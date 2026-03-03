@@ -1673,7 +1673,7 @@ ipcMain.handle('get-bank-holidays', () => {
 const LICENCE_FILE = 'licence.dat';
 const LICENCE_GRACE_DAYS = 7;
 const LICENCE_REVALIDATE_HOURS = 24;
-const TRIAL_DAYS = 14;
+const TRIAL_DAYS = 30;
 
 function getLicencePath() {
   return path.join(app.getPath('userData'), LICENCE_FILE);

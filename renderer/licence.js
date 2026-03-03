@@ -139,7 +139,7 @@
         showOverlay({
           title: isTrial ? 'Free Trial Ended' : (status.status === 'revoked' ? 'Licence Revoked' : 'Subscription Expired'),
           message: isTrial
-            ? 'Your ' + (status.trialDays || 14) + '-day free trial has ended. Enter a licence key to continue using Custody Note.'
+            ? 'Your ' + (status.trialDays || 30) + '-day free trial has ended. Enter a licence key to continue using Custody Note.'
             : (status.message || 'Your subscription has expired. Please renew or enter a new key.'),
           showRenew: true,
         });

@@ -35,5 +35,5 @@ Then attach the zip (`CustodyNote-Trial-YYYY-MM-DD.zip`) to your email and send.
 ## Why the database must be blank
 
 - Recipients should start the trial with no pre-existing data.
-- They get the full trial experience (14-day trial) without seeing someone else's records.
+- They get the full trial experience (30-day trial) without seeing someone else's records.
 - Avoids any privacy or confidentiality issues.
