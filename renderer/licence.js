@@ -68,9 +68,12 @@
     if (header) header.insertAdjacentElement('afterend', _warningBanner);
   }
 
+  var _licenceUIInited = false;
   function initLicenceUI() {
     var activateBtn = document.getElementById('licence-activate-btn');
     if (!activateBtn) return;
+    if (_licenceUIInited) return;
+    _licenceUIInited = true;
     activateBtn.addEventListener('click', function () {
       var keyInput = document.getElementById('licence-key-input');
       var emailInput = document.getElementById('licence-email-input');
@@ -106,6 +109,8 @@
       });
     }
   }
+  window.initLicenceUI = initLicenceUI;
+  window.showLicenceOverlay = showOverlay;
 
   function startRevalidation() {
     if (_revalidateTimer) clearInterval(_revalidateTimer);

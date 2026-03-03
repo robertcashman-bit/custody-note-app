@@ -2540,8 +2540,39 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  function loadLicenceSettingsUI() {
+    if (!window.api || !window.api.licenceStatus) return;
+    window.api.licenceStatus().then(function(st) {
+      var activeEl = document.getElementById('licence-status-active');
+      var noneEl = document.getElementById('licence-status-none');
+      var obscuredEl = document.getElementById('licence-key-obscured');
+      var timeEl = document.getElementById('licence-time-remaining');
+      if (!activeEl || !noneEl) return;
+      if (st && st.key && (st.status === 'active' || st.status === 'expiring_soon')) {
+        noneEl.style.display = 'none';
+        activeEl.style.display = '';
+        var key = st.key || '';
+        var obscured = key.length > 4 ? '****-****-****-' + key.slice(-4) : '****';
+        if (obscuredEl) obscuredEl.textContent = obscured;
+        if (timeEl) {
+          if (st.daysRemaining !== undefined) {
+            timeEl.textContent = st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining';
+          } else if (st.expiresAt) {
+            timeEl.textContent = 'Expires ' + new Date(st.expiresAt).toLocaleDateString('en-GB');
+          } else {
+            timeEl.textContent = 'Subscription active';
+          }
+        }
+      } else {
+        activeEl.style.display = 'none';
+        noneEl.style.display = '';
+      }
+    });
+  }
+
   function loadSettings() {
     if (!window.api) return;
+    loadLicenceSettingsUI();
     window.api.getSettings().then(s => {
       const em = document.getElementById('setting-email');
       if (em) em.value = s.email || '';
@@ -7923,6 +7954,66 @@ PDF_CASENOTE_ADVERT +
         }
       });
     });
+    /* ─── Licence event handlers ─── */
+    document.getElementById('btn-licence-email-key')?.addEventListener('click', function() {
+      if (!window.api.licenceEmailKey) return;
+      var btn = this;
+      btn.disabled = true;
+      window.api.licenceEmailKey().then(function(r) {
+        btn.disabled = false;
+        showToast(r.ok ? 'Licence key sent to your email' : (r.error || 'Failed'), r.ok ? 'info' : 'error');
+      });
+    });
+    document.getElementById('btn-licence-deactivate-device')?.addEventListener('click', function() {
+      if (!window.api.licenceDeactivateMachine) return;
+      if (!confirm('Deactivate this device? You will need to enter your licence key again on the new device. This computer will need a new activation.')) return;
+      var btn = this;
+      btn.disabled = true;
+      window.api.licenceDeactivateMachine().then(function(r) {
+        if (r.ok) {
+          showToast(r.message || 'Device deactivated', 'info');
+          if (window.api.licenceDeactivate) window.api.licenceDeactivate();
+          if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Enter your licence key to activate on this device.' });
+          if (window.initLicenceUI) window.initLicenceUI();
+          loadLicenceSettingsUI();
+        } else {
+          showToast(r.error || 'Failed', 'error');
+        }
+        btn.disabled = false;
+      });
+    });
+    document.getElementById('btn-licence-change')?.addEventListener('click', function() {
+      if (!window.api.licenceDeactivate) return;
+      if (!confirm('Change licence? Your current licence will be removed. Enter a new key in the overlay.')) return;
+      window.api.licenceDeactivate();
+      if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Enter your new licence key.' });
+      if (window.initLicenceUI) window.initLicenceUI();
+      loadLicenceSettingsUI();
+    });
+    document.getElementById('btn-licence-activate-settings')?.addEventListener('click', function() {
+      var keyInput = document.getElementById('setting-licence-key');
+      var errEl = document.getElementById('licence-activate-error');
+      var key = keyInput ? keyInput.value.trim() : '';
+      if (!key) {
+        if (errEl) { errEl.textContent = 'Enter a licence key'; errEl.style.display = ''; }
+        return;
+      }
+      if (!window.api.licenceActivate) return;
+      var btn = this;
+      btn.disabled = true;
+      if (errEl) errEl.style.display = 'none';
+      window.api.licenceActivate({ key: key }).then(function(result) {
+        btn.disabled = false;
+        if (result.success) {
+          keyInput.value = '';
+          loadLicenceSettingsUI();
+          showToast('Licence activated', 'info');
+        } else {
+          if (errEl) { errEl.textContent = result.message || 'Activation failed'; errEl.style.display = ''; }
+        }
+      });
+    });
+
     /* ─── Cloud backup event handlers ─── */
     document.getElementById('btn-cloud-backup-subscribe')?.addEventListener('click', function() {
       if (window.api.cloudBackupSubscribe) window.api.cloudBackupSubscribe();

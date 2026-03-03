@@ -519,6 +519,29 @@
           <button type="button" id="settings-back-btn" class="btn btn-secondary">&larr; Home</button>
           <span id="settings-saved-toast" class="settings-saved-toast">Settings saved</span>
         </div>
+        <div class="settings-card" id="licence-settings-card">
+          <h2>Licence</h2>
+          <div id="licence-status-active" style="display:none;">
+            <p class="settings-hint" style="margin:0 0 0.5rem 0;">Licence key (obscured)</p>
+            <div class="setting-row" style="align-items:center;">
+              <code id="licence-key-obscured" style="font-size:1rem;letter-spacing:1px;padding:0.5rem;background:var(--input-bg,#f8fafc);border-radius:4px;">--------</code>
+            </div>
+            <p id="licence-time-remaining" class="settings-hint" style="margin:0.5rem 0 1rem 0;"></p>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+              <button type="button" id="btn-licence-email-key" class="btn btn-secondary">Email my licence key</button>
+              <button type="button" id="btn-licence-deactivate-device" class="btn btn-secondary">Deactivate this device</button>
+              <button type="button" id="btn-licence-change" class="btn btn-secondary">Change licence</button>
+            </div>
+          </div>
+          <div id="licence-status-none" style="display:none;">
+            <p class="settings-hint" style="margin:0 0 0.75rem 0;">Enter your licence key to activate. You can also start a trial from the overlay when the app first opens.</p>
+            <label for="setting-licence-key">Licence key</label>
+            <input type="text" id="setting-licence-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX or trial key" autocomplete="off" spellcheck="false" style="max-width:320px;">
+            <button type="button" id="btn-licence-activate-settings" class="btn btn-primary" style="margin-top:0.5rem;">Activate</button>
+            <p id="licence-activate-error" class="licence-error" style="display:none;margin-top:0.5rem;color:#dc2626;"></p>
+          </div>
+        </div>
+
         <div class="settings-card">
           <h2>Your Details</h2>
           <label>DSCC PIN/Number</label>

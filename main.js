@@ -1783,10 +1783,10 @@ function computeLicenceStatus(data) {
     const expiryMs = new Date(data.expiresAt).getTime();
     const daysRemaining = Math.ceil((expiryMs - now) / (24 * 60 * 60 * 1000));
     if (expiryMs < now) {
-      return { status: 'expired', message: 'Your subscription expired on ' + new Date(data.expiresAt).toLocaleDateString('en-GB') + '. Please renew to continue using Custody Note.', key: data.key, email: data.email, daysRemaining: 0, isTrial: !!data.isTrial };
+      return { status: 'expired', message: 'Your subscription expired on ' + new Date(data.expiresAt).toLocaleDateString('en-GB') + '. Please renew to continue using Custody Note.', key: data.key, email: data.email, daysRemaining: 0, isTrial: !!data.isTrial, trialDays: TRIAL_DAYS };
     }
     if (daysRemaining <= 7) {
-      return { status: 'expiring_soon', message: 'Your ' + (data.isTrial ? 'trial' : 'subscription') + ' expires in ' + daysRemaining + ' day' + (daysRemaining !== 1 ? 's' : '') + '. Please renew to avoid interruption.', key: data.key, email: data.email || '', expiresAt: data.expiresAt, activatedAt: data.activatedAt, lastValidated: data.lastValidated, daysRemaining: daysRemaining, isTrial: !!data.isTrial };
+      return { status: 'expiring_soon', message: 'Your ' + (data.isTrial ? 'trial' : 'subscription') + ' expires in ' + daysRemaining + ' day' + (daysRemaining !== 1 ? 's' : '') + '. Please renew to avoid interruption.', key: data.key, email: data.email || '', expiresAt: data.expiresAt, activatedAt: data.activatedAt, lastValidated: data.lastValidated, daysRemaining: daysRemaining, isTrial: !!data.isTrial, trialDays: TRIAL_DAYS };
     }
   }
   if (data.lastValidated) {
@@ -1796,7 +1796,7 @@ function computeLicenceStatus(data) {
       return { status: 'grace_expired', message: 'Licence could not be verified for ' + LICENCE_GRACE_DAYS + ' days. Please connect to the internet.', key: data.key, email: data.email };
     }
   }
-  const result = { status: 'active', key: data.key, email: data.email || '', expiresAt: data.expiresAt || null, activatedAt: data.activatedAt, lastValidated: data.lastValidated, isTrial: !!data.isTrial };
+  const result = { status: 'active', key: data.key, email: data.email || '', expiresAt: data.expiresAt || null, activatedAt: data.activatedAt, lastValidated: data.lastValidated, isTrial: !!data.isTrial, trialDays: data.isTrial ? TRIAL_DAYS : undefined };
   if (data.expiresAt) {
     result.daysRemaining = Math.ceil((new Date(data.expiresAt).getTime() - now) / (24 * 60 * 60 * 1000));
   }
@@ -1867,6 +1867,36 @@ ipcMain.handle('licence:validate', async () => {
 ipcMain.handle('licence:deactivate', () => {
   deleteLicenceData();
   return { success: true };
+});
+
+ipcMain.handle('licence:email-key', async () => {
+  const data = readLicenceData();
+  if (!data || !data.key) return { ok: false, error: 'No licence key' };
+  const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return { ok: false, error: 'Cannot reach licence server' };
+  try {
+    const resp = await httpPost(`${apiUrl}/api/licence/email-key`, { key: data.key });
+    if (resp.error) return { ok: false, error: resp.error };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Failed to send email' };
+  }
+});
+
+ipcMain.handle('licence:deactivate-machine', async () => {
+  const data = readLicenceData();
+  if (!data || !data.key) return { ok: false, error: 'No licence key' };
+  const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return { ok: false, error: 'Cannot reach licence server' };
+  const machineId = getMachineId();
+  try {
+    const resp = await httpPost(`${apiUrl}/api/licence/deactivate-machine`, { key: data.key, machineId });
+    if (resp.error) return { ok: false, error: resp.error };
+    deleteLicenceData();
+    return { ok: true, message: resp.message };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Failed to deactivate' };
+  }
 });
 
 app.whenReady().then(async () => {
