@@ -7987,6 +7987,24 @@ PDF_CASENOTE_ADVERT +
         });
       }
     });
+    // Auto-update status listener
+    if (window.api.onAppUpdateStatus) {
+      window.api.onAppUpdateStatus(function(data) {
+        var wrap = document.getElementById('update-footer-wrap');
+        var el = document.getElementById('update-footer-status');
+        if (!wrap || !el) return;
+        if (data.status === 'downloading') {
+          wrap.style.display = '';
+          el.textContent = 'Downloading update v' + data.version + '\u2026';
+          el.onclick = null;
+        } else if (data.status === 'ready') {
+          wrap.style.display = '';
+          el.textContent = '\u2713 Update v' + data.version + ' ready \u2014 click to restart';
+          el.onclick = function() { window.api.appUpdateInstall(); };
+        }
+      });
+    }
+
     // Cloud backup status listener
     if (window.api.onCloudBackupStatusChanged) {
       window.api.onCloudBackupStatusChanged(function(data) {

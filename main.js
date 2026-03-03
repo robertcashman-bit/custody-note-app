@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const { autoUpdater } = require('electron-updater');
 
 /* Portable trial: when userData folder exists next to the exe, use it so trial packages work. */
 if (app.isPackaged) {
@@ -1655,6 +1656,10 @@ ipcMain.handle('get-app-version', () => {
   } catch (_) { return { version: '0.0.0', lastUpdated: '' }; }
 });
 
+ipcMain.handle('app-update-install', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
 ipcMain.handle('get-bank-holidays', () => {
   try {
     const row = dbGet("SELECT value FROM settings WHERE key='bankHolidays'");
@@ -1891,6 +1896,28 @@ app.whenReady().then(async () => {
 
   if (!safeStorage.isEncryptionAvailable()) {
     console.warn('[Encryption] safeStorage not available on this system. Database will not be encrypted automatically. Set a recovery password in Settings for protection.');
+  }
+
+  /* ─── Silent auto-update from GitHub Releases ─── */
+  if (app.isPackaged) {
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.logger = { info: console.log, warn: console.warn, error: console.error, debug: () => {} };
+
+    autoUpdater.on('update-available', (info) => {
+      console.log('[AutoUpdate] Update available:', info.version);
+      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'downloading', version: info.version });
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+      console.log('[AutoUpdate] Update downloaded:', info.version, '— will install on next restart');
+      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'ready', version: info.version });
+    });
+    autoUpdater.on('error', (err) => {
+      console.warn('[AutoUpdate] Error:', err?.message || err);
+    });
+
+    autoUpdater.checkForUpdates().catch(() => {});
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
   }
 
   await initDb();
