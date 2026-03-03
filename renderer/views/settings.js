@@ -1,0 +1,258 @@
+/* ═══════════════════════════════════════════════════════
+   SETTINGS VIEW  (extracted from app.js)
+   Depends on: firms, firmsPage, FIRMS_PER_PAGE, LAA, esc, showToast, showConfirm (globals)
+   ═══════════════════════════════════════════════════════ */
+
+function loadSettings() {
+  if (!window.api) return;
+  window.api.getSettings().then(function(s) {
+    window._appSettingsCache = s || {};
+    document.getElementById('setting-email').value = s.email || '';
+    document.getElementById('setting-dscc-pin').value = s.dsccPin || '';
+    document.getElementById('setting-backup-folder').value = s.backupFolder || '';
+    var obf = document.getElementById('setting-offsite-backup-folder');
+    if (obf) obf.value = s.offsiteBackupFolder || '';
+    var cloudUrlEl = document.getElementById('setting-cloud-backup-url');
+    if (cloudUrlEl) cloudUrlEl.value = s.cloudBackupUrl || '';
+    var cloudTokenEl = document.getElementById('setting-cloud-backup-token');
+    if (cloudTokenEl) cloudTokenEl.value = s.cloudBackupToken || '';
+    var qfAcc = document.getElementById('setting-quickfile-account');
+    var qfKey = document.getElementById('setting-quickfile-apikey');
+    var qfApp = document.getElementById('setting-quickfile-appid');
+    if (qfAcc) qfAcc.value = s.quickfileAccountNumber || '';
+    if (qfKey) qfKey.value = s.quickfileApiKey || '';
+    if (qfApp) qfApp.value = s.quickfileAppId || '';
+    if (s.laaRates) {
+      try {
+        var lr = typeof s.laaRates === 'string' ? JSON.parse(s.laaRates) : s.laaRates;
+        if (lr.fixedFee) { LAA.fixedFee = +lr.fixedFee; document.getElementById('rate-fixedFee').value = lr.fixedFee; }
+        if (lr.escapeThreshold) { LAA.escapeThreshold = +lr.escapeThreshold; document.getElementById('rate-escapeThreshold').value = lr.escapeThreshold; }
+        if (lr.attendanceSocial) { LAA.national.attendance.social = +lr.attendanceSocial; document.getElementById('rate-attendanceSocial').value = lr.attendanceSocial; }
+        if (lr.attendanceUnsocial) { LAA.national.attendance.unsocial = +lr.attendanceUnsocial; document.getElementById('rate-attendanceUnsocial').value = lr.attendanceUnsocial; }
+        if (lr.travelWaiting) { LAA.national.travel.social = +lr.travelWaiting; LAA.national.travel.unsocial = +lr.travelWaiting; LAA.national.waiting.social = +lr.travelWaiting; LAA.national.waiting.unsocial = +lr.travelWaiting; document.getElementById('rate-travelWaiting').value = lr.travelWaiting; }
+        if (lr.mileage) { LAA.mileageRate = +lr.mileage; document.getElementById('rate-mileage').value = lr.mileage; }
+        if (lr.vat) { LAA.vatRate = +lr.vat / 100; document.getElementById('rate-vat').value = lr.vat; }
+      } catch (_) {}
+    }
+    var forumUrlEl = document.getElementById('suggestions-forum-url');
+    if (forumUrlEl) forumUrlEl.value = s.suggestionsForumUrl || '';
+    var dm = document.getElementById('setting-dark-mode');
+    if (dm) dm.checked = s.darkMode === 'true';
+    var fs = document.getElementById('setting-font-size');
+    if (fs && s.fontSize) { fs.value = s.fontSize; }
+    var fv = document.getElementById('font-size-val');
+    if (fv && s.fontSize) { fv.textContent = s.fontSize + 'px'; }
+    var sup = document.getElementById('setting-show-supervisor-review');
+    if (sup) sup.checked = s.showSupervisorReview === 'true';
+
+    var ai = document.getElementById('setting-auto-import-enabled');
+    if (ai) ai.checked = s.autoImportEnabled === 'true';
+    var aif = document.getElementById('setting-auto-import-folder');
+    if (aif) aif.value = s.autoImportFolder || '';
+
+    // Cloud backup status
+    if (window.api.cloudBackupStatus) {
+      window.api.cloudBackupStatus().then(function(status) {
+        var notSub = document.getElementById('cloud-backup-not-subscribed');
+        var isSub = document.getElementById('cloud-backup-subscribed');
+        var lastEl = document.getElementById('cloud-backup-last-success');
+        if (status && status.enabled) {
+          if (notSub) notSub.style.display = 'none';
+          if (isSub) isSub.style.display = '';
+          if (lastEl && status.lastSuccess) {
+            lastEl.textContent = 'Last successful upload: ' + new Date(status.lastSuccess).toLocaleString('en-GB');
+          }
+        } else {
+          if (notSub) notSub.style.display = '';
+          if (isSub) isSub.style.display = 'none';
+        }
+        if (status && status.lastError) {
+          var errEl = document.getElementById('cloud-backup-error');
+          if (errEl) { errEl.textContent = status.lastError; errEl.style.display = ''; }
+        }
+      });
+    }
+
+  });
+  if (window.api.getDbPath) {
+    window.api.getDbPath().then(function(p) {
+      var el = document.getElementById('settings-db-path');
+      if (el) el.textContent = p || 'Unknown';
+    });
+  }
+  var bfEl = document.getElementById('settings-backup-path-display');
+  if (bfEl) {
+    window.api.getSettings().then(function(s) {
+      bfEl.textContent = s.backupFolder || 'Desktop (default)';
+    });
+  }
+  var obfEl = document.getElementById('settings-offsite-backup-path-display');
+  if (obfEl) {
+    window.api.getSettings().then(function(s) {
+      obfEl.textContent = (s.offsiteBackupFolder && s.offsiteBackupFolder.trim()) ? s.offsiteBackupFolder : 'None';
+    });
+  }
+  var connEl = document.getElementById('settings-connectivity');
+  if (connEl) {
+    connEl.textContent = navigator.onLine ? 'Online' : 'Offline (app works fully without internet)';
+  }
+  if (window.api.isDbEncrypted) {
+    var safeStorageCheck = window.api.isSafeStorageAvailable ? window.api.isSafeStorageAvailable() : Promise.resolve(true);
+    Promise.all([window.api.isDbEncrypted(), safeStorageCheck]).then(function(results) {
+      var enc = results[0], osProt = results[1];
+      var el = document.getElementById('encryption-status');
+      if (!el) return;
+      if (enc && osProt) {
+        el.textContent = 'Database is encrypted (AES-256-GCM) — key protected by Windows Credential Store';
+        el.style.color = 'green';
+      } else if (enc && !osProt) {
+        el.textContent = 'Database is encrypted (AES-256-GCM) — key stored in plaintext fallback (OS protection unavailable). Setting a recovery password is strongly recommended.';
+        el.style.color = '#c55';
+      } else {
+        el.textContent = 'Database is not yet encrypted (will encrypt on next save)';
+        el.style.color = '';
+      }
+    });
+  }
+  if (window.api.hasRecoveryPassword) {
+    window.api.hasRecoveryPassword().then(function(has) {
+      var el = document.getElementById('recovery-status');
+      if (el) el.textContent = has ? 'Recovery password is SET' : 'No recovery password set — you should set one now';
+      if (el) el.style.color = has ? 'green' : '#c00';
+    });
+  }
+  loadFirmsList();
+}
+
+function saveSettings() {
+  window.api.setSettings({
+    email: (document.getElementById('setting-email') || {value:''}).value.trim() || '',
+    dsccPin: (document.getElementById('setting-dscc-pin') || {value:''}).value.trim() || '',
+    backupFolder: (document.getElementById('setting-backup-folder') || {value:''}).value.trim() || '',
+    offsiteBackupFolder: (document.getElementById('setting-offsite-backup-folder') || {value:''}).value.trim() || '',
+    cloudBackupUrl: (document.getElementById('setting-cloud-backup-url') || {value:''}).value.trim() || '',
+    cloudBackupToken: (document.getElementById('setting-cloud-backup-token') || {value:''}).value.trim() || '',
+    quickfileAccountNumber: (document.getElementById('setting-quickfile-account') || {value:''}).value.trim() || '',
+    quickfileApiKey: (document.getElementById('setting-quickfile-apikey') || {value:''}).value.trim() || '',
+    quickfileAppId: (document.getElementById('setting-quickfile-appid') || {value:''}).value.trim() || '',
+    suggestionsForumUrl: (document.getElementById('suggestions-forum-url') || {value:''}).value.trim() || '',
+    darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
+    fontSize: (document.getElementById('setting-font-size') || {value:'16'}).value || '16',
+    showSupervisorReview: document.getElementById('setting-show-supervisor-review')?.checked ? 'true' : 'false',
+    autoImportEnabled: document.getElementById('setting-auto-import-enabled')?.checked ? 'true' : 'false',
+    autoImportFolder: (document.getElementById('setting-auto-import-folder') || {value:''}).value.trim() || '',
+    laaRates: JSON.stringify({
+      fixedFee: (document.getElementById('rate-fixedFee') || {value:'320'}).value || '320',
+      escapeThreshold: (document.getElementById('rate-escapeThreshold') || {value:'650'}).value || '650',
+      attendanceSocial: (document.getElementById('rate-attendanceSocial') || {value:'54.57'}).value || '54.57',
+      attendanceUnsocial: (document.getElementById('rate-attendanceUnsocial') || {value:'72.46'}).value || '72.46',
+      travelWaiting: (document.getElementById('rate-travelWaiting') || {value:'27.29'}).value || '27.29',
+      mileage: (document.getElementById('rate-mileage') || {value:'0.45'}).value || '0.45',
+      vat: (document.getElementById('rate-vat') || {value:'20'}).value || '20',
+    }),
+  }).then(function() { showToast('Settings saved', 'success'); });
+}
+
+function loadFirmsList() {
+  if (!window.api) return;
+  window.api.firmsList().then(function(f) {
+    firms = f;
+    renderFirmsPage();
+  });
+}
+
+function renderFirmsPage() {
+  var container = document.getElementById('firms-list-container');
+  var paginationEl = document.getElementById('firms-pagination');
+  var pageInfoEl = document.getElementById('firms-page-info');
+  var prevBtn = document.getElementById('firms-page-prev');
+  var nextBtn = document.getElementById('firms-page-next');
+  if (!container) return;
+  var totalPages = Math.max(1, Math.ceil(firms.length / FIRMS_PER_PAGE));
+  firmsPage = Math.min(Math.max(1, firmsPage), totalPages);
+  var start = (firmsPage - 1) * FIRMS_PER_PAGE;
+  var pageFirms = firms.slice(start, start + FIRMS_PER_PAGE);
+  container.innerHTML = '';
+  if (!firms.length) {
+    var row = document.createElement('tr');
+    row.innerHTML = '<td colspan="5" class="firms-empty">No firms added yet.</td>';
+    container.appendChild(row);
+  } else {
+    pageFirms.forEach(function(firm) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="firm-name-cell">' + esc(firm.name) + '</td>' +
+        '<td>' + esc(firm.contact_name || '') + '</td>' +
+        '<td>' + esc(firm.contact_email || '') + '</td>' +
+        '<td>' + esc(firm.contact_phone || '') + '</td>' +
+        '<td class="firms-actions-col">' +
+          '<button type="button" class="btn-star ' + (firm.is_default ? 'default' : '') + '" data-id="' + firm.id + '" title="Set as default">\u2605</button>' +
+          '<button type="button" class="btn-small firm-del" data-id="' + firm.id + '">Remove</button>' +
+        '</td>';
+      tr.querySelector('.firm-del').addEventListener('click', function() {
+        showConfirm('Remove ' + firm.name + '?').then(function(ok) { if (ok) window.api.firmDelete(firm.id).then(loadFirmsList); });
+      });
+      tr.querySelector('.btn-star').addEventListener('click', function() {
+        window.api.firmSetDefault(firm.id).then(loadFirmsList);
+      });
+      container.appendChild(tr);
+    });
+  }
+  if (paginationEl) paginationEl.style.display = firms.length > FIRMS_PER_PAGE ? 'flex' : 'none';
+  if (pageInfoEl) pageInfoEl.textContent = totalPages > 1 ? 'Page ' + firmsPage + ' of ' + totalPages : '';
+  if (prevBtn) prevBtn.disabled = firmsPage <= 1;
+  if (nextBtn) nextBtn.disabled = firmsPage >= totalPages;
+}
+
+function addFirm() {
+  var name = (document.getElementById('new-firm-name') || {}).value || '';
+  name = name.trim();
+  var contact = ((document.getElementById('new-firm-contact') || {}).value || '').trim();
+  var phone = ((document.getElementById('new-firm-phone') || {}).value || '').trim();
+  var email = ((document.getElementById('new-firm-email') || {}).value || '').trim();
+  if (!name) { showToast('Enter a firm name', 'error'); return; }
+  window.api.firmSave({ name: name, contact_name: contact, contact_phone: phone, contact_email: email }).then(function() {
+    document.getElementById('new-firm-name').value = '';
+    document.getElementById('new-firm-contact').value = '';
+    document.getElementById('new-firm-phone').value = '';
+    document.getElementById('new-firm-email').value = '';
+    loadFirmsList();
+    window.api.firmsList().then(function(f) { firms = f; });
+  });
+}
+
+function importFirmsFromQuickFile() {
+  var btn = document.getElementById('btn-import-qf-clients');
+  var status = document.getElementById('qf-import-status');
+  if (!window.api || !window.api.quickfileFetchClients) {
+    showToast('QuickFile client import is not available', 'error');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Fetching from QuickFile\u2026';
+  if (status) status.textContent = '';
+  window.api.quickfileFetchClients().then(function(res) {
+    var clients = res.clients || [];
+    if (!clients.length) { showToast('No clients found in your QuickFile account', 'warning'); return; }
+    var existingNames = firms.map(function(f) { return f.name.toLowerCase().trim(); });
+    var added = 0, skipped = 0, saves = [];
+    clients.forEach(function(c) {
+      if (!c.companyName) return;
+      if (existingNames.indexOf(c.companyName.toLowerCase().trim()) >= 0) { skipped++; return; }
+      added++;
+      saves.push(window.api.firmSave({ name: c.companyName, contact_name: c.contactName || '', contact_email: c.email || '', contact_phone: c.telephone || '', address: c.address || '' }));
+    });
+    return Promise.all(saves).then(function() {
+      loadFirmsList();
+      window.api.firmsList().then(function(f) { firms = f; });
+      var msg = added + ' firm' + (added !== 1 ? 's' : '') + ' imported' + (skipped ? ', ' + skipped + ' already existed' : '');
+      if (status) status.textContent = msg;
+      showToast(msg, 'success');
+    });
+  }).catch(function(err) {
+    showToast('QuickFile error: ' + (err.message || err), 'error');
+  }).finally(function() {
+    btn.disabled = false;
+    btn.textContent = 'Import firms from QuickFile';
+  });
+}

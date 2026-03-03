@@ -1,0 +1,48 @@
+{
+  "name": "custody-note",
+  "version": "1.4.1",
+  "lastUpdated": "2026-03-02",
+  "description": "Custody Note – LAA-compliant custody note app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "prebuild": "node scripts/bump-version.mjs",
+    "build": "electron-builder",
+    "build:icon": "node scripts/build-icon.mjs",
+    "stations": "node data/parse-stations-from-pdf.js",
+    "test": "node scripts/smoke-test.js",
+    "prepare-trial": "node scripts/prepare-trial.js",
+    "capture-screenshots": "node scripts/capture-screenshots.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^26.8.1",
+    "pdf-parse": "^1.1.4",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
+    "ws": "^8.19.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^1.1.4",
+    "sql.js": "^1.10.0"
+  },
+  "build": {
+    "appId": "com.policestationagent.custodynote",
+    "productName": "Custody Note",
+    "directories": {
+      "output": "C:\\Users\\rober\\custody-note-dist"
+    },
+    "win": {
+      "icon": "custody-note.ico",
+      "signAndEditExecutable": false
+    },
+    "files": [
+      "**/*",
+      "!dist"
+    ]
+  }
+}

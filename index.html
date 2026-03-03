@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://sql.js.org 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://sql.js.org;">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.svg">
+  <title>Custody Note</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- Splash screen -->
+    <div id="splash" class="splash-overlay">
+      <div class="splash-header">
+        <svg class="splash-logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect class="splash-notepad" x="4" y="8" width="56" height="48" rx="6" stroke="#3b82f6" stroke-width="3" fill="none"/>
+          <line class="splash-line splash-line-1" x1="14" y1="22" x2="50" y2="22" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+          <line class="splash-line splash-line-2" x1="14" y1="32" x2="42" y2="32" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"/>
+          <line class="splash-line splash-line-3" x1="14" y1="42" x2="36" y2="42" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"/>
+          <circle class="splash-tick-circle" cx="50" cy="46" r="10" fill="#2563eb"/>
+          <path class="splash-tick-check" d="M47 46l2.5 2.5L53 44" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        <div class="splash-title">Custody Note</div>
+      </div>
+      <div class="splash-tagline">Fast, compliant police-station attendance notes</div>
+      <div class="splash-sub">Defence Legal Services Ltd t/a Police Station Agent</div>
+      <div class="splash-features">
+        <div class="splash-feature-card">
+          <span class="splash-feature-icon">&#9878;</span>
+          <strong>LAA-ready structure</strong>
+          <span>Guided sections, declarations and signatures</span>
+        </div>
+        <div class="splash-feature-card">
+          <span class="splash-feature-icon">&#9201;</span>
+          <strong>PACE clock &amp; time recording</strong>
+          <span>Automatic reviews, social/unsocial split</span>
+        </div>
+        <div class="splash-feature-card">
+          <span class="splash-feature-icon">&#128196;</span>
+          <strong>Professional PDFs</strong>
+          <span>Print, email, consistent formatting</span>
+        </div>
+        <div class="splash-feature-card">
+          <span class="splash-feature-icon">&#9889;</span>
+          <strong>Quick capture</strong>
+          <span>Start in seconds, fill details as you go</span>
+        </div>
+        <div class="splash-feature-card">
+          <span class="splash-feature-icon">&#128274;</span>
+          <strong>Encrypted backups</strong>
+          <span>Automatic AES-256 with recovery support</span>
+        </div>
+        <div class="splash-feature-card">
+          <span class="splash-feature-icon">&#128268;</span>
+          <strong>Offline-first</strong>
+          <span>Works without internet, syncs when available</span>
+        </div>
+      </div>
+      <div class="splash-loader"><span></span><span></span><span></span></div>
+      <div class="splash-advert">
+        <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+          <a href="mailto:robertcashman@defencelegalservices.com?subject=Custody Note Enquiry" class="splash-advert-btn splash-advert-link">Contact Us</a>
+          <a href="https://www.custodynote.com" class="splash-advert-btn splash-advert-link" target="_blank" rel="noopener">www.custodynote.com</a>
+        </div>
+      </div>
+    </div>
+
+    <header class="app-header">
+      <div class="header-left">
+        <svg class="header-logo" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="4" y="8" width="56" height="48" rx="6" stroke="#3b82f6" stroke-width="3" fill="none"/>
+          <line x1="14" y1="22" x2="50" y2="22" stroke="#3b82f6" stroke-width="2" stroke-linecap="round"/>
+          <line x1="14" y1="32" x2="42" y2="32" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"/>
+          <line x1="14" y1="42" x2="36" y2="42" stroke="#60a5fa" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="50" cy="46" r="10" fill="#2563eb"/>
+          <path d="M47 46l2.5 2.5L53 44" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h1 id="header-app-title">Custody Note</h1>
+        <span id="header-form-title" class="header-form-title"></span>
+      </div>
+      <div class="header-center">
+        <input type="search" id="global-search" class="global-search" placeholder="Search records..." autocomplete="off">
+      </div>
+      <div class="header-right">
+        <span id="header-form-actions" class="header-form-actions">
+          <span id="header-autosave" class="autosave-indicator"></span>
+          <button type="button" class="btn-small" id="header-kb-help" title="Keyboard shortcuts">?</button>
+          <button type="button" class="btn btn-small" id="header-laa-forms" title="Generate LAA forms">LAA Forms</button>
+          <button type="button" class="btn btn-sections" id="header-sections-idx">Sections</button>
+        </span>
+        <div class="header-clock-group">
+          <div class="header-arrival" id="header-arrival-time" title="Time of arrival at station"></div>
+        </div>
+        <div class="gear-wrap">
+          <button type="button" id="gear-menu-btn" class="header-icon-btn" title="Menu">&#9776;</button>
+          <div id="gear-dropdown" class="gear-dropdown hidden">
+            <button type="button" class="gear-item" data-action="records">Records</button>
+            <button type="button" class="gear-item" data-action="laa-forms">LAA Forms</button>
+            <div class="gear-divider"></div>
+            <button type="button" class="gear-item" data-action="firms">Firms</button>
+            <button type="button" class="gear-item" data-action="reports">Reports</button>
+            <button type="button" class="gear-item" data-action="settings">Settings</button>
+            <div class="gear-divider"></div>
+            <button type="button" class="gear-item" data-action="help">Help / Instructions</button>
+            <button type="button" class="gear-item" data-action="prepare-trial" title="Create trial zip with blank database for email">Prepare trial for email</button>
+          </div>
+        </div>
+        <button type="button" id="dark-mode-toggle" class="header-icon-btn" title="Toggle dark mode">&#9790;</button>
+      </div>
+    </header>
+
+    <main class="app-main">
+
+      <!-- HOME / COMMAND CENTER -->
+      <div id="view-home" class="view active">
+        <div class="home-container">
+          <div class="home-top">
+            <div id="home-greeting" class="home-greeting">Good evening.</div>
+            <div class="home-greeting-accent"></div>
+            <div id="home-datetime" class="home-datetime"></div>
+          </div>
+          <div class="home-actions">
+            <button type="button" id="home-card-telephone" class="home-action-card home-card-teal">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.362 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg></span>
+              <span class="home-card-title">New Tel Advice</span>
+              <span class="home-card-sub">Record a telephone advice session (INVB)</span>
+            </button>
+            <button type="button" id="home-card-quick" class="home-action-card home-card-amber">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+              <span class="home-card-title">Quick Capture</span>
+              <span class="home-card-sub">Quickly capture initial case details</span>
+            </button>
+            <button type="button" id="home-card-attendance" class="home-action-card home-card-blue">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></span>
+              <span class="home-card-title">New Attendance</span>
+              <span class="home-card-sub">Record an in-person attendance at a police station</span>
+            </button>
+            <button type="button" id="home-card-video-capture" class="home-action-card home-card-blue">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></span>
+              <span class="home-card-title">Video Capture</span>
+              <span class="home-card-sub">Record Code E/F compliance, media refs and continuity</span>
+            </button>
+            <button type="button" id="home-card-video-id" class="home-action-card home-card-blue">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+              <span class="home-card-title">Video Identification Parade</span>
+              <span class="home-card-sub">Record VIPER / Code D details, objections and result</span>
+            </button>
+          </div>
+
+          <!-- Cloud Backup Warning Banner -->
+          <div id="home-cloud-backup-warning" class="home-cloud-backup-banner" style="display:none;">
+            <div style="display:flex;align-items:flex-start;gap:0.75rem;background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #f59e0b;border-radius:10px;padding:0.85rem 1rem;">
+              <span style="font-size:1.3rem;line-height:1;">&#9888;</span>
+              <div style="flex:1;">
+                <p style="margin:0;font-weight:600;font-size:0.9rem;color:#92400e;">Your data is not backed up to the cloud</p>
+                <p style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#78350f;">If your computer fails, your records could be permanently lost. <button type="button" id="home-cloud-backup-cta" style="background:none;border:none;padding:0;color:#1e40af;cursor:pointer;font-size:0.8rem;text-decoration:underline;font-weight:600;">Subscribe to Cloud Backup &rarr;</button></p>
+              </div>
+              <button type="button" id="home-cloud-backup-dismiss" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#92400e;padding:0;line-height:1;" title="Dismiss">&times;</button>
+            </div>
+          </div>
+
+          <!-- Recent Cases (top of content) -->
+          <div class="home-card-widget home-card-widget-first">
+            <div class="home-widget-header">
+              <h3 class="home-widget-title">Recent Cases</h3>
+              <button type="button" id="home-view-all" class="home-view-all">View all &rarr;</button>
+            </div>
+            <ul id="home-recent-list" class="home-recent-list">
+              <li class="home-recent-empty">No records yet. Create your first attendance above.</li>
+            </ul>
+            <div id="home-stats" class="home-stats"></div>
+          </div>
+
+          <!-- Shortcuts -->
+          <h2 class="home-section-title">Shortcuts</h2>
+          <div class="home-shortcuts">
+            <h3 class="home-shortcuts-subhead">Tools &amp; options</h3>
+            <div class="home-tools">
+              <button type="button" class="home-tool-btn" data-action="records" title="View and search all records">Records</button>
+              <button type="button" class="home-tool-btn" data-action="firms" title="Firms you work for">Firms</button>
+              <button type="button" class="home-tool-btn" data-action="reports" title="Attendance and fee reports">Reports</button>
+              <button type="button" class="home-tool-btn" data-action="shortcut-print-pdf" title="Print attendance note PDF">Print PDF</button>
+              <button type="button" class="home-tool-btn" data-action="shortcut-email-solicitor" title="Email attendance note to instructing solicitor">Email to solicitor</button>
+              <button type="button" class="home-tool-btn" data-action="shortcut-backup-now" title="Create a backup now">Backup now</button>
+              <button type="button" class="home-tool-btn" data-action="settings" title="App settings and backup">Settings</button>
+              <button type="button" class="home-tool-btn" data-action="help" title="How to use Custody Note">Help</button>
+            </div>
+          </div>
+
+          <!-- LAA Forms -->
+          <h2 class="home-section-title">LAA Forms</h2>
+          <div class="home-standalone-options home-standalone-options-detailed" style="margin-bottom:1.5rem;">
+            <button type="button" class="home-standalone-card" data-laa-form="crm1" title="CRM1 &mdash; Client Details">
+              <span class="home-standalone-card-icon" aria-hidden="true">&#128203;</span>
+              <span class="home-standalone-card-text">
+                <span class="home-standalone-card-label">CRM1 &mdash; Client Details</span>
+                <span class="home-standalone-card-desc">Client&rsquo;s personal details, capital, income. Auto-filled from your record.</span>
+              </span>
+            </button>
+            <button type="button" class="home-standalone-card" data-laa-form="crm2" title="CRM2 &mdash; Advice &amp; Assistance">
+              <span class="home-standalone-card-icon" aria-hidden="true">&#128221;</span>
+              <span class="home-standalone-card-text">
+                <span class="home-standalone-card-label">CRM2 &mdash; Advice &amp; Assistance</span>
+                <span class="home-standalone-card-desc">Application for A&amp;A at the police station. Auto-filled from your record.</span>
+              </span>
+            </button>
+            <button type="button" class="home-standalone-card" data-laa-form="crm3" title="CRM3 &mdash; Advocacy Assistance">
+              <span class="home-standalone-card-icon" aria-hidden="true">&#9878;</span>
+              <span class="home-standalone-card-text">
+                <span class="home-standalone-card-label">CRM3 &mdash; Advocacy Assistance</span>
+                <span class="home-standalone-card-desc">Application for Advocacy Assistance (bail, WFD). Auto-filled from your record.</span>
+              </span>
+            </button>
+            <button type="button" class="home-standalone-card" data-laa-form="declaration" title="Applicant Declaration">
+              <span class="home-standalone-card-icon" aria-hidden="true">&#128196;</span>
+              <span class="home-standalone-card-text">
+                <span class="home-standalone-card-label">Applicant Declaration</span>
+                <span class="home-standalone-card-desc">Criminal legal aid applicant&rsquo;s declaration for online submissions. Auto-filled from your record.</span>
+              </span>
+            </button>
+          </div>
+
+          <!-- Attendance picker for Print PDF / Email to solicitor from home -->
+          <div id="attendance-picker-modal" class="sections-index hidden" aria-label="Select attendance">
+            <div class="sections-index-content attendance-picker-content">
+              <h3 id="attendance-picker-title">Select attendance</h3>
+              <p class="attendance-picker-hint">Choose an attendance to print or email.</p>
+              <ul id="attendance-picker-list" class="attendance-picker-list"></ul>
+              <button type="button" id="attendance-picker-cancel" class="btn btn-secondary" style="margin-top:0.75rem;width:100%;">Cancel</button>
+            </div>
+          </div>
+
+          <div class="home-status-strip">
+            <span id="home-net-status" class="home-status-item">Checking connection&hellip;</span>
+            <span class="home-status-sep">&middot;</span>
+            <span id="home-backup-status" class="home-status-item">Auto backup: checking&hellip;</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIST VIEW -->
+      <div id="view-list" class="view">
+        <div class="list-top-bar">
+          <button type="button" id="list-back-home" class="btn btn-secondary">&larr; Home</button>
+          <span class="list-top-title">All Records</span>
+        </div>
+        <div class="list-toolbar">
+          <input type="search" id="list-search" placeholder="Search by name, UFN, station, custody number, date..." class="search-input">
+          <button type="button" id="backup-now-btn" class="btn btn-secondary btn-small" title="Create a backup now">Backup now</button>
+        </div>
+        <div class="list-filters">
+          <div class="filter-group">
+            <button type="button" class="filter-btn active" data-filter="all">All</button>
+            <button type="button" class="filter-btn" data-filter="draft">Drafts</button>
+            <button type="button" class="filter-btn" data-filter="finalised">Finalised</button>
+            <button type="button" class="filter-btn" data-filter="archived">Archived</button>
+          </div>
+          <select id="list-sort" class="list-sort-select">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Client name A-Z</option>
+            <option value="station">Station</option>
+          </select>
+          <button type="button" id="list-density-toggle" class="btn-small" title="Toggle compact view">Compact</button>
+        </div>
+        <ul id="attendance-list" class="attendance-list"></ul>
+        <div id="list-pagination" class="firms-pagination">
+          <button type="button" id="list-page-prev" class="btn btn-secondary btn-small">Back</button>
+          <span id="list-page-info" class="firms-page-info"></span>
+          <button type="button" id="list-page-next" class="btn btn-secondary btn-small">Forward</button>
+        </div>
+      </div>
+
+      <!-- QUICK CAPTURE VIEW -->
+      <div id="view-quickcapture" class="view">
+        <div class="form-page-header">
+          <span class="form-page-title">Quick Capture</span>
+          <button type="button" id="qc-cancel" class="btn btn-secondary">Cancel</button>
+        </div>
+        <div class="qc-form">
+          <div class="form-row-2col">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Client Name</label>
+              <div class="name-row">
+                <div class="name-row-field"><label class="name-row-sublabel">First name</label><input type="text" id="qc-forename" placeholder="First name"></div>
+                <div class="name-row-field"><label class="name-row-sublabel">Surname</label><input type="text" id="qc-surname" placeholder="Surname"></div>
+              </div>
+            </div>
+            <div class="form-group" style="grid-column:1/-1;" id="qc-station-wrap">
+              <label>Police Station</label>
+              <div class="station-search-wrap" id="qc-station-search-wrap"></div>
+            </div>
+            <div class="form-group"><label>Offence (summary)</label><input type="text" id="qc-offence" placeholder="e.g. Theft"></div>
+            <div class="form-group"><label>DSCC Number</label><input type="text" id="qc-dscc" placeholder="e.g. 110154321A"></div>
+            <div class="form-group"><label>Instruction received</label><input type="datetime-local" id="qc-instruction"></div>
+            <div class="form-group"><label>Time of first contact with client</label><div class="time-input-wrap"><input type="time" id="qc-first-contact" title="LAA 9.25 – when you first spoke to/saw client"><button type="button" class="btn-now" id="qc-first-contact-now">Now</button></div></div>
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Instructing Firm</label>
+              <div id="qc-firm-wrap" class="form-firm-wrap">
+                <input type="hidden" id="qc-firm" value="">
+                <div class="form-firm-choice-row" id="qc-firm-choice-row">
+                  <button type="button" class="btn btn-secondary btn-small form-firm-choice-btn" id="qc-firm-select-btn">Select instructing firm</button>
+                  <button type="button" class="btn btn-primary btn-small form-firm-choice-btn" id="qc-firm-add-btn">Add new firm</button>
+                </div>
+                <div class="form-firm-selected" id="qc-firm-selected" style="display:none;"></div>
+                <div class="add-firm-inline-wrap form-firm-add-section" id="qc-firm-add-section" style="display:none;">
+                  <div class="add-firm-inline">
+                    <input type="text" id="qc-new-firm-name" class="form-input" placeholder="Firm name *">
+                    <input type="text" id="qc-new-firm-laa" class="form-input" placeholder="LAA Account no.">
+                    <input type="text" id="qc-new-firm-contact" class="form-input" placeholder="Contact name">
+                    <input type="tel" id="qc-new-firm-phone" class="form-input" placeholder="Contact phone">
+                    <input type="email" id="qc-new-firm-email" class="form-input" placeholder="Contact email">
+                  </div>
+                  <div class="add-firm-inline">
+                    <button type="button" class="btn btn-primary" id="qc-add-firm-btn">Add Firm</button>
+                    <button type="button" class="btn btn-secondary btn-small" id="qc-add-firm-cancel">Cancel</button>
+                  </div>
+                </div>
+                <div class="form-firm-use-existing-section" id="qc-firm-use-section" style="display:none;">
+                  <input type="text" id="qc-firm-search" class="form-input search-input" placeholder="Search by firm name or contact..." autocomplete="off">
+                  <div id="qc-firm-results" class="form-firm-search-results" role="listbox"></div>
+                </div>
+              </div>
+            </div>
+            <div class="form-group"><label>Name of person who instructed</label><input type="text" id="qc-referral-name" placeholder="e.g. Richard Chamberlain"></div>
+            <div class="form-group"><label>Contact number</label><input type="tel" id="qc-referral-phone" placeholder="e.g. 07700 900123"></div>
+            <div class="form-group"><label>Contact email</label><input type="email" id="qc-referral-email" placeholder="e.g. name@firm.co.uk"></div>
+            <div class="form-group"><label>Source of Referral</label>
+              <select id="qc-source"><option value="">--</option><option>Duty Rota</option><option>Duty panel</option><option>Own Legal Aid</option><option>Own private</option><option>Agency</option></select>
+            </div>
+            <div class="form-group"><label>Work Type</label>
+              <select id="qc-work-type"><option value="">--</option><option>First Police Station Attendance</option><option>Police Station Telephone Attendance</option><option>Further Police Station Attendance</option><option>Other</option></select>
+            </div>
+            <div class="form-group"><label>OIC Rank &amp; Name</label><input type="text" id="qc-oic-name" placeholder="e.g. DC Smith"></div>
+            <div class="form-group"><label>OIC Telephone</label><input type="tel" id="qc-oic-phone" placeholder="e.g. 07700 900123"></div>
+            <div class="form-group"><label>OIC Email address</label><input type="email" id="qc-oic-email" placeholder="e.g. officer@police.uk"></div>
+            <div class="form-group"><label>Custody Number</label><input type="text" id="qc-custody-number" placeholder="e.g. CU/12345"></div>
+            <div class="form-group"><label>Client Status</label>
+              <select id="qc-client-status"><option value="">--</option><option>Under Arrest</option><option>Voluntary Attendance</option><option>Other</option></select>
+            </div>
+            <div class="form-group"><label>Weekend / Bank Holiday?</label>
+              <select id="qc-weekend-bh"><option value="">--</option><option>Yes</option><option>No</option></select>
+            </div>
+            <div class="form-group"><label>Time set off</label><div class="time-input-wrap"><input type="time" id="qc-setoff"><button type="button" class="btn-now" id="qc-setoff-now">Now</button></div></div>
+            <div class="form-group"><label>Time arrived</label><div class="time-input-wrap"><input type="time" id="qc-arrived"><button type="button" class="btn-now" id="qc-arrived-now">Now</button></div></div>
+            <div class="form-group" style="grid-column:1/-1;"><label>General Notes</label><textarea id="qc-notes" rows="3" placeholder="General notes about the case or attendance"></textarea></div>
+          </div>
+          <div style="display:flex;gap:0.75rem;margin-top:1.25rem;">
+            <button type="button" id="qc-save" class="btn btn-primary" style="flex:1;padding:0.85rem;">Save as Draft</button>
+            <button type="button" id="qc-expand" class="btn btn-accent" style="flex:1;padding:0.85rem;">Expand to Full Form</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FIRMS VIEW -->
+      <div id="view-firms" class="view">
+        <div class="firms-page-header">
+          <button type="button" id="firms-back-btn" class="btn btn-secondary">&larr; Home</button>
+        </div>
+        <div class="settings-card">
+          <h2>Firms You Work For</h2>
+          <p class="settings-hint">Add firms that instruct you. Star one as default.</p>
+          <div class="firms-choice-row">
+            <button type="button" id="firms-action-add" class="btn btn-primary firms-choice-btn">Add a new firm</button>
+            <button type="button" id="firms-action-use-existing" class="btn btn-secondary firms-choice-btn">Use existing firm</button>
+          </div>
+          <div id="firms-add-section" class="firms-section-hidden">
+            <h3 style="margin-top:1.25rem;margin-bottom:0.5rem;font-size:0.95rem;">Add a Firm</h3>
+            <div class="add-firm-row">
+              <input type="text" id="new-firm-name" placeholder="Firm name">
+              <input type="text" id="new-firm-contact" placeholder="Contact name">
+              <input type="tel" id="new-firm-phone" placeholder="Contact phone">
+              <input type="email" id="new-firm-email" placeholder="Contact email">
+              <button type="button" id="add-firm-btn" class="btn btn-primary">Add Firm</button>
+            </div>
+            <div style="margin-top:0.75rem;">
+              <button type="button" id="btn-import-qf-clients" class="btn btn-secondary">Import firms from QuickFile</button>
+              <span id="qf-import-status" class="settings-hint" style="margin-left:0.5rem;"></span>
+            </div>
+          </div>
+          <div id="firms-use-existing-section" class="firms-section-hidden">
+            <label for="firms-search-input" class="sr-only">Search firms</label>
+            <input type="text" id="firms-search-input" class="search-input firms-search-input" placeholder="Search by firm name or contact…" autocomplete="off" aria-label="Search firms">
+            <div id="firms-search-results" class="firms-search-results" role="listbox" aria-label="Matching firms"></div>
+          </div>
+          <div id="firms-table-wrap" class="firms-table-wrap">
+            <table class="firms-table" id="firms-table">
+              <thead>
+                <tr>
+                  <th>Firm name</th>
+                  <th>Contact name</th>
+                  <th>Email</th>
+                  <th>Tel no</th>
+                  <th class="firms-actions-col"></th>
+                </tr>
+              </thead>
+              <tbody id="firms-list-container"></tbody>
+            </table>
+          </div>
+          <div id="firms-pagination" class="firms-pagination">
+            <button type="button" id="firms-page-prev" class="btn btn-secondary btn-small">Back</button>
+            <span id="firms-page-info" class="firms-page-info"></span>
+            <button type="button" id="firms-page-next" class="btn btn-secondary btn-small">Forward</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORM VIEW -->
+      <div id="view-form" class="view">
+        <div class="form-page-header">
+          <span class="form-page-title" id="form-page-title">1. Case Reference & Arrival</span>
+          <div class="header-right-group">
+            <span id="autosave-indicator" class="autosave-indicator"></span>
+            <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
+            <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
+            <button type="button" id="sections-index-btn" class="btn btn-sections">Sections</button>
+          </div>
+        </div>
+        <div id="standalone-back-bar" class="standalone-back-bar hidden">
+          <button type="button" id="standalone-back-btn" class="btn btn-secondary">&#8592; Back to form</button>
+        </div>
+        <div id="section-index-bar" class="section-index-bar" aria-label="Jump to section"></div>
+
+        <!-- Keyboard shortcuts modal -->
+        <div id="kb-help-modal" class="sections-index hidden">
+          <div class="sections-index-content" style="max-width:380px;">
+            <h3>Keyboard Shortcuts</h3>
+            <table class="kb-table">
+              <tr><td><kbd>Ctrl</kbd>+<kbd>&rarr;</kbd></td><td>Next section</td></tr>
+              <tr><td><kbd>Ctrl</kbd>+<kbd>&larr;</kbd></td><td>Previous section</td></tr>
+              <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save &amp; exit</td></tr>
+              <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Export PDF</td></tr>
+              <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Print attendance note</td></tr>
+              <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></td><td>Print preview</td></tr>
+              <tr><td><kbd>Esc</kbd></td><td>Close popup / back</td></tr>
+            </table>
+            <button type="button" id="kb-help-close" class="btn btn-secondary" style="margin-top:0.75rem;width:100%;">Close</button>
+          </div>
+        </div>
+
+        <!-- Context bar: always-visible case summary -->
+        <div id="form-context-bar" class="form-context-bar"></div>
+
+        <!-- Sections index popup -->
+        <div id="sections-index" class="sections-index hidden">
+          <div class="sections-index-content">
+            <h3>Sections</h3>
+            <ul id="sections-index-list"></ul>
+            <button type="button" id="sections-index-close" class="btn btn-secondary" style="margin-top:0.75rem;width:100%;">Close</button>
+          </div>
+        </div>
+
+        <!-- Validation modal -->
+        <div id="validation-modal" class="validation-modal hidden">
+          <div class="validation-modal-content">
+            <h3>Missing Fields</h3>
+            <p class="settings-hint">These fields should be completed before finalising:</p>
+            <ul id="validation-list"></ul>
+            <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+              <button type="button" id="validation-finalise-anyway" class="btn btn-finalise">Finalise anyway</button>
+              <button type="button" id="validation-close" class="btn btn-secondary" style="flex:1;">Go back and fix</button>
+            </div>
+          </div>
+        </div>
+
+        <form id="attendance-form" class="attendance-form"></form>
+
+        <div class="form-bottom-bar">
+          <button type="button" id="form-prev" class="bottom-btn prev-btn">&#9664; Previous</button>
+          <div id="section-progress-bar" class="section-progress-bar"></div>
+          <button type="button" id="form-sections-btn" class="bottom-btn sections-btn">&#9783; Sections</button>
+          <button type="button" id="form-save-exit" class="bottom-btn save-btn">&#10003; Save / Exit</button>
+          <div id="section-progress-bar-2" class="section-progress-bar"></div>
+          <button type="button" id="form-next" class="bottom-btn next-btn">Next &#9654;</button>
+        </div>
+      </div>
+
+      <!-- REPORTS VIEW -->
+      <div id="view-reports" class="view">
+        <div class="firms-page-header">
+          <button type="button" id="reports-back-btn" class="btn btn-secondary">&larr; Home</button>
+          <h2 style="margin:0;color:var(--primary);">Reports</h2>
+        </div>
+        <div class="reports-grid">
+          <div class="settings-card">
+            <h2>This Month</h2>
+            <div class="report-stat" id="report-month-total">0 attendances</div>
+          </div>
+          <div class="settings-card">
+            <h2>This Year</h2>
+            <div class="report-stat" id="report-year-total">0 attendances</div>
+          </div>
+          <div class="settings-card">
+            <h2>Escape Fee Cases</h2>
+            <div class="report-stat" id="report-escape-count">0</div>
+          </div>
+          <div class="settings-card" style="grid-column:1/-1;">
+            <h2>By Firm</h2>
+            <div id="report-by-firm" class="report-breakdown"></div>
+          </div>
+          <div class="settings-card" style="grid-column:1/-1;">
+            <h2>By Station</h2>
+            <div id="report-by-station" class="report-breakdown"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS VIEW -->
+      <div id="view-settings" class="view">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
+          <button type="button" id="settings-back-btn" class="btn btn-secondary">&larr; Home</button>
+          <span id="settings-saved-toast" class="settings-saved-toast">Settings saved</span>
+        </div>
+        <div class="settings-card">
+          <h2>Your Details</h2>
+          <label>DSCC PIN/Number</label>
+          <input type="text" id="setting-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10" style="max-width:200px;">
+          <label style="margin-top:0.75rem;">Supervisor review</label>
+          <label class="toggle-row">
+            <span>Show supervisor review section (only if a firm requires it)</span>
+            <input type="checkbox" id="setting-show-supervisor-review">
+          </label>
+          <p class="settings-hint" style="margin-top:4px;">Freelance reps can usually leave this off.</p>
+          <label style="margin-top:0.75rem;">Fee Earner Name</label>
+          <input type="text" id="setting-fee-earner-name" placeholder="e.g. Robert Smith">
+          <p class="settings-hint" style="margin-top:4px;">Auto-fills fee earner name in conflict certificates and LAA declarations.</p>
+          <label style="margin-top:0.75rem;">Your email (PDFs sent here to check)</label>
+          <input type="email" id="setting-email" placeholder="you@example.com">
+        </div>
+
+        <div class="settings-card">
+          <h2>QuickFile (invoice numbers)</h2>
+          <p class="settings-hint">Link the File reference / Invoice number field to your QuickFile account. Get your API key and create an app in QuickFile &rarr; Account settings &rarr; 3rd Party Integrations.</p>
+          <label>Account number</label>
+          <input type="text" id="setting-quickfile-account" placeholder="Your QuickFile account number" autocomplete="off">
+          <label>API key</label>
+          <input type="password" id="setting-quickfile-apikey" placeholder="API key from QuickFile" autocomplete="off">
+          <label>Application ID</label>
+          <input type="text" id="setting-quickfile-appid" placeholder="From your registered QuickFile app" autocomplete="off">
+        </div>
+
+        <div class="settings-card">
+          <h2>Appearance</h2>
+          <label>Colour Theme</label>
+          <div id="theme-picker" class="theme-picker">
+            <button type="button" class="theme-swatch theme-swatch-active" data-theme="default" title="Deep Navy"><span class="swatch-colour" style="background:#0f172a;"></span><span class="swatch-label">Deep Navy</span></button>
+            <button type="button" class="theme-swatch" data-theme="light" title="Classic Light"><span class="swatch-colour" style="background:#f1f5f9;border:1px solid #cbd5e1;"></span><span class="swatch-label">Classic Light</span></button>
+            <button type="button" class="theme-swatch" data-theme="slate" title="Slate Blue"><span class="swatch-colour" style="background:#334766;"></span><span class="swatch-label">Slate Blue</span></button>
+            <button type="button" class="theme-swatch" data-theme="midnight" title="Midnight"><span class="swatch-colour" style="background:#1e293b;"></span><span class="swatch-label">Midnight</span></button>
+            <button type="button" class="theme-swatch" data-theme="teal" title="Blue"><span class="swatch-colour" style="background:#172554;"></span><span class="swatch-label">Blue</span></button>
+            <button type="button" class="theme-swatch" data-theme="emerald" title="Emerald"><span class="swatch-colour" style="background:#064e3b;"></span><span class="swatch-label">Emerald</span></button>
+            <button type="button" class="theme-swatch" data-theme="rose" title="Rose"><span class="swatch-colour" style="background:#4c0519;"></span><span class="swatch-label">Rose</span></button>
+            <button type="button" class="theme-swatch" data-theme="purple" title="Purple"><span class="swatch-colour" style="background:#3b0764;"></span><span class="swatch-label">Purple</span></button>
+            <button type="button" class="theme-swatch" data-theme="charcoal" title="Charcoal"><span class="swatch-colour" style="background:#1c1917;"></span><span class="swatch-label">Charcoal</span></button>
+            <button type="button" class="theme-swatch" data-theme="copper" title="Copper"><span class="swatch-colour" style="background:#451a03;"></span><span class="swatch-label">Copper</span></button>
+          </div>
+          <label class="toggle-row" style="margin-top:1rem;">
+            <span>Dark Mode (for night shifts)</span>
+            <input type="checkbox" id="setting-dark-mode">
+          </label>
+          <label style="margin-top:1rem;">Font Size</label>
+          <div class="font-size-row">
+            <span class="font-label">A</span>
+            <input type="range" id="setting-font-size" min="12" max="20" value="16" step="1">
+            <span class="font-label font-label-lg">A</span>
+            <span id="font-size-val" class="font-size-val">16px</span>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Backup</h2>
+          <p class="settings-hint" style="margin-top:0;">Your attendance data is backed up automatically as encrypted files. Choose where to save them below.</p>
+          <label>Backup folder</label>
+          <div class="setting-row">
+            <input type="text" id="setting-backup-folder" readonly placeholder="Desktop">
+            <button type="button" id="setting-backup-browse" class="btn btn-secondary">Browse</button>
+          </div>
+          <ul class="settings-hint" style="margin:0.25rem 0 1rem 1.25rem;">
+            <li><strong>Quick backup</strong> &mdash; Runs every 2 minutes when you&rsquo;ve made changes. Saves a single file <code>attendance-latest.db</code> (overwritten each time).</li>
+            <li><strong>Hourly archive</strong> &mdash; A timestamped copy is saved every hour. Up to 48 hourly files are kept; older ones are removed automatically.</li>
+            <li><strong>Backup now</strong> &mdash; On the Attendance List (Records), use the &ldquo;Backup now&rdquo; button to create an immediate backup plus refresh the latest file.</li>
+          </ul>
+          <label>Off-site backup folder (optional)</label>
+          <div class="setting-row">
+            <input type="text" id="setting-offsite-backup-folder" readonly placeholder="None">
+            <button type="button" id="setting-offsite-backup-browse" class="btn btn-secondary">Browse</button>
+          </div>
+          <p class="settings-hint">Choose a folder that syncs to the cloud (e.g. OneDrive, Dropbox, Google Drive). The same encrypted backup files are copied there whenever a backup runs, so you have a copy away from your computer in case of loss or theft. Leave blank to use only the main backup folder.</p>
+          <label>Cloud backup URL (optional)</label>
+          <input type="url" id="setting-cloud-backup-url" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
+          <p class="settings-hint" style="margin-top:0.25rem;">When set, &ldquo;Backup now&rdquo; also uploads the encrypted backup to this URL (your own API, e.g. Vercel + S3/Azure). Leave blank to skip cloud upload.</p>
+          <label style="margin-top:0.5rem;">Cloud backup token (optional)</label>
+          <input type="password" id="setting-cloud-backup-token" placeholder="Secret token for your API" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
+          <p class="settings-hint" style="margin-top:0.25rem;">Sent as <code>Authorization: Bearer &lt;token&gt;</code>. Your API can reject uploads without a valid token.</p>
+          <div id="cloud-backup-section" style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid var(--border-color, #ccc);">
+            <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Cloud Backup</h3>
+            <div id="cloud-backup-not-subscribed" style="display:none;">
+              <div style="background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #f59e0b;border-radius:8px;padding:1rem;margin-bottom:1rem;">
+                <p style="margin:0 0 0.5rem 0;font-weight:600;color:#92400e;">&#9888; Local backup only</p>
+                <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#78350f;">Your data is backed up only to this computer. If your hard drive fails, is stolen, or is damaged, your entire database could be <strong>permanently lost with no chance of recovery</strong>.</p>
+                <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#78350f;">Subscribe to Cloud Backup for automatic, incorruptible off-site protection on AWS. Your data is encrypted before upload and isolated so only you can access it (SRA-compliant).</p>
+                <button type="button" id="btn-cloud-backup-subscribe" class="btn btn-primary" style="margin-top:0.25rem;">Subscribe to Cloud Backup</button>
+              </div>
+            </div>
+            <div id="cloud-backup-subscribed" style="display:none;">
+              <div style="background:linear-gradient(135deg,#d1fae5,#ecfdf5);border:1px solid #10b981;border-radius:8px;padding:1rem;margin-bottom:1rem;">
+                <p style="margin:0 0 0.5rem 0;font-weight:600;color:#065f46;">&#10003; Amazon Web Services subscription paid</p>
+                <p style="margin:0;font-size:0.85rem;color:#064e3b;">Your database is automatically backed up to a secure UK data centre (AWS London). Backups are encrypted and tamper-proof for 90 days.</p>
+                <p id="cloud-backup-last-success" style="margin:0.5rem 0 0 0;font-size:0.8rem;color:#065f46;"></p>
+              </div>
+              <button type="button" id="btn-cloud-backup-restore" class="btn btn-secondary" style="margin-bottom:0.5rem;">Restore from Cloud Backup</button>
+              <div id="cloud-restore-panel" style="display:none;margin-top:0.75rem;">
+                <p class="settings-hint">Select a backup to restore. This will replace your current database. A safety copy is saved first.</p>
+                <select id="cloud-restore-select" style="width:100%;max-width:400px;padding:0.5rem;margin-bottom:0.5rem;"></select>
+                <button type="button" id="btn-cloud-restore-confirm" class="btn btn-primary">Restore selected backup</button>
+                <span id="cloud-restore-status" class="settings-hint" style="margin-left:0.5rem;"></span>
+              </div>
+            </div>
+            <p id="cloud-backup-error" class="settings-hint" style="color:#c00;display:none;"></p>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Security &amp; Encryption</h2>
+          <p id="encryption-status" class="settings-path-display">Checking...</p>
+          <label>Recovery Password</label>
+          <p class="settings-hint">Set a recovery password so you can access your data if you move to a new computer or your laptop is lost/stolen. <strong>Keep this password safe</strong> &mdash; if you forget it and lose your computer, your data cannot be recovered.</p>
+          <p class="settings-hint">If you need to recover (e.g. new computer), start the app with your database and recovery.dat in place; a window will ask for this password.</p>
+          <p id="recovery-status" class="settings-hint" style="font-weight:600;"></p>
+          <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem;">
+            <input type="password" id="setting-recovery-pw" placeholder="New recovery password" style="flex:1;">
+            <button type="button" id="btn-toggle-recovery-pw" class="btn btn-small" aria-label="Show password">Show</button>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <input type="password" id="setting-recovery-pw-confirm" placeholder="Confirm recovery password" style="flex:1;">
+            <button type="button" id="btn-toggle-recovery-pw-confirm" class="btn btn-small" aria-label="Show password">Show</button>
+          </div>
+          <div style="margin-top:0.5rem;">
+            <button type="button" id="btn-set-recovery-pw" class="btn btn-secondary">Set Recovery Password</button>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Import record (Admin)</h2>
+          <p class="settings-hint">Load a previous record from a PDF exported by this app, or from a JSON backup. The record will be added as a new draft and opened for editing.</p>
+          <button type="button" id="settings-load-from-pdf" class="btn btn-primary">Load from PDF or JSON</button>
+          <div style="margin-top:0.75rem;">
+            <label style="display:block;margin-bottom:6px;">Import from file path (paste)</label>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+              <input type="text" id="settings-import-path" placeholder="C:\path\to\file.pdf or .json" style="flex:1;min-width:260px;">
+              <button type="button" id="settings-import-path-btn" class="btn btn-secondary">Import</button>
+            </div>
+            <p class="settings-hint" style="margin-top:6px;">Tip: you can also drag-and-drop a PDF/JSON onto the app window to import it.</p>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Auto-import folder (optional)</h2>
+          <p class="settings-hint">When enabled, the app will automatically import any new PDF/JSON files added to a folder (e.g. a “Custody Note exports” folder). Imported files are not moved or deleted.</p>
+          <label class="toggle-row">
+            <span>Enable auto-import</span>
+            <input type="checkbox" id="setting-auto-import-enabled">
+          </label>
+          <label style="margin-top:0.75rem;">Auto-import folder</label>
+          <div class="setting-row">
+            <input type="text" id="setting-auto-import-folder" readonly placeholder="Choose a folder">
+            <button type="button" id="setting-auto-import-browse" class="btn btn-secondary">Browse</button>
+          </div>
+          <p class="settings-hint">The app checks the folder periodically and imports the newest files first.</p>
+        </div>
+
+        <div class="settings-card">
+          <h2>Storage &amp; Connectivity</h2>
+          <label>Database location</label>
+          <p id="settings-db-path" class="settings-path-display">Loading...</p>
+          <div style="margin:0.5rem 0 1rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <button type="button" id="btn-db-repair" class="btn btn-secondary">Repair database (fix duplicates)</button>
+            <span id="db-repair-status" class="settings-hint" style="margin:0;"></span>
+          </div>
+          <label>Backup folder</label>
+          <p id="settings-backup-path-display" class="settings-path-display">Loading...</p>
+          <label>Off-site backup folder</label>
+          <p id="settings-offsite-backup-path-display" class="settings-path-display">Loading...</p>
+          <label>Connectivity</label>
+          <p id="settings-connectivity" class="settings-path-display">Checking...</p>
+          <p class="settings-hint">The app works fully offline. All data is stored locally on this computer in an SQLite database. No internet connection is required for core functionality. The QuickFile invoicing integration requires internet when used.</p>
+        </div>
+
+        <div class="settings-card">
+          <h2>LAA Forms (Official)</h2>
+          <p>Open official LAA PDF form templates bundled with the app. These are the real forms from GOV.UK.</p>
+          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm1" style="margin-top:0.5rem;display:block;text-align:left;">CRM1 &mdash; Client&rsquo;s Details (v16 Feb 2025)</button>
+          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm2" style="margin-top:0.5rem;display:block;text-align:left;">CRM2 &mdash; Advice &amp; Assistance (v15 Oct 2025)</button>
+          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm3" style="margin-top:0.5rem;display:block;text-align:left;">CRM3 &mdash; Advocacy Assistance (v17 Feb 2025)</button>
+          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-declaration" style="margin-top:0.5rem;display:block;text-align:left;">Applicant Declaration (v7 Feb 2025)</button>
+        </div>
+
+        <div class="settings-card">
+          <h2>LAA Fee Rates (editable)</h2>
+          <p class="settings-hint">Edit rates below. Changes apply to fee calculations immediately.</p>
+          <table class="rates-table rates-editable">
+            <tr><td>Fixed Fee (all schemes)</td><td>&pound;<input type="number" id="rate-fixedFee" step="0.01" value="320.00" class="rate-input"></td></tr>
+            <tr><td>Escape Threshold</td><td>&pound;<input type="number" id="rate-escapeThreshold" step="0.01" value="650.00" class="rate-input"></td></tr>
+            <tr><td>Attendance (social) /hr</td><td>&pound;<input type="number" id="rate-attendanceSocial" step="0.01" value="54.57" class="rate-input"></td></tr>
+            <tr><td>Attendance (unsocial) /hr</td><td>&pound;<input type="number" id="rate-attendanceUnsocial" step="0.01" value="72.46" class="rate-input"></td></tr>
+            <tr><td>Travel &amp; Waiting /hr</td><td>&pound;<input type="number" id="rate-travelWaiting" step="0.01" value="27.29" class="rate-input"></td></tr>
+            <tr><td>Mileage /mile</td><td>&pound;<input type="number" id="rate-mileage" step="0.01" value="0.45" class="rate-input"></td></tr>
+            <tr><td>VAT (%)</td><td><input type="number" id="rate-vat" step="1" value="20" class="rate-input">%</td></tr>
+            <tr><td>Unsocial hours</td><td>7pm-7am + weekends/BH</td></tr>
+          </table>
+        </div>
+
+        <div class="settings-card">
+          <h2>Support &amp; Suggestions</h2>
+          <p class="settings-hint">Have a suggestion, need help, or want to report a bug? Get in touch or visit the support forum.</p>
+          <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:0.75rem;">
+            <button type="button" id="suggestions-forum-open-btn" class="btn btn-primary">Open Support Forum</button>
+            <button type="button" id="support-email-btn" class="btn btn-secondary">Email Support</button>
+            <button type="button" id="share-app-email-btn" class="btn btn-secondary">Email installer link to someone</button>
+          </div>
+        </div>
+
+        <div class="settings-card" id="useful-links-card">
+          <h2>Useful Links</h2>
+          <p class="settings-hint" style="margin-top:0;">Quick access to essential resources for police station reps and criminal defence practitioners.</p>
+
+          <h3 class="useful-links-category">PSR Connect &amp; Tools</h3>
+          <div class="useful-links-grid">
+            <a href="https://www.policestationrepuk.com/" class="useful-link-btn" data-ext-url="https://www.policestationrepuk.com/">PSR Connect Home</a>
+            <a href="https://policestationrepuk.com/EscapeFeeCalculator" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/EscapeFeeCalculator">Escape Fee Calculator</a>
+            <a href="https://policestationrepuk.com/PoliceStationRates" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/PoliceStationRates">Police Station Rates</a>
+            <a href="https://policestationrepuk.com/FormsLibrary" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/FormsLibrary">Forms Library</a>
+            <a href="https://policestationrepuk.com/LegalUpdates" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/LegalUpdates">Legal Updates</a>
+            <a href="https://policestationrepuk.com/PACE" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/PACE">PACE Reference</a>
+            <a href="https://policestationrepuk.com/StationsDirectory" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/StationsDirectory">Stations Directory</a>
+            <a href="https://policestationrepuk.com/InterviewUnderCaution" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/InterviewUnderCaution">Interview Under Caution</a>
+            <a href="https://policestationrepuk.com/PoliceDisclosureGuide" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/PoliceDisclosureGuide">Disclosure Guide</a>
+            <a href="https://policestationrepuk.com/CrownCourtFees" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/CrownCourtFees">Crown Court Fees</a>
+            <a href="https://policestationrepuk.com/MagistratesCourtFees" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/MagistratesCourtFees">Magistrates Court Fees</a>
+            <a href="https://policestationrepuk.com/Wiki" class="useful-link-btn" data-ext-url="https://policestationrepuk.com/Wiki">Knowledge Base</a>
+          </div>
+
+          <h3 class="useful-links-category">Legal Aid &amp; LAA</h3>
+          <div class="useful-links-grid">
+            <a href="https://apply-for-criminal-legal-aid.service.justice.gov.uk" class="useful-link-btn" data-ext-url="https://apply-for-criminal-legal-aid.service.justice.gov.uk">Crime Apply (online)</a>
+            <a href="https://www.gov.uk/government/collections/criminal-legal-aid-application-forms" class="useful-link-btn" data-ext-url="https://www.gov.uk/government/collections/criminal-legal-aid-application-forms">LAA Application Forms</a>
+            <a href="https://www.gov.uk/guidance/legal-aid-crime-eform" class="useful-link-btn" data-ext-url="https://www.gov.uk/guidance/legal-aid-crime-eform">Crime eForm Guidance</a>
+            <a href="https://legalaidlearning.justice.gov.uk/apply-faq/" class="useful-link-btn" data-ext-url="https://legalaidlearning.justice.gov.uk/apply-faq/">Legal Aid FAQs</a>
+          </div>
+
+          <h3 class="useful-links-category">DSCC &amp; Duty Solicitor</h3>
+          <div class="useful-links-grid">
+            <a href="https://www.dutysolicitors.org/" class="useful-link-btn" data-ext-url="https://www.dutysolicitors.org/">DSCC Portal (rotas)</a>
+            <a href="https://www.gov.uk/guidance/duty-solicitors-rotas-information-and-guidance" class="useful-link-btn" data-ext-url="https://www.gov.uk/guidance/duty-solicitors-rotas-information-and-guidance">Duty Solicitor Guidance</a>
+          </div>
+
+          <h3 class="useful-links-category">PACE &amp; Legislation</h3>
+          <div class="useful-links-grid">
+            <a href="https://www.gov.uk/guidance/police-and-criminal-evidence-act-1984-pace-codes-of-practice" class="useful-link-btn" data-ext-url="https://www.gov.uk/guidance/police-and-criminal-evidence-act-1984-pace-codes-of-practice">PACE Codes A&ndash;H</a>
+            <a href="https://www.legislation.gov.uk/ukpga/1984/60/contents" class="useful-link-btn" data-ext-url="https://www.legislation.gov.uk/ukpga/1984/60/contents">PACE 1984 (full text)</a>
+            <a href="https://www.legislation.gov.uk/ukpga/1976/63/contents" class="useful-link-btn" data-ext-url="https://www.legislation.gov.uk/ukpga/1976/63/contents">Bail Act 1976</a>
+            <a href="https://www.legislation.gov.uk/ukpga/2003/44/contents" class="useful-link-btn" data-ext-url="https://www.legislation.gov.uk/ukpga/2003/44/contents">Criminal Justice Act 2003</a>
+            <a href="https://www.legislation.gov.uk/ukpga/1983/20/contents" class="useful-link-btn" data-ext-url="https://www.legislation.gov.uk/ukpga/1983/20/contents">Mental Health Act 1983</a>
+            <a href="https://www.legislation.gov.uk/ukpga/1971/38/contents" class="useful-link-btn" data-ext-url="https://www.legislation.gov.uk/ukpga/1971/38/contents">Misuse of Drugs Act 1971</a>
+          </div>
+
+          <h3 class="useful-links-category">Sentencing &amp; CPS</h3>
+          <div class="useful-links-grid">
+            <a href="https://www.sentencingcouncil.org.uk/" class="useful-link-btn" data-ext-url="https://www.sentencingcouncil.org.uk/">Sentencing Council</a>
+            <a href="https://www.sentencingcouncil.org.uk/sentencing-and-the-council/about-sentencing-guidelines/magistrates-court-sentencing-guidelines/" class="useful-link-btn" data-ext-url="https://www.sentencingcouncil.org.uk/sentencing-and-the-council/about-sentencing-guidelines/magistrates-court-sentencing-guidelines/">Magistrates Guidelines</a>
+            <a href="https://www.cps.gov.uk/prosecution-guidance" class="useful-link-btn" data-ext-url="https://www.cps.gov.uk/prosecution-guidance">CPS Prosecution Guidance</a>
+            <a href="https://www.cps.gov.uk/publication/code-crown-prosecutors" class="useful-link-btn" data-ext-url="https://www.cps.gov.uk/publication/code-crown-prosecutors">Code for Crown Prosecutors</a>
+          </div>
+
+          <h3 class="useful-links-category">Court Listings</h3>
+          <div class="useful-links-grid">
+            <a href="https://www.courtserve.net/" class="useful-link-btn" data-ext-url="https://www.courtserve.net/">CourtServe (magistrates)</a>
+            <a href="https://xhibit.justice.gov.uk/" class="useful-link-btn" data-ext-url="https://xhibit.justice.gov.uk/">Xhibit (Crown Court)</a>
+            <a href="https://www.gov.uk/find-court-tribunal" class="useful-link-btn" data-ext-url="https://www.gov.uk/find-court-tribunal">Find a Court</a>
+          </div>
+
+          <h3 class="useful-links-category">Professional Bodies</h3>
+          <div class="useful-links-grid">
+            <a href="https://www.lawsociety.org.uk/en/career-advice/individual-accreditations/criminal-litigation-accreditation/" class="useful-link-btn" data-ext-url="https://www.lawsociety.org.uk/en/career-advice/individual-accreditations/criminal-litigation-accreditation/">Law Society (CLA)</a>
+            <a href="https://www.clsa.co.uk/" class="useful-link-btn" data-ext-url="https://www.clsa.co.uk/">CLSA</a>
+            <a href="https://www.lccsa.org.uk/" class="useful-link-btn" data-ext-url="https://www.lccsa.org.uk/">LCCSA</a>
+            <a href="https://www.appropriateadult.org.uk/" class="useful-link-btn" data-ext-url="https://www.appropriateadult.org.uk/">Appropriate Adult</a>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- HELP / INSTRUCTIONS VIEW -->
+      <div id="view-help" class="view">
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
+          <button type="button" id="help-back-btn" class="btn btn-secondary">&larr; Home</button>
+          <h2 style="margin:0;color:var(--primary);">How to Use Custody Note</h2>
+        </div>
+        <div class="help-page">
+
+          <p class="help-intro">Custody Note is a complete digital attendance note and LAA billing tool for police station representatives. Everything is stored locally on your computer &mdash; no internet connection is required. This guide covers every feature in detail.</p>
+
+          <details class="help-section" open>
+            <summary class="help-heading">Getting Started</summary>
+            <div class="help-content">
+              <p>When you first launch the app, you will be asked for your <strong>DSCC PIN/Number</strong>. This is used in PDF headers and billing. You can skip this and set it later in Settings.</p>
+              <h4>Recommended first steps:</h4>
+              <ol>
+                <li>Go to <strong>Settings</strong> (gear menu, top-right) and enter your <strong>Fee Earner Name</strong>. This auto-fills into conflict certificates and LAA declarations on every new record.</li>
+                <li>Set your <strong>email address</strong> so exported PDFs can be sent to you for checking.</li>
+                <li>Add the <strong>firms that instruct you</strong> via the Firms page. Star one as your default firm.</li>
+                <li>Set a <strong>backup folder</strong> in Settings so your data is automatically backed up every 2 minutes (and hourly archives kept). Optionally set an <strong>off-site backup folder</strong> (e.g. OneDrive or Dropbox) so backups also copy to the cloud.</li>
+                <li>Set a <strong>recovery password</strong> in Settings &gt; Security &amp; Encryption. This lets you recover your database if you move to a new computer.</li>
+              </ol>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Licence Activation and Trial</summary>
+            <div class="help-content">
+              <p>Custody Note requires a valid licence or trial to run. When you first install the app, you can start a <strong>14-day free trial</strong> to try all features.</p>
+              <h4>Trial</h4>
+              <ul>
+                <li>On first launch, if no licence is entered, the app will offer a trial. Click <strong>Start trial</strong> to begin.</li>
+                <li>The trial lasts 14 days and includes all features except Cloud Backup (Cloud Backup requires a paid subscription).</li>
+                <li>You will see a reminder as the trial nears expiry. When expired, the app will show the licence overlay until you enter a valid licence key.</li>
+              </ul>
+              <h4>Activating a subscription</h4>
+              <ul>
+                <li>After purchasing a subscription at <a href="https://custodynote.com" target="_blank" rel="noopener">custodynote.com</a>, you will receive a licence key by email.</li>
+                <li>Enter your licence key in the activation overlay when prompted (e.g. when trial has expired or when opening the app without a valid licence).</li>
+                <li>The app validates your licence online. You need an internet connection for activation and periodic validation (the app has a grace period when offline).</li>
+                <li>If you see a "subscription" or "trial" message and you have paid, ensure you entered the exact licence key from your email. Keys are case-sensitive; enter them exactly as shown.</li>
+              </ul>
+              <h4>Renewing or changing your subscription</h4>
+              <p>To renew, upgrade, or cancel, log in to your account at custodynote.com or use the link in your subscription confirmation email. The app will automatically recognise an active subscription when it next validates.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Home Screen</summary>
+            <div class="help-content">
+              <p>The home screen is your command centre. It shows a greeting, the current date and time, and three action cards:</p>
+              <ul>
+                <li><strong>New Tel Advice</strong> &mdash; Start a telephone advice record (INVB claim). Use this for police station advice calls where you do not physically attend.</li>
+                <li><strong>Quick Capture</strong> &mdash; Rapidly capture key case details when you first receive an instruction. You can expand this into a full form later.</li>
+                <li><strong>New Attendance</strong> &mdash; Start a full police station attendance note for an in-person attendance.</li>
+              </ul>
+              <p>Below the cards you will see <strong>Latest activity</strong> showing your most recent records (up to 10). Use <strong>View all</strong> to open the full list in All Records. A status strip confirms your internet and backup status.</p>
+              <p>The <strong>search bar</strong> at the top of the header lets you search across all records by client name, UFN, station, custody number, or date.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Quick Capture</summary>
+            <div class="help-content">
+              <p>Quick Capture is designed for the moment you receive an instruction &mdash; while driving, on the phone, or in a rush. It captures the essential details:</p>
+              <ul>
+                <li>Client name, police station, offence, DSCC number</li>
+                <li>Instruction time, first contact time (LAA requirement)</li>
+                <li>Instructing firm, OIC details, custody number</li>
+                <li>Travel times (set off / arrived)</li>
+              </ul>
+              <p>You have two options when saving:</p>
+              <ul>
+                <li><strong>Save as Draft</strong> &mdash; Saves the quick capture data. You can open it later from All Records to continue.</li>
+                <li><strong>Expand to Full Form</strong> &mdash; Immediately opens the full 9-section attendance form with all your quick capture data pre-filled.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">New Attendance (Full Form)</summary>
+            <div class="help-content">
+              <p>The main attendance form has <strong>9 sections</strong> in the flow (1–9), navigated with Previous/Next or the <strong>Sections</strong> button. <strong>Consents &amp; Retainer, Third Party Authority, Authorities, Communications Log, Supervisor Review, LAA Declaration, and Admin &amp; Billing</strong> are <em>not</em> part of this flow &mdash; they open in a <strong>separate screen</strong> when you tap their card on section 1 or from Home.</p>
+
+              <h4>1. Case Reference &amp; Arrival</h4>
+              <p>DSCC number, UFN, work type, instruction time, first contact with client, police station (typeahead search), instructing firm, OIC details. The police station field lets you type the first few letters and select from the LAA station list.</p>
+
+              <h4>2. Journey to Station</h4>
+              <p>Set-off time, arrival time, mileage. Used for travel and waiting time calculations.</p>
+
+              <h4>3. Custody Record</h4>
+              <p>Client personal details (name, DOB, address, nationality), NI number, benefits, passported benefit status (auto-detected from the benefit you select), employment, accommodation, marital status, risk assessment, PACE reviews, ethnicity and disability codes.</p>
+              <div class="help-tip"><strong>Tip:</strong> Date of birth accepts flexible formats &mdash; type <em>15/03/1987</em>, <em>15-3-87</em>, or <em>15 mar 1987</em> and it will auto-parse.</div>
+              <div class="help-tip"><strong>Tip:</strong> When you select a benefit type, the app automatically sets whether it is a passporting benefit (Universal Credit, Income Support, income-based JSA/ESA, Pension Credit Guarantee = Yes; all others = No).</div>
+
+              <h4>4. Offences</h4>
+              <p>Record up to four offences with details and statute. These are used to auto-fill charges if the client is charged (see Outcome section).</p>
+
+              <h4>5. Disclosure &amp; Evidence</h4>
+              <p>Record what disclosure was received, PACE searches, forensic samples, and the name of the complainant/alleged victim.</p>
+
+              <h4>6. Consultation (Attend on Client)</h4>
+              <p>Record your consultation with the client: advice given, conflict check, instructions, welfare, checklist items.</p>
+
+              <h4>7. Interview</h4>
+              <p>Record one or more interviews with start/end times, advice given, and notes. Use <strong>+ Add interview</strong> for further interviews.</p>
+              <p class="help-tip" style="margin-top:0.5rem;"><strong>Note:</strong> These notes are not verbatim and should not be relied upon as if a transcript.</p>
+
+              <h4>8. Outcome</h4>
+              <p>Record the outcome decision (NFA, Charged, Bail, RUI, etc.). If the client is charged, the app offers to <strong>pre-fill the charge details</strong> from the offences in Section 4 &mdash; a confirmation box appears so you can accept or decline.</p>
+              <p>The <strong>Court Name</strong> field has typeahead autocomplete &mdash; start typing and matching courts appear.</p>
+
+              <h4>9. Time Recording &amp; Fees</h4>
+              <p>Record attendance, travel, waiting, and advice times (social/unsocial hours). The app calculates whether the case is an escape fee case automatically. Includes an <strong>Invoice Sent</strong> tracker that auto-stamps the date and time when you mark it as sent.</p>
+
+              <h4>Stand-alone options (separate screen)</h4>
+              <p>These open in a <strong>separate screen</strong> when you tap their card on section 1 or from Home; they are not in the main 1–9 flow.</p>
+              <ul>
+                <li><strong>Consents &amp; Retainer</strong> &mdash; Client retainer / authority to act. Fields auto-fill from client details entered earlier.</li>
+                <li><strong>Third Party Authority</strong> &mdash; Record authority from the client to contact third parties. Each entry captures name, relationship, contact details, what information is authorised to disclose, and outcome. Use <strong>+ Add third party</strong> for multiple entries.</li>
+                <li><strong>Authorities</strong> &mdash; Appointed Solicitor (reference, contact details), Medical Authorities (per provider), Other Professional Authority (social services, housing, education, etc.).</li>
+                <li><strong>Communications Log</strong> &mdash; Log telephone calls, emails, and text messages. Each entry: type, direction, date, time, party, summary. Use <strong>+ Add entry</strong> for each.</li>
+                <li><strong>Supervisor Review</strong> &mdash; Only shown if enabled in Settings. For firms that require supervisor sign-off.</li>
+                <li><strong>LAA Declaration</strong> &mdash; Declaration text, client and fee earner names (fee earner auto-fills from Settings), signatures (pads or full-screen canvas).</li>
+                <li><strong>Admin &amp; Billing</strong> &mdash; File number (ours) / invoice number (can link QuickFile), UFN, LAA account, MAAT ID.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Telephone Advice (INVB)</summary>
+            <div class="help-content">
+              <p>The telephone advice form is a streamlined 4-section form for police station advice calls where you do not physically attend:</p>
+              <ol>
+                <li><strong>Call Details</strong> &mdash; DSCC number, station, firm, OIC, instruction time, first contact time.</li>
+                <li><strong>Client &amp; Advice</strong> &mdash; Client details, offence, disclosure, advice given, sufficient benefit test.</li>
+                <li><strong>Outcome</strong> &mdash; Outcome decision, time recording, fee calculation.</li>
+                <li><strong>Sign Off</strong> &mdash; LAA declaration, client/fee earner names. Signatures are <strong>optional</strong> (toggle on if the client is present or the firm requires them).</li>
+              </ol>
+              <p>This form meets all minimum LAA requirements for INVB (telephone advice) claims. The fields required for an LAA audit pass are highlighted.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Navigating the Form</summary>
+            <div class="help-content">
+              <ul>
+                <li><strong>Previous / Next buttons</strong> &mdash; at the bottom of each section to move between sections.</li>
+                <li><strong>Sections button</strong> &mdash; opens a popup listing all sections so you can jump directly to any one.</li>
+                <li><strong>Context bar</strong> &mdash; the bar below the header always shows the client name, station, date, and current section for quick reference.</li>
+                <li><strong>Progress bar</strong> &mdash; the coloured bar above the bottom buttons shows how far through the form you are.</li>
+                <li><strong>Auto-save</strong> &mdash; the form auto-saves your work every few seconds. You will see "Saved" appear near the top of the form.</li>
+              </ul>
+              <h4>Keyboard Shortcuts</h4>
+              <table class="help-kb-table">
+                <tr><td><kbd>Ctrl</kbd> + <kbd>&rarr;</kbd></td><td>Next section</td></tr>
+                <tr><td><kbd>Ctrl</kbd> + <kbd>&larr;</kbd></td><td>Previous section</td></tr>
+                <tr><td><kbd>Ctrl</kbd> + <kbd>S</kbd></td><td>Save and exit</td></tr>
+                <tr><td><kbd>Ctrl</kbd> + <kbd>E</kbd></td><td>Export PDF</td></tr>
+                <tr><td><kbd>Ctrl</kbd> + <kbd>P</kbd></td><td>Print attendance note</td></tr>
+                <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></td><td>Print preview</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>Close popup / go back</td></tr>
+              </table>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">All Records</summary>
+            <div class="help-content">
+              <p>Access All Records from the gear menu or by clicking <strong>View all</strong> on the home screen.</p>
+              <ul>
+                <li><strong>Search</strong> &mdash; search by client name, UFN, station, custody number, or date.</li>
+                <li><strong>Filter</strong> &mdash; filter by All, Drafts, or Finalised records.</li>
+                <li><strong>Sort</strong> &mdash; sort by newest, oldest, client name A-Z, or station.</li>
+                <li><strong>Compact view</strong> &mdash; toggle compact view for a denser list.</li>
+              </ul>
+              <h4>Record Actions</h4>
+              <p>Each record in the list has three action buttons:</p>
+              <ul>
+                <li><strong>Edit</strong> &mdash; Opens the record for editing. If the record is finalised, you will be asked to confirm; the status reverts to draft until you re-finalise.</li>
+                <li><strong>Duplicate</strong> &mdash; Creates a copy of the record for a further visit. Client details are carried over; attendance-specific details are cleared.</li>
+                <li><strong>New matter</strong> &mdash; Creates a new matter for the same client (same as duplicate but clearly a new matter).</li>
+                <li><strong>Delete</strong> &mdash; Deletes the record. Finalised records are soft-deleted (can be recovered). You will be asked for a reason.</li>
+              </ul>
+              <p>Click anywhere on the record row (not a button) to open it in view/edit mode.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Signatures</summary>
+            <div class="help-content">
+              <p>Signature pads appear in the LAA Declaration, Consents, and Supervisor Review sections. You can sign directly in the inline canvas, but for touchscreens (tablets, laptops with touchscreens) use the <strong>Sign</strong> button:</p>
+              <ol>
+                <li>Press the blue <strong>Sign</strong> button next to the signature pad.</li>
+                <li>A full-screen overlay opens with a large white canvas.</li>
+                <li>Sign with your finger or stylus.</li>
+                <li>Press <strong>Done</strong> to save the signature back to the form, or <strong>Cancel</strong> to discard.</li>
+                <li>Use <strong>Clear</strong> to wipe the canvas and start again.</li>
+              </ol>
+              <p>The inline pad also has <strong>Clear</strong> and <strong>Undo</strong> buttons.</p>
+              <p>Signature timestamps (date and time) are automatically recorded when you sign.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Firms</summary>
+            <div class="help-content">
+              <p>Manage firms that instruct you from the <strong>Firms</strong> page (gear menu).</p>
+              <ul>
+                <li><strong>Add a new firm</strong> &mdash; enter firm name, contact name, phone, and email.</li>
+                <li><strong>Use existing firm</strong> &mdash; search your saved firms by name or contact.</li>
+                <li><strong>Star a firm</strong> &mdash; click the star icon to set a firm as your default. The default firm is auto-selected on new records.</li>
+                <li><strong>Import from QuickFile</strong> &mdash; if you use QuickFile for invoicing, you can import your client list as firms.</li>
+              </ul>
+              <p>When creating a new record, you can select from your saved firms or add a new firm inline.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Reports</summary>
+            <div class="help-content">
+              <p>The Reports page (gear menu) shows:</p>
+              <ul>
+                <li><strong>This Month</strong> &mdash; total attendances this calendar month.</li>
+                <li><strong>This Year</strong> &mdash; total attendances this calendar year.</li>
+                <li><strong>Escape Fee Cases</strong> &mdash; number of cases exceeding the LAA escape threshold.</li>
+                <li><strong>By Firm</strong> &mdash; breakdown of records by instructing firm.</li>
+                <li><strong>By Station</strong> &mdash; breakdown of records by police station.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Settings</summary>
+            <div class="help-content">
+              <h4>Your Details</h4>
+              <ul>
+                <li><strong>DSCC PIN/Number</strong> &mdash; appears on PDF headers and is used for billing.</li>
+                <li><strong>Fee Earner Name</strong> &mdash; auto-fills into conflict certificates and LAA declarations on every new record.</li>
+                <li><strong>Email</strong> &mdash; PDFs can be sent here for checking.</li>
+                <li><strong>Supervisor Review</strong> &mdash; toggle on only if a firm requires supervisor sign-off.</li>
+              </ul>
+              <h4>QuickFile Integration</h4>
+              <p>Link your QuickFile account to pull invoice numbers automatically. Enter your Account Number, API Key, and Application ID from QuickFile &gt; Account Settings &gt; 3rd Party Integrations.</p>
+              <h4>Appearance</h4>
+              <ul>
+                <li><strong>Colour Theme</strong> &mdash; choose from Deep Navy, Classic Light, Slate Blue, Midnight, or Teal.</li>
+                <li><strong>Dark Mode</strong> &mdash; for night shifts.</li>
+                <li><strong>Font Size</strong> &mdash; adjust from 12px to 20px using the slider.</li>
+              </ul>
+              <h4>Backup</h4>
+              <p>The app backs up your attendance database automatically as encrypted files. In Settings &gt; Backup you can set:</p>
+              <ul>
+                <li><strong>Backup folder</strong> &mdash; Where backups are saved (e.g. Desktop or a dedicated folder). A <strong>quick backup</strong> runs every 2 minutes when you&rsquo;ve made changes, saving a single file that is overwritten each time. An <strong>hourly archive</strong> creates a new timestamped file every hour; the app keeps up to 48 of these and deletes older ones. From the Attendance List (Records), use <strong>Backup now</strong> to create an immediate backup.</li>
+                <li><strong>Off-site backup folder (optional)</strong> &mdash; A second folder (e.g. inside OneDrive, Dropbox, or Google Drive). Whenever a backup runs, the same encrypted files are copied here so they sync to the cloud. This gives you a copy away from your computer in case of loss, theft, or hardware failure. Your data is not sent to any server you don&rsquo;t control &mdash; you choose the folder and the sync is handled by your cloud provider.</li>
+              </ul>
+              <p>All backups are encrypted. Set a <strong>recovery password</strong> (Settings &gt; Security) so you can open a backup on another computer if needed.</p>
+              <h4>Security &amp; Encryption</h4>
+              <p>Your database is encrypted with AES-256-GCM. Set a <strong>recovery password</strong> so you can access your data on a new computer. Keep this password safe.</p>
+              <h4>LAA Fee Rates</h4>
+              <p>Edit the fixed fee, escape threshold, attendance rates (social/unsocial), travel and waiting rates, mileage, and VAT. Changes apply immediately to all fee calculations.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Saving, Finalising &amp; PDF Export</summary>
+            <div class="help-content">
+              <p>Records have two statuses:</p>
+              <ul>
+                <li><strong>Draft</strong> &mdash; work in progress, can be edited freely.</li>
+                <li><strong>Finalised</strong> &mdash; locked for editing. To make changes, use the <strong>Amend</strong> button in All Records, which reverts the record to draft.</li>
+              </ul>
+              <p>To finalise a record, press <strong>Save / Exit</strong> and choose <strong>Finalise</strong>. The app checks for missing required fields and warns you before finalising.</p>
+              <p>To export a PDF, press <kbd>Ctrl</kbd> + <kbd>E</kbd> or use the PDF export button. The PDF is saved to your Desktop.</p>
+              <p>Official LAA forms (CRM1, CRM2, CRM3, Applicant Declaration) are available in Settings and from the <strong>LAA Forms</strong> button in the form header. Forms are pre-filled from the current record where possible.</p>
+              <h4>LAA billing codes</h4>
+              <p>The form uses standard LAA codes for billing and claims. Key fields: <strong>DSCC number</strong> (from the duty solicitor call centre), <strong>UFN</strong> (Unique File Number from the instructing firm), <strong>MAAT ID</strong> (client identifier on the Legal Aid Agency system), and <strong>LAA account</strong> (for case tracking). These appear in Admin &amp; Billing and in the form header. Use them to match your exported PDFs and time records to LAA claims and firm file systems.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Data Safety &amp; Privacy</summary>
+            <div class="help-content">
+              <ul>
+                <li>All data is stored <strong>locally</strong> on your computer in an encrypted SQLite database.</li>
+                <li><strong>No data is sent to any server.</strong> The app works fully offline.</li>
+                <li>The database is encrypted with <strong>AES-256-GCM</strong>. The encryption key is protected by Windows Credential Store.</li>
+                <li>Automatic backups run every 2 minutes (quick) and every hour (archive). You can set an off-site backup folder (e.g. OneDrive) so the same encrypted files are copied there and sync to the cloud.</li>
+                <li>Set a <strong>recovery password</strong> in Settings to protect against data loss if your computer is lost or replaced.</li>
+                <li>Deleted finalised records are soft-deleted (not permanently removed) for audit trail purposes.</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Cloud Backup</summary>
+            <div class="help-content">
+              <p><strong>Cloud Backup</strong> is an optional add-on that automatically uploads your encrypted database to a secure UK data centre (AWS London).</p>
+              <ul>
+                <li><strong>Incorruptible:</strong> Backups are protected by AWS Object Lock &mdash; once uploaded, nobody (not even us) can delete or modify them for 90 days.</li>
+                <li><strong>Encrypted:</strong> Your data is encrypted on your computer before upload. We cannot read your backups.</li>
+                <li><strong>Isolated:</strong> Only your licence key can access your backups. No other subscriber can see your data (SRA-compliant).</li>
+                <li><strong>Restore:</strong> If your computer fails, install Custody Note on a new machine, enter your licence key, and restore from the cloud. You will need your recovery password.</li>
+              </ul>
+              <p>To subscribe, go to <strong>Settings &gt; Cloud Backup</strong> or visit <a href="#" onclick="if(window.api&&window.api.openExternal)window.api.openExternal('https://custodynote.com/pricing');return false;">custodynote.com/pricing</a>.</p>
+              <p style="margin-top:0.75rem;padding:0.75rem;background:#fef3c7;border-radius:6px;border:1px solid #f59e0b;font-size:0.9rem;"><strong>&#9888; Without cloud backup:</strong> Your data is stored only on this computer. If your hard drive fails, is stolen, or is damaged, your records could be permanently lost with no way to recover them.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
+            <summary class="help-heading">Tips &amp; Shortcuts</summary>
+            <div class="help-content">
+              <ul>
+                <li>Use <strong>Quick Capture</strong> when you first get a call &mdash; capture the essentials, then expand to the full form when you arrive at the station.</li>
+                <li>The <strong>Now</strong> button next to time fields sets the current time instantly.</li>
+                <li>The <strong>DOB field</strong> accepts flexible date formats: <em>15/03/1987</em>, <em>15-3-87</em>, <em>15 mar 1987</em>. The client&rsquo;s age is calculated automatically.</li>
+                <li>Police station and court name fields have <strong>typeahead search</strong> &mdash; type the first few letters and pick from the list.</li>
+                <li>When a client is <strong>charged</strong>, the app offers to pre-fill charge details from the offences you recorded in Section 4.</li>
+                <li>The <strong>Scratchpad</strong> (bottom-right corner) is a floating notepad for temporary notes during an attendance.</li>
+                <li>Use <strong>Duplicate</strong> on an existing record to create a further attendance &mdash; client details carry over automatically.</li>
+                <li>Toggle <strong>Dark Mode</strong> for night shifts using the moon icon in the top-right header.</li>
+              </ul>
+            </div>
+          </details>
+
+        </div>
+      </div>
+
+    </main>
+    <footer class="app-footer">
+      <span>Custody Note v<span id="app-version">...</span> | Updated: <span id="app-updated">...</span></span>
+      <span class="footer-brand">&copy; Defence Legal Services Ltd 2026</span>
+      <span class="footer-right"><span id="net-status-text" class="footer-status">Checking connection&hellip;</span><span class="footer-sep">&middot;</span><span id="backup-status-text" class="footer-status">Auto backup: checking&hellip;</span><span id="cloud-backup-footer-wrap"><span class="footer-sep">&middot;</span><span id="cloud-backup-footer-status" class="footer-status" style="color:#d97706;">Local backup only</span></span><span id="aws-s3-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="aws-s3-status-footer" class="footer-status"></span></span></span>
+    </footer>
+    <!-- First-launch setup modal -->
+    <div id="first-launch-modal" class="first-launch-overlay" style="display:none;">
+      <div class="first-launch-box">
+        <h2>Welcome to Custody Note</h2>
+        <p>Please enter your details to get started. These are used in PDF headers, billing and LAA declarations.</p>
+        <label>Fee Earner Name <span style="color:#dc2626;">*</span></label>
+        <input type="text" id="fl-fee-earner-name" placeholder="e.g. Robert Smith" style="margin-bottom:0.75rem;">
+        <label>DSCC PIN/Number <span style="color:#dc2626;">*</span></label>
+        <input type="text" id="fl-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10">
+        <div class="first-launch-footer">
+          <button type="button" id="fl-skip" class="btn btn-secondary">Skip for now</button>
+          <button type="button" id="fl-save" class="btn btn-primary">Save &amp; Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Licence activation overlay -->
+    <div id="licence-overlay" class="licence-overlay" style="display:none;">
+      <div class="licence-box">
+        <div class="licence-logo">
+          <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48">
+            <rect x="4" y="8" width="56" height="48" rx="6" stroke="#3b82f6" stroke-width="3" fill="none"/>
+            <circle cx="50" cy="46" r="10" fill="#2563eb"/>
+            <path d="M47 46l2.5 2.5L53 44" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          </svg>
+        </div>
+        <h2 id="licence-title">Activate Custody Note</h2>
+        <p id="licence-message" class="licence-message">Enter your licence key to activate the application.</p>
+        <div id="licence-form">
+          <label for="licence-key-input">Licence Key</label>
+          <input type="text" id="licence-key-input" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+          <label for="licence-email-input" style="margin-top:0.75rem;">Email (optional)</label>
+          <input type="email" id="licence-email-input" placeholder="you@example.com" autocomplete="off">
+          <p id="licence-error" class="licence-error" style="display:none;"></p>
+          <div class="licence-actions">
+            <button type="button" id="licence-activate-btn" class="btn btn-primary">Activate</button>
+          </div>
+        </div>
+        <div id="licence-renew-section" style="display:none;">
+          <p class="licence-hint">Need a new licence? Visit <a href="https://www.custodynote.com" id="licence-renew-link" class="licence-link">www.custodynote.com</a> or contact <a href="mailto:robertcashman@defencelegalservices.com" class="licence-link">robertcashman@defencelegalservices.com</a></p>
+        </div>
+        <p class="licence-footer-text">&copy; Defence Legal Services Ltd 2026</p>
+      </div>
+    </div>
+
+    <!-- Floating scratchpad -->
+    <div id="scratchpad" class="scratchpad hidden">
+      <div class="scratchpad-header">
+        <span>Quick Notes</span>
+        <div style="display:flex;gap:0.3rem;">
+          <button type="button" id="scratchpad-fullscreen" class="btn-small" title="Full screen">&#x26F6;</button>
+          <button type="button" id="scratchpad-close" class="btn-small">Minimise</button>
+        </div>
+      </div>
+      <textarea id="scratchpad-text" placeholder="Jot down anything here... These notes stay until you clear them."></textarea>
+    </div>
+    <button type="button" id="scratchpad-toggle" class="scratchpad-fab" title="Quick Notes">&#128221;</button>
+  </div>
+  <!-- Browser API layer: in Electron preload sets window.api so this no-ops; in browser it loads sql.js dynamically so the app never blocks on an external script when run from the desktop shortcut -->
+  <script src="browser-api.js"></script>
+  <!-- ── Module layer (load order matters) ─────────────────────
+       1. toast.js     — UI feedback (no dependencies)
+       2. app.js       — state vars + all functions + init()
+       3. views/*.js   — override view-specific functions from app.js
+       4. csv-exporter — override CSV functions from app.js
+  ──────────────────────────────────────────────────────────── -->
+  <script src="renderer/toast.js"></script>
+  <script src="renderer/licence.js"></script>
+  <script src="app.js?v=1.4.0"></script>
+  <script src="renderer/views/reports.js"></script>
+  <script src="renderer/views/settings.js"></script>
+  <script src="renderer/views/list.js"></script>
+  <script src="renderer/csv-exporter.js"></script>
+  <!-- laa-forms.js retired: official PDFs now used via laa-generate-official-pdf IPC -->
+  <script src="renderer/audit-log.js"></script>
+  <!-- Unregister any stale service workers (not needed in Electron) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+        if (regs.length) console.log('[SW] Unregistered', regs.length, 'stale service worker(s)');
+      });
+      if ('caches' in window) {
+        caches.keys().then(function (names) {
+          names.forEach(function (n) { caches.delete(n); });
+          if (names.length) console.log('[SW] Cleared', names.length, 'cache(s)');
+        });
+      }
+    }
+    // Fallback: if init() never runs (e.g. script error), hide splash after 9s so user is not stuck
+    setTimeout(function () {
+      var s = document.getElementById('splash');
+      if (s && s.parentNode) {
+        s.classList.add('fade-out');
+        setTimeout(function () { s.remove(); }, 600);
+      }
+    }, 9000);
+  </script>
+</body>
+</html>

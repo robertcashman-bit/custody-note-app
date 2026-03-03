@@ -1,0 +1,131 @@
+{
+  "matterTypeCodes": [
+    {"code": "1", "description": "Violence against the person"},
+    {"code": "2", "description": "Sexual offences"},
+    {"code": "3", "description": "Robbery"},
+    {"code": "4", "description": "Burglary"},
+    {"code": "5", "description": "Criminal damage"},
+    {"code": "6", "description": "Theft and handling"},
+    {"code": "7", "description": "Fraud and forgery"},
+    {"code": "8", "description": "Public order offences"},
+    {"code": "9", "description": "Drug offences"},
+    {"code": "10", "description": "Driving and motor vehicle offences"},
+    {"code": "11", "description": "Other offences"},
+    {"code": "12", "description": "Terrorism"},
+    {"code": "13", "description": "Offences against the administration of justice"},
+    {"code": "14", "description": "Firearms offences"},
+    {"code": "15", "description": "Arson"},
+    {"code": "16", "description": "Possession of offensive weapon"},
+    {"code": "17", "description": "Breach of order"},
+    {"code": "18", "description": "Dishonesty (other)"},
+    {"code": "19", "description": "Domestic violence"},
+    {"code": "20", "description": "Immigration"},
+    {"code": "21", "description": "Money laundering"}
+  ],
+  "outcomeCodes": [
+    {"code": "CN01", "description": "No further instructions"},
+    {"code": "CN02", "description": "Change of solicitor"},
+    {"code": "CN03", "description": "Client not a suspect"},
+    {"code": "CN04", "description": "No further action"},
+    {"code": "CN05", "description": "Simple caution, reprimand, warning"},
+    {"code": "CN06", "description": "Charge, summons or reported for summons"},
+    {"code": "CN07", "description": "Conditional caution"},
+    {"code": "CN08", "description": "Fixed penalty notice"},
+    {"code": "CN09", "description": "Released – No Bail"},
+    {"code": "CN10", "description": "Bail Varied/Extended"},
+    {"code": "CN11", "description": "Bail Not Varied/Extended"},
+    {"code": "CN12", "description": "Pre-charge engagement agreed and concludes before investigation ends"},
+    {"code": "CN13", "description": "Pre-charge engagement not agreed"}
+  ],
+  "stageReachedCodes": [
+    {"code": "INVA", "description": "Advice and Assistance (not at police station)"},
+    {"code": "INVB", "description": "Police station: telephone advice only"},
+    {"code": "INVC", "description": "Police station: attendance"},
+    {"code": "INVE", "description": "Warrant of further detention (incl. armed forces)"},
+    {"code": "INVH", "description": "Police station: post-charge attendance"},
+    {"code": "INVK", "description": "Advocacy Assistance – extend Pre-Charge Bail"},
+    {"code": "INVL", "description": "Advocacy Assistance – vary Pre-Charge Bail conditions"},
+    {"code": "INVM", "description": "Pre-Charge Engagement Advice and Assistance"}
+  ],
+  "feeCodes": [
+    {"code": "INVC", "description": "Police station attendance (fixed fee per scheme)"},
+    {"code": "INVB1", "description": "Telephone advice only – London"},
+    {"code": "INVB2", "description": "Telephone advice only – Outside London"},
+    {"code": "INVA", "description": "Advice and Assistance (not at police station)"},
+    {"code": "INVE", "description": "Warrant of further detention (incl. armed forces custody)"},
+    {"code": "INVH", "description": "Post-charge attendance"},
+    {"code": "INVK", "description": "Advocacy Assistance – extend Pre-Charge Bail"},
+    {"code": "INVL", "description": "Advocacy Assistance – vary Pre-Charge Bail conditions"},
+    {"code": "INVM", "description": "Pre-Charge Engagement Advice and Assistance"}
+  ],
+  "modeOfTrial": [
+    {"code": "SO", "description": "Summary Only"},
+    {"code": "EW", "description": "Either Way"},
+    {"code": "IO", "description": "Indictable Only"}
+  ],
+  "ethnicCodes": [
+    {"code": "01", "description": "White British"},
+    {"code": "02", "description": "White Irish"},
+    {"code": "14", "description": "White Other"},
+    {"code": "16", "description": "Gypsy/Traveller"},
+    {"code": "10", "description": "Mixed White & Black Caribbean"},
+    {"code": "11", "description": "Mixed White & Black African"},
+    {"code": "12", "description": "Mixed White & Asian"},
+    {"code": "13", "description": "Mixed Other"},
+    {"code": "06", "description": "Asian or Asian British Indian"},
+    {"code": "07", "description": "Asian or Asian British Pakistani"},
+    {"code": "08", "description": "Asian or Asian British Bangladeshi"},
+    {"code": "09", "description": "Chinese"},
+    {"code": "15", "description": "Asian or Asian British Other"},
+    {"code": "04", "description": "Black or Black British Caribbean"},
+    {"code": "03", "description": "Black or Black British African"},
+    {"code": "05", "description": "Black or Black British Other"},
+    {"code": "00", "description": "Other"},
+    {"code": "99", "description": "Unknown"}
+  ],
+  "disabilityCodes": [
+    {"code": "NCD", "description": "Not considered disabled"},
+    {"code": "MOB", "description": "Mobility impairment"},
+    {"code": "HEA", "description": "Hearing impaired"},
+    {"code": "DEA", "description": "Deaf"},
+    {"code": "VIS", "description": "Visually impaired"},
+    {"code": "BLI", "description": "Blind"},
+    {"code": "MHC", "description": "Mental health condition"},
+    {"code": "LDD", "description": "Learning disability/difficulty"},
+    {"code": "ILL", "description": "Long-standing illness or health condition"},
+    {"code": "OTH", "description": "Other"},
+    {"code": "UKN", "description": "Unknown"}
+  ],
+  "hourlyRates": {
+    "postDec2025": {
+      "effectiveDate": "2025-12-22",
+      "fixedFee": 320.00,
+      "escapeThreshold": 650.00,
+      "telephoneAdviceOnly": {"london": 28.70, "national": 27.60},
+      "ownSolicitor": {
+        "attendance": {"social": 54.57, "unsocial": 72.46},
+        "travel": {"social": 27.29, "unsocial": 27.29},
+        "waiting": {"social": 27.29, "unsocial": 27.29}
+      },
+      "dutySolicitor": {
+        "attendance": {"social": 54.57, "unsocial": 72.46},
+        "travel": {"social": 27.29, "unsocial": 27.29},
+        "waiting": {"social": 27.29, "unsocial": 27.29}
+      },
+      "londonOwnSolicitor": {
+        "attendance": {"social": 58.97, "unsocial": 72.46},
+        "travel": {"social": 29.49, "unsocial": 29.49},
+        "waiting": {"social": 29.49, "unsocial": 29.49}
+      },
+      "londonDutySolicitor": {
+        "attendance": {"social": 58.97, "unsocial": 72.46},
+        "travel": {"social": 29.49, "unsocial": 29.49},
+        "waiting": {"social": 29.49, "unsocial": 29.49}
+      },
+      "mileageRate": 0.45,
+      "vatRate": 0.20
+    }
+  },
+  "laaDeclarationText": "I apply for the right to free legal advice and assistance at the police station under the Legal Aid, Sentencing and Punishment of Offenders Act 2012.\n\nI understand that:\n• The information I have given is true and complete to the best of my knowledge.\n• If I have knowingly given false or incomplete information I understand that legal aid may be withdrawn and criminal proceedings may be brought against me.\n• My personal data will be processed in accordance with the Legal Aid Agency's Privacy Notice.\n• I have not previously received legal advice or assistance in relation to the same matter from another solicitor (unless stated above).\n• The solicitor/representative named is authorised to act on my behalf in connection with this matter.",
+  "privacyNoticeText": "Privacy Notice: The Legal Aid Agency (LAA) collects and processes your personal data for the purpose of determining eligibility for, and administering, legal aid. Your data may be shared with relevant third parties as outlined in the LAA Privacy Notice available at www.gov.uk/government/organisations/legal-aid-agency/about/personal-information-charter. Data is processed under the Legal Aid, Sentencing and Punishment of Offenders Act 2012."
+}
