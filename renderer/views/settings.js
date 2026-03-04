@@ -50,27 +50,39 @@ function loadSettings() {
     var aif = document.getElementById('setting-auto-import-folder');
     if (aif) aif.value = s.autoImportFolder || '';
 
-    // Cloud backup status
-    if (window.api.cloudBackupStatus) {
-      window.api.cloudBackupStatus().then(function(status) {
-        var notSub = document.getElementById('cloud-backup-not-subscribed');
-        var isSub = document.getElementById('cloud-backup-subscribed');
-        var lastEl = document.getElementById('cloud-backup-last-success');
-        if (status && status.enabled) {
-          if (notSub) notSub.style.display = 'none';
-          if (isSub) isSub.style.display = '';
-          if (lastEl && status.lastSuccess) {
-            lastEl.textContent = 'Last successful upload: ' + new Date(status.lastSuccess).toLocaleString('en-GB');
-          }
-        } else {
-          if (notSub) notSub.style.display = '';
-          if (isSub) isSub.style.display = 'none';
+    // Cloud backup status – trigger fresh check when Settings opens
+    var cloudBackupApplyStatus = function(status) {
+      var checking = document.getElementById('cloud-backup-checking');
+      var notSub = document.getElementById('cloud-backup-not-subscribed');
+      var isSub = document.getElementById('cloud-backup-subscribed');
+      var lastEl = document.getElementById('cloud-backup-last-success');
+      if (checking) checking.style.display = 'none';
+      if (status && status.enabled) {
+        if (notSub) notSub.style.display = 'none';
+        if (isSub) isSub.style.display = '';
+        if (lastEl && status.lastSuccess) {
+          lastEl.textContent = 'Last successful upload: ' + new Date(status.lastSuccess).toLocaleString('en-GB');
         }
-        if (status && status.lastError) {
-          var errEl = document.getElementById('cloud-backup-error');
-          if (errEl) { errEl.textContent = status.lastError; errEl.style.display = ''; }
+      } else {
+        if (notSub) notSub.style.display = '';
+        if (isSub) isSub.style.display = 'none';
+      }
+      var errEl = document.getElementById('cloud-backup-error');
+      if (errEl) {
+        if (status && status.lastError) { errEl.textContent = status.lastError; errEl.style.display = ''; }
+        else { errEl.style.display = 'none'; }
+      }
+    };
+    if (window.api.cloudBackupCheckEntitlement) {
+      window.api.cloudBackupCheckEntitlement().then(function() {
+        return window.api.cloudBackupStatus ? window.api.cloudBackupStatus() : null;
+      }).then(cloudBackupApplyStatus).catch(function() {
+        if (window.api.cloudBackupStatus) {
+          window.api.cloudBackupStatus().then(cloudBackupApplyStatus);
         }
       });
+    } else if (window.api.cloudBackupStatus) {
+      window.api.cloudBackupStatus().then(cloudBackupApplyStatus);
     }
 
   });

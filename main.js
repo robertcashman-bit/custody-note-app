@@ -947,8 +947,22 @@ async function fetchManagedCloudCredentials() {
 
 async function checkCloudBackupEntitlement() {
   const data = readLicenceData();
-  if (!data || !data.key) { _cloudBackupEnabled = false; return; }
+  if (!data || !data.key) {
+    _cloudBackupEnabled = false;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false });
+    }
+    return;
+  }
   const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) {
+    _cloudBackupEnabled = false;
+    console.warn('[CloudBackup] No API URL configured');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false });
+    }
+    return;
+  }
   try {
     const resp = await httpPost(`${apiUrl}/api/licence/validate`, {
       key: data.key,
@@ -961,7 +975,10 @@ async function checkCloudBackupEntitlement() {
       data.lastValidated = new Date().toISOString();
       writeLicenceData(data);
     }
-  } catch (_) {}
+  } catch (err) {
+    _cloudBackupEnabled = false;
+    console.error('[CloudBackup] Entitlement check failed:', err && err.message ? err.message : err);
+  }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('cloud-backup-status-changed', { enabled: _cloudBackupEnabled });
   }
@@ -2111,7 +2128,10 @@ app.whenReady().then(async () => {
   dedupeDraftsByCaseKeys();
   setInterval(runQuickBackup, 2 * 60 * 1000);
   setInterval(runHourlyBackup, 60 * 60 * 1000);
+  // Check cloud backup on startup; retry a few times in case network isn't ready
   checkCloudBackupEntitlement().catch(() => {});
+  setTimeout(() => checkCloudBackupEntitlement().catch(() => {}), 5000);
+  setTimeout(() => checkCloudBackupEntitlement().catch(() => {}), 15000);
   setInterval(() => { checkCloudBackupEntitlement().catch(() => {}); }, 60 * 60 * 1000);
   setInterval(() => {
     cleanupAccidentalDuplicateDrafts();

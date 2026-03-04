@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.4.6",
+      "version": "1.4.7",
       "date": "2026-03-04",
       "latest": true,
+      "changes": [
+        "Cloud Backup section moved to top of Settings Backup card",
+        "Footer 'Local backup only' is clickable and opens Settings",
+        "Added 'Checking...' state when verifying cloud backup status",
+        "Fresh entitlement check when opening Settings"
+      ]
+    },
+    {
+      "version": "1.4.6",
+      "date": "2026-03-04",
+      "latest": false,
       "changes": [
         "Automated version and changelog sync with website"
       ]

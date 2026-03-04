@@ -8015,11 +8015,26 @@ PDF_CASENOTE_ADVERT +
     });
 
     /* ─── Cloud backup event handlers ─── */
+    document.getElementById('cloud-backup-footer-status')?.addEventListener('click', function() {
+      var txt = (this.textContent || '').trim();
+      if (txt === 'Local backup only' || txt.indexOf('Local') >= 0) {
+        showView('settings');
+        setTimeout(function() {
+          document.getElementById('cloud-backup-section')?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    });
     document.getElementById('btn-cloud-backup-subscribe')?.addEventListener('click', function() {
-      if (window.api.cloudBackupSubscribe) window.api.cloudBackupSubscribe();
+      if (window.api.cloudBackupCheckEntitlement) {
+        window.api.cloudBackupCheckEntitlement();
+      }
     });
     document.getElementById('home-cloud-backup-cta')?.addEventListener('click', function() {
-      if (window.api.cloudBackupSubscribe) window.api.cloudBackupSubscribe();
+      if (window.api.cloudBackupCheckEntitlement) {
+        window.api.cloudBackupCheckEntitlement().then(function() {
+          if (window.api.cloudBackupStatus) return window.api.cloudBackupStatus();
+        });
+      }
     });
     document.getElementById('home-cloud-backup-dismiss')?.addEventListener('click', function() {
       var el = document.getElementById('home-cloud-backup-warning');
@@ -8102,10 +8117,25 @@ PDF_CASENOTE_ADVERT +
         var footerEl = document.getElementById('cloud-backup-footer-status');
         var homeWarning = document.getElementById('home-cloud-backup-warning');
         if (data && data.enabled) {
-          if (footerEl) { footerEl.textContent = 'Amazon Web Services subscription paid'; footerEl.style.color = '#10b981'; }
+          if (footerEl) { footerEl.textContent = 'Backing up to AWS'; footerEl.style.color = '#10b981'; footerEl.style.cursor = ''; footerEl.style.textDecoration = ''; }
           if (homeWarning) homeWarning.style.display = 'none';
+          // Update Settings panels if visible
+          var checking = document.getElementById('cloud-backup-checking');
+          var notSub = document.getElementById('cloud-backup-not-subscribed');
+          var isSub = document.getElementById('cloud-backup-subscribed');
+          var lastEl = document.getElementById('cloud-backup-last-success');
+          if (checking) checking.style.display = 'none';
+          if (notSub) notSub.style.display = 'none';
+          if (isSub) isSub.style.display = '';
+          if (lastEl && data.lastSuccess) lastEl.textContent = 'Last successful upload: ' + new Date(data.lastSuccess).toLocaleString('en-GB');
         } else {
-          if (footerEl) { footerEl.textContent = 'Local backup only'; footerEl.style.color = '#d97706'; }
+          if (footerEl) { footerEl.textContent = 'Local backup only'; footerEl.style.color = '#d97706'; footerEl.style.cursor = 'pointer'; footerEl.style.textDecoration = 'underline'; }
+          var checking = document.getElementById('cloud-backup-checking');
+          var notSub = document.getElementById('cloud-backup-not-subscribed');
+          var isSub = document.getElementById('cloud-backup-subscribed');
+          if (checking) checking.style.display = 'none';
+          if (notSub) notSub.style.display = '';
+          if (isSub) isSub.style.display = 'none';
         }
       });
     }
@@ -8115,10 +8145,10 @@ PDF_CASENOTE_ADVERT +
         var footerEl = document.getElementById('cloud-backup-footer-status');
         var homeWarning = document.getElementById('home-cloud-backup-warning');
         if (status && status.enabled) {
-          if (footerEl) { footerEl.textContent = 'Amazon Web Services subscription paid'; footerEl.style.color = '#10b981'; }
+          if (footerEl) { footerEl.textContent = 'Backing up to AWS'; footerEl.style.color = '#10b981'; footerEl.style.cursor = ''; footerEl.style.textDecoration = ''; }
           if (homeWarning) homeWarning.style.display = 'none';
         } else {
-          if (footerEl) { footerEl.textContent = 'Local backup only'; footerEl.style.color = '#d97706'; }
+          if (footerEl) { footerEl.textContent = 'Local backup only'; footerEl.style.color = '#d97706'; footerEl.style.cursor = 'pointer'; footerEl.style.textDecoration = 'underline'; }
           // Show warning unless recently dismissed (within 7 days)
           try {
             var dismissed = localStorage.getItem('cloud-backup-warning-dismissed');
