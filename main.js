@@ -898,12 +898,23 @@ let _lastManagedCloudSuccess = null;
 let _lastManagedCloudError = null;
 let _cloudBackupEnabled = false;
 
+const ALLOWED_API_HOSTS = ['custodynote.com', 'www.custodynote.com', 'localhost', '127.0.0.1'];
+
+function isAllowedApiUrl(urlStr) {
+  try {
+    const u = new URL(urlStr);
+    if (u.protocol !== 'https:' && !(u.hostname === 'localhost' || u.hostname === '127.0.0.1')) return false;
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    return ALLOWED_API_HOSTS.some(h => h.replace(/^www\./, '') === host || u.hostname === h);
+  } catch (_) { return false; }
+}
+
 function getManagedCloudApiUrl() {
   try {
     const cfgPath = path.join(app.getPath('userData'), 'licence-config.json');
     if (fs.existsSync(cfgPath)) {
       const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-      if (cfg.apiUrl) return cfg.apiUrl;
+      if (cfg.apiUrl && isAllowedApiUrl(cfg.apiUrl)) return cfg.apiUrl;
     }
   } catch (_) {}
   return 'https://custodynote.com';
@@ -1720,10 +1731,14 @@ function deleteLicenceData() {
   try { if (fs.existsSync(lpath)) fs.unlinkSync(lpath); } catch (_) {}
 }
 
+const MAX_LICENCE_KEY_LENGTH = 64;
+
 function validateLicenceKeyFormat(key) {
   if (!key || typeof key !== 'string') return false;
-  const k = key.trim().toUpperCase();
-  return /^[A-Z0-9]{4,8}(-[A-Z0-9]{4,8}){2,7}$/.test(k) || k.length >= 16;
+  const k = key.trim();
+  if (k.length > MAX_LICENCE_KEY_LENGTH) return false;
+  const upper = k.toUpperCase();
+  return /^[A-Z0-9]{4,8}(-[A-Z0-9]{4,8}){2,7}$/.test(upper) || k.length >= 16;
 }
 
 function getLicenceValidationUrl() {
@@ -1731,7 +1746,7 @@ function getLicenceValidationUrl() {
     const cfgPath = path.join(app.getPath('userData'), 'licence-config.json');
     if (fs.existsSync(cfgPath)) {
       const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-      if (cfg.validationUrl) return cfg.validationUrl;
+      if (cfg.validationUrl && isAllowedApiUrl(cfg.validationUrl)) return cfg.validationUrl;
     }
   } catch (_) {}
   // Default: use same base as cloud backup so app and website interface out of the box
@@ -1741,7 +1756,13 @@ function getLicenceValidationUrl() {
 
 function httpPost(url, body) {
   return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
+    let parsed;
+    try {
+      parsed = new URL(url);
+      if (!isAllowedApiUrl(url)) return reject(new Error('API URL not allowed'));
+    } catch (e) {
+      return reject(new Error('Invalid URL'));
+    }
     const mod = parsed.protocol === 'https:' ? https : http;
     const payload = JSON.stringify(body);
     const req = mod.request({

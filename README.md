@@ -17,6 +17,30 @@ Custody Note is an LAA-compliant desktop app for recording custody notes and pol
    npm start
    ```
 
+## Releasing a new version
+
+Version and changelog are automated. From the app folder:
+
+```bash
+# Patch release (1.4.6 → 1.4.7), prompts for changelog items
+npm run release patch
+
+# With changelog from command line (semicolon-separated)
+npm run release patch -- --changes "Security fixes; Updated dependencies"
+
+# Minor (1.4.6 → 1.5.0) or major (1.4.6 → 2.0.0)
+npm run release minor
+npm run release major
+```
+
+This script: (1) bumps version in package.json, (2) updates changelog.json, (3) syncs to the website, (4) builds the app. After deploying the website, the changelog page and download page will show the new version.
+
+To sync changelog to the website without releasing (e.g. after editing changelog.json manually):
+
+```bash
+npm run sync-website
+```
+
 ## Features
 
 - **List** – Search and open past attendances.

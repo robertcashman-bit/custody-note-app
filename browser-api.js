@@ -339,7 +339,11 @@
 
     /* ── Open external link ── */
     openExternal: function (url) {
-      window.open(url, '_blank', 'noopener');
+      if (typeof url !== 'string') return Promise.resolve();
+      var u = url.trim();
+      if (u.startsWith('https://') || u.startsWith('mailto:')) {
+        window.open(u, '_blank', 'noopener');
+      }
       return Promise.resolve();
     },
 

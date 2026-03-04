@@ -1,0 +1,76 @@
+{
+  "releases": [
+    {
+      "version": "1.4.6",
+      "date": "2026-03-04",
+      "latest": true,
+      "changes": [
+        "Automated version and changelog sync with website"
+      ]
+    },
+    {
+      "version": "1.4.5",
+      "date": "2026-03-03",
+      "latest": false,
+      "changes": [
+        "Automatic updates — the app now silently downloads and installs updates from GitHub Releases so subscribers always have the latest version",
+        "Managed cloud backup — automatic encrypted backups to AWS London with no credentials stored in the app",
+        "Support forum integration — community forum linked across the website",
+        "Removed manual AWS S3 settings from the app (now fully managed via subscription)"
+      ]
+    },
+    {
+      "version": "1.4.2",
+      "date": "2026-03-03",
+      "latest": false,
+      "changes": [
+        "Managed cloud backup — automatic encrypted backups to AWS London with no credentials stored in the app",
+        "Support forum integration — community forum linked across the website",
+        "Removed manual AWS S3 settings from the app (now fully managed via subscription)"
+      ]
+    },
+    {
+      "version": "1.4.1",
+      "date": "2026-03-02",
+      "latest": false,
+      "changes": [
+        "Bug fixes and stability improvements",
+        "Version display and build pipeline updates"
+      ]
+    },
+    {
+      "version": "1.4.0",
+      "date": "2026-02-25",
+      "latest": false,
+      "changes": [
+        "UI refinements and accessibility improvements",
+        "Backup and restore flow improvements",
+        "Performance optimisations for large datasets"
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2025-10-01",
+      "latest": false,
+      "changes": [
+        "Initial public release",
+        "Full attendance records with PACE review tracking (1st, 2nd, 3rd review — due and actual)",
+        "Telephone advice (INVB) recording",
+        "Quick Capture for incoming calls",
+        "Client details, offence picker with type-ahead search",
+        "Disclosure and OIC fields",
+        "LAA outcome codes, stage reached, and fee codes",
+        "Time recording (travel, waiting, attendance)",
+        "Firm tracking and multi-firm billing",
+        "Disbursements with VAT treatment",
+        "PDF export of attendance notes for firms and clients",
+        "Reports by month, firm, and station",
+        "Local encrypted backups every 2 minutes (AES-256-GCM)",
+        "Off-site folder backup (OneDrive, Dropbox, etc.)",
+        "Tamper-proof cloud backup on AWS (subscriber add-on): 90-day retention, UK data centre, per-subscriber isolation",
+        "Licence key activation (30-day trial and paid subscription)",
+        "Works fully offline at any police station"
+      ]
+    }
+  ]
+}

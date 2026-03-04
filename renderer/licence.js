@@ -54,13 +54,19 @@
     if (err) { err.textContent = text; err.style.display = ''; }
   }
 
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s || '';
+    return d.innerHTML;
+  }
+
   function showWarningBanner(message, daysRemaining) {
     if (_warningBanner) { try { _warningBanner.remove(); } catch (_) {} }
     _warningBanner = document.createElement('div');
     _warningBanner.className = 'licence-warning-banner';
     var urgency = daysRemaining <= 2 ? ' licence-warning-critical' : '';
     if (urgency) _warningBanner.classList.add('licence-warning-critical');
-    _warningBanner.innerHTML = '<span class="licence-warning-icon">&#9888;</span> <span>' + message + '</span> <button type="button" class="licence-warning-dismiss" title="Dismiss">&times;</button>';
+    _warningBanner.innerHTML = '<span class="licence-warning-icon">&#9888;</span> <span>' + esc(message) + '</span> <button type="button" class="licence-warning-dismiss" title="Dismiss">&times;</button>';
     _warningBanner.querySelector('.licence-warning-dismiss').addEventListener('click', function () {
       _warningBanner.style.display = 'none';
     });
