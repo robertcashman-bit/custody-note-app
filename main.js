@@ -1980,12 +1980,29 @@ app.whenReady().then(async () => {
       console.log('[AutoUpdate] Update downloaded:', info.version, '— will install on next restart');
       if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'ready', version: info.version });
     });
+    autoUpdater.on('update-not-available', () => {
+      console.log('[AutoUpdate] No update available');
+      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'up-to-date' });
+    });
     autoUpdater.on('error', (err) => {
       console.warn('[AutoUpdate] Error:', err?.message || err);
+      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'error', message: err?.message || 'Update check failed' });
+    });
+
+    ipcMain.handle('app-check-updates', async () => {
+      try {
+        const result = await autoUpdater.checkForUpdates();
+        if (result?.updateInfo) return { status: 'available', version: result.updateInfo.version };
+        return { status: 'up-to-date' };
+      } catch (e) {
+        return { status: 'error', message: e?.message || 'Update check failed' };
+      }
     });
 
     autoUpdater.checkForUpdates().catch(() => {});
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
+  } else {
+    ipcMain.handle('app-check-updates', async () => ({ status: 'dev', message: 'Updates only apply to the installed app' }));
   }
 
   await initDb();

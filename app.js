@@ -1766,6 +1766,29 @@ var REQUIRED_FIELD_KEYS = [
     _homeGreetingTimer = setInterval(updateHomeGreeting, 60000);
     loadHomeRecent();
     updateHomeStatus();
+    updateHomeLicenceCard();
+    updateGearLicenceItem();
+  }
+
+  function updateHomeLicenceCard() {
+    var card = document.getElementById('home-enter-licence-card');
+    if (!card) return;
+    if (!window.api || !window.api.licenceStatus) { card.style.display = 'none'; return; }
+    window.api.licenceStatus().then(function(st) {
+      var hasLicence = st && st.key && (st.status === 'active' || st.status === 'expiring_soon');
+      card.style.display = hasLicence ? 'none' : '';
+    }).catch(function() { card.style.display = 'none'; });
+  }
+
+  function updateGearLicenceItem() {
+    if (!window.api || !window.api.licenceStatus) return;
+    window.api.licenceStatus().then(function(st) {
+      var hasLicence = st && st.key && (st.status === 'active' || st.status === 'expiring_soon');
+      var btn = document.querySelector('.gear-item-licence');
+      var div = document.querySelector('.gear-divider-licence');
+      if (btn) btn.style.display = hasLicence ? 'none' : '';
+      if (div) div.style.display = hasLicence ? 'none' : '';
+    }).catch(function() {});
   }
 
   function updateHomeGreeting() {
@@ -7406,6 +7429,12 @@ PDF_CASENOTE_ADVERT +
       return;
     }
 
+    document.addEventListener('licence-activated', function () {
+      updateHomeLicenceCard();
+      updateGearLicenceItem();
+    });
+    updateGearLicenceItem();
+
     // Auto-import notifications from main process (folder watcher).
     if (window.api.onAutoImportImported) {
       window.api.onAutoImportImported(function(p) {
@@ -7443,6 +7472,9 @@ PDF_CASENOTE_ADVERT +
           e.preventDefault();
           document.getElementById('gear-dropdown')?.classList.add('hidden');
           switch (t.dataset.action) {
+            case 'enter-licence-key':
+              if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Enter your licence key', message: 'Paste the key from your email (trial or purchase at custodynote.com).' });
+              break;
             case 'records': showView('list'); break;
             case 'laa-forms': showLaaFormsNav(); break;
             case 'firms': showView('firms'); break;
@@ -7507,6 +7539,10 @@ PDF_CASENOTE_ADVERT +
 
         if (!t.id) return;
         switch (t.id) {
+          case 'home-enter-licence-btn':
+            e.preventDefault();
+            if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Enter your licence key', message: 'Paste the key from your email (trial or purchase at custodynote.com).' });
+            return;
           case 'home-card-attendance':
             e.preventDefault();
             currentStandaloneSectionId = null;
@@ -8025,16 +8061,26 @@ PDF_CASENOTE_ADVERT +
       }
     });
     document.getElementById('btn-cloud-backup-subscribe')?.addEventListener('click', function() {
-      if (window.api.cloudBackupCheckEntitlement) {
-        window.api.cloudBackupCheckEntitlement();
-      }
+      var btn = document.getElementById('btn-cloud-backup-subscribe');
+      if (!window.api.cloudBackupCheckEntitlement) return;
+      if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+      window.api.cloudBackupCheckEntitlement().then(function() {
+        if (btn) { btn.disabled = false; btn.textContent = 'Verify now'; }
+      }).catch(function() {
+        if (btn) { btn.disabled = false; btn.textContent = 'Verify now'; }
+      });
     });
     document.getElementById('home-cloud-backup-cta')?.addEventListener('click', function() {
-      if (window.api.cloudBackupCheckEntitlement) {
-        window.api.cloudBackupCheckEntitlement().then(function() {
-          if (window.api.cloudBackupStatus) return window.api.cloudBackupStatus();
-        });
-      }
+      var cta = document.getElementById('home-cloud-backup-cta');
+      if (!window.api.cloudBackupCheckEntitlement) return;
+      if (cta) { cta.disabled = true; cta.textContent = 'Checking…'; }
+      window.api.cloudBackupCheckEntitlement().then(function() {
+        if (window.api.cloudBackupStatus) return window.api.cloudBackupStatus();
+      }).then(function() {
+        if (cta) { cta.disabled = false; cta.textContent = 'Verify now →'; }
+      }).catch(function() {
+        if (cta) { cta.disabled = false; cta.textContent = 'Verify now →'; }
+      });
     });
     document.getElementById('home-cloud-backup-dismiss')?.addEventListener('click', function() {
       var el = document.getElementById('home-cloud-backup-warning');
@@ -8098,18 +8144,48 @@ PDF_CASENOTE_ADVERT +
       window.api.onAppUpdateStatus(function(data) {
         var wrap = document.getElementById('update-footer-wrap');
         var el = document.getElementById('update-footer-status');
-        if (!wrap || !el) return;
+        var banner = document.getElementById('home-update-banner');
+        var bannerText = document.getElementById('home-update-banner-text');
+        var restartBtn = document.getElementById('home-update-restart-btn');
         if (data.status === 'downloading') {
-          wrap.style.display = '';
-          el.textContent = 'Downloading update v' + data.version + '\u2026';
-          el.onclick = null;
+          if (wrap && el) { wrap.style.display = ''; el.textContent = 'Downloading update v' + data.version + '\u2026'; el.onclick = null; }
+          if (banner) banner.style.display = '';
+          if (bannerText) bannerText.textContent = 'A new version (v' + data.version + ') is downloading. You\'ll be notified when it\'s ready to install.';
+          if (restartBtn) restartBtn.style.display = 'none';
         } else if (data.status === 'ready') {
-          wrap.style.display = '';
-          el.textContent = '\u2713 Update v' + data.version + ' ready \u2014 click to restart';
-          el.onclick = function() { window.api.appUpdateInstall(); };
+          if (wrap && el) { wrap.style.display = ''; el.textContent = '\u2713 Update v' + data.version + ' ready \u2014 click to restart'; el.onclick = function() { window.api.appUpdateInstall(); }; }
+          if (banner) banner.style.display = '';
+          if (bannerText) bannerText.textContent = 'Update v' + data.version + ' is ready. Restart the app to install.';
+          if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Restart to install'; restartBtn.onclick = function() { window.api.appUpdateInstall(); }; }
+        } else if (data.status === 'up-to-date') {
+          if (banner) banner.style.display = 'none';
+          var statusEl = document.getElementById('check-updates-status');
+          if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
+        } else if (data.status === 'error') {
+          if (banner) banner.style.display = 'none';
         }
       });
     }
+    document.getElementById('check-updates-btn')?.addEventListener('click', function() {
+      var btn = document.getElementById('check-updates-btn');
+      var statusEl = document.getElementById('check-updates-status');
+      if (!window.api.appCheckUpdates) return;
+      if (btn) btn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Checking\u2026';
+      window.api.appCheckUpdates().then(function(res) {
+        if (statusEl) {
+          if (res.status === 'up-to-date') statusEl.textContent = '\u2713 You\'re up to date';
+          else if (res.status === 'available') statusEl.textContent = 'Update v' + (res.version || '') + ' found \u2014 downloading\u2026';
+          else if (res.status === 'dev') statusEl.textContent = 'Updates only apply to the installed app.';
+          else statusEl.textContent = 'Could not check: ' + (res.message || 'Unknown error');
+        }
+        if (res.status === 'up-to-date') showToast('You\'re up to date', 'success');
+      }).catch(function() {
+        if (statusEl) statusEl.textContent = 'Update check failed.';
+      }).finally(function() {
+        if (btn) btn.disabled = false;
+      });
+    });
 
     // Cloud backup status listener
     if (window.api.onCloudBackupStatusChanged) {
@@ -8285,18 +8361,49 @@ PDF_CASENOTE_ADVERT +
         window.open(url, '_blank');
       }
     });
-    document.getElementById('support-email-btn')?.addEventListener('click', () => {
-      var mailto = 'mailto:robertcashman@defencelegalservices.com?subject=Custody Note Support';
-      if (window.api && window.api.openExternal) {
-        window.api.openExternal(mailto);
-      } else {
-        window.location.href = mailto;
+    document.addEventListener('click', function(e) {
+      var link = e.target?.closest?.('.support-faq-link');
+      if (link && link.dataset?.url) {
+        var url = link.dataset.url;
+        if (window.api && window.api.openExternal) {
+          window.api.openExternal(url);
+        } else {
+          window.open(url, '_blank');
+        }
       }
     });
-    document.getElementById('share-app-email-btn')?.addEventListener('click', () => {
-      var subject = encodeURIComponent('Custody Note - Police station attendance notes app');
+    var shareAppUrl = 'https://custodynote.com/download';
+    document.getElementById('share-app-copy-btn')?.addEventListener('click', function() {
+      var btn = this;
+      var copy = function() {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(shareAppUrl).then(function() {
+            showToast('Link copied to clipboard', 'success');
+            btn.textContent = 'Copied!';
+            setTimeout(function() { btn.textContent = 'Copy download link'; }, 2000);
+          }).catch(function() { showToast('Could not copy', 'error'); });
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = shareAppUrl;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try {
+            document.execCommand('copy');
+            showToast('Link copied to clipboard', 'success');
+            btn.textContent = 'Copied!';
+            setTimeout(function() { btn.textContent = 'Copy download link'; }, 2000);
+          } catch (_) { showToast('Could not copy', 'error'); }
+          document.body.removeChild(ta);
+        }
+      };
+      copy();
+    });
+    document.getElementById('share-app-email-btn')?.addEventListener('click', function() {
+      var subject = encodeURIComponent('Custody Note – custody notes app for police station reps');
       var body = encodeURIComponent(
-        'I\'ve been using Custody Note for police station attendance notes. You can download it here:\n\nhttps://www.custodynote.com'
+        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload: ' + shareAppUrl + '\n\n30-day free trial, no credit card.'
       );
       var mailto = 'mailto:?subject=' + subject + '&body=' + body;
       if (window.api && window.api.openExternal) {

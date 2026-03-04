@@ -96,6 +96,7 @@
           if (_warningBanner) _warningBanner.remove();
           markReady();
           startRevalidation();
+          document.dispatchEvent(new CustomEvent('licence-activated'));
         } else {
           showError(result && result.message ? result.message : 'Activation failed. Check your key and try again.');
         }

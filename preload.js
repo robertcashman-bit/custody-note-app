@@ -74,4 +74,5 @@ contextBridge.exposeInMainWorld('api', {
   /* Auto-update */
   onAppUpdateStatus: (cb) => ipcRenderer.on('app-update-status', (_, data) => cb(data)),
   appUpdateInstall: () => ipcRenderer.invoke('app-update-install'),
+  appCheckUpdates: () => ipcRenderer.invoke('app-check-updates'),
 });
