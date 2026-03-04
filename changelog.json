@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.4.7",
+      "version": "1.4.8",
       "date": "2026-03-04",
       "latest": true,
+      "changes": [
+        "Licence key easier to find (home card, gear menu)",
+        "Cloud backup clearer messaging",
+        "Check for updates in Settings",
+        "Support FAQ instead of Email Support",
+        "Share Custody Note card",
+        "New CN monogram icon"
+      ]
+    },
+    {
+      "version": "1.4.7",
+      "date": "2026-03-04",
+      "latest": false,
       "changes": [
         "Cloud Backup section moved to top of Settings Backup card",
         "Footer 'Local backup only' is clickable and opens Settings",
