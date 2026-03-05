@@ -76,3 +76,15 @@ contextBridge.exposeInMainWorld('api', {
   appUpdateInstall: () => ipcRenderer.invoke('app-update-install'),
   appCheckUpdates: () => ipcRenderer.invoke('app-check-updates'),
 });
+
+contextBridge.exposeInMainWorld('custodyNote', {
+  requestLicenceEmail: (email) => ipcRenderer.invoke('custody:requestLicenceEmail', email),
+  adminLogin: (password) => ipcRenderer.invoke('custody:adminLogin', password),
+  adminSetPassword: (opts) => ipcRenderer.invoke('custody:adminSetPassword', opts),
+  adminHasPassword: () => ipcRenderer.invoke('custody:adminHasPassword'),
+  adminSearch: (emailQuery) => ipcRenderer.invoke('custody:adminSearch', emailQuery),
+  adminRevealLicence: (id) => ipcRenderer.invoke('custody:adminRevealLicence', id),
+  adminResend: (id) => ipcRenderer.invoke('custody:adminResend', id),
+  adminSync: () => ipcRenderer.invoke('custody:adminSync'),
+  serverConfigured: () => ipcRenderer.invoke('custody:serverConfigured'),
+});

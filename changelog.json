@@ -1,9 +1,37 @@
 {
   "releases": [
     {
+      "version": "1.4.9",
+      "date": "2026-03-05",
+      "latest": true,
+      "changes": [
+        "Removed debug instrumentation",
+        "Support FAQ open by default",
+        "Forgot-key rate limit fix"
+      ]
+    },
+    {
       "version": "1.4.8",
       "date": "2026-03-04",
-      "latest": true,
+      "latest": false,
+      "changes": [
+        "Removed debug instrumentation",
+        "Support FAQ open by default",
+        "Forgot-key rate limit fix (website)"
+      ]
+    },
+    {
+      "version": "1.4.7",
+      "date": "2026-03-04",
+      "latest": false,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
+      "version": "1.4.8",
+      "date": "2026-03-04",
+      "latest": false,
       "changes": [
         "Licence key easier to find (home card, gear menu)",
         "Cloud backup clearer messaging",

@@ -33,7 +33,9 @@ npm run release minor
 npm run release major
 ```
 
-This script: (1) bumps version in package.json, (2) updates changelog.json, (3) syncs to the website, (4) builds the app. After deploying the website, the changelog page and download page will show the new version.
+**Requires:** `GH_TOKEN` or `GITHUB_TOKEN` (GitHub PAT with `repo` scope) for publishing.
+
+The script: (1) bumps version, (2) updates changelog, (3) syncs to website, (4) builds and publishes the installer to GitHub, (5) deploys the website to Vercel. Without a token it builds only (no publish, no deploy). Use `--no-publish` to skip publish even with a token.
 
 To sync changelog to the website without releasing (e.g. after editing changelog.json manually):
 

@@ -68,9 +68,16 @@ function loadSettings() {
         if (isSub) isSub.style.display = 'none';
       }
       var errEl = document.getElementById('cloud-backup-error');
+      var supportEl = document.getElementById('cloud-backup-error-support');
       if (errEl) {
-        if (status && status.lastError) { errEl.textContent = status.lastError; errEl.style.display = ''; }
-        else { errEl.style.display = 'none'; }
+        if (status && status.lastError) {
+          errEl.textContent = status.lastError;
+          errEl.style.display = '';
+          if (supportEl) supportEl.style.display = '';
+        } else {
+          errEl.style.display = 'none';
+          if (supportEl) supportEl.style.display = 'none';
+        }
       }
     };
     if (window.api.cloudBackupCheckEntitlement) {

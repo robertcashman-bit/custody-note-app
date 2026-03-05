@@ -2563,6 +2563,17 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  function maskLicenceKey(key) {
+    if (!key || typeof key !== 'string') return '****';
+    var k = key.trim();
+    var parts = k.split('-');
+    if (parts.length >= 4) {
+      var last = parts[parts.length - 1] || '';
+      return parts[0] + '-****-****-' + last.slice(-4);
+    }
+    return k.length >= 4 ? k.slice(0, 4) + '-****-****-' + k.slice(-4) : '****';
+  }
+
   function loadLicenceSettingsUI() {
     if (!window.api || !window.api.licenceStatus) return;
     window.api.licenceStatus().then(function(st) {
@@ -2570,13 +2581,14 @@ var REQUIRED_FIELD_KEYS = [
       var noneEl = document.getElementById('licence-status-none');
       var obscuredEl = document.getElementById('licence-key-obscured');
       var timeEl = document.getElementById('licence-time-remaining');
+      var lastValidatedEl = document.getElementById('licence-last-validated');
+      var resultEl = document.getElementById('licence-validate-result');
       if (!activeEl || !noneEl) return;
+      if (resultEl) { resultEl.style.display = 'none'; resultEl.textContent = ''; }
       if (st && st.key && (st.status === 'active' || st.status === 'expiring_soon')) {
         noneEl.style.display = 'none';
         activeEl.style.display = '';
-        var key = st.key || '';
-        var obscured = key.length > 4 ? '****-****-****-' + key.slice(-4) : '****';
-        if (obscuredEl) obscuredEl.textContent = obscured;
+        if (obscuredEl) obscuredEl.textContent = maskLicenceKey(st.key);
         if (timeEl) {
           if (st.daysRemaining !== undefined) {
             timeEl.textContent = st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining';
@@ -2585,6 +2597,9 @@ var REQUIRED_FIELD_KEYS = [
           } else {
             timeEl.textContent = 'Subscription active';
           }
+        }
+        if (lastValidatedEl) {
+          lastValidatedEl.textContent = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
         }
       } else {
         activeEl.style.display = 'none';
@@ -8026,10 +8041,54 @@ PDF_CASENOTE_ADVERT +
       if (window.initLicenceUI) window.initLicenceUI();
       loadLicenceSettingsUI();
     });
+    document.getElementById('btn-licence-remove')?.addEventListener('click', function() {
+      if (!window.api.licenceDeactivate) return;
+      if (!confirm('Remove licence? You will need to enter a key again to use the app. Paid features will be locked until you activate again.')) return;
+      window.api.licenceDeactivate();
+      if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Enter your licence key to activate.' });
+      if (window.initLicenceUI) window.initLicenceUI();
+      loadLicenceSettingsUI();
+    });
+    document.getElementById('btn-licence-validate')?.addEventListener('click', function() {
+      var resultEl = document.getElementById('licence-validate-result');
+      var btn = document.getElementById('btn-licence-validate');
+      if (!window.api.licenceValidate || !resultEl) return;
+      if (btn) btn.disabled = true;
+      resultEl.style.display = '';
+      resultEl.textContent = 'Validating…';
+      resultEl.style.color = '';
+      window.api.licenceValidate().then(function(r) {
+        if (btn) btn.disabled = false;
+        if (!r) { resultEl.textContent = 'Network error'; resultEl.style.color = '#dc2626'; return; }
+        var status = r.status || {};
+        if (r.valid === true) {
+          resultEl.textContent = 'Valid — licence is active.';
+          resultEl.style.color = '#059669';
+        } else if (status.status === 'expired') {
+          resultEl.textContent = 'Expired — ' + (status.message || 'Subscription has expired.');
+          resultEl.style.color = '#dc2626';
+        } else if (status.status === 'already_used') {
+          resultEl.textContent = 'Already used — ' + (status.message || 'Licence is in use on 2 devices.');
+          resultEl.style.color = '#dc2626';
+        } else if (status.status === 'invalid' || status.status === 'revoked') {
+          resultEl.textContent = 'Invalid — ' + (status.message || 'Licence key is not valid.');
+          resultEl.style.color = '#dc2626';
+        } else {
+          resultEl.textContent = (status.message || r.message || 'Network error');
+          resultEl.style.color = '#dc2626';
+        }
+        loadLicenceSettingsUI();
+      }).catch(function(e) {
+        if (btn) btn.disabled = false;
+        resultEl.textContent = 'Network error — ' + (e && e.message ? e.message : 'Could not reach server');
+        resultEl.style.color = '#dc2626';
+      });
+    });
     document.getElementById('btn-licence-activate-settings')?.addEventListener('click', function() {
       var keyInput = document.getElementById('setting-licence-key');
       var errEl = document.getElementById('licence-activate-error');
-      var key = keyInput ? keyInput.value.trim() : '';
+      var raw = keyInput ? keyInput.value : '';
+      var key = (typeof raw === 'string' ? raw : '').replace(/\s/g, '').trim().toUpperCase();
       if (!key) {
         if (errEl) { errEl.textContent = 'Enter a licence key'; errEl.style.display = ''; }
         return;
@@ -8047,6 +8106,9 @@ PDF_CASENOTE_ADVERT +
         } else {
           if (errEl) { errEl.textContent = result.message || 'Activation failed'; errEl.style.display = ''; }
         }
+      }).catch(function(e) {
+        btn.disabled = false;
+        if (errEl) { errEl.textContent = (e && e.message) || 'Network error'; errEl.style.display = ''; }
       });
     });
 
@@ -8195,23 +8257,33 @@ PDF_CASENOTE_ADVERT +
         if (data && data.enabled) {
           if (footerEl) { footerEl.textContent = 'Backing up to AWS'; footerEl.style.color = '#10b981'; footerEl.style.cursor = ''; footerEl.style.textDecoration = ''; }
           if (homeWarning) homeWarning.style.display = 'none';
-          // Update Settings panels if visible
           var checking = document.getElementById('cloud-backup-checking');
           var notSub = document.getElementById('cloud-backup-not-subscribed');
           var isSub = document.getElementById('cloud-backup-subscribed');
           var lastEl = document.getElementById('cloud-backup-last-success');
+          var errEl = document.getElementById('cloud-backup-error');
+          var supportEl = document.getElementById('cloud-backup-error-support');
           if (checking) checking.style.display = 'none';
           if (notSub) notSub.style.display = 'none';
           if (isSub) isSub.style.display = '';
           if (lastEl && data.lastSuccess) lastEl.textContent = 'Last successful upload: ' + new Date(data.lastSuccess).toLocaleString('en-GB');
+          if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+          if (supportEl) supportEl.style.display = 'none';
         } else {
           if (footerEl) { footerEl.textContent = 'Local backup only'; footerEl.style.color = '#d97706'; footerEl.style.cursor = 'pointer'; footerEl.style.textDecoration = 'underline'; }
           var checking = document.getElementById('cloud-backup-checking');
           var notSub = document.getElementById('cloud-backup-not-subscribed');
           var isSub = document.getElementById('cloud-backup-subscribed');
+          var errEl = document.getElementById('cloud-backup-error');
+          var supportEl = document.getElementById('cloud-backup-error-support');
           if (checking) checking.style.display = 'none';
           if (notSub) notSub.style.display = '';
           if (isSub) isSub.style.display = 'none';
+          if (data && data.lastError && errEl) {
+            errEl.textContent = data.lastError;
+            errEl.style.display = '';
+            if (supportEl) supportEl.style.display = '';
+          }
         }
       });
     }
@@ -8361,6 +8433,148 @@ PDF_CASENOTE_ADVERT +
         window.open(url, '_blank');
       }
     });
+    (function initForgotLicence() {
+      var btn = document.getElementById('forgot-licence-btn');
+      var inp = document.getElementById('forgot-licence-email');
+      var msg = document.getElementById('forgot-licence-msg');
+      if (!btn || !inp || !msg || !window.custodyNote?.requestLicenceEmail) return;
+      btn.addEventListener('click', function() {
+        var email = (inp.value || '').trim();
+        if (!email) { msg.textContent = 'Enter your email address.'; msg.style.color = ''; return; }
+        btn.disabled = true;
+        msg.textContent = 'Sending…';
+        msg.style.color = '';
+        window.custodyNote.requestLicenceEmail(email).then(function(res) {
+          msg.textContent = res && res.message ? res.message : 'If that email exists in our system, your licence code has been sent.';
+          msg.style.color = 'var(--success-color,#16a34a)';
+          btn.disabled = false;
+        }).catch(function() {
+          msg.textContent = 'If that email exists in our system, your licence code has been sent.';
+          msg.style.color = 'var(--success-color,#16a34a)';
+          btn.disabled = false;
+        });
+      });
+    })();
+
+    (function initAdminLicencePanel() {
+      if (!window.custodyNote) return;
+      var panel = document.getElementById('admin-licence-panel');
+      var setupSection = document.getElementById('admin-setup-section');
+      var loginSection = document.getElementById('admin-login-section');
+      var contentSection = document.getElementById('admin-content-section');
+      var setupTokenInp = document.getElementById('admin-setup-token-inp');
+      var setupPasswordInp = document.getElementById('admin-setup-password-inp');
+      var setupBtn = document.getElementById('admin-setup-btn');
+      var setupMsg = document.getElementById('admin-setup-msg');
+      var pwInp = document.getElementById('admin-password-inp');
+      var loginBtn = document.getElementById('admin-login-btn');
+      var loginMsg = document.getElementById('admin-login-msg');
+      var searchInp = document.getElementById('admin-search-inp');
+      var searchBtn = document.getElementById('admin-search-btn');
+      var syncBtn = document.getElementById('admin-sync-btn');
+      var syncMsg = document.getElementById('admin-sync-msg');
+      var resultsEl = document.getElementById('admin-results');
+      var closeBtn = document.getElementById('admin-close-btn');
+      if (!panel || !loginSection || !contentSection) return;
+
+      function showContent(show) {
+        if (setupSection) setupSection.style.display = 'none';
+        loginSection.style.display = show ? 'none' : 'block';
+        contentSection.style.display = show ? 'block' : 'none';
+      }
+
+      function escapeHtml(s) {
+        if (!s) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+      function doSearch() {
+        var q = (searchInp && searchInp.value) ? searchInp.value.trim() : '';
+        custodyNote.adminSearch(q).then(function(r) {
+          if (!r || !r.items) { resultsEl.innerHTML = '<p>No results</p>'; return; }
+          var html = '<table style="width:100%;border-collapse:collapse;"><tr><th style="text-align:left;padding:0.35rem;">Email</th><th style="text-align:left;">Key</th><th>Status</th><th>Created</th><th></th></tr>';
+          r.items.forEach(function(it) {
+            var date = it.createdAt ? new Date(it.createdAt).toLocaleDateString() : '-';
+            html += '<tr><td style="padding:0.35rem;">' + escapeHtml(it.email || '') + '</td><td><code>' + escapeHtml(it.licenceKeyMasked || '') + '</code></td><td>' + escapeHtml(it.status || '') + '</td><td>' + date + '</td><td><button type="button" class="btn btn-small admin-reveal-btn" data-id="' + escapeHtml(it.id) + '">Reveal</button> <button type="button" class="btn btn-small admin-resend-btn" data-id="' + escapeHtml(it.id) + '">Resend</button></td></tr>';
+          });
+          html += '</table>';
+          resultsEl.innerHTML = html;
+          resultsEl.querySelectorAll('.admin-reveal-btn').forEach(function(b) {
+            b.addEventListener('click', function() {
+              custodyNote.adminRevealLicence(b.dataset.id).then(function(rec) {
+                if (rec && rec.licence_key) showToast('Licence: ' + rec.licence_key, 'success');
+                else if (rec && rec.error) showToast(rec.error, 'error');
+              });
+            });
+          });
+          resultsEl.querySelectorAll('.admin-resend-btn').forEach(function(b) {
+            b.addEventListener('click', function() {
+              custodyNote.adminResend(b.dataset.id).then(function(r) {
+                showToast(r && r.message ? r.message : 'Sent');
+              });
+            });
+          });
+        });
+      }
+
+      custodyNote.adminHasPassword().then(function(has) {
+        if (has) {
+          if (setupSection) setupSection.style.display = 'none';
+          showContent(false);
+        } else {
+          if (setupSection) {
+            setupSection.style.display = 'block';
+            loginSection.style.display = 'none';
+            contentSection.style.display = 'none';
+          } else {
+            loginMsg.textContent = 'Admin not configured. Set ADMIN_SETUP_TOKEN and run setup.';
+          }
+        }
+      });
+
+      if (setupBtn) setupBtn.addEventListener('click', function() {
+        var token = setupTokenInp ? setupTokenInp.value.trim() : '';
+        var pw = setupPasswordInp ? setupPasswordInp.value : '';
+        if (!token || token.length < 16) { setupMsg.textContent = 'Setup token must be at least 16 characters'; return; }
+        if (!pw || pw.length < 8) { setupMsg.textContent = 'Password must be at least 8 characters'; return; }
+        setupMsg.textContent = '';
+        custodyNote.adminSetPassword({ token: token, password: pw }).then(function(r) {
+          if (r && r.ok) {
+            setupSection.style.display = 'none';
+            loginSection.style.display = 'block';
+            setupMsg.textContent = '';
+            setupTokenInp.value = ''; setupPasswordInp.value = '';
+          } else {
+            setupMsg.textContent = (r && r.error) ? r.error : 'Setup failed';
+          }
+        }).catch(function() { setupMsg.textContent = 'Setup failed'; });
+      });
+
+      if (loginBtn) loginBtn.addEventListener('click', function() {
+        var pw = pwInp ? pwInp.value : '';
+        custodyNote.adminLogin(pw).then(function(r) {
+          if (r && r.ok) { showContent(true); loginMsg.textContent = ''; doSearch(); }
+          else { loginMsg.textContent = (r && r.error) ? r.error : 'Invalid'; }
+        });
+      });
+
+      if (searchBtn) searchBtn.addEventListener('click', doSearch);
+      if (searchInp) searchInp.addEventListener('keydown', function(e) { if (e.key === 'Enter') doSearch(); });
+
+      if (syncBtn) syncBtn.addEventListener('click', function() {
+        syncMsg.textContent = 'Syncing…';
+        custodyNote.adminSync().then(function(r) {
+          syncMsg.textContent = r && r.ok ? 'Synced ' + (r.synced || 0) + ' records.' : ((r && r.reason) ? r.reason : 'Sync failed');
+        });
+      });
+
+      if (closeBtn) closeBtn.addEventListener('click', function() {
+        panel.style.display = 'none';
+      });
+      panel.addEventListener('click', function(e) {
+        if (e.target === panel) panel.style.display = 'none';
+      });
+    })();
+
     document.addEventListener('click', function(e) {
       var link = e.target?.closest?.('.support-faq-link');
       if (link && link.dataset?.url) {

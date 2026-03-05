@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://sql.js.org 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://sql.js.org;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://sql.js.org 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://sql.js.org https://custodynote.com https://www.custodynote.com; object-src 'none'; base-uri 'none';">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -547,21 +547,26 @@
         <div class="settings-card" id="licence-settings-card">
           <h2>Licence</h2>
           <div id="licence-status-active" style="display:none;">
-            <p class="settings-hint" style="margin:0 0 0.5rem 0;">Licence key (obscured)</p>
-            <div class="setting-row" style="align-items:center;">
+            <p class="settings-hint" style="margin:0 0 0.5rem 0;">Licence key (masked)</p>
+            <div class="setting-row" style="align-items:center;flex-wrap:wrap;gap:0.5rem;">
               <code id="licence-key-obscured" style="font-size:1rem;letter-spacing:1px;padding:0.5rem;background:var(--input-bg,#f8fafc);border-radius:4px;">--------</code>
+              <button type="button" id="btn-licence-validate" class="btn btn-secondary btn-small">Validate</button>
             </div>
-            <p id="licence-time-remaining" class="settings-hint" style="margin:0.5rem 0 1rem 0;"></p>
+            <p id="licence-time-remaining" class="settings-hint" style="margin:0.5rem 0 0.25rem 0;"></p>
+            <p id="licence-last-validated" class="settings-hint" style="margin:0 0 1rem 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
+            <p id="licence-validate-result" class="settings-hint" style="margin:0 0 0.5rem 0;display:none;"></p>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
               <button type="button" id="btn-licence-email-key" class="btn btn-secondary">Email my licence key</button>
               <button type="button" id="btn-licence-deactivate-device" class="btn btn-secondary">Deactivate this device</button>
               <button type="button" id="btn-licence-change" class="btn btn-secondary">Change licence</button>
+              <button type="button" id="btn-licence-remove" class="btn btn-secondary">Remove licence</button>
             </div>
           </div>
           <div id="licence-status-none" style="display:none;">
             <p class="settings-hint" style="margin:0 0 0.75rem 0;">Enter your licence key to activate. You can also start a trial from the overlay when the app first opens.</p>
             <label for="setting-licence-key">Licence key</label>
             <input type="text" id="setting-licence-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX or trial key" autocomplete="off" spellcheck="false" style="max-width:320px;">
+            <p class="settings-hint" style="margin:0.25rem 0 0 0;font-size:0.8rem;">Hyphens and spaces are optional; key is normalized to uppercase.</p>
             <button type="button" id="btn-licence-activate-settings" class="btn btn-primary" style="margin-top:0.5rem;">Activate</button>
             <p id="licence-activate-error" class="licence-error" style="display:none;margin-top:0.5rem;color:#dc2626;"></p>
           </div>
@@ -650,6 +655,7 @@
               </div>
             </div>
             <p id="cloud-backup-error" class="settings-hint" style="color:#c00;display:none;"></p>
+            <p id="cloud-backup-error-support" class="settings-hint" style="display:none;margin-top:0.25rem;font-size:0.85rem;">Include the reference from the message above when you <a href="https://www.custodynote.com/support" target="_blank" rel="noopener">contact support</a>.</p>
           </div>
           <p class="settings-hint" style="margin-top:0;">Your attendance data is also backed up locally as encrypted files. Choose where to save them below.</p>
           <label>Backup folder</label>
@@ -768,12 +774,18 @@
 
         <div class="settings-card">
           <h2>Support &amp; Suggestions</h2>
-          <details id="support-faq-details" class="support-faq-details" style="margin-top:0.75rem;border:1px solid var(--border-color,#ddd);border-radius:8px;padding:0;">
+          <details id="support-faq-details" class="support-faq-details" open style="margin-top:0.75rem;border:1px solid var(--border-color,#ddd);border-radius:8px;padding:0;">
             <summary style="padding:0.75rem 1rem;cursor:pointer;font-weight:600;user-select:none;">What do you do if you need support?</summary>
             <div style="padding:0 1rem 1rem;border-top:1px solid var(--border-color,#eee);">
               <ul style="margin:0.5rem 0 0 0;padding-left:1.25rem;line-height:1.7;">
                 <li><strong>Support forum</strong> — Post questions, get help from the team and other users. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/support">Open forum</button></li>
-                <li><strong>Forgot licence key?</strong> — Visit Support to have your key emailed. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/support">Get key</button></li>
+                <li><strong>Forgot licence key?</strong> — Enter your email and we&apos;ll send it if we have it on file.
+                  <div class="forgot-licence-row" style="margin-top:0.35rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+                    <input type="email" id="forgot-licence-email" placeholder="you@example.com" class="forgot-licence-input" style="padding:0.35rem 0.5rem;font-size:0.85rem;border:1px solid var(--border-color,#ccc);border-radius:4px;min-width:180px;" />
+                    <button type="button" id="forgot-licence-btn" class="btn btn-small btn-primary">Email my key</button>
+                    <span id="forgot-licence-msg" class="forgot-licence-msg" style="font-size:0.8rem;color:var(--text-muted,#666);"></span>
+                  </div>
+                </li>
                 <li><strong>FAQ</strong> — Trials, licences, cloud backup, billing. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/faq">View FAQ</button></li>
                 <li><strong>Sales or general enquiries</strong> — Use the Contact form on the website. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/contact">Contact</button></li>
               </ul>
@@ -1306,6 +1318,52 @@
         setTimeout(function () { s.remove(); }, 600);
       }
     }, 9000);
+
+    // Admin panel: Ctrl+Shift+A
+    document.addEventListener('keydown', function(e) {
+      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+        e.preventDefault();
+        var panel = document.getElementById('admin-licence-panel');
+        if (panel) {
+          var show = panel.style.display !== 'flex';
+          panel.style.display = show ? 'flex' : 'none';
+        }
+      }
+    });
   </script>
+
+  <!-- Admin licence panel (hidden, Ctrl+Shift+A to toggle) -->
+  <div id="admin-licence-panel" class="admin-panel" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;flex;">
+    <div class="admin-panel-inner" style="background:#fff;border-radius:12px;max-width:640px;max-height:90vh;overflow:auto;padding:1.5rem;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+      <h2 style="margin:0 0 1rem 0;font-size:1.25rem;">Licence Admin</h2>
+      <div id="admin-setup-section" style="display:none;">
+        <p class="admin-hint" style="font-size:0.85rem;color:#666;">Admin not configured. Set up admin with your setup token (from ADMIN_SETUP_TOKEN env):</p>
+        <div style="margin-bottom:0.75rem;">
+          <input type="text" id="admin-setup-token-inp" placeholder="Setup token" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:0.5rem;" />
+          <input type="password" id="admin-setup-password-inp" placeholder="New admin password" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;" />
+        </div>
+        <button type="button" id="admin-setup-btn" class="btn btn-primary" style="margin-bottom:1rem;">Set password</button>
+        <p id="admin-setup-msg" style="font-size:0.8rem;color:#c00;min-height:1.2em;"></p>
+      </div>
+      <div id="admin-login-section">
+        <p class="admin-hint" style="font-size:0.85rem;color:#666;">Enter admin password:</p>
+        <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+          <input type="password" id="admin-password-inp" placeholder="Password" style="flex:1;padding:0.5rem;border:1px solid #ccc;border-radius:6px;" />
+          <button type="button" id="admin-login-btn" class="btn btn-primary">Login</button>
+        </div>
+        <p id="admin-login-msg" style="font-size:0.8rem;color:#c00;min-height:1.2em;"></p>
+      </div>
+      <div id="admin-content-section" style="display:none;">
+        <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+          <input type="text" id="admin-search-inp" placeholder="Search by email" style="flex:1;padding:0.5rem;border:1px solid #ccc;border-radius:6px;" />
+          <button type="button" id="admin-search-btn" class="btn btn-secondary">Search</button>
+          <button type="button" id="admin-sync-btn" class="btn btn-secondary">Sync</button>
+        </div>
+        <p id="admin-sync-msg" style="font-size:0.8rem;color:#666;min-height:1.2em;"></p>
+        <div id="admin-results" style="margin-top:1rem;font-size:0.85rem;"></div>
+      </div>
+      <button type="button" id="admin-close-btn" class="btn btn-secondary" style="margin-top:1rem;">Close</button>
+    </div>
+  </div>
 </body>
 </html>

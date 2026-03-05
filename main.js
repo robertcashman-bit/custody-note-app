@@ -910,6 +910,10 @@ function isAllowedApiUrl(urlStr) {
 }
 
 function getManagedCloudApiUrl() {
+  const envBase = process.env.LICENCE_SERVER_BASE_URL;
+  if (envBase && typeof envBase === 'string' && isAllowedApiUrl(envBase)) {
+    return envBase.replace(/\/$/, '');
+  }
   try {
     const cfgPath = path.join(app.getPath('userData'), 'licence-config.json');
     if (fs.existsSync(cfgPath)) {
@@ -984,12 +988,34 @@ async function checkCloudBackupEntitlement() {
   }
 }
 
+/** Map AWS/SDK errors to user-friendly codes; return { message, code, correlationId }. */
+function mapBackupError(err) {
+  const correlationId = 'cn-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  const msg = err && err.message ? String(err.message) : String(err);
+  if (!msg) return { message: 'Backup failed: unknown error', code: 'UNKNOWN', correlationId };
+  if (/credentials|Credential|Unauthorized|AccessDenied|403|Forbidden/i.test(msg)) {
+    return { message: 'Backup failed: permission denied. Check your licence and try again.', code: 'PERMISSION_DENIED', correlationId };
+  }
+  if (/bucket|Bucket|NoSuchBucket|InvalidBucket|404/i.test(msg)) {
+    return { message: 'Backup failed: configuration missing (bucket). Contact support.', code: 'CONFIG_MISSING', correlationId };
+  }
+  if (/network|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|timeout/i.test(msg)) {
+    return { message: 'Backup failed: network issue. Check your connection and try again.', code: 'NETWORK_ERROR', correlationId };
+  }
+  if (/ObjectLock|object lock/i.test(msg)) {
+    return { message: 'Backup failed: storage configuration issue. Contact support.', code: 'CONFIG_ERROR', correlationId };
+  }
+  return { message: 'Backup failed: ' + msg.slice(0, 80), code: 'ERROR', correlationId };
+}
+
+const MANAGED_BACKUP_MAX_RETRIES = 3;
+const MANAGED_BACKUP_INITIAL_DELAY_MS = 1000;
+
 function uploadToManagedCloudIfEnabled(buffer, key) {
   if (!buffer || !Buffer.isBuffer(buffer) || !key) return;
   if (!_cloudBackupEnabled) return;
 
-  fetchManagedCloudCredentials().then(creds => {
-    if (!creds) return;
+  function doUpload(creds, attempt) {
     return import('@aws-sdk/client-s3').then(({ S3Client, PutObjectCommand }) => {
       const client = new S3Client({
         region: creds.region,
@@ -1000,26 +1026,53 @@ function uploadToManagedCloudIfEnabled(buffer, key) {
         },
       });
       const s3Key = `${creds.prefix}/${key}`;
+      // Do NOT use ObjectLockMode/ObjectLockRetainUntilDate unless bucket has Object Lock enabled
       return client.send(new PutObjectCommand({
         Bucket: creds.bucket,
         Key: s3Key,
         Body: buffer,
         ContentType: 'application/octet-stream',
-        ObjectLockMode: 'COMPLIANCE',
-        ObjectLockRetainUntilDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
       }));
     });
-  }).then(() => {
-    _lastManagedCloudSuccess = Date.now();
-    _lastManagedCloudError = null;
-    console.log('[Backup] Managed cloud upload succeeded:', key);
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cloud-backup-status-changed', { enabled: true, lastSuccess: _lastManagedCloudSuccess });
-  }).catch(err => {
-    if (err) {
-      _lastManagedCloudError = err.message || String(err);
-      console.error('[Backup] Managed cloud upload failed:', _lastManagedCloudError);
+  }
+
+  function retryWithBackoff(creds, attempt) {
+    return doUpload(creds, attempt).catch(err => {
+      const mapped = mapBackupError(err);
+      console.error('[Backup] Managed cloud upload attempt', attempt, mapped.code, mapped.correlationId, err && err.message);
+      if (attempt < MANAGED_BACKUP_MAX_RETRIES) {
+        const delay = MANAGED_BACKUP_INITIAL_DELAY_MS * Math.pow(2, attempt - 1);
+        return new Promise((resolve) => setTimeout(resolve, delay)).then(() => retryWithBackoff(creds, attempt + 1));
+      }
+      _lastManagedCloudError = mapped.message + ' (Ref: ' + mapped.correlationId + ')';
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('cloud-backup-status-changed', {
+          enabled: _cloudBackupEnabled,
+          lastError: _lastManagedCloudError,
+          correlationId: mapped.correlationId,
+        });
+      }
+      throw err;
+    });
+  }
+
+  fetchManagedCloudCredentials().then(creds => {
+    if (!creds) {
+      _lastManagedCloudError = 'Backup failed: configuration missing. Check your licence.';
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, lastError: _lastManagedCloudError });
+      }
+      return;
     }
-  });
+    return retryWithBackoff(creds, 1);
+  }).then(() => {
+    if (!_lastManagedCloudError) {
+      _lastManagedCloudSuccess = Date.now();
+      _lastManagedCloudError = null;
+      console.log('[Backup] Managed cloud upload succeeded:', key);
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cloud-backup-status-changed', { enabled: true, lastSuccess: _lastManagedCloudSuccess });
+    }
+  }).catch(() => {});
 }
 
 function createWindow() {
@@ -1036,6 +1089,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
     title: 'Custody Note',
   });
@@ -1315,6 +1369,24 @@ function createWindow() {
                   await sleep(500);
                   if (document.getElementById('view-settings')?.classList.contains('active')) {
                     log('12. Gear > Settings works');
+                    /* 12b. Support links: ensure details open, click support-faq-link and useful-link-btn */
+                    var detailsEl = document.getElementById('support-faq-details');
+                    if (detailsEl && !detailsEl.open) { detailsEl.setAttribute('open', ''); await sleep(100); }
+                    var supportFaqLinks = document.querySelectorAll('.support-faq-link');
+                    if (supportFaqLinks.length >= 4) {
+                      supportFaqLinks[0].click();
+                      await sleep(150);
+                      log('12b. support-faq-link clicked (Open forum)');
+                    } else {
+                      errors.push('support-faq-link buttons not found or wrong count: ' + supportFaqLinks.length);
+                    }
+                    var usefulLinks = document.querySelectorAll('.useful-link-btn');
+                    var supportLink = Array.from(usefulLinks).find(function(a){ return (a.dataset.extUrl || a.href || '').indexOf('support') >= 0; });
+                    if (supportLink) {
+                      supportLink.click();
+                      await sleep(150);
+                      log('12c. useful-link-btn Support clicked');
+                    }
                   } else {
                     errors.push('Gear Settings: view-settings not active');
                   }
@@ -1808,9 +1880,17 @@ async function validateLicenceOnline(key, machineId) {
   if (!url) return { valid: true, offline: true };
   try {
     const resp = await httpPost(url, { key, machineId, appVersion: (require('./package.json').version || '0.0.0') });
-    return { valid: !!resp.valid, expiresAt: resp.expiresAt || null, email: resp.email || '', message: resp.message || '', isTrial: !!resp.isTrial, offline: false };
+    return {
+      valid: !!resp.valid,
+      expiresAt: resp.expiresAt || null,
+      email: resp.email || '',
+      message: resp.message || '',
+      isTrial: !!resp.isTrial,
+      offline: false,
+      serverStatus: resp.status || null,
+    };
   } catch (e) {
-    return { valid: null, offline: true, message: 'Could not reach validation server: ' + e.message };
+    return { valid: null, offline: true, message: 'Could not reach validation server: ' + e.message, serverStatus: null };
   }
 }
 
@@ -1895,9 +1975,11 @@ ipcMain.handle('licence:validate', async () => {
     if (result.email) data.email = result.email;
     writeLicenceData(data);
   } else if (result.valid === false) {
-    data.status = 'revoked';
+    const serverStatus = result.serverStatus || 'revoked';
+    if (serverStatus === 'expired') data.expiresAt = result.expiresAt || data.expiresAt;
+    data.status = serverStatus;
     writeLicenceData(data);
-    return { valid: false, status: { status: 'revoked', message: result.message || 'Licence has been revoked' } };
+    return { valid: false, status: { status: serverStatus, message: result.message || 'Licence is not valid' } };
   }
   return { valid: result.valid !== false, status: computeLicenceStatus(data) };
 });
@@ -2006,6 +2088,15 @@ app.whenReady().then(async () => {
   }
 
   await initDb();
+
+  /* ─── Licence store (admin DB) init ─── */
+  try {
+    const licenceStoreKey = require('./main/licenceStoreKey').getLicenceStoreKey(app, safeStorage);
+    await require('./main/licenceStore').initStore(app.getPath('userData'), licenceStoreKey);
+    require('./main/licenceIpc').registerLicenceIpc(app);
+  } catch (e) {
+    console.warn('[LicenceStore] Init failed:', e.message);
+  }
 
   if (trialInitOnly) {
     app.quit();

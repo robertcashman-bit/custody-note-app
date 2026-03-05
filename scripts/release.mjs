@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Release script: bumps version, updates changelog, syncs to website, builds app.
+ * Release script: bumps version, updates changelog, syncs to website, builds app, publishes to GitHub, deploys website.
  *
  * Usage:
  *   npm run release [patch|minor|major] [-- --changes "item1; item2; item3"]
@@ -9,11 +9,14 @@
  *
  * If --changes is not provided, reads one change per line from stdin until empty line.
  *
+ * Requires: GH_TOKEN or GITHUB_TOKEN (GitHub PAT with repo scope) for publishing.
+ *
  * This script:
  * 1. Bumps version in package.json
  * 2. Appends to changelog.json
  * 3. Syncs version + changelog to website (custody note - website production)
- * 4. Builds the Electron app
+ * 4. Builds the Electron app and publishes to GitHub (creates release, uploads installer)
+ * 5. Deploys the website to Vercel (so download page serves new version)
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -23,6 +26,25 @@ import { createInterface } from 'readline';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
 const WEBSITE_ROOT = join(APP_ROOT, '..', 'custody note - website production');
+
+/** Load GH_TOKEN from .env or .env.local if not already set */
+function loadEnvToken() {
+  if (process.env.GH_TOKEN || process.env.GITHUB_TOKEN) return;
+  for (const name of ['.env', '.env.local']) {
+    const p = join(APP_ROOT, name);
+    if (!existsSync(p)) continue;
+    try {
+      const content = readFileSync(p, 'utf8');
+      for (const line of content.split('\n')) {
+        const m = line.match(/^\s*GH_TOKEN\s*=\s*(.+?)\s*$/);
+        if (m) {
+          process.env.GH_TOKEN = m[1].replace(/^["']|["']$/g, '').trim();
+          return;
+        }
+      }
+    } catch (_) {}
+  }
+}
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -115,17 +137,57 @@ async function main() {
   });
   console.log('Website data synced');
 
-  // Build app (no prebuild bump; we already bumped)
+  // Build and publish app to GitHub
+  loadEnvToken();
   const { spawn } = await import('child_process');
-  await new Promise((resolve, reject) => {
-    const proc = spawn('npm', ['run', 'build:only'], {
-      cwd: APP_ROOT,
-      stdio: 'inherit',
-      shell: true,
+  const hasToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  const doPublish = hasToken && !argv.includes('--no-publish');
+
+  if (doPublish) {
+    console.log('Building and publishing to GitHub...');
+    await new Promise((resolve, reject) => {
+      const proc = spawn(
+        'npx',
+        ['electron-builder', '--win', '--publish', 'always'],
+        {
+          cwd: APP_ROOT,
+          stdio: 'inherit',
+          shell: true,
+          env: { ...process.env, GH_TOKEN: process.env.GH_TOKEN || process.env.GITHUB_TOKEN },
+        }
+      );
+      proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Build/publish exited ${code}`))));
     });
-    proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Build exited ${code}`))));
-  });
+  } else {
+    if (!hasToken) {
+      console.warn('GH_TOKEN or GITHUB_TOKEN not set — skipping GitHub publish. Build only.');
+    }
+    await new Promise((resolve, reject) => {
+      const proc = spawn('npm', ['run', 'build:only'], {
+        cwd: APP_ROOT,
+        stdio: 'inherit',
+        shell: true,
+      });
+      proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Build exited ${code}`))));
+    });
+  }
   console.log('Build complete.');
+
+  // Deploy website (fetch-latest-release + Vercel)
+  if (existsSync(join(WEBSITE_ROOT, 'package.json'))) {
+    console.log('Deploying website...');
+    await new Promise((resolve, reject) => {
+      const proc = spawn('npm', ['run', 'deploy'], {
+        cwd: WEBSITE_ROOT,
+        stdio: 'inherit',
+        shell: true,
+      });
+      proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Website deploy exited ${code}`))));
+    });
+    console.log('Website deployed.');
+  } else {
+    console.log('Website not found, skipping deploy.');
+  }
 }
 
 main().catch((err) => {
