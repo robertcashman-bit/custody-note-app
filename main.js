@@ -1894,6 +1894,9 @@ async function validateLicenceOnline(key, machineId) {
 
 function computeLicenceStatus(data) {
   if (!data || !data.key) return { status: 'none', message: 'No licence activated' };
+  if (data.status === 'revoked' || data.status === 'invalid') {
+    return { status: 'revoked', message: 'Licence has been revoked. Please enter a new licence key or contact support.', key: data.key, email: data.email };
+  }
   const now = Date.now();
   if (data.expiresAt) {
     const expiryMs = new Date(data.expiresAt).getTime();

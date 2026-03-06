@@ -83,7 +83,8 @@
     activateBtn.addEventListener('click', function () {
       var keyInput = document.getElementById('licence-key-input');
       var emailInput = document.getElementById('licence-email-input');
-      var key = (keyInput ? keyInput.value : '').trim();
+      var rawKey = keyInput ? keyInput.value : '';
+      var key = (typeof rawKey === 'string' ? rawKey : '').replace(/\s/g, '').trim().toUpperCase();
       var email = (emailInput ? emailInput.value : '').trim();
       if (!key) { showError('Please enter a licence key.'); return; }
       activateBtn.disabled = true;

@@ -8036,6 +8036,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('btn-licence-change')?.addEventListener('click', function() {
       if (!window.api.licenceDeactivate) return;
       if (!confirm('Change licence? Your current licence will be removed. Enter a new key in the overlay.')) return;
+      if (window.api.licenceDeactivateMachine) window.api.licenceDeactivateMachine().catch(function() {});
       window.api.licenceDeactivate();
       if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Enter your new licence key.' });
       if (window.initLicenceUI) window.initLicenceUI();
@@ -8044,6 +8045,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('btn-licence-remove')?.addEventListener('click', function() {
       if (!window.api.licenceDeactivate) return;
       if (!confirm('Remove licence? You will need to enter a key again to use the app. Paid features will be locked until you activate again.')) return;
+      if (window.api.licenceDeactivateMachine) window.api.licenceDeactivateMachine().catch(function() {});
       window.api.licenceDeactivate();
       if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Enter your licence key to activate.' });
       if (window.initLicenceUI) window.initLicenceUI();
