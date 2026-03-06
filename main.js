@@ -2725,6 +2725,9 @@ ipcMain.handle('cloud-backup-list', async () => {
 ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
   const data = readLicenceData();
   if (!data || !data.key) return { ok: false, error: 'No licence key' };
+  if (typeof backupKey !== 'string' || !backupKey.trim()) return { ok: false, error: 'Invalid backup key' };
+  const sanitizedKey = backupKey.replace(/[^a-zA-Z0-9._\-]/g, '');
+  if (sanitizedKey !== backupKey || sanitizedKey.includes('..')) return { ok: false, error: 'Invalid backup key' };
   try {
     const creds = await fetchManagedCloudCredentials();
     if (!creds) return { ok: false, error: 'Could not obtain cloud credentials' };
@@ -2737,7 +2740,7 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
         sessionToken: creds.sessionToken,
       },
     });
-    const s3Key = `${creds.prefix}/${backupKey}`;
+    const s3Key = `${creds.prefix}/${sanitizedKey}`;
     const resp = await client.send(new GetObjectCommand({ Bucket: creds.bucket, Key: s3Key }));
     const chunks = [];
     for await (const chunk of resp.Body) { chunks.push(chunk); }
