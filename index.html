@@ -771,16 +771,43 @@
 
         <div class="settings-card">
           <h2>LAA Fee Rates (editable)</h2>
-          <p class="settings-hint">Edit rates below. Changes apply to fee calculations immediately.</p>
+          <div style="background:#d1fae5;border:1px solid #10b981;border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.85rem;">
+            <p style="margin:0 0 0.3rem 0;font-weight:700;font-size:0.9rem;color:#065f46;">&#10003; Rates updated &mdash; Criminal Legal Aid (General &amp; Remuneration) (Amendment) Regulations 2025</p>
+            <p style="margin:0;font-size:0.82rem;color:#064e3b;">Fixed fee and escape threshold are now <strong>harmonised across all police stations in England &amp; Wales</strong> (in force 22 Dec 2025). The attendance hourly rates are editable &mdash; verify against your Standard Crime Contract or <a href="https://www.legislation.gov.uk/uksi/2025/1251/made" target="_blank" rel="noopener" style="color:#065f46;font-weight:600;">SI 2025/1251</a>.</p>
+          </div>
           <table class="rates-table rates-editable">
-            <tr><td>Fixed Fee (all schemes)</td><td>&pound;<input type="number" id="rate-fixedFee" step="0.01" value="320.00" class="rate-input"></td></tr>
-            <tr><td>Escape Threshold</td><td>&pound;<input type="number" id="rate-escapeThreshold" step="0.01" value="650.00" class="rate-input"></td></tr>
-            <tr><td>Attendance (social) /hr</td><td>&pound;<input type="number" id="rate-attendanceSocial" step="0.01" value="54.57" class="rate-input"></td></tr>
-            <tr><td>Attendance (unsocial) /hr</td><td>&pound;<input type="number" id="rate-attendanceUnsocial" step="0.01" value="72.46" class="rate-input"></td></tr>
-            <tr><td>Travel &amp; Waiting /hr</td><td>&pound;<input type="number" id="rate-travelWaiting" step="0.01" value="27.29" class="rate-input"></td></tr>
-            <tr><td>Mileage /mile</td><td>&pound;<input type="number" id="rate-mileage" step="0.01" value="0.45" class="rate-input"></td></tr>
-            <tr><td>VAT (%)</td><td><input type="number" id="rate-vat" step="1" value="20" class="rate-input">%</td></tr>
-            <tr><td>Unsocial hours</td><td>7pm-7am + weekends/BH</td></tr>
+            <tr>
+              <td>Fixed Fee (all stations)<br><span style="font-size:0.78rem;color:#64748b;">Harmonised &mdash; same for every police station, England &amp; Wales (SI 2025/1251)</span></td>
+              <td>&pound;<input type="number" id="rate-fixedFee" step="0.01" value="320.00" class="rate-input"></td>
+            </tr>
+            <tr>
+              <td>Escape Threshold (all stations)<br><span style="font-size:0.78rem;color:#64748b;">Harmonised &mdash; same for every police station, England &amp; Wales (SI 2025/1251)</span></td>
+              <td>&pound;<input type="number" id="rate-escapeThreshold" step="0.01" value="650.00" class="rate-input"></td>
+            </tr>
+            <tr>
+              <td>Attendance (social hours) /hr<br><span style="font-size:0.78rem;color:#64748b;">Business hours (Mon&ndash;Fri) &mdash; check your contract for police station escape fee rate</span></td>
+              <td>&pound;<input type="number" id="rate-attendanceSocial" step="0.01" value="56.51" class="rate-input"></td>
+            </tr>
+            <tr>
+              <td>Attendance (unsocial hours) /hr<br><span style="font-size:0.78rem;color:#64748b;">Outside business hours, weekends &amp; bank holidays &mdash; check your contract</span></td>
+              <td>&pound;<input type="number" id="rate-attendanceUnsocial" step="0.01" value="75.77" class="rate-input"></td>
+            </tr>
+            <tr>
+              <td>Travel &amp; Waiting /hr<br><span style="font-size:0.78rem;color:#64748b;">Out-of-hours / call-out rate (SI 2025/1251)</span></td>
+              <td>&pound;<input type="number" id="rate-travelWaiting" step="0.01" value="30.36" class="rate-input"></td>
+            </tr>
+            <tr>
+              <td>Mileage /mile<br><span style="font-size:0.78rem;color:#64748b;">HMRC approved rate (unchanged)</span></td>
+              <td>&pound;<input type="number" id="rate-mileage" step="0.01" value="0.45" class="rate-input"></td>
+            </tr>
+            <tr>
+              <td>VAT (%)</td>
+              <td><input type="number" id="rate-vat" step="1" value="20" class="rate-input">%</td>
+            </tr>
+            <tr>
+              <td>Unsocial hours definition<br><span style="font-size:0.78rem;color:#64748b;">Any time that is <strong>not</strong> a Business Day (Mon&ndash;Fri excluding bank holidays) &mdash; SI 2025/1251</span></td>
+              <td style="font-size:0.9rem;color:#475569;">Outside Business Days &amp; BH</td>
+            </tr>
           </table>
         </div>
 
