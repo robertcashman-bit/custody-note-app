@@ -1770,11 +1770,45 @@ var REQUIRED_FIELD_KEYS = [
     updateGearLicenceItem();
   }
 
+  function updateLicenceFooterBadge(st) {
+    var badge = document.getElementById('licence-footer-badge');
+    if (!badge) return;
+    if (!st || !st.key) {
+      badge.textContent = 'No licence';
+      badge.style.color = '#dc2626';
+      badge.style.fontWeight = '600';
+    } else if (st.isTrial) {
+      var days = st.daysRemaining != null ? ' (' + st.daysRemaining + 'd left)' : '';
+      badge.textContent = 'Trial' + days;
+      badge.style.color = '#d97706';
+      badge.style.fontWeight = '600';
+    } else if (st.status === 'expiring_soon') {
+      badge.textContent = 'Licensed \u2014 expiring soon';
+      badge.style.color = '#d97706';
+      badge.style.fontWeight = '600';
+    } else if (st.status === 'active') {
+      badge.textContent = 'Licensed';
+      badge.style.color = '#059669';
+      badge.style.fontWeight = '600';
+    } else if (st.status === 'expired') {
+      badge.textContent = 'Licence expired';
+      badge.style.color = '#dc2626';
+      badge.style.fontWeight = '600';
+    } else {
+      badge.textContent = 'Licence: ' + (st.status || 'unknown');
+      badge.style.color = '#64748b';
+      badge.style.fontWeight = '';
+    }
+    badge.onclick = function() { showView('settings'); setTimeout(function() { document.getElementById('licence-settings-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150); };
+  }
+
   function updateHomeLicenceCard() {
     var card = document.getElementById('home-enter-licence-card');
-    if (!card) return;
-    if (!window.api || !window.api.licenceStatus) { card.style.display = 'none'; return; }
+    if (!window.api || !window.api.licenceStatus) { if (card) card.style.display = 'none'; return; }
     window.api.licenceStatus().then(function(st) {
+      // Update footer badge (visible on every screen)
+      updateLicenceFooterBadge(st);
+      if (!card) return;
       var isPaid = st && st.key && (st.status === 'active' || st.status === 'expiring_soon') && !st.isTrial;
       card.style.display = isPaid ? 'none' : '';
       // Update card text for trial vs no-licence state
@@ -1782,7 +1816,8 @@ var REQUIRED_FIELD_KEYS = [
       var subEl = card.querySelector('p:last-of-type');
       var btnEl = card.querySelector('button');
       if (st && st.isTrial) {
-        if (titleEl) titleEl.textContent = 'You are on a free trial';
+        var trialDays = st.daysRemaining != null ? ' \u2014 ' + st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : '';
+        if (titleEl) titleEl.textContent = 'Free trial' + trialDays;
         if (subEl) subEl.innerHTML = 'Enter your paid licence key to activate cloud backup and full access. <strong>custodynote.com/buy</strong>';
         if (btnEl) btnEl.textContent = 'Enter licence key \u2192';
       } else {
@@ -1790,7 +1825,7 @@ var REQUIRED_FIELD_KEYS = [
         if (subEl) subEl.innerHTML = 'Paste the key from your email. Get a free trial or buy at <strong>custodynote.com</strong>';
         if (btnEl) btnEl.textContent = 'Enter key \u2192';
       }
-    }).catch(function() { card.style.display = 'none'; });
+    }).catch(function() { if (card) card.style.display = 'none'; });
   }
 
   function updateGearLicenceItem() {
@@ -7738,6 +7773,10 @@ PDF_CASENOTE_ADVERT +
         if (uEl && info.lastUpdated) uEl.textContent = info.lastUpdated;
         if (info.version) window.__appVersion = info.version;
       });
+    }
+    // Populate licence footer badge on startup (visible on every screen)
+    if (window.api && window.api.licenceStatus) {
+      window.api.licenceStatus().then(function(st) { updateLicenceFooterBadge(st); }).catch(function() {});
     }
 
     /* Load bank holidays from cache / server */
