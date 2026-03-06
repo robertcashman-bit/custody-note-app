@@ -7521,15 +7521,6 @@ PDF_CASENOTE_ADVERT +
             case 'reports': showView('reports'); break;
             case 'settings': showView('settings'); break;
             case 'help': showView('help'); break;
-            case 'prepare-trial':
-              if (window.api && window.api.prepareTrial) {
-                showToast('Preparing trial package...', 'info');
-                window.api.prepareTrial().then(function(r) {
-                  if (r && r.ok) showToast('Trial zip created on Desktop', 'success');
-                  else showToast(r && r.error ? r.error : 'Failed', 'error');
-                }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); });
-              }
-              break;
           }
           return;
         }

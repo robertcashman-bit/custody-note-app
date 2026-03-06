@@ -45,6 +45,9 @@ function loadSettings() {
     var sup = document.getElementById('setting-show-supervisor-review');
     if (sup) sup.checked = s.showSupervisorReview === 'true';
 
+    var fen = document.getElementById('setting-fee-earner-name');
+    if (fen) fen.value = s.feeEarnerNameDefault || '';
+
     var ai = document.getElementById('setting-auto-import-enabled');
     if (ai) ai.checked = s.autoImportEnabled === 'true';
     var aif = document.getElementById('setting-auto-import-folder');
@@ -154,6 +157,7 @@ function saveSettings() {
     quickfileAccountNumber: (document.getElementById('setting-quickfile-account') || {value:''}).value.trim() || '',
     quickfileApiKey: (document.getElementById('setting-quickfile-apikey') || {value:''}).value.trim() || '',
     quickfileAppId: (document.getElementById('setting-quickfile-appid') || {value:''}).value.trim() || '',
+    feeEarnerNameDefault: (document.getElementById('setting-fee-earner-name') || {value:''}).value.trim() || '',
     suggestionsForumUrl: (document.getElementById('suggestions-forum-url') || {value:''}).value.trim() || '',
     darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
     fontSize: (document.getElementById('setting-font-size') || {value:'16'}).value || '16',
