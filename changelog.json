@@ -5,8 +5,15 @@
       "date": "2026-03-05",
       "latest": true,
       "changes": [
+        "LAA fee rates updated to Standard Crime Contract 2025 (SI 2025/1251) — fixed fee £320 and escape threshold £650 confirmed and harmonised across all police stations",
+        "Licence status badge now visible permanently in the footer on every screen — shows Trial / Licensed / Expiring with colour coding",
+        "System Status diagnostic panel added to Settings — shows live licence, cloud backup, and auto-update status with clear explanations",
+        "Trial users now see an inline licence key entry box directly in Settings › Licence — no extra clicks needed",
+        "Home screen shows a trial banner with direct link to licence key entry when on a free trial",
+        "Fee earner name now saves and persists correctly across sessions",
+        "Removed 'Prepare trial for email' developer tool from user-facing gear menu",
+        "Version number no longer auto-increments on every build — versions only change on an explicit release",
         "Removed debug instrumentation",
-        "Support FAQ open by default",
         "Forgot-key rate limit fix"
       ]
     },

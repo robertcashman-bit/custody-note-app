@@ -8511,10 +8511,12 @@ PDF_CASENOTE_ADVERT +
         if (data.enabled) {
           setBlock('sysstat-backup-icon','✅','#059669','sysstat-backup-line1','Backing up to AWS (UK region)','sysstat-backup-line2','');
           if (l2El) l2El.textContent = data.lastSuccess ? 'Last upload: ' + new Date(data.lastSuccess).toLocaleString('en-GB') : 'Backup active — no uploads yet this session';
+        } else if (data.isTrial) {
+          setBlock('sysstat-backup-icon','ℹ️','#2563eb','sysstat-backup-line1','Local backup only — trial licence','sysstat-backup-line2','');
+          if (l2El) l2El.textContent = 'Cloud backup is not included in the free trial. Subscribe at custodynote.com/buy to enable it.';
         } else {
           setBlock('sysstat-backup-icon','⚠️','#d97706','sysstat-backup-line1','Local backup only','sysstat-backup-line2','');
-          var reason = 'Cloud backup requires a paid subscription with cloud backup included.';
-          if (data.lastError) reason = data.lastError;
+          var reason = data.lastError || 'Cloud backup requires a paid subscription. Subscribe at custodynote.com/buy.';
           if (l2El) l2El.textContent = reason;
         }
       }
