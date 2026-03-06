@@ -1066,12 +1066,10 @@ function uploadToManagedCloudIfEnabled(buffer, key) {
     }
     return retryWithBackoff(creds, 1);
   }).then(() => {
-    if (!_lastManagedCloudError) {
-      _lastManagedCloudSuccess = Date.now();
-      _lastManagedCloudError = null;
-      console.log('[Backup] Managed cloud upload succeeded:', key);
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cloud-backup-status-changed', { enabled: true, lastSuccess: _lastManagedCloudSuccess });
-    }
+    _lastManagedCloudSuccess = Date.now();
+    _lastManagedCloudError = null;
+    console.log('[Backup] Managed cloud upload succeeded:', key);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cloud-backup-status-changed', { enabled: true, lastSuccess: _lastManagedCloudSuccess });
   }).catch(() => {});
 }
 
