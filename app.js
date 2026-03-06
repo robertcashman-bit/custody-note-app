@@ -1775,8 +1775,21 @@ var REQUIRED_FIELD_KEYS = [
     if (!card) return;
     if (!window.api || !window.api.licenceStatus) { card.style.display = 'none'; return; }
     window.api.licenceStatus().then(function(st) {
-      var hasLicence = st && st.key && (st.status === 'active' || st.status === 'expiring_soon');
-      card.style.display = hasLicence ? 'none' : '';
+      var isPaid = st && st.key && (st.status === 'active' || st.status === 'expiring_soon') && !st.isTrial;
+      card.style.display = isPaid ? 'none' : '';
+      // Update card text for trial vs no-licence state
+      var titleEl = card.querySelector('p:first-of-type');
+      var subEl = card.querySelector('p:last-of-type');
+      var btnEl = card.querySelector('button');
+      if (st && st.isTrial) {
+        if (titleEl) titleEl.textContent = 'You are on a free trial';
+        if (subEl) subEl.innerHTML = 'Enter your paid licence key to activate cloud backup and full access. <strong>custodynote.com/buy</strong>';
+        if (btnEl) btnEl.textContent = 'Enter licence key \u2192';
+      } else {
+        if (titleEl) titleEl.textContent = 'Enter your licence key';
+        if (subEl) subEl.innerHTML = 'Paste the key from your email. Get a free trial or buy at <strong>custodynote.com</strong>';
+        if (btnEl) btnEl.textContent = 'Enter key \u2192';
+      }
     }).catch(function() { card.style.display = 'none'; });
   }
 
@@ -2579,6 +2592,7 @@ var REQUIRED_FIELD_KEYS = [
     window.api.licenceStatus().then(function(st) {
       var activeEl = document.getElementById('licence-status-active');
       var noneEl = document.getElementById('licence-status-none');
+      var trialUpgradeEl = document.getElementById('licence-trial-upgrade');
       var obscuredEl = document.getElementById('licence-key-obscured');
       var timeEl = document.getElementById('licence-time-remaining');
       var lastValidatedEl = document.getElementById('licence-last-validated');
@@ -2590,20 +2604,29 @@ var REQUIRED_FIELD_KEYS = [
         activeEl.style.display = '';
         if (obscuredEl) obscuredEl.textContent = maskLicenceKey(st.key);
         if (timeEl) {
-          if (st.daysRemaining !== undefined) {
+          if (st.isTrial) {
+            timeEl.textContent = 'Free trial \u2014 ' + (st.daysRemaining !== undefined ? st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : 'active');
+            timeEl.style.color = '#d97706';
+          } else if (st.daysRemaining !== undefined) {
             timeEl.textContent = st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining';
+            timeEl.style.color = '';
           } else if (st.expiresAt) {
             timeEl.textContent = 'Expires ' + new Date(st.expiresAt).toLocaleDateString('en-GB');
+            timeEl.style.color = '';
           } else {
             timeEl.textContent = 'Subscription active';
+            timeEl.style.color = '#059669';
           }
         }
         if (lastValidatedEl) {
           lastValidatedEl.textContent = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
         }
+        // Show the inline upgrade box when on a trial
+        if (trialUpgradeEl) trialUpgradeEl.style.display = st.isTrial ? '' : 'none';
       } else {
         activeEl.style.display = 'none';
         noneEl.style.display = '';
+        if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
       }
     });
   }
@@ -2611,6 +2634,8 @@ var REQUIRED_FIELD_KEYS = [
   function loadSettings() {
     if (!window.api) return;
     loadLicenceSettingsUI();
+    // Trigger System Status card refresh whenever Settings is opened
+    document.dispatchEvent(new CustomEvent('view-settings-shown'));
     window.api.getSettings().then(s => {
       const em = document.getElementById('setting-email');
       if (em) em.value = s.email || '';
@@ -7556,7 +7581,23 @@ PDF_CASENOTE_ADVERT +
         switch (t.id) {
           case 'home-enter-licence-btn':
             e.preventDefault();
-            if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Enter your licence key', message: 'Paste the key from your email (trial or purchase at custodynote.com).' });
+            // Go to Settings > Licence and focus the key input
+            showView('settings');
+            setTimeout(function() {
+              var upgradeEl = document.getElementById('licence-trial-upgrade');
+              var noneEl = document.getElementById('licence-status-none');
+              var inputEl = document.getElementById('trial-upgrade-key') || document.getElementById('setting-licence-key');
+              // Scroll to the licence card
+              var licCard = document.getElementById('licence-settings-card');
+              if (licCard) licCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              if (upgradeEl && upgradeEl.style.display !== 'none') {
+                var inp = document.getElementById('trial-upgrade-key');
+                if (inp) { inp.focus(); inp.select(); }
+              } else if (noneEl && noneEl.style.display !== 'none') {
+                var inp2 = document.getElementById('setting-licence-key');
+                if (inp2) { inp2.focus(); inp2.select(); }
+              }
+            }, 150);
             return;
           case 'home-card-attendance':
             e.preventDefault();
@@ -7704,6 +7745,7 @@ PDF_CASENOTE_ADVERT +
         var uEl = document.getElementById('app-updated');
         if (vEl && info.version) vEl.textContent = info.version;
         if (uEl && info.lastUpdated) uEl.textContent = info.lastUpdated;
+        if (info.version) window.__appVersion = info.version;
       });
     }
 
@@ -8114,6 +8156,41 @@ PDF_CASENOTE_ADVERT +
       });
     });
 
+    // Trial upgrade inline form handler
+    document.getElementById('btn-trial-upgrade-activate')?.addEventListener('click', function() {
+      var keyInput = document.getElementById('trial-upgrade-key');
+      var errEl = document.getElementById('trial-upgrade-error');
+      var raw = keyInput ? keyInput.value : '';
+      var key = (typeof raw === 'string' ? raw : '').replace(/[\s-]/g, '').trim().toUpperCase();
+      if (!key) {
+        if (errEl) { errEl.textContent = 'Please paste your licence key'; errEl.style.display = ''; }
+        return;
+      }
+      if (!window.api.licenceActivate) return;
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Activating\u2026';
+      if (errEl) errEl.style.display = 'none';
+      window.api.licenceActivate({ key: key }).then(function(result) {
+        btn.disabled = false;
+        btn.textContent = 'Activate';
+        if (result.success) {
+          if (keyInput) keyInput.value = '';
+          loadLicenceSettingsUI();
+          updateHomeLicenceCard();
+          showToast('Licence activated \u2014 cloud backup enabled', 'info');
+          // Refresh cloud backup entitlement now
+          if (window.api.cloudBackupCheckEntitlement) window.api.cloudBackupCheckEntitlement().catch(function(){});
+        } else {
+          if (errEl) { errEl.textContent = result.message || 'Activation failed \u2014 check the key and try again'; errEl.style.display = ''; }
+        }
+      }).catch(function(e) {
+        btn.disabled = false;
+        btn.textContent = 'Activate';
+        if (errEl) { errEl.textContent = (e && e.message) || 'Network error \u2014 check your connection'; errEl.style.display = ''; }
+      });
+    });
+
     /* ─── Cloud backup event handlers ─── */
     document.getElementById('cloud-backup-footer-status')?.addEventListener('click', function() {
       var txt = (this.textContent || '').trim();
@@ -8281,6 +8358,17 @@ PDF_CASENOTE_ADVERT +
           if (checking) checking.style.display = 'none';
           if (notSub) notSub.style.display = '';
           if (isSub) isSub.style.display = 'none';
+          // Update the reason text based on licence status
+          var reasonEl = document.getElementById('cloud-backup-unavailable-reason');
+          if (reasonEl) {
+            if (data && data.isTrial) {
+              reasonEl.innerHTML = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> to enable it.';
+            } else if (data && data.lastError) {
+              reasonEl.textContent = 'Cloud backup verification failed: ' + data.lastError + '. Check your internet connection and try again.';
+            } else {
+              reasonEl.innerHTML = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> then enter your licence key in Settings \u203a Licence.';
+            }
+          }
           if (data && data.lastError && errEl) {
             errEl.textContent = data.lastError;
             errEl.style.display = '';
@@ -8310,6 +8398,189 @@ PDF_CASENOTE_ADVERT +
         }
       });
     }
+
+    // ── System Status Diagnostic Panel ──────────────────────────────────────
+    (function initSystemStatus() {
+      var _lastCloudStatus = null;
+      var _lastUpdateStatus = null;
+
+      // Track cloud backup status changes
+      if (window.api.onCloudBackupStatusChanged) {
+        window.api.onCloudBackupStatusChanged(function(data) {
+          _lastCloudStatus = data;
+          updateSysStatBackup(data);
+        });
+      }
+      // Track auto-update status changes
+      if (window.api.onAppUpdateStatus) {
+        window.api.onAppUpdateStatus(function(data) {
+          _lastUpdateStatus = data;
+          updateSysStatUpdate(data);
+        });
+      }
+
+      function setBlock(iconId, icon, iconColor, line1Id, line1, line2Id, line2) {
+        var ic = document.getElementById(iconId);
+        var l1 = document.getElementById(line1Id);
+        var l2 = document.getElementById(line2Id);
+        if (ic) { ic.textContent = icon; ic.style.color = iconColor || ''; }
+        if (l1) l1.textContent = line1 || '';
+        if (l2) l2.textContent = line2 || '';
+      }
+
+      function updateSysStatLicence(st) {
+        if (!st) { setBlock('sysstat-licence-icon','⏳','','sysstat-licence-line1','Checking licence…','sysstat-licence-line2',''); return; }
+        var icon, color, line1, line2, line3 = '';
+        var l3El = document.getElementById('sysstat-licence-line3');
+        if (st.status === 'active' && st.isTrial) {
+          icon = '⚠️'; color = '#d97706';
+          line1 = 'Trial licence active — ' + (st.daysRemaining != null ? st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : 'expires ' + new Date(st.expiresAt).toLocaleDateString('en-GB'));
+          line2 = 'Enter a paid licence key in Settings › Licence to activate cloud backup and remove this notice.';
+          line3 = 'Get a licence at custodynote.com/buy';
+        } else if (st.status === 'active') {
+          icon = '✅'; color = '#059669';
+          line1 = 'Licence active';
+          line2 = st.expiresAt ? 'Expires: ' + new Date(st.expiresAt).toLocaleDateString('en-GB') : 'Subscription active — no expiry date returned';
+          line3 = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
+        } else if (st.status === 'expiring_soon') {
+          icon = '⚠️'; color = '#d97706';
+          line1 = 'Expiring soon — ' + (st.daysRemaining || '') + ' days remaining';
+          line2 = 'Renew at custodynote.com/buy';
+          line3 = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
+        } else if (st.status === 'expired' || st.status === 'grace_expired') {
+          icon = '❌'; color = '#dc2626';
+          line1 = 'Licence expired';
+          line2 = st.message || 'Renew your subscription at custodynote.com/buy';
+          line3 = '';
+        } else if (st.status === 'revoked') {
+          icon = '❌'; color = '#dc2626';
+          line1 = 'Licence revoked';
+          line2 = 'Contact support at custodynote.com/support';
+          line3 = '';
+        } else {
+          icon = '❓'; color = '#64748b';
+          line1 = 'No licence found';
+          line2 = 'Enter a licence key in Settings › Licence, or start a trial from the home screen.';
+          line3 = '';
+        }
+        var ic = document.getElementById('sysstat-licence-icon');
+        var l1 = document.getElementById('sysstat-licence-line1');
+        var l2 = document.getElementById('sysstat-licence-line2');
+        if (ic) { ic.textContent = icon; ic.style.color = color; }
+        if (l1) l1.textContent = line1;
+        if (l2) l2.textContent = line2;
+        if (l3El) l3El.textContent = line3;
+      }
+
+      function updateSysStatBackup(data) {
+        var l2El = document.getElementById('sysstat-backup-line2');
+        if (!data) {
+          setBlock('sysstat-backup-icon','⏳','','sysstat-backup-line1','Checking cloud backup…','sysstat-backup-line2','');
+          return;
+        }
+        if (data.enabled) {
+          setBlock('sysstat-backup-icon','✅','#059669','sysstat-backup-line1','Backing up to AWS (UK region)','sysstat-backup-line2','');
+          if (l2El) l2El.textContent = data.lastSuccess ? 'Last upload: ' + new Date(data.lastSuccess).toLocaleString('en-GB') : 'Backup active — no uploads yet this session';
+        } else {
+          setBlock('sysstat-backup-icon','⚠️','#d97706','sysstat-backup-line1','Local backup only','sysstat-backup-line2','');
+          var reason = 'Cloud backup requires a paid subscription with cloud backup included.';
+          if (data.lastError) reason = data.lastError;
+          if (l2El) l2El.textContent = reason;
+        }
+      }
+
+      function updateSysStatUpdate(data) {
+        var l2El = document.getElementById('sysstat-update-line2');
+        if (!data) {
+          setBlock('sysstat-update-icon','⏳','','sysstat-update-line1','Checking auto-update…','sysstat-update-line2','');
+          return;
+        }
+        if (data.status === 'up-to-date') {
+          setBlock('sysstat-update-icon','✅','#059669','sysstat-update-line1','Up to date — v' + (window.__appVersion || '1.4.8'),'sysstat-update-line2','');
+          if (l2El) l2El.textContent = 'Auto-update enabled · Checks every 4 hours · Next check within ' + (4 - (new Date().getMinutes() / 60)).toFixed(1) + 'h';
+        } else if (data.status === 'downloading') {
+          setBlock('sysstat-update-icon','⬇️','#2563eb','sysstat-update-line1','Downloading update v' + data.version + '…','sysstat-update-line2','');
+          if (l2El) l2El.textContent = 'Will install automatically on next restart';
+        } else if (data.status === 'ready') {
+          setBlock('sysstat-update-icon','🔄','#059669','sysstat-update-line1','Update v' + data.version + ' ready to install','sysstat-update-line2','');
+          if (l2El) l2El.textContent = 'Restart the app to apply the update';
+        } else if (data.status === 'dev') {
+          setBlock('sysstat-update-icon','🔧','#64748b','sysstat-update-line1','Running in development mode','sysstat-update-line2','');
+          if (l2El) l2El.textContent = 'Auto-updates apply to the installed (packaged) app only';
+        } else if (data.status === 'error') {
+          setBlock('sysstat-update-icon','⚠️','#d97706','sysstat-update-line1','Update check failed','sysstat-update-line2','');
+          if (l2El) l2El.textContent = data.message || 'Could not reach update server — will retry automatically';
+        } else {
+          setBlock('sysstat-update-icon','⏳','','sysstat-update-line1','Waiting for update check…','sysstat-update-line2','');
+          if (l2El) l2El.textContent = 'Auto-update checks every 4 hours when the app is running';
+        }
+      }
+
+      function runDiagnostics() {
+        // Licence
+        if (window.api && window.api.licenceStatus) {
+          window.api.licenceStatus().then(function(st) { updateSysStatLicence(st); }).catch(function() {
+            setBlock('sysstat-licence-icon','❓','#64748b','sysstat-licence-line1','Could not read licence status','sysstat-licence-line2','');
+          });
+        }
+        // Cloud backup
+        if (window.api && window.api.cloudBackupStatus) {
+          window.api.cloudBackupStatus().then(function(st) {
+            if (!_lastCloudStatus) { _lastCloudStatus = st; updateSysStatBackup(st); }
+          }).catch(function() {
+            setBlock('sysstat-backup-icon','❓','#64748b','sysstat-backup-line1','Could not read backup status','sysstat-backup-line2','');
+          });
+        } else {
+          updateSysStatBackup(_lastCloudStatus);
+        }
+        // Auto-update: trigger a check so the status IPC fires
+        if (window.api && window.api.appCheckUpdates) {
+          window.api.appCheckUpdates().then(function(res) {
+            if (!_lastUpdateStatus) updateSysStatUpdate(res);
+          }).catch(function() {
+            updateSysStatUpdate({ status: 'error', message: 'Update check failed' });
+          });
+        } else {
+          updateSysStatUpdate(_lastUpdateStatus || { status: 'dev' });
+        }
+      }
+
+      // Run on view load
+      document.addEventListener('view-settings-shown', function() { runDiagnostics(); });
+
+      // Refresh button
+      var refreshBtn = document.getElementById('sysstat-refresh-btn');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+          refreshBtn.disabled = true;
+          refreshBtn.textContent = 'Refreshing…';
+          _lastCloudStatus = null;
+          _lastUpdateStatus = null;
+          // Reset to pending state
+          ['sysstat-licence-icon','sysstat-backup-icon','sysstat-update-icon'].forEach(function(id) {
+            var el = document.getElementById(id); if (el) { el.textContent = '⏳'; el.style.color = ''; }
+          });
+          ['sysstat-licence-line1','sysstat-backup-line1','sysstat-update-line1'].forEach(function(id) {
+            var el = document.getElementById(id); if (el) el.textContent = 'Checking…';
+          });
+          ['sysstat-licence-line2','sysstat-backup-line2','sysstat-update-line2','sysstat-licence-line3'].forEach(function(id) {
+            var el = document.getElementById(id); if (el) el.textContent = '';
+          });
+          if (window.api && window.api.cloudBackupCheckEntitlement) {
+            window.api.cloudBackupCheckEntitlement().catch(function() {});
+          }
+          runDiagnostics();
+          setTimeout(function() {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = 'Refresh diagnostics';
+          }, 3000);
+        });
+      }
+
+      // Initial run (delayed slightly to allow status events to arrive first)
+      setTimeout(runDiagnostics, 800);
+    })();
+    // ── End System Status ────────────────────────────────────────────────────
 
     document.getElementById('settings-load-from-pdf')?.addEventListener('click', function() {
       if (!window.api || !window.api.importRecordFromFile) { showToast('Import not available', 'error'); return; }

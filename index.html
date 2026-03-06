@@ -185,8 +185,8 @@
             <div style="display:flex;align-items:flex-start;gap:0.75rem;background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #f59e0b;border-radius:10px;padding:0.85rem 1rem;">
               <span style="font-size:1.3rem;line-height:1;">&#9888;</span>
               <div style="flex:1;">
-                <p style="margin:0;font-weight:600;font-size:0.9rem;color:#92400e;">Cloud backup status unknown</p>
-                <p style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#78350f;">Internet access is required to verify your cloud backup subscription. <button type="button" id="home-cloud-backup-cta" style="background:none;border:none;padding:0;color:#1e40af;cursor:pointer;font-size:0.8rem;text-decoration:underline;font-weight:600;">Verify now &rarr;</button></p>
+                <p style="margin:0;font-weight:600;font-size:0.9rem;color:#92400e;">Cloud backup not active</p>
+                <p id="home-cloud-backup-reason" style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#78350f;">Cloud backup is included with paid subscriptions — your data is currently backed up locally only. <button type="button" id="home-cloud-backup-cta" style="background:none;border:none;padding:0;color:#1e40af;cursor:pointer;font-size:0.8rem;text-decoration:underline;font-weight:600;">Go to Settings &rarr;</button></p>
               </div>
               <button type="button" id="home-cloud-backup-dismiss" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#92400e;padding:0;line-height:1;" title="Dismiss">&times;</button>
             </div>
@@ -547,26 +547,39 @@
         <div class="settings-card" id="licence-settings-card">
           <h2>Licence</h2>
           <div id="licence-status-active" style="display:none;">
-            <p class="settings-hint" style="margin:0 0 0.5rem 0;">Licence key (masked)</p>
+            <p class="settings-hint" style="margin:0 0 0.5rem 0;">Current licence</p>
             <div class="setting-row" style="align-items:center;flex-wrap:wrap;gap:0.5rem;">
               <code id="licence-key-obscured" style="font-size:1rem;letter-spacing:1px;padding:0.5rem;background:var(--input-bg,#f8fafc);border-radius:4px;">--------</code>
               <button type="button" id="btn-licence-validate" class="btn btn-secondary btn-small">Validate</button>
             </div>
-            <p id="licence-time-remaining" class="settings-hint" style="margin:0.5rem 0 0.25rem 0;"></p>
+            <p id="licence-time-remaining" class="settings-hint" style="margin:0.5rem 0 0.25rem 0;font-weight:600;"></p>
             <p id="licence-last-validated" class="settings-hint" style="margin:0 0 1rem 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
             <p id="licence-validate-result" class="settings-hint" style="margin:0 0 0.5rem 0;display:none;"></p>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
-              <button type="button" id="btn-licence-email-key" class="btn btn-secondary">Email my licence key</button>
-              <button type="button" id="btn-licence-deactivate-device" class="btn btn-secondary">Deactivate this device</button>
+              <button type="button" id="btn-licence-email-key" class="btn btn-secondary">Email my key</button>
+              <button type="button" id="btn-licence-deactivate-device" class="btn btn-secondary">Deactivate device</button>
               <button type="button" id="btn-licence-change" class="btn btn-secondary">Change licence</button>
               <button type="button" id="btn-licence-remove" class="btn btn-secondary">Remove licence</button>
             </div>
           </div>
-          <div id="licence-status-none" style="display:none;">
-            <p class="settings-hint" style="margin:0 0 0.75rem 0;">Enter your licence key to activate. You can also start a trial from the overlay when the app first opens.</p>
+
+          <!-- Shown only when on a trial — direct paid key entry -->
+          <div id="licence-trial-upgrade" style="display:none;margin-top:1.25rem;padding:1rem 1.1rem;background:linear-gradient(135deg,#eff6ff,#f0f9ff);border:2px solid #3b82f6;border-radius:10px;">
+            <p style="margin:0 0 0.4rem 0;font-weight:700;font-size:1rem;color:#1e40af;">&#128273; Enter your paid licence key</p>
+            <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#1e3a8a;">Paste the licence key from your purchase confirmation email. This activates cloud backup and removes the trial notice.</p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+              <input type="text" id="trial-upgrade-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px;max-width:340px;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid #93c5fd;border-radius:6px;letter-spacing:1px;">
+              <button type="button" id="btn-trial-upgrade-activate" class="btn btn-primary" style="padding:0.55rem 1.2rem;font-size:0.95rem;">Activate</button>
+            </div>
+            <p id="trial-upgrade-error" style="display:none;margin:0.5rem 0 0 0;font-size:0.85rem;color:#dc2626;"></p>
+            <p style="margin:0.6rem 0 0 0;font-size:0.8rem;color:#1e3a8a;">Don&rsquo;t have a key? <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;font-weight:600;">Buy at custodynote.com/buy &rarr;</a></p>
+          </div>
+
+          <div id="licence-status-none" style="display:none;margin-top:1rem;">
+            <p class="settings-hint" style="margin:0 0 0.75rem 0;">Enter your licence key to activate.</p>
             <label for="setting-licence-key">Licence key</label>
-            <input type="text" id="setting-licence-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX or trial key" autocomplete="off" spellcheck="false" style="max-width:320px;">
-            <p class="settings-hint" style="margin:0.25rem 0 0 0;font-size:0.8rem;">Hyphens and spaces are optional; key is normalized to uppercase.</p>
+            <input type="text" id="setting-licence-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="max-width:320px;">
+            <p class="settings-hint" style="margin:0.25rem 0 0 0;font-size:0.8rem;">Hyphens and spaces are optional; key is normalised to uppercase.</p>
             <button type="button" id="btn-licence-activate-settings" class="btn btn-primary" style="margin-top:0.5rem;">Activate</button>
             <p id="licence-activate-error" class="licence-error" style="display:none;margin-top:0.5rem;color:#dc2626;"></p>
           </div>
@@ -635,9 +648,9 @@
             <p id="cloud-backup-checking" class="settings-hint" style="margin:0;color:#64748b;">Checking cloud backup status&hellip;</p>
             <div id="cloud-backup-not-subscribed" style="display:none;">
               <div style="background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #f59e0b;border-radius:8px;padding:1rem;margin-bottom:0.5rem;">
-                <p style="margin:0 0 0.5rem 0;font-weight:600;color:#92400e;">&#9888; Cloud backup status unavailable</p>
-                <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#78350f;">Internet access is required to verify your cloud backup subscription. Your data is encrypted before upload and isolated so only you can access it (SRA-compliant).</p>
-                <button type="button" id="btn-cloud-backup-subscribe" class="btn btn-primary" style="margin-top:0.25rem;">Verify now</button>
+                <p style="margin:0 0 0.5rem 0;font-weight:600;color:#92400e;">&#9888; Cloud backup not active</p>
+                <p id="cloud-backup-unavailable-reason" style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#78350f;">Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> then enter your licence key in Settings &rsaquo; Licence.</p>
+                <button type="button" id="btn-cloud-backup-subscribe" class="btn btn-primary" style="margin-top:0.25rem;">Verify subscription</button>
               </div>
             </div>
             <div id="cloud-backup-subscribed" style="display:none;">
@@ -805,6 +818,42 @@
             </div>
           </div>
           <p id="check-updates-status" class="settings-hint" style="margin-top:0.5rem;min-height:1.5em;"></p>
+        </div>
+
+        <!-- SYSTEM STATUS DIAGNOSTIC CARD -->
+        <div class="settings-card" id="system-status-card">
+          <h2>System Status</h2>
+          <p class="settings-hint" style="margin-top:0;">Real-time diagnostics for licence, cloud backup, and auto-updates.</p>
+
+          <div id="sysstat-licence" style="margin-bottom:1rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+              <span id="sysstat-licence-icon" style="font-size:1.1rem;">⏳</span>
+              <strong>Licence</strong>
+            </div>
+            <p id="sysstat-licence-line1" class="settings-hint" style="margin:0.15rem 0 0 0;font-size:0.85rem;">Checking…</p>
+            <p id="sysstat-licence-line2" class="settings-hint" style="margin:0.1rem 0 0 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
+            <p id="sysstat-licence-line3" class="settings-hint" style="margin:0.1rem 0 0 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
+          </div>
+
+          <div id="sysstat-backup" style="margin-bottom:1rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+              <span id="sysstat-backup-icon" style="font-size:1.1rem;">⏳</span>
+              <strong>Cloud Backup</strong>
+            </div>
+            <p id="sysstat-backup-line1" class="settings-hint" style="margin:0.15rem 0 0 0;font-size:0.85rem;">Checking…</p>
+            <p id="sysstat-backup-line2" class="settings-hint" style="margin:0.1rem 0 0 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
+          </div>
+
+          <div id="sysstat-update" style="margin-bottom:0.5rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+              <span id="sysstat-update-icon" style="font-size:1.1rem;">⏳</span>
+              <strong>Auto-Update</strong>
+            </div>
+            <p id="sysstat-update-line1" class="settings-hint" style="margin:0.15rem 0 0 0;font-size:0.85rem;">Checking…</p>
+            <p id="sysstat-update-line2" class="settings-hint" style="margin:0.1rem 0 0 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
+          </div>
+
+          <button type="button" id="sysstat-refresh-btn" class="btn btn-secondary" style="margin-top:0.25rem;">Refresh diagnostics</button>
         </div>
 
         <div class="settings-card" id="useful-links-card">
@@ -1217,7 +1266,7 @@
 
     </main>
     <footer class="app-footer">
-      <span>Custody Note v<span id="app-version">...</span> | Updated: <span id="app-updated">...</span></span>
+      <span>Custody Note v<span id="app-version">...</span> | Build: <span id="app-updated">...</span></span>
       <span class="footer-brand">&copy; Defence Legal Services Ltd 2026</span>
       <span class="footer-right"><span id="net-status-text" class="footer-status">Checking connection&hellip;</span><span class="footer-sep">&middot;</span><span id="backup-status-text" class="footer-status">Auto backup: checking&hellip;</span><span id="cloud-backup-footer-wrap"><span class="footer-sep">&middot;</span><span id="cloud-backup-footer-status" class="footer-status" style="color:#d97706;cursor:pointer;text-decoration:underline;" title="Open Settings to check Cloud Backup">Local backup only</span></span><span id="aws-s3-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="aws-s3-status-footer" class="footer-status"></span></span><span id="update-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="update-footer-status" class="footer-status" style="color:#059669;cursor:pointer;"></span></span></span>
     </footer>

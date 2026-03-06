@@ -952,10 +952,20 @@ async function fetchManagedCloudCredentials() {
 
 async function checkCloudBackupEntitlement() {
   const data = readLicenceData();
+  const isTrial = !!(data && data.isTrial);
   if (!data || !data.key) {
     _cloudBackupEnabled = false;
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false });
+      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, isTrial: false });
+    }
+    return;
+  }
+  if (isTrial) {
+    // Trial keys never have cloud backup; skip network call
+    _cloudBackupEnabled = false;
+    console.info('[CloudBackup] Skipping entitlement check — trial licence active. Cloud backup not included.');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, isTrial: true });
     }
     return;
   }
@@ -964,7 +974,7 @@ async function checkCloudBackupEntitlement() {
     _cloudBackupEnabled = false;
     console.warn('[CloudBackup] No API URL configured');
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false });
+      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, isTrial: false });
     }
     return;
   }
@@ -975,6 +985,7 @@ async function checkCloudBackupEntitlement() {
       appVersion: require('./package.json').version || '0.0.0',
     });
     _cloudBackupEnabled = !!(resp && resp.cloudBackup);
+    console.info('[CloudBackup] Entitlement result: cloudBackup=' + _cloudBackupEnabled + ' valid=' + !!(resp && resp.valid));
     if (resp && resp.expiresAt) data.expiresAt = resp.expiresAt;
     if (resp && resp.valid !== undefined) {
       data.lastValidated = new Date().toISOString();
@@ -985,7 +996,7 @@ async function checkCloudBackupEntitlement() {
     console.error('[CloudBackup] Entitlement check failed:', err && err.message ? err.message : err);
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('cloud-backup-status-changed', { enabled: _cloudBackupEnabled });
+    mainWindow.webContents.send('cloud-backup-status-changed', { enabled: _cloudBackupEnabled, isTrial: false });
   }
 }
 
@@ -2690,10 +2701,12 @@ ipcMain.handle('test-s3-backup', async () => {
 /* ─── Managed cloud backup IPC handlers ─── */
 
 ipcMain.handle('cloud-backup-status', () => {
+  const licData = readLicenceData();
   return {
     enabled: _cloudBackupEnabled,
     lastSuccess: _lastManagedCloudSuccess,
     lastError: _lastManagedCloudError,
+    isTrial: !!(licData && licData.isTrial),
   };
 });
 
