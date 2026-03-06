@@ -2778,8 +2778,8 @@ var REQUIRED_FIELD_KEYS = [
       laaRates: JSON.stringify({
         fixedFee: document.getElementById('rate-fixedFee')?.value || '320.00',
         escapeThreshold: document.getElementById('rate-escapeThreshold')?.value || '650.00',
-        attendanceSocial: document.getElementById('rate-attendanceSocial')?.value || '56.51',
-        attendanceUnsocial: document.getElementById('rate-attendanceUnsocial')?.value || '75.77',
+        attendanceSocial: document.getElementById('rate-attendanceSocial')?.value || '62.16',
+        attendanceUnsocial: document.getElementById('rate-attendanceUnsocial')?.value || '77.68',
         travelWaiting: document.getElementById('rate-travelWaiting')?.value || '30.36',
         mileage: document.getElementById('rate-mileage')?.value || '0.45',
         vat: document.getElementById('rate-vat')?.value || '20',

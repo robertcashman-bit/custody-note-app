@@ -771,33 +771,34 @@
 
         <div class="settings-card">
           <h2>LAA Fee Rates (editable)</h2>
-          <div style="background:#d1fae5;border:1px solid #10b981;border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.85rem;">
-            <p style="margin:0 0 0.3rem 0;font-weight:700;font-size:0.9rem;color:#065f46;">&#10003; Rates updated &mdash; Criminal Legal Aid (General &amp; Remuneration) (Amendment) Regulations 2025</p>
-            <p style="margin:0;font-size:0.82rem;color:#064e3b;">Fixed fee and escape threshold are now <strong>harmonised across all police stations in England &amp; Wales</strong> (in force 22 Dec 2025). The attendance hourly rates are editable &mdash; verify against your Standard Crime Contract or <a href="https://www.legislation.gov.uk/uksi/2025/1251/made" target="_blank" rel="noopener" style="color:#065f46;font-weight:600;">SI 2025/1251</a>.</p>
+          <div style="background:#eff6ff;border:1px solid #3b82f6;border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.85rem;">
+            <p style="margin:0 0 0.3rem 0;font-weight:700;font-size:0.9rem;color:#1e40af;">&#128196; Standard Crime Contract 2025 &mdash; SI 2025/1251 (in force 22 Dec 2025)</p>
+            <p style="margin:0 0 0.4rem 0;font-size:0.82rem;color:#1e3a8a;">Fixed fee and escape threshold are <strong>confirmed and harmonised</strong> across all police stations in England &amp; Wales. The hourly attendance rates for escape fee calculation are set in Schedule 4 of the Remuneration Regulations &mdash; <strong>check Section 5 of your Standard Crime Contract 2025</strong> or <a href="https://www.legislation.gov.uk/uksi/2025/1251/made" target="_blank" rel="noopener" style="color:#1e40af;font-weight:600;">SI 2025/1251</a> and edit the values below to match.</p>
+            <p style="margin:0;font-size:0.8rem;color:#1e3a8a;">&#9888; The attendance hourly rates below are editable defaults &mdash; verify them against your own contract before using for LAA claims.</p>
           </div>
           <table class="rates-table rates-editable">
             <tr>
-              <td>Fixed Fee (all stations)<br><span style="font-size:0.78rem;color:#64748b;">Harmonised &mdash; same for every police station, England &amp; Wales (SI 2025/1251)</span></td>
+              <td>Fixed Fee (all stations)<br><span style="font-size:0.78rem;color:#059669;font-weight:600;">&#10003; Confirmed &mdash; harmonised for every police station in England &amp; Wales (SI 2025/1251, para 2(4))</span></td>
               <td>&pound;<input type="number" id="rate-fixedFee" step="0.01" value="320.00" class="rate-input"></td>
             </tr>
             <tr>
-              <td>Escape Threshold (all stations)<br><span style="font-size:0.78rem;color:#64748b;">Harmonised &mdash; same for every police station, England &amp; Wales (SI 2025/1251)</span></td>
+              <td>Escape Threshold (all stations)<br><span style="font-size:0.78rem;color:#059669;font-weight:600;">&#10003; Confirmed &mdash; harmonised for every police station (SI 2025/1251, para 2(5))</span></td>
               <td>&pound;<input type="number" id="rate-escapeThreshold" step="0.01" value="650.00" class="rate-input"></td>
             </tr>
             <tr>
-              <td>Attendance (social hours) /hr<br><span style="font-size:0.78rem;color:#64748b;">Business hours (Mon&ndash;Fri) &mdash; check your contract for police station escape fee rate</span></td>
-              <td>&pound;<input type="number" id="rate-attendanceSocial" step="0.01" value="56.51" class="rate-input"></td>
+              <td>Attendance (social hours) /hr<br><span style="font-size:0.78rem;color:#d97706;">&#9888; Verify against Schedule 4 of your contract &mdash; court duty national rate is £62.16 (SI 2025/1251)</span></td>
+              <td>&pound;<input type="number" id="rate-attendanceSocial" step="0.01" value="62.16" class="rate-input"></td>
             </tr>
             <tr>
-              <td>Attendance (unsocial hours) /hr<br><span style="font-size:0.78rem;color:#64748b;">Outside business hours, weekends &amp; bank holidays &mdash; check your contract</span></td>
-              <td>&pound;<input type="number" id="rate-attendanceUnsocial" step="0.01" value="75.77" class="rate-input"></td>
+              <td>Attendance (unsocial hours) /hr<br><span style="font-size:0.78rem;color:#d97706;">&#9888; Verify against Schedule 4 of your contract &mdash; court duty national rate is £77.68 (SI 2025/1251)</span></td>
+              <td>&pound;<input type="number" id="rate-attendanceUnsocial" step="0.01" value="77.68" class="rate-input"></td>
             </tr>
             <tr>
-              <td>Travel &amp; Waiting /hr<br><span style="font-size:0.78rem;color:#64748b;">Out-of-hours / call-out rate (SI 2025/1251)</span></td>
+              <td>Travel &amp; Waiting /hr<br><span style="font-size:0.78rem;color:#059669;font-weight:600;">&#10003; Confirmed &mdash; out-of-hours / call-out rate (SI 2025/1251, multiple tables)</span></td>
               <td>&pound;<input type="number" id="rate-travelWaiting" step="0.01" value="30.36" class="rate-input"></td>
             </tr>
             <tr>
-              <td>Mileage /mile<br><span style="font-size:0.78rem;color:#64748b;">HMRC approved rate (unchanged)</span></td>
+              <td>Mileage /mile<br><span style="font-size:0.78rem;color:#059669;font-weight:600;">&#10003; Confirmed &mdash; HMRC approved rate (unchanged)</span></td>
               <td>&pound;<input type="number" id="rate-mileage" step="0.01" value="0.45" class="rate-input"></td>
             </tr>
             <tr>
@@ -805,8 +806,8 @@
               <td><input type="number" id="rate-vat" step="1" value="20" class="rate-input">%</td>
             </tr>
             <tr>
-              <td>Unsocial hours definition<br><span style="font-size:0.78rem;color:#64748b;">Any time that is <strong>not</strong> a Business Day (Mon&ndash;Fri excluding bank holidays) &mdash; SI 2025/1251</span></td>
-              <td style="font-size:0.9rem;color:#475569;">Outside Business Days &amp; BH</td>
+              <td>Unsocial hours<br><span style="font-size:0.78rem;color:#d97706;">&#9888; Check Section 1 (Definitions) of your 2025 Crime Contract Specification &mdash; typically any time outside normal Business Hours (Mon&ndash;Fri) and all day weekends / bank holidays</span></td>
+              <td style="font-size:0.9rem;color:#475569;">Outside Business Hours &amp; weekends/BH</td>
             </tr>
           </table>
         </div>
