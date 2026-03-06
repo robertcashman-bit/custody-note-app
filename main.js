@@ -677,6 +677,7 @@ async function initDb() {
     timestamp TEXT DEFAULT (datetime('now')),
     user_note TEXT
   );`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_audit_attendance ON audit_log(attendance_id);`);
 
   /* ─── Soft-delete & indexed search columns (idempotent) ─── */
   try { db.run("ALTER TABLE attendances ADD COLUMN deleted_at TEXT DEFAULT NULL"); } catch (_) {}
