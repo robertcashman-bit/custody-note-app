@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.10",
+      "version": "1.4.11",
       "date": "2026-03-07",
       "latest": true,
+      "changes": [
+        "Sync status now confirms all records synced with count",
+        "Check for updates button on home screen",
+        "Update button changes to Install when update is ready"
+      ]
+    },
+    {
+      "version": "1.4.10",
+      "date": "2026-03-07",
+      "latest": false,
       "changes": [
         "Cross-device record sync — records now automatically sync between devices every 2 minutes",
         "Licence validation fix — subscription status now correctly updates across devices",
