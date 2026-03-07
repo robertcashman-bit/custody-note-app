@@ -35,6 +35,8 @@ npm run release major
 
 **Requires:** `GH_TOKEN` or `GITHUB_TOKEN` (GitHub PAT with `repo` scope) for publishing.
 
+To enable GitHub Actions CI (run tests on push), add the workflow file once via the GitHub website: create `.github/workflows/test.yml` with the contents of `docs/github-actions-test.yml.example`. This avoids needing `workflow` scope on your token when pushing from other tools.
+
 ### Signing the Windows installer (recommended)
 
 Unsigned installers trigger Windows SmartScreen warnings. To sign the app you need a code signing certificate (PFX) from a trusted CA. Set `CSC_LINK` and `CSC_KEY_PASSWORD` before building; see **[SIGNING.md](SIGNING.md)** for full instructions.
