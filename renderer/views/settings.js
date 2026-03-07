@@ -10,7 +10,8 @@ function loadSettings() {
   // Trigger System Status card diagnostics (licence, backup, update panels)
   document.dispatchEvent(new CustomEvent('view-settings-shown'));
   window.api.getSettings().then(function(s) {
-    window._appSettingsCache = s || {};
+    s = s || {};
+    window._appSettingsCache = s;
     document.getElementById('setting-email').value = s.email || '';
     document.getElementById('setting-dscc-pin').value = s.dsccPin || '';
     document.getElementById('setting-backup-folder').value = s.backupFolder || '';
@@ -188,7 +189,12 @@ function saveSettings() {
       mileage: (document.getElementById('rate-mileage') || {value:'0.45'}).value || '0.45',
       vat: (document.getElementById('rate-vat') || {value:'20'}).value || '20',
     }),
-  }).then(function() { showToast('Settings saved', 'success'); });
+  }).then(function() {
+    showToast('Settings saved', 'success');
+  }).catch(function(err) {
+    console.error('[Settings] Failed to save settings:', err);
+    showToast('Failed to save settings — please try again', 'error');
+  });
 }
 
 function loadFirmsList() {

@@ -709,7 +709,14 @@ async function initDb() {
 function loadStationsFromFile() {
   const stationsPath = path.join(__dirname, 'data', 'police-stations-laa.json');
   if (!fs.existsSync(stationsPath)) return;
-  const stations = JSON.parse(fs.readFileSync(stationsPath, 'utf8'));
+  let stations;
+  try {
+    stations = JSON.parse(fs.readFileSync(stationsPath, 'utf8'));
+  } catch (e) {
+    console.error('[loadStationsFromFile] Failed to parse police-stations-laa.json:', e && e.message);
+    return;
+  }
+  if (!Array.isArray(stations)) return;
   for (const s of stations) {
     try {
       const existing = dbGet('SELECT id FROM police_stations WHERE name = ? AND code = ?', [s.name || '', s.code || '']);
@@ -2380,7 +2387,13 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   }
 
   const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
-  const parsed = typeof data === 'object' ? data : JSON.parse(dataStr);
+  let parsed;
+  try {
+    parsed = typeof data === 'object' ? data : JSON.parse(dataStr);
+  } catch (e) {
+    console.error('[attendance-save] Invalid JSON data payload:', e && e.message);
+    throw new Error('Invalid attendance data — could not parse record');
+  }
 
   /* Keep file reference in sync with file number (ours) – same value for both */
   if (parsed.ourFileNumber != null && parsed.ourFileNumber !== '') {
@@ -2553,10 +2566,19 @@ ipcMain.handle('stations-list', () => {
 });
 
 ipcMain.handle('stations-replace', (_, stations) => {
-  db.run('DELETE FROM police_stations');
-  for (const s of stations) {
-    db.run('INSERT INTO police_stations (name, code, scheme, region) VALUES (?, ?, ?, ?)',
-      [s.name || '', s.code || '', s.scheme || '', s.region || '']);
+  if (!Array.isArray(stations)) throw new Error('stations must be an array');
+  try {
+    db.run('BEGIN');
+    db.run('DELETE FROM police_stations');
+    for (const s of stations) {
+      db.run('INSERT INTO police_stations (name, code, scheme, region) VALUES (?, ?, ?, ?)',
+        [s.name || '', s.code || '', s.scheme || '', s.region || '']);
+    }
+    db.run('COMMIT');
+  } catch (e) {
+    try { db.run('ROLLBACK'); } catch (_) {}
+    console.error('[stations-replace] Transaction failed, rolled back:', e && e.message);
+    throw e;
   }
   saveDb();
   return true;
@@ -2611,33 +2633,47 @@ ipcMain.handle('generate-ufn', (_, dateStr) => {
 ipcMain.handle('load-reference-data', () => {
   const refPath = path.join(__dirname, 'data', 'laa-reference-data.json');
   if (fs.existsSync(refPath)) {
-    return JSON.parse(fs.readFileSync(refPath, 'utf8'));
+    try {
+      return JSON.parse(fs.readFileSync(refPath, 'utf8'));
+    } catch (e) {
+      console.error('[load-reference-data] Failed to parse laa-reference-data.json:', e && e.message);
+      return null;
+    }
   }
   return null;
 });
 
 ipcMain.handle('backup-now', () => {
-  const backupDir = getBackupFolder();
-  const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
-  const dest = path.join(backupDir, name);
-  const data = db.export();
-  const encData = encryptBuffer(Buffer.from(data));
-  fs.writeFileSync(dest, encData);
-  const latestDest = path.join(backupDir, 'attendance-latest.db');
-  fs.writeFileSync(latestDest, encData);
-  dbDirtySinceQuickBackup = false;
-  dbDirtySinceHourlyBackup = false;
-  pruneOldBackups(backupDir);
-  copyToOffsiteBackup(dest);
-  copyToOffsiteBackup(latestDest);
-  uploadToCloudIfConfigured(encData);
-  uploadToS3IfConfigured(encData, 'attendance-latest.db');
-  uploadToS3IfConfigured(encData, path.basename(dest));
-  uploadToManagedCloudIfEnabled(encData, 'attendance-latest.db');
-  uploadToManagedCloudIfEnabled(encData, path.basename(dest));
-  const offsiteDir = getOffsiteBackupFolder();
-  if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
-  return dest;
+  try {
+    const backupDir = getBackupFolder();
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+    const dest = path.join(backupDir, name);
+    const data = db.export();
+    const encData = encryptBuffer(Buffer.from(data));
+    fs.writeFileSync(dest, encData);
+    const latestDest = path.join(backupDir, 'attendance-latest.db');
+    fs.writeFileSync(latestDest, encData);
+    dbDirtySinceQuickBackup = false;
+    dbDirtySinceHourlyBackup = false;
+    pruneOldBackups(backupDir);
+    copyToOffsiteBackup(dest);
+    copyToOffsiteBackup(latestDest);
+    uploadToCloudIfConfigured(encData);
+    uploadToS3IfConfigured(encData, 'attendance-latest.db');
+    uploadToS3IfConfigured(encData, path.basename(dest));
+    uploadToManagedCloudIfEnabled(encData, 'attendance-latest.db');
+    uploadToManagedCloudIfEnabled(encData, path.basename(dest));
+    const offsiteDir = getOffsiteBackupFolder();
+    if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
+    return dest;
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    console.error('[backup-now] Backup failed:', msg);
+    throw new Error('Backup failed: ' + msg);
+  }
 });
 
 ipcMain.handle('db-repair', () => {
