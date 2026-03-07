@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.4.10",
+      "date": "2026-03-07",
+      "latest": true,
+      "changes": [
+        "Cross-device record sync — records now automatically sync between devices every 2 minutes",
+        "Licence validation fix — subscription status now correctly updates across devices",
+        "Sync now button on home screen for immediate sync"
+      ]
+    },
+    {
       "version": "1.4.9",
       "date": "2026-03-05",
-      "latest": true,
+      "latest": false,
       "changes": [
         "LAA fee rates updated to Standard Crime Contract 2025 (SI 2025/1251) — fixed fee £320 and escape threshold £650 confirmed and harmonised across all police stations",
         "Licence status badge now visible permanently in the footer on every screen — shows Trial / Licensed / Expiring with colour coding",
