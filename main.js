@@ -690,6 +690,14 @@ async function initDb() {
   try { db.run("ALTER TABLE attendances ADD COLUMN supervisor_note TEXT DEFAULT ''"); } catch (_) {}
   try { db.run("ALTER TABLE attendances ADD COLUMN archived_at TEXT DEFAULT NULL"); } catch (_) {}
 
+  /* ─── Cross-device sync columns ─── */
+  try { db.run("ALTER TABLE attendances ADD COLUMN sync_id TEXT DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN sync_dirty INTEGER DEFAULT 1"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN sync_version INTEGER DEFAULT 1"); } catch (_) {}
+  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id);`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty);`);
+  backfillSyncIds();
+
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_client ON attendances(client_name);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_date ON attendances(attendance_date);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_dscc ON attendances(dscc_ref);`);
@@ -1090,6 +1098,241 @@ function uploadToManagedCloudIfEnabled(buffer, key) {
     console.log('[Backup] Managed cloud upload succeeded:', key);
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cloud-backup-status-changed', { enabled: true, lastSuccess: _lastManagedCloudSuccess });
   }).catch(() => {});
+}
+
+/* ═══════════════════════════════════════════════
+   CROSS-DEVICE SYNC ENGINE
+   Pushes local changes to and pulls remote changes
+   from a central DynamoDB store via the website API.
+   ═══════════════════════════════════════════════ */
+let _syncInProgress = false;
+let _syncTimer = null;
+const SYNC_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+const SYNC_MAX_PUSH_BATCH = 50;
+
+function generateSyncId() {
+  const bytes = crypto.randomBytes(16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join('-');
+}
+
+function backfillSyncIds() {
+  if (!db) return;
+  try {
+    const rows = dbAll("SELECT id FROM attendances WHERE sync_id IS NULL OR sync_id = ''");
+    for (const row of rows) {
+      dbRun('UPDATE attendances SET sync_id=?, sync_dirty=1 WHERE id=?', [generateSyncId(), row.id]);
+    }
+    if (rows.length > 0) {
+      console.log('[Sync] Backfilled sync_id for', rows.length, 'records');
+    }
+  } catch (e) {
+    console.warn('[Sync] Backfill sync_id failed:', e && e.message ? e.message : e);
+  }
+}
+
+function getSyncApiUrl() {
+  const base = getManagedCloudApiUrl();
+  return base || null;
+}
+
+function getLastSyncTimestamp() {
+  if (!db) return '1970-01-01T00:00:00.000Z';
+  const row = dbGet("SELECT value FROM settings WHERE key = 'lastSyncPullAt'");
+  return (row && row.value) || '1970-01-01T00:00:00.000Z';
+}
+
+function setLastSyncTimestamp(ts) {
+  if (!db) return;
+  dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('lastSyncPullAt', ?)", [ts]);
+}
+
+async function syncPush() {
+  const apiUrl = getSyncApiUrl();
+  if (!apiUrl) return { pushed: 0 };
+
+  const data = readLicenceData();
+  if (!data || !data.key) return { pushed: 0 };
+
+  const dirtyRows = dbAll(
+    `SELECT id, sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason,
+            client_name, station_name, dscc_ref, attendance_date,
+            supervisor_approved_at, supervisor_note, archived_at, sync_version
+     FROM attendances WHERE sync_dirty = 1 ORDER BY updated_at ASC LIMIT ?`,
+    [SYNC_MAX_PUSH_BATCH]
+  );
+
+  if (!dirtyRows.length) return { pushed: 0 };
+
+  const records = dirtyRows.map(r => ({
+    syncId: r.sync_id,
+    data: r.data,
+    status: r.status || 'draft',
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    deletedAt: r.deleted_at || null,
+    deletionReason: r.deletion_reason || null,
+    clientName: r.client_name || '',
+    stationName: r.station_name || '',
+    dsccRef: r.dscc_ref || '',
+    attendanceDate: r.attendance_date || '',
+    supervisorApprovedAt: r.supervisor_approved_at || null,
+    supervisorNote: r.supervisor_note || '',
+    archivedAt: r.archived_at || null,
+    version: r.sync_version || 1,
+  }));
+
+  const resp = await httpPost(`${apiUrl}/api/sync/push`, {
+    key: data.key,
+    machineId: getMachineId(),
+    records,
+  });
+
+  if (resp && resp.ok) {
+    const syncIds = dirtyRows.map(r => r.sync_id);
+    for (const sid of syncIds) {
+      dbRun('UPDATE attendances SET sync_dirty=0 WHERE sync_id=?', [sid]);
+    }
+    return { pushed: resp.written || 0 };
+  }
+  throw new Error(resp && resp.error ? resp.error : 'Push failed');
+}
+
+async function syncPull() {
+  const apiUrl = getSyncApiUrl();
+  if (!apiUrl) return { pulled: 0 };
+
+  const data = readLicenceData();
+  if (!data || !data.key) return { pulled: 0 };
+
+  const since = getLastSyncTimestamp();
+  const resp = await httpPost(`${apiUrl}/api/sync/pull`, {
+    key: data.key,
+    machineId: getMachineId(),
+    since,
+  });
+
+  if (!resp || !resp.ok) {
+    throw new Error(resp && resp.error ? resp.error : 'Pull failed');
+  }
+
+  const remoteRecords = resp.records || [];
+  let merged = 0;
+
+  for (const remote of remoteRecords) {
+    const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty FROM attendances WHERE sync_id=?', [remote.syncId]);
+
+    if (!local) {
+      dbRun(
+        `INSERT INTO attendances (sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason,
+         client_name, station_name, dscc_ref, attendance_date,
+         supervisor_approved_at, supervisor_note, archived_at, sync_dirty, sync_version)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
+        [remote.syncId, remote.data, remote.status, remote.createdAt, remote.updatedAt,
+         remote.deletedAt || null, remote.deletionReason || null,
+         remote.clientName || '', remote.stationName || '', remote.dsccRef || '', remote.attendanceDate || '',
+         remote.supervisorApprovedAt || null, remote.supervisorNote || '', remote.archivedAt || null,
+         remote.version || 1]
+      );
+      merged++;
+      continue;
+    }
+
+    // Conflict resolution: remote wins if its version is higher or (same version but updated later).
+    // If local has unsaved changes (sync_dirty=1) and remote is newer, remote still wins
+    // but local changes are logged in audit_log.
+    const localVersion = local.sync_version || 1;
+    const remoteVersion = remote.version || 1;
+    const remoteNewer = remoteVersion > localVersion ||
+      (remoteVersion === localVersion && remote.updatedAt > (local.updated_at || ''));
+
+    if (remoteNewer) {
+      if (local.sync_dirty === 1) {
+        const existing = dbGet('SELECT data FROM attendances WHERE id=?', [local.id]);
+        db.run(
+          'INSERT INTO audit_log (attendance_id, action, previous_snapshot, timestamp, user_note) VALUES (?,?,?,?,?)',
+          [local.id, 'sync_overwritten', existing ? existing.data : null, new Date().toISOString(), 'Local changes overwritten by newer remote version']
+        );
+      }
+      dbRun(
+        `UPDATE attendances SET data=?, status=?, updated_at=?, deleted_at=?, deletion_reason=?,
+         client_name=?, station_name=?, dscc_ref=?, attendance_date=?,
+         supervisor_approved_at=?, supervisor_note=?, archived_at=?, sync_dirty=0, sync_version=?
+         WHERE id=?`,
+        [remote.data, remote.status, remote.updatedAt,
+         remote.deletedAt || null, remote.deletionReason || null,
+         remote.clientName || '', remote.stationName || '', remote.dsccRef || '', remote.attendanceDate || '',
+         remote.supervisorApprovedAt || null, remote.supervisorNote || '', remote.archivedAt || null,
+         remoteVersion, local.id]
+      );
+      merged++;
+    }
+  }
+
+  if (resp.serverTime) {
+    setLastSyncTimestamp(resp.serverTime);
+  }
+
+  if (merged > 0) {
+    saveDb();
+  }
+  return { pulled: merged };
+}
+
+async function runSyncCycle() {
+  if (_syncInProgress) return;
+  const apiUrl = getSyncApiUrl();
+  if (!apiUrl) return;
+  const data = readLicenceData();
+  if (!data || !data.key) return;
+
+  _syncInProgress = true;
+  let pushResult = { pushed: 0 };
+  let pullResult = { pulled: 0 };
+
+  try {
+    pushResult = await syncPush();
+  } catch (e) {
+    console.warn('[Sync] Push error:', e && e.message ? e.message : e);
+  }
+
+  try {
+    pullResult = await syncPull();
+  } catch (e) {
+    console.warn('[Sync] Pull error:', e && e.message ? e.message : e);
+  }
+
+  _syncInProgress = false;
+
+  const total = (pushResult.pushed || 0) + (pullResult.pulled || 0);
+  if (total > 0) {
+    console.info(`[Sync] Cycle complete: pushed=${pushResult.pushed}, pulled=${pullResult.pulled}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('sync-status-changed', {
+        status: 'synced',
+        pushed: pushResult.pushed,
+        pulled: pullResult.pulled,
+        lastSync: new Date().toISOString(),
+      });
+      if (pullResult.pulled > 0) {
+        mainWindow.webContents.send('records-updated-from-sync', { count: pullResult.pulled });
+      }
+    }
+  }
+}
+
+function startSyncTimer() {
+  if (_syncTimer) return;
+  runSyncCycle().catch(() => {});
+  _syncTimer = setInterval(() => {
+    runSyncCycle().catch(() => {});
+  }, SYNC_INTERVAL_MS);
+}
+
+function stopSyncTimer() {
+  if (_syncTimer) { clearInterval(_syncTimer); _syncTimer = null; }
 }
 
 function createWindow() {
@@ -1994,6 +2237,8 @@ ipcMain.handle('licence:validate', async () => {
     data.lastValidated = new Date().toISOString();
     if (result.expiresAt) data.expiresAt = result.expiresAt;
     if (result.email) data.email = result.email;
+    if (result.isTrial !== undefined) data.isTrial = !!result.isTrial;
+    if (result.serverStatus) data.status = result.serverStatus;
     writeLicenceData(data);
   } else if (result.valid === false) {
     const serverStatus = result.serverStatus || 'revoked';
@@ -2262,6 +2507,8 @@ app.whenReady().then(async () => {
   setTimeout(() => checkCloudBackupEntitlement().catch(() => {}), 5000);
   setTimeout(() => checkCloudBackupEntitlement().catch(() => {}), 15000);
   setInterval(() => { checkCloudBackupEntitlement().catch(() => {}); }, 60 * 60 * 1000);
+  // Start cross-device sync after short delay to allow network to settle
+  setTimeout(() => startSyncTimer(), 8000);
   setInterval(() => {
     cleanupAccidentalDuplicateDrafts();
     dedupeDraftsByCaseKeys();
@@ -2275,6 +2522,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  stopSyncTimer();
   if (db) { saveDb(); db.close(); }
   app.quit();
 });
@@ -2378,9 +2626,10 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
 
   /* Unlock: change status back to draft without overwriting data */
   if (id && unlock && !data) {
-    const existing = dbGet('SELECT status FROM attendances WHERE id = ?', [id]);
+    const existing = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
     if (existing) {
-      dbRun('UPDATE attendances SET status=?, updated_at=? WHERE id=?', ['draft', now, id]);
+      const nextVer = (existing.sync_version || 1) + 1;
+      dbRun('UPDATE attendances SET status=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', ['draft', now, nextVer, id]);
       db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'unlocked_for_amendment', now]);
       markDbDirty();
     }
@@ -2409,7 +2658,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   const attendanceDate = parsed.date || '';
 
   if (id) {
-    const existing = dbGet('SELECT status, data FROM attendances WHERE id = ?', [id]);
+    const existing = dbGet('SELECT status, data, sync_version FROM attendances WHERE id = ?', [id]);
 
     /* Block edits to finalised records unless explicitly re-finalising */
     if (existing && existing.status === 'finalised' && st !== 'finalised') {
@@ -2430,9 +2679,10 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       } catch (_) {}
     }
 
+    const nextVer = (existing && existing.sync_version || 1) + 1;
     dbRun(
-      'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=? WHERE id=?',
-      [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, id]
+      'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, sync_dirty=1, sync_version=? WHERE id=?',
+      [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, nextVer, id]
     );
     const action = st === 'finalised' ? 'finalised' : 'updated';
     db.run(
@@ -2447,9 +2697,11 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   if (st === 'draft') {
     const existingId = findExistingDraftIdByCaseKey(parsed);
     if (existingId) {
+      const ev = dbGet('SELECT sync_version FROM attendances WHERE id=?', [existingId]);
+      const nv = (ev && ev.sync_version || 1) + 1;
       dbRun(
-        'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=? WHERE id=?',
-        [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, existingId]
+        'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, sync_dirty=1, sync_version=? WHERE id=?',
+        [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, nv, existingId]
       );
       db.run(
         'INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)',
@@ -2462,13 +2714,14 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     // if we just created the exact same draft in the last 30s, reuse it.
     try {
       const recentDup = dbGet(
-        "SELECT id FROM attendances WHERE status='draft' AND deleted_at IS NULL AND data=? AND created_at >= datetime('now', '-30 seconds') ORDER BY id DESC LIMIT 1",
+        "SELECT id, sync_version FROM attendances WHERE status='draft' AND deleted_at IS NULL AND data=? AND created_at >= datetime('now', '-30 seconds') ORDER BY id DESC LIMIT 1",
         [dataToSave]
       );
       if (recentDup && recentDup.id) {
+        const nv = (recentDup.sync_version || 1) + 1;
         dbRun(
-          'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=? WHERE id=?',
-          [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, recentDup.id]
+          'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, sync_dirty=1, sync_version=? WHERE id=?',
+          [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, nv, recentDup.id]
         );
         markDbDirty();
         return recentDup.id;
@@ -2491,10 +2744,11 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     parsed.fileReference = parsed.ourFileNumber;
   }
   const insertDataStr = JSON.stringify(parsed);
+  const newSyncId = generateSyncId();
 
   dbRun(
-    'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date) VALUES (?,?,?,?,?,?,?)',
-    [insertDataStr, st, now, clientName, stationName, dsccRef, attendanceDate]
+    'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date, sync_id, sync_dirty, sync_version) VALUES (?,?,?,?,?,?,?,?,1,1)',
+    [insertDataStr, st, now, clientName, stationName, dsccRef, attendanceDate, newSyncId]
   );
   markDbDirty();
   // sql.js + our dbRun/saveDb flow can occasionally yield 0 for last_insert_rowid().
@@ -2513,7 +2767,9 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
 ipcMain.handle('attendance-archive', (_, id) => {
   if (!id) return false;
   const now = new Date().toISOString();
-  dbRun('UPDATE attendances SET archived_at=?, updated_at=? WHERE id=?', [now, now, id]);
+  const ev = dbGet('SELECT sync_version FROM attendances WHERE id=?', [id]);
+  const nv = (ev && ev.sync_version || 1) + 1;
+  dbRun('UPDATE attendances SET archived_at=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, now, nv, id]);
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'archived', now]);
   markDbDirty();
   return true;
@@ -2521,17 +2777,21 @@ ipcMain.handle('attendance-archive', (_, id) => {
 
 ipcMain.handle('attendance-unarchive', (_, id) => {
   if (!id) return false;
-  dbRun('UPDATE attendances SET archived_at=NULL, updated_at=? WHERE id=?', [new Date().toISOString(), id]);
+  const now = new Date().toISOString();
+  const ev = dbGet('SELECT sync_version FROM attendances WHERE id=?', [id]);
+  const nv = (ev && ev.sync_version || 1) + 1;
+  dbRun('UPDATE attendances SET archived_at=NULL, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, nv, id]);
   markDbDirty();
   return true;
 });
 
 ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
   if (!id) return false;
-  const existing = dbGet('SELECT status FROM attendances WHERE id = ?', [id]);
+  const existing = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
   if (existing && existing.status === 'finalised') {
     const now = new Date().toISOString();
-    dbRun('UPDATE attendances SET deleted_at=?, deletion_reason=? WHERE id=?', [now, reason || '', id]);
+    const nv = (existing.sync_version || 1) + 1;
+    dbRun('UPDATE attendances SET deleted_at=?, deletion_reason=?, sync_dirty=1, sync_version=? WHERE id=?', [now, reason || '', nv, id]);
     db.run(
       'INSERT INTO audit_log (attendance_id, action, user_note, timestamp) VALUES (?,?,?,?)',
       [id, 'soft_deleted', reason || '', now]
@@ -2807,6 +3067,15 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     const SQL = await initSqlJs();
     const newDb = new SQL.Database(decrypted);
     db = newDb;
+    // Ensure sync columns exist in restored DB and mark all records for re-sync
+    try { db.run("ALTER TABLE attendances ADD COLUMN sync_id TEXT DEFAULT NULL"); } catch (_) {}
+    try { db.run("ALTER TABLE attendances ADD COLUMN sync_dirty INTEGER DEFAULT 1"); } catch (_) {}
+    try { db.run("ALTER TABLE attendances ADD COLUMN sync_version INTEGER DEFAULT 1"); } catch (_) {}
+    db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id)");
+    db.run("CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty)");
+    backfillSyncIds();
+    dbRun("UPDATE attendances SET sync_dirty=1");
+    dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
     saveDb();
     console.log('[Restore] Database restored from cloud backup:', backupKey);
     return { ok: true };
@@ -2814,6 +3083,28 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     console.error('[Restore] Cloud restore failed:', e && e.message ? e.message : e);
     return { ok: false, error: e && e.message ? e.message : 'Restore failed' };
   }
+});
+
+/* ─── Cross-device sync IPC handlers ─── */
+ipcMain.handle('sync-now', async () => {
+  try {
+    await runSyncCycle();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Sync failed' };
+  }
+});
+
+ipcMain.handle('sync-status', () => {
+  const lastSync = getLastSyncTimestamp();
+  const dirtyCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+  const apiUrl = getSyncApiUrl();
+  return {
+    enabled: !!apiUrl,
+    inProgress: _syncInProgress,
+    lastSync: lastSync !== '1970-01-01T00:00:00.000Z' ? lastSync : null,
+    pendingChanges: dirtyCount ? dirtyCount.c : 0,
+  };
 });
 
 ipcMain.handle('prepare-trial', async () => {

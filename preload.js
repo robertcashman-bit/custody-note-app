@@ -71,6 +71,11 @@ contextBridge.exposeInMainWorld('api', {
   cloudBackupList: () => ipcRenderer.invoke('cloud-backup-list'),
   cloudBackupRestore: (params) => ipcRenderer.invoke('cloud-backup-restore', params),
   onCloudBackupStatusChanged: (cb) => ipcRenderer.on('cloud-backup-status-changed', (_, data) => cb(data)),
+  /* Cross-device sync */
+  syncNow: () => ipcRenderer.invoke('sync-now'),
+  syncStatus: () => ipcRenderer.invoke('sync-status'),
+  onSyncStatusChanged: (cb) => ipcRenderer.on('sync-status-changed', (_, data) => cb(data)),
+  onRecordsUpdatedFromSync: (cb) => ipcRenderer.on('records-updated-from-sync', (_, data) => cb(data)),
   /* Auto-update */
   onAppUpdateStatus: (cb) => ipcRenderer.on('app-update-status', (_, data) => cb(data)),
   appUpdateInstall: () => ipcRenderer.invoke('app-update-install'),

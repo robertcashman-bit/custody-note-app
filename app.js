@@ -1738,6 +1738,42 @@ var REQUIRED_FIELD_KEYS = [
     if (hft) hft.textContent = title;
   }
 
+  /* ─── Cross-device sync status ─── */
+  function updateSyncStatusIndicator(data) {
+    var el = document.getElementById('sync-status-indicator');
+    if (!el) return;
+    if (!data || !data.status) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    if (data.status === 'synced') {
+      el.textContent = '\u2601 Synced';
+      el.style.color = '#059669';
+    } else if (data.status === 'syncing') {
+      el.textContent = '\u2601 Syncing\u2026';
+      el.style.color = '#d97706';
+    } else {
+      el.textContent = '\u2601 Sync';
+      el.style.color = '#64748b';
+    }
+  }
+
+  function triggerManualSync() {
+    if (!window.api || !window.api.syncNow) return;
+    updateSyncStatusIndicator({ status: 'syncing' });
+    window.api.syncNow().then(function(result) {
+      if (result && result.ok) {
+        updateSyncStatusIndicator({ status: 'synced' });
+      } else {
+        updateSyncStatusIndicator({ status: 'error' });
+        showToast('Sync failed: ' + (result && result.error || 'Unknown error'), 'error');
+      }
+    }).catch(function() {
+      updateSyncStatusIndicator({ status: 'error' });
+    });
+  }
+
   function showView(name) {
     Object.keys(views).forEach(k => {
       document.getElementById(views[k])?.classList.toggle('active', k === name);
@@ -1768,6 +1804,39 @@ var REQUIRED_FIELD_KEYS = [
     updateHomeStatus();
     updateHomeLicenceCard();
     updateGearLicenceItem();
+    initSyncButton();
+  }
+
+  function initSyncButton() {
+    var btn = document.getElementById('sync-now-btn');
+    if (btn && !btn._syncBound) {
+      btn._syncBound = true;
+      btn.addEventListener('click', function() { triggerManualSync(); });
+    }
+    if (window.api && window.api.syncStatus) {
+      window.api.syncStatus().then(function(st) {
+        if (btn) btn.style.display = st && st.enabled ? '' : 'none';
+        var indicator = document.getElementById('sync-status-indicator');
+        if (indicator) {
+          if (st && st.enabled) {
+            indicator.style.display = '';
+            if (st.lastSync) {
+              indicator.textContent = '\u2601 Last sync: ' + new Date(st.lastSync).toLocaleTimeString('en-GB');
+              indicator.style.color = '#059669';
+            } else {
+              indicator.textContent = '\u2601 Not yet synced';
+              indicator.style.color = '#64748b';
+            }
+            if (st.pendingChanges > 0) {
+              indicator.textContent += ' (' + st.pendingChanges + ' pending)';
+              indicator.style.color = '#d97706';
+            }
+          } else {
+            indicator.style.display = 'none';
+          }
+        }
+      });
+    }
   }
 
   function updateLicenceFooterBadge(st) {
@@ -7535,6 +7604,20 @@ PDF_CASENOTE_ADVERT +
       window.api.onAutoImportError(function(p) {
         if (!p) return;
         showToast('Auto-import failed: ' + (p.file || '') + ' ' + (p.error || ''), 'error');
+      });
+    }
+
+    /* Cross-device sync event listeners */
+    if (window.api.onRecordsUpdatedFromSync) {
+      window.api.onRecordsUpdatedFromSync(function(info) {
+        showToast('Synced ' + (info && info.count || '') + ' record' + ((info && info.count !== 1) ? 's' : '') + ' from another device', 'success');
+        try { loadHomeRecent(); } catch (_) {}
+        try { refreshList(); } catch (_) {}
+      });
+    }
+    if (window.api.onSyncStatusChanged) {
+      window.api.onSyncStatusChanged(function(data) {
+        updateSyncStatusIndicator(data);
       });
     }
 
