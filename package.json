@@ -45,7 +45,12 @@
     },
     "win": {
       "icon": "custody-note.ico",
-      "signAndEditExecutable": false
+      "target": ["nsis"],
+      "nsis": {
+        "createDesktopShortcut": true,
+        "createStartMenuShortcut": true,
+        "oneClick": false
+      }
     },
     "files": [
       "**/*",

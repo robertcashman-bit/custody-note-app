@@ -3395,7 +3395,7 @@ function getQuickFileAuth() {
   return { accountNumber, submissionNumber, md5Value, applicationId };
 }
 
-function quickFileRequest(path, bodyContent) {
+function quickFileRequest(urlPath, bodyContent) {
   const auth = getQuickFileAuth();
   const postData = JSON.stringify({
     payload: {
@@ -3415,7 +3415,7 @@ function quickFileRequest(path, bodyContent) {
     const req = https.request(
       {
         hostname: 'api.quickfile.co.uk',
-        path: path,
+        path: urlPath,
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

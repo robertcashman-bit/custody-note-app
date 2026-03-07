@@ -35,6 +35,10 @@ npm run release major
 
 **Requires:** `GH_TOKEN` or `GITHUB_TOKEN` (GitHub PAT with `repo` scope) for publishing.
 
+### Signing the Windows installer (recommended)
+
+Unsigned installers trigger Windows SmartScreen warnings. To sign the app you need a code signing certificate (PFX) from a trusted CA. Set `CSC_LINK` and `CSC_KEY_PASSWORD` before building; see **[SIGNING.md](SIGNING.md)** for full instructions.
+
 The script: (1) bumps version, (2) updates changelog, (3) syncs to website, (4) builds and publishes the installer to GitHub, (5) deploys the website to Vercel. Without a token it builds only (no publish, no deploy). Use `--no-publish` to skip publish even with a token.
 
 To sync changelog to the website without releasing (e.g. after editing changelog.json manually):

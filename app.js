@@ -8073,6 +8073,9 @@ PDF_CASENOTE_ADVERT +
         }
       });
     });
+    document.getElementById('settings-save-btn')?.addEventListener('click', function() {
+      if (typeof saveSettings === 'function') saveSettings();
+    });
     /* ─── Licence event handlers ─── */
     document.getElementById('btn-licence-email-key')?.addEventListener('click', function() {
       if (!window.api.licenceEmailKey) return;
@@ -8933,7 +8936,13 @@ PDF_CASENOTE_ADVERT +
       ['setting-dscc-pin', 'dsccPin'],
       ['setting-quickfile-account', 'quickfileAccountNumber'],
       ['setting-quickfile-apikey', 'quickfileApiKey'],
-      ['setting-quickfile-appid', 'quickfileAppId']
+      ['setting-quickfile-appid', 'quickfileAppId'],
+      ['setting-backup-folder', 'backupFolder'],
+      ['setting-offsite-backup-folder', 'offsiteBackupFolder'],
+      ['setting-cloud-backup-url', 'cloudBackupUrl'],
+      ['setting-cloud-backup-token', 'cloudBackupToken'],
+      ['suggestions-forum-url', 'suggestionsForumUrl'],
+      ['setting-auto-import-folder', 'autoImportFolder']
     ];
     settingsFields.forEach(([id, key]) => {
       const el = document.getElementById(id);
