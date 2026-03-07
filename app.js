@@ -1783,11 +1783,11 @@ var REQUIRED_FIELD_KEYS = [
       badge.style.color = '#d97706';
       badge.style.fontWeight = '600';
     } else if (st.status === 'expiring_soon') {
-      badge.textContent = 'Licensed \u2014 expiring soon';
+      badge.textContent = 'Subscription \u2014 expiring soon';
       badge.style.color = '#d97706';
       badge.style.fontWeight = '600';
     } else if (st.status === 'active') {
-      badge.textContent = 'Licensed';
+      badge.textContent = 'Subscription active';
       badge.style.color = '#059669';
       badge.style.fontWeight = '600';
     } else if (st.status === 'expired') {
@@ -2629,6 +2629,7 @@ var REQUIRED_FIELD_KEYS = [
       var noneEl = document.getElementById('licence-status-none');
       var trialUpgradeEl = document.getElementById('licence-trial-upgrade');
       var obscuredEl = document.getElementById('licence-key-obscured');
+      var typeBadge = document.getElementById('licence-type-badge');
       var timeEl = document.getElementById('licence-time-remaining');
       var lastValidatedEl = document.getElementById('licence-last-validated');
       var resultEl = document.getElementById('licence-validate-result');
@@ -2638,15 +2639,26 @@ var REQUIRED_FIELD_KEYS = [
         noneEl.style.display = 'none';
         activeEl.style.display = '';
         if (obscuredEl) obscuredEl.textContent = maskLicenceKey(st.key);
+        if (typeBadge) {
+          if (st.isTrial) {
+            typeBadge.textContent = 'TRIAL';
+            typeBadge.style.background = '#fef3c7';
+            typeBadge.style.color = '#92400e';
+          } else {
+            typeBadge.textContent = 'SUBSCRIPTION';
+            typeBadge.style.background = '#d1fae5';
+            typeBadge.style.color = '#065f46';
+          }
+        }
         if (timeEl) {
           if (st.isTrial) {
             timeEl.textContent = 'Free trial \u2014 ' + (st.daysRemaining !== undefined ? st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : 'active');
             timeEl.style.color = '#d97706';
           } else if (st.daysRemaining !== undefined) {
-            timeEl.textContent = st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining';
+            timeEl.textContent = 'Subscription \u2014 ' + st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining';
             timeEl.style.color = '';
           } else if (st.expiresAt) {
-            timeEl.textContent = 'Expires ' + new Date(st.expiresAt).toLocaleDateString('en-GB');
+            timeEl.textContent = 'Subscription \u2014 expires ' + new Date(st.expiresAt).toLocaleDateString('en-GB');
             timeEl.style.color = '';
           } else {
             timeEl.textContent = 'Subscription active';

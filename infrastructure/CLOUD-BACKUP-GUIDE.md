@@ -12,7 +12,7 @@ Custody Note offers two backup tiers:
 
 2. **Cloud Backup (add-on subscription)**
    - Everything in Local, plus automatic encrypted upload to AWS (London data centre)
-   - Incorruptible: backups cannot be deleted or tampered with for 90 days (Object Lock)
+   - Incorruptible: backups are permanently protected — cannot be deleted or tampered with (Object Lock)
    - Per-subscriber isolation: only you can access your backups
    - Restore from cloud on any machine
    - SRA-compliant data handling
@@ -64,9 +64,9 @@ All transfers use HTTPS (TLS 1.2+).
 Cloud backups are stored with AWS S3 Object Lock in **Compliance mode**.
 This means:
 
-- Once uploaded, a backup **cannot be deleted or modified by anyone** for 90 days
+- Once uploaded, a backup **cannot be deleted or modified by anyone** — permanently
 - Not even the Custody Note developers or AWS account administrators can tamper with it
-- This provides an audit trail and protects against ransomware, accidental deletion,
+- This provides a permanent audit trail and protects against ransomware, accidental deletion,
   or malicious actors
 
 ### Data Isolation (SRA Compliance)
@@ -113,9 +113,9 @@ Set one in Settings > Security & Encryption and keep it somewhere safe.
 
 ### What if I stop paying for cloud backup?
 
-Your existing backups remain on AWS and are protected by Object Lock for 90 days.
-You can resubscribe at any time to restore them. New backups will not be uploaded
-until you resubscribe.
+Your existing backups remain on AWS and are permanently protected by Object Lock.
+They cannot be deleted. You can resubscribe at any time to restore them.
+New backups will not be uploaded until you resubscribe.
 
 ### Can the Custody Note team read my backups?
 
@@ -180,7 +180,7 @@ access-controlled per subscriber, and you can request deletion at any time.
 | Client encryption  | AES-256-GCM (your unique key)                   |
 | Server encryption  | AES-256 (AWS SSE-S3)                             |
 | In transit         | HTTPS / TLS 1.2+                                 |
-| Immutability       | S3 Object Lock, Compliance mode, 90-day retention|
+| Immutability       | S3 Object Lock, Compliance mode, permanent retention|
 | Access control     | STS temporary credentials, scoped IAM policies   |
 | Data residency     | AWS eu-west-2 (London, United Kingdom)           |
 | Key protection     | Windows Credential Store (safeStorage) or fallback|

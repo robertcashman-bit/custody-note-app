@@ -120,6 +120,38 @@
   window.initLicenceUI = initLicenceUI;
   window.showLicenceOverlay = showOverlay;
 
+  (function initForgotKeyOverlay() {
+    var btn = document.getElementById('licence-overlay-forgot-btn');
+    var emailInput = document.getElementById('licence-overlay-forgot-email');
+    var msgEl = document.getElementById('licence-overlay-forgot-msg');
+    if (!btn || !emailInput) return;
+    btn.addEventListener('click', function () {
+      var email = (emailInput.value || '').trim();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        if (msgEl) { msgEl.textContent = 'Please enter a valid email address.'; msgEl.style.color = '#f87171'; }
+        return;
+      }
+      btn.disabled = true;
+      if (msgEl) { msgEl.textContent = 'Sending\u2026'; msgEl.style.color = 'rgba(255,255,255,0.6)'; }
+      var api = window.custodyNote || {};
+      if (!api.requestLicenceEmail) {
+        if (msgEl) { msgEl.textContent = 'Not available in this version.'; msgEl.style.color = '#f87171'; }
+        btn.disabled = false;
+        return;
+      }
+      api.requestLicenceEmail(email).then(function (res) {
+        btn.disabled = false;
+        if (msgEl) {
+          msgEl.textContent = (res && res.message) ? res.message : 'If that email is on file, your key has been sent.';
+          msgEl.style.color = '#4ade80';
+        }
+      }).catch(function () {
+        btn.disabled = false;
+        if (msgEl) { msgEl.textContent = 'Something went wrong. Try again later.'; msgEl.style.color = '#f87171'; }
+      });
+    });
+  })();
+
   function startRevalidation() {
     if (_revalidateTimer) clearInterval(_revalidateTimer);
     _revalidateTimer = setInterval(function () {

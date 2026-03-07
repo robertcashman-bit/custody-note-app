@@ -12,12 +12,16 @@ Parameters:
     Description: Name of the S3 bucket for encrypted backup storage.
   RetentionDays:
     Type: Number
-    Default: 90
-    Description: Object Lock retention period in days (Compliance mode).
+    Default: 36500
+    Description: Object Lock retention period in days (Compliance mode). 36500 ≈ 100 years (effectively permanent).
   TransitionToIADays:
     Type: Number
     Default: 30
-    Description: Days before transitioning objects to Infrequent Access storage.
+    Description: Days before transitioning current objects to Infrequent Access storage.
+  GlacierDays:
+    Type: Number
+    Default: 90
+    Description: Days before transitioning noncurrent versions to Glacier Deep Archive.
 
 Resources:
 
@@ -51,6 +55,12 @@ Resources:
             Transitions:
               - StorageClass: STANDARD_IA
                 TransitionInDays: !Ref TransitionToIADays
+          - Id: NoncurrentToGlacier
+            Status: Enabled
+            Prefix: backups/
+            NoncurrentVersionTransitions:
+              - StorageClass: DEEP_ARCHIVE
+                NoncurrentDays: !Ref GlacierDays
       Tags:
         - Key: Project
           Value: CustodyNote

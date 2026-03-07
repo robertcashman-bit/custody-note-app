@@ -23,8 +23,9 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     BucketName=custody-note-backups \
-    RetentionDays=90 \
-    TransitionToIADays=30
+    RetentionDays=36500 \
+    TransitionToIADays=30 \
+    GlacierDays=90
 ```
 
 ## Step 2: Retrieve Outputs
@@ -60,8 +61,8 @@ Add these to your Vercel environment variables (or `.env.local`):
 ### Object Lock (Compliance Mode)
 
 Once a backup is uploaded, it **cannot be deleted or overwritten** by anyone --
-not even the AWS account root user -- for the configured retention period (90 days).
-This makes backups incorruptible and tamper-proof.
+not even the AWS account root user -- for the configured retention period (default: 100 years).
+This makes backups permanently incorruptible and tamper-proof.
 
 ### Per-Subscriber Isolation
 

@@ -2952,6 +2952,11 @@ kbd {
   color: var(--text-secondary, #94a3b8); font-size: 0.82rem;
   margin: 1.25rem 0 0; line-height: 1.5;
 }
+.licence-forgot-section {
+  margin-top: 1.25rem; padding-top: 1rem;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  text-align: left;
+}
 .licence-link {
   color: var(--primary, #3b82f6); text-decoration: underline;
 }

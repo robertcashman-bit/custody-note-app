@@ -108,7 +108,7 @@
         "Reports by month, firm, and station",
         "Local encrypted backups every 2 minutes (AES-256-GCM)",
         "Off-site folder backup (OneDrive, Dropbox, etc.)",
-        "Tamper-proof cloud backup on AWS (subscriber add-on): 90-day retention, UK data centre, per-subscriber isolation",
+        "Tamper-proof cloud backup on AWS (subscriber add-on): permanent retention, UK data centre, per-subscriber isolation",
         "Licence key activation (30-day trial and paid subscription)",
         "Works fully offline at any police station"
       ]

@@ -552,6 +552,7 @@
             <p class="settings-hint" style="margin:0 0 0.5rem 0;">Current licence</p>
             <div class="setting-row" style="align-items:center;flex-wrap:wrap;gap:0.5rem;">
               <code id="licence-key-obscured" style="font-size:1rem;letter-spacing:1px;padding:0.5rem;background:var(--input-bg,#f8fafc);border-radius:4px;">--------</code>
+              <span id="licence-type-badge" style="display:inline-block;padding:0.2rem 0.6rem;border-radius:4px;font-size:0.8rem;font-weight:700;letter-spacing:0.03em;"></span>
               <button type="button" id="btn-licence-validate" class="btn btn-secondary btn-small">Validate</button>
             </div>
             <p id="licence-time-remaining" class="settings-hint" style="margin:0.5rem 0 0.25rem 0;font-weight:600;"></p>
@@ -658,7 +659,7 @@
             <div id="cloud-backup-subscribed" style="display:none;">
               <div style="background:linear-gradient(135deg,#d1fae5,#ecfdf5);border:1px solid #10b981;border-radius:8px;padding:1rem;margin-bottom:0.5rem;">
                 <p style="margin:0 0 0.5rem 0;font-weight:600;color:#065f46;">&#10003; Backing up to AWS automatically</p>
-                <p style="margin:0;font-size:0.85rem;color:#064e3b;">Your database is automatically backed up to a secure UK data centre (AWS London). Backups are encrypted and tamper-proof for 90 days.</p>
+                <p style="margin:0;font-size:0.85rem;color:#064e3b;">Your database is automatically backed up to a secure UK data centre (AWS London). Backups are encrypted and permanently tamper-proof.</p>
                 <p id="cloud-backup-last-success" style="margin:0.5rem 0 0 0;font-size:0.8rem;color:#065f46;"></p>
               </div>
               <button type="button" id="btn-cloud-backup-restore" class="btn btn-secondary" style="margin-bottom:0.5rem;">Restore from Cloud Backup</button>
@@ -1267,7 +1268,7 @@
             <div class="help-content">
               <p><strong>Cloud Backup</strong> is an optional add-on that automatically uploads your encrypted database to a secure UK data centre (AWS London).</p>
               <ul>
-                <li><strong>Incorruptible:</strong> Backups are protected by AWS Object Lock &mdash; once uploaded, nobody (not even us) can delete or modify them for 90 days.</li>
+                <li><strong>Incorruptible:</strong> Backups are protected by AWS Object Lock &mdash; once uploaded, nobody (not even us) can delete or modify them. Ever.</li>
                 <li><strong>Encrypted:</strong> Your data is encrypted on your computer before upload. We cannot read your backups.</li>
                 <li><strong>Isolated:</strong> Only your licence key can access your backups. No other subscriber can see your data (SRA-compliant).</li>
                 <li><strong>Restore:</strong> If your computer fails, install Custody Note on a new machine, enter your licence key, and restore from the cloud. You will need your recovery password.</li>
@@ -1342,6 +1343,14 @@
         </div>
         <div id="licence-renew-section" style="display:none;">
           <p class="licence-hint">Need a new licence? Visit <a href="https://www.custodynote.com" id="licence-renew-link" class="licence-link">www.custodynote.com</a> or contact <a href="mailto:robertcashman@defencelegalservices.com" class="licence-link">robertcashman@defencelegalservices.com</a></p>
+        </div>
+        <div class="licence-forgot-section">
+          <p class="licence-hint" style="margin-bottom:0.4rem;">Forgotten your licence key? Enter your email and we&apos;ll send it to you.</p>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <input type="email" id="licence-overlay-forgot-email" placeholder="you@example.com" style="padding:0.35rem 0.5rem;font-size:0.85rem;border:1px solid rgba(255,255,255,0.2);border-radius:4px;min-width:180px;background:rgba(255,255,255,0.08);color:#fff;">
+            <button type="button" id="licence-overlay-forgot-btn" class="btn btn-small">Email my key</button>
+          </div>
+          <p id="licence-overlay-forgot-msg" style="font-size:0.8rem;margin-top:0.35rem;min-height:1.2em;color:rgba(255,255,255,0.6);"></p>
         </div>
         <p class="licence-footer-text">&copy; Defence Legal Services Ltd 2026</p>
       </div>

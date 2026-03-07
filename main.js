@@ -1981,6 +1981,7 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     isTrial: result.isTrial === true,
   };
   writeLicenceData(data);
+  checkCloudBackupEntitlement().catch(() => {});
   return { success: true, status: computeLicenceStatus(data) };
 });
 
