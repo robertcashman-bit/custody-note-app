@@ -25,6 +25,9 @@ Version and changelog are automated. From the app folder:
 # Patch release (1.4.6 → 1.4.7), prompts for changelog items
 npm run release patch
 
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   # Publish current version exactly as-is (no bump; requires package/changelog already aligned)
+npm run release:current
+
 # With changelog from command line (semicolon-separated)
 npm run release patch -- --changes "Security fixes; Updated dependencies"
 
@@ -35,13 +38,19 @@ npm run release major
 
 **Requires:** `GH_TOKEN` or `GITHUB_TOKEN` (GitHub PAT with `repo` scope) for publishing.
 
-To enable GitHub Actions CI (run tests on push), add the workflow file once via the GitHub website: create `.github/workflows/test.yml` with the contents of `docs/github-actions-test.yml.example`. This avoids needing `workflow` scope on your token when pushing from other tools.
+### Pushing to GitHub (so it goes every time)
+
+- Use a PAT with **repo** scope (and **workflow** only if you need to push changes to `.github/workflows/`).
+- **Do not commit** `.github/workflows/` in this repo if your token lacks **workflow** scope — otherwise `git push` will fail with "refusing to allow an OAuth App to create or update workflow".
+- To get CI on push without that scope: add the workflow **once** on GitHub: create `.github/workflows/test.yml` in the repo (e.g. via the website) and paste the contents of `docs/github-actions-test.yml.example`. After that, normal pushes (code, changelog, etc.) will always succeed.
 
 ### Signing the Windows installer (recommended)
 
 Unsigned installers trigger Windows SmartScreen warnings. To sign the app you need a code signing certificate (PFX) from a trusted CA. Set `CSC_LINK` and `CSC_KEY_PASSWORD` before building; see **[SIGNING.md](SIGNING.md)** for full instructions.
 
-The script: (1) bumps version, (2) updates changelog, (3) syncs to website, (4) builds and publishes the installer to GitHub, (5) deploys the website to Vercel. Without a token it builds only (no publish, no deploy). Use `--no-publish` to skip publish even with a token.
+The script: (1) bumps version, (2) updates changelog, (3) syncs to website, (4) builds and publishes the installer to GitHub, (5) deploys the website to Vercel. A token is required by default; pass `--no-publish` explicitly for local build-only runs.
+
+Release safety checks are enforced automatically: build/release will fail if `package.json` version and `changelog.json` latest release are not in sync.
 
 To sync changelog to the website without releasing (e.g. after editing changelog.json manually):
 

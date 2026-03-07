@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Release script: bumps version, updates changelog, syncs to website, builds app, publishes to GitHub, deploys website.
+ * Release script: bumps/syncs version, syncs website, builds app, publishes to GitHub, deploys website.
  *
  * Usage:
- *   npm run release [patch|minor|major] [-- --changes "item1; item2; item3"]
+ *   npm run release [patch|minor|major|current] [-- --changes "item1; item2; item3"]
  *   npm run release patch
  *   npm run release minor -- --changes "New feature X"
  *
@@ -12,8 +12,8 @@
  * Requires: GH_TOKEN or GITHUB_TOKEN (GitHub PAT with repo scope) for publishing.
  *
  * This script:
- * 1. Bumps version in package.json
- * 2. Appends to changelog.json
+ * 1. Bumps version in package.json (or uses current version in "current" mode)
+ * 2. Appends to changelog.json (or validates changelog in "current" mode)
  * 3. Syncs version + changelog to website (custody note - website production)
  * 4. Builds the Electron app and publishes to GitHub (creates release, uploads installer)
  * 5. Deploys the website to Vercel (so download page serves new version)
@@ -54,6 +54,26 @@ function writeJson(path, data) {
   writeFileSync(path, JSON.stringify(data, null, 2) + '\n', 'utf8');
 }
 
+function fail(message) {
+  throw new Error(message);
+}
+
+function verifyReleaseConsistency(pkg, changelog) {
+  const releases = Array.isArray(changelog.releases) ? changelog.releases : [];
+  if (!pkg.version || typeof pkg.version !== 'string') fail('package.json version is missing or invalid.');
+  if (releases.length === 0) fail('changelog.json has no releases.');
+  const latest = releases.filter(r => r && r.latest === true);
+  if (latest.length !== 1) fail(`changelog.json must have exactly one latest=true entry (found ${latest.length}).`);
+  const latestRelease = latest[0];
+  if (!latestRelease.version) fail('Latest changelog entry has no version.');
+  if (latestRelease.version !== pkg.version) {
+    fail(`Version mismatch: package.json=${pkg.version}, changelog latest=${latestRelease.version}`);
+  }
+  if (!releases[0] || releases[0].version !== latestRelease.version || releases[0].latest !== true) {
+    fail('Latest changelog entry must be first in releases array.');
+  }
+}
+
 function parseVersion(v) {
   return v.split('.').map(Number);
 }
@@ -87,42 +107,54 @@ function parseChangesArg(argv) {
 
 async function main() {
   const argv = process.argv.slice(2);
-  const type = ['patch', 'minor', 'major'].includes(argv[0]) ? argv[0] : 'patch';
+  const mode = argv[0];
+  const type = ['patch', 'minor', 'major'].includes(mode) ? mode : null;
+  const useCurrentVersion = mode === 'current';
   let changes = parseChangesArg(argv);
 
   const pkgPath = join(APP_ROOT, 'package.json');
   const changelogPath = join(APP_ROOT, 'changelog.json');
   const pkg = readJson(pkgPath);
-
-  const newVersion = bumpVersion(pkg.version, type);
+  const changelog = existsSync(changelogPath) ? readJson(changelogPath) : { releases: [] };
+  let releases = changelog.releases || [];
+  let newVersion = pkg.version;
   const today = new Date().toISOString().slice(0, 10);
 
-  if (!changes || changes.length === 0) {
-    changes = await readChangesFromStdin();
-  }
-  if (changes.length === 0) {
-    changes = ['Bug fixes and improvements'];
+  if (type) {
+    newVersion = bumpVersion(pkg.version, type);
+    if (!changes || changes.length === 0) {
+      changes = await readChangesFromStdin();
+    }
+    if (changes.length === 0) {
+      changes = ['Bug fixes and improvements'];
+    }
+
+    // Update package.json
+    pkg.version = newVersion;
+    pkg.lastUpdated = today;
+    writeJson(pkgPath, pkg);
+    console.log(`Version bumped to ${newVersion}`);
+
+    // Update changelog.json
+    for (const r of releases) r.latest = false;
+    releases.unshift({
+      version: newVersion,
+      date: today,
+      latest: true,
+      changes,
+    });
+    changelog.releases = releases;
+    writeJson(changelogPath, changelog);
+    console.log('Changelog updated');
+  } else if (useCurrentVersion) {
+    verifyReleaseConsistency(pkg, changelog);
+    console.log(`Using existing release metadata for v${newVersion}`);
+  } else {
+    fail('Usage: npm run release [patch|minor|major|current] [-- --changes "item1; item2"]');
   }
 
-  // Update package.json
-  pkg.version = newVersion;
-  pkg.lastUpdated = today;
-  writeJson(pkgPath, pkg);
-  console.log(`Version bumped to ${newVersion}`);
-
-  // Update changelog.json
-  const changelog = existsSync(changelogPath) ? readJson(changelogPath) : { releases: [] };
-  const releases = changelog.releases || [];
-  for (const r of releases) r.latest = false;
-  releases.unshift({
-    version: newVersion,
-    date: today,
-    latest: true,
-    changes,
-  });
-  changelog.releases = releases;
-  writeJson(changelogPath, changelog);
-  console.log('Changelog updated');
+  // Always verify consistency before build/publish
+  verifyReleaseConsistency(pkg, changelog);
 
   // Sync to website
   const websiteDataPath = join(WEBSITE_ROOT, 'src', 'data', 'releases.json');
@@ -141,7 +173,11 @@ async function main() {
   loadEnvToken();
   const { spawn } = await import('child_process');
   const hasToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-  const doPublish = hasToken && !argv.includes('--no-publish');
+  const skipPublish = argv.includes('--no-publish');
+  if (!hasToken && !skipPublish) {
+    fail('GH_TOKEN or GITHUB_TOKEN is required for release publish. Set a token or pass --no-publish explicitly.');
+  }
+  const doPublish = hasToken && !skipPublish;
 
   if (doPublish) {
     console.log('Building and publishing to GitHub...');
@@ -158,9 +194,21 @@ async function main() {
       );
       proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Build/publish exited ${code}`))));
     });
+    // Verify GitHub latest release matches expected version before website deploy.
+    const latestUrl = 'https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/latest';
+    const latestRes = await fetch(latestUrl, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'CustodyNote-ReleaseScript' } });
+    if (!latestRes.ok) {
+      fail(`Could not verify GitHub latest release (${latestRes.status} ${latestRes.statusText})`);
+    }
+    const latestData = await latestRes.json();
+    const latestVersion = String(latestData.tag_name || '').replace(/^v/, '');
+    if (latestVersion !== newVersion) {
+      fail(`GitHub latest release is v${latestVersion || 'unknown'}, expected v${newVersion}.`);
+    }
+    console.log(`GitHub latest release verified: v${latestVersion}`);
   } else {
-    if (!hasToken) {
-      console.warn('GH_TOKEN or GITHUB_TOKEN not set — skipping GitHub publish. Build only.');
+    if (skipPublish) {
+      console.warn('--no-publish set — building only (no GitHub release).');
     }
     await new Promise((resolve, reject) => {
       const proc = spawn('npm', ['run', 'build:only'], {

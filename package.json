@@ -6,12 +6,14 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder",
-    "build:only": "electron-builder",
+    "verify:release": "node scripts/verify-release-consistency.mjs",
+    "build": "npm run verify:release && electron-builder",
+    "build:only": "npm run verify:release && electron-builder",
     "release": "node scripts/release.mjs",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
     "release:major": "node scripts/release.mjs major",
+    "release:current": "node scripts/release.mjs current",
     "sync-website": "node scripts/sync-website.mjs",
     "build:icon": "node scripts/build-icon.mjs",
     "stations": "node data/parse-stations-from-pdf.js",
@@ -45,12 +47,12 @@
     },
     "win": {
       "icon": "custody-note.ico",
-      "target": ["nsis"],
-      "nsis": {
-        "createDesktopShortcut": true,
-        "createStartMenuShortcut": true,
-        "oneClick": false
-      }
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "oneClick": false
     },
     "files": [
       "**/*",

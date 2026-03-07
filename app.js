@@ -8522,12 +8522,14 @@ PDF_CASENOTE_ADVERT +
 
       function updateSysStatUpdate(data) {
         var l2El = document.getElementById('sysstat-update-line2');
+        var versionFromFooter = ((document.getElementById('app-version') && document.getElementById('app-version').textContent) || '').trim();
+        var currentVersion = String(window.__appVersion || versionFromFooter || '').trim();
         if (!data) {
           setBlock('sysstat-update-icon','⏳','','sysstat-update-line1','Checking auto-update…','sysstat-update-line2','');
           return;
         }
         if (data.status === 'up-to-date') {
-          setBlock('sysstat-update-icon','✅','#059669','sysstat-update-line1','Up to date — v' + (window.__appVersion || '1.4.8'),'sysstat-update-line2','');
+          setBlock('sysstat-update-icon','✅','#059669','sysstat-update-line1','Up to date' + (currentVersion ? ' — v' + currentVersion : ''),'sysstat-update-line2','');
           if (l2El) l2El.textContent = 'Auto-update enabled · Checks every 4 hours · Next check within ' + (4 - (new Date().getMinutes() / 60)).toFixed(1) + 'h';
         } else if (data.status === 'downloading') {
           setBlock('sysstat-update-icon','⬇️','#2563eb','sysstat-update-line1','Downloading update v' + data.version + '…','sysstat-update-line2','');
