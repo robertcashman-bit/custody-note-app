@@ -1,0 +1,54 @@
+# On push of a version tag (e.g. v1.4.9), build the Windows installer, publish to GitHub
+# Releases, and deploy the website to Vercel so the download page shows the new version.
+#
+# Prerequisites (Settings > Secrets and variables > Actions):
+# - VERCEL_TOKEN — from Vercel dashboard > Settings > Tokens (so the website can deploy).
+# - GH_PAT — a GitHub PAT with repo scope (so the workflow can checkout the website repo).
+#   Create at https://github.com/settings/tokens. Used only to clone the website repo.
+# GITHUB_TOKEN is provided automatically and is used to create the app release in this repo.
+#
+# To run: push a tag that matches the current package.json version, e.g.:
+#   git tag v1.4.9
+#   git push origin v1.4.9
+
+name: Release and deploy
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+        with:
+          path: custody-note-app
+          ref: ${{ github.ref }}
+
+      - name: Checkout website
+        uses: actions/checkout@v4
+        with:
+          repository: robertcashman-bit/super-parakeet
+          path: custody note - website production
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: custody-note-app/package-lock.json
+
+      - name: Install app dependencies
+        run: npm ci
+        working-directory: custody-note-app
+
+      - name: Publish release and deploy website
+        working-directory: custody-note-app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/release.mjs current

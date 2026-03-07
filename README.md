@@ -25,7 +25,7 @@ Version and changelog are automated. From the app folder:
 # Patch release (1.4.6 → 1.4.7), prompts for changelog items
 npm run release patch
 
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   # Publish current version exactly as-is (no bump; requires package/changelog already aligned)
+# Publish current version to GitHub and deploy website (no version bump)
 npm run release:current
 
 # With changelog from command line (semicolon-separated)
@@ -36,7 +36,14 @@ npm run release minor
 npm run release major
 ```
 
-**Requires:** `GH_TOKEN` or `GITHUB_TOKEN` (GitHub PAT with `repo` scope) for publishing.
+**Requires:** `GH_TOKEN` or `GITHUB_TOKEN` (GitHub PAT with `repo` scope) for publishing. For `release:current` to also deploy the website, the script runs `npm run deploy` in the sibling folder `custody note - website production` (that deploy needs Vercel configured locally or in CI).
+
+### Publish and deploy automatically (one command or CI)
+
+- **Local:** Copy `.env.example` to `.env`, set `GH_TOKEN=ghp_...`, then run `npm run release:current`. That builds the installer, publishes it to GitHub Releases, and deploys the website to Vercel so the download page shows the new version.
+- **CI:** Push a version tag to trigger build, publish, and deploy with no local token:
+  1. In this repo’s **Settings > Secrets and variables > Actions** add: `VERCEL_TOKEN` (from Vercel) and `GH_PAT` (GitHub PAT with repo scope, used to clone the website repo).
+  2. Push a tag that matches the current `package.json` version, e.g. `git tag v1.4.9` then `git push origin v1.4.9`. The workflow **Release and deploy** (`.github/workflows/release-publish.yml`) will build the Windows installer, publish it to GitHub Releases, and deploy the website.
 
 ### Pushing to GitHub (so it goes every time)
 
