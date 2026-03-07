@@ -5,6 +5,10 @@
 
 function loadSettings() {
   if (!window.api) return;
+  // Refresh licence panel (trial upgrade box, key status, days remaining)
+  if (typeof loadLicenceSettingsUI === 'function') loadLicenceSettingsUI();
+  // Trigger System Status card diagnostics (licence, backup, update panels)
+  document.dispatchEvent(new CustomEvent('view-settings-shown'));
   window.api.getSettings().then(function(s) {
     window._appSettingsCache = s || {};
     document.getElementById('setting-email').value = s.email || '';
@@ -59,6 +63,7 @@ function loadSettings() {
       var notSub = document.getElementById('cloud-backup-not-subscribed');
       var isSub = document.getElementById('cloud-backup-subscribed');
       var lastEl = document.getElementById('cloud-backup-last-success');
+      var reasonEl = document.getElementById('cloud-backup-unavailable-reason');
       if (checking) checking.style.display = 'none';
       if (status && status.enabled) {
         if (notSub) notSub.style.display = 'none';
@@ -69,11 +74,21 @@ function loadSettings() {
       } else {
         if (notSub) notSub.style.display = '';
         if (isSub) isSub.style.display = 'none';
+        // Show why backup is unavailable — trial vs no subscription
+        if (reasonEl) {
+          if (status && status.isTrial) {
+            reasonEl.innerHTML = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> to enable it.';
+          } else if (status && status.lastError) {
+            reasonEl.textContent = 'Cloud backup verification failed: ' + status.lastError + '. Check your internet connection and try again.';
+          } else {
+            reasonEl.innerHTML = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> then enter your licence key in Settings \u203a Licence.';
+          }
+        }
       }
       var errEl = document.getElementById('cloud-backup-error');
       var supportEl = document.getElementById('cloud-backup-error-support');
       if (errEl) {
-        if (status && status.lastError) {
+        if (status && status.lastError && !status.isTrial) {
           errEl.textContent = status.lastError;
           errEl.style.display = '';
           if (supportEl) supportEl.style.display = '';

@@ -7607,23 +7607,19 @@ PDF_CASENOTE_ADVERT +
         switch (t.id) {
           case 'home-enter-licence-btn':
             e.preventDefault();
-            // Go to Settings > Licence and focus the key input
             showView('settings');
-            setTimeout(function() {
-              var upgradeEl = document.getElementById('licence-trial-upgrade');
-              var noneEl = document.getElementById('licence-status-none');
-              var inputEl = document.getElementById('trial-upgrade-key') || document.getElementById('setting-licence-key');
-              // Scroll to the licence card
+            // Wait for loadLicenceSettingsUI async call to resolve before focusing
+            (window.api && window.api.licenceStatus ? window.api.licenceStatus() : Promise.resolve(null)).then(function(st) {
               var licCard = document.getElementById('licence-settings-card');
               if (licCard) licCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              if (upgradeEl && upgradeEl.style.display !== 'none') {
+              if (st && st.isTrial) {
                 var inp = document.getElementById('trial-upgrade-key');
                 if (inp) { inp.focus(); inp.select(); }
-              } else if (noneEl && noneEl.style.display !== 'none') {
+              } else {
                 var inp2 = document.getElementById('setting-licence-key');
                 if (inp2) { inp2.focus(); inp2.select(); }
               }
-            }, 150);
+            });
             return;
           case 'home-card-attendance':
             e.preventDefault();
@@ -8947,6 +8943,36 @@ PDF_CASENOTE_ADVERT +
           window.api.setSettings({ [key]: val }).then(showSettingsSavedToast);
         }, 800));
       }
+    });
+
+    // Fee earner name — was missing auto-save, so changes were lost on restart
+    document.getElementById('setting-fee-earner-name')?.addEventListener('input', debounce((e) => {
+      window.api.setSettings({ feeEarnerNameDefault: e.target.value.trim() }).then(showSettingsSavedToast);
+    }, 800));
+
+    // LAA rate fields — save all rates as a JSON blob whenever any rate changes
+    function saveLaaRates() {
+      const rates = {
+        fixedFee: document.getElementById('rate-fixedFee')?.value || '320.00',
+        escapeThreshold: document.getElementById('rate-escapeThreshold')?.value || '650.00',
+        attendanceSocial: document.getElementById('rate-attendanceSocial')?.value || '62.16',
+        attendanceUnsocial: document.getElementById('rate-attendanceUnsocial')?.value || '77.68',
+        travelWaiting: document.getElementById('rate-travelWaiting')?.value || '30.36',
+        mileage: document.getElementById('rate-mileage')?.value || '0.45',
+        vat: document.getElementById('rate-vat')?.value || '20',
+      };
+      // Also update the in-memory LAA object so fee calculations use new rates immediately
+      if (rates.fixedFee) LAA.fixedFee = +rates.fixedFee;
+      if (rates.escapeThreshold) LAA.escapeThreshold = +rates.escapeThreshold;
+      if (rates.attendanceSocial) LAA.national.attendance.social = +rates.attendanceSocial;
+      if (rates.attendanceUnsocial) LAA.national.attendance.unsocial = +rates.attendanceUnsocial;
+      if (rates.travelWaiting) { LAA.national.travel.social = +rates.travelWaiting; LAA.national.travel.unsocial = +rates.travelWaiting; LAA.national.waiting.social = +rates.travelWaiting; LAA.national.waiting.unsocial = +rates.travelWaiting; }
+      if (rates.mileage) LAA.mileageRate = +rates.mileage;
+      if (rates.vat) LAA.vatRate = +rates.vat / 100;
+      window.api.setSettings({ laaRates: JSON.stringify(rates) }).then(showSettingsSavedToast);
+    }
+    ['rate-fixedFee','rate-escapeThreshold','rate-attendanceSocial','rate-attendanceUnsocial','rate-travelWaiting','rate-mileage','rate-vat'].forEach(id => {
+      document.getElementById(id)?.addEventListener('change', debounce(saveLaaRates, 600));
     });
 
     document.getElementById('setting-dark-mode')?.addEventListener('change', (e) => {
