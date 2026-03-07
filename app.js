@@ -1748,11 +1748,14 @@ var REQUIRED_FIELD_KEYS = [
     }
     el.style.display = '';
     if (data.status === 'synced') {
-      el.textContent = '\u2601 Synced';
+      el.textContent = '\u2601 All records synced';
       el.style.color = '#059669';
     } else if (data.status === 'syncing') {
       el.textContent = '\u2601 Syncing\u2026';
       el.style.color = '#d97706';
+    } else if (data.status === 'error') {
+      el.textContent = '\u2601 Sync error';
+      el.style.color = '#dc2626';
     } else {
       el.textContent = '\u2601 Sync';
       el.style.color = '#64748b';
@@ -1765,12 +1768,33 @@ var REQUIRED_FIELD_KEYS = [
     window.api.syncNow().then(function(result) {
       if (result && result.ok) {
         updateSyncStatusIndicator({ status: 'synced' });
+        refreshSyncCounts();
       } else {
         updateSyncStatusIndicator({ status: 'error' });
         showToast('Sync failed: ' + (result && result.error || 'Unknown error'), 'error');
       }
     }).catch(function() {
       updateSyncStatusIndicator({ status: 'error' });
+    });
+  }
+
+  function refreshSyncCounts() {
+    if (!window.api || !window.api.syncStatus) return;
+    window.api.syncStatus().then(function(st) {
+      var el = document.getElementById('sync-status-indicator');
+      if (!el || !st || !st.enabled) return;
+      el.style.display = '';
+      if (st.pendingChanges === 0 && st.lastSync) {
+        el.innerHTML = '\u2601 <strong>All ' + st.totalRecords + ' record' + (st.totalRecords !== 1 ? 's' : '') + ' synced</strong> \u00b7 ' + new Date(st.lastSync).toLocaleTimeString('en-GB');
+        el.style.color = '#059669';
+      } else if (st.pendingChanges > 0) {
+        var synced = st.totalRecords - st.pendingChanges;
+        el.innerHTML = '\u2601 ' + synced + ' of ' + st.totalRecords + ' synced \u00b7 <strong>' + st.pendingChanges + ' pending</strong>';
+        el.style.color = '#d97706';
+      } else if (!st.lastSync) {
+        el.textContent = '\u2601 Not yet synced \u00b7 ' + st.totalRecords + ' record' + (st.totalRecords !== 1 ? 's' : '') + ' waiting';
+        el.style.color = '#64748b';
+      }
     });
   }
 
@@ -1818,25 +1842,51 @@ var REQUIRED_FIELD_KEYS = [
         if (btn) btn.style.display = st && st.enabled ? '' : 'none';
         var indicator = document.getElementById('sync-status-indicator');
         if (indicator) {
-          if (st && st.enabled) {
-            indicator.style.display = '';
-            if (st.lastSync) {
-              indicator.textContent = '\u2601 Last sync: ' + new Date(st.lastSync).toLocaleTimeString('en-GB');
-              indicator.style.color = '#059669';
-            } else {
-              indicator.textContent = '\u2601 Not yet synced';
-              indicator.style.color = '#64748b';
-            }
-            if (st.pendingChanges > 0) {
-              indicator.textContent += ' (' + st.pendingChanges + ' pending)';
-              indicator.style.color = '#d97706';
-            }
-          } else {
-            indicator.style.display = 'none';
-          }
+          indicator.style.display = st && st.enabled ? '' : 'none';
         }
+        if (st && st.enabled) refreshSyncCounts();
       });
     }
+    initHomeUpdateButton();
+  }
+
+  function initHomeUpdateButton() {
+    var btn = document.getElementById('home-check-update-btn');
+    if (!btn || btn._updateBound) return;
+    btn._updateBound = true;
+    btn.addEventListener('click', function() {
+      if (!window.api || !window.api.appCheckUpdates) {
+        showToast('Updates only apply to the installed app', 'info');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = '\u21BB Checking\u2026';
+      window.api.appCheckUpdates().then(function(res) {
+        if (res.status === 'up-to-date') {
+          btn.textContent = '\u2713 Up to date';
+          btn.style.color = '#059669';
+          showToast('You\u2019re on the latest version', 'success');
+        } else if (res.status === 'available') {
+          btn.textContent = '\u21BB Downloading v' + (res.version || '') + '\u2026';
+          btn.style.color = '#d97706';
+        } else if (res.status === 'dev') {
+          btn.textContent = '\u21BB Check for updates';
+          showToast('Updates only apply to the installed app', 'info');
+        } else {
+          btn.textContent = '\u21BB Check for updates';
+          showToast('Could not check: ' + (res.message || 'Unknown error'), 'error');
+        }
+      }).catch(function() {
+        btn.textContent = '\u21BB Check for updates';
+        showToast('Update check failed', 'error');
+      }).finally(function() {
+        btn.disabled = false;
+        setTimeout(function() {
+          btn.textContent = '\u21BB Check for updates';
+          btn.style.color = '';
+        }, 10000);
+      });
+    });
   }
 
   function updateLicenceFooterBadge(st) {
@@ -7618,6 +7668,7 @@ PDF_CASENOTE_ADVERT +
     if (window.api.onSyncStatusChanged) {
       window.api.onSyncStatusChanged(function(data) {
         updateSyncStatusIndicator(data);
+        refreshSyncCounts();
       });
     }
 
@@ -8428,6 +8479,20 @@ PDF_CASENOTE_ADVERT +
           if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
         } else if (data.status === 'error') {
           if (banner) banner.style.display = 'none';
+        }
+        // Also update the home-screen update button
+        var homeBtn = document.getElementById('home-check-update-btn');
+        if (homeBtn) {
+          if (data.status === 'ready') {
+            homeBtn.textContent = '\u21BB Install v' + data.version;
+            homeBtn.style.color = '#059669';
+            homeBtn.style.borderColor = '#059669';
+            homeBtn.onclick = function() { window.api.appUpdateInstall(); };
+          } else if (data.status === 'downloading') {
+            homeBtn.textContent = '\u21BB Downloading v' + data.version + '\u2026';
+            homeBtn.style.color = '#d97706';
+            homeBtn.disabled = true;
+          }
         }
       });
     }

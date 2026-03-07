@@ -191,10 +191,12 @@
             </div>
           </div>
 
-          <!-- Cross-device sync status -->
-          <div id="sync-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <!-- Cross-device sync & update status -->
+          <div id="sync-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
             <span id="sync-status-indicator" style="font-size:0.85rem;display:none;"></span>
             <button type="button" id="sync-now-btn" style="display:none;font-size:0.8rem;padding:3px 10px;border:1px solid #334155;border-radius:6px;background:#1e293b;color:#94a3b8;cursor:pointer;" title="Sync records with other devices">&#x2601; Sync now</button>
+            <span style="flex:1;"></span>
+            <button type="button" id="home-check-update-btn" style="font-size:0.8rem;padding:3px 10px;border:1px solid #334155;border-radius:6px;background:#1e293b;color:#94a3b8;cursor:pointer;" title="Check for a new version">&#x21BB; Check for updates</button>
           </div>
 
           <!-- Recent Cases (top of content) -->

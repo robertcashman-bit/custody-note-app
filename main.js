@@ -3098,12 +3098,14 @@ ipcMain.handle('sync-now', async () => {
 ipcMain.handle('sync-status', () => {
   const lastSync = getLastSyncTimestamp();
   const dirtyCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+  const totalCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const apiUrl = getSyncApiUrl();
   return {
     enabled: !!apiUrl,
     inProgress: _syncInProgress,
     lastSync: lastSync !== '1970-01-01T00:00:00.000Z' ? lastSync : null,
     pendingChanges: dirtyCount ? dirtyCount.c : 0,
+    totalRecords: totalCount ? totalCount.c : 0,
   };
 });
 
