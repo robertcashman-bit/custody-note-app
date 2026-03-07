@@ -43,7 +43,7 @@
     "appId": "com.policestationagent.custodynote",
     "productName": "Custody Note",
     "directories": {
-      "output": "C:\\Users\\rober\\custody-note-dist"
+      "output": "dist"
     },
     "win": {
       "icon": "custody-note.ico",
