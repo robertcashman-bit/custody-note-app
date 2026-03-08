@@ -1,9 +1,29 @@
 {
   "releases": [
     {
+      "version": "1.4.13",
+      "date": "2026-03-08",
+      "latest": true,
+      "changes": [
+        "Security hardening — licence keys no longer sent in URLs; rate limiting and session checks improved",
+        "Cloud key recovery — recover your encryption key from the cloud using your licence key if you forget your recovery password",
+        "Recovery password must be at least 10 characters with uppercase, lowercase and a number",
+        "Sync status and Check for updates moved to the footer with connection and backup status"
+      ]
+    },
+    {
+      "version": "1.4.12",
+      "date": "2026-03-08",
+      "latest": false,
+      "changes": [
+        "Sync status and Check for updates button moved to bottom of screen with other status indicators",
+        "Fix for sync indicator briefly showing before status loads"
+      ]
+    },
+    {
       "version": "1.4.11",
       "date": "2026-03-07",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Sync status now confirms all records synced with count",
         "Check for updates button on home screen",

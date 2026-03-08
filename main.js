@@ -69,8 +69,9 @@ function getOrCreateMasterKey() {
     return _masterKey;
   }
 
-  // safeStorage not available — read legacy fallback if it exists (backward compat)
-  console.warn('[Encryption] safeStorage unavailable; recovery password required for key persistence.');
+  // safeStorage not available — use fallback file so the key persists across restarts.
+  // Without this, restarting before setting a recovery password would generate a new key and lock the DB.
+  console.warn('[Encryption] safeStorage unavailable; using fallback key file. Set a recovery password in Settings.');
   if (fs.existsSync(fallbackPath)) {
     try {
       const k = fs.readFileSync(fallbackPath, 'utf8').trim();
@@ -83,9 +84,12 @@ function getOrCreateMasterKey() {
       console.warn('[Encryption] Cannot read fallback key:', err.message);
     }
   }
-  // Generate key in memory only — NOT written to disk as plaintext.
-  // The user must set a recovery password to persist the key securely.
   _masterKey = crypto.randomBytes(32).toString('hex');
+  try {
+    fs.writeFileSync(fallbackPath, _masterKey, 'utf8');
+  } catch (err) {
+    console.error('[Encryption] Cannot write fallback key:', err.message);
+  }
   return _masterKey;
 }
 
@@ -99,8 +103,13 @@ function saveMasterKeyToSafeStorage(hexKey) {
       console.error('[Encryption] Failed to save key to safeStorage:', err.message);
     }
   }
-  // When safeStorage is unavailable, the key is only persisted via
-  // the recovery password (recovery.dat). No plaintext fallback is created.
+  if (!safeStorage.isEncryptionAvailable()) {
+    try {
+      fs.writeFileSync(getFallbackKeyPath(), hexKey, 'utf8');
+    } catch (err) {
+      console.error('[Encryption] Failed to save fallback key:', err.message);
+    }
+  }
 }
 
 function deleteFallbackKeyIfExists() {
@@ -114,7 +123,7 @@ function deriveKeyFromPassword(password, salt) {
   return crypto.pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, 32, PBKDF2_DIGEST);
 }
 
-function setRecoveryPassword(password) {
+async function setRecoveryPassword(password) {
   const masterKeyHex = getOrCreateMasterKey();
   if (!masterKeyHex) throw new Error('Master key not available');
   const salt = crypto.randomBytes(32);
@@ -128,8 +137,8 @@ function setRecoveryPassword(password) {
   _recoveryPasswordHash = crypto.createHash('sha256').update(password).digest('hex');
   deleteFallbackKeyIfExists();
   _needsFallbackMigration = false;
-  uploadKeyEscrow().catch(() => {});
-  return true;
+  const cloudBackupOk = await uploadKeyEscrow();
+  return { cloudBackupOk };
 }
 
 function hasRecoveryPassword() {
@@ -186,20 +195,24 @@ function decryptMasterKeyFromEscrow(blob, licenceKey) {
 
 async function uploadKeyEscrow() {
   const apiUrl = getManagedCloudApiUrl();
-  if (!apiUrl) return;
+  if (!apiUrl) return false;
   const data = readLicenceData();
-  if (!data || !data.key || !_masterKey) return;
+  if (!data || !data.key || !_masterKey) return false;
   try {
     const blob = encryptMasterKeyForEscrow(_masterKey, data.key);
-    await httpPost(`${apiUrl}/api/recovery`, {
+    const resp = await httpPost(`${apiUrl}/api/recovery`, {
       key: data.key,
       machineId: getMachineId(),
       blob,
     });
-    console.info('[Recovery] Key escrow uploaded to cloud.');
+    if (resp && resp.ok) {
+      console.info('[Recovery] Key escrow uploaded to cloud.');
+      return true;
+    }
   } catch (e) {
     console.warn('[Recovery] Failed to upload key escrow:', e && e.message ? e.message : e);
   }
+  return false;
 }
 
 function encryptBuffer(buf) {
@@ -3174,13 +3187,13 @@ ipcMain.handle('prepare-trial', async () => {
 
 ipcMain.handle('get-db-path', () => getDbPath());
 
-ipcMain.handle('set-recovery-password', (_, password) => {
+ipcMain.handle('set-recovery-password', async (_, password) => {
   try {
-    setRecoveryPassword(password);
+    const result = await setRecoveryPassword(password);
     saveDb();
-    return { success: true };
+    return { success: true, cloudBackupOk: result.cloudBackupOk };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, error: err.message, cloudBackupOk: false };
   }
 });
 

@@ -8144,7 +8144,11 @@ PDF_CASENOTE_ADVERT +
       if (pw !== pwConfirm) { showToast('Passwords do not match', 'error'); return; }
       window.api.setRecoveryPassword(pw).then(r => {
         if (r && r.success) {
-          showToast('Recovery password set and backed up to cloud — keep it safe', 'success', 6000);
+          if (r.cloudBackupOk) {
+            showToast('Recovery password set and backed up to cloud — keep it safe', 'success', 6000);
+          } else {
+            showToast('Recovery password set. Cloud backup failed — check connection and try again later.', 'info', 6000);
+          }
           document.getElementById('setting-recovery-pw').value = '';
           document.getElementById('setting-recovery-pw-confirm').value = '';
           const el = document.getElementById('recovery-status');
