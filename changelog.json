@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.13",
+      "version": "1.4.14",
       "date": "2026-03-08",
       "latest": true,
+      "changes": [
+        "Automatic record sync — changes sync within seconds across devices, Sync now button removed",
+        "Version and changelog drift fix — website and app versions stay in sync"
+      ]
+    },
+    {
+      "version": "1.4.13",
+      "date": "2026-03-08",
+      "latest": false,
       "changes": [
         "Security hardening — licence keys no longer sent in URLs; rate limiting and session checks improved",
         "Cloud key recovery — recover your encryption key from the cloud using your licence key if you forget your recovery password",

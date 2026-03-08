@@ -1738,7 +1738,7 @@ var REQUIRED_FIELD_KEYS = [
     if (hft) hft.textContent = title;
   }
 
-  /* ─── Cross-device sync status ─── */
+  /* ─── Cross-device sync status (auto-sync, no manual button) ─── */
   function updateSyncStatusIndicator(data) {
     var el = document.getElementById('sync-status-indicator');
     if (!el) return;
@@ -1750,32 +1750,17 @@ var REQUIRED_FIELD_KEYS = [
     if (data.status === 'synced') {
       el.textContent = '\u2601 All records synced';
       el.style.color = '#059669';
+      refreshSyncCounts();
     } else if (data.status === 'syncing') {
       el.textContent = '\u2601 Syncing\u2026';
-      el.style.color = '#d97706';
+      el.style.color = '#2563eb';
     } else if (data.status === 'error') {
-      el.textContent = '\u2601 Sync error';
+      el.textContent = '\u2601 Sync error \u2014 retrying';
       el.style.color = '#dc2626';
     } else {
       el.textContent = '\u2601 Sync';
       el.style.color = '#64748b';
     }
-  }
-
-  function triggerManualSync() {
-    if (!window.api || !window.api.syncNow) return;
-    updateSyncStatusIndicator({ status: 'syncing' });
-    window.api.syncNow().then(function(result) {
-      if (result && result.ok) {
-        updateSyncStatusIndicator({ status: 'synced' });
-        refreshSyncCounts();
-      } else {
-        updateSyncStatusIndicator({ status: 'error' });
-        showToast('Sync failed: ' + (result && result.error || 'Unknown error'), 'error');
-      }
-    }).catch(function() {
-      updateSyncStatusIndicator({ status: 'error' });
-    });
   }
 
   function refreshSyncCounts() {
@@ -1785,14 +1770,14 @@ var REQUIRED_FIELD_KEYS = [
       if (!el || !st || !st.enabled) return;
       el.style.display = '';
       if (st.pendingChanges === 0 && st.lastSync) {
-        el.innerHTML = '\u2601 <strong>All ' + st.totalRecords + ' record' + (st.totalRecords !== 1 ? 's' : '') + ' synced</strong> \u00b7 ' + new Date(st.lastSync).toLocaleTimeString('en-GB');
+        el.innerHTML = '\u2601 <strong>All ' + st.totalRecords + ' record' + (st.totalRecords !== 1 ? 's' : '') + ' synced</strong>';
         el.style.color = '#059669';
       } else if (st.pendingChanges > 0) {
         var synced = st.totalRecords - st.pendingChanges;
         el.innerHTML = '\u2601 ' + synced + ' of ' + st.totalRecords + ' synced \u00b7 <strong>' + st.pendingChanges + ' pending</strong>';
         el.style.color = '#d97706';
       } else if (!st.lastSync) {
-        el.textContent = '\u2601 Not yet synced \u00b7 ' + st.totalRecords + ' record' + (st.totalRecords !== 1 ? 's' : '') + ' waiting';
+        el.textContent = '\u2601 Waiting for first sync\u2026';
         el.style.color = '#64748b';
       }
     });
@@ -1828,20 +1813,14 @@ var REQUIRED_FIELD_KEYS = [
     updateHomeStatus();
     updateHomeLicenceCard();
     updateGearLicenceItem();
-    initSyncButton();
+    initSyncStatus();
   }
 
-  function initSyncButton() {
-    var btn = document.getElementById('sync-now-btn');
-    if (btn && !btn._syncBound) {
-      btn._syncBound = true;
-      btn.addEventListener('click', function() { triggerManualSync(); });
-    }
+  function initSyncStatus() {
     if (window.api && window.api.syncStatus) {
       window.api.syncStatus().then(function(st) {
         var wrap = document.getElementById('sync-footer-wrap');
         if (wrap) wrap.style.display = st && st.enabled ? '' : 'none';
-        if (btn) btn.style.display = st && st.enabled ? '' : 'none';
         var indicator = document.getElementById('sync-status-indicator');
         if (indicator) {
           indicator.style.display = st && st.enabled ? '' : 'none';
@@ -8147,7 +8126,7 @@ PDF_CASENOTE_ADVERT +
           if (r.cloudBackupOk) {
             showToast('Recovery password set and backed up to cloud — keep it safe', 'success', 6000);
           } else {
-            showToast('Recovery password set. Cloud backup failed — check connection and try again later.', 'info', 6000);
+            showToast('Recovery password set locally, but cloud backup failed — check connection and try again later.', 'warning', 6000);
           }
           document.getElementById('setting-recovery-pw').value = '';
           document.getElementById('setting-recovery-pw-confirm').value = '';

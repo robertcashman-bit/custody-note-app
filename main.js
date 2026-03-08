@@ -69,15 +69,25 @@ function getOrCreateMasterKey() {
     return _masterKey;
   }
 
-  // safeStorage not available — use fallback file so the key persists across restarts.
-  // Without this, restarting before setting a recovery password would generate a new key and lock the DB.
-  console.warn('[Encryption] safeStorage unavailable; using fallback key file. Set a recovery password in Settings.');
+  // safeStorage not available — use obfuscated fallback file so the key persists across restarts.
+  // The key is encrypted with a machine-derived key (not truly secure against a determined local
+  // attacker, but prevents casual exposure). Users should set a recovery password ASAP.
+  console.warn('[Encryption] safeStorage unavailable; using obfuscated fallback. Set a recovery password in Settings.');
   if (fs.existsSync(fallbackPath)) {
     try {
-      const k = fs.readFileSync(fallbackPath, 'utf8').trim();
+      const raw = fs.readFileSync(fallbackPath);
+      const k = _decryptFallbackKey(raw);
       if (k && k.length === 64) {
         _masterKey = k;
         _needsFallbackMigration = true;
+        return _masterKey;
+      }
+      // Legacy plaintext fallback (pre-obfuscation upgrade)
+      const plaintext = raw.toString('utf8').trim();
+      if (plaintext && plaintext.length === 64 && /^[0-9a-f]+$/.test(plaintext)) {
+        _masterKey = plaintext;
+        _needsFallbackMigration = true;
+        _writeFallbackKeyEncrypted(fallbackPath, _masterKey);
         return _masterKey;
       }
     } catch (err) {
@@ -85,12 +95,42 @@ function getOrCreateMasterKey() {
     }
   }
   _masterKey = crypto.randomBytes(32).toString('hex');
-  try {
-    fs.writeFileSync(fallbackPath, _masterKey, 'utf8');
-  } catch (err) {
-    console.error('[Encryption] Cannot write fallback key:', err.message);
-  }
+  _writeFallbackKeyEncrypted(fallbackPath, _masterKey);
   return _masterKey;
+}
+
+function _getMachineObfuscationKey() {
+  const os = require('os');
+  const raw = 'cn-fallback:' + [os.hostname(), os.platform(), os.arch(), (os.cpus()[0] || {}).model || '', os.totalmem()].join('|');
+  return crypto.createHash('sha256').update(raw).digest();
+}
+
+function _writeFallbackKeyEncrypted(filePath, hexKey) {
+  try {
+    const mk = _getMachineObfuscationKey();
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', mk, iv);
+    const enc = Buffer.concat([cipher.update(Buffer.from(hexKey, 'utf8')), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    fs.writeFileSync(filePath, Buffer.concat([iv, tag, enc]));
+  } catch (err) {
+    console.error('[Encryption] Cannot write obfuscated fallback key:', err.message);
+  }
+}
+
+function _decryptFallbackKey(buf) {
+  if (!buf || buf.length < 28) return null;
+  try {
+    const mk = _getMachineObfuscationKey();
+    const iv = buf.slice(0, 12);
+    const tag = buf.slice(12, 28);
+    const enc = buf.slice(28);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', mk, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8');
+  } catch (_) {
+    return null;
+  }
 }
 
 function saveMasterKeyToSafeStorage(hexKey) {
@@ -104,11 +144,7 @@ function saveMasterKeyToSafeStorage(hexKey) {
     }
   }
   if (!safeStorage.isEncryptionAvailable()) {
-    try {
-      fs.writeFileSync(getFallbackKeyPath(), hexKey, 'utf8');
-    } catch (err) {
-      console.error('[Encryption] Failed to save fallback key:', err.message);
-    }
+    _writeFallbackKeyEncrypted(getFallbackKeyPath(), hexKey);
   }
 }
 
@@ -810,6 +846,7 @@ const MAX_HOURLY_BACKUPS = 48;
 function markDbDirty() {
   dbDirtySinceQuickBackup = true;
   dbDirtySinceHourlyBackup = true;
+  scheduleSyncSoon();
 }
 
 function isBackupFolderReady() {
@@ -1060,7 +1097,7 @@ async function checkCloudBackupEntitlement() {
     const resp = await httpPost(`${apiUrl}/api/licence/validate`, {
       key: data.key,
       machineId: getMachineId(),
-      appVersion: require('./package.json').version || '0.0.0',
+      appVersion: app.getVersion() || '0.0.0',
     });
     _cloudBackupEnabled = !!(resp && resp.cloudBackup);
     console.info('[CloudBackup] Entitlement result: cloudBackup=' + _cloudBackupEnabled + ' valid=' + !!(resp && resp.valid));
@@ -1170,7 +1207,9 @@ function uploadToManagedCloudIfEnabled(buffer, key) {
    ═══════════════════════════════════════════════ */
 let _syncInProgress = false;
 let _syncTimer = null;
-const SYNC_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+let _syncSoonTimer = null;
+const SYNC_INTERVAL_MS = 30 * 1000; // 30 seconds background poll
+const SYNC_SOON_DELAY_MS = 3000;    // debounce: sync 3s after last mutation
 const SYNC_MAX_PUSH_BATCH = 50;
 
 function generateSyncId() {
@@ -1352,37 +1391,45 @@ async function runSyncCycle() {
   if (!data || !data.key) return;
 
   _syncInProgress = true;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('sync-status-changed', { status: 'syncing' });
+  }
+
   let pushResult = { pushed: 0 };
   let pullResult = { pulled: 0 };
+  let hadError = false;
 
   try {
     pushResult = await syncPush();
   } catch (e) {
+    hadError = true;
     console.warn('[Sync] Push error:', e && e.message ? e.message : e);
   }
 
   try {
     pullResult = await syncPull();
   } catch (e) {
+    hadError = true;
     console.warn('[Sync] Pull error:', e && e.message ? e.message : e);
   }
 
   _syncInProgress = false;
 
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('sync-status-changed', {
+      status: hadError ? 'error' : 'synced',
+      pushed: pushResult.pushed || 0,
+      pulled: pullResult.pulled || 0,
+      lastSync: new Date().toISOString(),
+    });
+    if (pullResult.pulled > 0) {
+      mainWindow.webContents.send('records-updated-from-sync', { count: pullResult.pulled });
+    }
+  }
+
   const total = (pushResult.pushed || 0) + (pullResult.pulled || 0);
   if (total > 0) {
     console.info(`[Sync] Cycle complete: pushed=${pushResult.pushed}, pulled=${pullResult.pulled}`);
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('sync-status-changed', {
-        status: 'synced',
-        pushed: pushResult.pushed,
-        pulled: pullResult.pulled,
-        lastSync: new Date().toISOString(),
-      });
-      if (pullResult.pulled > 0) {
-        mainWindow.webContents.send('records-updated-from-sync', { count: pullResult.pulled });
-      }
-    }
   }
 }
 
@@ -1396,6 +1443,21 @@ function startSyncTimer() {
 
 function stopSyncTimer() {
   if (_syncTimer) { clearInterval(_syncTimer); _syncTimer = null; }
+  if (_syncSoonTimer) { clearTimeout(_syncSoonTimer); _syncSoonTimer = null; }
+}
+
+/**
+ * Debounced immediate sync — called after any record mutation so changes
+ * reach the other device within seconds instead of waiting for the next
+ * 30-second poll.  Multiple rapid saves (e.g. autosave) are batched into
+ * one cycle via the 3-second debounce.
+ */
+function scheduleSyncSoon() {
+  if (_syncSoonTimer) clearTimeout(_syncSoonTimer);
+  _syncSoonTimer = setTimeout(() => {
+    _syncSoonTimer = null;
+    runSyncCycle().catch(() => {});
+  }, SYNC_SOON_DELAY_MS);
 }
 
 function createWindow() {
@@ -2040,7 +2102,7 @@ async function fetchAndCacheBankHolidays() {
   return new Promise((resolve) => {
     const req = https.request(
       { hostname: 'www.gov.uk', path: '/bank-holidays.json', method: 'GET',
-        headers: { Accept: 'application/json', 'User-Agent': 'CustodyNote/1.1' } },
+        headers: { Accept: 'application/json', 'User-Agent': `CustodyNote/${app.getVersion()}` } },
       (res) => {
         let raw = '';
         res.on('data', c => { raw += c; });
@@ -2068,19 +2130,20 @@ async function fetchAndCacheBankHolidays() {
 
 ipcMain.handle('get-app-version', () => {
   try {
-    const pkg = require('./package.json');
-    let lastUpdated = pkg.lastUpdated || '';
+    const version = app.getVersion();
+    let lastUpdated = '';
+    try { lastUpdated = require('./package.json').lastUpdated || ''; } catch (_) {}
     if (!lastUpdated) {
       const pkgPath = path.join(__dirname, 'package.json');
       const stat = fs.statSync(pkgPath);
       lastUpdated = new Date(stat.mtimeMs).toISOString().slice(0, 10);
     }
-    return { version: pkg.version || '0.0.0', lastUpdated: lastUpdated };
+    return { version: version || '0.0.0', lastUpdated };
   } catch (_) { return { version: '0.0.0', lastUpdated: '' }; }
 });
 
 ipcMain.handle('app-update-install', () => {
-  autoUpdater.quitAndInstall(false, true);
+  autoUpdater.quitAndInstall(true, true);
 });
 
 ipcMain.handle('get-bank-holidays', () => {
@@ -2202,7 +2265,7 @@ async function validateLicenceOnline(key, machineId) {
   const url = getLicenceValidationUrl();
   if (!url) return { valid: true, offline: true };
   try {
-    const resp = await httpPost(url, { key, machineId, appVersion: (require('./package.json').version || '0.0.0') });
+    const resp = await httpPost(url, { key, machineId, appVersion: app.getVersion() || '0.0.0' });
     return {
       valid: !!resp.valid,
       expiresAt: resp.expiresAt || null,
@@ -2403,7 +2466,9 @@ app.whenReady().then(async () => {
     ipcMain.handle('app-check-updates', async () => {
       try {
         const result = await autoUpdater.checkForUpdates();
-        if (result?.updateInfo) return { status: 'available', version: result.updateInfo.version };
+        if (result?.updateInfo && result.updateInfo.version !== app.getVersion()) {
+          return { status: 'available', version: result.updateInfo.version };
+        }
         return { status: 'up-to-date' };
       } catch (e) {
         return { status: 'error', message: e?.message || 'Update check failed' };
