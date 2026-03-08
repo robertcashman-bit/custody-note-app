@@ -1839,6 +1839,8 @@ var REQUIRED_FIELD_KEYS = [
     }
     if (window.api && window.api.syncStatus) {
       window.api.syncStatus().then(function(st) {
+        var wrap = document.getElementById('sync-footer-wrap');
+        if (wrap) wrap.style.display = st && st.enabled ? '' : 'none';
         if (btn) btn.style.display = st && st.enabled ? '' : 'none';
         var indicator = document.getElementById('sync-status-indicator');
         if (indicator) {

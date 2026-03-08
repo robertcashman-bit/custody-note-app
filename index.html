@@ -191,14 +191,6 @@
             </div>
           </div>
 
-          <!-- Cross-device sync & update status -->
-          <div id="sync-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-            <span id="sync-status-indicator" style="font-size:0.85rem;display:none;"></span>
-            <button type="button" id="sync-now-btn" style="display:none;font-size:0.8rem;padding:3px 10px;border:1px solid #334155;border-radius:6px;background:#1e293b;color:#94a3b8;cursor:pointer;" title="Sync records with other devices">&#x2601; Sync now</button>
-            <span style="flex:1;"></span>
-            <button type="button" id="home-check-update-btn" style="font-size:0.8rem;padding:3px 10px;border:1px solid #334155;border-radius:6px;background:#1e293b;color:#94a3b8;cursor:pointer;" title="Check for a new version">&#x21BB; Check for updates</button>
-          </div>
-
           <!-- Recent Cases (top of content) -->
           <div class="home-card-widget home-card-widget-first">
             <div class="home-widget-header">
@@ -1309,7 +1301,7 @@
     <footer class="app-footer">
       <span>Custody Note v<span id="app-version">...</span> | Build: <span id="app-updated">...</span> | <span id="licence-footer-badge" style="cursor:pointer;" title="Click to open Licence settings"></span></span>
       <span class="footer-brand">&copy; Defence Legal Services Ltd 2026</span>
-      <span class="footer-right"><span id="net-status-text" class="footer-status">Checking connection&hellip;</span><span class="footer-sep">&middot;</span><span id="backup-status-text" class="footer-status">Auto backup: checking&hellip;</span><span id="cloud-backup-footer-wrap"><span class="footer-sep">&middot;</span><span id="cloud-backup-footer-status" class="footer-status" style="color:#d97706;cursor:pointer;text-decoration:underline;" title="Open Settings to check Cloud Backup">Local backup only</span></span><span id="aws-s3-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="aws-s3-status-footer" class="footer-status"></span></span><span id="update-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="update-footer-status" class="footer-status" style="color:#059669;cursor:pointer;"></span></span></span>
+      <span class="footer-right"><span id="net-status-text" class="footer-status">Checking connection&hellip;</span><span class="footer-sep">&middot;</span><span id="backup-status-text" class="footer-status">Auto backup: checking&hellip;</span><span id="cloud-backup-footer-wrap"><span class="footer-sep">&middot;</span><span id="cloud-backup-footer-status" class="footer-status" style="color:#d97706;cursor:pointer;text-decoration:underline;" title="Open Settings to check Cloud Backup">Local backup only</span></span><span id="aws-s3-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="aws-s3-status-footer" class="footer-status"></span></span><span id="sync-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="sync-status-indicator" class="footer-status"></span> <button type="button" id="sync-now-btn" class="footer-action-btn" title="Sync records with other devices">Sync now</button></span><span id="update-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="update-footer-status" class="footer-status" style="color:#059669;cursor:pointer;"></span></span><span class="footer-sep">&middot;</span><button type="button" id="home-check-update-btn" class="footer-action-btn" title="Check for a new version">Check for updates</button></span>
     </footer>
     <!-- First-launch setup modal -->
     <div id="first-launch-modal" class="first-launch-overlay" style="display:none;">
