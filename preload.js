@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
   getDbPath: () => ipcRenderer.invoke('get-db-path'),
   setRecoveryPassword: (pw) => ipcRenderer.invoke('set-recovery-password', pw),
   hasRecoveryPassword: () => ipcRenderer.invoke('has-recovery-password'),
+  recoverKeyFromCloud: () => ipcRenderer.invoke('recover-key-from-cloud'),
   isDbEncrypted: () => ipcRenderer.invoke('is-db-encrypted'),
   isSafeStorageAvailable: () => ipcRenderer.invoke('is-safe-storage-available'),
   chooseFolder: (opts) => ipcRenderer.invoke('choose-folder', opts || {}),

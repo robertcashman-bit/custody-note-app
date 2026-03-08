@@ -8139,11 +8139,12 @@ PDF_CASENOTE_ADVERT +
       const pw = document.getElementById('setting-recovery-pw')?.value || '';
       const pwConfirm = document.getElementById('setting-recovery-pw-confirm')?.value || '';
       if (!pw) { showToast('Please enter a recovery password', 'error'); return; }
-      if (pw.length < 6) { showToast('Recovery password must be at least 6 characters', 'error'); return; }
+      if (pw.length < 10) { showToast('Recovery password must be at least 10 characters', 'error'); return; }
+      if (!/[A-Z]/.test(pw) || !/[a-z]/.test(pw) || !/[0-9]/.test(pw)) { showToast('Recovery password must include uppercase, lowercase, and a number', 'error'); return; }
       if (pw !== pwConfirm) { showToast('Passwords do not match', 'error'); return; }
       window.api.setRecoveryPassword(pw).then(r => {
         if (r && r.success) {
-          showToast('Recovery password set — keep it safe, you will need it on a new computer', 'success', 6000);
+          showToast('Recovery password set and backed up to cloud — keep it safe', 'success', 6000);
           document.getElementById('setting-recovery-pw').value = '';
           document.getElementById('setting-recovery-pw-confirm').value = '';
           const el = document.getElementById('recovery-status');
@@ -8153,6 +8154,30 @@ PDF_CASENOTE_ADVERT +
         }
       }).catch(err => {
         showToast('Error setting recovery password: ' + (err.message || err), 'error');
+      });
+    });
+    document.getElementById('btn-cloud-recover-key')?.addEventListener('click', () => {
+      if (!window.api || !window.api.recoverKeyFromCloud) {
+        showToast('Cloud recovery not available', 'error');
+        return;
+      }
+      const statusEl = document.getElementById('cloud-recover-status');
+      if (statusEl) { statusEl.textContent = 'Recovering from cloud\u2026'; statusEl.style.color = '#d97706'; }
+      const btn = document.getElementById('btn-cloud-recover-key');
+      if (btn) btn.disabled = true;
+      window.api.recoverKeyFromCloud().then(r => {
+        if (r && r.ok) {
+          showToast('Encryption key recovered from cloud. You can now access your data.', 'success', 6000);
+          if (statusEl) { statusEl.textContent = 'Key recovered from cloud successfully'; statusEl.style.color = 'green'; }
+        } else {
+          showToast(r && r.error ? r.error : 'Cloud recovery failed', 'error');
+          if (statusEl) { statusEl.textContent = r && r.error ? r.error : 'Recovery failed'; statusEl.style.color = '#dc2626'; }
+        }
+      }).catch(err => {
+        showToast('Cloud recovery error: ' + (err.message || err), 'error');
+        if (statusEl) { statusEl.textContent = ''; }
+      }).finally(() => {
+        if (btn) btn.disabled = false;
       });
     });
     /* btn-new-attendance, btn-quick-capture, qc-* already attached above */

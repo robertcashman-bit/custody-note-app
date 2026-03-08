@@ -31,6 +31,7 @@ const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_DIGEST = 'sha512';
 let _masterKey = null;
 let _recoveryPasswordHash = null;
+let _needsFallbackMigration = false;
 
 function getKeyFilePath() {
   return path.join(app.getPath('userData'), 'encryption.key');
@@ -68,27 +69,23 @@ function getOrCreateMasterKey() {
     return _masterKey;
   }
 
-  // safeStorage not available — use plaintext fallback file in userData.
-  // The DB is still encrypted with this key; only the key-file itself is unprotected.
-  console.warn('[Encryption] safeStorage unavailable; using plaintext fallback key file.');
+  // safeStorage not available — read legacy fallback if it exists (backward compat)
+  console.warn('[Encryption] safeStorage unavailable; recovery password required for key persistence.');
   if (fs.existsSync(fallbackPath)) {
     try {
       const k = fs.readFileSync(fallbackPath, 'utf8').trim();
       if (k && k.length === 64) {
         _masterKey = k;
+        _needsFallbackMigration = true;
         return _masterKey;
       }
     } catch (err) {
       console.warn('[Encryption] Cannot read fallback key:', err.message);
     }
   }
-  // Create a new master key and persist it to the fallback file
+  // Generate key in memory only — NOT written to disk as plaintext.
+  // The user must set a recovery password to persist the key securely.
   _masterKey = crypto.randomBytes(32).toString('hex');
-  try {
-    fs.writeFileSync(fallbackPath, _masterKey, 'utf8');
-  } catch (err) {
-    console.error('[Encryption] Cannot write fallback key:', err.message);
-  }
   return _masterKey;
 }
 
@@ -97,16 +94,19 @@ function saveMasterKeyToSafeStorage(hexKey) {
     try {
       const encrypted = safeStorage.encryptString(hexKey);
       fs.writeFileSync(getKeyFilePath(), encrypted);
+      deleteFallbackKeyIfExists();
     } catch (err) {
       console.error('[Encryption] Failed to save key to safeStorage:', err.message);
     }
-  } else {
-    // safeStorage unavailable — persist to fallback file
-    try {
-      fs.writeFileSync(getFallbackKeyPath(), hexKey, 'utf8');
-    } catch (err) {
-      console.error('[Encryption] Failed to save fallback key:', err.message);
-    }
+  }
+  // When safeStorage is unavailable, the key is only persisted via
+  // the recovery password (recovery.dat). No plaintext fallback is created.
+}
+
+function deleteFallbackKeyIfExists() {
+  const fb = getFallbackKeyPath();
+  if (fs.existsSync(fb)) {
+    try { fs.unlinkSync(fb); console.info('[Encryption] Removed legacy plaintext fallback key.'); } catch (_) {}
   }
 }
 
@@ -126,6 +126,9 @@ function setRecoveryPassword(password) {
   const data = Buffer.concat([salt, iv, tag, enc]);
   fs.writeFileSync(getRecoveryFilePath(), data);
   _recoveryPasswordHash = crypto.createHash('sha256').update(password).digest('hex');
+  deleteFallbackKeyIfExists();
+  _needsFallbackMigration = false;
+  uploadKeyEscrow().catch(() => {});
   return true;
 }
 
@@ -149,6 +152,53 @@ function tryRecoverMasterKey(password) {
     return dec.toString('utf8');
   } catch (_) {
     return null;
+  }
+}
+
+/* ─── Cloud key escrow ─── */
+function encryptMasterKeyForEscrow(masterKeyHex, licenceKey) {
+  const salt = crypto.createHash('sha256').update('cn-escrow-salt:' + licenceKey.trim().toUpperCase()).digest();
+  const derived = crypto.pbkdf2Sync(licenceKey.trim().toUpperCase(), salt, PBKDF2_ITERATIONS, 32, PBKDF2_DIGEST);
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', derived, iv);
+  const enc = Buffer.concat([cipher.update(Buffer.from(masterKeyHex, 'utf8')), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, enc]).toString('base64');
+}
+
+function decryptMasterKeyFromEscrow(blob, licenceKey) {
+  const raw = Buffer.from(blob, 'base64');
+  if (raw.length < 28) return null;
+  const iv = raw.slice(0, 12);
+  const tag = raw.slice(12, 28);
+  const enc = raw.slice(28);
+  const salt = crypto.createHash('sha256').update('cn-escrow-salt:' + licenceKey.trim().toUpperCase()).digest();
+  const derived = crypto.pbkdf2Sync(licenceKey.trim().toUpperCase(), salt, PBKDF2_ITERATIONS, 32, PBKDF2_DIGEST);
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', derived, iv);
+    decipher.setAuthTag(tag);
+    const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
+    return dec.toString('utf8');
+  } catch (_) {
+    return null;
+  }
+}
+
+async function uploadKeyEscrow() {
+  const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return;
+  const data = readLicenceData();
+  if (!data || !data.key || !_masterKey) return;
+  try {
+    const blob = encryptMasterKeyForEscrow(_masterKey, data.key);
+    await httpPost(`${apiUrl}/api/recovery`, {
+      key: data.key,
+      machineId: getMachineId(),
+      blob,
+    });
+    console.info('[Recovery] Key escrow uploaded to cloud.');
+  } catch (e) {
+    console.warn('[Recovery] Failed to upload key escrow:', e && e.message ? e.message : e);
   }
 }
 
@@ -3135,6 +3185,30 @@ ipcMain.handle('set-recovery-password', (_, password) => {
 });
 
 ipcMain.handle('has-recovery-password', () => hasRecoveryPassword());
+
+ipcMain.handle('recover-key-from-cloud', async () => {
+  const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return { ok: false, error: 'Cannot reach server' };
+  const data = readLicenceData();
+  if (!data || !data.key) return { ok: false, error: 'No licence key activated' };
+  try {
+    const resp = await httpPost(`${apiUrl}/api/recovery`, {
+      key: data.key,
+      machineId: getMachineId(),
+    });
+    if (!resp || !resp.ok) return { ok: false, error: resp && resp.error ? resp.error : 'Failed' };
+    if (!resp.blob) return { ok: false, error: 'No cloud recovery data found. Set a recovery password on a device that has your data.' };
+    const masterKeyHex = decryptMasterKeyFromEscrow(resp.blob, data.key);
+    if (!masterKeyHex || masterKeyHex.length !== 64) {
+      return { ok: false, error: 'Could not decrypt recovery data. The licence key may not match.' };
+    }
+    _masterKey = masterKeyHex;
+    saveMasterKeyToSafeStorage(masterKeyHex);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Recovery failed' };
+  }
+});
 
 ipcMain.handle('is-db-encrypted', () => {
   try {
