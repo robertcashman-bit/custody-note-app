@@ -1,0 +1,25 @@
+v1.4.19: Sync fixes, attachments moved, form improvements, backup onboarding
+
+Sync:
+- httpPost now follows HTTP redirects (301/302/307/308) and checks status codes
+- Increased sync timeout from 10s to 30s to prevent timeouts with larger batches
+- Push guards against race condition: checks sync_version before clearing dirty flag
+- Better error logging for push/pull failures
+
+Form:
+- Attachments consolidated to end of record near Invoice section with clear guidance
+- Legacy per-section attachments auto-migrated to unified location
+- Case assessment changed to dropdown (Strong/Medium/Weak/N/A) with reasoning box
+- Client instructions: new larger text box above summary
+- Clothing/shoes/phone seized: conditional what and notes fields when Yes
+- Offence dates: clearer Start date / End date labels for Between qualifier
+- Dropdown defaults set to N/A where appropriate
+
+Settings and onboarding:
+- First-launch wizard: 2-step setup with backup destination selection
+- Backup summary in settings shows Local, Off-site, and AWS Cloud status
+- Detect cloud folders button (OneDrive, Dropbox, Google Drive, iCloud)
+
+Performance:
+- Form change handlers update only the changed field inline
+- Full DOM collection deferred via debounced scheduleCollect

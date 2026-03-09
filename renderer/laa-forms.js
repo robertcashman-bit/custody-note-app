@@ -624,10 +624,10 @@
     html += rowAlways('Matter Type', d.matterTypeCode);
     html += rowAlways('Offence (Summary)', d.offenceSummary || d.offence1Details);
     html += row('Offence 1 \u2013 Details', d.offence1Details);
-    html += row('Offence 1 \u2013 Date', fmtDate(d.offence1Date));
+    html += row('Offence 1 \u2013 Date', (d.offence1DateQualifier && d.offence1DateQualifier !== 'On' ? d.offence1DateQualifier + ' ' : '') + fmtDate(d.offence1Date) + (d.offence1DateQualifier === 'Between' && d.offence1DateEnd ? ' \u2013 ' + fmtDate(d.offence1DateEnd) : ''));
     html += row('Offence 1 \u2013 Statute', d.offence1Statute);
     html += row('Offence 2', d.offence2Details);
-    html += row('Offence 2 \u2013 Date', fmtDate(d.offence2Date));
+    html += row('Offence 2 \u2013 Date', (d.offence2DateQualifier && d.offence2DateQualifier !== 'On' ? d.offence2DateQualifier + ' ' : '') + fmtDate(d.offence2Date) + (d.offence2DateQualifier === 'Between' && d.offence2DateEnd ? ' \u2013 ' + fmtDate(d.offence2DateEnd) : ''));
     html += row('Offence 2 \u2013 Statute', d.offence2Statute);
     html += '</table>';
 
@@ -1225,8 +1225,9 @@
       else if (mot.indexOf('either') >= 0) caseType = 'Either way';
       else if (mot.indexOf('indictable') >= 0) caseType = 'Indictable';
     }
+    var offDateStr = (d.offence1DateQualifier && d.offence1DateQualifier !== 'On' ? d.offence1DateQualifier + ' ' : '') + (fmtDate(d.offence1Date) || fmtDate(d.date)) + (d.offence1DateQualifier === 'Between' && d.offence1DateEnd ? ' \u2013 ' + fmtDate(d.offence1DateEnd) : '');
     var s4pairs = [
-      ['Date of Offence', fmtDate(d.offence1Date) || fmtDate(d.date)],
+      ['Date of Offence', offDateStr],
       ['Case Type', caseType],
       ['Offence 1', d.offence1Details || d.offenceSummary],
       ['Statute 1', d.offence1Statute], ['Mode of Trial 1', d.offence1ModeOfTrial],

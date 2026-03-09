@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('api', {
   isDbEncrypted: () => ipcRenderer.invoke('is-db-encrypted'),
   isSafeStorageAvailable: () => ipcRenderer.invoke('is-safe-storage-available'),
   chooseFolder: (opts) => ipcRenderer.invoke('choose-folder', opts || {}),
+  detectCloudFolders: () => ipcRenderer.invoke('detect-cloud-folders'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),

@@ -425,9 +425,28 @@ function dbAll(sql, params = []) {
   return rows;
 }
 
+let _dbDirty = false;
+let _dbSaveTimer = null;
+const DB_SAVE_DEBOUNCE_MS = 500;
+
+function markDbDirtyForSave() {
+  _dbDirty = true;
+  if (!_dbSaveTimer) {
+    _dbSaveTimer = setTimeout(() => {
+      _dbSaveTimer = null;
+      if (_dbDirty) { _dbDirty = false; saveDb(); }
+    }, DB_SAVE_DEBOUNCE_MS);
+  }
+}
+
+function flushDb() {
+  if (_dbSaveTimer) { clearTimeout(_dbSaveTimer); _dbSaveTimer = null; }
+  if (_dbDirty) { _dbDirty = false; saveDb(); }
+}
+
 function dbRun(sql, params = []) {
   db.run(sql, params);
-  saveDb();
+  markDbDirtyForSave();
 }
 
 function parseSqliteDateTimeToMs(s) {
@@ -1102,13 +1121,22 @@ async function checkCloudBackupEntitlement() {
     _cloudBackupEnabled = !!(resp && resp.cloudBackup);
     console.info('[CloudBackup] Entitlement result: cloudBackup=' + _cloudBackupEnabled + ' valid=' + !!(resp && resp.valid));
     if (resp && resp.expiresAt) data.expiresAt = resp.expiresAt;
+    data.cachedCloudBackup = _cloudBackupEnabled;
+    data.cachedCloudBackupAt = new Date().toISOString();
     if (resp && resp.valid !== undefined) {
       data.lastValidated = new Date().toISOString();
-      writeLicenceData(data);
     }
+    writeLicenceData(data);
   } catch (err) {
-    _cloudBackupEnabled = false;
-    console.error('[CloudBackup] Entitlement check failed:', err && err.message ? err.message : err);
+    const cachedAge = data.cachedCloudBackupAt ? (Date.now() - new Date(data.cachedCloudBackupAt).getTime()) : Infinity;
+    const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+    if (data.cachedCloudBackup && cachedAge < MAX_CACHE_AGE_MS) {
+      _cloudBackupEnabled = true;
+      console.warn('[CloudBackup] Entitlement check failed (network issue) — using cached entitlement (age: ' + Math.round(cachedAge / 3600000) + 'h):', err && err.message ? err.message : err);
+    } else {
+      _cloudBackupEnabled = false;
+      console.error('[CloudBackup] Entitlement check failed and no valid cache:', err && err.message ? err.message : err);
+    }
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('cloud-backup-status-changed', { enabled: _cloudBackupEnabled, isTrial: false });
@@ -1290,12 +1318,11 @@ async function syncPush() {
     key: data.key,
     machineId: getMachineId(),
     records,
-  });
+  }, { timeout: 30000 });
 
   if (resp && resp.ok) {
-    const syncIds = dirtyRows.map(r => r.sync_id);
-    for (const sid of syncIds) {
-      dbRun('UPDATE attendances SET sync_dirty=0 WHERE sync_id=?', [sid]);
+    for (const r of dirtyRows) {
+      dbRun('UPDATE attendances SET sync_dirty=0 WHERE sync_id=? AND sync_version=?', [r.sync_id, r.sync_version || 1]);
     }
     return { pushed: resp.written || 0 };
   }
@@ -1314,7 +1341,7 @@ async function syncPull() {
     key: data.key,
     machineId: getMachineId(),
     since,
-  });
+  }, { timeout: 30000 });
 
   if (!resp || !resp.ok) {
     throw new Error(resp && resp.error ? resp.error : 'Pull failed');
@@ -1384,11 +1411,11 @@ async function syncPull() {
 }
 
 async function runSyncCycle() {
-  if (_syncInProgress) return;
+  if (_syncInProgress) return { ran: false, reason: 'already-in-progress' };
   const apiUrl = getSyncApiUrl();
-  if (!apiUrl) return;
+  if (!apiUrl) return { ran: false, reason: 'no-api-url' };
   const data = readLicenceData();
-  if (!data || !data.key) return;
+  if (!data || !data.key) return { ran: false, reason: 'no-licence' };
 
   _syncInProgress = true;
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1401,16 +1428,18 @@ async function runSyncCycle() {
 
   try {
     pushResult = await syncPush();
+    if (pushResult.pushed > 0) console.info('[Sync] Pushed', pushResult.pushed, 'records');
   } catch (e) {
     hadError = true;
-    console.warn('[Sync] Push error:', e && e.message ? e.message : e);
+    console.error('[Sync] Push FAILED:', e && e.message ? e.message : e);
   }
 
   try {
     pullResult = await syncPull();
+    if (pullResult.pulled > 0) console.info('[Sync] Pulled', pullResult.pulled, 'records');
   } catch (e) {
     hadError = true;
-    console.warn('[Sync] Pull error:', e && e.message ? e.message : e);
+    console.error('[Sync] Pull FAILED:', e && e.message ? e.message : e);
   }
 
   _syncInProgress = false;
@@ -1431,6 +1460,7 @@ async function runSyncCycle() {
   if (total > 0) {
     console.info(`[Sync] Cycle complete: pushed=${pushResult.pushed}, pulled=${pullResult.pulled}`);
   }
+  return { ran: true, hadError, pushed: pushResult.pushed || 0, pulled: pullResult.pulled || 0 };
 }
 
 function startSyncTimer() {
@@ -2229,7 +2259,9 @@ function getLicenceValidationUrl() {
   return base ? base + '/api/licence/validate' : null;
 }
 
-function httpPost(url, body) {
+function httpPost(url, body, opts) {
+  const timeoutMs = (opts && opts.timeout) || 15000;
+  const maxRedirects = (opts && opts._redirectCount) || 0;
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -2239,19 +2271,30 @@ function httpPost(url, body) {
       return reject(new Error('Invalid URL'));
     }
     const mod = parsed.protocol === 'https:' ? https : http;
-    const payload = JSON.stringify(body);
+    const payload = typeof body === 'string' ? body : JSON.stringify(body);
     const req = mod.request({
       hostname: parsed.hostname,
       port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
       path: parsed.pathname + parsed.search,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
-      timeout: 10000,
+      timeout: timeoutMs,
     }, (res) => {
+      if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
+        if (maxRedirects >= 3) return reject(new Error('Too many redirects'));
+        res.resume();
+        resolve(httpPost(res.headers.location, body, { timeout: timeoutMs, _redirectCount: maxRedirects + 1 }));
+        return;
+      }
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
-        try { resolve(JSON.parse(data)); } catch (_) { reject(new Error('Invalid response')); }
+        if (res.statusCode >= 400) {
+          let errMsg = 'Server error ' + res.statusCode;
+          try { const j = JSON.parse(data); if (j.error) errMsg = j.error; } catch (_) {}
+          return reject(new Error(errMsg));
+        }
+        try { resolve(JSON.parse(data)); } catch (_) { reject(new Error('Invalid response from server')); }
       });
     });
     req.on('error', reject);
@@ -2651,7 +2694,7 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   stopSyncTimer();
-  if (db) { saveDb(); db.close(); }
+  if (db) { flushDb(); db.close(); }
   app.quit();
 });
 
@@ -3216,7 +3259,9 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
 /* ─── Cross-device sync IPC handlers ─── */
 ipcMain.handle('sync-now', async () => {
   try {
-    await runSyncCycle();
+    const result = await runSyncCycle();
+    if (!result || !result.ran) return { ok: false, error: 'Sync not configured — check your licence and internet connection' };
+    if (result.hadError) return { ok: false, error: 'Sync completed with errors — some records may not have synced' };
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Sync failed' };
@@ -3306,6 +3351,30 @@ ipcMain.handle('choose-folder', async (_, opts) => {
     title,
   });
   return canceled ? null : (filePaths[0] || null);
+});
+
+ipcMain.handle('detect-cloud-folders', () => {
+  const home = app.getPath('home');
+  const candidates = [
+    { name: 'OneDrive', sub: 'OneDrive' },
+    { name: 'Dropbox', sub: 'Dropbox' },
+    { name: 'Google Drive', sub: 'Google Drive' },
+    { name: 'iCloud Drive', sub: 'iCloudDrive' },
+  ];
+  const found = [];
+  for (const c of candidates) {
+    const full = path.join(home, c.sub);
+    try { if (fs.existsSync(full) && fs.statSync(full).isDirectory()) found.push({ name: c.name, path: full }); } catch (_) {}
+  }
+  try {
+    const entries = fs.readdirSync(home, { withFileTypes: true });
+    for (const e of entries) {
+      if (e.isDirectory() && e.name.startsWith('OneDrive - ') && !found.some(f => f.path === path.join(home, e.name))) {
+        found.push({ name: 'OneDrive (' + e.name.slice(11) + ')', path: path.join(home, e.name) });
+      }
+    }
+  } catch (_) {}
+  return found;
 });
 
 ipcMain.handle('pick-image', async () => {

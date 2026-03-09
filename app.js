@@ -615,19 +615,27 @@ var LAA = {
       fields: [
         { key: 'matterTypeCode', label: 'Matter Type', type: 'codedSelect', codeKey: 'matterTypeCodes', cols: 2 },
         { key: 'offence1Details', label: 'Offence 1 – Details', type: 'offence', cols: 2 },
-        { key: 'offence1Date', label: 'Date of Offence 1', type: 'date' },
+        { key: 'offence1DateQualifier', label: 'Date qualifier', type: 'select', options: ['On','Before','After','Between','On or about','Unknown'] },
+        { key: 'offence1Date', label: 'Offence 1 — Start date', type: 'date' },
+        { key: 'offence1DateEnd', label: 'Offence 1 — End date', type: 'date', showIf: { field: 'offence1DateQualifier', value: 'Between' } },
         { key: 'offence1ModeOfTrial', label: 'Mode of Trial 1', type: 'codedSelect', codeKey: 'modeOfTrial' },
         { key: 'offence1Statute', label: 'Statute 1', type: 'text', cols: 2 },
         { key: 'offence2Details', label: 'Offence 2 – Details', type: 'offence', cols: 2 },
-        { key: 'offence2Date', label: 'Date of Offence 2', type: 'date' },
+        { key: 'offence2DateQualifier', label: 'Date qualifier', type: 'select', options: ['On','Before','After','Between','On or about','Unknown'] },
+        { key: 'offence2Date', label: 'Offence 2 — Start date', type: 'date' },
+        { key: 'offence2DateEnd', label: 'Offence 2 — End date', type: 'date', showIf: { field: 'offence2DateQualifier', value: 'Between' } },
         { key: 'offence2ModeOfTrial', label: 'Mode of Trial 2', type: 'codedSelect', codeKey: 'modeOfTrial' },
         { key: 'offence2Statute', label: 'Statute 2', type: 'text', cols: 2 },
         { key: 'offence3Details', label: 'Offence 3 – Details', type: 'offence', cols: 2 },
-        { key: 'offence3Date', label: 'Date of Offence 3', type: 'date' },
+        { key: 'offence3DateQualifier', label: 'Date qualifier', type: 'select', options: ['On','Before','After','Between','On or about','Unknown'] },
+        { key: 'offence3Date', label: 'Offence 3 — Start date', type: 'date' },
+        { key: 'offence3DateEnd', label: 'Offence 3 — End date', type: 'date', showIf: { field: 'offence3DateQualifier', value: 'Between' } },
         { key: 'offence3ModeOfTrial', label: 'Mode of Trial 3', type: 'codedSelect', codeKey: 'modeOfTrial' },
         { key: 'offence3Statute', label: 'Statute 3', type: 'text', cols: 2 },
         { key: 'offence4Details', label: 'Offence 4 – Details', type: 'offence', cols: 2 },
-        { key: 'offence4Date', label: 'Date of Offence 4', type: 'date' },
+        { key: 'offence4DateQualifier', label: 'Date qualifier', type: 'select', options: ['On','Before','After','Between','On or about','Unknown'] },
+        { key: 'offence4Date', label: 'Offence 4 — Start date', type: 'date' },
+        { key: 'offence4DateEnd', label: 'Offence 4 — End date', type: 'date', showIf: { field: 'offence4DateQualifier', value: 'Between' } },
         { key: 'offence4ModeOfTrial', label: 'Mode of Trial 4', type: 'codedSelect', codeKey: 'modeOfTrial' },
         { key: 'offence4Statute', label: 'Statute 4', type: 'text', cols: 2 },
         { key: 'otherOffencesNotes', label: 'Other offences (notes)', type: 'textarea', placeholder: 'List any further offences here', cols: 2 },
@@ -676,6 +684,8 @@ var LAA = {
         { key: 'samplesDisclosed', label: 'Samples (DNA, fingerprints, etc.) disclosed?', type: 'select', options: ['Yes','No','Not applicable'] },
         { key: '_forensic_samples', label: 'Forensic samples – type and what was done', type: 'multiForensicSample' },
         { key: 'clothingShoesSeized', label: 'Clothing / shoes / phone seized?', type: 'select', options: ['Yes','No'] },
+        { key: 'clothingShoesSeizedWhat', label: 'What was seized?', type: 'text', placeholder: 'e.g. Trainers, jacket, iPhone', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
+        { key: 'clothingShoesSeizedNotes', label: 'Seizure notes', type: 'textarea', placeholder: 'Condition, replacement clothing given, etc.', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
         { key: '_h_other_disclosure', label: 'Other', type: 'sectionHeading' },
         { key: 'cautionAvailable', label: 'Caution / out-of-court disposal offered?', type: 'select', options: ['Yes','No'] },
         { key: 'disclosureReInjuries', label: 'Disclosure re injuries to victim', type: 'select', options: ['Not Applicable','Yes','No'] },
@@ -714,7 +724,7 @@ var LAA = {
         { key: '_h_benefits', label: 'Benefits & Income', type: 'sectionHeading' },
         { key: 'benefits', label: 'Receiving benefits?', type: 'select', options: ['Yes','No','Unknown'] },
         { key: 'benefitType', label: 'Benefit type', type: 'select', options: [
-          '','Universal Credit','Universal Credit (with housing element)','Income Support','Income-based JSA (Jobseeker\'s Allowance)','Income-related ESA (Employment & Support Allowance)','Pension Credit (Guarantee Credit)','Housing Benefit','Child Tax Credit (income under £16,190)','Working Tax Credit','Personal Independence Payment (PIP)','Disability Living Allowance (DLA)','Attendance Allowance','Carer\'s Allowance','State Pension','Contribution-based JSA','Contribution-based ESA','Child Benefit','Maternity Allowance','Bereavement Support Payment','Industrial Injuries Benefit','Asylum Support (Section 95/98)','Other'
+          '','N/A','Universal Credit','Universal Credit (with housing element)','Income Support','Income-based JSA (Jobseeker\'s Allowance)','Income-related ESA (Employment & Support Allowance)','Pension Credit (Guarantee Credit)','Housing Benefit','Child Tax Credit (income under £16,190)','Working Tax Credit','Personal Independence Payment (PIP)','Disability Living Allowance (DLA)','Attendance Allowance','Carer\'s Allowance','State Pension','Contribution-based JSA','Contribution-based ESA','Child Benefit','Maternity Allowance','Bereavement Support Payment','Industrial Injuries Benefit','Asylum Support (Section 95/98)','Other'
         ] },
         { key: 'benefitOther', label: 'Other benefit (specify)', type: 'text', placeholder: 'Type benefit not listed above', showIf: { field: 'benefitType', value: 'Other' } },
         { key: 'benefitNotes', label: 'Benefit notes', type: 'text' },
@@ -736,8 +746,10 @@ var LAA = {
         { key: '_h_case_assessment', label: 'Case Assessment', type: 'sectionHeading' },
         { key: 'gapsInEvidence', label: 'Gaps in Evidence', type: 'text', placeholder: 'e.g. None', cols: 2 },
         { key: 'lawElements', label: 'The Law / Elements of offence', type: 'textarea', cols: 2 },
-        { key: 'caseAssessment', label: 'Case assessment (police case)', type: 'text', placeholder: 'e.g. Strong case / Weak case', cols: 2 },
+        { key: 'caseAssessment', label: 'Case assessment (police case)', type: 'select', options: ['N/A','Strong','Medium','Weak'] },
+        { key: 'caseAssessmentWhy', label: 'Assessment reasoning', type: 'textarea', placeholder: 'Why is the case assessed this way?', showIf: { field: 'caseAssessment', notValue: 'N/A' } },
         { key: 'likelySentence', label: 'Likely sentence if convicted', type: 'text', placeholder: 'e.g. Community order', cols: 2 },
+        { key: 'clientInstructionsDetail', label: 'Client instructions', type: 'textarea', placeholder: 'Full client instructions — what the client has told you', cols: 2, rows: 6 },
         { key: 'clientInstructions', label: 'Summary of client instructions', type: 'textarea', cols: 2 },
       ],
       adviceChecklist: [
@@ -786,10 +798,11 @@ var LAA = {
         { key: 'adviceReComplaint', label: 'Advice re making a complaint given?', type: 'select', options: ['Yes','No'] },
         { key: '_h_instructions_sigs', label: 'Confirmation of Instructions', type: 'sectionHeading' },
         { key: '_note_instructions_sigs', label: 'Rep signs to confirm the record accurately reflects the advice given and instructions received. Client signs to confirm they received this advice and these are their instructions.', type: 'sectionNote' },
-        { key: 'repInstructionsSignature', label: 'Rep signature – I confirm this accurately records the advice given and the client\'s instructions', type: 'signature', sigKey: 'repInstructionsSig' },
-        { key: 'clientInstructionsSignature', label: 'Client signature – I confirm this accurately records the advice I received and my instructions', type: 'signature', sigKey: 'clientInstructionsSig' },
-        { key: 'instructionsSignatureDate', label: 'Signature date (auto)', type: 'date', readonly: true },
-        { key: 'instructionsSignatureTime', label: 'Signature time (auto)', type: 'time', readonly: true },
+        { key: 'instructionsSignRequired', label: 'Signature required?', type: 'select', options: ['No','Yes'], cols: 2 },
+        { key: 'repInstructionsSignature', label: 'Rep signature – I confirm this accurately records the advice given and the client\'s instructions', type: 'signature', sigKey: 'repInstructionsSig', showIf: { field: 'instructionsSignRequired', value: 'Yes' } },
+        { key: 'clientInstructionsSignature', label: 'Client signature – I confirm this accurately records the advice I received and my instructions', type: 'signature', sigKey: 'clientInstructionsSig', showIf: { field: 'instructionsSignRequired', value: 'Yes' } },
+        { key: 'instructionsSignatureDate', label: 'Signature date (auto)', type: 'date', readonly: true, showIf: { field: 'instructionsSignRequired', value: 'Yes' } },
+        { key: 'instructionsSignatureTime', label: 'Signature time (auto)', type: 'time', readonly: true, showIf: { field: 'instructionsSignRequired', value: 'Yes' } },
         { key: '_btn_client_instructions', label: '📄 Print Client Instructions Confirmation', type: 'actionButton', action: 'generateClientInstructions' },
         { key: '_btn_prepared_statement', label: '📄 Print Prepared Statement Template', type: 'actionButton', action: 'generatePreparedStatement' },
         { key: '_h_monitoring', label: 'Monitoring', type: 'sectionHeading' },
@@ -839,8 +852,8 @@ var LAA = {
         { key: 'bailDate', label: 'Bail / Return Date', type: 'date', showIf: { field: 'outcomeDecision', value: 'Released Under Investigation' } },
         { key: 'courtName', label: 'Court Name', type: 'text', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
         { key: 'courtDate', label: 'Court Date', type: 'date', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
-        { key: 'nextLocationName', label: 'Next Location', type: 'text' },
-        { key: 'nextDate', label: 'Next Date', type: 'date' },
+        { key: 'nextLocationName', label: 'Next Location', type: 'text', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
+        { key: 'nextDate', label: 'Next Date', type: 'date', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
       ],
     },
@@ -879,6 +892,8 @@ var LAA = {
         { key: 'policeStationFinalisedTime', label: 'Time police station finalised', type: 'time' },
         { key: 'repConfirmationSignature', label: 'Rep confirmation (signature)', type: 'signature', sigKey: 'repConfirmationSig' },
         { key: 'notesToOffice', label: 'Notes to Office / Firm', type: 'textarea', cols: 2 },
+        { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
+        { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
         { key: 'invoiceSent', label: 'Invoice sent?', type: 'select', options: ['No','Yes'] },
         { key: 'invoiceSentDate', label: 'Date sent', type: 'date', readonly: true, showIf: { field: 'invoiceSent', value: 'Yes' } },
@@ -1642,23 +1657,30 @@ var REQUIRED_FIELD_KEYS = [
     updateCalcPanel();
   }
 
+  var _suppressChangeHandlers = false;
+
   function getFieldValue(key) {
-    const el = document.querySelector('[data-field="' + key + '"]');
+    var form = document.getElementById('attendance-form');
+    var el = form ? form.querySelector('[data-field="' + key + '"]') : document.querySelector('[data-field="' + key + '"]');
     return el ? el.value : (formData[key] || '');
   }
 
   function setFieldValue(key, val) {
-    const els = document.querySelectorAll('[data-field="' + key + '"]');
+    var form = document.getElementById('attendance-form');
+    var els = form ? form.querySelectorAll('[data-field="' + key + '"]') : document.querySelectorAll('[data-field="' + key + '"]');
+    _suppressChangeHandlers = true;
     els.forEach(function(el) {
       el.value = val != null ? String(val) : '';
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
     });
+    _suppressChangeHandlers = false;
     formData[key] = val != null ? val : '';
   }
 
   function setFieldValueSilent(key, val) {
-    const els = document.querySelectorAll('[data-field="' + key + '"]');
+    var form = document.getElementById('attendance-form');
+    var els = form ? form.querySelectorAll('[data-field="' + key + '"]') : document.querySelectorAll('[data-field="' + key + '"]');
     els.forEach(function(el) { el.value = val != null ? String(val) : ''; });
     formData[key] = val != null ? val : '';
   }
@@ -1738,7 +1760,7 @@ var REQUIRED_FIELD_KEYS = [
     if (hft) hft.textContent = title;
   }
 
-  /* ─── Cross-device sync status (auto-sync, no manual button) ─── */
+  /* ─── Cross-device sync status ─── */
   function updateSyncStatusIndicator(data) {
     var el = document.getElementById('sync-status-indicator');
     if (!el) return;
@@ -1748,8 +1770,6 @@ var REQUIRED_FIELD_KEYS = [
     }
     el.style.display = '';
     if (data.status === 'synced') {
-      el.textContent = '\u2601 All records synced';
-      el.style.color = '#059669';
       refreshSyncCounts();
     } else if (data.status === 'syncing') {
       el.textContent = '\u2601 Syncing\u2026';
@@ -1780,7 +1800,7 @@ var REQUIRED_FIELD_KEYS = [
         el.textContent = '\u2601 Waiting for first sync\u2026';
         el.style.color = '#64748b';
       }
-    });
+    }).catch(function() {});
   }
 
   function showView(name) {
@@ -2514,6 +2534,12 @@ var REQUIRED_FIELD_KEYS = [
     if (!formData.previousAdvice) formData.previousAdvice = 'No';
     if (!formData.privacyNoticeAccepted) formData.privacyNoticeAccepted = 'No';
     if (!formData.disclosureReInjuries) formData.disclosureReInjuries = 'Not Applicable';
+    if (!formData.clothingShoesSeized) formData.clothingShoesSeized = 'No';
+    if (!formData.samplesDisclosed) formData.samplesDisclosed = 'Not applicable';
+    if (!formData.cautionAvailable) formData.cautionAvailable = 'No';
+    if (!formData.witnessIntimidation) formData.witnessIntimidation = 'No';
+    if (!formData.pncDisclosed) formData.pncDisclosed = 'No';
+    if (!formData.caseAssessment) formData.caseAssessment = 'N/A';
     if (!formData.paceSearches || !Array.isArray(formData.paceSearches)) formData.paceSearches = [{ searchType: '', whatFound: '' }];
     if (!formData.forensicSamples || !Array.isArray(formData.forensicSamples)) formData.forensicSamples = [{ sampleType: '', whatDone: '', notes: '' }];
     if (!formData.thirdPartyEntries || !Array.isArray(formData.thirdPartyEntries)) formData.thirdPartyEntries = [];
@@ -2580,7 +2606,16 @@ var REQUIRED_FIELD_KEYS = [
     return hasSubstantive;
   }
 
+  var _quietSaveDebounceTimer = null;
+  var QUIET_SAVE_DEBOUNCE_MS = 1000;
+
+  function scheduleQuietSave() {
+    clearTimeout(_quietSaveDebounceTimer);
+    _quietSaveDebounceTimer = setTimeout(quietSave, QUIET_SAVE_DEBOUNCE_MS);
+  }
+
   function quietSave() {
+    clearTimeout(_quietSaveDebounceTimer);
     const formView = document.getElementById('view-form');
     if (!formView || !formView.classList.contains('active')) return;
     const data = getFormData();
@@ -2588,14 +2623,14 @@ var REQUIRED_FIELD_KEYS = [
     if (_draftSaveInFlight) { _draftSaveQueued = true; return; }
     _draftSaveInFlight = true;
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
-      if (result && typeof result === 'object' && result.error === 'locked') return; /* finalised — skip autosave */
+      if (result && typeof result === 'object' && result.error === 'locked') return;
       if (typeof result === 'number' || typeof result === 'string') currentAttendanceId = result;
       showAutoSaveIndicator();
     }).finally(() => {
       _draftSaveInFlight = false;
       if (_draftSaveQueued) {
         _draftSaveQueued = false;
-        setTimeout(() => quietSave(), 0);
+        setTimeout(() => quietSave(), 500);
       }
     });
   }
@@ -2823,6 +2858,7 @@ var REQUIRED_FIELD_KEYS = [
       if (fs && s.fontSize) { fs.value = s.fontSize; }
       const fv = document.getElementById('font-size-val');
       if (fv && s.fontSize) { fv.textContent = s.fontSize + 'px'; }
+      updateBackupDestSummary(s);
     });
     if (window.api.getDbPath) {
       window.api.getDbPath().then(p => {
@@ -2871,6 +2907,23 @@ var REQUIRED_FIELD_KEYS = [
       });
     }
     loadFirmsList();
+  }
+
+  function updateBackupDestSummary(s) {
+    var localEl = document.getElementById('backup-dest-local-path');
+    if (localEl) localEl.textContent = s.backupFolder || 'Desktop (default)';
+    var offsitePathEl = document.getElementById('backup-dest-offsite-path');
+    if (offsitePathEl) {
+      var ofp = (s.offsiteBackupFolder || '').trim();
+      if (ofp) {
+        var folderName = ofp.split('\\').pop().split('/').pop();
+        offsitePathEl.textContent = folderName + ' (' + ofp + ')';
+        offsitePathEl.style.color = '#059669';
+      } else {
+        offsitePathEl.textContent = 'Not configured — click Detect or Browse in the section below';
+        offsitePathEl.style.color = '';
+      }
+    }
   }
 
   function saveSettings() {
@@ -3694,8 +3747,8 @@ var REQUIRED_FIELD_KEYS = [
         const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
         const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
         form.querySelectorAll('select, input, textarea').forEach(el => {
-          el.addEventListener('change', () => { collectCurrentData(); applyConditionalVisibility(); updateContextBar(); quietSave(); });
-          el.addEventListener('blur', () => { collectCurrentData(); quietSave(); });
+          el.addEventListener('change', () => { if (_suppressChangeHandlers) return; collectCurrentData(); applyConditionalVisibility(); updateContextBar(); scheduleQuietSave(); });
+          el.addEventListener('blur', () => { if (_suppressChangeHandlers) return; collectCurrentData(); scheduleQuietSave(); });
         });
         startAutoSave();
         return;
@@ -3908,33 +3961,50 @@ var REQUIRED_FIELD_KEYS = [
         renderMultiInterview(section, data, sec);
       }
 
-      /* Attachments for relevant sections */
-      if (['custody', 'disclosure', 'interview', 'injuriesAppearance'].includes(sec.id)) {
+      /* Attachments — rendered inside the Time Recording & Fees section, near invoices */
+      if (sec.id === 'timeRecording') {
         const photoWrap = document.createElement('div');
         photoWrap.className = 'photo-attach-area';
-        photoWrap.innerHTML = '<h4 class="section-heading" style="margin-top:1rem;cursor:default;">Attachments</h4>';
+        photoWrap.style.marginTop = '1.5rem';
+        photoWrap.style.padding = '1rem';
+        photoWrap.style.border = '1px dashed var(--border-color, #cbd5e1)';
+        photoWrap.style.borderRadius = '0.5rem';
+        photoWrap.style.background = 'var(--card-bg, #f8fafc)';
+        photoWrap.innerHTML = '<h4 class="section-heading" style="margin-top:0;cursor:default;">Attachments &amp; Documents</h4>' +
+          '<p style="font-size:0.85rem;color:var(--text-muted, #64748b);margin:0.25rem 0 0.75rem;">Attach photos, documents, or screenshots related to this attendance (e.g. custody record pages, disclosure documents, injury photos). All attachments are saved with this record and included in exports.</p>';
         const thumbs = document.createElement('div');
         thumbs.className = 'photo-thumbs';
-        thumbs.id = 'photo-thumbs-' + sec.id;
+        thumbs.id = 'photo-thumbs-attachments';
         photoWrap.appendChild(thumbs);
         const attachBtn = document.createElement('button');
         attachBtn.type = 'button';
         attachBtn.className = 'btn btn-secondary';
+        attachBtn.style.marginTop = '0.5rem';
         attachBtn.textContent = '+ Add attachment';
         attachBtn.addEventListener('click', () => {
           if (!window.api || !window.api.pickImage) return;
           window.api.pickImage().then(result => {
             if (!result || result.error) { if (result && result.error) showToast(result.error, 'error'); return; }
             if (!formData.photos) formData.photos = {};
-            if (!formData.photos[sec.id]) formData.photos[sec.id] = [];
-            formData.photos[sec.id].push({ dataUrl: result.dataUrl, name: result.name });
-            renderPhotoThumbs(sec.id);
+            if (!formData.photos['attachments']) formData.photos['attachments'] = [];
+            formData.photos['attachments'].push({ dataUrl: result.dataUrl, name: result.name });
+            renderPhotoThumbs('attachments');
             quietSave();
           });
         });
         photoWrap.appendChild(attachBtn);
         section.appendChild(photoWrap);
-        renderPhotoThumbs(sec.id);
+        if (formData.photos) {
+          const legacyKeys = ['custody', 'disclosure', 'interview', 'injuriesAppearance'];
+          for (const lk of legacyKeys) {
+            if (formData.photos[lk] && formData.photos[lk].length) {
+              if (!formData.photos['attachments']) formData.photos['attachments'] = [];
+              formData.photos['attachments'].push(...formData.photos[lk]);
+              delete formData.photos[lk];
+            }
+          }
+        }
+        renderPhotoThumbs('attachments');
       }
 
       /* Extra actions (Finalise, PDF, Email) */
@@ -3989,10 +4059,21 @@ var REQUIRED_FIELD_KEYS = [
 
     const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
     const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
+
+    var _progressDebounce = null;
+    function debouncedProgressUpdate() {
+      clearTimeout(_progressDebounce);
+      _progressDebounce = setTimeout(updateProgressBar, 300);
+    }
+
+    var _collectTimer = null;
+    function scheduleCollect() { clearTimeout(_collectTimer); _collectTimer = setTimeout(collectCurrentData, 400); }
+
     form.querySelectorAll('select, input, textarea').forEach(el => {
       el.addEventListener('change', () => {
-        collectCurrentData();
-        const field = el.dataset.field;
+        if (_suppressChangeHandlers) return;
+        var field = el.dataset.field || el.name;
+        if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
         if (field && sharedClientFields.includes(field)) {
           setFieldValueSilent(field, el.value);
         }
@@ -4006,7 +4087,6 @@ var REQUIRED_FIELD_KEYS = [
           setFieldValue('weekendBankHoliday', (isWE || isBH) ? 'Yes' : 'No');
         }
         if (field === 'outcomeDecision') {
-          applyConditionalVisibility();
           if (formData.outcomeDecision === 'Bail without charge' && (!formData.bailReturnStationName || !formData.bailReturnStationCode)) {
             if (formData.policeStationName) { formData.bailReturnStationName = formData.policeStationName; setFieldValueSilent('bailReturnStationName', formData.policeStationName); }
             if (formData.schemeId) { formData.bailReturnStationCode = formData.schemeId; setFieldValueSilent('bailReturnStationCode', formData.schemeId); }
@@ -4016,17 +4096,16 @@ var REQUIRED_FIELD_KEYS = [
         else if (['travelSocial','travelUnsocial','waitingSocial','waitingUnsocial','adviceSocial','adviceUnsocial','milesClaimable'].includes(field)) recalcTotal();
         if (field === 'timeDetentionAuthorised') { setFieldValue('relevantTime', el.value || ''); calcReviewTimes(); }
         if (field === 'relevantTime') { calcReviewTimes(); }
-        updateProgressBar();
-        quietSave();
+        debouncedProgressUpdate();
+        scheduleCollect();
+        scheduleQuietSave();
       });
       el.addEventListener('blur', () => {
-        collectCurrentData();
-        const field = el.dataset.field;
-        if (field && sharedClientFields.includes(field)) {
-          setFieldValueSilent(field, el.value);
-        }
-        updateProgressBar();
-        quietSave();
+        if (_suppressChangeHandlers) return;
+        var field = el.dataset.field || el.name;
+        if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
+        scheduleCollect();
+        scheduleQuietSave();
       });
     });
 
@@ -4699,8 +4778,9 @@ var REQUIRED_FIELD_KEYS = [
     if (f.className) wrap.classList.add(f.className);
     if (f.firmCompletes) wrap.classList.add('firm-field');
     if (f.cols === 2) wrap.style.gridColumn = '1 / -1';
-    if (f.showIf) { wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); }
+    if (f.showIf) { wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); if (f.showIf.notValue) wrap.dataset.showIfNotValue = f.showIf.notValue; }
     if (f.showIfOr) { wrap.dataset.showIfOrField = f.showIfOr.field; wrap.dataset.showIfOrValue = f.showIfOr.value || ''; }
+    if (f.hideIf) { wrap.dataset.hideIfField = f.hideIf.field; wrap.dataset.hideIfValue = f.hideIf.value || ''; }
     const label = document.createElement('label');
     label.textContent = f.label;
     if (REQUIRED_FIELD_KEYS.includes(f.key)) {
@@ -4740,7 +4820,7 @@ var REQUIRED_FIELD_KEYS = [
       codeOptions(f.codeKey).forEach(o => { const opt = document.createElement('option'); opt.value = o.value; opt.textContent = o.label; input.appendChild(opt); });
     } else if (f.type === 'textarea') {
       input = document.createElement('textarea');
-      input.rows = 4;
+      input.rows = f.rows || 4;
       if (f.placeholder) input.placeholder = f.placeholder;
     } else if (f.type === 'station') {
       renderStationSearch(f, data, wrap, grid);
@@ -5419,14 +5499,18 @@ var REQUIRED_FIELD_KEYS = [
       });
     }
 
+    var _stationDebounce = null;
     textInput.addEventListener('focus', () => { buildSuggestions(textInput.value); sugList.classList.add('open'); });
-    textInput.addEventListener('input', () => { buildSuggestions(textInput.value); sugList.classList.add('open'); });
+    textInput.addEventListener('input', () => {
+      textInput.classList.remove('input-error');
+      clearTimeout(_stationDebounce);
+      _stationDebounce = setTimeout(() => { buildSuggestions(textInput.value); sugList.classList.add('open'); }, 80);
+    });
     textInput.addEventListener('blur', () => {
-      setTimeout(() => sugList.classList.remove('open'), 150);
+      setTimeout(() => sugList.classList.remove('open'), 180);
       if (!hiddenInput.value) textInput.classList.add('input-error');
       else textInput.classList.remove('input-error');
     });
-    textInput.addEventListener('input', () => { textInput.classList.remove('input-error'); });
 
     sw.appendChild(textInput);
     sw.appendChild(hiddenInput);
@@ -5468,10 +5552,14 @@ var REQUIRED_FIELD_KEYS = [
       dropdown.classList.add('open');
     }
 
+    var _courtDebounce = null;
     input.addEventListener('focus', function() { setSuggestions(input.value); });
-    input.addEventListener('input', function() { setSuggestions(input.value); });
+    input.addEventListener('input', function() {
+      clearTimeout(_courtDebounce);
+      _courtDebounce = setTimeout(function() { setSuggestions(input.value); }, 80);
+    });
     input.addEventListener('blur', function() {
-      setTimeout(function() { dropdown.classList.remove('open'); }, 150);
+      setTimeout(function() { dropdown.classList.remove('open'); }, 180);
     });
     input.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') dropdown.classList.remove('open');
@@ -5483,42 +5571,65 @@ var REQUIRED_FIELD_KEYS = [
     const flatOffences = [];
     OFFENCES_BY_GROUP.forEach(grp => {
       (grp.offences || []).forEach(off => {
-        flatOffences.push({ ...off, defaultMatterType: off.matterType || grp.defaultMatterType || '11' });
+        flatOffences.push({ ...off, _group: grp.group, defaultMatterType: off.matterType || grp.defaultMatterType || '11' });
       });
     });
 
+    function selectOffence(off) {
+      const mode = (off.mode === 'SO' || off.mode === 'EW' || off.mode === 'IO') ? off.mode : 'EW';
+      const statute = off.statute ? String(off.statute) : '';
+      setFieldValue('offence' + slot + 'Details', off.name);
+      setFieldValue('offence' + slot + 'Statute', statute);
+      setFieldValue('offence' + slot + 'ModeOfTrial', mode);
+      setFieldValue('matterTypeCode', off.defaultMatterType);
+      input.value = off.name;
+      dropdown.classList.remove('open');
+      applyConditionalVisibility();
+    }
+
+    var _offDebounce = null;
     function showSuggestions(q) {
       const query = (q || '').toLowerCase().trim();
-      const matches = query.length >= 2
-        ? flatOffences.filter(o => o.name.toLowerCase().includes(query))
-        : [];
-      const limit = 10;
       dropdown.innerHTML = '';
+
+      if (query.length < 1) {
+        OFFENCES_BY_GROUP.forEach(grp => {
+          const hdr = document.createElement('div');
+          hdr.className = 'offence-group-header';
+          hdr.textContent = grp.group;
+          dropdown.appendChild(hdr);
+          (grp.offences || []).forEach(off => {
+            const fullOff = { ...off, defaultMatterType: off.matterType || grp.defaultMatterType || '11' };
+            const opt = document.createElement('div');
+            opt.className = 'offence-autocomplete-option';
+            opt.innerHTML = esc(off.name) + '<span class="offence-statute">' + esc(off.statute || '') + '</span>';
+            opt.addEventListener('mousedown', (e) => { e.preventDefault(); selectOffence(fullOff); });
+            dropdown.appendChild(opt);
+          });
+        });
+        dropdown.classList.add('open');
+        return;
+      }
+
+      const matches = flatOffences.filter(o => o.name.toLowerCase().includes(query));
+      const limit = 20;
       if (matches.length === 0) { dropdown.classList.remove('open'); return; }
       matches.slice(0, limit).forEach(off => {
         const opt = document.createElement('div');
         opt.className = 'offence-autocomplete-option';
         opt.innerHTML = esc(off.name) + '<span class="offence-statute">' + esc(off.statute || '') + '</span>';
-        opt.addEventListener('mousedown', (e) => {
-          e.preventDefault();
-          const mode = (off.mode === 'SO' || off.mode === 'EW' || off.mode === 'IO') ? off.mode : 'EW';
-          const statute = off.statute ? String(off.statute) : '';
-          setFieldValue('offence' + slot + 'Details', off.name);
-          setFieldValue('offence' + slot + 'Statute', statute);
-          setFieldValue('offence' + slot + 'ModeOfTrial', mode);
-          setFieldValue('matterTypeCode', off.defaultMatterType);
-          input.value = off.name;
-          dropdown.classList.remove('open');
-          applyConditionalVisibility();
-        });
+        opt.addEventListener('mousedown', (e) => { e.preventDefault(); selectOffence(off); });
         dropdown.appendChild(opt);
       });
       dropdown.classList.add('open');
     }
 
-    input.addEventListener('input', () => { showSuggestions(input.value); });
+    input.addEventListener('input', () => {
+      clearTimeout(_offDebounce);
+      _offDebounce = setTimeout(() => showSuggestions(input.value), 80);
+    });
     input.addEventListener('focus', () => { showSuggestions(input.value); });
-    input.addEventListener('blur', () => { setTimeout(() => dropdown.classList.remove('open'), 150); });
+    input.addEventListener('blur', () => { setTimeout(() => dropdown.classList.remove('open'), 180); });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') dropdown.classList.remove('open');
     });
@@ -5529,17 +5640,40 @@ var REQUIRED_FIELD_KEYS = [
     const flatOffences = [];
     OFFENCES_BY_GROUP.forEach(grp => {
       (grp.offences || []).forEach(off => {
-        flatOffences.push({ ...off });
+        flatOffences.push({ ...off, _group: grp.group });
       });
     });
 
+    var _offSumDebounce = null;
     function showSuggestions(q) {
       const query = (q || '').toLowerCase().trim();
-      const matches = query.length >= 2
-        ? flatOffences.filter(o => o.name.toLowerCase().includes(query))
-        : [];
-      const limit = 10;
       dropdown.innerHTML = '';
+
+      if (query.length < 1) {
+        OFFENCES_BY_GROUP.forEach(grp => {
+          const hdr = document.createElement('div');
+          hdr.className = 'offence-group-header';
+          hdr.textContent = grp.group;
+          dropdown.appendChild(hdr);
+          (grp.offences || []).forEach(off => {
+            const opt = document.createElement('div');
+            opt.className = 'offence-autocomplete-option';
+            opt.innerHTML = esc(off.name) + '<span class="offence-statute">' + esc(off.statute || '') + '</span>';
+            opt.addEventListener('mousedown', (e) => {
+              e.preventDefault();
+              input.value = off.name;
+              setFieldValue('offenceSummary', off.name);
+              dropdown.classList.remove('open');
+            });
+            dropdown.appendChild(opt);
+          });
+        });
+        dropdown.classList.add('open');
+        return;
+      }
+
+      const matches = flatOffences.filter(o => o.name.toLowerCase().includes(query));
+      const limit = 20;
       if (matches.length === 0) { dropdown.classList.remove('open'); return; }
       matches.slice(0, limit).forEach(off => {
         const opt = document.createElement('div');
@@ -5556,9 +5690,12 @@ var REQUIRED_FIELD_KEYS = [
       dropdown.classList.add('open');
     }
 
-    input.addEventListener('input', () => { showSuggestions(input.value); });
+    input.addEventListener('input', () => {
+      clearTimeout(_offSumDebounce);
+      _offSumDebounce = setTimeout(() => showSuggestions(input.value), 80);
+    });
     input.addEventListener('focus', () => { showSuggestions(input.value); });
-    input.addEventListener('blur', () => { setTimeout(() => dropdown.classList.remove('open'), 150); });
+    input.addEventListener('blur', () => { setTimeout(() => dropdown.classList.remove('open'), 180); });
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') dropdown.classList.remove('open');
     });
@@ -5661,13 +5798,16 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── CONDITIONAL VISIBILITY ─── */
   function applyConditionalVisibility() {
-    document.querySelectorAll('[data-show-if-field]').forEach(wrap => {
+    var scope = document.getElementById('attendance-form') || document;
+    scope.querySelectorAll('[data-show-if-field]').forEach(wrap => {
       const field = wrap.dataset.showIfField;
       const val = formData[field] || getFieldValue(field);
       const matchVal = wrap.dataset.showIfValue;
       const matchVals = (wrap.dataset.showIfValues || '').split(',').filter(Boolean);
+      const notVal = wrap.dataset.showIfNotValue;
       let visible = false;
-      if (matchVal) visible = val === matchVal;
+      if (notVal) { visible = !!val && val !== notVal && val !== ''; }
+      else if (matchVal) visible = val === matchVal;
       if (matchVals.length) visible = matchVals.includes(val);
       const orField = wrap.dataset.showIfOrField;
       if (orField) {
@@ -5676,6 +5816,12 @@ var REQUIRED_FIELD_KEYS = [
         if (orMatchVal && (orVal === orMatchVal || (orVal && orVal.split('|').indexOf(orMatchVal) >= 0))) visible = true;
       }
       wrap.style.display = visible ? '' : 'none';
+    });
+    scope.querySelectorAll('[data-hide-if-field]').forEach(wrap => {
+      const field = wrap.dataset.hideIfField;
+      const val = formData[field] || getFieldValue(field);
+      const matchVal = wrap.dataset.hideIfValue;
+      wrap.style.display = (val === matchVal) ? 'none' : '';
     });
     const faWrap = document.getElementById('further-attendance-wrap');
     if (faWrap) faWrap.style.display = formData.furtherAttendance === 'Yes' ? '' : 'none';
@@ -6529,10 +6675,10 @@ row('Fit to be detained?', d.fitToBeDetained) + row('Fit to be interviewed?', d.
 
 '<h2>4. Offences</h2><table>' +
 row('Matter Type', codeLookup('matterTypeCodes', d.matterTypeCode)) +
-row('Offence 1', d.offence1Details) + row('Date', fmtDate(d.offence1Date)) + row('Mode', codeLookup('modeOfTrial', d.offence1ModeOfTrial)) + row('Statute', d.offence1Statute) +
-row('Offence 2', d.offence2Details) + row('Date', fmtDate(d.offence2Date)) + row('Mode', codeLookup('modeOfTrial', d.offence2ModeOfTrial)) + row('Statute', d.offence2Statute) +
-row('Offence 3', d.offence3Details) + row('Date', fmtDate(d.offence3Date)) + row('Mode', codeLookup('modeOfTrial', d.offence3ModeOfTrial)) + row('Statute', d.offence3Statute) +
-row('Offence 4', d.offence4Details) + row('Date', fmtDate(d.offence4Date)) + row('Mode', codeLookup('modeOfTrial', d.offence4ModeOfTrial)) + row('Statute', d.offence4Statute) +
+row('Offence 1', d.offence1Details) + row('Date', (d.offence1DateQualifier && d.offence1DateQualifier !== 'On' ? d.offence1DateQualifier + ' ' : '') + fmtDate(d.offence1Date) + (d.offence1DateQualifier === 'Between' && d.offence1DateEnd ? ' – ' + fmtDate(d.offence1DateEnd) : '')) + row('Mode', codeLookup('modeOfTrial', d.offence1ModeOfTrial)) + row('Statute', d.offence1Statute) +
+row('Offence 2', d.offence2Details) + row('Date', (d.offence2DateQualifier && d.offence2DateQualifier !== 'On' ? d.offence2DateQualifier + ' ' : '') + fmtDate(d.offence2Date) + (d.offence2DateQualifier === 'Between' && d.offence2DateEnd ? ' – ' + fmtDate(d.offence2DateEnd) : '')) + row('Mode', codeLookup('modeOfTrial', d.offence2ModeOfTrial)) + row('Statute', d.offence2Statute) +
+row('Offence 3', d.offence3Details) + row('Date', (d.offence3DateQualifier && d.offence3DateQualifier !== 'On' ? d.offence3DateQualifier + ' ' : '') + fmtDate(d.offence3Date) + (d.offence3DateQualifier === 'Between' && d.offence3DateEnd ? ' – ' + fmtDate(d.offence3DateEnd) : '')) + row('Mode', codeLookup('modeOfTrial', d.offence3ModeOfTrial)) + row('Statute', d.offence3Statute) +
+row('Offence 4', d.offence4Details) + row('Date', (d.offence4DateQualifier && d.offence4DateQualifier !== 'On' ? d.offence4DateQualifier + ' ' : '') + fmtDate(d.offence4Date) + (d.offence4DateQualifier === 'Between' && d.offence4DateEnd ? ' – ' + fmtDate(d.offence4DateEnd) : '')) + row('Mode', codeLookup('modeOfTrial', d.offence4ModeOfTrial)) + row('Statute', d.offence4Statute) +
 row('Other offences (notes)', d.otherOffencesNotes) +
 '</table>' +
 
@@ -7649,7 +7795,12 @@ PDF_CASENOTE_ADVERT +
     if (window.api.onSyncStatusChanged) {
       window.api.onSyncStatusChanged(function(data) {
         updateSyncStatusIndicator(data);
-        refreshSyncCounts();
+        var syncWrap = document.getElementById('home-sync-now-wrap');
+        if (syncWrap && window.api.syncStatus) {
+          window.api.syncStatus().then(function(st) {
+            syncWrap.style.display = (st && st.enabled) ? '' : 'none';
+          });
+        }
       });
     }
 
@@ -8077,6 +8228,33 @@ PDF_CASENOTE_ADVERT +
         }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); });
       });
     }
+    // Manual sync button on home screen
+    var homeSyncWrap = document.getElementById('home-sync-now-wrap');
+    var homeSyncBtn = document.getElementById('home-sync-now-btn');
+    if (homeSyncBtn && window.api && window.api.syncNow) {
+      if (window.api.syncStatus) {
+        window.api.syncStatus().then(function(st) {
+          if (st && st.enabled && homeSyncWrap) homeSyncWrap.style.display = '';
+        });
+      }
+      homeSyncBtn.addEventListener('click', function() {
+        homeSyncBtn.disabled = true;
+        homeSyncBtn.textContent = '\u2601 Syncing\u2026';
+        window.api.syncNow().then(function(res) {
+          if (res && res.ok) {
+            showToast('Sync complete', 'success');
+          } else {
+            showToast('Sync failed: ' + (res && res.error || 'Unknown error'), 'error');
+          }
+          refreshSyncCounts();
+        }).catch(function(e) {
+          showToast('Sync failed: ' + (e && e.message || 'Unknown error'), 'error');
+        }).finally(function() {
+          homeSyncBtn.disabled = false;
+          homeSyncBtn.textContent = '\u2601 Sync now';
+        });
+      });
+    }
     document.getElementById('btn-db-repair')?.addEventListener('click', async () => {
       if (!window.api || !window.api.dbRepair) { showToast('Database repair is not available', 'error'); return; }
       const btn = document.getElementById('btn-db-repair');
@@ -8225,9 +8403,29 @@ PDF_CASENOTE_ADVERT +
       window.api.chooseFolder({ forOffsite: true }).then(p => {
         if (p) {
           const el = document.getElementById('setting-offsite-backup-folder');
-          if (el) { el.value = p; window.api.setSettings({ offsiteBackupFolder: p }).then(showSettingsSavedToast); }
+          if (el) { el.value = p; window.api.setSettings({ offsiteBackupFolder: p }).then(function() { showSettingsSavedToast(); window.api.getSettings().then(updateBackupDestSummary); }); }
         }
       });
+    });
+    document.getElementById('setting-offsite-detect')?.addEventListener('click', () => {
+      var panel = document.getElementById('offsite-detected-folders');
+      if (!panel) return;
+      panel.style.display = '';
+      panel.innerHTML = '<p style="font-size:0.85rem;color:var(--text-muted);">Scanning&hellip;</p>';
+      window.api.detectCloudFolders().then(function(folders) {
+        if (!folders || folders.length === 0) { panel.innerHTML = '<p style="font-size:0.85rem;color:#d97706;">No cloud sync folders found (OneDrive, Dropbox, Google Drive). Use Browse to select a folder manually.</p>'; return; }
+        var html = '<p style="font-size:0.85rem;font-weight:600;margin:0 0 0.4rem;">Cloud folders found on this PC:</p>';
+        folders.forEach(function(f) { html += '<button type="button" class="btn btn-secondary offsite-pick-btn" data-path="' + f.path.replace(/"/g, '&quot;') + '" style="display:block;margin-bottom:0.3rem;text-align:left;font-size:0.85rem;width:100%;">' + f.name + ' &mdash; ' + f.path + '</button>'; });
+        panel.innerHTML = html;
+        panel.querySelectorAll('.offsite-pick-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var p = this.dataset.path;
+            var el = document.getElementById('setting-offsite-backup-folder');
+            if (el) el.value = p;
+            window.api.setSettings({ offsiteBackupFolder: p }).then(function() { showSettingsSavedToast(); panel.style.display = 'none'; window.api.getSettings().then(updateBackupDestSummary); });
+          });
+        });
+      }).catch(function() { panel.innerHTML = '<p style="font-size:0.85rem;color:#dc2626;">Detection failed.</p>'; });
     });
     document.getElementById('settings-save-btn')?.addEventListener('click', function() {
       if (typeof saveSettings === 'function') saveSettings();
@@ -8547,6 +8745,8 @@ PDF_CASENOTE_ADVERT +
           if (lastEl && data.lastSuccess) lastEl.textContent = 'Last successful upload: ' + new Date(data.lastSuccess).toLocaleString('en-GB');
           if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
           if (supportEl) supportEl.style.display = 'none';
+          var cloudSt = document.getElementById('backup-dest-cloud-status');
+          if (cloudSt) { cloudSt.textContent = 'Active — backing up automatically'; cloudSt.style.color = '#059669'; }
         } else {
           if (footerEl) { footerEl.textContent = 'Local backup only'; footerEl.style.color = '#d97706'; footerEl.style.cursor = 'pointer'; footerEl.style.textDecoration = 'underline'; }
           var checking = document.getElementById('cloud-backup-checking');
@@ -8568,6 +8768,8 @@ PDF_CASENOTE_ADVERT +
               reasonEl.innerHTML = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> then enter your licence key in Settings \u203a Licence.';
             }
           }
+          var cloudSt2 = document.getElementById('backup-dest-cloud-status');
+          if (cloudSt2) { cloudSt2.textContent = 'Not active — local backup only'; cloudSt2.style.color = '#d97706'; }
           if (data && data.lastError && errEl) {
             errEl.textContent = data.lastError;
             errEl.style.display = '';
@@ -9533,26 +9735,119 @@ PDF_CASENOTE_ADVERT +
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
   }
 
-  /* ─── First-launch setup modal ─── */
+  /* ─── First-launch setup modal (2-step wizard) ─── */
   function initFirstLaunchModal() {
     var modal = document.getElementById('first-launch-modal');
     if (!modal) return;
     modal.style.display = 'flex';
 
-    document.getElementById('fl-save').addEventListener('click', function() {
+    var step1 = document.getElementById('fl-step-1');
+    var step2 = document.getElementById('fl-step-2');
+    var stepEls = modal.querySelectorAll('.fl-step');
+    var selectedBackupPath = '';
+
+    function showStep(n) {
+      step1.style.display = n === 1 ? '' : 'none';
+      step2.style.display = n === 2 ? '' : 'none';
+      stepEls.forEach(function(el) {
+        var s = parseInt(el.dataset.step, 10);
+        el.classList.toggle('active', s === n);
+        el.classList.toggle('done', s < n);
+      });
+    }
+
+    var iconMap = { 'OneDrive': '\u2601', 'Dropbox': '\uD83D\uDCE6', 'Google Drive': '\uD83D\uDCC1', 'iCloud Drive': '\u2601' };
+
+    function buildBackupOptions(folders) {
+      var container = document.getElementById('fl-backup-options');
+      container.innerHTML = '';
+      var allOptions = [];
+
+      (folders || []).forEach(function(f) {
+        var icon = '\u2601';
+        for (var k in iconMap) { if (f.name.indexOf(k.split(' ')[0]) !== -1) { icon = iconMap[k]; break; } }
+        allOptions.push({ name: f.name, path: f.path, icon: icon, hint: f.path });
+      });
+      allOptions.push({ name: 'Desktop (local only)', path: '__desktop__', icon: '\uD83D\uDDA5', hint: 'No cloud sync — backups stay on this computer' });
+      allOptions.push({ name: 'Choose a folder\u2026', path: '__browse__', icon: '\uD83D\uDCC2', hint: 'Browse for a specific folder' });
+
+      if (allOptions.length > 2) selectedBackupPath = allOptions[0].path;
+
+      allOptions.forEach(function(opt) {
+        var div = document.createElement('div');
+        div.className = 'fl-backup-option' + (opt.path === selectedBackupPath ? ' selected' : '');
+        var radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = 'fl-backup';
+        radio.value = opt.path;
+        radio.checked = opt.path === selectedBackupPath;
+        var iconSpan = document.createElement('span');
+        iconSpan.className = 'fl-backup-icon';
+        iconSpan.textContent = opt.icon;
+        var label = document.createElement('span');
+        label.className = 'fl-backup-label';
+        label.innerHTML = '<strong>' + opt.name + '</strong><small>' + opt.hint + '</small>';
+        div.appendChild(radio);
+        div.appendChild(iconSpan);
+        div.appendChild(label);
+        div.addEventListener('click', function() {
+          if (opt.path === '__browse__') {
+            window.api.chooseFolder({ forOffsite: true }).then(function(p) {
+              if (p) {
+                selectedBackupPath = p;
+                label.querySelector('small').textContent = p;
+                container.querySelectorAll('.fl-backup-option').forEach(function(el) { el.classList.remove('selected'); el.querySelector('input').checked = false; });
+                div.classList.add('selected');
+                radio.checked = true;
+              }
+            });
+            return;
+          }
+          selectedBackupPath = opt.path;
+          container.querySelectorAll('.fl-backup-option').forEach(function(el) { el.classList.remove('selected'); el.querySelector('input').checked = false; });
+          div.classList.add('selected');
+          radio.checked = true;
+        });
+        container.appendChild(div);
+      });
+    }
+
+    /* Step 1 -> Step 2 */
+    document.getElementById('fl-next').addEventListener('click', function() {
       var name = (document.getElementById('fl-fee-earner-name').value || '').trim();
       var pin = (document.getElementById('fl-dscc-pin').value || '').trim();
       if (!name) { showToast('Please enter your fee earner name', 'error'); return; }
       if (!pin) { showToast('Please enter your DSCC PIN/number', 'error'); return; }
-      window.api.setSettings({
-        dsccPin: pin,
-        feeEarnerNameDefault: name,
-      }).then(function() {
+      showStep(2);
+      window.api.detectCloudFolders().then(buildBackupOptions).catch(function() { buildBackupOptions([]); });
+    });
+
+    /* Step 2 -> Step 1 */
+    document.getElementById('fl-back').addEventListener('click', function() { showStep(1); });
+
+    /* Save & Finish */
+    document.getElementById('fl-save').addEventListener('click', function() {
+      var name = (document.getElementById('fl-fee-earner-name').value || '').trim();
+      var pin = (document.getElementById('fl-dscc-pin').value || '').trim();
+      if (!name || !pin) { showStep(1); showToast('Please fill in your details first', 'error'); return; }
+
+      var settings = { dsccPin: pin, feeEarnerNameDefault: name };
+      if (selectedBackupPath && selectedBackupPath !== '__desktop__' && selectedBackupPath !== '__browse__') {
+        settings.offsiteBackupFolder = selectedBackupPath;
+      }
+
+      window.api.setSettings(settings).then(function() {
         modal.style.display = 'none';
-        showToast('Setup saved — welcome to Custody Note, ' + name + '!', 'success', 4000);
+        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
+        var offsiteEl = document.getElementById('setting-offsite-backup-folder');
+        if (offsiteEl && settings.offsiteBackupFolder) offsiteEl.value = settings.offsiteBackupFolder;
+        var msg = 'Setup saved — welcome to Custody Note, ' + name + '!';
+        if (settings.offsiteBackupFolder) msg += ' Backups will sync to ' + selectedBackupPath.split('\\').pop().split('/').pop() + '.';
+        showToast(msg, 'success', 5000);
       });
     });
 
+    /* Skip */
     document.getElementById('fl-skip').addEventListener('click', function() {
       modal.style.display = 'none';
       var banner = document.createElement('div');

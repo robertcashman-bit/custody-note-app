@@ -266,6 +266,7 @@
             <span id="home-net-status" class="home-status-item">Checking connection&hellip;</span>
             <span class="home-status-sep">&middot;</span>
             <span id="home-backup-status" class="home-status-item">Auto backup: checking&hellip;</span>
+            <span id="home-sync-now-wrap" style="display:none;"><span class="home-status-sep">&middot;</span><button type="button" id="home-sync-now-btn" style="background:none;border:1px solid #2563eb;color:#2563eb;padding:0.15rem 0.6rem;border-radius:5px;font-size:0.78rem;cursor:pointer;font-weight:600;transition:background 0.15s,color 0.15s;" title="Sync records now">&#9729; Sync now</button></span>
           </div>
         </div>
       </div>
@@ -645,7 +646,22 @@
         </div>
 
         <div class="settings-card">
-          <h2>Backup</h2>
+          <h2>Backup &amp; Data Protection</h2>
+          <div id="backup-destination-summary" style="background:var(--input-bg,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:0.85rem 1rem;margin-bottom:1.25rem;">
+            <p style="margin:0 0 0.5rem;font-weight:700;font-size:0.92rem;color:var(--on-surface,#1e293b);">Where are your backups going?</p>
+            <div id="backup-dest-local" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;font-size:0.85rem;">
+              <span style="font-size:1.1rem;">&#128187;</span>
+              <span><strong>Local:</strong> <span id="backup-dest-local-path">Desktop</span></span>
+            </div>
+            <div id="backup-dest-offsite" style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;font-size:0.85rem;">
+              <span style="font-size:1.1rem;">&#9729;</span>
+              <span><strong>Off-site:</strong> <span id="backup-dest-offsite-path" style="color:var(--text-muted,#94a3b8);">Not configured</span></span>
+            </div>
+            <div id="backup-dest-cloud" style="display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;">
+              <span style="font-size:1.1rem;">&#9889;</span>
+              <span><strong>AWS Cloud:</strong> <span id="backup-dest-cloud-status">Checking&hellip;</span></span>
+            </div>
+          </div>
           <div id="cloud-backup-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border-color, #ccc);">
             <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Cloud Backup (AWS)</h3>
             <p id="cloud-backup-checking" class="settings-hint" style="margin:0;color:#64748b;">Checking cloud backup status&hellip;</p>
@@ -684,12 +700,14 @@
             <li><strong>Hourly archive</strong> &mdash; A timestamped copy is saved every hour. Up to 48 hourly files are kept; older ones are removed automatically.</li>
             <li><strong>Backup now</strong> &mdash; On the Attendance List (Records), use the &ldquo;Backup now&rdquo; button to create an immediate backup plus refresh the latest file.</li>
           </ul>
-          <label>Off-site backup folder (optional)</label>
+          <label>Off-site backup folder <span style="color:#059669;font-weight:600;">(recommended)</span></label>
           <div class="setting-row">
-            <input type="text" id="setting-offsite-backup-folder" readonly placeholder="None">
+            <input type="text" id="setting-offsite-backup-folder" readonly placeholder="Not configured — click Detect or Browse">
+            <button type="button" id="setting-offsite-detect" class="btn btn-secondary" title="Scan for OneDrive, Dropbox, Google Drive folders">Detect</button>
             <button type="button" id="setting-offsite-backup-browse" class="btn btn-secondary">Browse</button>
           </div>
-          <p class="settings-hint">Choose a folder that syncs to the cloud (e.g. OneDrive, Dropbox, Google Drive). The same encrypted backup files are copied there whenever a backup runs, so you have a copy away from your computer in case of loss or theft. Leave blank to use only the main backup folder.</p>
+          <div id="offsite-detected-folders" style="display:none;margin:0.5rem 0;"></div>
+          <p class="settings-hint">Choose a folder that syncs to the cloud (e.g. <strong>OneDrive</strong>, <strong>Dropbox</strong>, <strong>Google Drive</strong>). Encrypted backups are copied there automatically so you have a copy away from this computer. Click <strong>Detect</strong> to find cloud folders on this PC.</p>
           <label>Custom cloud backup URL (optional)</label>
           <input type="url" id="setting-cloud-backup-url" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
           <p class="settings-hint" style="margin-top:0.25rem;">For your own backup API only. Leave blank to use Custody Note&rsquo;s managed AWS backup (included with your licence).</p>
@@ -1305,18 +1323,38 @@
       <span class="footer-brand">&copy; Defence Legal Services Ltd 2026</span>
       <span class="footer-right"><span id="net-status-text" class="footer-status">Checking connection&hellip;</span><span class="footer-sep">&middot;</span><span id="backup-status-text" class="footer-status">Auto backup: checking&hellip;</span><span id="cloud-backup-footer-wrap"><span class="footer-sep">&middot;</span><span id="cloud-backup-footer-status" class="footer-status" style="color:#d97706;cursor:pointer;text-decoration:underline;" title="Open Settings to check Cloud Backup">Local backup only</span></span><span id="aws-s3-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="aws-s3-status-footer" class="footer-status"></span></span><span id="sync-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="sync-status-indicator" class="footer-status" style="display:none;"></span></span><span id="update-footer-wrap" style="display:none;"><span class="footer-sep">&middot;</span><span id="update-footer-status" class="footer-status" style="color:#059669;cursor:pointer;"></span></span><span class="footer-sep">&middot;</span><button type="button" id="home-check-update-btn" class="footer-action-btn" title="Check for a new version">Check for updates</button></span>
     </footer>
-    <!-- First-launch setup modal -->
+    <!-- First-launch setup modal (2-step wizard) -->
     <div id="first-launch-modal" class="first-launch-overlay" style="display:none;">
       <div class="first-launch-box">
-        <h2>Welcome to Custody Note</h2>
-        <p>Please enter your details to get started. These are used in PDF headers, billing and LAA declarations.</p>
-        <label>Fee Earner Name <span style="color:#dc2626;">*</span></label>
-        <input type="text" id="fl-fee-earner-name" placeholder="e.g. Robert Smith" style="margin-bottom:0.75rem;">
-        <label>DSCC PIN/Number <span style="color:#dc2626;">*</span></label>
-        <input type="text" id="fl-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10">
-        <div class="first-launch-footer">
-          <button type="button" id="fl-skip" class="btn btn-secondary">Skip for now</button>
-          <button type="button" id="fl-save" class="btn btn-primary">Save &amp; Continue</button>
+        <!-- Step indicator -->
+        <div class="fl-steps">
+          <span class="fl-step active" data-step="1">1. Your details</span>
+          <span class="fl-step" data-step="2">2. Backup</span>
+        </div>
+        <!-- Step 1: User details -->
+        <div id="fl-step-1">
+          <h2>Welcome to Custody Note</h2>
+          <p>Please enter your details to get started. These are used in PDF headers, billing and LAA declarations.</p>
+          <label>Fee Earner Name <span style="color:#dc2626;">*</span></label>
+          <input type="text" id="fl-fee-earner-name" placeholder="e.g. Robert Smith" style="margin-bottom:0.75rem;">
+          <label>DSCC PIN/Number <span style="color:#dc2626;">*</span></label>
+          <input type="text" id="fl-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10">
+          <div class="first-launch-footer">
+            <button type="button" id="fl-skip" class="btn btn-secondary">Skip for now</button>
+            <button type="button" id="fl-next" class="btn btn-primary">Next &rarr;</button>
+          </div>
+        </div>
+        <!-- Step 2: Backup destination -->
+        <div id="fl-step-2" style="display:none;">
+          <h2>Where should we back up?</h2>
+          <p>Your data is encrypted and backed up automatically. Choose an off-site folder so a copy is kept safely in the cloud.</p>
+          <div id="fl-backup-options" class="fl-backup-options">
+            <div class="fl-backup-scanning">Scanning for cloud folders&hellip;</div>
+          </div>
+          <div class="first-launch-footer">
+            <button type="button" id="fl-back" class="btn btn-secondary">&larr; Back</button>
+            <button type="button" id="fl-save" class="btn btn-primary">Save &amp; Finish</button>
+          </div>
         </div>
       </div>
     </div>

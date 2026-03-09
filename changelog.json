@@ -1,9 +1,77 @@
 {
   "releases": [
     {
+      "version": "1.4.19",
+      "date": "2026-03-09",
+      "latest": true,
+      "changes": [
+        "Sync fix — httpPost now follows HTTP redirects (301/302/307/308) and checks status codes",
+        "Sync fix — increased sync timeout from 10s to 30s to prevent timeouts with larger record sets",
+        "Sync fix — push no longer blindly clears sync_dirty; checks sync_version to avoid losing changes made during push",
+        "Sync fix — server-side push now writes to S3 in parallel batches of 10 (5x faster)",
+        "Sync fix — server-side pull now reads S3 in parallel batches of 10 with 200-record cap to prevent timeouts",
+        "Attachments moved to end of record near Invoices section with clearer description and guidance",
+        "Legacy attachments from custody/disclosure/interview sections auto-migrated to new unified location"
+      ]
+    },
+    {
+      "version": "1.4.18",
+      "date": "2026-03-09",
+      "latest": false,
+      "changes": [
+        "Sync fix — manual sync now reports correctly when not configured; pending count includes soft-deleted records",
+        "Backup clarity — settings screen shows a clear summary of where backups go (local, off-site, cloud)",
+        "Detect cloud folders button in Settings — finds OneDrive, Dropbox, Google Drive automatically",
+        "Case assessment — now a dropdown (Strong / Medium / Weak / N/A) with reasoning box",
+        "Client instructions — new larger text box for full client instructions above the summary",
+        "Clothing / shoes / phone seized — if Yes, prompts for what was seized and notes",
+        "Offence dates — clearer Start date / End date labels when Between is selected",
+        "Dropdown defaults — most disclosure and evidence fields default to No or N/A",
+        "Performance — form change handlers now update only the changed field inline; full DOM collection deferred"
+      ]
+    },
+    {
+      "version": "1.4.17",
+      "date": "2026-03-09",
+      "latest": false,
+      "changes": [
+        "First-launch wizard — step 2 now asks where to back up (OneDrive, Dropbox, Google Drive auto-detected)",
+        "Cloud folder detection — scans for OneDrive, Dropbox, Google Drive, iCloud and offers them as backup destinations",
+        "Version check fix — v1.4.16 GitHub release was stuck in Draft; now published correctly"
+      ]
+    },
+    {
+      "version": "1.4.16",
+      "date": "2026-03-09",
+      "latest": false,
+      "changes": [
+        "Performance — app reacts faster to input; debounced save, scoped DOM queries, reduced layout thrashing",
+        "Database writes batched — disk I/O no longer blocks on every keystroke",
+        "Smoother transitions — replaced expensive CSS effects with lightweight alternatives",
+        "Offence dropdowns now show full grouped list on focus with type-ahead search",
+        "Offence date qualifiers — On, Before, After, Between, On or about, Unknown",
+        "Benefit type — N/A option added",
+        "Confirmation of instructions — signatures optional via dropdown",
+        "Next location hidden when bail without charge (police station to return to covers it)",
+        "Sync status fix — no longer shows conflicting messages",
+        "Sync now button restored on home screen",
+        "Cloud backup works on restricted networks (cached entitlement)"
+      ]
+    },
+    {
+      "version": "1.4.15",
+      "date": "2026-03-09",
+      "latest": false,
+      "changes": [
+        "Sync status fix — no longer shows conflicting 'all synced' then 'pending' messages; counts now reflect actual state",
+        "Sync now button restored on home screen for manual sync",
+        "Cloud backup works on restricted networks — cached entitlement used when licence server is unreachable (e.g. government WiFi)"
+      ]
+    },
+    {
       "version": "1.4.14",
       "date": "2026-03-08",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Automatic record sync — changes sync within seconds across devices, Sync now button removed",
         "Version and changelog drift fix — website and app versions stay in sync"
