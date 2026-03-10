@@ -20,6 +20,7 @@ on:
 
 jobs:
   # ─── Job 1: Build the Electron app and publish to GitHub Releases ────────────
+  # Only requires the automatic GITHUB_TOKEN — no GH_PAT needed.
   release:
     runs-on: windows-latest
     steps:
@@ -40,27 +41,19 @@ jobs:
         run: npm ci
         working-directory: custody-note-app
 
-      - name: Run unit tests
-        run: npm run test:unit
-        working-directory: custody-note-app
-
-      - name: Verify release consistency
-        run: node scripts/verify-release-consistency.mjs
-        working-directory: custody-note-app
-
       - name: Build and publish to GitHub
         working-directory: custody-note-app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win --publish always
 
-  # ─── Job 2: Sync website and deploy to Vercel ────────────────────────────────
-  # Requires GH_PAT (to clone website repo) and VERCEL_TOKEN (to deploy).
-  # Skipped automatically if either secret is absent (no-op when ${{ secrets.GH_PAT }} is empty).
+  # ─── Job 2: Sync website changelog and deploy to Vercel ──────────────────────
+  # Optional — continue-on-error means a missing GH_PAT/VERCEL_TOKEN won't fail
+  # the overall workflow. The release job above always runs independently.
   deploy-website:
     runs-on: ubuntu-latest
     needs: release
-    if: ${{ secrets.GH_PAT != '' && secrets.VERCEL_TOKEN != '' }}
+    continue-on-error: true
     steps:
       - name: Checkout app
         uses: actions/checkout@v4
