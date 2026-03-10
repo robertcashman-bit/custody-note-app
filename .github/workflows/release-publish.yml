@@ -23,6 +23,8 @@ jobs:
   # Only requires the automatic GITHUB_TOKEN — no GH_PAT needed.
   release:
     runs-on: windows-latest
+    permissions:
+      contents: write  # needed to create GitHub Releases and upload assets
     steps:
       - name: Checkout app
         uses: actions/checkout@v4
