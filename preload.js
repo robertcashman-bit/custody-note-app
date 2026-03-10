@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('api', {
   quickfileFetchInvoices: () => ipcRenderer.invoke('quickfile-fetch-invoices'),
   quickfileFetchClients: () => ipcRenderer.invoke('quickfile-fetch-clients'),
   pickImage: () => ipcRenderer.invoke('pick-image'),
+  pickFile: () => ipcRenderer.invoke('pick-file'),
   importRecordFromFile: () => ipcRenderer.invoke('import-record-from-file'),
   importRecordFromPath: (filePath) => ipcRenderer.invoke('import-record-from-path', filePath),
   onAutoImportImported: (cb) => ipcRenderer.on('auto-import:imported', (_, payload) => cb(payload)),
@@ -76,6 +77,8 @@ contextBridge.exposeInMainWorld('api', {
   /* Cross-device sync */
   syncNow: () => ipcRenderer.invoke('sync-now'),
   syncStatus: () => ipcRenderer.invoke('sync-status'),
+  syncScheduleOnReconnect: () => ipcRenderer.invoke('sync-schedule-on-reconnect'),
+  syncGetDiagnostics: () => ipcRenderer.invoke('sync-get-diagnostics'),
   onSyncStatusChanged: (cb) => ipcRenderer.on('sync-status-changed', (_, data) => cb(data)),
   onRecordsUpdatedFromSync: (cb) => ipcRenderer.on('records-updated-from-sync', (_, data) => cb(data)),
   /* Auto-update */

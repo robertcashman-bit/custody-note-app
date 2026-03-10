@@ -152,8 +152,13 @@
             </button>
             <button type="button" id="home-card-attendance" class="home-action-card home-card-blue">
               <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg></span>
-              <span class="home-card-title">New Attendance</span>
-              <span class="home-card-sub">Record an in-person attendance at a police station</span>
+              <span class="home-card-title">Custody Attendance</span>
+              <span class="home-card-sub">Record an in-person attendance (client in custody)</span>
+            </button>
+            <button type="button" id="home-card-voluntary" class="home-action-card home-card-green">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/><path d="M9 11h6"/></svg></span>
+              <span class="home-card-title">Voluntary Attendance</span>
+              <span class="home-card-sub">Client attending voluntarily (not in custody)</span>
             </button>
             <button type="button" id="home-card-video-capture" class="home-action-card home-card-blue">
               <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></span>
@@ -288,6 +293,12 @@
             <button type="button" class="filter-btn" data-filter="finalised">Finalised</button>
             <button type="button" class="filter-btn" data-filter="archived">Archived</button>
           </div>
+          <select id="list-mode-filter" class="list-sort-select" title="Filter by attendance type">
+            <option value="all">All types</option>
+            <option value="custody">Custody</option>
+            <option value="voluntary">Voluntary</option>
+            <option value="telephone">Telephone</option>
+          </select>
           <select id="list-sort" class="list-sort-select">
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
@@ -312,6 +323,13 @@
         </div>
         <div class="qc-form">
           <div class="form-row-2col">
+            <div class="form-group" style="grid-column:1/-1;">
+              <label>Attendance Type</label>
+              <select id="qc-attendance-mode" title="Custody = client under arrest; Voluntary = client attending voluntarily">
+                <option value="custody">Custody</option>
+                <option value="voluntary">Voluntary</option>
+              </select>
+            </div>
             <div class="form-group" style="grid-column:1/-1;">
               <label>Client Name</label>
               <div class="name-row">
@@ -526,6 +544,10 @@
           <div class="settings-card">
             <h2>Escape Fee Cases</h2>
             <div class="report-stat" id="report-escape-count">0</div>
+          </div>
+          <div class="settings-card" style="grid-column:1/-1;">
+            <h2>By Attendance Type</h2>
+            <div id="report-by-type" class="report-breakdown"></div>
           </div>
           <div class="settings-card" style="grid-column:1/-1;">
             <h2>By Firm</h2>
@@ -1039,11 +1061,12 @@
           <details class="help-section">
             <summary class="help-heading">Home Screen</summary>
             <div class="help-content">
-              <p>The home screen is your command centre. It shows a greeting, the current date and time, and three action cards:</p>
+              <p>The home screen is your command centre. It shows a greeting, the current date and time, and action cards:</p>
               <ul>
                 <li><strong>New Tel Advice</strong> &mdash; Start a telephone advice record (INVB claim). Use this for police station advice calls where you do not physically attend.</li>
-                <li><strong>Quick Capture</strong> &mdash; Rapidly capture key case details when you first receive an instruction. You can expand this into a full form later.</li>
-                <li><strong>New Attendance</strong> &mdash; Start a full police station attendance note for an in-person attendance.</li>
+                <li><strong>Quick Capture</strong> &mdash; Rapidly capture key case details when you first receive an instruction. Choose Custody or Voluntary mode; you can expand into a full form later.</li>
+                <li><strong>Custody Attendance</strong> &mdash; Start a full police station attendance note when the client is <em>in custody</em> (under arrest). Includes PACE reviews, detention clock, and custody record.</li>
+                <li><strong>Voluntary Attendance</strong> &mdash; Start a voluntary interview attendance note when the client attends <em>voluntarily</em> (not under arrest). Client is free to leave unless arrested. No PACE reviews or detention clock.</li>
               </ul>
               <p>Below the cards you will see <strong>Latest activity</strong> showing your most recent records (up to 10). Use <strong>View all</strong> to open the full list in All Records. A status strip confirms your internet and backup status.</p>
               <p>The <strong>search bar</strong> at the top of the header lets you search across all records by client name, UFN, station, custody number, or date.</p>
@@ -1053,7 +1076,8 @@
           <details class="help-section">
             <summary class="help-heading">Quick Capture</summary>
             <div class="help-content">
-              <p>Quick Capture is designed for the moment you receive an instruction &mdash; while driving, on the phone, or in a rush. It captures the essential details:</p>
+              <p>Quick Capture is designed for the moment you receive an instruction &mdash; while driving, on the phone, or in a rush. At the top, choose <strong>Attendance Type</strong>: <em>Custody</em> (client under arrest) or <em>Voluntary</em> (client attending voluntarily).</p>
+              <p>It captures the essential details:</p>
               <ul>
                 <li>Client name, police station, offence, DSCC number</li>
                 <li>Instruction time, first contact time (LAA requirement)</li>
@@ -1063,7 +1087,7 @@
               <p>You have two options when saving:</p>
               <ul>
                 <li><strong>Save as Draft</strong> &mdash; Saves the quick capture data. You can open it later from All Records to continue.</li>
-                <li><strong>Expand to Full Form</strong> &mdash; Immediately opens the full 9-section attendance form with all your quick capture data pre-filled.</li>
+                <li><strong>Expand to Full Form</strong> &mdash; Immediately opens the full attendance form (custody or voluntary) with all your quick capture data pre-filled.</li>
               </ul>
             </div>
           </details>
@@ -1119,6 +1143,23 @@
           </details>
 
           <details class="help-section">
+            <summary class="help-heading">Voluntary Attendance</summary>
+            <div class="help-content">
+              <p>Use <strong>Voluntary Attendance</strong> when the client attends <em>voluntarily</em> under PACE &mdash; not under arrest, free to leave unless arrested. The form has <strong>7 sections</strong> tailored to voluntary interviews:</p>
+              <ol>
+                <li><strong>Matter Setup</strong> &mdash; Date, firm, client, location, OIC/interviewer, instruction source, DSCC reference, UFN, allegation.</li>
+                <li><strong>Voluntary Status &amp; Rights</strong> &mdash; Attending voluntarily? Free to leave explained? Caution given? Constable present?</li>
+                <li><strong>Welfare &amp; Safeguards</strong> &mdash; Youth/vulnerable adult, appropriate adult, interpreter, fitness to be interviewed.</li>
+                <li><strong>Disclosure &amp; Preparation</strong> &mdash; Disclosure summary, advice given, reasons, interview strategy.</li>
+                <li><strong>Attendance Record</strong> &mdash; Consultation and interview times, representations made. If the client is <strong>arrested during attendance</strong>, complete arrest time and conversion notes, then use <strong>Convert to custody workflow</strong> to create a new custody record with audit trail.</li>
+                <li><strong>Outcome &amp; Billing</strong> &mdash; Outcome code (CN04–CN13), sufficient benefit, time recording.</li>
+                <li><strong>Client Aftercare</strong> &mdash; What was explained, next steps, follow-up tasks.</li>
+              </ol>
+              <p>The <strong>Billing readiness</strong> panel (near Finalise) shows warnings for missing UFN, outcome code, DSCC reference, or sufficient benefit note. A <strong>confidentiality reminder</strong> appears before exporting or emailing.</p>
+            </div>
+          </details>
+
+          <details class="help-section">
             <summary class="help-heading">Telephone Advice (INVB)</summary>
             <div class="help-content">
               <p>The telephone advice form is a streamlined 4-section form for police station advice calls where you do not physically attend:</p>
@@ -1161,7 +1202,7 @@
               <p>Access All Records from the gear menu or by clicking <strong>View all</strong> on the home screen.</p>
               <ul>
                 <li><strong>Search</strong> &mdash; search by client name, UFN, station, custody number, or date.</li>
-                <li><strong>Filter</strong> &mdash; filter by All, Drafts, or Finalised records.</li>
+                <li><strong>Filter</strong> &mdash; filter by All, Drafts, or Finalised records; and by <strong>Attendance Type</strong> (All / Custody / Voluntary / Telephone).</li>
                 <li><strong>Sort</strong> &mdash; sort by newest, oldest, client name A-Z, or station.</li>
                 <li><strong>Compact view</strong> &mdash; toggle compact view for a denser list.</li>
               </ul>
@@ -1215,6 +1256,7 @@
                 <li><strong>This Month</strong> &mdash; total attendances this calendar month.</li>
                 <li><strong>This Year</strong> &mdash; total attendances this calendar year.</li>
                 <li><strong>Escape Fee Cases</strong> &mdash; number of cases exceeding the LAA escape threshold.</li>
+                <li><strong>By Attendance Type</strong> &mdash; breakdown by Custody, Voluntary, and Telephone.</li>
                 <li><strong>By Firm</strong> &mdash; breakdown of records by instructing firm.</li>
                 <li><strong>By Station</strong> &mdash; breakdown of records by police station.</li>
               </ul>
@@ -1262,7 +1304,7 @@
                 <li><strong>Finalised</strong> &mdash; locked for editing. To make changes, use the <strong>Amend</strong> button in All Records, which reverts the record to draft.</li>
               </ul>
               <p>To finalise a record, press <strong>Save / Exit</strong> and choose <strong>Finalise</strong>. The app checks for missing required fields and warns you before finalising.</p>
-              <p>To export a PDF, press <kbd>Ctrl</kbd> + <kbd>E</kbd> or use the PDF export button. The PDF is saved to your Desktop.</p>
+              <p>To export a PDF, press <kbd>Ctrl</kbd> + <kbd>E</kbd> or use the PDF export button. The PDF is saved to your Desktop. Before export, print, or email, a <strong>confidentiality reminder</strong> appears &mdash; only share with authorised recipients and ensure client confidentiality (SRA standards).</p>
               <p>Official LAA forms (CRM1, CRM2, CRM3, Applicant Declaration) are available in Settings and from the <strong>LAA Forms</strong> button in the form header. Forms are pre-filled from the current record where possible.</p>
               <h4>LAA billing codes</h4>
               <p>The form uses standard LAA codes for billing and claims. Key fields: <strong>DSCC number</strong> (from the duty solicitor call centre), <strong>UFN</strong> (Unique File Number from the instructing firm), <strong>MAAT ID</strong> (client identifier on the Legal Aid Agency system), and <strong>LAA account</strong> (for case tracking). These appear in Admin &amp; Billing and in the form header. Use them to match your exported PDFs and time records to LAA claims and firm file systems.</p>
@@ -1356,6 +1398,15 @@
             <button type="button" id="fl-save" class="btn btn-primary">Save &amp; Finish</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Sync diagnostics panel (Ctrl+Shift+D) -->
+    <div id="sync-diagnostics-overlay" class="sync-diagnostics-overlay" style="display:none;">
+      <div class="sync-diagnostics-box">
+        <h3>Sync diagnostics</h3>
+        <pre id="sync-diagnostics-content"></pre>
+        <button type="button" id="sync-diagnostics-close" class="btn btn-secondary">Close</button>
       </div>
     </div>
 

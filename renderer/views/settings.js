@@ -262,6 +262,9 @@ function addFirm() {
     document.getElementById('new-firm-email').value = '';
     loadFirmsList();
     window.api.firmsList().then(function(f) { firms = f; });
+    showToast('Firm saved', 'success');
+  }).catch(function(err) {
+    showToast('Failed to save firm: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
   });
 }
 

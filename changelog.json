@@ -1,9 +1,61 @@
 {
   "releases": [
     {
+      "version": "1.4.24",
+      "date": "2026-03-10",
+      "latest": true,
+      "changes": [
+        "Offline-first sync — local SQLite is source of truth; saves never wait for internet; sync runs in background",
+        "Sync queue — per-record queue; one failed record never blocks others; retry with backoff (10s, 30s, 2m, 10m, 30m)",
+        "8-second request timeout — prevents hanging on restricted Wi-Fi; timeout/network errors classified as retryable",
+        "Connectivity check — optional GET /api/health; clearer states: Synced, Pending sync, Saved locally, Sync delayed/blocked",
+        "Finalise fix — stop autosave before finalise; quietSave skips finalised records; backend rejects draft overwriting finalised",
+        "Sync on reconnect — online event and visibilitychange trigger immediate sync attempt",
+        "Diagnostics panel — Ctrl+Shift+D shows queue length, connectivity, last error for support"
+      ]
+    },
+    {
+      "version": "1.4.23",
+      "date": "2026-03-10",
+      "latest": false,
+      "changes": [
+        "Voluntary Attendance mode — new first-class workflow for PACE voluntary interviews (client not in custody)",
+        "Home screen: separate cards for Custody Attendance and Voluntary Attendance; Voluntary uses dedicated green card",
+        "Voluntary form: 7 sections; conversion to custody when arrested; billing readiness; confidentiality reminder"
+      ]
+    },
+    {
+      "version": "1.4.22",
+      "date": "2026-03-10",
+      "latest": false,
+      "changes": [
+        "Save/Exit now shows a menu with 'Finalise & exit' and 'Save as draft & exit' — matches the help text and makes finalising easier to find",
+        "Finalise flow — shows 'Finalising…' toast immediately so you know it's working; improved error handling when save fails",
+        "Firms now save correctly — firms table schema fixed (contact_name was missing, causing saves to fail); error toasts when firm save fails; 'Add new firm' in form includes source of referral; selecting a firm auto-fills contact name, phone, email, LAA account, and source of referral"
+      ]
+    },
+    {
+      "version": "1.4.21",
+      "date": "2026-03-10",
+      "latest": false,
+      "changes": [
+        "Fixed ENOENT crash when saving database — prevents concurrent saveDb calls from racing on rename; ensures userData directory exists; wraps save in try-catch so errors no longer crash the app"
+      ]
+    },
+    {
+      "version": "1.4.20",
+      "date": "2026-03-10",
+      "latest": false,
+      "changes": [
+        "Attachments — now accepts any file type (PDF, Word, Excel, CSV, images); file icon shown for non-image attachments; size limit raised to 15MB",
+        "Finalise — fixed silent failure when finalising a record; any pending auto-save is now cancelled before the finalise call to prevent a draft-save from undoing it; errors are now surfaced with a toast",
+        "Performance — removed duplicate progress bar rebuild that ran on every field change; context bar update debounced to 250ms"
+      ]
+    },
+    {
       "version": "1.4.19",
       "date": "2026-03-09",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Sync fix — httpPost now follows HTTP redirects (301/302/307/308) and checks status codes",
         "Sync fix — increased sync timeout from 10s to 30s to prevent timeouts with larger record sets",

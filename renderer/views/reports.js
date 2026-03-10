@@ -12,12 +12,16 @@ function loadReports() {
     var monthCount = 0, yearCount = 0, escapeCount = 0;
     var firmMap = {}, stationMap = {};
 
+    var typeMap = { custody: 0, voluntary: 0, telephone: 0 };
     rows.forEach(function(r) {
       var d = safeJson(r.data);
       var dt = d.date || '';
       if (dt.indexOf(thisMonth) === 0) monthCount++;
       if (dt.indexOf(thisYear) === 0) yearCount++;
       if (d.isEscapeFee === 'Yes' || (d.totalNet && parseFloat(d.totalNet) > LAA.escapeThreshold)) escapeCount++;
+      if (d._formType === 'telephone') typeMap.telephone++;
+      else if (d.attendanceMode === 'voluntary') typeMap.voluntary++;
+      else typeMap.custody++;
       var fn = d.firmName || 'Unknown';
       firmMap[fn] = (firmMap[fn] || 0) + 1;
       var sn = d.policeStationName || 'Unknown';
@@ -30,6 +34,13 @@ function loadReports() {
     if (monthEl) monthEl.textContent = monthCount + ' attendances';
     if (yearEl) yearEl.textContent = yearCount + ' attendances';
     if (escEl) escEl.textContent = escapeCount;
+
+    var typeDiv = document.getElementById('report-by-type');
+    if (typeDiv) {
+      typeDiv.innerHTML = '<div class="report-row"><span class="report-row-label">Custody</span><span class="report-row-val">' + typeMap.custody + '</span></div>' +
+        '<div class="report-row"><span class="report-row-label">Voluntary</span><span class="report-row-val">' + typeMap.voluntary + '</span></div>' +
+        '<div class="report-row"><span class="report-row-label">Telephone</span><span class="report-row-val">' + typeMap.telephone + '</span></div>';
+    }
 
     var firmDiv = document.getElementById('report-by-firm');
     if (firmDiv) {

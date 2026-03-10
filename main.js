@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const { URL } = require('url');
 const initSqlJs = require('sql.js');
 const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-import');
+const { createSyncWorker } = require('./main/syncWorker');
 
 let mainWindow;
 let db;
@@ -398,14 +399,28 @@ function getDbPath() {
   return path.join(userData, 'attendances.db');
 }
 
+let _saveDbInProgress = false;
+
 function saveDb() {
   if (!db) return;
-  const data = db.export();
-  const encrypted = encryptBuffer(Buffer.from(data));
-  const dbPath = getDbPath();
-  const tmpPath = dbPath + '.tmp';
-  fs.writeFileSync(tmpPath, encrypted);
-  fs.renameSync(tmpPath, dbPath);
+  if (_saveDbInProgress) return; /* Prevent concurrent saves – avoids ENOENT race on rename */
+  _saveDbInProgress = true;
+  try {
+    const data = db.export();
+    const encrypted = encryptBuffer(Buffer.from(data));
+    const dbPath = getDbPath();
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const tmpPath = dbPath + '.tmp';
+    fs.writeFileSync(tmpPath, encrypted);
+    if (fs.existsSync(tmpPath)) {
+      fs.renameSync(tmpPath, dbPath);
+    }
+  } catch (err) {
+    console.error('[saveDb] Failed to save database:', err.message);
+  } finally {
+    _saveDbInProgress = false;
+  }
 }
 
 function dbGet(sql, params = []) {
@@ -775,13 +790,16 @@ async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       laa_account TEXT DEFAULT '',
+      contact_name TEXT DEFAULT '',
       contact_email TEXT DEFAULT '',
       contact_phone TEXT DEFAULT '',
       address TEXT DEFAULT '',
+      source_of_referral TEXT DEFAULT '',
       is_default INTEGER DEFAULT 0,
       UNIQUE(name)
     );
   `);
+  try { db.run("ALTER TABLE firms ADD COLUMN source_of_referral TEXT DEFAULT ''"); } catch (_) {}
 
   db.run(`CREATE INDEX IF NOT EXISTS idx_attendances_updated ON attendances(updated_at);`);
 
@@ -796,6 +814,33 @@ async function initDb() {
     user_note TEXT
   );`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_audit_attendance ON audit_log(attendance_id);`);
+
+  /* ─── Sync queue (offline-first, per-record, one bad never blocks) ─── */
+  db.run(`CREATE TABLE IF NOT EXISTS sync_queue (
+    id TEXT PRIMARY KEY,
+    record_id TEXT NOT NULL,
+    operation TEXT DEFAULT 'upsert',
+    payload TEXT,
+    created_at INTEGER NOT NULL,
+    retry_count INTEGER DEFAULT 0,
+    last_attempt INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    error TEXT
+  );`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sync_queue_record ON sync_queue(record_id);`);
+
+  /* ─── Sync attempt audit (for reliability and traceability) ─── */
+  db.run(`CREATE TABLE IF NOT EXISTS sync_attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    correlation_id TEXT,
+    direction TEXT NOT NULL,
+    record_count INTEGER DEFAULT 0,
+    success INTEGER NOT NULL,
+    error_message TEXT,
+    created_at TEXT DEFAULT (datetime('now'))
+  );`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sync_attempts_created ON sync_attempts(created_at);`);
 
   /* ─── Soft-delete & indexed search columns (idempotent) ─── */
   try { db.run("ALTER TABLE attendances ADD COLUMN deleted_at TEXT DEFAULT NULL"); } catch (_) {}
@@ -815,6 +860,7 @@ async function initDb() {
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty);`);
   backfillSyncIds();
+  migrateSyncDirtyToQueue();
 
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_client ON attendances(client_name);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_date ON attendances(attendance_date);`);
@@ -1239,6 +1285,75 @@ let _syncSoonTimer = null;
 const SYNC_INTERVAL_MS = 30 * 1000; // 30 seconds background poll
 const SYNC_SOON_DELAY_MS = 3000;    // debounce: sync 3s after last mutation
 const SYNC_MAX_PUSH_BATCH = 50;
+const SYNC_MAX_ATTEMPTS = 3;
+const SYNC_RETRY_BASE_MS = 2000;
+const SYNC_RETRY_JITTER_MS = 500;
+const SYNC_ATTEMPTS_KEEP = 100;
+
+function generateCorrelationId() {
+  const hex = crypto.randomBytes(8).toString('hex');
+  return 'sync-' + hex;
+}
+
+function logSyncAttempt(correlationId, direction, recordCount, success, errorMessage) {
+  if (!db) return;
+  try {
+    dbRun(
+      'INSERT INTO sync_attempts (correlation_id, direction, record_count, success, error_message) VALUES (?,?,?,?,?)',
+      [correlationId || null, direction, recordCount || 0, success ? 1 : 0, errorMessage || null]
+    );
+    const row = dbGet('SELECT COUNT(*) as c FROM sync_attempts');
+    if (row && row.c > SYNC_ATTEMPTS_KEEP) {
+      dbRun('DELETE FROM sync_attempts WHERE id IN (SELECT id FROM sync_attempts ORDER BY id ASC LIMIT ?)', [row.c - SYNC_ATTEMPTS_KEEP]);
+    }
+  } catch (e) {
+    console.warn('[Sync] Failed to write sync_attempts:', e && e.message ? e.message : e);
+  }
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/** Classify sync errors: retryable (timeout, 5xx, 429, network) vs non-retryable (4xx validation/auth). */
+function isRetryableSyncError(err) {
+  if (!err) return false;
+  const msg = (err.message || String(err)).toLowerCase();
+  const code = err.code || err.statusCode;
+  /* Network/system: always retry */
+  if (code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ECONNRESET' ||
+      code === 'ENETUNREACH' || code === 'EAI_AGAIN') return true;
+  if (msg.includes('timeout') || msg.includes('network') || msg.includes('fetch')) return true;
+  /* HTTP status: 429, 5xx retryable; 400, 401, 403, 404, 422 non-retryable */
+  const m = msg.match(/server error (\d+)/i);
+  const status = code || (m && parseInt(m[1], 10));
+  if (status >= 500 || status === 429) return true;
+  if ([400, 401, 403, 404, 422].includes(status)) return false;
+  /* Unknown: treat as retryable (conservative for restricted networks) */
+  return true;
+}
+
+function withRetry(fn, correlationId, direction) {
+  return fn().catch(async (err) => {
+    if (!isRetryableSyncError(err)) {
+      console.warn('[Sync]', direction, 'non-retryable error, not retrying:', err && err.message ? err.message : err);
+      throw err;
+    }
+    let lastErr = err;
+    for (let attempt = 1; attempt < SYNC_MAX_ATTEMPTS; attempt++) {
+      const delay = SYNC_RETRY_BASE_MS * Math.pow(2, attempt - 1) + Math.floor(Math.random() * SYNC_RETRY_JITTER_MS);
+      console.warn('[Sync]', direction, 'attempt', attempt, 'failed:', lastErr && lastErr.message ? lastErr.message : lastErr, '- retry in', delay, 'ms');
+      await sleep(delay);
+      try {
+        return await fn();
+      } catch (e) {
+        if (!isRetryableSyncError(e)) throw e;
+        lastErr = e;
+      }
+    }
+    throw lastErr;
+  });
+}
 
 function generateSyncId() {
   const bytes = crypto.randomBytes(16);
@@ -1263,6 +1378,31 @@ function backfillSyncIds() {
   }
 }
 
+/** Migrate sync_dirty records into sync_queue for offline-first processing. */
+function migrateSyncDirtyToQueue() {
+  if (!db) return;
+  try {
+    const hasTable = dbGet("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sync_queue'");
+    if (!hasTable) return;
+    const rows = dbAll('SELECT id FROM attendances WHERE sync_dirty=1');
+    const now = Date.now();
+    for (const row of rows || []) {
+      const qid = 'sq-' + crypto.randomBytes(12).toString('hex');
+      const rid = String(row.id);
+      dbRun('DELETE FROM sync_queue WHERE record_id=? AND status IN (\'pending\',\'syncing\')', [rid]);
+      dbRun(
+        'INSERT OR IGNORE INTO sync_queue (id, record_id, operation, payload, created_at, retry_count, last_attempt, status) VALUES (?,?,?,?,?,0,?,?)',
+        [qid, rid, 'upsert', '{}', now, now, 'pending']
+      );
+    }
+    if (rows && rows.length > 0) {
+      console.log('[Sync] Migrated', rows.length, 'dirty records to sync_queue');
+    }
+  } catch (e) {
+    console.warn('[Sync] migrateSyncDirtyToQueue failed:', e && e.message ? e.message : e);
+  }
+}
+
 function getSyncApiUrl() {
   const base = getManagedCloudApiUrl();
   return base || null;
@@ -1279,7 +1419,7 @@ function setLastSyncTimestamp(ts) {
   dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('lastSyncPullAt', ?)", [ts]);
 }
 
-async function syncPush() {
+async function syncPush(opts) {
   const apiUrl = getSyncApiUrl();
   if (!apiUrl) return { pushed: 0 };
 
@@ -1314,22 +1454,25 @@ async function syncPush() {
     version: r.sync_version || 1,
   }));
 
+  const syncOpts = { timeout: 30000 };
+  if (opts && opts.correlationId) syncOpts.headers = { 'X-Correlation-Id': opts.correlationId };
   const resp = await httpPost(`${apiUrl}/api/sync/push`, {
     key: data.key,
     machineId: getMachineId(),
     records,
-  }, { timeout: 30000 });
+  }, syncOpts);
 
   if (resp && resp.ok) {
     for (const r of dirtyRows) {
       dbRun('UPDATE attendances SET sync_dirty=0 WHERE sync_id=? AND sync_version=?', [r.sync_id, r.sync_version || 1]);
     }
+    flushDb();
     return { pushed: resp.written || 0 };
   }
   throw new Error(resp && resp.error ? resp.error : 'Push failed');
 }
 
-async function syncPull() {
+async function syncPull(opts) {
   const apiUrl = getSyncApiUrl();
   if (!apiUrl) return { pulled: 0 };
 
@@ -1337,11 +1480,13 @@ async function syncPull() {
   if (!data || !data.key) return { pulled: 0 };
 
   const since = getLastSyncTimestamp();
+  const syncOpts = { timeout: 30000 };
+  if (opts && opts.correlationId) syncOpts.headers = { 'X-Correlation-Id': opts.correlationId };
   const resp = await httpPost(`${apiUrl}/api/sync/pull`, {
     key: data.key,
     machineId: getMachineId(),
     since,
-  }, { timeout: 30000 });
+  }, syncOpts);
 
   if (!resp || !resp.ok) {
     throw new Error(resp && resp.error ? resp.error : 'Pull failed');
@@ -1417,6 +1562,7 @@ async function runSyncCycle() {
   const data = readLicenceData();
   if (!data || !data.key) return { ran: false, reason: 'no-licence' };
 
+  const correlationId = generateCorrelationId();
   _syncInProgress = true;
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('sync-status-changed', { status: 'syncing' });
@@ -1427,19 +1573,25 @@ async function runSyncCycle() {
   let hadError = false;
 
   try {
-    pushResult = await syncPush();
-    if (pushResult.pushed > 0) console.info('[Sync] Pushed', pushResult.pushed, 'records');
+    pushResult = await withRetry(() => syncPush({ correlationId }), correlationId, 'push');
+    if (pushResult.pushed > 0) console.info('[Sync]', correlationId, 'Pushed', pushResult.pushed, 'records');
+    logSyncAttempt(correlationId, 'push', pushResult.pushed, true, null);
   } catch (e) {
     hadError = true;
-    console.error('[Sync] Push FAILED:', e && e.message ? e.message : e);
+    const errMsg = e && e.message ? e.message : String(e);
+    console.error('[Sync]', correlationId, 'Push FAILED:', errMsg);
+    logSyncAttempt(correlationId, 'push', 0, false, errMsg);
   }
 
   try {
-    pullResult = await syncPull();
-    if (pullResult.pulled > 0) console.info('[Sync] Pulled', pullResult.pulled, 'records');
+    pullResult = await withRetry(() => syncPull({ correlationId }), correlationId, 'pull');
+    if (pullResult.pulled > 0) console.info('[Sync]', correlationId, 'Pulled', pullResult.pulled, 'records');
+    logSyncAttempt(correlationId, 'pull', pullResult.pulled, true, null);
   } catch (e) {
     hadError = true;
-    console.error('[Sync] Pull FAILED:', e && e.message ? e.message : e);
+    const errMsg = e && e.message ? e.message : String(e);
+    console.error('[Sync]', correlationId, 'Pull FAILED:', errMsg);
+    logSyncAttempt(correlationId, 'pull', 0, false, errMsg);
   }
 
   _syncInProgress = false;
@@ -1458,36 +1610,55 @@ async function runSyncCycle() {
 
   const total = (pushResult.pushed || 0) + (pullResult.pulled || 0);
   if (total > 0) {
-    console.info(`[Sync] Cycle complete: pushed=${pushResult.pushed}, pulled=${pullResult.pulled}`);
+    console.info('[Sync]', correlationId, 'Cycle complete: pushed=' + pushResult.pushed + ', pulled=' + pullResult.pulled);
   }
   return { ran: true, hadError, pushed: pushResult.pushed || 0, pulled: pullResult.pulled || 0 };
 }
 
+let _syncWorker = null;
+
+function getSyncWorker() {
+  if (!_syncWorker && db) {
+    _syncWorker = createSyncWorker({
+      db,
+      dbRun,
+      dbGet: (sql, params) => dbGet(sql, params ?? []),
+      dbAll: (sql, params) => dbAll(sql, params ?? []),
+      flushDb,
+      getSyncApiUrl,
+      readLicenceData,
+      getMachineId,
+      httpPost: (url, body, opts) => httpPost(url, body, { ...opts, timeout: opts && opts.timeout || 8000 }),
+      httpGetWithTimeout,
+      syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
+      onStatusChange: () => {},
+      sendToRenderer: (channel, data) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data); },
+    });
+  }
+  return _syncWorker;
+}
+
+function enqueueSyncForRecord(recordId, operation = 'upsert') {
+  const w = getSyncWorker();
+  if (w) w.enqueue(String(recordId), operation, {});
+}
+
 function startSyncTimer() {
-  if (_syncTimer) return;
-  runSyncCycle().catch(() => {});
-  _syncTimer = setInterval(() => {
-    runSyncCycle().catch(() => {});
-  }, SYNC_INTERVAL_MS);
+  const w = getSyncWorker();
+  if (w) w.start();
 }
 
 function stopSyncTimer() {
-  if (_syncTimer) { clearInterval(_syncTimer); _syncTimer = null; }
-  if (_syncSoonTimer) { clearTimeout(_syncSoonTimer); _syncSoonTimer = null; }
+  if (_syncWorker) _syncWorker.stop();
 }
 
 /**
- * Debounced immediate sync — called after any record mutation so changes
- * reach the other device within seconds instead of waiting for the next
- * 30-second poll.  Multiple rapid saves (e.g. autosave) are batched into
- * one cycle via the 3-second debounce.
+ * Schedule sync soon — called after any record mutation.
+ * Offline-first: sync runs in background; UI never waits.
  */
 function scheduleSyncSoon() {
-  if (_syncSoonTimer) clearTimeout(_syncSoonTimer);
-  _syncSoonTimer = setTimeout(() => {
-    _syncSoonTimer = null;
-    runSyncCycle().catch(() => {});
-  }, SYNC_SOON_DELAY_MS);
+  const w = getSyncWorker();
+  if (w) w.scheduleSoon();
 }
 
 function createWindow() {
@@ -1587,7 +1758,7 @@ function createWindow() {
               log('1. Splash gone, header present, home view active');
 
               /* 1b. Home action cards exist */
-              var homeCards = ['home-card-attendance','home-card-telephone','home-card-quick'];
+              var homeCards = ['home-card-attendance','home-card-voluntary','home-card-telephone','home-card-quick'];
               var cardMissing = homeCards.filter(function(id) { return !document.getElementById(id); });
               if (cardMissing.length) errors.push('Home missing cards: ' + cardMissing.join(', '));
               log('1b. Home action cards present');
@@ -2259,9 +2430,36 @@ function getLicenceValidationUrl() {
   return base ? base + '/api/licence/validate' : null;
 }
 
+function httpGetWithTimeout(url, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    try {
+      const parsed = new URL(url);
+      if (!isAllowedApiUrl(url)) return reject(new Error('URL not allowed'));
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const req = mod.request({
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        timeout: timeoutMs || 8000,
+      }, (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => resolve({ statusCode: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, data }));
+      });
+      req.on('error', (e) => { const err = e instanceof Error ? e : new Error(String(e)); if (e && e.code) err.code = e.code; reject(err); });
+      req.on('timeout', () => { req.destroy(); const err = new Error('Timeout'); err.code = 'ETIMEDOUT'; reject(err); });
+      req.end();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 function httpPost(url, body, opts) {
   const timeoutMs = (opts && opts.timeout) || 15000;
   const maxRedirects = (opts && opts._redirectCount) || 0;
+  const extraHeaders = (opts && opts.headers) || {};
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -2272,18 +2470,19 @@ function httpPost(url, body, opts) {
     }
     const mod = parsed.protocol === 'https:' ? https : http;
     const payload = typeof body === 'string' ? body : JSON.stringify(body);
+    const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...extraHeaders };
     const req = mod.request({
       hostname: parsed.hostname,
       port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
       path: parsed.pathname + parsed.search,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      headers,
       timeout: timeoutMs,
     }, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
         if (maxRedirects >= 3) return reject(new Error('Too many redirects'));
         res.resume();
-        resolve(httpPost(res.headers.location, body, { timeout: timeoutMs, _redirectCount: maxRedirects + 1 }));
+        resolve(httpPost(res.headers.location, body, { timeout: timeoutMs, _redirectCount: maxRedirects + 1, headers: extraHeaders }));
         return;
       }
       let data = '';
@@ -2292,13 +2491,24 @@ function httpPost(url, body, opts) {
         if (res.statusCode >= 400) {
           let errMsg = 'Server error ' + res.statusCode;
           try { const j = JSON.parse(data); if (j.error) errMsg = j.error; } catch (_) {}
-          return reject(new Error(errMsg));
+          const err = new Error(errMsg);
+          err.statusCode = res.statusCode;
+          return reject(err);
         }
         try { resolve(JSON.parse(data)); } catch (_) { reject(new Error('Invalid response from server')); }
       });
     });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
+    req.on('error', (e) => {
+      const err = e instanceof Error ? e : new Error(String(e));
+      if (e && e.code) err.code = e.code;
+      reject(err);
+    });
+    req.on('timeout', () => {
+      req.destroy();
+      const err = new Error('Timeout');
+      err.code = 'ETIMEDOUT';
+      reject(err);
+    });
     req.write(payload);
     req.end();
   });
@@ -2803,6 +3013,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       dbRun('UPDATE attendances SET status=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', ['draft', now, nextVer, id]);
       db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'unlocked_for_amendment', now]);
       markDbDirty();
+      enqueueSyncForRecord(id);
     }
     return id;
   }
@@ -2861,6 +3072,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       [id, action, previousSnapshot, changedFields, now]
     );
     markDbDirty();
+    enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert');
     return id;
   }
 
@@ -2879,6 +3091,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
         [existingId, 'updated', now]
       );
       markDbDirty();
+      enqueueSyncForRecord(existingId);
       return existingId;
     }
     // Guard against burst duplicate inserts (double-click / repeated handler firing):
@@ -2895,6 +3108,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
           [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, nv, recentDup.id]
         );
         markDbDirty();
+        enqueueSyncForRecord(recentDup.id);
         return recentDup.id;
       }
     } catch (e) {
@@ -2931,6 +3145,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       'INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)',
       [newId, 'created', now]
     );
+    enqueueSyncForRecord(newId);
   }
   return newId;
 });
@@ -2943,6 +3158,7 @@ ipcMain.handle('attendance-archive', (_, id) => {
   dbRun('UPDATE attendances SET archived_at=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, now, nv, id]);
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'archived', now]);
   markDbDirty();
+  enqueueSyncForRecord(id);
   return true;
 });
 
@@ -2953,6 +3169,7 @@ ipcMain.handle('attendance-unarchive', (_, id) => {
   const nv = (ev && ev.sync_version || 1) + 1;
   dbRun('UPDATE attendances SET archived_at=NULL, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, nv, id]);
   markDbDirty();
+  enqueueSyncForRecord(id);
   return true;
 });
 
@@ -2968,6 +3185,7 @@ ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
       [id, 'soft_deleted', reason || '', now]
     );
     markDbDirty();
+    enqueueSyncForRecord(id);
     return { soft: true };
   }
   dbRun('DELETE FROM attendances WHERE id = ?', [id]);
@@ -3017,18 +3235,19 @@ ipcMain.handle('stations-replace', (_, stations) => {
 });
 
 ipcMain.handle('firms-list', () => {
-  return dbAll('SELECT id, name, laa_account, contact_name, contact_email, contact_phone, address, is_default FROM firms ORDER BY is_default DESC, name');
+  return dbAll('SELECT id, name, laa_account, contact_name, contact_email, contact_phone, address, source_of_referral, is_default FROM firms ORDER BY is_default DESC, name');
 });
 
 ipcMain.handle('firm-save', (_, firm) => {
+  const srcRef = firm.source_of_referral || '';
   if (firm.id) {
-    dbRun('UPDATE firms SET name=?, laa_account=?, contact_name=?, contact_email=?, contact_phone=?, address=?, is_default=? WHERE id=?',
-      [firm.name, firm.laa_account || '', firm.contact_name || '', firm.contact_email || '', firm.contact_phone || '', firm.address || '', firm.is_default ? 1 : 0, firm.id]);
+    dbRun('UPDATE firms SET name=?, laa_account=?, contact_name=?, contact_email=?, contact_phone=?, address=?, source_of_referral=?, is_default=? WHERE id=?',
+      [firm.name, firm.laa_account || '', firm.contact_name || '', firm.contact_email || '', firm.contact_phone || '', firm.address || '', srcRef, firm.is_default ? 1 : 0, firm.id]);
     markDbDirty();
     return firm.id;
   }
-  dbRun('INSERT OR REPLACE INTO firms (name, laa_account, contact_name, contact_email, contact_phone, address, is_default) VALUES (?, ?, ?, ?, ?, ?, ?)',
-    [firm.name, firm.laa_account || '', firm.contact_name || '', firm.contact_email || '', firm.contact_phone || '', firm.address || '', firm.is_default ? 1 : 0]);
+  dbRun('INSERT INTO firms (name, laa_account, contact_name, contact_email, contact_phone, address, source_of_referral, is_default) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    [firm.name, firm.laa_account || '', firm.contact_name || '', firm.contact_email || '', firm.contact_phone || '', firm.address || '', srcRef, firm.is_default ? 1 : 0]);
   markDbDirty();
   const r = dbGet('SELECT last_insert_rowid() as id');
   return r ? r.id : null;
@@ -3244,6 +3463,7 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     try { db.run("ALTER TABLE attendances ADD COLUMN sync_version INTEGER DEFAULT 1"); } catch (_) {}
     db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id)");
     db.run("CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty)");
+    db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
     backfillSyncIds();
     dbRun("UPDATE attendances SET sync_dirty=1");
     dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
@@ -3259,9 +3479,8 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
 /* ─── Cross-device sync IPC handlers ─── */
 ipcMain.handle('sync-now', async () => {
   try {
-    const result = await runSyncCycle();
-    if (!result || !result.ran) return { ok: false, error: 'Sync not configured — check your licence and internet connection' };
-    if (result.hadError) return { ok: false, error: 'Sync completed with errors — some records may not have synced' };
+    const w = getSyncWorker();
+    if (w) await w.runCycle();
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Sync failed' };
@@ -3271,15 +3490,42 @@ ipcMain.handle('sync-now', async () => {
 ipcMain.handle('sync-status', () => {
   const lastSync = getLastSyncTimestamp();
   const dirtyCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+  const queueCount = dbGet('SELECT COUNT(*) as c FROM sync_queue WHERE status IN (\'pending\',\'syncing\')');
   const totalCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const apiUrl = getSyncApiUrl();
+  const diag = getSyncWorker() ? getSyncWorker().getDiagnostics() : {};
+  let lastAttempts = [];
+  try {
+    const rows = dbAll('SELECT correlation_id, direction, record_count, success, error_message, created_at FROM sync_attempts ORDER BY id DESC LIMIT 10');
+    lastAttempts = (rows || []).map(r => ({
+      correlationId: r.correlation_id,
+      direction: r.direction,
+      recordCount: r.record_count,
+      success: !!r.success,
+      errorMessage: r.error_message,
+      createdAt: r.created_at,
+    }));
+  } catch (_) {}
   return {
     enabled: !!apiUrl,
-    inProgress: _syncInProgress,
-    lastSync: lastSync !== '1970-01-01T00:00:00.000Z' ? lastSync : null,
-    pendingChanges: dirtyCount ? dirtyCount.c : 0,
+    inProgress: diag.inProgress || false,
+    lastSync: lastSync !== '1970-01-01T00:00:00.000Z' ? lastSync : diag.lastSyncAt || null,
+    pendingChanges: (queueCount && queueCount.c) || diag.queueLength || dirtyCount?.c || 0,
     totalRecords: totalCount ? totalCount.c : 0,
+    lastAttempts,
+    connectivity: diag.connectivity,
+    lastError: diag.lastError,
   };
+});
+
+ipcMain.handle('sync-schedule-on-reconnect', () => {
+  scheduleSyncSoon();
+  return {};
+});
+
+ipcMain.handle('sync-get-diagnostics', () => {
+  const w = getSyncWorker();
+  return w ? w.getDiagnostics() : {};
 });
 
 ipcMain.handle('prepare-trial', async () => {
@@ -3391,6 +3637,36 @@ ipcMain.handle('pick-image', async () => {
   const buf = fs.readFileSync(filePath);
   if (buf.length > 5 * 1024 * 1024) return { error: 'File too large (max 5MB)' };
   return { dataUrl: 'data:' + mime + ';base64,' + buf.toString('base64'), name: path.basename(filePath) };
+});
+
+ipcMain.handle('pick-file', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile'],
+    title: 'Attach file',
+    filters: [
+      { name: 'All supported files', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'heic', 'heif'] },
+      { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif'] },
+      { name: 'PDF', extensions: ['pdf'] },
+      { name: 'Word / Excel', extensions: ['doc', 'docx', 'xls', 'xlsx'] },
+      { name: 'Text / CSV', extensions: ['txt', 'csv'] },
+      { name: 'All files', extensions: ['*'] },
+    ],
+  });
+  if (canceled || !filePaths.length) return null;
+  const filePath = filePaths[0];
+  const ext = path.extname(filePath).slice(1).toLowerCase();
+  const mimeMap = {
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+    webp: 'image/webp', bmp: 'image/bmp', heic: 'image/heic', heif: 'image/heif',
+    pdf: 'application/pdf',
+    doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    txt: 'text/plain', csv: 'text/csv',
+  };
+  const mime = mimeMap[ext] || 'application/octet-stream';
+  const buf = fs.readFileSync(filePath);
+  if (buf.length > 15 * 1024 * 1024) return { error: 'File too large (max 15MB)' };
+  return { dataUrl: 'data:' + mime + ';base64,' + buf.toString('base64'), name: path.basename(filePath), mime };
 });
 
 /* ─── Import record from PDF or JSON (Settings / Admin) ─── */

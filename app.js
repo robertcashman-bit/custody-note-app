@@ -1211,6 +1211,169 @@ var LAA = {
     },
   ];
 
+  /* ═══════════════════════════════════════════════════════════════
+     VOLUNTARY ATTENDANCE SECTIONS – PACE voluntary interview
+     Client not in custody; no detention clock, PACE reviews, or custody record.
+     ═══════════════════════════════════════════════════════════════ */
+  const voluntaryFormSections = [
+    /* ─────── VA1. MATTER SETUP ─────── */
+    {
+      id: 'volMatterSetup', title: '1. Matter Setup',
+      keyFields: ['date', 'forename', 'surname', 'policeStationId', 'firmId', 'instructionSource'],
+      fields: [
+        { key: '_note_voluntary', label: 'This is a voluntary attendance. Client is free to leave unless arrested.', type: 'sectionNote' },
+        { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Auto-assigned on create if left blank' },
+        { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
+        { key: 'date', label: 'Date of attendance', type: 'date' },
+        { key: 'firmId', label: 'Instructing Firm', type: 'firm', cols: 2 },
+        { key: 'feeEarnerName', label: 'Fee Earner / Rep', type: 'text', cols: 2 },
+        { key: 'schemeId', label: 'Police Station Scheme ID', type: 'text', placeholder: 'Auto-filled from station', readonly: true },
+        { type: 'nameRow', label: 'Client Name', fields: [
+            { key: 'forename', label: 'First name', placeholder: 'First name' },
+            { key: 'middleName', label: 'Middle name(s)', placeholder: 'Middle' },
+            { key: 'surname', label: 'Surname', placeholder: 'Surname' }
+          ], cols: 2 },
+        { key: 'dob', label: 'Date of Birth', type: 'date' },
+        { key: 'policeStationId', label: 'Location (Police Station)', type: 'station', cols: 2 },
+        { key: 'locationType', label: 'Location Type', type: 'select', options: ['police_station','other_police_location','other'], cols: 2 },
+        { key: 'otherLocation', label: 'Other location (if not listed)', type: 'text', cols: 2, showIf: { field: 'locationType', value: 'other' } },
+        { key: 'oicName', label: 'OIC / Interviewer / Agency', type: 'text', cols: 2 },
+        { key: 'oicPhone', label: 'OIC / Interviewer phone', type: 'tel' },
+        { key: 'instructionSource', label: 'Instruction Source', type: 'select', options: ['dscc','client_direct','family_or_third_party','already_at_station','firm_internal','other'], cols: 2, className: 'field-mandatory' },
+        { key: 'dsccRef', label: 'DSCC Reference', type: 'text', placeholder: 'e.g. 110154321A' },
+        { key: 'dsccNotificationStatus', label: 'DSCC Notification Status', type: 'select', options: ['received_from_dscc','reported_within_48h','reported_before_attendance','not_applicable','missing'], cols: 2 },
+        { key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', type: 'textarea', cols: 2, showIf: { field: 'dsccNotificationStatus', value: 'missing' } },
+        { key: 'ufn', label: 'UFN (Unique File Number)', type: 'text', placeholder: 'DDMMYY/NNN', cols: 2 },
+        { key: 'matterTypeCode', label: 'Criminal Matter Type', type: 'codedSelect', codeKey: 'matterTypeCodes', cols: 2 },
+        { key: 'offenceSummary', label: 'Allegation / Offence (summary)', type: 'text', cols: 2 },
+        { key: 'voluntaryInterviewBookedBy', label: 'Voluntary interview booked by', type: 'text', placeholder: 'e.g. Police, client, family', cols: 2 },
+      ],
+    },
+
+    /* ─────── VA2. VOLUNTARY STATUS & RIGHTS ─────── */
+    {
+      id: 'volStatusRights', title: '2. Voluntary Status & Rights',
+      keyFields: ['voluntaryStatusConfirmed', 'freeToLeaveExplained'],
+      fields: [
+        { key: '_note_rights', label: 'Client is attending voluntarily. Client is free to leave unless arrested.', type: 'sectionNote' },
+        { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', type: 'select', options: ['Yes','No','Not confirmed'], cols: 2 },
+        { key: 'freeToLeaveExplained', label: 'Free to leave explained to client?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
+        { key: 'cautionGiven', label: 'Caution given?', type: 'select', options: ['Yes','No','Not yet','Not applicable'], cols: 2 },
+        { key: 'noticeOfRightsExplained', label: 'Notice of rights (legal advice) explained?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
+        { key: 'legalAdviceRequested', label: 'Legal advice requested?', type: 'select', options: ['Yes','No'], cols: 2 },
+        { key: 'constablePresent', label: 'Constable present?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'For non-police body interviews, record whether a constable was present' },
+        { key: 'attendanceSubType', label: 'Attendance Sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
+      ],
+    },
+
+    /* ─────── VA3. WELFARE & SAFEGUARDS ─────── */
+    {
+      id: 'volWelfare', title: '3. Welfare & Safeguards',
+      keyFields: [],
+      fields: [
+        { key: 'juvenileVulnerable', label: 'Youth / Vulnerable adult?', type: 'select', options: ['Not Applicable','Juvenile','Vulnerable Adult'] },
+        { key: 'appropriateAdultRequired', label: 'Appropriate adult required?', type: 'select', options: ['Yes','No','N/A'] },
+        { key: 'appropriateAdultPresent', label: 'Appropriate adult present?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'appropriateAdultRequired', value: 'Yes' } },
+        { key: 'appropriateAdultName', label: 'Appropriate adult name', type: 'text', cols: 2, showIf: { field: 'appropriateAdultRequired', value: 'Yes' } },
+        { key: 'appropriateAdultRelation', label: 'AA relationship to client', type: 'text', showIf: { field: 'appropriateAdultRequired', value: 'Yes' } },
+        { key: 'languageIssues', label: 'Interpreter required?', type: 'select', options: ['Yes','No'] },
+        { key: 'interpreterPresent', label: 'Interpreter present?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterLanguage', label: 'Language required', type: 'text', showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterName', label: 'Interpreter name', type: 'text', showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'psychiatricIssues', label: 'Mental health / learning difficulty / intoxication?', type: 'select', options: ['Yes','No'] },
+        { key: 'psychiatricNotes', label: 'Details', type: 'textarea', cols: 2, showIf: { field: 'psychiatricIssues', value: 'Yes' } },
+        { key: 'fitToBeInterviewed', label: 'Fitness to be interviewed?', type: 'select', options: ['Yes','No','With adjustments'] },
+        { key: 'fitnessAdjustments', label: 'Adjustments made', type: 'textarea', cols: 2, showIf: { field: 'fitToBeInterviewed', values: ['No','With adjustments'] } },
+        { key: 'injuriesToClient', label: 'Injuries to client?', type: 'select', options: ['Yes','No'] },
+        { key: 'injuryDetails', label: 'Injury details', type: 'text', cols: 2, showIf: { field: 'injuriesToClient', value: 'Yes' } },
+      ],
+    },
+
+    /* ─────── VA4. DISCLOSURE & PREPARATION ─────── */
+    {
+      id: 'volDisclosure', title: '4. Disclosure & Preparation',
+      keyFields: ['disclosureNarrative', 'clientInstructions', 'reasonsForAdvice', 'interviewStrategy'],
+      fields: [
+        { key: 'disclosureReceivedTime', label: 'Disclosure received (time)', type: 'time' },
+        { key: 'disclosureType', label: 'Disclosure Type', type: 'select', options: ['Written','Oral','None'] },
+        { key: 'disclosureNarrative', label: 'Disclosure summary', type: 'textarea', cols: 2 },
+        { key: 'documentsReviewed', label: 'Documents reviewed', type: 'textarea', placeholder: 'List documents reviewed', cols: 2 },
+        { key: 'issuesRequiringClarification', label: 'Issues requiring clarification', type: 'textarea', cols: 2 },
+        { key: 'clientInstructionsInitial', label: "Client's initial account", type: 'textarea', cols: 2 },
+        { key: 'clientInstructions', label: 'Summary of client instructions', type: 'textarea', cols: 2 },
+        { key: 'adviceGiven', label: 'Advice given', type: 'textarea', cols: 2 },
+        { key: 'reasonsForAdvice', label: 'Reasons for advice', type: 'textarea', cols: 2 },
+        { key: 'interviewStrategy', label: 'Interview strategy', type: 'textarea', cols: 2 },
+      ],
+    },
+
+    /* ─────── VA5. ATTENDANCE RECORD ─────── */
+    {
+      id: 'volAttendanceRecord', title: '5. Attendance Record',
+      keyFields: ['consultationStart', 'consultationEnd', 'interviewStart', 'interviewEnd'],
+      fields: [
+        { key: 'consultationStart', label: 'Consultation start', type: 'time' },
+        { key: 'consultationEnd', label: 'Consultation end', type: 'time' },
+        { key: 'interviewStart', label: 'Interview start', type: 'time' },
+        { key: 'interviewEnd', label: 'Interview end', type: 'time' },
+        { key: 'interviewBreaks', label: 'Breaks (times & reason)', type: 'textarea', cols: 2 },
+        { key: 'keyRepresentationsMade', label: 'Key representations made', type: 'textarea', cols: 2 },
+        { key: 'keyQuestionsTopics', label: 'Key questions / topics', type: 'textarea', cols: 2 },
+        { key: 'anythingAdverseOrUnfair', label: 'Anything adverse or unfair', type: 'textarea', cols: 2 },
+        { key: 'interviewStoppedPostponed', label: 'Interview stopped / postponed?', type: 'select', options: ['No','Yes – stopped','Yes – postponed'] },
+        { key: 'arrestedDuringAttendance', label: 'Arrested during attendance?', type: 'select', options: ['No','Yes'], cols: 2 },
+        { key: 'arrestTimeIfConverted', label: 'Arrest time (if converted)', type: 'datetime-local', cols: 2, showIf: { field: 'arrestedDuringAttendance', value: 'Yes' } },
+        { key: 'conversionNotes', label: 'Conversion notes (voluntary → arrest)', type: 'textarea', cols: 2, showIf: { field: 'arrestedDuringAttendance', value: 'Yes' } },
+        { key: '_btn_convert_custody', label: 'Convert to custody workflow', type: 'actionButton', action: 'convertVoluntaryToCustody', showIf: { field: 'arrestedDuringAttendance', value: 'Yes' } },
+      ],
+    },
+
+    /* ─────── VA6. OUTCOME & BILLING ─────── */
+    {
+      id: 'volOutcome', title: '6. Outcome & Billing',
+      keyFields: ['outcomeCode', 'outcomeDecision'],
+      fields: [
+        { key: 'interviewCompleted', label: 'Interview completed?', type: 'select', options: ['Yes','No'] },
+        { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: [
+          'No further action (CN04)','Simple caution / reprimand / warning (CN05)','Charge / summons / reported for summons (CN06)',
+          'Conditional caution (CN07)','Fixed penalty notice (CN08)','Released no bail / RUI (CN09)','Bail varied / extended (CN10)','Bail not varied / extended (CN11)',
+          'Pre-charge engagement agreed / concluded (CN12)','Pre-charge engagement not agreed (CN13)','Draft / not yet concluded'
+        ], cols: 2 },
+        { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
+          'CN04 – No further action','CN05 – Simple caution / reprimand / warning','CN06 – Charge / Summons','CN07 – Conditional caution','CN08 – Fixed penalty notice',
+          'CN09 – Released no bail','CN10 – Bail varied / extended','CN11 – Bail not varied / extended','CN12 – Pre-charge engagement agreed','CN13 – Pre-charge engagement not agreed','Draft'
+        ], cols: 2 },
+        { key: 'stageReachedOrFeeCode', label: 'Stage reached / Fee code', type: 'text', placeholder: 'e.g. INVC', cols: 2 },
+        { key: 'sufficientBenefitNote', label: 'Sufficient benefit note', type: 'textarea', cols: 2 },
+        { key: 'followUpRequired', label: 'Follow-up required?', type: 'select', options: ['Yes','No'] },
+        { key: 'preChargeEngagementFlag', label: 'Pre-charge engagement?', type: 'select', options: ['Yes','No','N/A'] },
+        { key: '_h_time_billing', label: 'Time & Billing', type: 'sectionHeading' },
+        { key: 'totalMinutes', label: 'Total minutes (consultation + interview + waiting)', type: 'number', placeholder: 'e.g. 120' },
+        { key: 'milesClaimable', label: 'Miles claimable (45p)', type: 'number' },
+        { key: 'parkingCost', label: 'Parking cost (\u00A3)', type: 'number', placeholder: '0.00' },
+        { key: '_disbursements', label: 'Disbursements', type: 'multiDisbursement' },
+      ],
+    },
+
+    /* ─────── VA7. CLIENT AFTERCARE ─────── */
+    {
+      id: 'volAftercare', title: '7. Client Aftercare',
+      keyFields: ['nextStepsForClient'],
+      fields: [
+        { key: 'whatExplainedAfterInterview', label: 'What was explained after interview', type: 'textarea', cols: 2 },
+        { key: 'nextStepsForClient', label: 'Next steps for client', type: 'textarea', cols: 2 },
+        { key: 'nextDate', label: 'Next date (if any)', type: 'date' },
+        { key: 'bailDate', label: 'Bail / return date', type: 'date' },
+        { key: 'followUpTasks', label: 'Follow-up tasks', type: 'textarea', cols: 2 },
+        { key: '_h_sign_off', label: 'Sign Off', type: 'sectionHeading' },
+        { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
+        { key: 'laaFeeEarnerFullName', label: 'Fee Earner Full Name', type: 'text', cols: 2 },
+        { key: 'ethnicOriginCode', label: 'Ethnic Origin', type: 'codedSelect', codeKey: 'ethnicCodes' },
+        { key: 'disabilityCode', label: 'Disability', type: 'codedSelect', codeKey: 'disabilityCodes' },
+      ],
+    },
+  ];
+
   var activeFormSections = formSections;
 
   /* ─── CLIENT LOOKUP KEYS (client-pertinent fields only) ─── */
@@ -1565,13 +1728,30 @@ var REQUIRED_FIELD_KEYS = [
     photos.forEach((p, idx) => {
       const wrap = document.createElement('div');
       wrap.className = 'photo-thumb';
-      const img = document.createElement('img');
-      img.src = p.dataUrl;
-      img.alt = p.name;
-      img.title = p.name;
-      wrap.appendChild(img);
+      const isImage = !p.mime || p.mime.startsWith('image/');
+      if (isImage) {
+        const img = document.createElement('img');
+        img.src = p.dataUrl;
+        img.alt = p.name;
+        img.title = p.name;
+        wrap.appendChild(img);
+      } else {
+        const fileIcon = document.createElement('div');
+        fileIcon.className = 'photo-thumb-file-icon';
+        const ext = (p.name || '').split('.').pop().toUpperCase().slice(0, 5);
+        const iconMap = { PDF: '📄', DOC: '📝', DOCX: '📝', XLS: '📊', XLSX: '📊', CSV: '📊', TXT: '📃' };
+        fileIcon.innerHTML = '<span class="file-icon-glyph">' + (iconMap[ext] || '📎') + '</span><span class="file-icon-ext">' + esc(ext) + '</span>';
+        fileIcon.title = p.name;
+        wrap.appendChild(fileIcon);
+      }
+      const nameEl = document.createElement('div');
+      nameEl.className = 'photo-thumb-name';
+      nameEl.textContent = p.name || 'File';
+      nameEl.title = p.name || 'File';
+      wrap.appendChild(nameEl);
       const del = document.createElement('button');
       del.type = 'button'; del.className = 'photo-thumb-del'; del.textContent = '\u00D7';
+      del.title = 'Remove attachment';
       del.addEventListener('click', () => {
         formData.photos[secId].splice(idx, 1);
         renderPhotoThumbs(secId);
@@ -1655,6 +1835,23 @@ var REQUIRED_FIELD_KEYS = [
     fields.forEach(k => { total += parseInt(getFieldValue(k)) || 0; });
     setFieldValue('totalMinutes', total);
     updateCalcPanel();
+  }
+
+  function minsBetween(start, end) {
+    if (!start || !end || !/^\d{1,2}:\d{2}$/.test(start) || !/^\d{1,2}:\d{2}$/.test(end)) return 0;
+    const [sh, sm] = start.split(':').map(Number);
+    const [eh, em] = end.split(':').map(Number);
+    let diff = (eh * 60 + em) - (sh * 60 + sm);
+    if (diff < 0) diff += 24 * 60;
+    return diff;
+  }
+
+  function autoCalcVoluntaryTimes() {
+    const d = formData;
+    let total = 0;
+    total += minsBetween(d.consultationStart, d.consultationEnd);
+    total += minsBetween(d.interviewStart, d.interviewEnd);
+    if (total > 0) setFieldValue('totalMinutes', total);
   }
 
   var _suppressChangeHandlers = false;
@@ -1760,26 +1957,25 @@ var REQUIRED_FIELD_KEYS = [
     if (hft) hft.textContent = title;
   }
 
-  /* ─── Cross-device sync status ─── */
+  /* ─── Cross-device sync status (truthful, no vague "still trying") ─── */
   function updateSyncStatusIndicator(data) {
     var el = document.getElementById('sync-status-indicator');
     if (!el) return;
     if (!data || !data.status) {
-      el.style.display = 'none';
+      refreshSyncCounts();
       return;
     }
     el.style.display = '';
     if (data.status === 'synced') {
       refreshSyncCounts();
     } else if (data.status === 'syncing') {
-      el.textContent = '\u2601 Syncing\u2026';
+      el.textContent = '\u2601 Syncing now';
       el.style.color = '#2563eb';
     } else if (data.status === 'error') {
-      el.textContent = '\u2601 Sync error \u2014 retrying';
+      el.textContent = data.retryable ? '\u2601 Sync delayed \u2014 API unreachable' : '\u2601 Sync blocked \u2014 check licence';
       el.style.color = '#dc2626';
     } else {
-      el.textContent = '\u2601 Sync';
-      el.style.color = '#64748b';
+      refreshSyncCounts();
     }
   }
 
@@ -1789,18 +1985,31 @@ var REQUIRED_FIELD_KEYS = [
       var el = document.getElementById('sync-status-indicator');
       if (!el || !st || !st.enabled) return;
       el.style.display = '';
-      if (st.pendingChanges === 0 && st.lastSync) {
-        el.innerHTML = '\u2601 <strong>All ' + st.totalRecords + ' record' + (st.totalRecords !== 1 ? 's' : '') + ' synced</strong>';
+      var pending = st.pendingChanges || 0;
+      if (pending === 0 && st.lastSync) {
+        el.innerHTML = '\u2713 <strong>Synced</strong> (' + formatSyncTime(st.lastSync) + ')';
         el.style.color = '#059669';
-      } else if (st.pendingChanges > 0) {
-        var synced = st.totalRecords - st.pendingChanges;
-        el.innerHTML = '\u2601 ' + synced + ' of ' + st.totalRecords + ' synced \u00b7 <strong>' + st.pendingChanges + ' pending</strong>';
+      } else if (pending > 0) {
+        el.innerHTML = '\u23F1 <strong>' + pending + ' pending sync</strong> \u00b7 saved locally';
         el.style.color = '#d97706';
       } else if (!st.lastSync) {
-        el.textContent = '\u2601 Waiting for first sync\u2026';
+        el.textContent = '\u23F1 Saved locally \u00b7 waiting for connection';
         el.style.color = '#64748b';
       }
     }).catch(function() {});
+  }
+
+  function formatSyncTime(iso) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso);
+      var now = new Date();
+      var diff = (now - d) / 1000;
+      if (diff < 60) return 'just now';
+      if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+      if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+      return d.toLocaleDateString();
+    } catch (_) { return iso; }
   }
 
   function showView(name) {
@@ -2485,6 +2694,18 @@ var REQUIRED_FIELD_KEYS = [
     formData = data;
     currentSectionIdx = 0;
     currentAttendanceId = null;
+    var qcMode = (document.getElementById('qc-attendance-mode') && document.getElementById('qc-attendance-mode').value) || 'custody';
+    var isVoluntary = qcMode === 'voluntary';
+    if (expand) {
+      activeFormSections = isVoluntary ? voluntaryFormSections : formSections;
+      formData.attendanceMode = isVoluntary ? 'voluntary' : 'custody';
+      formData._formType = 'attendance';
+      formData.workType = isVoluntary ? 'Voluntary Police Station Attendance' : (data.workType || 'First Police Station Attendance');
+    } else {
+      formData.attendanceMode = isVoluntary ? 'voluntary' : 'custody';
+      formData._formType = 'attendance';
+      formData.workType = isVoluntary ? 'Voluntary Police Station Attendance' : (data.workType || 'First Police Station Attendance');
+    }
     prefillDefaults();
     if (expand) {
       renderForm(formData);
@@ -2504,6 +2725,14 @@ var REQUIRED_FIELD_KEYS = [
 
   function prefillDefaults() {
     if (!formData._formType) formData._formType = (activeFormSections === telFormSections) ? 'telephone' : 'attendance';
+    if (formData._formType === 'attendance' && !formData.attendanceMode) formData.attendanceMode = 'custody';
+    if (formData.attendanceMode === 'voluntary') {
+      if (!formData.locationType) formData.locationType = 'police_station';
+      if (!formData.voluntaryStatusConfirmed) formData.voluntaryStatusConfirmed = 'Yes';
+      if (!formData.instructionSource) formData.instructionSource = '';
+      if (!formData.dsccNotificationStatus) formData.dsccNotificationStatus = 'not_applicable';
+      if (!formData.attendanceSubType) formData.attendanceSubType = 'voluntary_police_station';
+    }
     if (!formData.city && formData.address3 && !formData._addressMigrated) {
       formData.city = formData.address3;
       formData.address3 = '';
@@ -2618,6 +2847,7 @@ var REQUIRED_FIELD_KEYS = [
     clearTimeout(_quietSaveDebounceTimer);
     const formView = document.getElementById('view-form');
     if (!formView || !formView.classList.contains('active')) return;
+    if (currentRecordStatus === 'finalised') return;
     const data = getFormData();
     if (!hasMeaningfulData(data)) return;
     if (_draftSaveInFlight) { _draftSaveQueued = true; return; }
@@ -3186,6 +3416,7 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── LIST VIEW ─── */
   var listStatusFilter = 'all';
+  var listModeFilter = 'all';
   var listSortMode = 'newest';
 
   function refreshList() {
@@ -3204,6 +3435,9 @@ var REQUIRED_FIELD_KEYS = [
       }) : rows.slice();
       if (listStatusFilter === 'draft') filtered = filtered.filter(r => (r.status || 'draft') === 'draft');
       else if (listStatusFilter === 'finalised') filtered = filtered.filter(r => r.status === 'finalised');
+      if (listModeFilter === 'custody') filtered = filtered.filter(r => { var d = safeJson(r.data); return d._formType !== 'telephone' && d.attendanceMode !== 'voluntary'; });
+      else if (listModeFilter === 'voluntary') filtered = filtered.filter(r => safeJson(r.data).attendanceMode === 'voluntary');
+      else if (listModeFilter === 'telephone') filtered = filtered.filter(r => safeJson(r.data)._formType === 'telephone');
       if (listSortMode === 'oldest') filtered.reverse();
       else if (listSortMode === 'name') filtered.sort((a, b) => {
         const da = safeJson(a.data), db = safeJson(b.data);
@@ -3241,7 +3475,7 @@ var REQUIRED_FIELD_KEYS = [
         const dsccLabel = d.dsccRef || r.dscc_ref || '';
         const fileNumLabel = d.ourFileNumber ? '#' + d.ourFileNumber : '';
         const meta = [fileNumLabel, dateLabel, stationLabel, dsccLabel].filter(Boolean).join(' \u00B7 ');
-        const formTypeBadge = d._formType === 'telephone' ? '<span class="badge badge-tel">TEL</span>' : '<span class="badge badge-att">ATT</span>';
+        const formTypeBadge = d._formType === 'telephone' ? '<span class="badge badge-tel">TEL</span>' : (d.attendanceMode === 'voluntary' ? '<span class="badge badge-vol">VOL</span>' : '<span class="badge badge-att">ATT</span>');
         const li = document.createElement('li');
         li.innerHTML = '<div class="list-item-text"><span class="title">' + esc(title) + '</span><div class="meta">' + esc(meta) + '</div></div>' +
           '<div class="list-item-actions">' +
@@ -3331,20 +3565,25 @@ var REQUIRED_FIELD_KEYS = [
         'multipleJourneys','waitingTimeStart','waitingTimeEnd','waitingTimeNotes',
         'outcomeOffence3Details','outcomeOffence3Statute','outcomeOffence4Details','outcomeOffence4Statute',
         'dsccRef','sourceOfReferral','fileReference','travelOriginPostcode','schemeId',
-        'instructionDateTime','weekendBankHoliday','otherLocation','dutySolicitor','clientStatus','telephoneAdviceGiven','feeEarnerTelephoneAdvice','arrivalNotes'];
+        'instructionDateTime','weekendBankHoliday','otherLocation','dutySolicitor','clientStatus','telephoneAdviceGiven','feeEarnerTelephoneAdvice','arrivalNotes',
+        'attendanceMode','instructionSource','dsccNotificationStatus','locationType','attendanceSubType','voluntaryStatusConfirmed','constablePresent'];
       formData = {};
       copyKeys.forEach(k => { if (src[k]) formData[k] = src[k]; });
-      formData.workType = 'Further Police Station Attendance';
+      var isVoluntary = src.attendanceMode === 'voluntary';
+      formData.workType = isVoluntary ? 'Further Voluntary Attendance' : 'Further Police Station Attendance';
       formData.caseStatus = 'Existing case';
       formData.clientType = 'Existing';
       currentAttendanceId = null;
       currentSectionIdx = 0;
+      activeFormSections = isVoluntary ? voluntaryFormSections : formSections;
+      if (isVoluntary) formData.attendanceMode = 'voluntary';
       prefillDefaults();
       setTimeout(() => {
         copyKeys.forEach(k => { if (src[k]) formData[k] = src[k]; });
-        formData.workType = 'Further Police Station Attendance';
+        formData.workType = isVoluntary ? 'Further Voluntary Attendance' : 'Further Police Station Attendance';
         formData.caseStatus = 'Existing case';
         formData.clientType = 'Existing';
+        if (isVoluntary) formData.attendanceMode = 'voluntary';
         renderForm(formData);
         showView('new');
       }, 200);
@@ -3385,7 +3624,15 @@ var REQUIRED_FIELD_KEYS = [
       currentRecordStatus = row ? row.status : null;
       currentRecordArchived = !!(row && row.archived_at);
       formData = row && row.data ? safeJson(row.data) : {};
-      activeFormSections = (formData._formType === 'telephone') ? telFormSections : formSections;
+      /* Legacy records: default to custody */
+      if (!formData.attendanceMode && formData._formType !== 'telephone') formData.attendanceMode = 'custody';
+      if (formData._formType === 'telephone') {
+        activeFormSections = telFormSections;
+      } else if (formData.attendanceMode === 'voluntary') {
+        activeFormSections = voluntaryFormSections;
+      } else {
+        activeFormSections = formSections;
+      }
       currentSectionIdx = 0;
       renderForm(formData);
       showView('new');
@@ -3424,6 +3671,7 @@ var REQUIRED_FIELD_KEYS = [
       var newData = {};
       sharedKeys.forEach(function(k) { if (src[k]) newData[k] = src[k]; });
       newData._formType = 'attendance';
+      newData.attendanceMode = 'custody';
       newData.workType = 'First Police Station Attendance';
       newData._convertedFromTelephone = true;
       newData._sourceUfn = src.ufn || '';
@@ -3435,6 +3683,68 @@ var REQUIRED_FIELD_KEYS = [
       renderForm(formData);
       showView('new');
       showToast('Converted to attendance \u2013 telephone record saved', 'success');
+    });
+  }
+
+  /* ─── CONVERT VOLUNTARY TO CUSTODY (arrested during attendance) ─── */
+  function convertVoluntaryToCustody() {
+    collectCurrentData();
+    if (formData.arrestedDuringAttendance !== 'Yes') return;
+    if (!(formData.arrestTimeIfConverted || '').trim() || !(formData.conversionNotes || '').trim()) {
+      showToast('Please complete arrest time and conversion notes before converting', 'error');
+      return;
+    }
+    var src = JSON.parse(JSON.stringify(formData));
+    var sharedKeys = [
+      'title','forename','middleName','surname','gender','dob','nationality','nationalityOther',
+      'clientPhone','clientEmail','address1','address2','address3','city','county','postCode',
+      'policeStationId','policeStationName','schemeId','firmId','firmName','firmLaaAccount',
+      'firmContactName','firmContactPhone','firmContactEmail','feeEarnerName',
+      'dsccRef','instructionDateTime','instructionSource','dsccNotificationStatus',
+      'matterTypeCode','offenceSummary','oicName','oicPhone','oicEmail',
+      'juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone',
+      'languageIssues','interpreterLanguage','interpreterName'
+    ];
+    showConfirm(
+      'Convert this voluntary attendance to a custody workflow?\n\n' +
+      'The voluntary record will be saved with an audit trail. A new custody attendance will open pre-filled with:\n' +
+      '• Client and matter details\n• Arrest time and conversion notes\n• Voluntary chronology preserved in the original record\n\n' +
+      'Continue?',
+      'Convert to Custody'
+    ).then(function(ok) {
+      if (!ok) return;
+      src._convertedToCustodyAt = new Date().toISOString();
+      formData = src;
+      var voluntaryId = currentAttendanceId;
+      window.api.attendanceSave({ id: voluntaryId, data: src, status: (src.status || 'draft') }).then(function(savedId) {
+        var arrestDt = (src.arrestTimeIfConverted || '').trim();
+        var arrestDate = arrestDt.length >= 10 ? arrestDt.slice(0, 10) : src.date;
+        var arrestTime = arrestDt.length >= 16 ? arrestDt.slice(11, 16) : '';
+        var newData = {};
+        sharedKeys.forEach(function(k) { if (src[k]) newData[k] = src[k]; });
+        newData._formType = 'attendance';
+        newData.attendanceMode = 'custody';
+        newData.workType = 'First Police Station Attendance';
+        newData._convertedFromVoluntary = true;
+        newData._sourceVoluntaryId = voluntaryId || savedId;
+        newData.voluntaryInterview = 'No';
+        newData.dateOfArrest = arrestDate;
+        newData.timeOfArrest = arrestTime;
+        newData.timeArrivalStation = arrestTime;
+        newData.groundsForArrest = 'Converted from voluntary attendance \u2013 see conversion notes';
+        newData.conversionNotesFromVoluntary = src.conversionNotes;
+        newData.date = arrestDate || src.date;
+        formData = newData;
+        currentAttendanceId = null;
+        currentSectionIdx = 0;
+        activeFormSections = formSections;
+        prefillDefaults();
+        renderForm(formData);
+        showView('new');
+        showToast('Converted to custody \u2013 voluntary record saved. Complete custody fields.', 'success');
+      }).catch(function(e) {
+        showToast('Failed to convert: ' + (e && e.message || 'Unknown error'), 'error');
+      });
     });
   }
 
@@ -3456,6 +3766,8 @@ var REQUIRED_FIELD_KEYS = [
     setFormTitle(activeFormSections[currentSectionIdx].title);
     if (activeFormSections[currentSectionIdx].id === 'timeRecording') { autoCalcTimes(); updateCalcPanel(); }
     if (activeFormSections[currentSectionIdx].id === 'journeyTime') { autoCalcTimes(); }
+    if (activeFormSections[currentSectionIdx].id === 'volOutcome' && formData.attendanceMode === 'voluntary') { autoCalcVoluntaryTimes(); }
+    if (activeFormSections[currentSectionIdx].id === 'timeRecording' || activeFormSections[currentSectionIdx].id === 'volOutcome') { updateBillingReadinessPanel(); }
     autoFillFromClient();
     applyConditionalVisibility();
     updateContextBar();
@@ -3485,6 +3797,42 @@ var REQUIRED_FIELD_KEYS = [
       archiveBtn.style.display = 'none';
       unarchiveBtn.style.display = 'none';
     }
+    updateBillingReadinessPanel();
+  }
+
+  function getBillingReadinessWarnings() {
+    var d = formData;
+    var w = [];
+    if (d._formType === 'telephone') return w;
+    if (!(d.ufn || '').trim()) w.push('UFN missing');
+    if (!(d.matterTypeCode || '').trim()) w.push('Criminal matter type missing');
+    var oc = (d.outcomeCode || '').trim();
+    var od = (d.outcomeDecision || '').trim();
+    if (!oc && od !== 'Draft' && od.indexOf('not yet concluded') < 0) w.push('Outcome code missing');
+    if (d.attendanceMode === 'voluntary') {
+      if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim()) w.push('DSCC reference or reason missing');
+      if (d.attendanceSubType === 'voluntary_non_police_body' && !d.constablePresent) w.push('Constable present? required for non-police body');
+      if (!(d.sufficientBenefitNote || '').trim()) w.push('Sufficient benefit note missing');
+    } else {
+      if (!(d.dsccRef || '').trim() && (d.sourceOfReferral || '').toLowerCase().indexOf('duty') >= 0) w.push('DSCC number missing (duty route)');
+      if (!(d.sufficientBenefitTest || '').trim() && !(d.sufficientBenefitNotes || '').trim()) w.push('Sufficient benefit note missing');
+    }
+    var mins = parseInt((d.totalMinutes || '').toString(), 10);
+    if (isNaN(mins) || mins <= 0) w.push('Time record incomplete');
+    return w;
+  }
+
+  function updateBillingReadinessPanel() {
+    var list = document.getElementById('billing-readiness-list');
+    var panel = document.getElementById('billing-readiness-panel');
+    if (!list || !panel) return;
+    var w = getBillingReadinessWarnings();
+    if (!w.length) {
+      panel.style.display = 'none';
+      return;
+    }
+    panel.style.display = '';
+    list.innerHTML = w.map(function(msg) { return '<li>' + esc(msg) + '</li>'; }).join('');
   }
 
   /* ─── AUTO-FILL DECLARATION & RETAINER FROM CLIENT (#4) ─── */
@@ -3590,6 +3938,7 @@ var REQUIRED_FIELD_KEYS = [
       : (formData.timeFirstContactWithClient || formData.timeArrival || pad2(now.getHours()) + ':' + pad2(now.getMinutes()));
     const leftParts = [];
     if (formData._formType === 'telephone') leftParts.push('<span class="context-invb-badge">INVB Tel</span>');
+    else if (formData.attendanceMode === 'voluntary') leftParts.push('<span class="context-vol-badge">Voluntary</span>');
     leftParts.push('<span><span class="context-label">Client:</span>' + esc(clientName) + '</span>');
     leftParts.push('<span><span class="context-label">Station:</span>' + esc(station) + '</span>');
     if (formData.custodyNumber) leftParts.push('<span><span class="context-label">Custody:</span>' + esc(formData.custodyNumber) + '</span>');
@@ -3982,12 +4331,13 @@ var REQUIRED_FIELD_KEYS = [
         attachBtn.style.marginTop = '0.5rem';
         attachBtn.textContent = '+ Add attachment';
         attachBtn.addEventListener('click', () => {
-          if (!window.api || !window.api.pickImage) return;
-          window.api.pickImage().then(result => {
+          const picker = (window.api && window.api.pickFile) ? window.api.pickFile : (window.api && window.api.pickImage ? window.api.pickImage : null);
+          if (!picker) return;
+          picker().then(result => {
             if (!result || result.error) { if (result && result.error) showToast(result.error, 'error'); return; }
             if (!formData.photos) formData.photos = {};
             if (!formData.photos['attachments']) formData.photos['attachments'] = [];
-            formData.photos['attachments'].push({ dataUrl: result.dataUrl, name: result.name });
+            formData.photos['attachments'].push({ dataUrl: result.dataUrl, name: result.name, mime: result.mime });
             renderPhotoThumbs('attachments');
             quietSave();
           });
@@ -4022,8 +4372,13 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(actions);
       }
 
-      /* Section 9: Finalise and Archive actions at the natural end of the record */
-      if (sec.id === 'timeRecording') {
+      /* Section 9 (custody) or volOutcome (voluntary): Billing readiness + Finalise and Archive actions */
+      if (sec.id === 'timeRecording' || sec.id === 'volOutcome') {
+        const billingPanel = document.createElement('div');
+        billingPanel.id = 'billing-readiness-panel';
+        billingPanel.className = 'billing-readiness-panel';
+        billingPanel.innerHTML = '<h4 class="billing-readiness-title">Billing readiness</h4><ul id="billing-readiness-list" class="billing-readiness-list"></ul>';
+        section.appendChild(billingPanel);
         const endActions = document.createElement('div');
         endActions.className = 'form-actions form-end-actions';
         endActions.innerHTML =
@@ -4066,6 +4421,12 @@ var REQUIRED_FIELD_KEYS = [
       _progressDebounce = setTimeout(updateProgressBar, 300);
     }
 
+    var _contextBarDebounce = null;
+    function debouncedContextBar() {
+      clearTimeout(_contextBarDebounce);
+      _contextBarDebounce = setTimeout(updateContextBar, 250);
+    }
+
     var _collectTimer = null;
     function scheduleCollect() { clearTimeout(_collectTimer); _collectTimer = setTimeout(collectCurrentData, 400); }
 
@@ -4078,7 +4439,7 @@ var REQUIRED_FIELD_KEYS = [
           setFieldValueSilent(field, el.value);
         }
         applyConditionalVisibility();
-        updateContextBar();
+        debouncedContextBar();
         if (field === 'instructionDateTime' && el.value) {
           formData.date = el.value.slice(0, 10);
           const dow = new Date(formData.date).getDay();
@@ -4094,9 +4455,11 @@ var REQUIRED_FIELD_KEYS = [
         }
         if (timeAndCalcFields.includes(field)) { autoCalcTimes(); }
         else if (['travelSocial','travelUnsocial','waitingSocial','waitingUnsocial','adviceSocial','adviceUnsocial','milesClaimable'].includes(field)) recalcTotal();
+        if (formData.attendanceMode === 'voluntary' && ['consultationStart','consultationEnd','interviewStart','interviewEnd'].includes(field)) { autoCalcVoluntaryTimes(); }
         if (field === 'timeDetentionAuthorised') { setFieldValue('relevantTime', el.value || ''); calcReviewTimes(); }
         if (field === 'relevantTime') { calcReviewTimes(); }
         debouncedProgressUpdate();
+        updateBillingReadinessPanel();
         scheduleCollect();
         scheduleQuietSave();
       });
@@ -4152,6 +4515,7 @@ var REQUIRED_FIELD_KEYS = [
         else if (f.action === 'generateClientInstructions') generateClientInstructionsDoc();
         else if (f.action === 'generatePreparedStatement') generatePreparedStatement();
         else if (f.action === 'convertToAttendance') convertTelephoneToAttendance();
+        else if (f.action === 'convertVoluntaryToCustody') convertVoluntaryToCustody();
       });
       wrap.appendChild(btn);
       grid.appendChild(wrap);
@@ -4861,20 +5225,33 @@ var REQUIRED_FIELD_KEYS = [
       var firmFields = [
         { id: 'afn', placeholder: 'Firm name *', type: 'text' },
         { id: 'afl', placeholder: 'LAA Account no.', type: 'text' },
-        { id: 'afc', placeholder: 'Contact name', type: 'text' },
+        { id: 'afc', placeholder: 'Contact name (person instructed)', type: 'text' },
         { id: 'afp', placeholder: 'Contact phone', type: 'tel' },
         { id: 'afe', placeholder: 'Contact email', type: 'email' },
+        { id: 'afs', placeholder: 'Source of referral', type: 'select', options: ['', 'Duty Rota', 'Duty panel', 'Own Legal Aid', 'Own private', 'Agency'] },
       ];
       var firmInps = {};
       var addRowInputs = document.createElement('div');
       addRowInputs.className = 'add-firm-inline';
       firmFields.forEach(function(ff) {
-        var inp = document.createElement('input');
-        inp.type = ff.type;
-        inp.className = 'form-input';
-        inp.placeholder = ff.placeholder;
-        if (ff.type === 'tel') attachPhoneValidation(inp);
-        if (ff.type === 'email') attachEmailValidation(inp);
+        var inp;
+        if (ff.type === 'select') {
+          inp = document.createElement('select');
+          inp.className = 'form-input';
+          (ff.options || []).forEach(function(opt) {
+            var o = document.createElement('option');
+            o.value = opt;
+            o.textContent = opt || '—';
+            inp.appendChild(o);
+          });
+        } else {
+          inp = document.createElement('input');
+          inp.type = ff.type;
+          inp.className = 'form-input';
+          inp.placeholder = ff.placeholder;
+          if (ff.type === 'tel') attachPhoneValidation(inp);
+          if (ff.type === 'email') attachEmailValidation(inp);
+        }
         firmInps[ff.id] = inp;
         addRowInputs.appendChild(inp);
       });
@@ -4962,6 +5339,7 @@ var REQUIRED_FIELD_KEYS = [
               setFieldValue('firmContactName', fi.contact_name || '');
               setFieldValue('firmContactPhone', fi.contact_phone || '');
               setFieldValue('firmContactEmail', fi.contact_email || '');
+              if (fi.source_of_referral) setFieldValue('sourceOfReferral', fi.source_of_referral);
               useExistingWrap.style.display = 'none';
               searchInp.value = '';
               updateSelectedLine();
@@ -5007,15 +5385,16 @@ var REQUIRED_FIELD_KEYS = [
         var name = firmInps.afn.value.trim();
         if (!name) { firmInps.afn.focus(); firmInps.afn.classList.add('input-error'); return; }
         firmInps.afn.classList.remove('input-error');
-        addBtn.disabled = true;
-        addBtn.textContent = 'Adding...';
         var newFirm = {
           name: name,
           laa_account: firmInps.afl.value.trim(),
           contact_name: firmInps.afc.value.trim(),
           contact_phone: firmInps.afp.value.trim(),
           contact_email: firmInps.afe.value.trim(),
+          source_of_referral: (firmInps.afs && firmInps.afs.value) ? String(firmInps.afs.value).trim() : '',
         };
+        addBtn.disabled = true;
+        addBtn.textContent = 'Saving…';
         window.api.firmSave(newFirm).then(function() {
           return window.api.firmsList();
         }).then(function(f) {
@@ -5029,6 +5408,8 @@ var REQUIRED_FIELD_KEYS = [
             setFieldValue('firmContactName', added.contact_name || '');
             setFieldValue('firmContactPhone', added.contact_phone || '');
             setFieldValue('firmContactEmail', added.contact_email || '');
+            if (added.source_of_referral) setFieldValue('sourceOfReferral', added.source_of_referral);
+            showToast('Firm saved and selected', 'success');
           }
           addRow.style.display = 'none';
           Object.keys(firmInps).forEach(function(k) { firmInps[k].value = ''; });
@@ -5036,6 +5417,10 @@ var REQUIRED_FIELD_KEYS = [
           addBtn.textContent = 'Add Firm';
           updateSelectedLine();
           choiceRow.style.display = 'flex';
+        }).catch(function(err) {
+          addBtn.disabled = false;
+          addBtn.textContent = 'Add Firm';
+          showToast('Failed to save firm: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
         });
       });
       firmInps.afn.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addBtn.click(); } });
@@ -5843,8 +6228,6 @@ var REQUIRED_FIELD_KEYS = [
       setFieldValueSilent('invoiceSentDate', formData.invoiceSentDate);
       setFieldValueSilent('invoiceSentTime', formData.invoiceSentTime);
     }
-
-    updateProgressBar();
   }
 
   /* ─── MULTI-INTERVIEW ─── */
@@ -6186,10 +6569,24 @@ var REQUIRED_FIELD_KEYS = [
       showToast('Nothing to save — please enter some data first', 'warning');
       return;
     }
+    /* For finalise: stop autosave and cancel any pending debounced draft save
+       to prevent overwriting finalised status with draft. */
+    if (status === 'finalised') {
+      stopAutoSave();
+      clearTimeout(_quietSaveDebounceTimer);
+      _draftSaveQueued = false;
+      showToast('Finalising…', 'info', 2000);
+    }
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
-      if (result && typeof result === 'object' && result.error === 'locked') {
-        showToast('This record is finalised and cannot be modified. Create a new attendance if needed.', 'error', 6000);
-        return;
+      if (result && typeof result === 'object') {
+        if (result.error === 'locked') {
+          showToast('This record is finalised and cannot be modified. Create a new attendance if needed.', 'error', 6000);
+          return;
+        }
+        if (result.error) {
+          showToast('Failed to save: ' + (result.message || result.error), 'error', 6000);
+          return;
+        }
       }
       if (typeof result === 'number' || typeof result === 'string') currentAttendanceId = result;
       if (status === 'finalised') {
@@ -6200,23 +6597,49 @@ var REQUIRED_FIELD_KEYS = [
       } else {
         showToast('Saved as draft', 'success');
       }
+    }).catch(function(err) {
+      showToast('Failed to save record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 6000);
     });
   }
 
   function saveAndExit() {
     const data = getFormData();
-    if (hasMeaningfulData(data)) {
-      window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(() => {
-        currentAttendanceId = null;
-        stopAutoSave();
-        showView('home');
-      });
-    } else {
+    if (!hasMeaningfulData(data)) {
       if (currentAttendanceId) window.api.attendanceDelete({ id: currentAttendanceId, reason: 'Discarded empty form' });
       currentAttendanceId = null;
       stopAutoSave();
       showView('home');
+      return;
     }
+    /* Show menu: Save as draft & exit, or Finalise & exit (matches help text) */
+    var overlay = document.createElement('div');
+    overlay.className = 'cn-confirm-overlay';
+    var box = document.createElement('div');
+    box.className = 'cn-confirm-box';
+    box.innerHTML = '<h3 class="cn-confirm-title">Save / Exit</h3><p class="cn-confirm-msg" style="margin-bottom:0.75rem;">What would you like to do?</p>' +
+      '<div class="cn-confirm-btns" style="flex-direction:column;gap:0.5rem;">' +
+      '<button type="button" class="btn btn-finalise" id="save-exit-finalise">Finalise &amp; exit</button>' +
+      '<button type="button" class="btn btn-primary" id="save-exit-draft">Save as draft &amp; exit</button>' +
+      '<button type="button" class="btn btn-secondary" id="save-exit-cancel">Cancel</button>' +
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function close() { try { document.body.removeChild(overlay); } catch (_) {} }
+    document.getElementById('save-exit-draft').addEventListener('click', function() {
+      close();
+      window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(function() {
+        currentAttendanceId = null;
+        stopAutoSave();
+        showView('home');
+        showToast('Saved as draft', 'success');
+      }).catch(function(err) { showToast('Failed to save: ' + (err && err.message || err), 'error', 5000); });
+    });
+    document.getElementById('save-exit-finalise').addEventListener('click', function() {
+      close();
+      validateBeforeFinalise();
+    });
+    document.getElementById('save-exit-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
   }
 
   /* ─── VALIDATION: TELEPHONE ADVICE FORM (INVB) ─── */
@@ -6252,6 +6675,48 @@ var REQUIRED_FIELD_KEYS = [
       m.push({ key: 'conflictCheckNotes', label: 'Conflict check notes', section: 1 });
     }
     if (!formData.previousAdvice) m.push({ key: 'previousAdvice', label: 'Has client received advice before?', section: 3 });
+    return m;
+  }
+
+  /* ─── VALIDATION: VOLUNTARY ATTENDANCE FORM ─── */
+  function validateVoluntaryForm() {
+    var m = [];
+    var required = [
+      { key: 'date', label: 'Date of attendance', section: 0 },
+      { key: 'instructionSource', label: 'Instruction source', section: 0 },
+      { key: 'surname', label: 'Surname', section: 0 },
+      { key: 'forename', label: 'Forename', section: 0 },
+      { key: 'offenceSummary', label: 'Allegation / Offence', section: 0 },
+      { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', section: 1 },
+      { key: 'outcomeDecision', label: 'Outcome', section: 5 },
+      { key: 'outcomeCode', label: 'Outcome code', section: 5 },
+    ];
+    if (!(formData.policeStationId || '').trim() && !(formData.otherLocation || '').trim()) {
+      m.push({ key: 'policeStationId', label: 'Location (police station or other)', section: 0 });
+    }
+    required.forEach(function(r) {
+      var val = formData[r.key];
+      if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
+    });
+    if (formData.instructionSource === 'dscc' && !(formData.dsccRef || '').trim() && formData.dsccNotificationStatus === 'missing' && !(formData.dsccReferenceMissingReason || '').trim()) {
+      m.push({ key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', section: 0 });
+    }
+    if (formData.attendanceSubType === 'voluntary_non_police_body' && !formData.constablePresent) {
+      m.push({ key: 'constablePresent', label: 'Constable present? (required for non-police body)', section: 1 });
+    }
+    if (formData.arrestedDuringAttendance === 'Yes') {
+      if (!(formData.arrestTimeIfConverted || '').trim()) m.push({ key: 'arrestTimeIfConverted', label: 'Arrest time (required when converted)', section: 4 });
+      if (!(formData.conversionNotes || '').trim()) m.push({ key: 'conversionNotes', label: 'Conversion notes', section: 4 });
+    }
+    if (!(formData.adviceGiven || '').trim()) m.push({ key: 'adviceGiven', label: 'Advice given', section: 3 });
+    if (!(formData.reasonsForAdvice || '').trim() && !(formData.reasonsForAdviceSelect || '').trim()) m.push({ key: 'reasonsForAdvice', label: 'Reasons for advice', section: 3 });
+    if (!(formData.clientInstructions || '').trim()) m.push({ key: 'clientInstructions', label: 'Summary of client instructions', section: 3 });
+    if (!(formData.disclosureNarrative || '').trim()) m.push({ key: 'disclosureNarrative', label: 'Disclosure summary', section: 3 });
+    if (formData.juvenileVulnerable === 'Juvenile' || formData.juvenileVulnerable === 'Vulnerable Adult') {
+      if (!(formData.appropriateAdultName || '').trim()) m.push({ key: 'appropriateAdultName', label: 'Appropriate adult name', section: 2 });
+      if (!(formData.appropriateAdultRelation || '').trim()) m.push({ key: 'appropriateAdultRelation', label: 'AA relationship', section: 2 });
+    }
+    if (formData.languageIssues === 'Yes' && !(formData.interpreterLanguage || '').trim()) m.push({ key: 'interpreterLanguage', label: 'Language required', section: 2 });
     return m;
   }
 
@@ -6329,7 +6794,7 @@ var REQUIRED_FIELD_KEYS = [
   function validateBeforeFinalise() {
     collectCurrentData();
     const isTelForm = formData._formType === 'telephone';
-    const missing = isTelForm ? validateTelephoneForm() : validateAttendanceForm();
+    const missing = isTelForm ? validateTelephoneForm() : (formData.attendanceMode === 'voluntary' ? validateVoluntaryForm() : validateAttendanceForm());
 
     const dscc = (formData.dsccRef || '').trim().toUpperCase();
     if (dscc && (dscc.length !== 10 || dscc.charAt(9) !== 'A')) {
@@ -7106,8 +7571,142 @@ PDF_CASENOTE_ADVERT +
       '</body></html>';
   }
 
+  /* ─── VOLUNTARY ATTENDANCE PDF ─── */
+  function buildVoluntaryPdfHtml(d, settings) {
+    var h = function(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    var row = function(l, v) { return v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : ''; };
+    var sn = d.policeStationName || d.policeStationId || '';
+    var firmName = d.firmName || d.firmId || '';
+    var brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
+    var codeLookup = function(key, code) { var arr = refData[key] || []; var item = arr.find(function(c) { return c.code === code; }); return item ? code + ' \u2013 ' + item.description : code || ''; };
+
+    var clientNameForTitle = [d.forename, d.surname].filter(Boolean).join(' ') || '\u2014';
+    var myRefForTitle = d.ourFileNumber || d.fileReference || '\u2014';
+
+    var convertedHtml = '';
+    if (d.arrestedDuringAttendance === 'Yes' && (d.arrestTimeIfConverted || d.conversionNotes)) {
+      convertedHtml = '<h2>Attendance converted to arrest</h2><table>' +
+        row('Arrest time', d.arrestTimeIfConverted) +
+        row('Conversion notes', d.conversionNotes) +
+        '</table><p style="font-size:10px;color:#64748b;">Post-arrest custody workflow would be recorded separately. Voluntary chronology preserved above.</p>';
+    }
+
+    return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | Voluntary | ' + h(myRefForTitle) + '</title>' +
+      '<style>' +
+      '@page{margin:15mm;size:A4;} body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 48px;color:#111;line-height:1.45;}' +
+      'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
+      'h2{font-size:12px;font-weight:700;margin:24px 0 8px;padding:8px 10px;background:#f0fdfa;color:#0f766e;border-radius:4px;border-left:4px solid #0f766e;border-top:1px solid #e2e8f0;padding-top:16px;print-color-adjust:exact;}' +
+      'table{width:100%;border-collapse:collapse;margin-bottom:8px;} td{padding:6px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
+      'tr:nth-child(even) td{background:#f8fafc;print-color-adjust:exact;} .l{color:#475569;width:40%;font-weight:500;word-break:break-word;}' +
+      '.nar{white-space:pre-wrap;font-size:10px;background:#f8fafc;padding:8px 10px 8px 13px;border-radius:4px;margin:6px 0;border:1px solid #e2e8f0;border-left:3px solid #0f766e;line-height:1.55;}' +
+      '.letterhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:12px;padding:8px 0 10px;border-bottom:1px solid #e2e8f0;margin:0 0 10px;}' +
+      '.lh-left{font-size:10px;font-weight:700;color:#0f172a;}.lh-center{font-size:11px;font-weight:800;letter-spacing:0.08em;color:#0f766e;text-transform:uppercase;}.lh-right{font-size:9px;color:#475569;text-align:right;}' +
+      '.cover-block{background:#f0fdf9;border:1px solid #99f6e4;border-radius:8px;padding:12px 16px;margin:10px 0 16px;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;print-color-adjust:exact;}' +
+      '.cover-item{font-size:10px;line-height:1.4;}.cover-item strong{color:#0f766e;}' +
+      '.vol-badge{display:inline-block;background:#0f766e;color:white;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700;margin-left:8px;}' +
+      '.watermark{position:fixed;top:30%;left:5%;font-size:90px;font-weight:900;color:rgba(0,0,0,0.04);transform:rotate(-30deg);pointer-events:none;z-index:0;letter-spacing:8px;print-color-adjust:exact;}' +
+      '@media print{.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.watermark{print-color-adjust:exact;}}' +
+      '</style></head><body>' +
+      '<div class="letterhead"><div class="lh-left">' + h(brand) + '</div><div class="lh-center">Voluntary Attendance Note</div><div class="lh-right">Ref ' + h(myRefForTitle) + (d.date ? (' \u00B7 ' + h(fmtDate(d.date))) : '') + '</div></div>' +
+      '<h1>Voluntary Interview Attendance Note <span class="vol-badge">Voluntary</span></h1>' +
+      '<p style="font-size:10px;color:#64748b;"><strong>Client attending voluntarily. Client free to leave unless arrested.</strong></p>' +
+      '<div class="cover-block">' +
+      '<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>Location:</strong> ' + h(sn || d.otherLocation || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>DSCC:</strong> ' + h(d.dsccRef || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>Instruction source:</strong> ' + h(d.instructionSource || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>Constable present:</strong> ' + h(d.constablePresent || '\u2014') + '</div>' +
+      '</div>' +
+      (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">VOLUNTARY</div>' : '') +
+
+      '<h2>1. Matter Setup</h2><table>' +
+      row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) + row('Firm', firmName) + row('Fee Earner', d.feeEarnerName) +
+      row('Client', [d.forename, d.surname].filter(Boolean).join(' ')) + row('DOB', fmtDate(d.dob)) +
+      row('Location', sn || d.otherLocation) + row('Location type', d.locationType) +
+      row('OIC / Interviewer', d.oicName) + row('Instruction source', d.instructionSource) +
+      row('DSCC reference', d.dsccRef) + row('DSCC notification status', d.dsccNotificationStatus) +
+      row('UFN', d.ufn) + row('Matter type', codeLookup('matterTypeCodes', d.matterTypeCode)) +
+      row('Allegation / Offence', d.offenceSummary) +
+      '</table>' +
+
+      '<h2>2. Voluntary Status &amp; Rights</h2><table>' +
+      row('Attending voluntarily?', d.voluntaryStatusConfirmed) + row('Free to leave explained?', d.freeToLeaveExplained) +
+      row('Caution given?', d.cautionGiven) + row('Notice of rights explained?', d.noticeOfRightsExplained) +
+      row('Legal advice requested?', d.legalAdviceRequested) + row('Constable present?', d.constablePresent) +
+      row('Attendance sub-type', d.attendanceSubType) +
+      '</table>' +
+
+      '<h2>3. Welfare &amp; Safeguards</h2><table>' +
+      row('Youth / Vulnerable?', d.juvenileVulnerable) + row('Appropriate adult required?', d.appropriateAdultRequired) +
+      row('Appropriate adult present?', d.appropriateAdultPresent) + row('Interpreter required?', d.languageIssues) +
+      row('Interpreter present?', d.interpreterPresent) + row('Language', d.interpreterLanguage) +
+      row('Fitness to be interviewed?', d.fitToBeInterviewed) + (d.fitnessAdjustments ? row('Adjustments', d.fitnessAdjustments) : '') +
+      row('Mental health / intoxication?', d.psychiatricIssues) + (d.psychiatricNotes ? row('Details', d.psychiatricNotes) : '') +
+      '</table>' +
+
+      '<h2>4. Disclosure &amp; Preparation</h2><table>' +
+      row('Disclosure received (time)', d.disclosureReceivedTime) + row('Disclosure type', d.disclosureType) +
+      '</table>' + (d.disclosureNarrative ? '<div class="nar">' + h(d.disclosureNarrative) + '</div>' : '') +
+      '<table>' + row('Documents reviewed', d.documentsReviewed) + row('Client initial account', d.clientInstructionsInitial) +
+      row('Advice given', d.adviceGiven) + row('Reasons for advice', d.reasonsForAdvice) +
+      row('Interview strategy', d.interviewStrategy) + '</table>' +
+
+      '<h2>5. Attendance Record</h2><table>' +
+      row('Consultation start', d.consultationStart) + row('Consultation end', d.consultationEnd) +
+      row('Interview start', d.interviewStart) + row('Interview end', d.interviewEnd) +
+      row('Key representations made', d.keyRepresentationsMade) + row('Key questions / topics', d.keyQuestionsTopics) +
+      row('Anything adverse or unfair', d.anythingAdverseOrUnfair) +
+      row('Interview stopped / postponed?', d.interviewStoppedPostponed) +
+      row('Arrested during attendance?', d.arrestedDuringAttendance) +
+      '</table>' +
+
+      '<h2>6. Outcome &amp; Billing</h2><table>' +
+      row('Interview completed?', d.interviewCompleted) + row('Outcome', d.outcomeDecision) +
+      row('Outcome code', d.outcomeCode) + row('Stage / fee code', d.stageReachedOrFeeCode) +
+      row('Sufficient benefit note', d.sufficientBenefitNote) + row('Follow-up required?', d.followUpRequired) +
+      row('Total minutes', d.totalMinutes) + row('Miles claimable', d.milesClaimable) + row('Parking cost', d.parkingCost) +
+      '</table>' +
+
+      '<h2>7. Client Aftercare</h2><table>' +
+      row('What explained after interview', d.whatExplainedAfterInterview) +
+      row('Next steps for client', d.nextStepsForClient) +
+      row('Next date', fmtDate(d.nextDate)) + row('Bail / return date', fmtDate(d.bailDate)) +
+      row('Follow-up tasks', d.followUpTasks) +
+      row('Client full name', d.laaClientFullName) + row('Fee earner', d.laaFeeEarnerFullName) +
+      row('Ethnic origin', codeLookup('ethnicCodes', d.ethnicOriginCode)) + row('Disability', codeLookup('disabilityCodes', d.disabilityCode)) +
+      '</table>' +
+
+      convertedHtml +
+
+      (function() {
+        try {
+          var payload = JSON.stringify(d);
+          var encoded = typeof btoa !== 'undefined' ? btoa(unescape(encodeURIComponent(payload))) : '';
+          if (encoded) return '<div style="font-size:1px;line-height:0;height:0;overflow:hidden;position:absolute;left:-9999px;color:transparent;">CUSTODY_NOTE_IMPORT:' + encoded + '</div>';
+        } catch (e) { return ''; }
+      })() +
+      '</body></html>';
+  }
+
   function getActivePdfBuilder() {
-    return (formData._formType === 'telephone') ? buildTelephonePdfHtml : buildPdfHtml;
+    if (formData._formType === 'telephone') return buildTelephonePdfHtml;
+    if (formData.attendanceMode === 'voluntary') return buildVoluntaryPdfHtml;
+    return buildPdfHtml;
+  }
+
+  function getPdfBuilderForData(data) {
+    if (data._formType === 'telephone') return buildTelephonePdfHtml;
+    if (data.attendanceMode === 'voluntary') return buildVoluntaryPdfHtml;
+    return buildPdfHtml;
+  }
+
+  var CONFIDENTIALITY_REMINDER = 'Only share with authorised recipients. Client confidentiality and SRA standards apply.';
+
+  function confirmConfidentialityThen(action) {
+    showConfirm(CONFIDENTIALITY_REMINDER + '\n\nContinue?', 'Confidentiality').then(function(ok) {
+      if (ok && typeof action === 'function') action();
+    });
   }
 
   function exportPdf() {
@@ -7115,7 +7714,7 @@ PDF_CASENOTE_ADVERT +
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : 'attendance';
+      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(p => showToast('PDF saved: ' + p, 'success')).catch(e => showToast('PDF failed: ' + (e && e.message), 'error'));
@@ -7127,7 +7726,7 @@ PDF_CASENOTE_ADVERT +
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : 'attendance';
+      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
@@ -7145,7 +7744,7 @@ PDF_CASENOTE_ADVERT +
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : 'attendance';
+      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
@@ -7164,11 +7763,11 @@ PDF_CASENOTE_ADVERT +
       if (!email) { showToast('Set your email in Settings first', 'error'); return; }
       const builder = getActivePdfBuilder();
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : 'attendance';
+      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(p => {
-        const subj = encodeURIComponent((data._formType === 'telephone' ? 'Tel Advice' : 'Attendance') + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || ''));
+        const subj = encodeURIComponent((data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || ''));
         window.api.openExternal('mailto:' + email + '?subject=' + subj + '&body=' + encodeURIComponent('PDF attached: ' + fn));
         showToast('PDF saved to Desktop \u2014 attach: ' + fn, 'success');
       }).catch(e => showToast('Failed: ' + (e && e.message), 'error'));
@@ -7178,7 +7777,7 @@ PDF_CASENOTE_ADVERT +
   function printAttendanceNoteWithData(data) {
     if (!data) return;
     window.api.getSettings().then(settings => {
-      const builder = (data._formType === 'telephone') ? buildTelephonePdfHtml : buildPdfHtml;
+      const builder = getPdfBuilderForData(data);
       const html = builder(data, settings);
       printGeneratedDoc(html);
     }).catch(e => showToast('Print failed: ' + (e && e.message), 'error'));
@@ -7188,9 +7787,9 @@ PDF_CASENOTE_ADVERT +
   function previewPdfWithData(data) {
     if (!data) return;
     window.api.getSettings().then(settings => {
-      const builder = (data._formType === 'telephone') ? buildTelephonePdfHtml : buildPdfHtml;
+      const builder = getPdfBuilderForData(data);
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : 'attendance';
+      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
@@ -7210,13 +7809,13 @@ PDF_CASENOTE_ADVERT +
       return;
     }
     window.api.getSettings().then(settings => {
-      const builder = (data._formType === 'telephone') ? buildTelephonePdfHtml : buildPdfHtml;
+      const builder = getPdfBuilderForData(data);
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : 'attendance';
+      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(p => {
-        const subj = encodeURIComponent((data._formType === 'telephone' ? 'Tel Advice' : 'Attendance note') + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || ''));
+        const subj = encodeURIComponent((data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance note')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || ''));
         const body = encodeURIComponent('Please find the attendance note PDF attached.\n\nFilename: ' + fn + '\n\nSent from Custody Note.');
         window.api.openExternal('mailto:' + encodeURIComponent(firmEmail) + '?subject=' + subj + '&body=' + body);
         showToast('PDF saved to Desktop. Attach "' + fn + '" and send to ' + firmEmail, 'success');
@@ -7274,11 +7873,11 @@ PDF_CASENOTE_ADVERT +
           });
         }
         if (isPrint) {
-          li.querySelector('.picker-preview-btn')?.addEventListener('click', function(e) { e.stopPropagation(); loadAndRun(previewPdfWithData); });
-          li.querySelector('.picker-print-btn')?.addEventListener('click', function(e) { e.stopPropagation(); loadAndRun(function(d) { printAttendanceNoteWithData(d); showToast('Print dialog opened', 'success'); }); });
+          li.querySelector('.picker-preview-btn')?.addEventListener('click', function(e) { e.stopPropagation(); confirmConfidentialityThen(function() { loadAndRun(previewPdfWithData); }); });
+          li.querySelector('.picker-print-btn')?.addEventListener('click', function(e) { e.stopPropagation(); confirmConfidentialityThen(function() { loadAndRun(function(d) { printAttendanceNoteWithData(d); showToast('Print dialog opened', 'success'); }); }); });
         } else {
           li.addEventListener('click', function() {
-            loadAndRun(emailToSolicitorWithData);
+            confirmConfidentialityThen(function() { loadAndRun(emailToSolicitorWithData); });
           });
         }
       });
@@ -7580,6 +8179,27 @@ PDF_CASENOTE_ADVERT +
      KEYBOARD SHORTCUTS (#10)
      ═══════════════════════════════════════════════ */
   function initKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        var ov = document.getElementById('sync-diagnostics-overlay');
+        if (ov && ov.style.display === 'none') {
+          if (window.api && window.api.syncGetDiagnostics) {
+            window.api.syncGetDiagnostics().then(function(d) {
+              var pre = document.getElementById('sync-diagnostics-content');
+              if (pre) pre.textContent = JSON.stringify(d, null, 2);
+            });
+          }
+          ov.style.display = 'flex';
+        } else if (ov) {
+          ov.style.display = 'none';
+        }
+      }
+    });
+    document.getElementById('sync-diagnostics-close')?.addEventListener('click', function() {
+      var ov = document.getElementById('sync-diagnostics-overlay');
+      if (ov) ov.style.display = 'none';
+    });
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'B') {
         e.preventDefault();
@@ -7904,8 +8524,21 @@ PDF_CASENOTE_ADVERT +
             currentStandaloneSectionId = null;
             formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
             activeFormSections = formSections;
+            formData.attendanceMode = 'custody';
             formData.workType = 'First Police Station Attendance';
             formData._formType = 'attendance';
+            prefillDefaults();
+            renderForm(formData);
+            showView('new');
+            return;
+          case 'home-card-voluntary':
+            e.preventDefault();
+            currentStandaloneSectionId = null;
+            formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
+            activeFormSections = voluntaryFormSections;
+            formData.attendanceMode = 'voluntary';
+            formData._formType = 'attendance';
+            formData.workType = 'Voluntary Police Station Attendance';
             prefillDefaults();
             renderForm(formData);
             showView('new');
@@ -7977,8 +8610,16 @@ PDF_CASENOTE_ADVERT +
       }
     }
     setNetStatus(navigator.onLine);
-    window.addEventListener('online', function () { setNetStatus(true); });
+    window.addEventListener('online', function () {
+      setNetStatus(true);
+      if (window.api && window.api.syncScheduleOnReconnect) window.api.syncScheduleOnReconnect();
+    });
     window.addEventListener('offline', function () { setNetStatus(false); });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && window.api && window.api.syncScheduleOnReconnect) {
+        window.api.syncScheduleOnReconnect();
+      }
+    });
 
     /* Header live clock */
     startHeaderClock();
@@ -8117,11 +8758,11 @@ PDF_CASENOTE_ADVERT +
       if (!btn || !btn.id || !btn.id.startsWith('form-')) return;
       switch (btn.id) {
         case 'form-finalise': validateBeforeFinalise(); break;
-        case 'form-pdf': exportPdf(); break;
-        case 'form-print': printAttendanceNote(); break;
-        case 'form-email': emailPdf(); break;
-        case 'form-email-solicitor': emailToSolicitorWithData(getFormData()); break;
-        case 'form-report-firm': sendReportToFirm(); break;
+        case 'form-pdf': confirmConfidentialityThen(exportPdf); break;
+        case 'form-print': confirmConfidentialityThen(printAttendanceNote); break;
+        case 'form-email': confirmConfidentialityThen(emailPdf); break;
+        case 'form-email-solicitor': confirmConfidentialityThen(function() { emailToSolicitorWithData(getFormData()); }); break;
+        case 'form-report-firm': confirmConfidentialityThen(sendReportToFirm); break;
         case 'form-audit-log': showAuditLog(currentAttendanceId); break;
         case 'form-supervisor-approve':
           if (!currentAttendanceId) { showToast('Save the record first before recording supervisor approval', 'error'); return; }
@@ -8372,6 +9013,7 @@ PDF_CASENOTE_ADVERT +
       });
     });
     document.getElementById('list-sort')?.addEventListener('change', (e) => { listSortMode = e.target.value; listPage = 1; refreshList(); });
+    document.getElementById('list-mode-filter')?.addEventListener('change', (e) => { listModeFilter = e.target.value; listPage = 1; refreshList(); });
     document.getElementById('list-density-toggle')?.addEventListener('click', () => {
       const ul = document.getElementById('attendance-list');
       if (ul) ul.classList.toggle('compact');
