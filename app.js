@@ -1987,9 +1987,19 @@ var REQUIRED_FIELD_KEYS = [
       if (!el || !st || !st.enabled) return;
       el.style.display = '';
       var pending = st.pendingChanges || 0;
+      var failed = st.failedCount || 0;
+      var blocked = st.blockedCount || 0;
       if (pending === 0 && st.lastSync) {
         el.innerHTML = '\u2713 <strong>Synced</strong> (' + formatSyncTime(st.lastSync) + ')';
         el.style.color = '#059669';
+      } else if (blocked > 0) {
+        el.innerHTML = '\u26A0 <strong>' + blocked + ' sync blocked</strong> \u00b7 retrying soon';
+        el.style.color = '#dc2626';
+        if (st.lastError) el.title = st.lastError;
+      } else if (failed > 0) {
+        el.innerHTML = '\u26A0 <strong>' + failed + ' sync failed</strong> \u00b7 retrying soon';
+        el.style.color = '#dc2626';
+        if (st.lastError) el.title = st.lastError;
       } else if (pending > 0) {
         el.innerHTML = '\u23F1 <strong>' + pending + ' pending sync</strong> \u00b7 saved locally';
         el.style.color = '#d97706';
@@ -2351,7 +2361,6 @@ var REQUIRED_FIELD_KEYS = [
 
       if (!d.clientSig) issues.push({ id: id, name: name, reason: 'Missing client signature' });
       if (!d.outcomeDecision && !d.outcomeCode) issues.push({ id: id, name: name, reason: 'No outcome recorded' });
-      if (!d.ufn) issues.push({ id: id, name: name, reason: 'Missing UFN' });
       if (!d.feeEarnerSig) issues.push({ id: id, name: name, reason: 'Missing fee earner signature' });
       if (!d.firmId) issues.push({ id: id, name: name, reason: 'No firm assigned' });
     });
@@ -3805,11 +3814,11 @@ var REQUIRED_FIELD_KEYS = [
     var d = formData;
     var w = [];
     if (d._formType === 'telephone') return w;
-    if (!(d.ufn || '').trim()) w.push('UFN missing');
     if (!(d.matterTypeCode || '').trim()) w.push('Criminal matter type missing');
-    var oc = (d.outcomeCode || '').trim();
     var od = (d.outcomeDecision || '').trim();
-    if (!oc && od !== 'Draft' && od.indexOf('not yet concluded') < 0) w.push('Outcome code missing');
+    var matterConcluded = od && od !== 'Draft' && od.indexOf('not yet concluded') < 0
+      && od !== 'Ongoing' && od !== 'Adjourned';
+    if (matterConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code missing (matter concluded)');
     if (d.attendanceMode === 'voluntary') {
       if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim()) w.push('DSCC reference or reason missing');
       if (d.attendanceSubType === 'voluntary_non_police_body' && !d.constablePresent) w.push('Constable present? required for non-police body');
@@ -6689,13 +6698,18 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'firstContactWithin45Mins', label: 'First contact within 45 mins?', section: 1 },
       { key: 'telephoneAdviceSummary', label: 'Summary of advice given', section: 1 },
       { key: 'outcomeDecision', label: 'Outcome', section: 2 },
-      { key: 'outcomeCode', label: 'Outcome Code', section: 2 },
-      { key: 'caseConcludedDate', label: 'Case concluded date', section: 2 },
     ];
     required.forEach(function(r) {
       var val = formData[r.key];
       if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
     });
+    var telOd = (formData.outcomeDecision || '').trim();
+    var telConcluded = telOd && telOd !== 'Draft' && telOd.indexOf('not yet concluded') < 0
+      && telOd !== 'Ongoing' && telOd !== 'Adjourned';
+    if (telConcluded) {
+      if (!(formData.outcomeCode || '').trim()) m.push({ key: 'outcomeCode', label: 'Outcome Code', section: 2 });
+      if (!(formData.caseConcludedDate || '').trim()) m.push({ key: 'caseConcludedDate', label: 'Case concluded date', section: 2 });
+    }
     if (formData.firstContactWithin45Mins === 'No' && !(formData.firstContactOver45MinsReason || '').trim()) {
       m.push({ key: 'firstContactOver45MinsReason', label: 'Reason first contact exceeded 45 mins', section: 1 });
     }
@@ -6717,7 +6731,6 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'offenceSummary', label: 'Allegation / Offence', section: 0 },
       { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', section: 1 },
       { key: 'outcomeDecision', label: 'Outcome', section: 5 },
-      { key: 'outcomeCode', label: 'Outcome code', section: 5 },
     ];
     if (!(formData.policeStationId || '').trim() && !(formData.otherLocation || '').trim()) {
       m.push({ key: 'policeStationId', label: 'Location (police station or other)', section: 0 });
@@ -6726,6 +6739,12 @@ var REQUIRED_FIELD_KEYS = [
       var val = formData[r.key];
       if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
     });
+    var volOd = (formData.outcomeDecision || '').trim();
+    var volConcluded = volOd && volOd !== 'Draft' && volOd.indexOf('not yet concluded') < 0
+      && volOd !== 'Ongoing' && volOd !== 'Adjourned';
+    if (volConcluded && !(formData.outcomeCode || '').trim()) {
+      m.push({ key: 'outcomeCode', label: 'Outcome code', section: 5 });
+    }
     if (formData.instructionSource === 'dscc' && !(formData.dsccRef || '').trim() && formData.dsccNotificationStatus === 'missing' && !(formData.dsccReferenceMissingReason || '').trim()) {
       m.push({ key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', section: 0 });
     }

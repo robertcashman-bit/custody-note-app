@@ -1,9 +1,30 @@
 {
   "releases": [
     {
-      "version": "1.4.25",
+      "version": "1.4.27",
       "date": "2026-03-10",
       "latest": true,
+      "changes": [
+        "Billing: UFN no longer flagged as missing — not required in this workflow",
+        "Billing: Outcome code only required when matter is concluded (not Draft/Ongoing/Adjourned)",
+        "Sync: fixed pending count calculation (JS truthiness bug showing stale sync_dirty count)",
+        "Sync: auto-recovery for failed/blocked queue items — retries after 5 min cooldown",
+        "Sync: queue cleanup — stale failed/blocked entries cleared on re-enqueue and startup migration",
+        "Sync: UI now shows distinct failed/blocked status with error tooltip instead of generic pending"
+      ]
+    },
+    {
+      "version": "1.4.26",
+      "date": "2026-03-10",
+      "latest": false,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
+      "version": "1.4.25",
+      "date": "2026-03-10",
+      "latest": false,
       "changes": [
         "Finalise mutex — prevents double-click finalise; shows 'Finalising in progress' if button clicked twice",
         "Finalise race fix — waits for any in-flight auto-save to complete before sending the finalise request",

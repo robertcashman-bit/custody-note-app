@@ -88,14 +88,14 @@ function createSyncWorker(ctx) {
     }
   }
 
-  /** Enqueue a sync operation for a record. Replaces any existing pending for same record. */
+  /** Enqueue a sync operation for a record. Replaces any existing entry for same record. */
   function enqueue(recordId, operation, payload) {
     if (!ctx.db) return null;
     const id = generateQueueId();
     const now = Date.now();
     const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload || {});
     try {
-      ctx.dbRun('DELETE FROM sync_queue WHERE record_id=? AND status IN (\'pending\',\'syncing\')', [String(recordId)]);
+      ctx.dbRun('DELETE FROM sync_queue WHERE record_id=?', [String(recordId)]);
       ctx.dbRun(
         'INSERT INTO sync_queue (id, record_id, operation, payload, created_at, retry_count, last_attempt, status, error) VALUES (?,?,?,?,?,0,?,?,?)',
         [id, String(recordId), operation || 'upsert', payloadStr, now, now, 'pending', null]
@@ -215,6 +215,33 @@ function createSyncWorker(ctx) {
     }
   }
 
+  /** Re-enqueue failed/blocked items so they get retried with a fresh attempt count. */
+  function recoverStuckItems() {
+    if (!ctx.db) return 0;
+    const RECOVERY_COOLDOWN_MS = 5 * 60_000;
+    const now = Date.now();
+    try {
+      const stuck = ctx.dbAll(
+        `SELECT id, record_id, last_attempt FROM sync_queue
+         WHERE status IN ('failed','blocked')
+         AND (? - COALESCE(last_attempt, 0)) > ?`,
+        [now, RECOVERY_COOLDOWN_MS]
+      );
+      let recovered = 0;
+      for (const row of stuck || []) {
+        ctx.dbRun(
+          'UPDATE sync_queue SET status=?, retry_count=0, last_attempt=?, error=NULL WHERE id=?',
+          ['pending', now, row.id]
+        );
+        recovered++;
+      }
+      if (recovered > 0) ctx.flushDb && ctx.flushDb();
+      return recovered;
+    } catch (e) {
+      return 0;
+    }
+  }
+
   /** Main loop: check connectivity, process queue, run pull */
   async function runCycle() {
     if (_inProgress) return;
@@ -230,6 +257,7 @@ function createSyncWorker(ctx) {
         _inProgress = false;
         return;
       }
+      recoverStuckItems();
       await processOne();
       if (ctx.syncPull) {
         const pullResult = await ctx.syncPull().catch(() => ({ pulled: 0 }));

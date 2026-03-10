@@ -1389,7 +1389,7 @@ function migrateSyncDirtyToQueue() {
     for (const row of rows || []) {
       const qid = 'sq-' + crypto.randomBytes(12).toString('hex');
       const rid = String(row.id);
-      dbRun('DELETE FROM sync_queue WHERE record_id=? AND status IN (\'pending\',\'syncing\')', [rid]);
+      dbRun('DELETE FROM sync_queue WHERE record_id=?', [rid]);
       dbRun(
         'INSERT OR IGNORE INTO sync_queue (id, record_id, operation, payload, created_at, retry_count, last_attempt, status) VALUES (?,?,?,?,?,0,?,?)',
         [qid, rid, 'upsert', '{}', now, now, 'pending']
@@ -3490,7 +3490,9 @@ ipcMain.handle('sync-now', async () => {
 ipcMain.handle('sync-status', () => {
   const lastSync = getLastSyncTimestamp();
   const dirtyCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
-  const queueCount = dbGet('SELECT COUNT(*) as c FROM sync_queue WHERE status IN (\'pending\',\'syncing\')');
+  const queuePending = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing')");
+  const queueFailed = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status='failed'");
+  const queueBlocked = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status='blocked'");
   const totalCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const apiUrl = getSyncApiUrl();
   const diag = getSyncWorker() ? getSyncWorker().getDiagnostics() : {};
@@ -3506,11 +3508,17 @@ ipcMain.handle('sync-status', () => {
       createdAt: r.created_at,
     }));
   } catch (_) {}
+  const pendingCount = (queuePending ? queuePending.c : 0) || 0;
+  const failedCount = (queueFailed ? queueFailed.c : 0) || 0;
+  const blockedCount = (queueBlocked ? queueBlocked.c : 0) || 0;
+  const pending = pendingCount + failedCount + blockedCount;
   return {
     enabled: !!apiUrl,
     inProgress: diag.inProgress || false,
     lastSync: lastSync !== '1970-01-01T00:00:00.000Z' ? lastSync : diag.lastSyncAt || null,
-    pendingChanges: (queueCount && queueCount.c) || diag.queueLength || dirtyCount?.c || 0,
+    pendingChanges: pending,
+    failedCount,
+    blockedCount,
     totalRecords: totalCount ? totalCount.c : 0,
     lastAttempts,
     connectivity: diag.connectivity,
