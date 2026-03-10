@@ -1,9 +1,23 @@
 {
   "releases": [
     {
-      "version": "1.4.24",
+      "version": "1.4.25",
       "date": "2026-03-10",
       "latest": true,
+      "changes": [
+        "Finalise mutex — prevents double-click finalise; shows 'Finalising in progress' if button clicked twice",
+        "Finalise race fix — waits for any in-flight auto-save to complete before sending the finalise request",
+        "Finalise bar visible immediately — 'Attendance Finished — Finalise' button now shows on new forms without waiting for first auto-save",
+        "Scroll smoothness — form container uses GPU-accelerated scrolling; chrome-collapse scroll handler moved to requestAnimationFrame to eliminate jank",
+        "Section bar auto-scroll — active section button scrolls into view when navigating between sections",
+        "Debounced visibility checks — conditional field show/hide and billing readiness panel now debounced on change to reduce layout thrash",
+        "Section index popup — only rebuilt when open, not on every section navigation"
+      ]
+    },
+    {
+      "version": "1.4.24",
+      "date": "2026-03-10",
+      "latest": false,
       "changes": [
         "Offline-first sync — local SQLite is source of truth; saves never wait for internet; sync runs in background",
         "Sync queue — per-record queue; one failed record never blocks others; retry with backoff (10s, 30s, 2m, 10m, 30m)",

@@ -14,6 +14,7 @@ var currentRecordArchived = false;
 var autoSaveTimer = null;
 var _draftSaveInFlight = false;
 var _draftSaveQueued = false;
+var _finalising = false;
 var recentStationIds = [];
 var magistratesCourts = [];
 var paceTimer = null;
@@ -2023,8 +2024,8 @@ var REQUIRED_FIELD_KEYS = [
       if (hft) hft.textContent = '';
       document.body.classList.remove('chrome-collapsed');
     }
-    if (name === 'home') { stopAutoSave(); stopPaceClock(); loadHomeView(); }
-    if (name === 'list') { stopAutoSave(); stopPaceClock(); refreshList(); }
+    if (name === 'home') { stopAutoSave(); stopPaceClock(); _finalising = false; loadHomeView(); }
+    if (name === 'list') { stopAutoSave(); stopPaceClock(); _finalising = false; refreshList(); }
     if (name === 'firms') loadFirmsList();
     if (name === 'reports') loadReports();
     if (name === 'settings') loadSettings();
@@ -3771,7 +3772,7 @@ var REQUIRED_FIELD_KEYS = [
     autoFillFromClient();
     applyConditionalVisibility();
     updateContextBar();
-    buildSectionsIndex();
+    refreshSectionsIndexIfOpen();
     updateProgressBar();
     const form = document.getElementById('attendance-form');
     if (form) form.scrollTop = 0;
@@ -3782,7 +3783,7 @@ var REQUIRED_FIELD_KEYS = [
     const archiveBtn = document.getElementById('form-archive-btn');
     const unarchiveBtn = document.getElementById('form-unarchive-btn');
     if (!finaliseBar || !archiveBtn || !unarchiveBtn) return;
-    if (currentAttendanceId && currentRecordStatus !== 'finalised' && !currentRecordArchived) {
+    if (currentRecordStatus !== 'finalised' && !currentRecordArchived) {
       finaliseBar.style.display = '';
     } else {
       finaliseBar.style.display = 'none';
@@ -4095,8 +4096,18 @@ var REQUIRED_FIELD_KEYS = [
         updateFormBarVisibility();
         const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
         const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
+        var _saVisDebounce = null, _saCtxDebounce = null;
         form.querySelectorAll('select, input, textarea').forEach(el => {
-          el.addEventListener('change', () => { if (_suppressChangeHandlers) return; collectCurrentData(); applyConditionalVisibility(); updateContextBar(); scheduleQuietSave(); });
+          el.addEventListener('change', () => {
+            if (_suppressChangeHandlers) return;
+            var field = el.dataset.field || el.name;
+            if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
+            clearTimeout(_saVisDebounce);
+            _saVisDebounce = setTimeout(function() { collectCurrentData(); applyConditionalVisibility(); }, 150);
+            clearTimeout(_saCtxDebounce);
+            _saCtxDebounce = setTimeout(updateContextBar, 250);
+            scheduleQuietSave();
+          });
           el.addEventListener('blur', () => { if (_suppressChangeHandlers) return; collectCurrentData(); scheduleQuietSave(); });
         });
         startAutoSave();
@@ -4427,6 +4438,18 @@ var REQUIRED_FIELD_KEYS = [
       _contextBarDebounce = setTimeout(updateContextBar, 250);
     }
 
+    var _visibilityDebounce = null;
+    function debouncedVisibility() {
+      clearTimeout(_visibilityDebounce);
+      _visibilityDebounce = setTimeout(applyConditionalVisibility, 120);
+    }
+
+    var _billingDebounce = null;
+    function debouncedBillingPanel() {
+      clearTimeout(_billingDebounce);
+      _billingDebounce = setTimeout(updateBillingReadinessPanel, 350);
+    }
+
     var _collectTimer = null;
     function scheduleCollect() { clearTimeout(_collectTimer); _collectTimer = setTimeout(collectCurrentData, 400); }
 
@@ -4438,7 +4461,7 @@ var REQUIRED_FIELD_KEYS = [
         if (field && sharedClientFields.includes(field)) {
           setFieldValueSilent(field, el.value);
         }
-        applyConditionalVisibility();
+        debouncedVisibility();
         debouncedContextBar();
         if (field === 'instructionDateTime' && el.value) {
           formData.date = el.value.slice(0, 10);
@@ -4459,7 +4482,7 @@ var REQUIRED_FIELD_KEYS = [
         if (field === 'timeDetentionAuthorised') { setFieldValue('relevantTime', el.value || ''); calcReviewTimes(); }
         if (field === 'relevantTime') { calcReviewTimes(); }
         debouncedProgressUpdate();
-        updateBillingReadinessPanel();
+        debouncedBillingPanel();
         scheduleCollect();
         scheduleQuietSave();
       });
@@ -6566,6 +6589,7 @@ var REQUIRED_FIELD_KEYS = [
   function saveForm(status) {
     const data = getFormData();
     if (!hasMeaningfulData(data)) {
+      _finalising = false;
       showToast('Nothing to save — please enter some data first', 'warning');
       return;
     }
@@ -6580,16 +6604,19 @@ var REQUIRED_FIELD_KEYS = [
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
       if (result && typeof result === 'object') {
         if (result.error === 'locked') {
+          _finalising = false;
           showToast('This record is finalised and cannot be modified. Create a new attendance if needed.', 'error', 6000);
           return;
         }
         if (result.error) {
+          _finalising = false;
           showToast('Failed to save: ' + (result.message || result.error), 'error', 6000);
           return;
         }
       }
       if (typeof result === 'number' || typeof result === 'string') currentAttendanceId = result;
       if (status === 'finalised') {
+        _finalising = false;
         currentRecordStatus = 'finalised';
         updateFormBarVisibility();
         showToast('Record finalised and saved', 'success');
@@ -6598,6 +6625,7 @@ var REQUIRED_FIELD_KEYS = [
         showToast('Saved as draft', 'success');
       }
     }).catch(function(err) {
+      _finalising = false;
       showToast('Failed to save record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 6000);
     });
   }
@@ -6792,6 +6820,9 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── VALIDATION BEFORE FINALISE (#8) ─── */
   function validateBeforeFinalise() {
+    /* Prevent double-click / concurrent finalise calls */
+    if (_finalising) { showToast('Finalising in progress — please wait…', 'info', 2000); return; }
+
     collectCurrentData();
     const isTelForm = formData._formType === 'telephone';
     const missing = isTelForm ? validateTelephoneForm() : (formData.attendanceMode === 'voluntary' ? validateVoluntaryForm() : validateAttendanceForm());
@@ -6813,10 +6844,25 @@ var REQUIRED_FIELD_KEYS = [
       : Promise.resolve([]);
 
     function doFinalise() {
+      /* If a draft auto-save is still in flight, wait for it to settle before finalising
+         to avoid a race where the draft write arrives at the backend after the finalise write. */
+      if (_draftSaveInFlight) {
+        showToast('Saving draft — finalising in a moment…', 'info', 1800);
+        var retries = 0;
+        var waitAndFinalise = setInterval(function() {
+          if (!_draftSaveInFlight || ++retries > 10) {
+            clearInterval(waitAndFinalise);
+            if (!_draftSaveInFlight) doFinalise();
+            else { _finalising = false; showToast('Could not finalise — please try again', 'error', 4000); }
+          }
+        }, 300);
+        return;
+      }
       const c = typeof calculateProfitCosts === 'function' && calculateProfitCosts();
       if (c && c.isEscape) {
         showConfirm('ESCAPE CASE – Total costs exceed £' + (LAA.escapeThreshold || 650) + '. You must submit CRM18 to claim at hourly rates. Continue to finalise?').then(ok => {
           if (ok) saveForm('finalised');
+          else _finalising = false;
         });
       } else {
         saveForm('finalised');
@@ -6834,9 +6880,13 @@ var REQUIRED_FIELD_KEYS = [
         '• Sufficient Benefit Test: ' + sbt + '\n' +
         '• Conflict check: ' + conflict + '\n' +
         '• Outcome: ' + outcome + '\n\nContinue to finalise?';
-      showConfirm(msg, 'Pre-finalise checklist').then(ok => { if (ok) doFinalise(); });
+      showConfirm(msg, 'Pre-finalise checklist').then(ok => {
+        if (ok) doFinalise();
+        else _finalising = false;
+      });
     }
     function showValidationModal(dupes) {
+      _finalising = false; /* Release lock — user must review issues first */
       const modal = document.getElementById('validation-modal');
       const list = document.getElementById('validation-list');
       if (!modal || !list) return;
@@ -6860,6 +6910,7 @@ var REQUIRED_FIELD_KEYS = [
       modal.classList.remove('hidden');
     }
 
+    _finalising = true;
     checkDuplicate.then(function(dupes) {
       if (missing.length === 0 && (!dupes || !dupes.length)) { showPreFinaliseChecklistThenFinalise(); return; }
       const modal = document.getElementById('validation-modal');
@@ -6943,6 +6994,10 @@ var REQUIRED_FIELD_KEYS = [
 
   function openSectionsIndex() { document.getElementById('sections-index')?.classList.remove('hidden'); buildSectionsIndex(); }
   function closeSectionsIndex() { document.getElementById('sections-index')?.classList.add('hidden'); }
+  function refreshSectionsIndexIfOpen() {
+    const popup = document.getElementById('sections-index');
+    if (popup && !popup.classList.contains('hidden')) buildSectionsIndex();
+  }
 
   var sectionShortLabels = {
     caseArrival: 'Ref', journeyTime: 'Journey', custody: 'Custody', offences: 'Offences',
@@ -6956,6 +7011,7 @@ var REQUIRED_FIELD_KEYS = [
     const container = document.getElementById('section-index-bar');
     if (!container) return;
     container.innerHTML = '';
+    var activeBtn = null;
     forEachVisibleSection((sec, i, status) => {
       const num = i + 1;
       const label = sectionShortLabels[sec.id] || sec.title.replace(/^[\d.]+\s*/, '').slice(0, 12);
@@ -6963,12 +7019,18 @@ var REQUIRED_FIELD_KEYS = [
       btn.type = 'button';
       btn.className = 'section-index-btn';
       btn.title = sec.title;
-      if (i === currentSectionIdx) btn.classList.add('current');
+      if (i === currentSectionIdx) { btn.classList.add('current'); activeBtn = btn; }
       if (formData.sectionComplete && formData.sectionComplete[i]) btn.classList.add('filled');
       btn.innerHTML = '<span class="sec-num">' + num + '</span> ' + esc(label);
       btn.addEventListener('click', () => showSection(i));
       container.appendChild(btn);
     });
+    /* Scroll active button into view in the bar */
+    if (activeBtn) {
+      requestAnimationFrame(function() {
+        activeBtn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+      });
+    }
   }
 
   function updateProgressBar() {
@@ -8838,14 +8900,20 @@ PDF_CASENOTE_ADVERT +
       if (!form) return;
       var lastScrollTop = 0;
       var scrollThreshold = 40;
+      var _chromeTicking = false;
       form.addEventListener('scroll', function() {
-        var st = form.scrollTop;
-        if (st > lastScrollTop && st > scrollThreshold) {
-          document.body.classList.add('chrome-collapsed');
-        } else if (st < lastScrollTop) {
-          document.body.classList.remove('chrome-collapsed');
-        }
-        lastScrollTop = Math.max(0, st);
+        if (_chromeTicking) return;
+        _chromeTicking = true;
+        requestAnimationFrame(function() {
+          var st = form.scrollTop;
+          if (st > lastScrollTop && st > scrollThreshold) {
+            document.body.classList.add('chrome-collapsed');
+          } else if (st < lastScrollTop) {
+            document.body.classList.remove('chrome-collapsed');
+          }
+          lastScrollTop = Math.max(0, st);
+          _chromeTicking = false;
+        });
       }, { passive: true });
     })();
     document.getElementById('kb-help-close')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.add('hidden'); });
@@ -10024,14 +10092,17 @@ PDF_CASENOTE_ADVERT +
       document.getElementById('validation-modal')?.classList.add('hidden');
     });
     document.getElementById('validation-finalise-anyway')?.addEventListener('click', () => {
+      if (_finalising) return;
+      _finalising = true;
       showConfirm('Are you sure? Incomplete records may cause the firm billing difficulties.').then(ok => {
-        if (!ok) return;
+        if (!ok) { _finalising = false; return; }
         document.getElementById('validation-modal')?.classList.add('hidden');
         collectCurrentData();
         const c = typeof calculateProfitCosts === 'function' && calculateProfitCosts();
         if (c && c.isEscape) {
           showConfirm('ESCAPE CASE – Submit CRM18 to claim at hourly rates. Continue to finalise?').then(ok2 => {
             if (ok2) saveForm('finalised');
+            else _finalising = false;
           });
         } else {
           saveForm('finalised');

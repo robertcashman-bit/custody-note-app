@@ -1242,9 +1242,9 @@ html.dark .home-attention-item:hover {
   display: flex; flex-shrink: 0; justify-content: space-between; align-items: center;
   flex-wrap: nowrap; gap: 0.4rem 1rem;
   border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 10;
+  z-index: 10;
   overflow: hidden;
-  transition: opacity 0.15s ease, padding 0.15s ease;
+  transition: max-height 0.18s ease, opacity 0.18s ease, padding 0.18s ease;
   max-height: 50px;
 }
 .context-left { display: flex; gap: 1rem; flex-wrap: nowrap; overflow: hidden; }
@@ -1330,6 +1330,11 @@ html.dark .home-attention-item:hover {
   padding: 1.25rem 1.5rem;
   background: var(--surface); width: 100%; min-width: 0;
   color: var(--on-surface);
+  /* GPU-accelerated scrolling for smooth performance */
+  will-change: scroll-position;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
 }
 
 .form-section { display: none; width: 100%; min-width: 0; }
@@ -1437,7 +1442,7 @@ html.dark .station-code { color: var(--primary); }
   border: 2px solid var(--border); border-radius: 6px;
   font-size: 1rem; font-family: inherit;
   background: var(--input-bg); color: var(--on-surface);
-  transition: border-color 0.1s ease;
+  transition: border-color 0.15s ease;
 }
 .form-group input:focus,
 .form-group select:focus,
@@ -2319,7 +2324,9 @@ html.dark .useful-links-category { color: var(--corporate-accent, #93c5fd); }
   background: var(--surface); border-bottom: 1px solid var(--border);
   align-items: stretch; overflow-x: auto; overflow-y: hidden;
   scrollbar-width: none;
-  transition: opacity 0.15s ease, padding 0.15s ease;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  transition: max-height 0.18s ease, opacity 0.18s ease, padding 0.18s ease;
   max-height: 50px;
 }
 .section-index-bar::-webkit-scrollbar { display: none; }
@@ -3015,11 +3022,11 @@ kbd {
 /* ═══ AUTO-HIDE CHROME ON SCROLL ═══ */
 .chrome-collapsed .section-index-bar {
   max-height: 0; padding-top: 0; padding-bottom: 0;
-  border-bottom-width: 0; opacity: 0; overflow: hidden;
+  border-bottom-width: 0; opacity: 0;
 }
 .chrome-collapsed .form-context-bar {
   max-height: 0; padding-top: 0; padding-bottom: 0;
-  border-bottom-width: 0; opacity: 0; overflow: hidden;
+  border-bottom-width: 0; opacity: 0;
 }
 
 /* ═══ LICENCE OVERLAY ═══ */
