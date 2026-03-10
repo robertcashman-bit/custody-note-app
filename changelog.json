@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.31",
+      "version": "1.4.32",
       "date": "2026-03-10",
       "latest": true,
+      "changes": [
+        "Reduced sync frequency 10s to 30s for better performance",
+        "Fixed finalise race condition where autosave could block finalisation",
+        "Added 30s safety timeout to prevent stuck finalise state"
+      ]
+    },
+    {
+      "version": "1.4.31",
+      "date": "2026-03-10",
+      "latest": false,
       "changes": [
         "Performance optimization: faster startup (deferred backfills, reduced splash, eliminated redundant fetches), lazy form section rendering, event delegation for list view, lightweight home stats IPC, indexed draft lookup, transaction-wrapped migrations, CSS blur removal, timer cleanup"
       ]
