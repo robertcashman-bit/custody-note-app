@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.30",
+      "version": "1.4.31",
       "date": "2026-03-10",
       "latest": true,
+      "changes": [
+        "Performance optimization: faster startup (deferred backfills, reduced splash, eliminated redundant fetches), lazy form section rendering, event delegation for list view, lightweight home stats IPC, indexed draft lookup, transaction-wrapped migrations, CSS blur removal, timer cleanup"
+      ]
+    },
+    {
+      "version": "1.4.30",
+      "date": "2026-03-10",
+      "latest": false,
       "changes": [
         "Sync engine hardening and version-aware queue reliability fixes",
         "Finalise/billing flow now supports unknown ongoing outcomes without blocking",
