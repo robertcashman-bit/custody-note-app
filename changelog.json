@@ -1,9 +1,27 @@
 {
   "releases": [
     {
-      "version": "1.4.28",
+      "version": "1.4.30",
       "date": "2026-03-10",
       "latest": true,
+      "changes": [
+        "Sync engine hardening and version-aware queue reliability fixes",
+        "Finalise/billing flow now supports unknown ongoing outcomes without blocking",
+        "Added diagnostics panel improvements and comprehensive sync/finalise stress tests"
+      ]
+    },
+    {
+      "version": "1.4.29",
+      "date": "2026-03-10",
+      "latest": false,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
+      "version": "1.4.28",
+      "date": "2026-03-10",
+      "latest": false,
       "changes": [
         "Bug fixes and improvements"
       ]
