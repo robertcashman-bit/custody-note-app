@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld('api', {
   syncStatus: () => ipcRenderer.invoke('sync-status'),
   syncScheduleOnReconnect: () => ipcRenderer.invoke('sync-schedule-on-reconnect'),
   syncGetDiagnostics: () => ipcRenderer.invoke('sync-get-diagnostics'),
+  attendanceHomeStats: () => ipcRenderer.invoke('attendance-home-stats'),
   syncForceRetry: () => ipcRenderer.invoke('sync-force-retry'),
   onSyncStatusChanged: (cb) => ipcRenderer.on('sync-status-changed', (_, data) => cb(data)),
   onRecordsUpdatedFromSync: (cb) => ipcRenderer.on('records-updated-from-sync', (_, data) => cb(data)),

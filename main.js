@@ -22,7 +22,6 @@ const { createSyncWorker } = require('./main/syncWorker');
 let mainWindow;
 let db;
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-let _lastDuplicateDraftCleanupMs = 0;
 
 /* ═══════════════════════════════════════════════
    DATABASE ENCRYPTION (AES-256-GCM + dual key)
@@ -585,9 +584,27 @@ function findExistingDraftIdByCaseKey(parsed) {
   const key = buildCaseKeyFromParsed(parsed);
   if (!key) return null;
   try {
-    const rows = dbAll(
-      "SELECT id, data, updated_at, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL ORDER BY updated_at DESC"
-    );
+    const dscc = normalizeKeyPart(parsed.dsccRef).toUpperCase();
+    const date = normalizeKeyPart(parsed.date || (parsed.instructionDateTime ? String(parsed.instructionDateTime).slice(0, 10) : ''));
+    const station = normalizeKeyPart(parsed.policeStationName).toLowerCase();
+    const client = normalizeKeyPart([parsed.surname || '', parsed.forename || ''].filter(Boolean).join(', ')).toLowerCase();
+
+    let rows;
+    if (dscc) {
+      rows = dbAll(
+        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL AND dscc_ref=? ORDER BY updated_at DESC LIMIT 5",
+        [dscc]
+      );
+    } else if (client && date && station) {
+      rows = dbAll(
+        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL AND client_name=? AND attendance_date=? ORDER BY updated_at DESC LIMIT 5",
+        [client, date]
+      );
+    } else {
+      rows = dbAll(
+        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL ORDER BY updated_at DESC"
+      );
+    }
     for (const r of rows) {
       if (!r || !r.data) continue;
       let p = {};
@@ -873,7 +890,6 @@ async function initDb() {
   }
 
   loadStationsFromFile();
-  backfillAttendanceIndexColumns();
   saveDb();
   return db;
 }
@@ -889,6 +905,7 @@ function loadStationsFromFile() {
     return;
   }
   if (!Array.isArray(stations)) return;
+  try { db.run('BEGIN TRANSACTION'); } catch (_) {}
   for (const s of stations) {
     try {
       const existing = dbGet('SELECT id FROM police_stations WHERE name = ? AND code = ?', [s.name || '', s.code || '']);
@@ -901,6 +918,7 @@ function loadStationsFromFile() {
       }
     } catch (_) {}
   }
+  try { db.run('COMMIT'); } catch (_) {}
 }
 
 /* ─── SMART BACKUP SYSTEM ─── */
@@ -1314,13 +1332,15 @@ function backfillSyncIds() {
   if (!db) return;
   try {
     const rows = dbAll("SELECT id FROM attendances WHERE sync_id IS NULL OR sync_id = ''");
+    if (rows.length === 0) return;
+    try { db.run('BEGIN TRANSACTION'); } catch (_) {}
     for (const row of rows) {
       dbRun('UPDATE attendances SET sync_id=?, sync_dirty=1 WHERE id=?', [generateSyncId(), row.id]);
     }
-    if (rows.length > 0) {
-      console.log('[Sync] Backfilled sync_id for', rows.length, 'records');
-    }
+    try { db.run('COMMIT'); } catch (_) {}
+    console.log('[Sync] Backfilled sync_id for', rows.length, 'records');
   } catch (e) {
+    try { db.run('ROLLBACK'); } catch (_) {}
     console.warn('[Sync] Backfill sync_id failed:', e && e.message ? e.message : e);
   }
 }
@@ -1332,8 +1352,10 @@ function migrateSyncDirtyToQueue() {
     const hasTable = dbGet("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sync_queue'");
     if (!hasTable) return;
     const rows = dbAll('SELECT id FROM attendances WHERE sync_dirty=1');
+    if (!rows || rows.length === 0) return;
     const now = Date.now();
-    for (const row of rows || []) {
+    try { db.run('BEGIN TRANSACTION'); } catch (_) {}
+    for (const row of rows) {
       const qid = 'sq-' + crypto.randomBytes(12).toString('hex');
       const rid = String(row.id);
       dbRun('DELETE FROM sync_queue WHERE record_id=?', [rid]);
@@ -1342,10 +1364,10 @@ function migrateSyncDirtyToQueue() {
         [qid, rid, 'upsert', '{}', now, now, 'pending']
       );
     }
-    if (rows && rows.length > 0) {
-      console.log('[Sync] Migrated', rows.length, 'dirty records to sync_queue');
-    }
+    try { db.run('COMMIT'); } catch (_) {}
+    console.log('[Sync] Migrated', rows.length, 'dirty records to sync_queue');
   } catch (e) {
+    try { db.run('ROLLBACK'); } catch (_) {}
     console.warn('[Sync] migrateSyncDirtyToQueue failed:', e && e.message ? e.message : e);
   }
 }
@@ -1519,6 +1541,19 @@ function createWindow() {
       mainWindow.show();
       mainWindow.maximize();
     }
+    setTimeout(() => {
+      if (db) {
+        try {
+          db.run('BEGIN TRANSACTION');
+          backfillAttendanceIndexColumns({ limit: 10000 });
+          db.run('COMMIT');
+          saveDb();
+        } catch (e) {
+          try { db.run('ROLLBACK'); } catch (_) {}
+          console.warn('[DB] Deferred backfill failed:', e && e.message ? e.message : e);
+        }
+      }
+    }, 5000);
   });
   mainWindow.loadFile('index.html');
   const ses = mainWindow.webContents.session;
@@ -2804,13 +2839,34 @@ ipcMain.handle('attendance-list-full', () => {
   );
 });
 
-ipcMain.handle('attendance-search', (_, params) => {
-  const nowMs = Date.now();
-  if (nowMs - _lastDuplicateDraftCleanupMs > 60 * 1000) {
-    cleanupAccidentalDuplicateDrafts();
-    _lastDuplicateDraftCleanupMs = nowMs;
-  }
+ipcMain.handle('attendance-home-stats', () => {
+  const rows = dbAll(
+    'SELECT id, created_at, updated_at, client_name, attendance_date, status, data FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC'
+  );
+  return rows.map(r => {
+    let clientSig, feeEarnerSig, firmId, caseOutcomeStatus, totalTimeClaimed, totalHoursWorked, forename, surname;
+    if (r.data) {
+      try {
+        const d = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
+        clientSig = d.clientSig || '';
+        feeEarnerSig = d.feeEarnerSig || '';
+        firmId = d.firmId || '';
+        caseOutcomeStatus = d.caseOutcomeStatus || '';
+        totalTimeClaimed = d.totalTimeClaimed || '';
+        totalHoursWorked = d.totalHoursWorked || '';
+        forename = d.forename || '';
+        surname = d.surname || '';
+      } catch (_) {}
+    }
+    return {
+      id: r.id, created_at: r.created_at, updated_at: r.updated_at,
+      client_name: r.client_name, attendance_date: r.attendance_date, status: r.status,
+      data: { clientSig, feeEarnerSig, firmId, caseOutcomeStatus, totalTimeClaimed, totalHoursWorked, forename, surname }
+    };
+  });
+});
 
+ipcMain.handle('attendance-search', (_, params) => {
   const { query, status, page, pageSize, sortField, sortDir, archived } = params || {};
   const p = Math.max(1, page || 1);
   const ps = Math.max(1, pageSize || 50);

@@ -17,6 +17,9 @@ var _draftSaveQueued = false;
 var _finalising = false;
 var recentStationIds = [];
 var magistratesCourts = [];
+var _cachedFlatOffences = null;
+var _cachedFlatOffencesWithMatter = null;
+var _formEnsureSectionRendered = null;
 var paceTimer = null;
 var listPage = 1;
 var LIST_PER_PAGE = 50;
@@ -2027,6 +2030,7 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function showView(name) {
+    if (_homeGreetingTimer) { clearInterval(_homeGreetingTimer); _homeGreetingTimer = null; }
     Object.keys(views).forEach(k => {
       document.getElementById(views[k])?.classList.toggle('active', k === name);
     });
@@ -2297,14 +2301,18 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function loadHomeWidgets(listRows) {
-    var listFn = window.api.attendanceListFull || window.api.attendanceList;
-    listFn().then(function(fullRows) {
-      loadWeekSummary(fullRows);
-      loadNeedsAttention(fullRows);
-    }).catch(function() {
+    if (window.api && window.api.attendanceHomeStats) {
+      window.api.attendanceHomeStats().then(function(statsRows) {
+        loadWeekSummary(statsRows || []);
+        loadNeedsAttention(statsRows || []);
+      }).catch(function() {
+        loadWeekSummary(listRows || []);
+        loadNeedsAttention(listRows || []);
+      });
+    } else {
       loadWeekSummary(listRows || []);
-      loadNeedsAttention([]);
-    });
+      loadNeedsAttention(listRows || []);
+    }
   }
 
   function loadWeekSummary(rows) {
@@ -2331,12 +2339,13 @@ var REQUIRED_FIELD_KEYS = [
       if ((r.status || 'draft') === 'finalised') weekFinalised++;
       else weekDrafts++;
 
+      var d = null;
       if (r.data) {
-        try {
-          var d = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
-          var h = parseFloat(d.totalTimeClaimed || d.totalHoursWorked || 0);
-          if (!isNaN(h)) weekHours += h;
-        } catch (e) {}
+        try { d = typeof r.data === 'string' ? JSON.parse(r.data) : r.data; } catch (_) {}
+      }
+      if (d) {
+        var h = parseFloat(d.totalTimeClaimed || d.totalHoursWorked || 0);
+        if (!isNaN(h)) weekHours += h;
       }
     });
 
@@ -2355,7 +2364,7 @@ var REQUIRED_FIELD_KEYS = [
       if ((r.status || 'draft') === 'finalised') return;
       var d = null;
       if (r.data) {
-        try { d = typeof r.data === 'string' ? JSON.parse(r.data) : r.data; } catch (e) { return; }
+        try { d = typeof r.data === 'string' ? JSON.parse(r.data) : r.data; } catch (_) { return; }
       }
       if (!d) return;
 
@@ -3435,11 +3444,40 @@ var REQUIRED_FIELD_KEYS = [
   var listStatusFilter = 'all';
   var listModeFilter = 'all';
   var listSortMode = 'newest';
+  var _listItemIndex = {};
+  var _listDelegateAttached = false;
+
+  function setupListDelegation() {
+    if (_listDelegateAttached) return;
+    var ul = document.getElementById('attendance-list');
+    if (!ul) return;
+    _listDelegateAttached = true;
+    ul.addEventListener('click', function(e) {
+      var actionBtn = e.target.closest('[data-action]');
+      var li = e.target.closest('li[data-id]');
+      if (!li) return;
+      var id = parseInt(li.dataset.id);
+      var rec = _listItemIndex[id];
+      if (!rec) return;
+      var title = li.dataset.title || '';
+      if (actionBtn) {
+        e.stopPropagation();
+        switch (actionBtn.dataset.action) {
+          case 'amend': amendAttendance(id, rec.status, title); break;
+          case 'dup': duplicateAttendance(id); break;
+          case 'newMatter': newMatterFromAttendance(id); break;
+          case 'delete': deleteAttendance(id, title); break;
+        }
+      } else if (e.target.closest('.list-item-text')) {
+        openAttendance(id);
+      }
+    });
+  }
 
   function refreshList() {
     const ul = document.getElementById('attendance-list');
     if (!ul || !window.api) return;
-    /* Use full list (with data blob) so we can show name/date from form JSON when index columns are empty. */
+    setupListDelegation();
     window.api.attendanceListFull().then(rows => {
       const q = (document.getElementById('list-search')?.value || '').toLowerCase();
       let filtered = q ? rows.filter(r => {
@@ -3469,6 +3507,7 @@ var REQUIRED_FIELD_KEYS = [
         return sa.localeCompare(sb);
       });
       ul.innerHTML = '';
+      _listItemIndex = {};
       if (!filtered.length) {
         ul.innerHTML = '<li class="empty-state"><p>No attendances yet. Click "New Attendance" to start.</p></li>';
         renderListPagination(0);
@@ -3479,7 +3518,9 @@ var REQUIRED_FIELD_KEYS = [
       if (listPage < 1) listPage = 1;
       const start = (listPage - 1) * LIST_PER_PAGE;
       const pageItems = filtered.slice(start, start + LIST_PER_PAGE);
+      var frag = document.createDocumentFragment();
       pageItems.forEach(r => {
+        _listItemIndex[r.id] = r;
         const d = safeJson(r.data);
         const title = (r.client_name && String(r.client_name).trim()) || [d.surname, d.forename].filter(Boolean).join(', ') || 'Draft (no name)';
         const rawDate = r.attendance_date || d.date || (r.updated_at ? String(r.updated_at).slice(0, 10) : '') || '';
@@ -3494,6 +3535,8 @@ var REQUIRED_FIELD_KEYS = [
         const meta = [fileNumLabel, dateLabel, stationLabel, dsccLabel].filter(Boolean).join(' \u00B7 ');
         const formTypeBadge = d._formType === 'telephone' ? '<span class="badge badge-tel">TEL</span>' : (d.attendanceMode === 'voluntary' ? '<span class="badge badge-vol">VOL</span>' : '<span class="badge badge-att">ATT</span>');
         const li = document.createElement('li');
+        li.dataset.id = r.id;
+        li.dataset.title = title;
         li.innerHTML = '<div class="list-item-text"><span class="title">' + esc(title) + '</span><div class="meta">' + esc(meta) + '</div></div>' +
           '<div class="list-item-actions">' +
             '<div class="list-item-badges">' +
@@ -3501,22 +3544,15 @@ var REQUIRED_FIELD_KEYS = [
               '<span class="badge ' + (r.status || 'draft') + '">' + (r.status || 'draft') + '</span>' +
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
-              '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + r.id + '">Edit</button>' +
-              '<button type="button" class="btn-list-action dup-btn" title="Duplicate for further visit" data-id="' + r.id + '">Duplicate</button>' +
-              '<button type="button" class="btn-list-action new-matter-btn" title="New matter (same client)" data-id="' + r.id + '">New matter</button>' +
-              '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + r.id + '">Delete</button>' +
+              '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
+              '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
+              '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
+              '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>' +
             '</div>' +
           '</div>';
-        li.querySelector('.list-item-text')?.addEventListener('click', () => openAttendance(r.id));
-        if (!li.querySelector('.list-item-text')) {
-          li.addEventListener('click', (e) => { if (!e.target.closest('.btn-list-action')) openAttendance(r.id); });
-        }
-        li.querySelector('.amend-btn').addEventListener('click', (e) => { e.stopPropagation(); amendAttendance(r.id, r.status, title); });
-        li.querySelector('.dup-btn').addEventListener('click', (e) => { e.stopPropagation(); duplicateAttendance(r.id); });
-        li.querySelector('.new-matter-btn').addEventListener('click', (e) => { e.stopPropagation(); newMatterFromAttendance(r.id); });
-        li.querySelector('.delete-btn').addEventListener('click', (e) => { e.stopPropagation(); deleteAttendance(r.id, title); });
-        ul.appendChild(li);
+        frag.appendChild(li);
       });
+      ul.appendChild(frag);
       renderListPagination(filtered.length);
     });
   }
@@ -3779,6 +3815,7 @@ var REQUIRED_FIELD_KEYS = [
       if (target < 0 || target >= activeFormSections.length) break;
     }
     currentSectionIdx = Math.max(0, Math.min(target, activeFormSections.length - 1));
+    if (_formEnsureSectionRendered) _formEnsureSectionRendered(currentSectionIdx);
     document.querySelectorAll('.form-section').forEach((el, i) => el.classList.toggle('active', i === currentSectionIdx));
     setFormTitle(activeFormSections[currentSectionIdx].title);
     if (activeFormSections[currentSectionIdx].id === 'timeRecording') { autoCalcTimes(); updateCalcPanel(); }
@@ -4137,17 +4174,84 @@ var REQUIRED_FIELD_KEYS = [
     document.getElementById('form-prev')?.classList.remove('hidden');
     document.getElementById('form-next')?.classList.remove('hidden');
 
-    activeFormSections.forEach((sec, secIdx) => {
-      const section = document.createElement('div');
-      section.className = 'form-section' + (secIdx === currentSectionIdx ? ' active' : '');
-      section.dataset.secIdx = secIdx;
-      section.dataset.sectionId = sec.id || '';
-      if (sec.id === 'supervisorReview' && !isSupervisorSectionEnabled()) {
-        section.style.display = 'none';
-      }
-      /* Date/time bar removed -- now shown in context bar only */
+    var _renderedSections = {};
+    var _lazyFormData = data;
 
-      /* Declaration text */
+    const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
+    const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
+
+    var _progressDebounce = null;
+    function debouncedProgressUpdate() {
+      clearTimeout(_progressDebounce);
+      _progressDebounce = setTimeout(updateProgressBar, 300);
+    }
+
+    var _contextBarDebounce = null;
+    function debouncedContextBar() {
+      clearTimeout(_contextBarDebounce);
+      _contextBarDebounce = setTimeout(updateContextBar, 250);
+    }
+
+    var _visibilityDebounce = null;
+    function debouncedVisibility() {
+      clearTimeout(_visibilityDebounce);
+      _visibilityDebounce = setTimeout(applyConditionalVisibility, 120);
+    }
+
+    var _billingDebounce = null;
+    function debouncedBillingPanel() {
+      clearTimeout(_billingDebounce);
+      _billingDebounce = setTimeout(updateBillingReadinessPanel, 350);
+    }
+
+    var _collectTimer = null;
+    function scheduleCollect() { clearTimeout(_collectTimer); _collectTimer = setTimeout(collectCurrentData, 400); }
+
+    function attachSectionListeners(sectionEl) {
+      sectionEl.querySelectorAll('select, input, textarea').forEach(el => {
+        el.addEventListener('change', () => {
+          if (_suppressChangeHandlers) return;
+          var field = el.dataset.field || el.name;
+          if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
+          if (field && sharedClientFields.includes(field)) {
+            setFieldValueSilent(field, el.value);
+          }
+          debouncedVisibility();
+          debouncedContextBar();
+          if (field === 'instructionDateTime' && el.value) {
+            formData.date = el.value.slice(0, 10);
+            const dow = new Date(formData.date).getDay();
+            const isWE = dow === 0 || dow === 6;
+            const isBH = UK_BANK_HOLIDAYS.includes(formData.date);
+            setFieldValue('weekendBankHoliday', (isWE || isBH) ? 'Yes' : 'No');
+          }
+          if (field === 'outcomeDecision') {
+            if (formData.outcomeDecision === 'Bail without charge' && (!formData.bailReturnStationName || !formData.bailReturnStationCode)) {
+              if (formData.policeStationName) { formData.bailReturnStationName = formData.policeStationName; setFieldValueSilent('bailReturnStationName', formData.policeStationName); }
+              if (formData.schemeId) { formData.bailReturnStationCode = formData.schemeId; setFieldValueSilent('bailReturnStationCode', formData.schemeId); }
+            }
+          }
+          if (timeAndCalcFields.includes(field)) { autoCalcTimes(); }
+          else if (['travelSocial','travelUnsocial','waitingSocial','waitingUnsocial','adviceSocial','adviceUnsocial','milesClaimable'].includes(field)) recalcTotal();
+          if (formData.attendanceMode === 'voluntary' && ['consultationStart','consultationEnd','interviewStart','interviewEnd'].includes(field)) { autoCalcVoluntaryTimes(); }
+          if (field === 'timeDetentionAuthorised') { setFieldValue('relevantTime', el.value || ''); calcReviewTimes(); }
+          if (field === 'relevantTime') { calcReviewTimes(); }
+          debouncedProgressUpdate();
+          debouncedBillingPanel();
+          scheduleCollect();
+          scheduleQuietSave();
+        });
+        el.addEventListener('blur', () => {
+          if (_suppressChangeHandlers) return;
+          var field = el.dataset.field || el.name;
+          if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
+          scheduleCollect();
+          scheduleQuietSave();
+        });
+      });
+    }
+
+    function populateSectionContent(section, sec, secIdx) {
       if (sec.hasDeclarationText && refData.laaDeclarationText) {
         const telNote = document.createElement('p');
         telNote.className = 'declaration-tel-note';
@@ -4168,7 +4272,6 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(decl);
       }
 
-      /* Checklist (optionally grouped) */
       if (sec.checklist) {
         const cl = document.createElement('div');
         cl.className = 'checklist-group consultation-checklist';
@@ -4198,7 +4301,7 @@ var REQUIRED_FIELD_KEYS = [
             const wrap = document.createElement('label');
             wrap.className = 'checklist-item';
             const cb = document.createElement('input');
-            cb.type = 'checkbox'; cb.name = c.key; cb.checked = !!data[c.key];
+            cb.type = 'checkbox'; cb.name = c.key; cb.checked = !!_lazyFormData[c.key];
             wrap.appendChild(cb); wrap.append(' ' + c.label);
             row.appendChild(wrap);
           });
@@ -4207,14 +4310,11 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(cl);
       }
 
-      /* Main fields grid */
       const grid = document.createElement('div');
       grid.className = 'form-row-2col';
-      (sec.fields || []).forEach(f => renderField(f, data, grid, section));
+      (sec.fields || []).forEach(f => renderField(f, _lazyFormData, grid, section));
       if (grid.children.length) section.appendChild(grid);
 
-
-      /* Advice checklist (grouped) */
       if (sec.adviceChecklist) {
         const al = document.createElement('div');
         al.className = 'checklist-group advice-checklist';
@@ -4244,7 +4344,7 @@ var REQUIRED_FIELD_KEYS = [
             const wrap = document.createElement('label');
             wrap.className = 'checklist-item';
             const cb = document.createElement('input');
-            cb.type = 'checkbox'; cb.name = c.key; cb.checked = !!data[c.key];
+            cb.type = 'checkbox'; cb.name = c.key; cb.checked = !!_lazyFormData[c.key];
             wrap.appendChild(cb); wrap.append(' ' + c.label);
             row.appendChild(wrap);
           });
@@ -4253,15 +4353,13 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(al);
       }
 
-      /* Extra fields */
       if (sec.extraFields) {
         const grid2 = document.createElement('div');
         grid2.className = 'form-row-2col';
-        sec.extraFields.forEach(f => renderField(f, data, grid2, section));
+        sec.extraFields.forEach(f => renderField(f, _lazyFormData, grid2, section));
         if (grid2.children.length) section.appendChild(grid2);
       }
 
-      /* Calc panel */
       if (sec.hasCalcPanel) {
         const cp = document.createElement('div');
         cp.id = 'calc-panel';
@@ -4269,12 +4367,10 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(cp);
       }
 
-      /* Common offences picker for offences section */
       if (sec.id === 'offences') {
         renderOffencePicker(section);
       }
 
-      /* UFN auto-suggestion on admin section */
       if (sec.id === 'adminBilling') {
         const ufnInp = section.querySelector('[data-field="ufn"]');
         if (ufnInp) {
@@ -4299,7 +4395,6 @@ var REQUIRED_FIELD_KEYS = [
         }
       }
 
-      /* Further attendance button on outcome section */
       if (sec.id === 'outcome') {
         const faWrap = document.createElement('div');
         faWrap.id = 'further-attendance-wrap';
@@ -4329,13 +4424,11 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(faWrap);
       }
 
-      /* Multi-interview */
       if (sec.multiInterview) {
         renderNoCommentButton(section);
-        renderMultiInterview(section, data, sec);
+        renderMultiInterview(section, _lazyFormData, sec);
       }
 
-      /* Attachments — rendered inside the Time Recording & Fees section, near invoices */
       if (sec.id === 'timeRecording') {
         const photoWrap = document.createElement('div');
         photoWrap.className = 'photo-attach-area';
@@ -4382,7 +4475,6 @@ var REQUIRED_FIELD_KEYS = [
         renderPhotoThumbs('attachments');
       }
 
-      /* Extra actions (Finalise, PDF, Email) */
       if (sec.extraActions) {
         const actions = document.createElement('div');
         actions.className = 'form-actions';
@@ -4397,7 +4489,6 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(actions);
       }
 
-      /* Section 9 (custody) or volOutcome (voluntary): Billing readiness + Finalise and Archive actions */
       if (sec.id === 'timeRecording' || sec.id === 'volOutcome') {
         const billingPanel = document.createElement('div');
         billingPanel.id = 'billing-readiness-panel';
@@ -4413,7 +4504,6 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(endActions);
       }
 
-      /* Supervisor section action */
       if (sec.id === 'supervisorReview') {
         const supActions = document.createElement('div');
         supActions.className = 'form-actions';
@@ -4426,88 +4516,43 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(supActions);
       }
 
+      attachSectionListeners(section);
+      _renderedSections[secIdx] = true;
+    }
+
+    function ensureSectionRendered(secIdx) {
+      if (_renderedSections[secIdx]) return;
+      var section = document.querySelector('.form-section[data-sec-idx="' + secIdx + '"]');
+      if (!section) return;
+      var sec = activeFormSections[secIdx];
+      if (!sec) return;
+      populateSectionContent(section, sec, secIdx);
+      applyConditionalVisibility();
+    }
+
+    activeFormSections.forEach((sec, secIdx) => {
+      const section = document.createElement('div');
+      section.className = 'form-section' + (secIdx === currentSectionIdx ? ' active' : '');
+      section.dataset.secIdx = secIdx;
+      section.dataset.sectionId = sec.id || '';
+      if (sec.id === 'supervisorReview' && !isSupervisorSectionEnabled()) {
+        section.style.display = 'none';
+      }
+
+      if (secIdx === currentSectionIdx) {
+        populateSectionContent(section, sec, secIdx);
+      }
+
       form.appendChild(section);
     });
+
+    _formEnsureSectionRendered = ensureSectionRendered;
 
     setFormTitle(activeFormSections[currentSectionIdx].title);
     buildSectionsIndex();
     applyConditionalVisibility();
     updateContextBar();
     updateFormBarVisibility();
-
-    /* Form action buttons (Finalise, PDF, Email, Report, Audit, Supervisor) are handled by delegated listener in init */
-
-    const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
-    const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
-
-    var _progressDebounce = null;
-    function debouncedProgressUpdate() {
-      clearTimeout(_progressDebounce);
-      _progressDebounce = setTimeout(updateProgressBar, 300);
-    }
-
-    var _contextBarDebounce = null;
-    function debouncedContextBar() {
-      clearTimeout(_contextBarDebounce);
-      _contextBarDebounce = setTimeout(updateContextBar, 250);
-    }
-
-    var _visibilityDebounce = null;
-    function debouncedVisibility() {
-      clearTimeout(_visibilityDebounce);
-      _visibilityDebounce = setTimeout(applyConditionalVisibility, 120);
-    }
-
-    var _billingDebounce = null;
-    function debouncedBillingPanel() {
-      clearTimeout(_billingDebounce);
-      _billingDebounce = setTimeout(updateBillingReadinessPanel, 350);
-    }
-
-    var _collectTimer = null;
-    function scheduleCollect() { clearTimeout(_collectTimer); _collectTimer = setTimeout(collectCurrentData, 400); }
-
-    form.querySelectorAll('select, input, textarea').forEach(el => {
-      el.addEventListener('change', () => {
-        if (_suppressChangeHandlers) return;
-        var field = el.dataset.field || el.name;
-        if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
-        if (field && sharedClientFields.includes(field)) {
-          setFieldValueSilent(field, el.value);
-        }
-        debouncedVisibility();
-        debouncedContextBar();
-        if (field === 'instructionDateTime' && el.value) {
-          formData.date = el.value.slice(0, 10);
-          const dow = new Date(formData.date).getDay();
-          const isWE = dow === 0 || dow === 6;
-          const isBH = UK_BANK_HOLIDAYS.includes(formData.date);
-          setFieldValue('weekendBankHoliday', (isWE || isBH) ? 'Yes' : 'No');
-        }
-        if (field === 'outcomeDecision') {
-          if (formData.outcomeDecision === 'Bail without charge' && (!formData.bailReturnStationName || !formData.bailReturnStationCode)) {
-            if (formData.policeStationName) { formData.bailReturnStationName = formData.policeStationName; setFieldValueSilent('bailReturnStationName', formData.policeStationName); }
-            if (formData.schemeId) { formData.bailReturnStationCode = formData.schemeId; setFieldValueSilent('bailReturnStationCode', formData.schemeId); }
-          }
-        }
-        if (timeAndCalcFields.includes(field)) { autoCalcTimes(); }
-        else if (['travelSocial','travelUnsocial','waitingSocial','waitingUnsocial','adviceSocial','adviceUnsocial','milesClaimable'].includes(field)) recalcTotal();
-        if (formData.attendanceMode === 'voluntary' && ['consultationStart','consultationEnd','interviewStart','interviewEnd'].includes(field)) { autoCalcVoluntaryTimes(); }
-        if (field === 'timeDetentionAuthorised') { setFieldValue('relevantTime', el.value || ''); calcReviewTimes(); }
-        if (field === 'relevantTime') { calcReviewTimes(); }
-        debouncedProgressUpdate();
-        debouncedBillingPanel();
-        scheduleCollect();
-        scheduleQuietSave();
-      });
-      el.addEventListener('blur', () => {
-        if (_suppressChangeHandlers) return;
-        var field = el.dataset.field || el.name;
-        if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
-        scheduleCollect();
-        scheduleQuietSave();
-      });
-    });
 
     calcReviewTimes();
     startAutoSave();
@@ -5989,13 +6034,30 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   /* ─── OFFENCE AUTOCOMPLETE (inline on offence Details fields) ─── */
-  function initOffenceAutocomplete(input, dropdown, slot) {
-    const flatOffences = [];
-    OFFENCES_BY_GROUP.forEach(grp => {
-      (grp.offences || []).forEach(off => {
-        flatOffences.push({ ...off, _group: grp.group, defaultMatterType: off.matterType || grp.defaultMatterType || '11' });
+  function getFlatOffencesWithMatter() {
+    if (_cachedFlatOffencesWithMatter) return _cachedFlatOffencesWithMatter;
+    _cachedFlatOffencesWithMatter = [];
+    OFFENCES_BY_GROUP.forEach(function(grp) {
+      (grp.offences || []).forEach(function(off) {
+        _cachedFlatOffencesWithMatter.push({ ...off, _group: grp.group, defaultMatterType: off.matterType || grp.defaultMatterType || '11' });
       });
     });
+    return _cachedFlatOffencesWithMatter;
+  }
+
+  function getFlatOffences() {
+    if (_cachedFlatOffences) return _cachedFlatOffences;
+    _cachedFlatOffences = [];
+    OFFENCES_BY_GROUP.forEach(function(grp) {
+      (grp.offences || []).forEach(function(off) {
+        _cachedFlatOffences.push({ ...off, _group: grp.group });
+      });
+    });
+    return _cachedFlatOffences;
+  }
+
+  function initOffenceAutocomplete(input, dropdown, slot) {
+    const flatOffences = getFlatOffencesWithMatter();
 
     function selectOffence(off) {
       const mode = (off.mode === 'SO' || off.mode === 'EW' || off.mode === 'IO') ? off.mode : 'EW';
@@ -6059,12 +6121,7 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── OFFENCE SUMMARY AUTOCOMPLETE (first page – sets offenceSummary only) ─── */
   function initOffenceSummaryAutocomplete(input, dropdown) {
-    const flatOffences = [];
-    OFFENCES_BY_GROUP.forEach(grp => {
-      (grp.offences || []).forEach(off => {
-        flatOffences.push({ ...off, _group: grp.group });
-      });
-    });
+    const flatOffences = getFlatOffences();
 
     var _offSumDebounce = null;
     function showSuggestions(q) {
@@ -8860,7 +8917,7 @@ PDF_CASENOTE_ADVERT +
     /* Splash: hide when data ready + min 1.5s elapsed, or immediately if first-launch */
     var splashDataReady = false;
     var splashMinReached = false;
-    var splashMinMs = 1500;
+    var splashMinMs = 600;
     function tryHideSplash() {
       if (!document.getElementById('splash')) return;
       if (splashDataReady && splashMinReached) hideSplash();
@@ -10208,12 +10265,12 @@ PDF_CASENOTE_ADVERT +
       if (_clientDropdown && !_clientDropdown.contains(e.target)) hideClientDropdown();
     });
 
-    purgeEmptyDrafts().then(() => {
-      showView('home');
-    }).catch(function(err) {
-      console.error('[init] purgeEmptyDrafts failed:', err);
-      showView('home');
-    });
+    showView('home');
+    setTimeout(function() {
+      purgeEmptyDrafts().catch(function(err) {
+        console.error('[init] purgeEmptyDrafts failed:', err);
+      });
+    }, 3000);
   }
 
   function openLaaForm(formType, sourceData) {
