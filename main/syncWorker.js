@@ -33,7 +33,7 @@
  */
 const crypto = require('crypto');
 
-const SYNC_POLL_INTERVAL_MS = 10000;
+const SYNC_POLL_INTERVAL_MS = 30000;
 const SYNC_REQUEST_TIMEOUT_MS = 8000;
 const HEALTH_CHECK_TIMEOUT_MS = 4000;
 const RETRY_DELAYS_MS = [0, 10_000, 30_000, 120_000, 600_000, 1_800_000]; // attempt 1..6
@@ -342,8 +342,13 @@ function createSyncWorker(ctx) {
     _timer = null;
   }
 
+  let _scheduleSoonTimer = null;
   function scheduleSoon() {
-    setTimeout(() => runCycle().catch(() => {}), 1000);
+    if (_scheduleSoonTimer) return;
+    _scheduleSoonTimer = setTimeout(() => {
+      _scheduleSoonTimer = null;
+      runCycle().catch(() => {});
+    }, 1000);
   }
 
   function getDiagnostics() {

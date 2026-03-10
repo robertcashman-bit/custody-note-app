@@ -6661,26 +6661,24 @@ var REQUIRED_FIELD_KEYS = [
     const data = getFormData();
     if (!hasMeaningfulData(data)) {
       _finalising = false;
+      startAutoSave();
       showToast('Nothing to save — please enter some data first', 'warning');
       return;
     }
-    /* For finalise: stop autosave and cancel any pending debounced draft save
-       to prevent overwriting finalised status with draft. */
     if (status === 'finalised') {
-      stopAutoSave();
-      clearTimeout(_quietSaveDebounceTimer);
-      _draftSaveQueued = false;
       showToast('Finalising…', 'info', 2000);
     }
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
       if (result && typeof result === 'object') {
         if (result.error === 'locked') {
           _finalising = false;
+          startAutoSave();
           showToast('This record is finalised and cannot be modified. Create a new attendance if needed.', 'error', 6000);
           return;
         }
         if (result.error) {
           _finalising = false;
+          startAutoSave();
           showToast('Failed to save: ' + (result.message || result.error), 'error', 6000);
           return;
         }
@@ -6697,6 +6695,7 @@ var REQUIRED_FIELD_KEYS = [
       }
     }).catch(function(err) {
       _finalising = false;
+      startAutoSave();
       showToast('Failed to save record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 6000);
     });
   }
@@ -6903,9 +6902,25 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   /* ─── VALIDATION BEFORE FINALISE (#8) ─── */
+  var _finalisingStartedAt = 0;
   function validateBeforeFinalise() {
-    /* Prevent double-click / concurrent finalise calls */
-    if (_finalising) { showToast('Finalising in progress — please wait…', 'info', 2000); return; }
+    /* Prevent double-click / concurrent finalise calls — with safety timeout
+       so a stuck _finalising flag from a previous crashed attempt can't lock
+       the user out permanently. */
+    if (_finalising) {
+      if (_finalisingStartedAt && (Date.now() - _finalisingStartedAt > 30000)) {
+        _finalising = false;
+      } else {
+        showToast('Finalising in progress — please wait…', 'info', 2000);
+        return;
+      }
+    }
+
+    /* Stop autosave immediately so no draft save can race with the finalise
+       flow while the user is reading the pre-finalise checklist / confirm dialog. */
+    stopAutoSave();
+    clearTimeout(_quietSaveDebounceTimer);
+    _draftSaveQueued = false;
 
     collectCurrentData();
     const isTelForm = formData._formType === 'telephone';
@@ -6931,13 +6946,13 @@ var REQUIRED_FIELD_KEYS = [
       /* If a draft auto-save is still in flight, wait for it to settle before finalising
          to avoid a race where the draft write arrives at the backend after the finalise write. */
       if (_draftSaveInFlight) {
-        showToast('Saving draft — finalising in a moment…', 'info', 1800);
+        showToast('Saving draft — finalising in a moment…', 'info', 2500);
         var retries = 0;
         var waitAndFinalise = setInterval(function() {
-          if (!_draftSaveInFlight || ++retries > 10) {
+          if (!_draftSaveInFlight || ++retries > 20) {
             clearInterval(waitAndFinalise);
             if (!_draftSaveInFlight) doFinalise();
-            else { _finalising = false; showToast('Could not finalise — please try again', 'error', 4000); }
+            else { _finalising = false; startAutoSave(); showToast('Could not finalise — please try again', 'error', 4000); }
           }
         }, 300);
         return;
@@ -6946,7 +6961,7 @@ var REQUIRED_FIELD_KEYS = [
       if (c && c.isEscape) {
         showConfirm('ESCAPE CASE – Total costs exceed £' + (LAA.escapeThreshold || 650) + '. You must submit CRM18 to claim at hourly rates. Continue to finalise?').then(ok => {
           if (ok) saveForm('finalised');
-          else _finalising = false;
+          else { _finalising = false; startAutoSave(); }
         });
       } else {
         saveForm('finalised');
@@ -6966,11 +6981,11 @@ var REQUIRED_FIELD_KEYS = [
         '• Outcome: ' + outcome + '\n\nContinue to finalise?';
       showConfirm(msg, 'Pre-finalise checklist').then(ok => {
         if (ok) doFinalise();
-        else _finalising = false;
+        else { _finalising = false; startAutoSave(); }
       });
     }
     function showValidationModal(dupes) {
-      _finalising = false; /* Release lock — user must review issues first */
+      _finalising = false; startAutoSave(); /* Release lock — user must review issues first */
       const modal = document.getElementById('validation-modal');
       const list = document.getElementById('validation-list');
       if (!modal || !list) return;
@@ -6995,6 +7010,7 @@ var REQUIRED_FIELD_KEYS = [
     }
 
     _finalising = true;
+    _finalisingStartedAt = Date.now();
     checkDuplicate.then(function(dupes) {
       if (missing.length === 0 && (!dupes || !dupes.length)) { showPreFinaliseChecklistThenFinalise(); return; }
       const modal = document.getElementById('validation-modal');
