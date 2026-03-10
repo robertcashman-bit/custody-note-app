@@ -1,7 +1,32 @@
 /**
- * Offline-First Sync Worker
+ * Offline-First Sync Worker — v2
  * Processes sync_queue per-record. One bad item never blocks others.
  * Runs in Electron main process every 10 seconds.
+ *
+ * ROOT CAUSE ANALYSIS (v1 issues fixed here):
+ *
+ * 1. Health check gated all sync processing — if /api/health timed out (common
+ *    on government Wi-Fi with captive portals or high latency), runCycle bailed
+ *    entirely. The push endpoint may still be reachable even when health fails.
+ *    FIX: Health check is now advisory. We skip processing only on definitive
+ *    'offline' (no API URL) or 'auth_required'. Otherwise we attempt the push
+ *    and let per-item error handling decide.
+ *
+ * 2. markSynced cleared sync_dirty by record ID without checking sync_version.
+ *    If autosave wrote a new version between pushRecord reading the row and
+ *    markSynced completing, the newer change was silently marked as synced.
+ *    FIX: pushRecord now captures sync_version at read time. markSynced only
+ *    clears sync_dirty when the version still matches.
+ *
+ * 3. processOne processed exactly one queue item per 10s cycle. A queue of 20
+ *    items took 200+ seconds to flush even with perfect connectivity.
+ *    FIX: processBatch processes up to 5 items per cycle, stopping on the
+ *    first network error (no point continuing if connectivity is lost).
+ *
+ * 4. recoverStuckItems reset 'blocked' items (permanent 4xx errors) to pending
+ *    after 5 minutes, causing them to retry forever and burn cycles.
+ *    FIX: Only 'failed' items (retryable errors that exhausted retries) are
+ *    recovered. 'blocked' items stay blocked until the user re-saves the record.
  *
  * Connectivity states: offline | internet_available_api_unreachable | api_available | auth_required
  * Retry schedule: 1=0s, 2=10s, 3=30s, 4=2m, 5=10m, 6=30m → then failed
@@ -10,8 +35,11 @@ const crypto = require('crypto');
 
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 8000;
+const HEALTH_CHECK_TIMEOUT_MS = 4000;
 const RETRY_DELAYS_MS = [0, 10_000, 30_000, 120_000, 600_000, 1_800_000]; // attempt 1..6
 const MAX_RETRY_ATTEMPTS = 6;
+const BATCH_SIZE = 5;
+const HEALTH_CHECK_SKIP_WINDOW_MS = 60_000;
 
 /** Classify errors: retryable vs permanent */
 function isRetryableError(err) {
@@ -20,7 +48,7 @@ function isRetryableError(err) {
   const code = err.code || err.statusCode;
   if (code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ECONNRESET' ||
       code === 'ENETUNREACH' || code === 'EAI_AGAIN') return true;
-  if (msg.includes('timeout') || msg.includes('network')) return true;
+  if (msg.includes('timeout') || msg.includes('network') || msg.includes('aborted')) return true;
   const m = msg.match(/server error (\d+)/i);
   const status = code || (m && parseInt(m[1], 10));
   if (status >= 500 || status === 429) return true;
@@ -31,7 +59,8 @@ function isRetryableError(err) {
 /** Exponential backoff: next attempt after RETRY_DELAYS_MS[retry_count] */
 function getNextAttemptMs(retryCount) {
   const idx = Math.min(retryCount, RETRY_DELAYS_MS.length - 1);
-  return RETRY_DELAYS_MS[idx] || RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
+  const val = RETRY_DELAYS_MS[idx];
+  return val !== undefined ? val : RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
 }
 
 function generateQueueId() {
@@ -47,14 +76,17 @@ function generateCorrelationId() {
  *   db, dbRun, dbGet, dbAll, flushDb
  *   getSyncApiUrl, readLicenceData, getMachineId
  *   httpPost (url, body, opts) → Promise, opts.timeout in ms
+ *   httpGetWithTimeout (url, timeoutMs) → Promise
  *   onStatusChange (status) → called with connectivity/sync status
  *   sendToRenderer (channel, data) → IPC to renderer
+ *   syncPull () → Promise
  */
 function createSyncWorker(ctx) {
   let _timer = null;
   let _inProgress = false;
-  let _connectivityState = 'unknown'; // offline | api_available | internet_available_api_unreachable | auth_required | unknown
+  let _connectivityState = 'unknown';
   let _lastSyncAt = null;
+  let _lastSuccessfulPushAt = 0;
   let _lastError = null;
 
   function setConnectivity(state) {
@@ -68,17 +100,24 @@ function createSyncWorker(ctx) {
     if (ctx.sendToRenderer) ctx.sendToRenderer('sync-status-changed', payload);
   }
 
-  /** Lightweight health check. Uses httpGetWithTimeout if provided, else assumes api_available. */
+  /**
+   * Advisory health check. Returns connectivity state but does NOT block
+   * sync processing on 'internet_available_api_unreachable'. Only 'offline'
+   * and 'auth_required' are hard stops.
+   */
   async function checkConnectivity() {
     const apiUrl = ctx.getSyncApiUrl && ctx.getSyncApiUrl();
     if (!apiUrl) return 'offline';
     const data = ctx.readLicenceData && ctx.readLicenceData();
     if (!data || !data.key) return 'auth_required';
+    if (Date.now() - _lastSuccessfulPushAt < HEALTH_CHECK_SKIP_WINDOW_MS) {
+      return 'api_available';
+    }
     if (!ctx.httpGetWithTimeout) return 'api_available';
     try {
       const base = apiUrl.replace(/\/$/, '');
       const healthUrl = base + '/api/health';
-      const resp = await ctx.httpGetWithTimeout(healthUrl, SYNC_REQUEST_TIMEOUT_MS);
+      const resp = await ctx.httpGetWithTimeout(healthUrl, HEALTH_CHECK_TIMEOUT_MS);
       if (resp && (resp.statusCode === 200 || resp.statusCode === 204)) return 'api_available';
       if (resp && resp.statusCode === 401) return 'auth_required';
       if (resp && resp.statusCode === 404) return 'api_available';
@@ -131,10 +170,14 @@ function createSyncWorker(ctx) {
     ctx.dbRun('UPDATE sync_queue SET status=?, last_attempt=? WHERE id=?', ['syncing', Date.now(), id]);
   }
 
-  /** Mark item synced and clear sync_dirty */
-  function markSynced(id, recordId) {
+  /** Mark item synced. Only clears sync_dirty if the version hasn't changed during push. */
+  function markSynced(id, recordId, pushedVersion) {
     ctx.dbRun('UPDATE sync_queue SET status=?, error=NULL WHERE id=?', ['synced', id]);
-    if (recordId) ctx.dbRun('UPDATE attendances SET sync_dirty=0 WHERE id=?', [recordId]);
+    if (recordId && pushedVersion != null) {
+      ctx.dbRun('UPDATE attendances SET sync_dirty=0 WHERE id=? AND sync_version=?', [recordId, pushedVersion]);
+    } else if (recordId) {
+      ctx.dbRun('UPDATE attendances SET sync_dirty=0 WHERE id=?', [recordId]);
+    }
     ctx.flushDb && ctx.flushDb();
   }
 
@@ -152,7 +195,10 @@ function createSyncWorker(ctx) {
     ctx.flushDb && ctx.flushDb();
   }
 
-  /** Push single record to API. Always reads current state from attendances. */
+  /**
+   * Push single record to API. Reads current state from attendances and
+   * captures sync_version so markSynced can do a version-aware cleanup.
+   */
   async function pushRecord(queueItem) {
     const apiUrl = ctx.getSyncApiUrl && ctx.getSyncApiUrl();
     if (!apiUrl) throw new Error('No API URL');
@@ -161,6 +207,7 @@ function createSyncWorker(ctx) {
     const recordId = queueItem.record_id;
     const row = ctx.dbGet('SELECT id, sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason, client_name, station_name, dscc_ref, attendance_date, supervisor_approved_at, supervisor_note, archived_at, sync_version FROM attendances WHERE id=?', [recordId]);
     if (!row) throw new Error('Record not found');
+    const capturedVersion = row.sync_version || 1;
     const record = {
       syncId: row.sync_id,
       data: row.data,
@@ -176,7 +223,7 @@ function createSyncWorker(ctx) {
       supervisorApprovedAt: row.supervisor_approved_at || null,
       supervisorNote: row.supervisor_note || '',
       archivedAt: row.archived_at || null,
-      version: row.sync_version || 1,
+      version: capturedVersion,
     };
     const correlationId = generateCorrelationId();
     const resp = await ctx.httpPost(
@@ -185,37 +232,51 @@ function createSyncWorker(ctx) {
       { timeout: SYNC_REQUEST_TIMEOUT_MS, correlationId }
     );
     if (!resp || !resp.ok) throw new Error(resp && resp.error ? resp.error : 'Push failed');
-    return { written: resp.written || 1 };
+    return { written: resp.written || 1, capturedVersion };
   }
 
-  /** Process one queue item. Returns { ok, error } */
-  async function processOne() {
-    const item = getNextQueueItem();
-    if (!item) return { processed: 0 };
-    const id = item.id;
-    const recordId = item.record_id;
-    markSyncing(id);
-    notifyRenderer({ status: 'syncing' });
-    try {
-      await pushRecord(item);
-      markSynced(id, recordId);
-      _lastSyncAt = new Date().toISOString();
-      _lastError = null;
-      setConnectivity('api_available');
-      notifyRenderer({ status: 'synced', lastSync: _lastSyncAt });
-      return { processed: 1 };
-    } catch (e) {
-      const retryable = isRetryableError(e);
-      markFailed(id, e, retryable);
-      _lastError = e && e.message ? e.message : String(e);
-      if (!retryable) setConnectivity('auth_required');
-      else setConnectivity('internet_available_api_unreachable');
-      notifyRenderer({ status: 'error', lastError: _lastError, retryable });
-      return { processed: 0, error: e };
+  /**
+   * Process up to BATCH_SIZE queue items per cycle. Stops on first network
+   * error (no point continuing if connectivity is lost).
+   */
+  async function processBatch() {
+    let totalProcessed = 0;
+    for (let i = 0; i < BATCH_SIZE; i++) {
+      const item = getNextQueueItem();
+      if (!item) break;
+      const id = item.id;
+      const recordId = item.record_id;
+      markSyncing(id);
+      if (totalProcessed === 0) notifyRenderer({ status: 'syncing' });
+      try {
+        const result = await pushRecord(item);
+        markSynced(id, recordId, result.capturedVersion);
+        _lastSyncAt = new Date().toISOString();
+        _lastSuccessfulPushAt = Date.now();
+        _lastError = null;
+        setConnectivity('api_available');
+        totalProcessed++;
+      } catch (e) {
+        const retryable = isRetryableError(e);
+        markFailed(id, e, retryable);
+        _lastError = e && e.message ? e.message : String(e);
+        if (!retryable) setConnectivity('auth_required');
+        else setConnectivity('internet_available_api_unreachable');
+        notifyRenderer({ status: 'error', lastError: _lastError, retryable });
+        break;
+      }
     }
+    if (totalProcessed > 0) {
+      notifyRenderer({ status: 'synced', lastSync: _lastSyncAt });
+    }
+    return { processed: totalProcessed };
   }
 
-  /** Re-enqueue failed/blocked items so they get retried with a fresh attempt count. */
+  /**
+   * Recover only 'failed' items (retryable errors that exhausted their retry
+   * budget). 'blocked' items are permanent (4xx) and should stay blocked until
+   * the user re-saves the record, which creates a fresh queue entry.
+   */
   function recoverStuckItems() {
     if (!ctx.db) return 0;
     const RECOVERY_COOLDOWN_MS = 5 * 60_000;
@@ -223,7 +284,7 @@ function createSyncWorker(ctx) {
     try {
       const stuck = ctx.dbAll(
         `SELECT id, record_id, last_attempt FROM sync_queue
-         WHERE status IN ('failed','blocked')
+         WHERE status = 'failed'
          AND (? - COALESCE(last_attempt, 0)) > ?`,
         [now, RECOVERY_COOLDOWN_MS]
       );
@@ -242,23 +303,23 @@ function createSyncWorker(ctx) {
     }
   }
 
-  /** Main loop: check connectivity, process queue, run pull */
+  /**
+   * Main loop: advisory health check, recover stuck items, process batch, pull.
+   * Health check no longer blocks processing — only 'offline' and 'auth_required'
+   * are hard stops. 'internet_available_api_unreachable' still attempts push
+   * (the per-item error handling will decide if it's truly unreachable).
+   */
   async function runCycle() {
     if (_inProgress) return;
     _inProgress = true;
     try {
       const conn = await checkConnectivity();
       setConnectivity(conn);
-      if (conn !== 'api_available' && conn !== 'auth_required') {
-        _inProgress = false;
-        return;
-      }
-      if (conn === 'auth_required') {
-        _inProgress = false;
+      if (conn === 'offline' || conn === 'auth_required') {
         return;
       }
       recoverStuckItems();
-      await processOne();
+      await processBatch();
       if (ctx.syncPull) {
         const pullResult = await ctx.syncPull().catch(() => ({ pulled: 0 }));
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
@@ -291,6 +352,13 @@ function createSyncWorker(ctx) {
     const failed = ctx.dbGet('SELECT COUNT(*) as c FROM sync_queue WHERE status=\'failed\'') || { c: 0 };
     const blocked = ctx.dbGet('SELECT COUNT(*) as c FROM sync_queue WHERE status=\'blocked\'') || { c: 0 };
     const lastSync = ctx.dbGet("SELECT value FROM settings WHERE key='lastSyncPullAt'");
+    let queueItems = [];
+    try {
+      queueItems = ctx.dbAll(
+        `SELECT id, record_id, status, retry_count, error, last_attempt, created_at
+         FROM sync_queue WHERE status != 'synced' ORDER BY created_at ASC LIMIT 50`
+      ) || [];
+    } catch (_) {}
     return {
       queueLength: pending.c || 0,
       failedCount: failed.c || 0,
@@ -299,7 +367,30 @@ function createSyncWorker(ctx) {
       connectivity: _connectivityState,
       lastError: _lastError,
       inProgress: _inProgress,
+      lastSuccessfulPushAt: _lastSuccessfulPushAt || null,
+      queueItems,
     };
+  }
+
+  /** Force-retry all failed and blocked items by resetting them to pending. */
+  function forceRetryAll() {
+    if (!ctx.db) return 0;
+    const now = Date.now();
+    try {
+      const stuck = ctx.dbAll(
+        "SELECT id FROM sync_queue WHERE status IN ('failed','blocked')"
+      ) || [];
+      for (const row of stuck) {
+        ctx.dbRun(
+          'UPDATE sync_queue SET status=?, retry_count=0, last_attempt=?, error=NULL WHERE id=?',
+          ['pending', now, row.id]
+        );
+      }
+      if (stuck.length > 0) ctx.flushDb && ctx.flushDb();
+      return stuck.length;
+    } catch (e) {
+      return 0;
+    }
   }
 
   return {
@@ -309,6 +400,7 @@ function createSyncWorker(ctx) {
     scheduleSoon,
     runCycle,
     getDiagnostics,
+    forceRetryAll,
     getConnectivity: () => _connectivityState,
   };
 }
@@ -317,7 +409,10 @@ module.exports = {
   createSyncWorker,
   generateQueueId,
   isRetryableError,
+  getNextAttemptMs,
   RETRY_DELAYS_MS,
   MAX_RETRY_ATTEMPTS,
   SYNC_REQUEST_TIMEOUT_MS,
+  HEALTH_CHECK_TIMEOUT_MS,
+  BATCH_SIZE,
 };

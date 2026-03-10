@@ -1405,8 +1405,19 @@
     <div id="sync-diagnostics-overlay" class="sync-diagnostics-overlay" style="display:none;">
       <div class="sync-diagnostics-box">
         <h3>Sync diagnostics</h3>
-        <pre id="sync-diagnostics-content"></pre>
-        <button type="button" id="sync-diagnostics-close" class="btn btn-secondary">Close</button>
+        <div id="sync-diag-summary" style="margin-bottom:12px;font-family:monospace;font-size:13px;"></div>
+        <details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:600;">Queue items</summary>
+          <div id="sync-diag-queue" style="max-height:200px;overflow-y:auto;font-size:12px;font-family:monospace;white-space:pre-wrap;background:#f5f5f5;padding:6px;border-radius:4px;margin-top:4px;"></div>
+        </details>
+        <details style="margin-bottom:8px;"><summary style="cursor:pointer;font-weight:600;">Recent sync attempts</summary>
+          <div id="sync-diag-attempts" style="max-height:180px;overflow-y:auto;font-size:12px;font-family:monospace;white-space:pre-wrap;background:#f5f5f5;padding:6px;border-radius:4px;margin-top:4px;"></div>
+        </details>
+        <pre id="sync-diagnostics-content" style="display:none;"></pre>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+          <button type="button" id="sync-diag-force-retry" class="btn btn-primary" style="font-size:13px;">Force retry all</button>
+          <button type="button" id="sync-diag-export" class="btn btn-secondary" style="font-size:13px;">Export diagnostics</button>
+          <button type="button" id="sync-diagnostics-close" class="btn btn-secondary" style="font-size:13px;">Close</button>
+        </div>
       </div>
     </div>
 

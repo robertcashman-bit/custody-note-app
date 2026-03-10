@@ -1279,15 +1279,6 @@ function uploadToManagedCloudIfEnabled(buffer, key) {
    Pushes local changes to and pulls remote changes
    from a central DynamoDB store via the website API.
    ═══════════════════════════════════════════════ */
-let _syncInProgress = false;
-let _syncTimer = null;
-let _syncSoonTimer = null;
-const SYNC_INTERVAL_MS = 30 * 1000; // 30 seconds background poll
-const SYNC_SOON_DELAY_MS = 3000;    // debounce: sync 3s after last mutation
-const SYNC_MAX_PUSH_BATCH = 50;
-const SYNC_MAX_ATTEMPTS = 3;
-const SYNC_RETRY_BASE_MS = 2000;
-const SYNC_RETRY_JITTER_MS = 500;
 const SYNC_ATTEMPTS_KEEP = 100;
 
 function generateCorrelationId() {
@@ -1309,50 +1300,6 @@ function logSyncAttempt(correlationId, direction, recordCount, success, errorMes
   } catch (e) {
     console.warn('[Sync] Failed to write sync_attempts:', e && e.message ? e.message : e);
   }
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-/** Classify sync errors: retryable (timeout, 5xx, 429, network) vs non-retryable (4xx validation/auth). */
-function isRetryableSyncError(err) {
-  if (!err) return false;
-  const msg = (err.message || String(err)).toLowerCase();
-  const code = err.code || err.statusCode;
-  /* Network/system: always retry */
-  if (code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ECONNRESET' ||
-      code === 'ENETUNREACH' || code === 'EAI_AGAIN') return true;
-  if (msg.includes('timeout') || msg.includes('network') || msg.includes('fetch')) return true;
-  /* HTTP status: 429, 5xx retryable; 400, 401, 403, 404, 422 non-retryable */
-  const m = msg.match(/server error (\d+)/i);
-  const status = code || (m && parseInt(m[1], 10));
-  if (status >= 500 || status === 429) return true;
-  if ([400, 401, 403, 404, 422].includes(status)) return false;
-  /* Unknown: treat as retryable (conservative for restricted networks) */
-  return true;
-}
-
-function withRetry(fn, correlationId, direction) {
-  return fn().catch(async (err) => {
-    if (!isRetryableSyncError(err)) {
-      console.warn('[Sync]', direction, 'non-retryable error, not retrying:', err && err.message ? err.message : err);
-      throw err;
-    }
-    let lastErr = err;
-    for (let attempt = 1; attempt < SYNC_MAX_ATTEMPTS; attempt++) {
-      const delay = SYNC_RETRY_BASE_MS * Math.pow(2, attempt - 1) + Math.floor(Math.random() * SYNC_RETRY_JITTER_MS);
-      console.warn('[Sync]', direction, 'attempt', attempt, 'failed:', lastErr && lastErr.message ? lastErr.message : lastErr, '- retry in', delay, 'ms');
-      await sleep(delay);
-      try {
-        return await fn();
-      } catch (e) {
-        if (!isRetryableSyncError(e)) throw e;
-        lastErr = e;
-      }
-    }
-    throw lastErr;
-  });
 }
 
 function generateSyncId() {
@@ -1417,59 +1364,6 @@ function getLastSyncTimestamp() {
 function setLastSyncTimestamp(ts) {
   if (!db) return;
   dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('lastSyncPullAt', ?)", [ts]);
-}
-
-async function syncPush(opts) {
-  const apiUrl = getSyncApiUrl();
-  if (!apiUrl) return { pushed: 0 };
-
-  const data = readLicenceData();
-  if (!data || !data.key) return { pushed: 0 };
-
-  const dirtyRows = dbAll(
-    `SELECT id, sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason,
-            client_name, station_name, dscc_ref, attendance_date,
-            supervisor_approved_at, supervisor_note, archived_at, sync_version
-     FROM attendances WHERE sync_dirty = 1 ORDER BY updated_at ASC LIMIT ?`,
-    [SYNC_MAX_PUSH_BATCH]
-  );
-
-  if (!dirtyRows.length) return { pushed: 0 };
-
-  const records = dirtyRows.map(r => ({
-    syncId: r.sync_id,
-    data: r.data,
-    status: r.status || 'draft',
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
-    deletedAt: r.deleted_at || null,
-    deletionReason: r.deletion_reason || null,
-    clientName: r.client_name || '',
-    stationName: r.station_name || '',
-    dsccRef: r.dscc_ref || '',
-    attendanceDate: r.attendance_date || '',
-    supervisorApprovedAt: r.supervisor_approved_at || null,
-    supervisorNote: r.supervisor_note || '',
-    archivedAt: r.archived_at || null,
-    version: r.sync_version || 1,
-  }));
-
-  const syncOpts = { timeout: 30000 };
-  if (opts && opts.correlationId) syncOpts.headers = { 'X-Correlation-Id': opts.correlationId };
-  const resp = await httpPost(`${apiUrl}/api/sync/push`, {
-    key: data.key,
-    machineId: getMachineId(),
-    records,
-  }, syncOpts);
-
-  if (resp && resp.ok) {
-    for (const r of dirtyRows) {
-      dbRun('UPDATE attendances SET sync_dirty=0 WHERE sync_id=? AND sync_version=?', [r.sync_id, r.sync_version || 1]);
-    }
-    flushDb();
-    return { pushed: resp.written || 0 };
-  }
-  throw new Error(resp && resp.error ? resp.error : 'Push failed');
 }
 
 async function syncPull(opts) {
@@ -1553,66 +1447,6 @@ async function syncPull(opts) {
     saveDb();
   }
   return { pulled: merged };
-}
-
-async function runSyncCycle() {
-  if (_syncInProgress) return { ran: false, reason: 'already-in-progress' };
-  const apiUrl = getSyncApiUrl();
-  if (!apiUrl) return { ran: false, reason: 'no-api-url' };
-  const data = readLicenceData();
-  if (!data || !data.key) return { ran: false, reason: 'no-licence' };
-
-  const correlationId = generateCorrelationId();
-  _syncInProgress = true;
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('sync-status-changed', { status: 'syncing' });
-  }
-
-  let pushResult = { pushed: 0 };
-  let pullResult = { pulled: 0 };
-  let hadError = false;
-
-  try {
-    pushResult = await withRetry(() => syncPush({ correlationId }), correlationId, 'push');
-    if (pushResult.pushed > 0) console.info('[Sync]', correlationId, 'Pushed', pushResult.pushed, 'records');
-    logSyncAttempt(correlationId, 'push', pushResult.pushed, true, null);
-  } catch (e) {
-    hadError = true;
-    const errMsg = e && e.message ? e.message : String(e);
-    console.error('[Sync]', correlationId, 'Push FAILED:', errMsg);
-    logSyncAttempt(correlationId, 'push', 0, false, errMsg);
-  }
-
-  try {
-    pullResult = await withRetry(() => syncPull({ correlationId }), correlationId, 'pull');
-    if (pullResult.pulled > 0) console.info('[Sync]', correlationId, 'Pulled', pullResult.pulled, 'records');
-    logSyncAttempt(correlationId, 'pull', pullResult.pulled, true, null);
-  } catch (e) {
-    hadError = true;
-    const errMsg = e && e.message ? e.message : String(e);
-    console.error('[Sync]', correlationId, 'Pull FAILED:', errMsg);
-    logSyncAttempt(correlationId, 'pull', 0, false, errMsg);
-  }
-
-  _syncInProgress = false;
-
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('sync-status-changed', {
-      status: hadError ? 'error' : 'synced',
-      pushed: pushResult.pushed || 0,
-      pulled: pullResult.pulled || 0,
-      lastSync: new Date().toISOString(),
-    });
-    if (pullResult.pulled > 0) {
-      mainWindow.webContents.send('records-updated-from-sync', { count: pullResult.pulled });
-    }
-  }
-
-  const total = (pushResult.pushed || 0) + (pullResult.pulled || 0);
-  if (total > 0) {
-    console.info('[Sync]', correlationId, 'Cycle complete: pushed=' + pushResult.pushed + ', pulled=' + pullResult.pulled);
-  }
-  return { ran: true, hadError, pushed: pushResult.pushed || 0, pulled: pullResult.pulled || 0 };
 }
 
 let _syncWorker = null;
@@ -2431,12 +2265,22 @@ function getLicenceValidationUrl() {
 }
 
 function httpGetWithTimeout(url, timeoutMs) {
+  const ceiling = (timeoutMs || 8000) + 2000;
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (fn, val) => { if (!settled) { settled = true; fn(val); } };
+    const hardTimer = setTimeout(() => {
+      if (req) req.destroy();
+      const err = new Error('Hard timeout');
+      err.code = 'ETIMEDOUT';
+      done(reject, err);
+    }, ceiling);
+    let req;
     try {
       const parsed = new URL(url);
-      if (!isAllowedApiUrl(url)) return reject(new Error('URL not allowed'));
+      if (!isAllowedApiUrl(url)) { clearTimeout(hardTimer); return done(reject, new Error('URL not allowed')); }
       const mod = parsed.protocol === 'https:' ? https : http;
-      const req = mod.request({
+      req = mod.request({
         hostname: parsed.hostname,
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: parsed.pathname + parsed.search,
@@ -2445,13 +2289,14 @@ function httpGetWithTimeout(url, timeoutMs) {
       }, (res) => {
         let data = '';
         res.on('data', (c) => { data += c; });
-        res.on('end', () => resolve({ statusCode: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, data }));
+        res.on('end', () => { clearTimeout(hardTimer); done(resolve, { statusCode: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, data }); });
       });
-      req.on('error', (e) => { const err = e instanceof Error ? e : new Error(String(e)); if (e && e.code) err.code = e.code; reject(err); });
-      req.on('timeout', () => { req.destroy(); const err = new Error('Timeout'); err.code = 'ETIMEDOUT'; reject(err); });
+      req.on('error', (e) => { clearTimeout(hardTimer); const err = e instanceof Error ? e : new Error(String(e)); if (e && e.code) err.code = e.code; done(reject, err); });
+      req.on('timeout', () => { req.destroy(); clearTimeout(hardTimer); const err = new Error('Timeout'); err.code = 'ETIMEDOUT'; done(reject, err); });
       req.end();
     } catch (e) {
-      reject(e);
+      clearTimeout(hardTimer);
+      done(reject, e);
     }
   });
 }
@@ -2460,18 +2305,27 @@ function httpPost(url, body, opts) {
   const timeoutMs = (opts && opts.timeout) || 15000;
   const maxRedirects = (opts && opts._redirectCount) || 0;
   const extraHeaders = (opts && opts.headers) || {};
+  const ceiling = timeoutMs + 2000;
   return new Promise((resolve, reject) => {
-    let parsed;
+    let settled = false;
+    const done = (fn, val) => { if (!settled) { settled = true; clearTimeout(hardTimer); fn(val); } };
+    const hardTimer = setTimeout(() => {
+      if (req) req.destroy();
+      const err = new Error('Hard timeout');
+      err.code = 'ETIMEDOUT';
+      done(reject, err);
+    }, ceiling);
+    let parsed, req;
     try {
       parsed = new URL(url);
-      if (!isAllowedApiUrl(url)) return reject(new Error('API URL not allowed'));
+      if (!isAllowedApiUrl(url)) return done(reject, new Error('API URL not allowed'));
     } catch (e) {
-      return reject(new Error('Invalid URL'));
+      return done(reject, new Error('Invalid URL'));
     }
     const mod = parsed.protocol === 'https:' ? https : http;
     const payload = typeof body === 'string' ? body : JSON.stringify(body);
     const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...extraHeaders };
-    const req = mod.request({
+    req = mod.request({
       hostname: parsed.hostname,
       port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
       path: parsed.pathname + parsed.search,
@@ -2480,9 +2334,9 @@ function httpPost(url, body, opts) {
       timeout: timeoutMs,
     }, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
-        if (maxRedirects >= 3) return reject(new Error('Too many redirects'));
+        if (maxRedirects >= 3) return done(reject, new Error('Too many redirects'));
         res.resume();
-        resolve(httpPost(res.headers.location, body, { timeout: timeoutMs, _redirectCount: maxRedirects + 1, headers: extraHeaders }));
+        done(resolve, httpPost(res.headers.location, body, { timeout: timeoutMs, _redirectCount: maxRedirects + 1, headers: extraHeaders }));
         return;
       }
       let data = '';
@@ -2493,21 +2347,21 @@ function httpPost(url, body, opts) {
           try { const j = JSON.parse(data); if (j.error) errMsg = j.error; } catch (_) {}
           const err = new Error(errMsg);
           err.statusCode = res.statusCode;
-          return reject(err);
+          return done(reject, err);
         }
-        try { resolve(JSON.parse(data)); } catch (_) { reject(new Error('Invalid response from server')); }
+        try { done(resolve, JSON.parse(data)); } catch (_) { done(reject, new Error('Invalid response from server')); }
       });
     });
     req.on('error', (e) => {
       const err = e instanceof Error ? e : new Error(String(e));
       if (e && e.code) err.code = e.code;
-      reject(err);
+      done(reject, err);
     });
     req.on('timeout', () => {
       req.destroy();
       const err = new Error('Timeout');
       err.code = 'ETIMEDOUT';
-      reject(err);
+      done(reject, err);
     });
     req.write(payload);
     req.end();
@@ -2662,6 +2516,21 @@ ipcMain.handle('licence:deactivate-machine', async () => {
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Failed to deactivate' };
   }
+});
+
+/* ═══════════════════════════════════════════════
+   Global error boundaries — restart sync timer if it dies silently.
+   ROOT CAUSE: Unhandled rejections in async flows could kill the sync
+   interval without any visible error. These handlers log the error
+   and restart the sync worker to maintain reliability.
+   ═══════════════════════════════════════════════ */
+process.on('unhandledRejection', (reason) => {
+  console.error('[Global] Unhandled rejection:', reason);
+  try { startSyncTimer(); } catch (_) {}
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Global] Uncaught exception:', err);
+  try { startSyncTimer(); } catch (_) {}
 });
 
 app.whenReady().then(async () => {
@@ -3534,6 +3403,14 @@ ipcMain.handle('sync-schedule-on-reconnect', () => {
 ipcMain.handle('sync-get-diagnostics', () => {
   const w = getSyncWorker();
   return w ? w.getDiagnostics() : {};
+});
+
+ipcMain.handle('sync-force-retry', () => {
+  const w = getSyncWorker();
+  if (!w) return { recovered: 0 };
+  const recovered = w.forceRetryAll();
+  if (recovered > 0) w.scheduleSoon();
+  return { recovered };
 });
 
 ipcMain.handle('prepare-trial', async () => {

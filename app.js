@@ -830,8 +830,9 @@ var LAA = {
     /* ─────── 8. OUTCOME ─────── */
     {
       id: 'outcome', title: '8. Outcome',
-      keyFields: ['outcomeDecision'],
+      keyFields: ['outcomeDecision', 'caseOutcomeStatus'],
       fields: [
+        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','bail_to_return','released_under_investigation','charged','nfa','concluded'], cols: 2 },
         { key: 'outcomeDecision', label: 'Decision', type: 'select', options: ['Charged without Bail','Charged with Bail','Bail without charge','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Community Resolution','Penalty Notice (PND)','Remanded in Custody','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
@@ -1143,8 +1144,9 @@ var LAA = {
     /* ─────── T3. OUTCOME ─────── */
     {
       id: 'telOutcome', title: '3. Outcome',
-      keyFields: ['outcomeDecision', 'outcomeCode', 'caseConcludedDate'],
+      keyFields: ['outcomeDecision', 'outcomeCode', 'caseConcludedDate', 'caseOutcomeStatus'],
       fields: [
+        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','bail_to_return','released_under_investigation','charged','nfa','concluded'], cols: 2 },
         { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: [
           'NFA \u2013 no further action',
           'Simple Caution',
@@ -1332,8 +1334,9 @@ var LAA = {
     /* ─────── VA6. OUTCOME & BILLING ─────── */
     {
       id: 'volOutcome', title: '6. Outcome & Billing',
-      keyFields: ['outcomeCode', 'outcomeDecision'],
+      keyFields: ['outcomeCode', 'outcomeDecision', 'caseOutcomeStatus'],
       fields: [
+        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','bail_to_return','released_under_investigation','charged','nfa','concluded'], cols: 2 },
         { key: 'interviewCompleted', label: 'Interview completed?', type: 'select', options: ['Yes','No'] },
         { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: [
           'No further action (CN04)','Simple caution / reprimand / warning (CN05)','Charge / summons / reported for summons (CN06)',
@@ -2360,7 +2363,11 @@ var REQUIRED_FIELD_KEYS = [
       var id = r.id;
 
       if (!d.clientSig) issues.push({ id: id, name: name, reason: 'Missing client signature' });
-      if (!d.outcomeDecision && !d.outcomeCode) issues.push({ id: id, name: name, reason: 'No outcome recorded' });
+      var recordAgeMs = r.created_at ? (Date.now() - new Date(r.created_at).getTime()) : 0;
+      var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+      if (recordAgeMs > sevenDaysMs && !d.caseOutcomeStatus) {
+        issues.push({ id: id, name: name, reason: 'No outcome recorded' });
+      }
       if (!d.feeEarnerSig) issues.push({ id: id, name: name, reason: 'Missing fee earner signature' });
       if (!d.firmId) issues.push({ id: id, name: name, reason: 'No firm assigned' });
     });
@@ -3815,10 +3822,8 @@ var REQUIRED_FIELD_KEYS = [
     var w = [];
     if (d._formType === 'telephone') return w;
     if (!(d.matterTypeCode || '').trim()) w.push('Criminal matter type missing');
-    var od = (d.outcomeDecision || '').trim();
-    var matterConcluded = od && od !== 'Draft' && od.indexOf('not yet concluded') < 0
-      && od !== 'Ongoing' && od !== 'Adjourned';
-    if (matterConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code missing (matter concluded)');
+    var caseConcluded = (d.caseOutcomeStatus || '') === 'concluded';
+    if (caseConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code missing (matter concluded)');
     if (d.attendanceMode === 'voluntary') {
       if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim()) w.push('DSCC reference or reason missing');
       if (d.attendanceSubType === 'voluntary_non_police_body' && !d.constablePresent) w.push('Constable present? required for non-police body');
@@ -6682,6 +6687,7 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── VALIDATION: TELEPHONE ADVICE FORM (INVB) ─── */
   function validateTelephoneForm() {
     var m = [];
+    var telCaseConcluded = (formData.caseOutcomeStatus || '') === 'concluded';
     var required = [
       { key: 'date', label: 'Date of telephone advice', section: 0 },
       { key: 'policeStationId', label: 'Police Station', section: 0 },
@@ -6697,16 +6703,15 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'timeFirstContactWithClient', label: 'Time of first contact with client', section: 1 },
       { key: 'firstContactWithin45Mins', label: 'First contact within 45 mins?', section: 1 },
       { key: 'telephoneAdviceSummary', label: 'Summary of advice given', section: 1 },
-      { key: 'outcomeDecision', label: 'Outcome', section: 2 },
     ];
+    if (telCaseConcluded) {
+      required.push({ key: 'outcomeDecision', label: 'Outcome', section: 2 });
+    }
     required.forEach(function(r) {
       var val = formData[r.key];
       if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
     });
-    var telOd = (formData.outcomeDecision || '').trim();
-    var telConcluded = telOd && telOd !== 'Draft' && telOd.indexOf('not yet concluded') < 0
-      && telOd !== 'Ongoing' && telOd !== 'Adjourned';
-    if (telConcluded) {
+    if (telCaseConcluded) {
       if (!(formData.outcomeCode || '').trim()) m.push({ key: 'outcomeCode', label: 'Outcome Code', section: 2 });
       if (!(formData.caseConcludedDate || '').trim()) m.push({ key: 'caseConcludedDate', label: 'Case concluded date', section: 2 });
     }
@@ -6723,6 +6728,7 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── VALIDATION: VOLUNTARY ATTENDANCE FORM ─── */
   function validateVoluntaryForm() {
     var m = [];
+    var volCaseConcluded = (formData.caseOutcomeStatus || '') === 'concluded';
     var required = [
       { key: 'date', label: 'Date of attendance', section: 0 },
       { key: 'instructionSource', label: 'Instruction source', section: 0 },
@@ -6730,8 +6736,10 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'forename', label: 'Forename', section: 0 },
       { key: 'offenceSummary', label: 'Allegation / Offence', section: 0 },
       { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', section: 1 },
-      { key: 'outcomeDecision', label: 'Outcome', section: 5 },
     ];
+    if (volCaseConcluded) {
+      required.push({ key: 'outcomeDecision', label: 'Outcome', section: 5 });
+    }
     if (!(formData.policeStationId || '').trim() && !(formData.otherLocation || '').trim()) {
       m.push({ key: 'policeStationId', label: 'Location (police station or other)', section: 0 });
     }
@@ -6739,10 +6747,7 @@ var REQUIRED_FIELD_KEYS = [
       var val = formData[r.key];
       if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
     });
-    var volOd = (formData.outcomeDecision || '').trim();
-    var volConcluded = volOd && volOd !== 'Draft' && volOd.indexOf('not yet concluded') < 0
-      && volOd !== 'Ongoing' && volOd !== 'Adjourned';
-    if (volConcluded && !(formData.outcomeCode || '').trim()) {
+    if (volCaseConcluded && !(formData.outcomeCode || '').trim()) {
       m.push({ key: 'outcomeCode', label: 'Outcome code', section: 5 });
     }
     if (formData.instructionSource === 'dscc' && !(formData.dsccRef || '').trim() && formData.dsccNotificationStatus === 'missing' && !(formData.dsccReferenceMissingReason || '').trim()) {
@@ -6773,6 +6778,7 @@ var REQUIRED_FIELD_KEYS = [
     var isHandedBack = formData.outcomeDecision === 'Handed back to DSCC';
     var isNonAttendance = formData.outcomeDecision === 'Did not attend (exceptional circumstances)';
     var isRelaxedPath = isHandedBack || isNonAttendance;
+    var caseConcluded = (formData.caseOutcomeStatus || '') === 'concluded';
     var required = [
       { key: 'date', label: 'Date', section: 0 },
       { key: 'policeStationId', label: 'Police Station', section: 0 },
@@ -6782,9 +6788,11 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'dob', label: 'Date of Birth', section: 2 },
       { key: 'sufficientBenefitTest', label: 'Sufficient Benefit Test (LAA)', section: 0 },
       { key: 'conflictCheckResult', label: 'Conflict check result', section: 5 },
-      { key: 'outcomeDecision', label: 'Outcome Decision', section: 7 },
       { key: 'laaClientFullName', label: 'Client Full Name (Declaration)', section: 9 },
     ];
+    if (caseConcluded) {
+      required.push({ key: 'outcomeDecision', label: 'Outcome Decision', section: 7 });
+    }
     if (!isRelaxedPath) {
       required.push({ key: 'niNumber', label: 'NI Number', section: 5 });
       required.push({ key: 'matterTypeCode', label: 'Matter Type', section: 3 });
@@ -8259,18 +8267,62 @@ PDF_CASENOTE_ADVERT +
   /* ═══════════════════════════════════════════════
      KEYBOARD SHORTCUTS (#10)
      ═══════════════════════════════════════════════ */
+  function populateDiagnosticsPanel() {
+    Promise.all([
+      window.api && window.api.syncGetDiagnostics ? window.api.syncGetDiagnostics() : {},
+      window.api && window.api.syncStatus ? window.api.syncStatus() : {},
+    ]).then(function(results) {
+      var diag = results[0] || {};
+      var status = results[1] || {};
+      var summaryEl = document.getElementById('sync-diag-summary');
+      var queueEl = document.getElementById('sync-diag-queue');
+      var attemptsEl = document.getElementById('sync-diag-attempts');
+      if (summaryEl) {
+        var lines = [];
+        lines.push('Connectivity:  ' + (diag.connectivity || status.connectivity || 'unknown'));
+        lines.push('Queue pending: ' + (diag.queueLength || 0));
+        lines.push('Queue failed:  ' + (diag.failedCount || status.failedCount || 0));
+        lines.push('Queue blocked: ' + (diag.blockedCount || status.blockedCount || 0));
+        lines.push('Last sync:     ' + (diag.lastSyncAt || status.lastSync || 'never'));
+        lines.push('Last error:    ' + (diag.lastError || status.lastError || 'none'));
+        lines.push('In progress:   ' + (diag.inProgress ? 'yes' : 'no'));
+        lines.push('Last push ok:  ' + (diag.lastSuccessfulPushAt ? new Date(diag.lastSuccessfulPushAt).toISOString() : 'never'));
+        summaryEl.textContent = lines.join('\n');
+      }
+      if (queueEl) {
+        var items = diag.queueItems || [];
+        if (!items.length) { queueEl.textContent = 'Queue empty'; }
+        else {
+          queueEl.textContent = items.map(function(qi) {
+            return '[' + qi.status + '] record=' + qi.record_id + ' retries=' + (qi.retry_count || 0) +
+              (qi.error ? ' err=' + qi.error : '') +
+              ' last=' + (qi.last_attempt ? new Date(qi.last_attempt).toLocaleString() : '?');
+          }).join('\n');
+        }
+      }
+      if (attemptsEl) {
+        var attempts = status.lastAttempts || [];
+        if (!attempts.length) { attemptsEl.textContent = 'No recent attempts'; }
+        else {
+          attemptsEl.textContent = attempts.map(function(a) {
+            return (a.success ? 'OK' : 'FAIL') + ' ' + a.direction + ' records=' + a.recordCount +
+              (a.errorMessage ? ' err=' + a.errorMessage : '') +
+              ' at=' + (a.createdAt || '?');
+          }).join('\n');
+        }
+      }
+      var pre = document.getElementById('sync-diagnostics-content');
+      if (pre) pre.textContent = JSON.stringify({ diag: diag, status: status }, null, 2);
+    });
+  }
+
   function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'D') {
         e.preventDefault();
         var ov = document.getElementById('sync-diagnostics-overlay');
         if (ov && ov.style.display === 'none') {
-          if (window.api && window.api.syncGetDiagnostics) {
-            window.api.syncGetDiagnostics().then(function(d) {
-              var pre = document.getElementById('sync-diagnostics-content');
-              if (pre) pre.textContent = JSON.stringify(d, null, 2);
-            });
-          }
+          populateDiagnosticsPanel();
           ov.style.display = 'flex';
         } else if (ov) {
           ov.style.display = 'none';
@@ -8280,6 +8332,26 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('sync-diagnostics-close')?.addEventListener('click', function() {
       var ov = document.getElementById('sync-diagnostics-overlay');
       if (ov) ov.style.display = 'none';
+    });
+    document.getElementById('sync-diag-force-retry')?.addEventListener('click', function() {
+      if (!window.api || !window.api.syncForceRetry) return;
+      window.api.syncForceRetry().then(function(res) {
+        showToast('Force retry: ' + (res.recovered || 0) + ' items reset', 'success');
+        populateDiagnosticsPanel();
+      });
+    });
+    document.getElementById('sync-diag-export')?.addEventListener('click', function() {
+      if (!window.api) return;
+      Promise.all([
+        window.api.syncGetDiagnostics ? window.api.syncGetDiagnostics() : {},
+        window.api.syncStatus ? window.api.syncStatus() : {},
+      ]).then(function(results) {
+        var exportData = { diagnostics: results[0], syncStatus: results[1], exportedAt: new Date().toISOString(), appVersion: document.getElementById('version')?.textContent || '' };
+        var text = JSON.stringify(exportData, null, 2);
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(text).then(function() { showToast('Diagnostics copied to clipboard', 'success'); });
+        }
+      });
     });
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'B') {
