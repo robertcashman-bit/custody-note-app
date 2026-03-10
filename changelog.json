@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.27",
+      "version": "1.4.28",
       "date": "2026-03-10",
       "latest": true,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
+      "version": "1.4.27",
+      "date": "2026-03-10",
+      "latest": false,
       "changes": [
         "Billing: UFN no longer flagged as missing — not required in this workflow",
         "Billing: Outcome code only required when matter is concluded (not Draft/Ongoing/Adjourned)",
