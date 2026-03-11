@@ -156,10 +156,12 @@ describe('Performance — scrolling', () => {
 
 describe('Performance — compact bottom bar', () => {
   it('bottom buttons use compact sizing', () => {
-    assert.ok(stylesCssSource.includes('min-height: 30px'),
-      'bottom-btn min-height should be 30px');
-    assert.ok(!stylesCssSource.match(/\.bottom-btn\s*\{[^}]*min-height:\s*4[48]px/),
-      'bottom-btn must not use 44-48px min-height in base rule');
+    const baseStart = stylesCssSource.indexOf('.bottom-btn {');
+    const baseBlock = stylesCssSource.substring(baseStart, stylesCssSource.indexOf('}', baseStart) + 1);
+    assert.ok(baseBlock.includes('min-height: 30px'),
+      'bottom-btn base rule min-height should be 30px');
+    assert.ok(!baseBlock.match(/min-height:\s*4[48]px/),
+      'bottom-btn base rule must not use 44-48px min-height');
   });
 
   it('bottom buttons do not use transition: all', () => {

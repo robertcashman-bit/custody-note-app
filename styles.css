@@ -3137,7 +3137,7 @@ kbd {
 @media (pointer: coarse) {
   .btn-list-action { min-height: 36px; min-width: 44px; }
   .filter-btn { min-height: 36px; padding: 0.4rem 0.75rem; }
-  .bottom-btn { min-height: 34px; }
+  .bottom-btn { min-height: 44px; }
   .gear-item { min-height: 40px; }
   .home-action-card { min-height: 100px; }
   .checkbox-item label { min-height: 36px; display: flex; align-items: center; }
@@ -3149,11 +3149,11 @@ kbd {
 /* ═══ AUTO-HIDE CHROME ON SCROLL ═══ */
 .chrome-collapsed .section-index-bar {
   transform: translateY(-100%); opacity: 0; pointer-events: none;
-  position: absolute; left: 0; right: 0;
+  position: absolute; top: 0; left: 0; right: 0;
 }
 .chrome-collapsed .form-context-bar {
   transform: translateY(-100%); opacity: 0; pointer-events: none;
-  position: absolute; left: 0; right: 0;
+  position: absolute; top: 0; left: 0; right: 0;
 }
 
 /* ═══ LICENCE OVERLAY ═══ */
