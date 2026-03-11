@@ -195,3 +195,63 @@ describe('Performance — compact bottom bar', () => {
       'save button should show keyboard shortcut in tooltip');
   });
 });
+
+describe('Voluntary form and outcome statuses', () => {
+
+  it('custody caseOutcomeStatus includes officer_to_notify and referred_to_cps', () => {
+    const custodyOutcome = appJsSource.match(/id:\s*'outcome'[\s\S]*?caseOutcomeStatus[\s\S]*?options:\s*\[([^\]]+)\]/);
+    assert.ok(custodyOutcome, 'custody outcome section must exist');
+    const opts = custodyOutcome[1];
+    assert.ok(opts.includes("'officer_to_notify'"), 'custody must include officer_to_notify');
+    assert.ok(opts.includes("'referred_to_cps'"), 'custody must include referred_to_cps');
+  });
+
+  it('voluntary caseOutcomeStatus includes officer_to_notify and referred_to_cps', () => {
+    const volOutcome = appJsSource.match(/id:\s*'volOutcome'[\s\S]*?caseOutcomeStatus[\s\S]*?options:\s*\[([^\]]+)\]/);
+    assert.ok(volOutcome, 'voluntary outcome section must exist');
+    const opts = volOutcome[1];
+    assert.ok(opts.includes("'officer_to_notify'"), 'voluntary must include officer_to_notify');
+    assert.ok(opts.includes("'referred_to_cps'"), 'voluntary must include referred_to_cps');
+  });
+
+  it('voluntary caseOutcomeStatus does NOT include bail_to_return', () => {
+    const volOutcome = appJsSource.match(/id:\s*'volOutcome'[\s\S]*?caseOutcomeStatus[\s\S]*?options:\s*\[([^\]]+)\]/);
+    assert.ok(volOutcome, 'voluntary outcome section must exist');
+    assert.ok(!volOutcome[1].includes("'bail_to_return'"), 'voluntary must not include bail_to_return');
+  });
+
+  it('voluntary form includes client personal detail fields', () => {
+    const start = appJsSource.indexOf("id: 'volMatterSetup'");
+    const end = appJsSource.indexOf("id: 'volStatusRights'");
+    assert.ok(start > 0 && end > start, 'volMatterSetup section must exist');
+    const section = appJsSource.substring(start, end);
+    assert.ok(section.includes("'clientPhone'"), 'voluntary must have clientPhone');
+    assert.ok(section.includes("'clientEmail'"), 'voluntary must have clientEmail');
+    assert.ok(section.includes("'address1'"), 'voluntary must have address1');
+    assert.ok(section.includes("'niNumber'"), 'voluntary must have niNumber');
+    assert.ok(section.includes("'nationality'"), 'voluntary must have nationality');
+    assert.ok(section.includes("'gender'"), 'voluntary must have gender');
+  });
+
+  it('voluntary form includes firm contact fields', () => {
+    const start = appJsSource.indexOf("id: 'volMatterSetup'");
+    const end = appJsSource.indexOf("id: 'volStatusRights'");
+    assert.ok(start > 0 && end > start, 'volMatterSetup section must exist');
+    const section = appJsSource.substring(start, end);
+    assert.ok(section.includes("'firmContactName'"), 'voluntary must have firmContactName');
+    assert.ok(section.includes("'firmContactPhone'"), 'voluntary must have firmContactPhone');
+    assert.ok(section.includes("'firmContactEmail'"), 'voluntary must have firmContactEmail');
+  });
+
+  it('voluntary aftercare does NOT include bailDate', () => {
+    const volAftercare = appJsSource.match(/id:\s*'volAftercare'[\s\S]*?fields:\s*\[([\s\S]*?)\]\s*,?\s*\}/);
+    assert.ok(volAftercare, 'volAftercare section must exist');
+    assert.ok(!volAftercare[1].includes("'bailDate'"), 'voluntary aftercare must not have bailDate');
+  });
+
+  it('home screen has prominent primary cards for custody and voluntary', () => {
+    assert.ok(indexHtmlSource.includes('home-primary-actions'), 'home must have primary actions container');
+    assert.ok(indexHtmlSource.includes('home-primary-custody'), 'home must have primary custody card');
+    assert.ok(indexHtmlSource.includes('home-primary-voluntary'), 'home must have primary voluntary card');
+  });
+});

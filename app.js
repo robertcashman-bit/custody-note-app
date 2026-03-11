@@ -844,7 +844,7 @@ var LAA = {
       id: 'outcome', title: '8. Outcome',
       keyFields: ['outcomeDecision', 'caseOutcomeStatus'],
       fields: [
-        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','bail_to_return','released_under_investigation','charged','nfa','concluded'], cols: 2 },
+        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','officer_to_notify','referred_to_cps','bail_to_return','released_under_investigation','charged','nfa','concluded'], cols: 2 },
         { key: 'outcomeDecision', label: 'Decision', type: 'select', options: ['Charged without Bail','Charged with Bail','Bail without charge','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Community Resolution','Penalty Notice (PND)','Remanded in Custody','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
@@ -1158,7 +1158,7 @@ var LAA = {
       id: 'telOutcome', title: '3. Outcome',
       keyFields: ['outcomeDecision', 'outcomeCode', 'caseConcludedDate', 'caseOutcomeStatus'],
       fields: [
-        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','bail_to_return','released_under_investigation','charged','nfa','concluded'], cols: 2 },
+        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','officer_to_notify','referred_to_cps','bail_to_return','released_under_investigation','charged','nfa','concluded'], cols: 2 },
         { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: [
           'NFA \u2013 no further action',
           'Simple Caution',
@@ -1241,6 +1241,9 @@ var LAA = {
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
         { key: 'date', label: 'Date of attendance', type: 'date' },
         { key: 'firmId', label: 'Instructing Firm', type: 'firm', cols: 2 },
+        { key: 'firmContactName', label: 'Contact at Firm', type: 'text', placeholder: 'Auto-filled from firm' },
+        { key: 'firmContactPhone', label: 'Contact phone', type: 'tel' },
+        { key: 'firmContactEmail', label: 'Contact email', type: 'email' },
         { key: 'feeEarnerName', label: 'Fee Earner / Rep', type: 'text', cols: 2 },
         { key: 'schemeId', label: 'Police Station Scheme ID', type: 'text', placeholder: 'Auto-filled from station', readonly: true },
         { type: 'nameRow', label: 'Client Name', fields: [
@@ -1249,6 +1252,30 @@ var LAA = {
             { key: 'surname', label: 'Surname', placeholder: 'Surname' }
           ], cols: 2 },
         { key: 'dob', label: 'Date of Birth', type: 'date' },
+        { key: '_h_vol_client_details', label: 'Client Details (provided by client)', type: 'sectionHeading' },
+        { key: 'clientPhone', label: 'Client telephone', type: 'tel' },
+        { key: 'clientEmail', label: 'Client email address', type: 'email' },
+        { key: 'clientEmailConsent', label: 'Email consent?', type: 'select', options: ['Yes','No'] },
+        { key: 'gender', label: 'Gender', type: 'select', options: ['Male','Female','Other','Prefer not to say'] },
+        { key: 'nationality', label: 'Nationality', type: 'select', options: [
+          'British','Irish','Polish','Romanian','Indian','Pakistani','Bangladeshi','Nigerian','Jamaican','Somali','Albanian','Afghan','Iraqi','Iranian','Eritrean','Sudanese','Ethiopian','Vietnamese','Chinese','Lithuanian','Latvian','Portuguese','Italian','Spanish','French','German','Turkish','Sri Lankan','Ghanaian','Zimbabwean','South African','Brazilian','Colombian','American','Canadian','Australian','Dual nationality','Stateless','Unknown','Other'
+        ] },
+        { key: 'nationalityOther', label: 'Other nationality (specify)', type: 'text', placeholder: 'Type nationality not listed', showIf: { field: 'nationality', value: 'Other' } },
+        { key: 'address1', label: 'Address line 1', type: 'text', placeholder: 'House number and street', cols: 2 },
+        { key: 'address2', label: 'Address line 2', type: 'text', cols: 2 },
+        { key: 'city', label: 'City / Town', type: 'text' },
+        { key: 'county', label: 'County', type: 'text' },
+        { key: 'postCode', label: 'Post Code', type: 'text' },
+        { key: 'niNumber', label: 'National Insurance No.', type: 'text', placeholder: 'e.g. AB 12 34 56 C' },
+        { key: '_h_vol_means', label: 'Means & Eligibility', type: 'sectionHeading' },
+        { key: 'employmentStatus', label: 'Employment', type: 'select', options: ['Employed','Self-employed','Unemployed','Student','Retired','Other'] },
+        { key: 'accommodationStatus', label: 'Accommodation', type: 'select', options: ['Owner/Occupier','Private rental (tenant)','Local Authority housing','Housing Association','Hostel / supported housing','Living with parents / family','Temporary accommodation','Homeless (rough sleeping)','NFA (no fixed abode)','Other'] },
+        { key: 'benefits', label: 'Receiving benefits?', type: 'select', options: ['Yes','No','Unknown'] },
+        { key: 'benefitType', label: 'Benefit type', type: 'select', options: [
+          'Universal Credit','Income Support','Income-based JSA','Income-related ESA','Guarantee Credit (Pension Credit)','Other'
+        ], showIf: { field: 'benefits', value: 'Yes' } },
+        { key: 'passportedBenefit', label: 'On a passporting benefit?', type: 'select', options: ['Unknown','Yes','No'], showIf: { field: 'benefits', value: 'Yes' } },
+        { key: '_h_vol_location', label: 'Location & Case', type: 'sectionHeading' },
         { key: 'policeStationId', label: 'Location (Police Station)', type: 'station', cols: 2 },
         { key: 'locationType', label: 'Location Type', type: 'select', options: ['police_station','other_police_location','other'], cols: 2 },
         { key: 'otherLocation', label: 'Other location (if not listed)', type: 'text', cols: 2, showIf: { field: 'locationType', value: 'other' } },
@@ -1348,7 +1375,7 @@ var LAA = {
       id: 'volOutcome', title: '6. Outcome & Billing',
       keyFields: ['outcomeCode', 'outcomeDecision', 'caseOutcomeStatus'],
       fields: [
-        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','bail_to_return','released_under_investigation','charged','nfa','concluded'], cols: 2 },
+        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','officer_to_notify','referred_to_cps','released_under_investigation','charged','nfa','concluded'], cols: 2 },
         { key: 'interviewCompleted', label: 'Interview completed?', type: 'select', options: ['Yes','No'] },
         { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: [
           'No further action (CN04)','Simple caution / reprimand / warning (CN05)','Charge / summons / reported for summons (CN06)',
@@ -1379,7 +1406,6 @@ var LAA = {
         { key: 'whatExplainedAfterInterview', label: 'What was explained after interview', type: 'textarea', cols: 2 },
         { key: 'nextStepsForClient', label: 'Next steps for client', type: 'textarea', cols: 2 },
         { key: 'nextDate', label: 'Next date (if any)', type: 'date' },
-        { key: 'bailDate', label: 'Bail / return date', type: 'date' },
         { key: 'followUpTasks', label: 'Follow-up tasks', type: 'textarea', cols: 2 },
         { key: '_h_sign_off', label: 'Sign Off', type: 'sectionHeading' },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
