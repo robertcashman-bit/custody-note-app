@@ -9,11 +9,14 @@
         "UX: Arrow key navigation in list view — ↑/↓ to navigate, Enter to open, Esc to clear search",
         "Performance: Record LRU cache — last 20 records cached for instant switching (<10ms vs ~250ms DB fetch)",
         "Performance: Cache hit rate tracking in performance panel (Ctrl+Shift+P)",
-        "Visual: Larger, more readable form inputs (1rem → 1.05rem font size)",
+        "Visual: Larger, more readable form inputs (1.05rem font, 0.65rem padding, focus shadows)",
+        "Visual: Enhanced form footer — larger buttons (48px min-height), prominent primary actions with gradients",
+        "Visual: Larger progress dots (12px) with smooth scaling and hover effects",
         "Visual: Smooth animations on list items, badges, and inputs (<150ms transitions)",
         "Visual: Prominent status badges with borders and hover effects",
-        "Visual: Focus glow on inputs for better accessibility",
-        "Updated keyboard shortcuts modal to show all new shortcuts"
+        "Visual: Responsive design — footer and buttons scale properly on mobile/tablet",
+        "Updated keyboard shortcuts modal to show all new shortcuts",
+        "Fix: Auto-updater — corrected installer filenames to use hyphens instead of dots"
       ]
     },
     {
