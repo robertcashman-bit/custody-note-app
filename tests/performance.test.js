@@ -134,4 +134,62 @@ describe('Performance — scrolling', () => {
     assert.ok(!stylesCssSource.includes('will-change: scroll-position'),
       'styles.css should not permanently hint scroll-position changes');
   });
+
+  it('chrome-collapse uses transform/opacity instead of max-height for scroll perf', () => {
+    assert.ok(stylesCssSource.includes('.chrome-collapsed .section-index-bar'),
+      'chrome-collapsed section-index-bar rule must exist');
+    assert.ok(stylesCssSource.includes('.chrome-collapsed .form-context-bar'),
+      'chrome-collapsed form-context-bar rule must exist');
+    const idxStart = stylesCssSource.indexOf('.chrome-collapsed .section-index-bar');
+    const idxBlock = stylesCssSource.substring(idxStart, idxStart + 200);
+    assert.ok(idxBlock.includes('transform: translateY'), 'collapse must use transform, not max-height');
+    assert.ok(!idxBlock.includes('max-height: 0'), 'collapse must not use max-height animation');
+  });
+
+  it('scroll handler uses passive listener and requestAnimationFrame', () => {
+    assert.ok(appJsSource.includes("{ passive: true }"),
+      'scroll listener must use passive: true');
+    assert.ok(appJsSource.includes('_chromeTicking'),
+      'scroll handler must use rAF throttle via _chromeTicking');
+  });
+});
+
+describe('Performance — compact bottom bar', () => {
+  it('bottom buttons use compact sizing', () => {
+    assert.ok(stylesCssSource.includes('min-height: 30px'),
+      'bottom-btn min-height should be 30px');
+    assert.ok(!stylesCssSource.match(/\.bottom-btn\s*\{[^}]*min-height:\s*4[48]px/),
+      'bottom-btn must not use 44-48px min-height in base rule');
+  });
+
+  it('bottom buttons do not use transition: all', () => {
+    const btnStart = stylesCssSource.indexOf('.bottom-btn {');
+    const btnBlock = stylesCssSource.substring(btnStart, btnStart + 300);
+    assert.ok(!btnBlock.includes('transition: all'),
+      'bottom-btn must not transition all properties (causes layout thrash)');
+  });
+
+  it('bottom buttons do not use gradient backgrounds', () => {
+    const nextStart = stylesCssSource.indexOf('.bottom-btn.next-btn');
+    const nextBlock = stylesCssSource.substring(nextStart, nextStart + 200);
+    assert.ok(!nextBlock.includes('linear-gradient'),
+      'primary bottom buttons should use flat color, not gradients');
+  });
+
+  it('progress dots are compact (7px or smaller)', () => {
+    const dotStart = stylesCssSource.indexOf('.section-progress-bar .prog-dot {');
+    const dotBlock = stylesCssSource.substring(dotStart, dotStart + 150);
+    const widthMatch = dotBlock.match(/width:\s*(\d+)px/);
+    assert.ok(widthMatch, 'prog-dot must have width in px');
+    assert.ok(parseInt(widthMatch[1]) <= 8, 'prog-dot width should be 8px or less');
+  });
+
+  it('HTML buttons use short labels', () => {
+    assert.ok(!indexHtmlSource.includes('>&#9783; Sections</button>'),
+      'sections button should not have long "Sections" label');
+    assert.ok(indexHtmlSource.includes('title="Jump to section"'),
+      'sections button should have a tooltip');
+    assert.ok(indexHtmlSource.includes('title="Save and exit (Ctrl+S)"'),
+      'save button should show keyboard shortcut in tooltip');
+  });
 });
