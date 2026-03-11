@@ -18,6 +18,7 @@ const { URL } = require('url');
 const initSqlJs = require('sql.js');
 const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-import');
 const { createSyncWorker } = require('./main/syncWorker');
+const { createBackupScheduler } = require('./main/backupScheduler');
 
 let mainWindow;
 let db;
@@ -926,9 +927,83 @@ let dbDirtySinceQuickBackup = false;
 let dbDirtySinceHourlyBackup = false;
 const MAX_HOURLY_BACKUPS = 48;
 
+let _backupScheduler = null;
+
+function getBackupScheduler() {
+  if (_backupScheduler) return _backupScheduler;
+  _backupScheduler = createBackupScheduler({
+    runBackup: (kind, reason) => {
+      console.log('[Backup] Scheduler triggered:', kind, reason);
+      if (kind === 'hourly') {
+        return _runHourlyBackupAsync();
+      }
+      return _runQuickBackupAsync();
+    },
+    onStatusChange: (status) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('backup-status-changed', status);
+      }
+    },
+  });
+  return _backupScheduler;
+}
+
+function _runQuickBackupAsync() {
+  if (!db) return { skipped: true, reason: 'db-missing' };
+  if (!isBackupFolderReady()) return { skipped: true, reason: 'backup-folder-missing' };
+  const dest = path.join(getBackupFolder(), 'attendance-latest.db');
+  const start = Date.now();
+  try {
+    const data = db.export();
+    const encrypted = encryptBuffer(Buffer.from(data));
+    const tmp = dest + '.tmp';
+    fs.writeFileSync(tmp, encrypted);
+    fs.renameSync(tmp, dest);
+    console.log('[Backup] Quick backup saved (encrypted), took', Date.now() - start, 'ms,', encrypted.length, 'bytes');
+    copyToOffsiteBackup(dest);
+    uploadToCloudIfConfigured(encrypted);
+    uploadToS3IfConfigured(encrypted, 'attendance-latest.db');
+    uploadToManagedCloudIfEnabled(encrypted, 'attendance-latest.db');
+    return { durationMs: Date.now() - start, bytes: encrypted.length };
+  } catch (err) {
+    console.error('[Backup] Quick backup failed:', err.message);
+    throw err;
+  }
+}
+
+function _runHourlyBackupAsync() {
+  if (!db) return { skipped: true, reason: 'db-missing' };
+  if (!isBackupFolderReady()) return { skipped: true, reason: 'backup-folder-missing' };
+  const backupDir = getBackupFolder();
+  const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+  const dest = path.join(backupDir, name);
+  const start = Date.now();
+  try {
+    const data = db.export();
+    const encrypted = encryptBuffer(Buffer.from(data));
+    const tmp = dest + '.tmp';
+    fs.writeFileSync(tmp, encrypted);
+    fs.renameSync(tmp, dest);
+    console.log('[Backup] Hourly archive saved (encrypted):', name, 'took', Date.now() - start, 'ms');
+    pruneOldBackups(backupDir);
+    copyToOffsiteBackup(dest);
+    uploadToCloudIfConfigured(encrypted);
+    uploadToS3IfConfigured(encrypted, name);
+    uploadToManagedCloudIfEnabled(encrypted, name);
+    const offsiteDir = getOffsiteBackupFolder();
+    if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
+    return { durationMs: Date.now() - start, bytes: encrypted.length };
+  } catch (err) {
+    console.error('[Backup] Hourly backup failed:', err.message);
+    throw err;
+  }
+}
+
 function markDbDirty() {
   dbDirtySinceQuickBackup = true;
   dbDirtySinceHourlyBackup = true;
+  const bs = _backupScheduler;
+  if (bs) bs.markDirty('db-change');
   scheduleSyncSoon();
 }
 
@@ -941,49 +1016,14 @@ function isBackupFolderReady() {
 
 function runQuickBackup() {
   if (!db || !dbDirtySinceQuickBackup) return;
-  if (!isBackupFolderReady()) return;
-  const dest = path.join(getBackupFolder(), 'attendance-latest.db');
-  try {
-    const data = db.export();
-    const encrypted = encryptBuffer(Buffer.from(data));
-    const tmp = dest + '.tmp';
-    fs.writeFileSync(tmp, encrypted);
-    fs.renameSync(tmp, dest);
-    dbDirtySinceQuickBackup = false;
-    console.log('[Backup] Quick backup saved (encrypted)');
-    copyToOffsiteBackup(dest);
-    uploadToCloudIfConfigured(encrypted);
-    uploadToS3IfConfigured(encrypted, 'attendance-latest.db');
-    uploadToManagedCloudIfEnabled(encrypted, 'attendance-latest.db');
-  } catch (err) {
-    console.error('[Backup] Quick backup failed:', err.message);
-  }
+  const result = _runQuickBackupAsync();
+  if (result && !result.skipped) dbDirtySinceQuickBackup = false;
 }
 
 function runHourlyBackup() {
   if (!db || !dbDirtySinceHourlyBackup) return;
-  if (!isBackupFolderReady()) return;
-  const backupDir = getBackupFolder();
-  const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
-  const dest = path.join(backupDir, name);
-  try {
-    const data = db.export();
-    const encrypted = encryptBuffer(Buffer.from(data));
-    const tmp = dest + '.tmp';
-    fs.writeFileSync(tmp, encrypted);
-    fs.renameSync(tmp, dest);
-    dbDirtySinceHourlyBackup = false;
-    console.log('[Backup] Hourly archive saved (encrypted):', name);
-    pruneOldBackups(backupDir);
-    copyToOffsiteBackup(dest);
-    uploadToCloudIfConfigured(encrypted);
-    uploadToS3IfConfigured(encrypted, name);
-    uploadToManagedCloudIfEnabled(encrypted, name);
-    const offsiteDir = getOffsiteBackupFolder();
-    if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
-  } catch (err) {
-    console.error('[Backup] Hourly backup failed:', err.message);
-  }
+  const result = _runHourlyBackupAsync();
+  if (result && !result.skipped) dbDirtySinceHourlyBackup = false;
 }
 
 function pruneOldBackups(backupDir) {
@@ -2785,8 +2825,7 @@ app.whenReady().then(async () => {
 
   cleanupAccidentalDuplicateDrafts();
   dedupeDraftsByCaseKeys();
-  setInterval(runQuickBackup, 2 * 60 * 1000);
-  setInterval(runHourlyBackup, 60 * 60 * 1000);
+  getBackupScheduler();
   // Check cloud backup on startup; retry a few times in case network isn't ready
   checkCloudBackupEntitlement().catch(() => {});
   setTimeout(() => checkCloudBackupEntitlement().catch(() => {}), 5000);
@@ -3244,12 +3283,25 @@ ipcMain.handle('backup-now', () => {
     uploadToManagedCloudIfEnabled(encData, path.basename(dest));
     const offsiteDir = getOffsiteBackupFolder();
     if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
+    const bs = _backupScheduler;
+    if (bs) bs.recordCompleted('quick', 'manual', { bytes: encData.length }, true);
     return dest;
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
     console.error('[backup-now] Backup failed:', msg);
     throw new Error('Backup failed: ' + msg);
   }
+});
+
+ipcMain.handle('backup-status', () => {
+  const bs = _backupScheduler;
+  if (!bs) return { state: 'not-initialised' };
+  return bs.getStatus();
+});
+
+ipcMain.on('editor-activity', () => {
+  const bs = _backupScheduler;
+  if (bs) bs.noteUserActivity('editor');
 });
 
 ipcMain.handle('db-repair', () => {

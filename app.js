@@ -1964,7 +1964,8 @@ var REQUIRED_FIELD_KEYS = [
     if (hft) hft.textContent = title;
   }
 
-  /* ─── Cross-device sync status (truthful, no vague "still trying") ─── */
+  /* ─── Cross-device sync status (offline-first, calm messaging) ─── */
+  var _syncRetryableErrorCount = 0;
   function updateSyncStatusIndicator(data) {
     var el = document.getElementById('sync-status-indicator');
     if (!el) return;
@@ -1974,13 +1975,25 @@ var REQUIRED_FIELD_KEYS = [
     }
     el.style.display = '';
     if (data.status === 'synced') {
+      _syncRetryableErrorCount = 0;
       refreshSyncCounts();
     } else if (data.status === 'syncing') {
       el.textContent = '\u2601 Syncing now';
       el.style.color = '#2563eb';
     } else if (data.status === 'error') {
-      el.textContent = data.retryable ? '\u2601 Sync delayed \u2014 API unreachable' : '\u2601 Sync blocked \u2014 check licence';
-      el.style.color = '#dc2626';
+      if (!data.retryable) {
+        el.textContent = '\u2601 Sync blocked \u2014 check licence';
+        el.style.color = '#dc2626';
+      } else {
+        _syncRetryableErrorCount++;
+        if (_syncRetryableErrorCount >= 5) {
+          el.textContent = '\u23F1 Saved locally \u00b7 sync will retry when connected';
+          el.style.color = '#d97706';
+        } else {
+          el.textContent = '\u23F1 Saved locally \u00b7 will sync when available';
+          el.style.color = '#64748b';
+        }
+      }
     } else {
       refreshSyncCounts();
     }
@@ -2430,7 +2443,7 @@ var REQUIRED_FIELD_KEYS = [
       window.api.getSettings().then(function(s) {
         var folder = s && s.backupFolder;
         if (folder) {
-          backupEl.textContent = 'Auto backup: ON (every 2 mins)';
+          backupEl.textContent = 'Auto backup: idle-based';
           backupEl.className = 'home-status-item online';
         } else {
           backupEl.textContent = 'Auto backup: OFF';
@@ -2867,6 +2880,9 @@ var REQUIRED_FIELD_KEYS = [
   function scheduleQuietSave() {
     clearTimeout(_quietSaveDebounceTimer);
     _quietSaveDebounceTimer = setTimeout(quietSave, QUIET_SAVE_DEBOUNCE_MS);
+    if (window.api && window.api.reportEditorActivity) {
+      window.api.reportEditorActivity();
+    }
   }
 
   function quietSave() {
@@ -6666,18 +6682,23 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     if (status === 'finalised') {
+      stopAutoSave();
+      clearTimeout(_quietSaveDebounceTimer);
+      _draftSaveQueued = false;
+      currentRecordStatus = 'finalised';
       showToast('Finalising…', 'info', 2000);
     }
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
       if (result && typeof result === 'object') {
         if (result.error === 'locked') {
           _finalising = false;
-          startAutoSave();
+          if (status !== 'finalised') startAutoSave();
           showToast('This record is finalised and cannot be modified. Create a new attendance if needed.', 'error', 6000);
           return;
         }
         if (result.error) {
           _finalising = false;
+          if (status === 'finalised') currentRecordStatus = 'draft';
           startAutoSave();
           showToast('Failed to save: ' + (result.message || result.error), 'error', 6000);
           return;
@@ -6695,6 +6716,7 @@ var REQUIRED_FIELD_KEYS = [
       }
     }).catch(function(err) {
       _finalising = false;
+      if (status === 'finalised') currentRecordStatus = 'draft';
       startAutoSave();
       showToast('Failed to save record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 6000);
     });
@@ -8344,14 +8366,17 @@ PDF_CASENOTE_ADVERT +
     Promise.all([
       window.api && window.api.syncGetDiagnostics ? window.api.syncGetDiagnostics() : {},
       window.api && window.api.syncStatus ? window.api.syncStatus() : {},
+      window.api && window.api.backupStatus ? window.api.backupStatus() : {},
     ]).then(function(results) {
       var diag = results[0] || {};
       var status = results[1] || {};
+      var backup = results[2] || {};
       var summaryEl = document.getElementById('sync-diag-summary');
       var queueEl = document.getElementById('sync-diag-queue');
       var attemptsEl = document.getElementById('sync-diag-attempts');
       if (summaryEl) {
         var lines = [];
+        lines.push('=== SYNC ===');
         lines.push('Connectivity:  ' + (diag.connectivity || status.connectivity || 'unknown'));
         lines.push('Queue pending: ' + (diag.queueLength || 0));
         lines.push('Queue failed:  ' + (diag.failedCount || status.failedCount || 0));
@@ -8360,6 +8385,26 @@ PDF_CASENOTE_ADVERT +
         lines.push('Last error:    ' + (diag.lastError || status.lastError || 'none'));
         lines.push('In progress:   ' + (diag.inProgress ? 'yes' : 'no'));
         lines.push('Last push ok:  ' + (diag.lastSuccessfulPushAt ? new Date(diag.lastSuccessfulPushAt).toISOString() : 'never'));
+        lines.push('');
+        lines.push('=== BACKUP ===');
+        lines.push('State:         ' + (backup.state || 'unknown'));
+        lines.push('Quick dirty:   ' + (backup.quickDirty ? 'YES' : 'no'));
+        lines.push('Hourly dirty:  ' + (backup.hourlyDirty ? 'YES' : 'no'));
+        lines.push('Deferred:      ' + (backup.deferredReason || 'no'));
+        lines.push('Last backup:   ' + (backup.lastBackupAt ? new Date(backup.lastBackupAt).toISOString() : 'never'));
+        lines.push('Last kind:     ' + (backup.lastBackupKind || 'none'));
+        lines.push('Last reason:   ' + (backup.lastBackupReason || 'none'));
+        lines.push('Last duration: ' + (backup.lastBackupDurationMs || 0) + 'ms');
+        lines.push('Last size:     ' + (backup.lastBackupBytes ? Math.round(backup.lastBackupBytes / 1024) + 'KB' : '0'));
+        lines.push('Last error:    ' + (backup.lastError || 'none'));
+        lines.push('');
+        lines.push('=== RENDERER ===');
+        lines.push('Record status: ' + (currentRecordStatus || 'none'));
+        lines.push('Finalising:    ' + (_finalising ? 'YES' : 'no'));
+        lines.push('Draft in-flight: ' + (_draftSaveInFlight ? 'YES' : 'no'));
+        lines.push('Draft queued:  ' + (_draftSaveQueued ? 'YES' : 'no'));
+        lines.push('Autosave timer: ' + (autoSaveTimer ? 'running' : 'stopped'));
+        lines.push('Attendance ID: ' + (currentAttendanceId || 'none'));
         summaryEl.textContent = lines.join('\n');
       }
       if (queueEl) {
@@ -8385,7 +8430,7 @@ PDF_CASENOTE_ADVERT +
         }
       }
       var pre = document.getElementById('sync-diagnostics-content');
-      if (pre) pre.textContent = JSON.stringify({ diag: diag, status: status }, null, 2);
+      if (pre) pre.textContent = JSON.stringify({ diag: diag, status: status, backup: backup, renderer: { currentRecordStatus: currentRecordStatus, finalising: _finalising, draftSaveInFlight: _draftSaveInFlight, draftSaveQueued: _draftSaveQueued, autosaveRunning: !!autoSaveTimer, currentAttendanceId: currentAttendanceId } }, null, 2);
     });
   }
 
@@ -8418,8 +8463,9 @@ PDF_CASENOTE_ADVERT +
       Promise.all([
         window.api.syncGetDiagnostics ? window.api.syncGetDiagnostics() : {},
         window.api.syncStatus ? window.api.syncStatus() : {},
+        window.api.backupStatus ? window.api.backupStatus() : {},
       ]).then(function(results) {
-        var exportData = { diagnostics: results[0], syncStatus: results[1], exportedAt: new Date().toISOString(), appVersion: document.getElementById('version')?.textContent || '' };
+        var exportData = { diagnostics: results[0], syncStatus: results[1], backup: results[2], renderer: { currentRecordStatus: currentRecordStatus, finalising: _finalising, draftSaveInFlight: _draftSaveInFlight, autosaveRunning: !!autoSaveTimer }, exportedAt: new Date().toISOString(), appVersion: document.getElementById('version')?.textContent || '' };
         var text = JSON.stringify(exportData, null, 2);
         if (navigator.clipboard) {
           navigator.clipboard.writeText(text).then(function() { showToast('Diagnostics copied to clipboard', 'success'); });
@@ -8888,23 +8934,57 @@ PDF_CASENOTE_ADVERT +
     var backupStatusEl = document.getElementById('backup-status-text');
     function updateBackupStatus() {
       if (!backupStatusEl) return;
-      if (window.api && window.api.getSettings) {
+      if (window.api && window.api.backupStatus) {
+        window.api.backupStatus().then(function(bs) {
+          if (!bs || bs.state === 'not-initialised') {
+            backupStatusEl.textContent = 'Auto backup: starting\u2026';
+            backupStatusEl.className = 'footer-status';
+            return;
+          }
+          if (bs.state === 'running') {
+            backupStatusEl.textContent = 'Backup running\u2026';
+            backupStatusEl.className = 'footer-status online';
+          } else if (bs.state === 'deferred') {
+            backupStatusEl.textContent = 'Auto backup: idle-based';
+            backupStatusEl.className = 'footer-status online';
+          } else if (bs.state === 'error') {
+            backupStatusEl.textContent = 'Backup error — will retry';
+            backupStatusEl.className = 'footer-status offline';
+          } else if (bs.quickDirty || bs.hourlyDirty) {
+            backupStatusEl.textContent = 'Auto backup: pending';
+            backupStatusEl.className = 'footer-status online';
+          } else {
+            window.api.getSettings().then(function(s) {
+              if (s && s.backupFolder) {
+                backupStatusEl.textContent = 'Auto backup: idle-based';
+                backupStatusEl.className = 'footer-status online';
+              } else {
+                backupStatusEl.textContent = 'Auto backup: OFF \u2014 no folder set';
+                backupStatusEl.className = 'footer-status offline';
+              }
+            });
+          }
+        }).catch(function() {
+          backupStatusEl.textContent = 'Auto backup: checking\u2026';
+        });
+      } else if (window.api && window.api.getSettings) {
         window.api.getSettings().then(function(s) {
           var folder = s && s.backupFolder;
           if (folder) {
-            backupStatusEl.textContent = 'Auto backup: ON (every 2 mins)';
+            backupStatusEl.textContent = 'Auto backup: idle-based';
             backupStatusEl.className = 'footer-status online';
           } else {
             backupStatusEl.textContent = 'Auto backup: OFF \u2014 no folder set';
             backupStatusEl.className = 'footer-status offline';
           }
         });
-      } else {
-        backupStatusEl.textContent = 'Auto backup: checking\u2026';
       }
     }
     updateBackupStatus();
-    setInterval(updateBackupStatus, 60000);
+    setInterval(updateBackupStatus, 30000);
+    if (window.api && window.api.onBackupStatusChanged) {
+      window.api.onBackupStatusChanged(function() { updateBackupStatus(); });
+    }
     /* App version and update date from package.json */
     if (window.api.getAppVersion) {
       window.api.getAppVersion().then(function(info) {
@@ -10258,15 +10338,18 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('validation-finalise-anyway')?.addEventListener('click', () => {
       if (_finalising) return;
       _finalising = true;
+      stopAutoSave();
+      clearTimeout(_quietSaveDebounceTimer);
+      _draftSaveQueued = false;
       showConfirm('Are you sure? Incomplete records may cause the firm billing difficulties.').then(ok => {
-        if (!ok) { _finalising = false; return; }
+        if (!ok) { _finalising = false; startAutoSave(); return; }
         document.getElementById('validation-modal')?.classList.add('hidden');
         collectCurrentData();
         const c = typeof calculateProfitCosts === 'function' && calculateProfitCosts();
         if (c && c.isEscape) {
           showConfirm('ESCAPE CASE – Submit CRM18 to claim at hourly rates. Continue to finalise?').then(ok2 => {
             if (ok2) saveForm('finalised');
-            else _finalising = false;
+            else { _finalising = false; startAutoSave(); }
           });
         } else {
           saveForm('finalised');
