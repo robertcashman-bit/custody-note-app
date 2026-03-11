@@ -5,10 +5,10 @@ function createBackupScheduler(options = {}) {
   const runBackup = typeof options.runBackup === 'function' ? options.runBackup : async () => ({ skipped: true });
   const onStatusChange = typeof options.onStatusChange === 'function' ? options.onStatusChange : () => {};
 
-  const QUICK_MIN_INTERVAL_MS = options.quickMinIntervalMs || 10 * 60 * 1000;
+  const QUICK_MIN_INTERVAL_MS = options.quickMinIntervalMs || 15 * 60 * 1000;
   const HOURLY_INTERVAL_MS = options.hourlyIntervalMs || 60 * 60 * 1000;
-  const USER_IDLE_GRACE_MS = options.userIdleGraceMs || 15 * 1000;
-  const PERIODIC_CHECK_MS = options.periodicCheckMs || 60 * 1000;
+  const USER_IDLE_GRACE_MS = options.userIdleGraceMs || 45 * 1000;
+  const PERIODIC_CHECK_MS = options.periodicCheckMs || 3 * 60 * 1000;
 
   let timer = null;
   let running = false;

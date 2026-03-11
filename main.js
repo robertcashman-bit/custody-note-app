@@ -933,6 +933,9 @@ let _backupScheduler = null;
 function getBackupScheduler() {
   if (_backupScheduler) return _backupScheduler;
   _backupScheduler = createBackupScheduler({
+    quickMinIntervalMs: 15 * 60 * 1000,
+    userIdleGraceMs: 45 * 1000,
+    periodicCheckMs: 3 * 60 * 1000,
     runBackup: (kind, reason) => {
       console.log('[Backup] Scheduler triggered:', kind, reason);
       if (kind === 'hourly') {

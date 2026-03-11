@@ -1975,11 +1975,52 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── Cross-device sync status (offline-first, calm messaging) ─── */
   var _syncRetryableErrorCount = 0;
+  var _footerSyncSnapshot = null;
+  var _footerBackupSnapshot = null;
+
+  function setFooterIndicator(el, text, variant, title) {
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'footer-indicator footer-chip' + (variant ? ' ' + variant : '');
+    if (title) el.title = title;
+    else el.removeAttribute('title');
+  }
+
+  function applySyncSnapshot(st) {
+    var wrap = document.getElementById('sync-footer-wrap');
+    var homeSyncWrap = document.getElementById('home-sync-now-wrap');
+    var el = document.getElementById('sync-status-indicator');
+    _footerSyncSnapshot = st || null;
+    if (wrap) wrap.style.display = st && st.enabled ? '' : 'none';
+    if (homeSyncWrap) homeSyncWrap.style.display = st && st.enabled ? '' : 'none';
+    if (!el) return;
+    if (!st || !st.enabled) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    var pending = st.pendingChanges || 0;
+    var failed = st.failedCount || 0;
+    var blocked = st.blockedCount || 0;
+    if (pending === 0 && st.lastSync) {
+      setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync), 'synced');
+    } else if (blocked > 0) {
+      setFooterIndicator(el, blocked + ' blocked', 'offline', st.lastError || '');
+    } else if (failed > 0) {
+      setFooterIndicator(el, failed + ' retrying', 'offline', st.lastError || '');
+    } else if (pending > 0) {
+      setFooterIndicator(el, pending + ' pending', 'syncing');
+    } else {
+      setFooterIndicator(el, 'Waiting to sync', 'backup-ok');
+    }
+  }
+
   function updateSyncStatusIndicator(data) {
     var el = document.getElementById('sync-status-indicator');
     if (!el) return;
     if (!data || !data.status) {
-      refreshSyncCounts();
+      if (_footerSyncSnapshot) applySyncSnapshot(_footerSyncSnapshot);
+      else refreshSyncCounts();
       return;
     }
     el.style.display = '';
@@ -1987,24 +2028,16 @@ var REQUIRED_FIELD_KEYS = [
       _syncRetryableErrorCount = 0;
       refreshSyncCounts();
     } else if (data.status === 'syncing') {
-      el.textContent = 'Syncing\u2026';
-      el.className = 'footer-indicator syncing';
-      el.style.color = '';
+      setFooterIndicator(el, 'Syncing\u2026', 'syncing');
     } else if (data.status === 'error') {
       if (!data.retryable) {
-        el.textContent = 'Sync blocked \u2014 check licence';
-        el.className = 'footer-indicator offline';
-        el.style.color = '';
+        setFooterIndicator(el, 'Sync blocked', 'offline', data.lastError || '');
       } else {
         _syncRetryableErrorCount++;
         if (_syncRetryableErrorCount >= 5) {
-          el.textContent = 'Saved locally \u00b7 sync retrying';
-          el.className = 'footer-indicator backup-active';
-          el.style.color = '';
+          setFooterIndicator(el, 'Retrying sync', 'backup-active', data.lastError || '');
         } else {
-          el.textContent = 'Saved locally \u00b7 syncing soon';
-          el.className = 'footer-indicator backup-ok';
-          el.style.color = '';
+          setFooterIndicator(el, 'Sync queued', 'backup-ok', data.lastError || '');
         }
       }
     } else {
@@ -2015,35 +2048,7 @@ var REQUIRED_FIELD_KEYS = [
   function refreshSyncCounts() {
     if (!window.api || !window.api.syncStatus) return;
     window.api.syncStatus().then(function(st) {
-      var el = document.getElementById('sync-status-indicator');
-      if (!el || !st || !st.enabled) return;
-      el.style.display = '';
-      var pending = st.pendingChanges || 0;
-      var failed = st.failedCount || 0;
-      var blocked = st.blockedCount || 0;
-      if (pending === 0 && st.lastSync) {
-        el.textContent = 'Synced (' + formatSyncTime(st.lastSync) + ')';
-        el.className = 'footer-indicator synced';
-        el.style.color = '';
-      } else if (blocked > 0) {
-        el.textContent = blocked + ' sync blocked \u00b7 retrying';
-        el.className = 'footer-indicator offline';
-        el.style.color = '';
-        if (st.lastError) el.title = st.lastError;
-      } else if (failed > 0) {
-        el.textContent = failed + ' sync failed \u00b7 retrying';
-        el.className = 'footer-indicator offline';
-        el.style.color = '';
-        if (st.lastError) el.title = st.lastError;
-      } else if (pending > 0) {
-        el.textContent = pending + ' pending \u00b7 saved locally';
-        el.className = 'footer-indicator syncing';
-        el.style.color = '';
-      } else if (!st.lastSync) {
-        el.textContent = 'Saved locally \u00b7 connecting';
-        el.className = 'footer-indicator backup-ok';
-        el.style.color = '';
-      }
+      applySyncSnapshot(st || {});
     }).catch(function() {});
   }
 
@@ -2097,13 +2102,7 @@ var REQUIRED_FIELD_KEYS = [
   function initSyncStatus() {
     if (window.api && window.api.syncStatus) {
       window.api.syncStatus().then(function(st) {
-        var wrap = document.getElementById('sync-footer-wrap');
-        if (wrap) wrap.style.display = st && st.enabled ? '' : 'none';
-        var indicator = document.getElementById('sync-status-indicator');
-        if (indicator) {
-          indicator.style.display = st && st.enabled ? '' : 'none';
-        }
-        if (st && st.enabled) refreshSyncCounts();
+        applySyncSnapshot(st || {});
       });
     }
     initHomeUpdateButton();
@@ -9035,11 +9034,7 @@ PDF_CASENOTE_ADVERT +
       window.api.onSyncStatusChanged(function(data) {
         updateSyncStatusIndicator(data);
         var syncWrap = document.getElementById('home-sync-now-wrap');
-        if (syncWrap && window.api.syncStatus) {
-          window.api.syncStatus().then(function(st) {
-            syncWrap.style.display = (st && st.enabled) ? '' : 'none';
-          });
-        }
+        if (syncWrap && _footerSyncSnapshot) syncWrap.style.display = _footerSyncSnapshot.enabled ? '' : 'none';
       });
     }
 
@@ -9219,8 +9214,7 @@ PDF_CASENOTE_ADVERT +
     var netStatusEl = document.getElementById('net-status-text');
     function setNetStatus(online) {
       if (netStatusEl) {
-        netStatusEl.textContent = online ? 'Internet: Connected' : 'No internet';
-        netStatusEl.className = 'footer-indicator ' + (online ? 'connected' : 'offline');
+        setFooterIndicator(netStatusEl, online ? 'Online' : 'Offline', online ? 'connected' : 'offline');
       }
       var homeNet = document.getElementById('home-net-status');
       if (homeNet) {
@@ -9279,58 +9273,59 @@ PDF_CASENOTE_ADVERT +
 
     /* Auto backup status */
     var backupStatusEl = document.getElementById('backup-status-text');
-    function updateBackupStatus() {
+    function applyBackupStatus(bs) {
+      _footerBackupSnapshot = bs || null;
       if (!backupStatusEl) return;
+      if (!bs || bs.state === 'not-initialised') {
+        setFooterIndicator(backupStatusEl, 'Backup starting\u2026', '');
+        return true;
+      }
+      if (bs.state === 'running') {
+        setFooterIndicator(backupStatusEl, 'Backup running', 'backup-active');
+      } else if (bs.state === 'deferred') {
+        setFooterIndicator(backupStatusEl, 'Backup idle', 'backup-ok');
+      } else if (bs.state === 'error') {
+        setFooterIndicator(backupStatusEl, 'Backup retrying', 'offline', bs.lastError || '');
+      } else if (bs.quickDirty || bs.hourlyDirty) {
+        setFooterIndicator(backupStatusEl, 'Backup queued', 'backup-active');
+      } else {
+        return false;
+      }
+      return true;
+    }
+
+    function updateBackupStatus(snapshot) {
+      if (!backupStatusEl) return;
+      if (snapshot && applyBackupStatus(snapshot)) return;
       if (window.api && window.api.backupStatus) {
         window.api.backupStatus().then(function(bs) {
-          if (!bs || bs.state === 'not-initialised') {
-            backupStatusEl.textContent = 'Auto backup: starting\u2026';
-            backupStatusEl.className = 'footer-indicator';
-            return;
-          }
-          if (bs.state === 'running') {
-            backupStatusEl.textContent = 'Backup running\u2026';
-            backupStatusEl.className = 'footer-indicator backup-active';
-          } else if (bs.state === 'deferred') {
-            backupStatusEl.textContent = 'Auto backup: idle-based';
-            backupStatusEl.className = 'footer-indicator backup-ok';
-          } else if (bs.state === 'error') {
-            backupStatusEl.textContent = 'Backup error \u2014 will retry';
-            backupStatusEl.className = 'footer-indicator offline';
-          } else if (bs.quickDirty || bs.hourlyDirty) {
-            backupStatusEl.textContent = 'Auto backup: pending';
-            backupStatusEl.className = 'footer-indicator backup-active';
-          } else {
+          if (!applyBackupStatus(bs)) {
             window.api.getSettings().then(function(s) {
               if (s && s.backupFolder) {
-                backupStatusEl.textContent = 'Auto backup: idle-based';
-                backupStatusEl.className = 'footer-indicator backup-ok';
+                setFooterIndicator(backupStatusEl, 'Backup idle', 'backup-ok');
               } else {
-                backupStatusEl.textContent = 'Auto backup: OFF';
-                backupStatusEl.className = 'footer-indicator offline';
+                setFooterIndicator(backupStatusEl, 'Backup off', 'offline');
               }
             });
           }
         }).catch(function() {
-          backupStatusEl.textContent = 'Auto backup: checking\u2026';
+          setFooterIndicator(backupStatusEl, 'Backup checking\u2026', '');
         });
       } else if (window.api && window.api.getSettings) {
         window.api.getSettings().then(function(s) {
           var folder = s && s.backupFolder;
           if (folder) {
-            backupStatusEl.textContent = 'Auto backup: idle-based';
-            backupStatusEl.className = 'footer-indicator backup-ok';
+            setFooterIndicator(backupStatusEl, 'Backup idle', 'backup-ok');
           } else {
-            backupStatusEl.textContent = 'Auto backup: OFF';
-            backupStatusEl.className = 'footer-indicator offline';
+            setFooterIndicator(backupStatusEl, 'Backup off', 'offline');
           }
         });
       }
     }
     updateBackupStatus();
-    setInterval(updateBackupStatus, 30000);
+    setInterval(function() { updateBackupStatus(); }, 180000);
     if (window.api && window.api.onBackupStatusChanged) {
-      window.api.onBackupStatusChanged(function() { updateBackupStatus(); });
+      window.api.onBackupStatusChanged(function(data) { updateBackupStatus(data); });
     }
     /* App version and update date from package.json */
     if (window.api.getAppVersion) {
@@ -9973,12 +9968,12 @@ PDF_CASENOTE_ADVERT +
         var bannerText = document.getElementById('home-update-banner-text');
         var restartBtn = document.getElementById('home-update-restart-btn');
         if (data.status === 'downloading') {
-          if (wrap && el) { wrap.style.display = ''; el.textContent = 'Downloading update v' + data.version + '\u2026'; el.onclick = null; }
+          if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Downloading v' + data.version, 'backup-active'); el.onclick = null; }
           if (banner) banner.style.display = '';
           if (bannerText) bannerText.textContent = 'A new version (v' + data.version + ') is downloading. You\'ll be notified when it\'s ready to install.';
           if (restartBtn) restartBtn.style.display = 'none';
         } else if (data.status === 'ready') {
-          if (wrap && el) { wrap.style.display = ''; el.textContent = '\u2713 Update v' + data.version + ' ready \u2014 click to restart'; el.onclick = function() { window.api.appUpdateInstall(); }; }
+          if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Update v' + data.version + ' ready', 'synced'); el.onclick = function() { window.api.appUpdateInstall(); }; }
           if (banner) banner.style.display = '';
           if (bannerText) bannerText.textContent = 'Update v' + data.version + ' is ready. Restart the app to install.';
           if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Restart to install'; restartBtn.onclick = function() { window.api.appUpdateInstall(); }; }
@@ -10032,7 +10027,7 @@ PDF_CASENOTE_ADVERT +
         var footerEl = document.getElementById('cloud-backup-footer-status');
         var homeWarning = document.getElementById('home-cloud-backup-warning');
         if (data && data.enabled) {
-          if (footerEl) { footerEl.textContent = 'Backing up to AWS'; footerEl.style.color = '#10b981'; footerEl.style.cursor = ''; footerEl.style.textDecoration = ''; }
+          if (footerEl) { setFooterIndicator(footerEl, 'AWS backup on', 'backup-ok'); footerEl.style.cursor = ''; }
           if (homeWarning) homeWarning.style.display = 'none';
           var checking = document.getElementById('cloud-backup-checking');
           var notSub = document.getElementById('cloud-backup-not-subscribed');
@@ -10049,7 +10044,7 @@ PDF_CASENOTE_ADVERT +
           var cloudSt = document.getElementById('backup-dest-cloud-status');
           if (cloudSt) { cloudSt.textContent = 'Active — backing up automatically'; cloudSt.style.color = '#059669'; }
         } else {
-          if (footerEl) { footerEl.textContent = 'Local backup only'; footerEl.style.color = '#d97706'; footerEl.style.cursor = 'pointer'; footerEl.style.textDecoration = 'underline'; }
+          if (footerEl) { setFooterIndicator(footerEl, 'Local only', 'warning'); footerEl.style.cursor = 'pointer'; }
           var checking = document.getElementById('cloud-backup-checking');
           var notSub = document.getElementById('cloud-backup-not-subscribed');
           var isSub = document.getElementById('cloud-backup-subscribed');
@@ -10085,10 +10080,10 @@ PDF_CASENOTE_ADVERT +
         var footerEl = document.getElementById('cloud-backup-footer-status');
         var homeWarning = document.getElementById('home-cloud-backup-warning');
         if (status && status.enabled) {
-          if (footerEl) { footerEl.textContent = 'Backing up to AWS'; footerEl.style.color = '#10b981'; footerEl.style.cursor = ''; footerEl.style.textDecoration = ''; }
+          if (footerEl) { setFooterIndicator(footerEl, 'AWS backup on', 'backup-ok'); footerEl.style.cursor = ''; }
           if (homeWarning) homeWarning.style.display = 'none';
         } else {
-          if (footerEl) { footerEl.textContent = 'Local backup only'; footerEl.style.color = '#d97706'; footerEl.style.cursor = 'pointer'; footerEl.style.textDecoration = 'underline'; }
+          if (footerEl) { setFooterIndicator(footerEl, 'Local only', 'warning'); footerEl.style.cursor = 'pointer'; }
           // Show warning unless recently dismissed (within 7 days)
           try {
             var dismissed = localStorage.getItem('cloud-backup-warning-dismissed');

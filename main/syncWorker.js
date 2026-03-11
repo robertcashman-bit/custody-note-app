@@ -33,7 +33,7 @@
  */
 const crypto = require('crypto');
 
-const SYNC_POLL_INTERVAL_MS = 30000;
+const SYNC_POLL_INTERVAL_MS = 60000;
 const SYNC_REQUEST_TIMEOUT_MS = 8000;
 const HEALTH_CHECK_TIMEOUT_MS = 4000;
 const RETRY_DELAYS_MS = [0, 10_000, 30_000, 120_000, 600_000, 1_800_000]; // attempt 1..6
@@ -415,6 +415,7 @@ module.exports = {
   generateQueueId,
   isRetryableError,
   getNextAttemptMs,
+  SYNC_POLL_INTERVAL_MS,
   RETRY_DELAYS_MS,
   MAX_RETRY_ATTEMPTS,
   SYNC_REQUEST_TIMEOUT_MS,

@@ -7,6 +7,12 @@ const appJsPath = path.join(__dirname, '..', 'app.js');
 const appJsSource = fs.readFileSync(appJsPath, 'utf8');
 const mainJsPath = path.join(__dirname, '..', 'main.js');
 const mainJsSource = fs.readFileSync(mainJsPath, 'utf8');
+const stylesCssPath = path.join(__dirname, '..', 'styles.css');
+const stylesCssSource = fs.readFileSync(stylesCssPath, 'utf8');
+const indexHtmlPath = path.join(__dirname, '..', 'index.html');
+const indexHtmlSource = fs.readFileSync(indexHtmlPath, 'utf8');
+const syncWorkerPath = path.join(__dirname, '..', 'main', 'syncWorker.js');
+const syncWorkerSource = fs.readFileSync(syncWorkerPath, 'utf8');
 
 describe('Performance — typing path', () => {
 
@@ -67,6 +73,15 @@ describe('Performance — main process', () => {
     assert.ok(mainJsSource.includes('idx_att_list'), 'must have idx_att_list index');
     assert.ok(mainJsSource.includes('deleted_at, archived_at, updated_at'), 'index must cover list filter columns');
   });
+
+  it('configures calmer backup scheduler timings', () => {
+    assert.ok(mainJsSource.includes('quickMinIntervalMs: 15 * 60 * 1000'),
+      'main.js should set a 15 minute quick backup interval');
+    assert.ok(mainJsSource.includes('userIdleGraceMs: 45 * 1000'),
+      'main.js should defer backups until the user is idle for 45 seconds');
+    assert.ok(mainJsSource.includes('periodicCheckMs: 3 * 60 * 1000'),
+      'main.js should reduce periodic backup checks to every 3 minutes');
+  });
 });
 
 describe('Performance — progress bar', () => {
@@ -76,5 +91,47 @@ describe('Performance — progress bar', () => {
     assert.ok(upbStart !== -1, 'updateProgressBar must exist');
     const bodyWindow = appJsSource.substring(upbStart, upbStart + 1200);
     assert.ok(!bodyWindow.includes('buildSectionIndexBar()'), 'updateProgressBar must not call buildSectionIndexBar');
+  });
+});
+
+describe('Performance — footer and status rendering', () => {
+  it('uses grouped footer chips instead of separator-heavy footer text', () => {
+    assert.ok(indexHtmlSource.includes('class="footer-meta"'), 'index.html should group footer meta');
+    assert.ok(indexHtmlSource.includes('class="footer-status-group"'), 'index.html should group footer statuses');
+    assert.ok(indexHtmlSource.includes('class="footer-action-btn footer-chip"'),
+      'check updates action should render as a footer chip');
+  });
+
+  it('uses shared footer indicator helper for compact status chips', () => {
+    assert.ok(appJsSource.includes("function setFooterIndicator("),
+      'app.js should centralize footer chip rendering');
+    assert.ok(appJsSource.includes("setFooterIndicator(netStatusEl, online ? 'Online' : 'Offline'"),
+      'network status should use compact chip wording');
+  });
+
+  it('does not poll backup status every 30 seconds anymore', () => {
+    assert.ok(!appJsSource.includes('setInterval(updateBackupStatus, 30000)'),
+      'must remove 30 second backup polling');
+    assert.ok(appJsSource.includes("setInterval(function() { updateBackupStatus(); }, 180000)"),
+      'must use a calmer 3 minute backup fallback poll');
+  });
+});
+
+describe('Performance — sync cadence', () => {
+  it('slows idle sync polling to 60 seconds', () => {
+    assert.ok(syncWorkerSource.includes('const SYNC_POLL_INTERVAL_MS = 60000'),
+      'sync worker should use a 60 second idle poll interval');
+  });
+});
+
+describe('Performance — scrolling', () => {
+  it('does not apply smooth scrolling globally', () => {
+    assert.ok(!stylesCssSource.includes('* { scroll-behavior: smooth; }'),
+      'styles.css must not force global smooth scrolling');
+  });
+
+  it('does not pin will-change on the main form scroll container', () => {
+    assert.ok(!stylesCssSource.includes('will-change: scroll-position'),
+      'styles.css should not permanently hint scroll-position changes');
   });
 });

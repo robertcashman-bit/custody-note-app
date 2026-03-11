@@ -3,7 +3,7 @@
  */
 const { describe, it } = require("node:test");
 const assert = require("node:assert");
-const { isRetryableError, RETRY_DELAYS_MS, MAX_RETRY_ATTEMPTS, SYNC_REQUEST_TIMEOUT_MS } = require("../main/syncWorker");
+const { isRetryableError, RETRY_DELAYS_MS, MAX_RETRY_ATTEMPTS, SYNC_REQUEST_TIMEOUT_MS, SYNC_POLL_INTERVAL_MS } = require("../main/syncWorker");
 
 describe("sync worker", () => {
   it("classifies network errors as retryable", () => {
@@ -42,5 +42,9 @@ describe("sync worker", () => {
 
   it("SYNC_REQUEST_TIMEOUT_MS is 8 seconds", () => {
     assert.strictEqual(SYNC_REQUEST_TIMEOUT_MS, 8000);
+  });
+
+  it("SYNC_POLL_INTERVAL_MS is 60 seconds", () => {
+    assert.strictEqual(SYNC_POLL_INTERVAL_MS, 60000);
   });
 });

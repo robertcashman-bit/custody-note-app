@@ -54,6 +54,19 @@ function createHarness(opts = {}) {
 }
 
 describe('backupScheduler', () => {
+  it('uses calmer default intervals', () => {
+    const scheduler = createBackupScheduler({
+      now: () => 0,
+      setTimer: () => 1,
+      clearTimer: () => {},
+      runBackup: async () => ({ skipped: true }),
+    });
+    const status = scheduler.getStatus();
+    assert.strictEqual(status.quickMinIntervalMs, 15 * 60 * 1000);
+    assert.strictEqual(status.userIdleGraceMs, 45 * 1000);
+    assert.strictEqual(status.periodicCheckMs, 3 * 60 * 1000);
+  });
+
   it('does not run when clean', () => {
     const h = createHarness();
     h.scheduler.requestCheckpoint('timer');
