@@ -1470,11 +1470,22 @@ async function syncPull(opts) {
       continue;
     }
 
-    // Conflict resolution: remote wins if its version is higher or (same version but updated later).
-    // If local has unsaved changes (sync_dirty=1) and remote is newer, remote still wins
-    // but local changes are logged in audit_log.
     const localVersion = local.sync_version || 1;
     const remoteVersion = remote.version || 1;
+
+    /* HARD RULE: never revert a locally-finalised record to draft via sync pull.
+       This protects against the scenario where the finalise push failed but
+       the server still has an older draft version. */
+    const localStatus = (() => {
+      const s = ctx && ctx.dbGet ? ctx.dbGet('SELECT status FROM attendances WHERE id=?', [local.id]) : dbGet('SELECT status FROM attendances WHERE id=?', [local.id]);
+      return s ? s.status : null;
+    })();
+    if (localStatus === 'finalised' && remote.status !== 'finalised') {
+      console.log('[SYNC-PULL] BLOCKED: refusing to overwrite finalised record id=' + local.id +
+        ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
+      continue;
+    }
+
     const remoteNewer = remoteVersion > localVersion ||
       (remoteVersion === localVersion && remote.updatedAt > (local.updated_at || ''));
 
@@ -3006,8 +3017,15 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   if (id) {
     const existing = dbGet('SELECT status, data, sync_version FROM attendances WHERE id = ?', [id]);
 
+    if (st === 'finalised') {
+      console.log('[FINALISE] attendance-save called with status=finalised, id=' + id +
+        ', existing.status=' + (existing ? existing.status : 'NOT_FOUND') +
+        ', existing.sync_version=' + (existing ? existing.sync_version : 'N/A'));
+    }
+
     /* Block edits to finalised records unless explicitly re-finalising */
     if (existing && existing.status === 'finalised' && st !== 'finalised') {
+      console.log('[FINALISE] BLOCKED: draft write to finalised record id=' + id);
       return { error: 'locked', message: 'This record is finalised and cannot be modified.' };
     }
 
@@ -3030,6 +3048,17 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, sync_dirty=1, sync_version=? WHERE id=?',
       [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, nextVer, id]
     );
+
+    if (st === 'finalised') {
+      const verify = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
+      console.log('[FINALISE] VERIFIED after UPDATE: id=' + id +
+        ', status=' + (verify ? verify.status : 'MISSING') +
+        ', sync_version=' + (verify ? verify.sync_version : 'N/A'));
+      if (!verify || verify.status !== 'finalised') {
+        console.error('[FINALISE] CRITICAL: DB write did NOT persist status=finalised for id=' + id);
+      }
+    }
+
     const action = st === 'finalised' ? 'finalised' : 'updated';
     db.run(
       'INSERT INTO audit_log (attendance_id, action, previous_snapshot, changed_fields, timestamp) VALUES (?,?,?,?,?)',
@@ -3112,6 +3141,23 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     enqueueSyncForRecord(newId);
   }
   return newId;
+});
+
+ipcMain.handle('attendance-force-status', (_, { id, status }) => {
+  if (!id || !status) return { error: 'missing_params' };
+  const existing = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
+  if (!existing) return { error: 'not_found' };
+  const now = new Date().toISOString();
+  const nextVer = (existing.sync_version || 1) + 1;
+  dbRun('UPDATE attendances SET status=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?',
+    [status, now, nextVer, id]);
+  db.run('INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)',
+    [id, status === 'finalised' ? 'force_finalised' : 'force_status_change', now, 'Forced status update to ' + status]);
+  markDbDirty();
+  enqueueSyncForRecord(id, status === 'finalised' ? 'finalise' : 'upsert');
+  const verify = dbGet('SELECT status FROM attendances WHERE id = ?', [id]);
+  console.log('[FORCE-STATUS] id=' + id + ' set to ' + status + ', verified=' + (verify ? verify.status : 'MISSING'));
+  return { ok: true, status: verify ? verify.status : status };
 });
 
 ipcMain.handle('attendance-archive', (_, id) => {

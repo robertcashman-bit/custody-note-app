@@ -107,6 +107,78 @@ describe('Stale draft overwrite protection', () => {
   });
 });
 
+describe('Sync pull finalise guard', () => {
+  it('syncPull refuses to overwrite locally-finalised records with remote draft', () => {
+    const mainJsSource = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+    const pullFn = mainJsSource.substring(
+      mainJsSource.indexOf('async function syncPull'),
+      mainJsSource.indexOf('async function syncPull') + 3000
+    );
+    assert.ok(pullFn.includes("localStatus === 'finalised'"),
+      'syncPull must check if local record is finalised');
+    assert.ok(pullFn.includes("remote.status !== 'finalised'"),
+      'syncPull must check if remote record is not finalised');
+    assert.ok(pullFn.includes('continue'),
+      'syncPull must skip overwrite when local is finalised and remote is not');
+  });
+});
+
+describe('Finalise retry and verification', () => {
+  it('saveForm retries finalise up to 3 times on failure', () => {
+    const saveFormBody = extractFunctionBody(appJsSource, 'saveForm');
+    assert.ok(saveFormBody.includes('attemptNum < 3'),
+      'saveForm must retry finalise up to 3 times');
+    assert.ok(saveFormBody.includes('doSaveIPC'),
+      'saveForm must use doSaveIPC for retry logic');
+  });
+
+  it('saveForm verifies DB status after finalise IPC succeeds', () => {
+    const saveFormBody = extractFunctionBody(appJsSource, 'saveForm');
+    assert.ok(saveFormBody.includes('attendanceGet(verifyId)'),
+      'saveForm must verify DB status after finalise');
+    assert.ok(saveFormBody.includes('[FINALISE] VERIFIED'),
+      'saveForm must log verification result');
+  });
+
+  it('saveForm uses attendanceForceStatus as last resort fallback', () => {
+    const saveFormBody = extractFunctionBody(appJsSource, 'saveForm');
+    assert.ok(saveFormBody.includes('attendanceForceStatus'),
+      'saveForm must have attendanceForceStatus fallback');
+    assert.ok(saveFormBody.includes('FORCE-STATUS succeeded'),
+      'saveForm must log force-status success');
+  });
+
+  it('quietSave skips when _finalising is true', () => {
+    const quietSaveBody = extractFunctionBody(appJsSource, 'quietSave');
+    assert.ok(quietSaveBody.includes('_finalising'),
+      'quietSave must check _finalising flag');
+  });
+
+  it('quietSave does not re-queue when finalising or finalised', () => {
+    const quietSaveBody = extractFunctionBody(appJsSource, 'quietSave');
+    assert.ok(quietSaveBody.includes("!_finalising && currentRecordStatus !== 'finalised'"),
+      'quietSave finally block must check _finalising and currentRecordStatus before re-queuing');
+  });
+
+  it('preload exposes attendanceForceStatus', () => {
+    const preloadSource = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+    assert.ok(preloadSource.includes('attendanceForceStatus'),
+      'preload must expose attendanceForceStatus');
+  });
+
+  it('main.js has attendance-force-status IPC handler', () => {
+    const mainJsSource = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+    assert.ok(mainJsSource.includes("ipcMain.handle('attendance-force-status'"),
+      'main.js must have attendance-force-status handler');
+    const handler = mainJsSource.substring(
+      mainJsSource.indexOf("ipcMain.handle('attendance-force-status'"),
+      mainJsSource.indexOf("ipcMain.handle('attendance-force-status'") + 1000
+    );
+    assert.ok(handler.includes("force_finalised"),
+      'handler must log force_finalised action in audit log');
+  });
+});
+
 describe('Backup scheduler integration in main.js', () => {
   it('main.js uses backupScheduler instead of 2-minute setInterval', () => {
     const mainJsSource = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');

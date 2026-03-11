@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('api', {
   attendanceSearch: (params) => ipcRenderer.invoke('attendance-search', params),
   attendanceGet: (id) => ipcRenderer.invoke('attendance-get', id),
   attendanceSave: (payload) => ipcRenderer.invoke('attendance-save', payload),
+  attendanceForceStatus: (params) => ipcRenderer.invoke('attendance-force-status', params),
   attendanceDelete: (params) => ipcRenderer.invoke('attendance-delete', params),
   attendanceArchive: (id) => ipcRenderer.invoke('attendance-archive', id),
   attendanceUnarchive: (id) => ipcRenderer.invoke('attendance-unarchive', id),

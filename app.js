@@ -2890,19 +2890,26 @@ var REQUIRED_FIELD_KEYS = [
     const formView = document.getElementById('view-form');
     if (!formView || !formView.classList.contains('active')) return;
     if (currentRecordStatus === 'finalised') return;
+    if (_finalising) return;
     const data = getFormData();
     if (!hasMeaningfulData(data)) return;
     if (_draftSaveInFlight) { _draftSaveQueued = true; return; }
     _draftSaveInFlight = true;
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
-      if (result && typeof result === 'object' && result.error === 'locked') return;
+      if (result && typeof result === 'object' && result.error === 'locked') {
+        console.log('[quietSave] draft write blocked — record is finalised');
+        currentRecordStatus = 'finalised';
+        return;
+      }
       if (typeof result === 'number' || typeof result === 'string') currentAttendanceId = result;
       showAutoSaveIndicator();
     }).finally(() => {
       _draftSaveInFlight = false;
-      if (_draftSaveQueued) {
+      if (_draftSaveQueued && !_finalising && currentRecordStatus !== 'finalised') {
         _draftSaveQueued = false;
         setTimeout(() => quietSave(), 500);
+      } else {
+        _draftSaveQueued = false;
       }
     });
   }
@@ -6682,44 +6689,133 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     if (status === 'finalised') {
+      console.log('[FINALISE] saveForm called: id=' + currentAttendanceId + ', _draftSaveInFlight=' + _draftSaveInFlight);
       stopAutoSave();
       clearTimeout(_quietSaveDebounceTimer);
       _draftSaveQueued = false;
       currentRecordStatus = 'finalised';
       showToast('Finalising…', 'info', 2000);
     }
-    window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
-      if (result && typeof result === 'object') {
-        if (result.error === 'locked') {
-          _finalising = false;
-          if (status !== 'finalised') startAutoSave();
-          showToast('This record is finalised and cannot be modified. Create a new attendance if needed.', 'error', 6000);
-          return;
-        }
-        if (result.error) {
-          _finalising = false;
-          if (status === 'finalised') currentRecordStatus = 'draft';
-          startAutoSave();
-          showToast('Failed to save: ' + (result.message || result.error), 'error', 6000);
-          return;
-        }
-      }
-      if (typeof result === 'number' || typeof result === 'string') currentAttendanceId = result;
+    var _saveAttempt = 0;
+    function doSaveIPC() {
+      _saveAttempt++;
+      var attemptNum = _saveAttempt;
       if (status === 'finalised') {
-        _finalising = false;
-        currentRecordStatus = 'finalised';
-        updateFormBarVisibility();
-        showToast('Record finalised and saved', 'success');
-        setListFilterAndShowList('finalised');
-      } else {
-        showToast('Saved as draft', 'success');
+        console.log('[FINALISE] IPC attempt #' + attemptNum + ': id=' + currentAttendanceId);
       }
-    }).catch(function(err) {
-      _finalising = false;
-      if (status === 'finalised') currentRecordStatus = 'draft';
-      startAutoSave();
-      showToast('Failed to save record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 6000);
-    });
+      window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
+        if (status === 'finalised') {
+          console.log('[FINALISE] IPC #' + attemptNum + ' returned: ' + JSON.stringify(result));
+        }
+        if (result && typeof result === 'object') {
+          if (result.error === 'locked') {
+            /* If the record is already finalised, that's fine — the previous attempt worked */
+            if (status === 'finalised') {
+              console.log('[FINALISE] Record already finalised (locked) — treating as success');
+              _finalising = false;
+              currentRecordStatus = 'finalised';
+              updateFormBarVisibility();
+              showToast('Record finalised and saved', 'success');
+              setListFilterAndShowList('finalised');
+              return;
+            }
+            _finalising = false;
+            startAutoSave();
+            showToast('This record is finalised and cannot be modified. Create a new attendance if needed.', 'error', 6000);
+            return;
+          }
+          if (result.error) {
+            console.error('[FINALISE] IPC #' + attemptNum + ' error: ' + result.error);
+            if (status === 'finalised' && attemptNum < 3) {
+              console.log('[FINALISE] Retrying finalise (attempt ' + (attemptNum + 1) + ')...');
+              setTimeout(doSaveIPC, 500);
+              return;
+            }
+            _finalising = false;
+            if (status === 'finalised') currentRecordStatus = 'draft';
+            startAutoSave();
+            showToast('Failed to save: ' + (result.message || result.error), 'error', 6000);
+            return;
+          }
+        }
+        if (typeof result === 'number' || typeof result === 'string') currentAttendanceId = result;
+        if (status === 'finalised') {
+          /* Verify the DB actually persisted the finalised status */
+          var verifyId = currentAttendanceId;
+          if (verifyId && window.api.attendanceGet) {
+            window.api.attendanceGet(verifyId).then(function(row) {
+              if (row && row.status === 'finalised') {
+                console.log('[FINALISE] VERIFIED: id=' + verifyId + ' is finalised in DB');
+                _finalising = false;
+                currentRecordStatus = 'finalised';
+                updateFormBarVisibility();
+                showToast('Record finalised and saved', 'success');
+                setListFilterAndShowList('finalised');
+              } else if (attemptNum < 3) {
+                console.error('[FINALISE] DB MISMATCH: id=' + verifyId + ' status=' + (row ? row.status : 'MISSING') + ' — retrying');
+                setTimeout(doSaveIPC, 500);
+              } else {
+                console.error('[FINALISE] DB MISMATCH after ' + attemptNum + ' attempts — forcing status');
+                if (window.api.attendanceForceStatus) {
+                  window.api.attendanceForceStatus({ id: verifyId, status: 'finalised' }).then(function(r) {
+                    if (r && r.ok) {
+                      console.log('[FINALISE] FORCE-STATUS succeeded for id=' + verifyId);
+                      _finalising = false;
+                      currentRecordStatus = 'finalised';
+                      updateFormBarVisibility();
+                      showToast('Record finalised and saved', 'success');
+                      setListFilterAndShowList('finalised');
+                    } else {
+                      console.error('[FINALISE] FORCE-STATUS failed:', r);
+                      _finalising = false;
+                      currentRecordStatus = 'draft';
+                      startAutoSave();
+                      showToast('Finalise may not have saved — please try again', 'error', 6000);
+                    }
+                  }).catch(function() {
+                    _finalising = false;
+                    currentRecordStatus = 'draft';
+                    startAutoSave();
+                    showToast('Finalise may not have saved — please try again', 'error', 6000);
+                  });
+                } else {
+                  _finalising = false;
+                  currentRecordStatus = 'draft';
+                  startAutoSave();
+                  showToast('Finalise may not have saved — please try again', 'error', 6000);
+                }
+              }
+            }).catch(function() {
+              _finalising = false;
+              currentRecordStatus = 'finalised';
+              updateFormBarVisibility();
+              showToast('Record finalised and saved', 'success');
+              setListFilterAndShowList('finalised');
+            });
+          } else {
+            _finalising = false;
+            currentRecordStatus = 'finalised';
+            updateFormBarVisibility();
+            showToast('Record finalised and saved', 'success');
+            setListFilterAndShowList('finalised');
+          }
+        } else {
+          showToast('Saved as draft', 'success');
+        }
+      }).catch(function(err) {
+        console.error('[FINALISE] IPC #' + attemptNum + ' FAILED:', err && err.message ? err.message : err);
+        if (status === 'finalised' && attemptNum < 3) {
+          console.log('[FINALISE] Retrying finalise after error (attempt ' + (attemptNum + 1) + ')...');
+          setTimeout(doSaveIPC, 500);
+          return;
+        }
+        _finalising = false;
+        if (status === 'finalised') currentRecordStatus = 'draft';
+        startAutoSave();
+        showToast('Failed to save record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 6000);
+      });
+    }
+    doSaveIPC();
   }
 
   function saveAndExit() {

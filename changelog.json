@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.4.33",
+      "version": "1.4.34",
       "date": "2026-03-11",
       "latest": true,
+      "changes": [
+        "Critical finalise fix: added 3-attempt retry with DB verification after each write — if the normal save doesn't persist 'finalised' status, the app retries automatically and falls back to a direct status update",
+        "Sync pull guard: server can no longer overwrite a locally-finalised record back to draft — finalised records are now protected regardless of version or timestamp",
+        "Autosave hardened: quietSave now also checks the _finalising flag and won't re-queue saves during or after finalisation",
+        "Added attendance-force-status IPC as a last-resort fallback for status writes",
+        "Comprehensive [FINALISE] logging throughout the save flow for easier diagnosis",
+        "111 automated tests (up from 103)"
+      ]
+    },
+    {
+      "version": "1.4.33",
+      "date": "2026-03-11",
+      "latest": false,
       "changes": [
         "Replaced 2-minute backup interval with idle-aware scheduler — backups now defer while typing and only run when there are real changes (minimum 10-minute gap)",
         "Fixed finalise not persisting — autosave race condition eliminated by stopping autosave and setting record status before the save IPC",
