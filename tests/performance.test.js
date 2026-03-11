@@ -222,47 +222,68 @@ describe('Voluntary form and outcome statuses', () => {
     assert.ok(opts.includes("'referred_to_cps'"), 'custody must include referred_to_cps');
   });
 
-  it('voluntary caseOutcomeStatus includes officer_to_notify and referred_to_cps', () => {
-    const volOutcome = appJsSource.match(/id:\s*'volOutcome'[\s\S]*?caseOutcomeStatus[\s\S]*?options:\s*\[([^\]]+)\]/);
-    assert.ok(volOutcome, 'voluntary outcome section must exist');
-    const opts = volOutcome[1];
-    assert.ok(opts.includes("'officer_to_notify'"), 'voluntary must include officer_to_notify');
-    assert.ok(opts.includes("'referred_to_cps'"), 'voluntary must include referred_to_cps');
+  it('voluntary form uses same section IDs as custody (not custom vol* IDs)', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    assert.ok(volStart > 0 && volEnd > volStart, 'voluntaryFormSections must exist');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(volBlock.includes("id: 'caseArrival'"), 'voluntary must use caseArrival section ID');
+    assert.ok(volBlock.includes("id: 'journeyTime'"), 'voluntary must use journeyTime section ID');
+    assert.ok(volBlock.includes("id: 'custody'"), 'voluntary must use custody section ID (renamed title)');
+    assert.ok(volBlock.includes("id: 'offences'"), 'voluntary must use offences section ID');
+    assert.ok(volBlock.includes("id: 'disclosure'"), 'voluntary must use disclosure section ID');
+    assert.ok(volBlock.includes("id: 'attend'"), 'voluntary must use attend section ID');
+    assert.ok(volBlock.includes("id: 'interview'"), 'voluntary must use interview section ID');
+    assert.ok(volBlock.includes("id: 'outcome'"), 'voluntary must use outcome section ID');
+    assert.ok(volBlock.includes("id: 'timeRecording'"), 'voluntary must use timeRecording section ID');
+    assert.ok(!volBlock.includes("id: 'volMatterSetup'"), 'must not use old volMatterSetup ID');
+    assert.ok(!volBlock.includes("id: 'volOutcome'"), 'must not use old volOutcome ID');
   });
 
-  it('voluntary caseOutcomeStatus does NOT include bail_to_return', () => {
-    const volOutcome = appJsSource.match(/id:\s*'volOutcome'[\s\S]*?caseOutcomeStatus[\s\S]*?options:\s*\[([^\]]+)\]/);
-    assert.ok(volOutcome, 'voluntary outcome section must exist');
-    assert.ok(!volOutcome[1].includes("'bail_to_return'"), 'voluntary must not include bail_to_return');
+  it('voluntary form has full disclosure section (co-suspects, CCTV, exhibits, PNC)', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(volBlock.includes("'coSuspects'"), 'voluntary disclosure must have coSuspects');
+    assert.ok(volBlock.includes("'cctvVisual'"), 'voluntary disclosure must have cctvVisual');
+    assert.ok(volBlock.includes("'exhibitsToInspect'"), 'voluntary disclosure must have exhibitsToInspect');
+    assert.ok(volBlock.includes("'pncDisclosed'"), 'voluntary disclosure must have pncDisclosed');
   });
 
-  it('voluntary form includes client personal detail fields', () => {
-    const start = appJsSource.indexOf("id: 'volMatterSetup'");
-    const end = appJsSource.indexOf("id: 'volStatusRights'");
-    assert.ok(start > 0 && end > start, 'volMatterSetup section must exist');
-    const section = appJsSource.substring(start, end);
-    assert.ok(section.includes("'clientPhone'"), 'voluntary must have clientPhone');
-    assert.ok(section.includes("'clientEmail'"), 'voluntary must have clientEmail');
-    assert.ok(section.includes("'address1'"), 'voluntary must have address1');
-    assert.ok(section.includes("'niNumber'"), 'voluntary must have niNumber');
-    assert.ok(section.includes("'nationality'"), 'voluntary must have nationality');
-    assert.ok(section.includes("'gender'"), 'voluntary must have gender');
+  it('voluntary form has full consultation section (conflict, advice, signatures)', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(volBlock.includes("'conflictCheckResult'"), 'voluntary must have conflictCheckResult');
+    assert.ok(volBlock.includes("'clientDecision'"), 'voluntary must have clientDecision');
+    assert.ok(volBlock.includes("'repInstructionsSignature'"), 'voluntary must have repInstructionsSignature');
+    assert.ok(volBlock.includes("'caseAssessment'"), 'voluntary must have caseAssessment');
+    assert.ok(volBlock.includes('adviceChecklist'), 'voluntary must have adviceChecklist');
   });
 
-  it('voluntary form includes firm contact fields', () => {
-    const start = appJsSource.indexOf("id: 'volMatterSetup'");
-    const end = appJsSource.indexOf("id: 'volStatusRights'");
-    assert.ok(start > 0 && end > start, 'volMatterSetup section must exist');
-    const section = appJsSource.substring(start, end);
-    assert.ok(section.includes("'firmContactName'"), 'voluntary must have firmContactName');
-    assert.ok(section.includes("'firmContactPhone'"), 'voluntary must have firmContactPhone');
-    assert.ok(section.includes("'firmContactEmail'"), 'voluntary must have firmContactEmail');
+  it('voluntary form has multi-interview and time recording', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(volBlock.includes('multiInterview: true'), 'voluntary must have multiInterview');
+    assert.ok(volBlock.includes("'travelSocial'"), 'voluntary must have travelSocial time breakdown');
+    assert.ok(volBlock.includes("'invoiceSent'"), 'voluntary must have invoiceSent');
   });
 
-  it('voluntary aftercare does NOT include bailDate', () => {
-    const volAftercare = appJsSource.match(/id:\s*'volAftercare'[\s\S]*?fields:\s*\[([\s\S]*?)\]\s*,?\s*\}/);
-    assert.ok(volAftercare, 'volAftercare section must exist');
-    assert.ok(!volAftercare[1].includes("'bailDate'"), 'voluntary aftercare must not have bailDate');
+  it('voluntary form excludes custody-specific fields', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(!volBlock.includes("'custodyNumber'"), 'voluntary must not have custodyNumber');
+    assert.ok(!volBlock.includes("'groundsForArrest'"), 'voluntary must not have groundsForArrest');
+    assert.ok(!volBlock.includes("'groundsForDetention'"), 'voluntary must not have groundsForDetention');
+    assert.ok(!volBlock.includes("'timeDetentionAuthorised'"), 'voluntary must not have timeDetentionAuthorised');
+    assert.ok(!volBlock.includes("'firstReviewDue'"), 'voluntary must not have PACE reviews');
+    assert.ok(!volBlock.includes("'fitToBeDetained'"), 'voluntary must not have fitToBeDetained');
+    assert.ok(!volBlock.includes("'drugsTest'"), 'voluntary must not have drugsTest');
+    assert.ok(!volBlock.includes("'_pace_searches'"), 'voluntary must not have PACE searches');
+    assert.ok(!volBlock.includes("'_forensic_samples'"), 'voluntary must not have forensic samples');
+    assert.ok(!volBlock.includes("'bail_to_return'"), 'voluntary must not have bail_to_return outcome');
   });
 
   it('home screen has prominent primary cards for custody and voluntary', () => {

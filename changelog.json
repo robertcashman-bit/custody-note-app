@@ -1,20 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.39",
+      "version": "1.4.40",
       "date": "2026-03-11",
       "latest": true,
       "changes": [
-        "Voluntary form overhaul — full client details (phone, email, address, NI, nationality, means), firm contact auto-populate, and bail fields removed from voluntary attendance",
-        "New outcome statuses — added Officer to Notify and Referred to CPS; removed Bail to Return from voluntary",
-        "Prominent home screen — Custody and Voluntary are now large primary cards above other actions",
-        "Compact footer — single-line status bar replaces two-line layout; build date and update button removed",
-        "Reduced background noise — autosave interval increased to 15s; redundant 3-min backup poll removed (event-driven only)",
-        "Compact bottom bar — buttons reduced from 48px to 30px with short labels and keyboard shortcut tooltips",
-        "Scroll performance — chrome-collapse uses transform/opacity instead of max-height; progress dots compacted",
-        "Touch accessibility — WCAG 2.5.5 AAA touch targets (44px) on coarse-pointer devices",
-        "Fix: Auto-updater — corrected installer filenames to use hyphens instead of dots",
-        "Regression coverage — 14 new tests for voluntary form fields, outcome statuses, home layout, footer, scroll, and compact UI"
+        "Voluntary form rebuild — now mirrors the custody form with custody-specific fields removed, instead of a separate rewritten form",
+        "Voluntary form gains full Offences section (4 offences with dates, mode of trial, statute)",
+        "Voluntary form gains full Disclosure section (co-suspects, CCTV, witnesses, exhibits, PNC)",
+        "Voluntary form gains full Consultation section (conflict check, eligibility, case assessment, advice checklist, signatures)",
+        "Voluntary form gains multi-interview structure (same as custody)",
+        "Voluntary form gains full Time Recording section (travel, waiting, time breakdown, case stage, invoice)",
+        "Voluntary-specific fields preserved (voluntary status, free to leave, caution, convert-to-custody, outcome codes CN04-CN13)",
+        "Compact bottom bar — buttons further reduced to 24px min-height"
       ]
     },
     {
