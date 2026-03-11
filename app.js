@@ -15,6 +15,9 @@ var autoSaveTimer = null;
 var _draftSaveInFlight = false;
 var _draftSaveQueued = false;
 var _finalising = false;
+var _lastFinaliseAttempt = null;
+var _lastFinaliseResult = null;
+var _lastDbWrite = null;
 var recentStationIds = [];
 var magistratesCourts = [];
 var _cachedFlatOffences = null;
@@ -2916,6 +2919,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function showAutoSaveIndicator() {
     var now = new Date();
+    _lastDbWrite = now.toISOString();
     var txt = 'Saved ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
@@ -6682,8 +6686,11 @@ var REQUIRED_FIELD_KEYS = [
 
   function saveForm(status) {
     const data = getFormData();
+    if (status === 'finalised') _lastFinaliseAttempt = new Date().toISOString();
     if (!hasMeaningfulData(data)) {
+      console.warn('[FINALISE] hasMeaningfulData returned false — aborting save');
       _finalising = false;
+      if (status === 'finalised') _lastFinaliseResult = 'no_data';
       startAutoSave();
       showToast('Nothing to save — please enter some data first', 'warning');
       return;
@@ -6747,6 +6754,8 @@ var REQUIRED_FIELD_KEYS = [
               if (row && row.status === 'finalised') {
                 console.log('[FINALISE] VERIFIED: id=' + verifyId + ' is finalised in DB');
                 _finalising = false;
+                _lastFinaliseResult = 'success';
+                _lastDbWrite = new Date().toISOString();
                 currentRecordStatus = 'finalised';
                 updateFormBarVisibility();
                 showToast('Record finalised and saved', 'success');
@@ -7024,14 +7033,13 @@ var REQUIRED_FIELD_KEYS = [
   function validateBeforeFinalise() {
     try {
       console.log('[FINALISE] validateBeforeFinalise called. _finalising=' + _finalising +
-        ', _finalisingStartedAt=' + _finalisingStartedAt + ', id=' + currentAttendanceId);
+        ', _finalisingStartedAt=' + _finalisingStartedAt + ', id=' + currentAttendanceId +
+        ', currentRecordStatus=' + currentRecordStatus);
 
-      /* Prevent double-click / concurrent finalise calls — 10s safety timeout
-         so a stuck flag can't lock the user out. */
       if (_finalising) {
         var stuckMs = _finalisingStartedAt ? (Date.now() - _finalisingStartedAt) : 99999;
         if (stuckMs > 10000) {
-          console.log('[FINALISE] Clearing stuck _finalising flag (stuck for ' + stuckMs + 'ms)');
+          console.log('[FINALISE] Clearing stuck _finalising flag (stuck ' + stuckMs + 'ms)');
           _finalising = false;
         } else {
           showToast('Finalising in progress — please wait…', 'info', 2000);
@@ -7039,106 +7047,111 @@ var REQUIRED_FIELD_KEYS = [
         }
       }
 
+      _finalising = true;
+      _finalisingStartedAt = Date.now();
       stopAutoSave();
       clearTimeout(_quietSaveDebounceTimer);
       _draftSaveQueued = false;
 
       collectCurrentData();
-      const isTelForm = formData._formType === 'telephone';
-      const missing = isTelForm ? validateTelephoneForm() : (formData.attendanceMode === 'voluntary' ? validateVoluntaryForm() : validateAttendanceForm());
+      var isTelForm = formData._formType === 'telephone';
+      var missing = isTelForm ? validateTelephoneForm() : (formData.attendanceMode === 'voluntary' ? validateVoluntaryForm() : validateAttendanceForm());
 
-      const dscc = (formData.dsccRef || '').trim().toUpperCase();
+      var dscc = (formData.dsccRef || '').trim().toUpperCase();
       if (dscc && (dscc.length !== 10 || dscc.charAt(9) !== 'A')) {
         missing.push({ key: 'dsccRef', label: 'DSCC Number (must be 10 chars ending in A)', section: 0 });
       }
 
-      const checkDuplicate = (window.api.attendanceCheckDuplicate && currentAttendanceId != null)
-        ? window.api.attendanceCheckDuplicate({
-            dsccRef: (formData.dsccRef || '').trim(),
-            clientName: [(formData.surname || ''), (formData.forename || '')].filter(Boolean).join(', '),
-            attendanceDate: formData.date || '',
-            stationName: formData.policeStationName || '',
-            excludeId: currentAttendanceId,
-          })
-        : Promise.resolve([]);
+      console.log('[FINALISE] Validation: missing=' + missing.length);
 
-      function doFinalise() {
-        console.log('[FINALISE] doFinalise called. _draftSaveInFlight=' + _draftSaveInFlight);
+      function waitForDraftThenFinalise() {
         if (_draftSaveInFlight) {
+          console.log('[FINALISE] Waiting for in-flight draft save…');
           showToast('Saving draft — finalising in a moment…', 'info', 2500);
           var retries = 0;
-          var waitAndFinalise = setInterval(function() {
+          var waitTimer = setInterval(function() {
             if (!_draftSaveInFlight || ++retries > 20) {
-              clearInterval(waitAndFinalise);
-              if (!_draftSaveInFlight) doFinalise();
-              else { _finalising = false; startAutoSave(); showToast('Could not finalise — please try again', 'error', 4000); }
+              clearInterval(waitTimer);
+              if (!_draftSaveInFlight) {
+                doFinaliseWrite();
+              } else {
+                console.error('[FINALISE] Draft save did not complete after ' + retries + ' retries');
+                _finalising = false;
+                startAutoSave();
+                showToast('Could not finalise — please try again', 'error', 4000);
+              }
             }
           }, 300);
           return;
         }
-        showToast('Saving finalised record…', 'info', 3000);
-        const c = typeof calculateProfitCosts === 'function' && calculateProfitCosts();
+        doFinaliseWrite();
+      }
+
+      function doFinaliseWrite() {
+        console.log('[FINALISE] doFinaliseWrite — proceeding to save');
+        showToast('Finalising record…', 'info', 3000);
+        var c = typeof calculateProfitCosts === 'function' && calculateProfitCosts();
         if (c && c.isEscape) {
-          showConfirm('ESCAPE CASE – Total costs exceed £' + (LAA.escapeThreshold || 650) + '. You must submit CRM18 to claim at hourly rates. Continue to finalise?').then(ok => {
+          showConfirm('ESCAPE CASE – Total costs exceed £' + (LAA.escapeThreshold || 650) + '. Submit CRM18 to claim at hourly rates.\n\nContinue to finalise?').then(function(ok) {
             if (ok) saveForm('finalised');
             else { _finalising = false; startAutoSave(); }
-          });
+          }).catch(function() { _finalising = false; startAutoSave(); });
         } else {
           saveForm('finalised');
         }
       }
 
-      function showValidationModal(dupes) {
-        _finalising = false; startAutoSave();
-        const modal = document.getElementById('validation-modal');
-        const list = document.getElementById('validation-list');
-        if (!modal || !list) {
-          showToast('Some fields are incomplete — finalising anyway', 'warning', 3000);
-          _finalising = true;
-          doFinalise();
-          return;
-        }
-        list.innerHTML = '';
-        if (dupes && dupes.length) {
-          dupes.forEach(function(d) {
-            const li = document.createElement('li');
-            li.className = 'val-warning';
-            li.innerHTML = '⚠️ <strong>Possible duplicate billing:</strong> ' + esc(d.matchReason) +
-              ' — Record #' + d.id + ' (' + esc(d.client_name) + ', ' + esc(d.attendance_date) + ')';
-            list.appendChild(li);
-          });
-        }
-        missing.forEach(function(m) {
-          const li = document.createElement('li');
-          li.innerHTML = '<span class="val-section">S' + (m.section + 1) + ': ' + esc(activeFormSections[m.section].title.split('. ')[1] || '') + '</span>' +
-            '<span class="val-field">' + esc(m.label) + '</span>';
-          li.addEventListener('click', function() { modal.classList.add('hidden'); showSection(m.section); });
-          list.appendChild(li);
+      function checkDuplicatesThenFinalise() {
+        var checkDuplicate = (window.api.attendanceCheckDuplicate && currentAttendanceId != null)
+          ? window.api.attendanceCheckDuplicate({
+              dsccRef: (formData.dsccRef || '').trim(),
+              clientName: [(formData.surname || ''), (formData.forename || '')].filter(Boolean).join(', '),
+              attendanceDate: formData.date || '',
+              stationName: formData.policeStationName || '',
+              excludeId: currentAttendanceId,
+            })
+          : Promise.resolve([]);
+
+        checkDuplicate.then(function(dupes) {
+          if (dupes && dupes.length) {
+            console.log('[FINALISE] Possible duplicates found: ' + dupes.length);
+            showConfirm('Possible duplicate billing detected:\n\n' +
+              dupes.map(function(d) { return '• ' + d.matchReason + ' (Record #' + d.id + ')'; }).join('\n') +
+              '\n\nFinalise anyway?', 'Duplicate Warning').then(function(ok) {
+              if (ok) waitForDraftThenFinalise();
+              else { _finalising = false; startAutoSave(); }
+            }).catch(function() { _finalising = false; startAutoSave(); });
+          } else {
+            waitForDraftThenFinalise();
+          }
+        }).catch(function(err) {
+          console.error('[FINALISE] Duplicate check failed:', err);
+          waitForDraftThenFinalise();
         });
-        modal.classList.remove('hidden');
-        console.log('[FINALISE] Validation modal shown with ' + missing.length + ' missing fields. User must click "Finalise Anyway" to proceed.');
-        showToast(missing.length + ' field(s) incomplete — click "Finalise Anyway" to proceed or fix the fields', 'warning', 5000);
       }
 
-      _finalising = true;
-      _finalisingStartedAt = Date.now();
-      console.log('[FINALISE] Starting. missing=' + missing.length + ', checking duplicates...');
-      checkDuplicate.then(function(dupes) {
-        console.log('[FINALISE] Duplicate check done. missing=' + missing.length + ', dupes=' + (dupes ? dupes.length : 0));
-        if (missing.length === 0 && (!dupes || !dupes.length)) {
-          /* No validation issues — proceed directly to finalise (skip informational checklist) */
-          doFinalise();
-          return;
-        }
-        showValidationModal(dupes);
-      }).catch(function(err) {
-        console.error('[FINALISE] Duplicate check failed:', err);
-        if (missing.length === 0) {
-          doFinalise();
-          return;
-        }
-        showValidationModal([]);
-      });
+      if (missing.length > 0) {
+        var fieldList = missing.slice(0, 10).map(function(m) { return '• ' + m.label; }).join('\n');
+        if (missing.length > 10) fieldList += '\n• …and ' + (missing.length - 10) + ' more';
+
+        showConfirm(missing.length + ' field(s) incomplete:\n\n' + fieldList +
+          '\n\nIncomplete records may cause billing difficulties.\nFinalise anyway?', 'Incomplete Fields').then(function(ok) {
+          if (ok) {
+            console.log('[FINALISE] User confirmed finalise with ' + missing.length + ' missing fields');
+            checkDuplicatesThenFinalise();
+          } else {
+            console.log('[FINALISE] User cancelled — returning to form');
+            _finalising = false;
+            startAutoSave();
+          }
+        }).catch(function(err) {
+          console.error('[FINALISE] Confirm dialog error:', err);
+          _finalising = false;
+          startAutoSave();
+        });
+      } else {
+        checkDuplicatesThenFinalise();
+      }
 
     } catch (e) {
       console.error('[FINALISE] UNCAUGHT ERROR in validateBeforeFinalise:', e);
@@ -8505,6 +8518,17 @@ PDF_CASENOTE_ADVERT +
         lines.push('Draft queued:  ' + (_draftSaveQueued ? 'YES' : 'no'));
         lines.push('Autosave timer: ' + (autoSaveTimer ? 'running' : 'stopped'));
         lines.push('Attendance ID: ' + (currentAttendanceId || 'none'));
+        lines.push('');
+        lines.push('=== FINALISE ===');
+        lines.push('Last attempt:  ' + (_lastFinaliseAttempt || 'never'));
+        lines.push('Last result:   ' + (_lastFinaliseResult || 'none'));
+        lines.push('Last DB write: ' + (_lastDbWrite || 'never'));
+        if (currentAttendanceId && window.api.attendanceGet) {
+          window.api.attendanceGet(currentAttendanceId).then(function(row) {
+            if (row) lines.push('DB status:     ' + row.status);
+            summaryEl.textContent = lines.join('\n');
+          }).catch(function() {});
+        }
         summaryEl.textContent = lines.join('\n');
       }
       if (queueEl) {

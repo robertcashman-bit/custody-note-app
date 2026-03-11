@@ -1477,7 +1477,7 @@ async function syncPull(opts) {
        This protects against the scenario where the finalise push failed but
        the server still has an older draft version. */
     const localStatus = (() => {
-      const s = ctx && ctx.dbGet ? ctx.dbGet('SELECT status FROM attendances WHERE id=?', [local.id]) : dbGet('SELECT status FROM attendances WHERE id=?', [local.id]);
+      const s = dbGet('SELECT status FROM attendances WHERE id=?', [local.id]);
       return s ? s.status : null;
     })();
     if (localStatus === 'finalised' && remote.status !== 'finalised') {
@@ -3065,6 +3065,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       [id, action, previousSnapshot, changedFields, now]
     );
     markDbDirty();
+    if (st === 'finalised') flushDb();
     enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert');
     return id;
   }

@@ -46,6 +46,7 @@
 
       var p = document.createElement('p');
       p.className = 'cn-confirm-msg';
+      p.style.whiteSpace = 'pre-line';
       p.textContent = message;
       box.appendChild(p);
 

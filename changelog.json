@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.4.35",
+      "version": "1.4.36",
       "date": "2026-03-11",
       "latest": true,
+      "changes": [
+        "Critical finalise fix: replaced confusing validation modal with simple confirm dialog — user now sees 'X field(s) incomplete. Finalise anyway?' with OK/Cancel",
+        "Fixed sync pull crash: removed undeclared ctx variable reference that caused ReferenceError on every sync pull",
+        "Immediate disk persistence: finalise writes are now flushed to disk immediately (not debounced) to prevent data loss",
+        "Toast rendering fix: confirm dialog messages now display line breaks correctly",
+        "Enhanced debug panel (Ctrl+Shift+D): shows last finalise attempt, result, and DB status",
+        "61 comprehensive automated tests covering the full finalise flow"
+      ]
+    },
+    {
+      "version": "1.4.35",
+      "date": "2026-03-11",
+      "latest": false,
       "changes": [
         "Finalise flow streamlined: removed extra confirmation dialog — clicking Finalise now saves immediately when all fields are complete",
         "Clear progress feedback: toasts shown at every step ('Saving finalised record…', 'Finalise error: …')",
