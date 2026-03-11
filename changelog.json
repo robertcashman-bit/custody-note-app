@@ -5,13 +5,16 @@
       "date": "2026-03-11",
       "latest": true,
       "changes": [
-        "Footer cleanup — version/licence/update actions and online/sync/backup/cloud states are now grouped into compact status chips that are easier to scan",
-        "Calmer status updates — sync and backup indicators now use pushed status events with shorter wording instead of noisy footer text and frequent renderer polling",
-        "Sync tuning — idle background sync now polls every 60 seconds while saves, reconnects, and manual sync still trigger prompt updates",
-        "Backup tuning — quick backups wait at least 15 minutes, require 45 seconds of user idle time, and periodic checks run every 3 minutes",
-        "Scrolling feels more native — removed global smooth-scroll behavior and the permanent main-pane scroll-position hint",
+        "Voluntary form overhaul — full client details (phone, email, address, NI, nationality, means), firm contact auto-populate, and bail fields removed from voluntary attendance",
+        "New outcome statuses — added Officer to Notify and Referred to CPS; removed Bail to Return from voluntary",
+        "Prominent home screen — Custody and Voluntary are now large primary cards above other actions",
+        "Compact footer — single-line status bar replaces two-line layout; build date and update button removed",
+        "Reduced background noise — autosave interval increased to 15s; redundant 3-min backup poll removed (event-driven only)",
+        "Compact bottom bar — buttons reduced from 48px to 30px with short labels and keyboard shortcut tooltips",
+        "Scroll performance — chrome-collapse uses transform/opacity instead of max-height; progress dots compacted",
+        "Touch accessibility — WCAG 2.5.5 AAA touch targets (44px) on coarse-pointer devices",
         "Fix: Auto-updater — corrected installer filenames to use hyphens instead of dots",
-        "Regression coverage — added tests for footer rendering, calmer sync cadence, calmer backup cadence, and scrolling safeguards"
+        "Regression coverage — 14 new tests for voluntary form fields, outcome statuses, home layout, footer, scroll, and compact UI"
       ]
     },
     {

@@ -48,6 +48,11 @@ describe('Performance — typing path', () => {
   it('autosave debounce is 800–1200ms', () => {
     assert.ok(appJsSource.includes('QUIET_SAVE_DEBOUNCE_MS = 1200'), 'QUIET_SAVE_DEBOUNCE_MS should be 1200');
   });
+
+  it('autosave interval is 15 seconds (not 10)', () => {
+    assert.ok(appJsSource.includes('setInterval(quietSave, 15000)'), 'autoSaveTimer should be 15000ms');
+    assert.ok(!appJsSource.includes('setInterval(quietSave, 10000)'), 'autoSaveTimer must not be 10000ms');
+  });
 });
 
 describe('Performance — list rendering', () => {
@@ -95,11 +100,20 @@ describe('Performance — progress bar', () => {
 });
 
 describe('Performance — footer and status rendering', () => {
-  it('uses grouped footer chips instead of separator-heavy footer text', () => {
-    assert.ok(indexHtmlSource.includes('class="footer-meta"'), 'index.html should group footer meta');
+  it('uses single-line footer with grouped status chips', () => {
+    assert.ok(indexHtmlSource.includes('class="footer-row"'), 'index.html should use single footer-row');
     assert.ok(indexHtmlSource.includes('class="footer-status-group"'), 'index.html should group footer statuses');
-    assert.ok(indexHtmlSource.includes('class="footer-action-btn footer-chip"'),
-      'check updates action should render as a footer chip');
+    assert.ok(!indexHtmlSource.includes('class="footer-line1"'), 'footer-line1 should be removed');
+    assert.ok(!indexHtmlSource.includes('class="footer-line2"'), 'footer-line2 should be removed');
+  });
+
+  it('does not include build date or check-for-updates button in footer', () => {
+    assert.ok(!indexHtmlSource.includes('home-check-update-btn'),
+      'footer must not have home-check-update-btn element');
+    const footerStart = indexHtmlSource.indexOf('<footer class="app-footer">');
+    const footerEnd = indexHtmlSource.indexOf('</footer>', footerStart);
+    const footerHtml = indexHtmlSource.substring(footerStart, footerEnd);
+    assert.ok(!footerHtml.includes('>Build <span'), 'footer must not show build date');
   });
 
   it('uses shared footer indicator helper for compact status chips', () => {
@@ -109,11 +123,13 @@ describe('Performance — footer and status rendering', () => {
       'network status should use compact chip wording');
   });
 
-  it('does not poll backup status every 30 seconds anymore', () => {
-    assert.ok(!appJsSource.includes('setInterval(updateBackupStatus, 30000)'),
-      'must remove 30 second backup polling');
-    assert.ok(appJsSource.includes("setInterval(function() { updateBackupStatus(); }, 180000)"),
-      'must use a calmer 3 minute backup fallback poll');
+  it('backup status is event-driven only (no polling)', () => {
+    assert.ok(!appJsSource.includes('setInterval(updateBackupStatus'),
+      'must not poll backup status on an interval');
+    assert.ok(!appJsSource.includes("setInterval(function() { updateBackupStatus"),
+      'must not use setInterval wrapper for backup status');
+    assert.ok(appJsSource.includes('onBackupStatusChanged'),
+      'must use event-driven backup status updates');
   });
 });
 

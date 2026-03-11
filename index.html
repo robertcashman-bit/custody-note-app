@@ -1369,26 +1369,19 @@
 
     </main>
     <footer class="app-footer">
-      <div class="footer-line1">
-        <div class="footer-meta">
-          <span class="footer-chip footer-meta-chip">v<span id="app-version">...</span></span>
-          <span class="footer-chip footer-meta-chip">Build <span id="app-updated">...</span></span>
-          <span id="licence-footer-badge" class="footer-chip footer-licence-chip" style="cursor:pointer;" title="Click to open Licence settings"></span>
-        </div>
-        <div class="footer-utility-group">
-          <span id="update-footer-wrap" style="display:none;"><span id="update-footer-status" class="footer-indicator footer-chip synced" style="cursor:pointer;"></span></span>
-          <button type="button" id="home-check-update-btn" class="footer-action-btn footer-chip" title="Check for a new version">Check for updates</button>
-          <span class="footer-brand">&copy; Defence Legal Services Ltd 2026</span>
-        </div>
-      </div>
-      <div class="footer-line2">
+      <div class="footer-row">
         <div class="footer-status-group">
+          <span class="footer-chip footer-meta-chip">v<span id="app-version">...</span></span>
+          <span id="app-updated" style="display:none;"></span>
+          <span id="licence-footer-badge" class="footer-chip footer-licence-chip" style="cursor:pointer;" title="Click to open Licence settings"></span>
           <span id="net-status-text" class="footer-indicator footer-chip connected">Checking&hellip;</span>
           <span id="backup-status-text" class="footer-indicator footer-chip backup-ok">Backup checking&hellip;</span>
           <span id="cloud-backup-footer-wrap"><span id="cloud-backup-footer-status" class="footer-indicator footer-chip warning" style="cursor:pointer;" title="Open Settings to check Cloud Backup">Local only</span></span>
           <span id="aws-s3-footer-wrap" style="display:none;"><span id="aws-s3-status-footer" class="footer-indicator footer-chip backup-active"></span></span>
           <span id="sync-footer-wrap" style="display:none;"><span id="sync-status-indicator" class="footer-indicator footer-chip synced" style="display:none;"></span></span>
+          <span id="update-footer-wrap" style="display:none;"><span id="update-footer-status" class="footer-indicator footer-chip synced" style="cursor:pointer;"></span></span>
         </div>
+        <span class="footer-brand">&copy; Defence Legal Services Ltd 2026</span>
       </div>
     </footer>
     <!-- First-launch setup modal (2-step wizard) -->

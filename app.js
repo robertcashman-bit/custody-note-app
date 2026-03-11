@@ -2903,7 +2903,7 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── AUTOSAVE (#1) ─── */
   function startAutoSave() {
     stopAutoSave();
-    autoSaveTimer = setInterval(quietSave, 10000);
+    autoSaveTimer = setInterval(quietSave, 15000);
   }
 
   function stopAutoSave() {
@@ -9349,7 +9349,6 @@ PDF_CASENOTE_ADVERT +
       }
     }
     updateBackupStatus();
-    setInterval(function() { updateBackupStatus(); }, 180000);
     if (window.api && window.api.onBackupStatusChanged) {
       window.api.onBackupStatusChanged(function(data) { updateBackupStatus(data); });
     }
