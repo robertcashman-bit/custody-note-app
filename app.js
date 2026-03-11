@@ -7022,126 +7022,130 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── VALIDATION BEFORE FINALISE (#8) ─── */
   var _finalisingStartedAt = 0;
   function validateBeforeFinalise() {
-    /* Prevent double-click / concurrent finalise calls — with safety timeout
-       so a stuck _finalising flag from a previous crashed attempt can't lock
-       the user out permanently. */
-    if (_finalising) {
-      if (_finalisingStartedAt && (Date.now() - _finalisingStartedAt > 30000)) {
-        _finalising = false;
-      } else {
-        showToast('Finalising in progress — please wait…', 'info', 2000);
-        return;
+    try {
+      console.log('[FINALISE] validateBeforeFinalise called. _finalising=' + _finalising +
+        ', _finalisingStartedAt=' + _finalisingStartedAt + ', id=' + currentAttendanceId);
+
+      /* Prevent double-click / concurrent finalise calls — 10s safety timeout
+         so a stuck flag can't lock the user out. */
+      if (_finalising) {
+        var stuckMs = _finalisingStartedAt ? (Date.now() - _finalisingStartedAt) : 99999;
+        if (stuckMs > 10000) {
+          console.log('[FINALISE] Clearing stuck _finalising flag (stuck for ' + stuckMs + 'ms)');
+          _finalising = false;
+        } else {
+          showToast('Finalising in progress — please wait…', 'info', 2000);
+          return;
+        }
       }
-    }
 
-    /* Stop autosave immediately so no draft save can race with the finalise
-       flow while the user is reading the pre-finalise checklist / confirm dialog. */
-    stopAutoSave();
-    clearTimeout(_quietSaveDebounceTimer);
-    _draftSaveQueued = false;
+      stopAutoSave();
+      clearTimeout(_quietSaveDebounceTimer);
+      _draftSaveQueued = false;
 
-    collectCurrentData();
-    const isTelForm = formData._formType === 'telephone';
-    const missing = isTelForm ? validateTelephoneForm() : (formData.attendanceMode === 'voluntary' ? validateVoluntaryForm() : validateAttendanceForm());
+      collectCurrentData();
+      const isTelForm = formData._formType === 'telephone';
+      const missing = isTelForm ? validateTelephoneForm() : (formData.attendanceMode === 'voluntary' ? validateVoluntaryForm() : validateAttendanceForm());
 
-    const dscc = (formData.dsccRef || '').trim().toUpperCase();
-    if (dscc && (dscc.length !== 10 || dscc.charAt(9) !== 'A')) {
-      missing.push({ key: 'dsccRef', label: 'DSCC Number (must be 10 chars ending in A)', section: 0 });
-    }
-
-    /* Duplicate billing check */
-    const checkDuplicate = (window.api.attendanceCheckDuplicate && currentAttendanceId != null)
-      ? window.api.attendanceCheckDuplicate({
-          dsccRef: (formData.dsccRef || '').trim(),
-          clientName: [(formData.surname || ''), (formData.forename || '')].filter(Boolean).join(', '),
-          attendanceDate: formData.date || '',
-          stationName: formData.policeStationName || '',
-          excludeId: currentAttendanceId,
-        })
-      : Promise.resolve([]);
-
-    function doFinalise() {
-      /* If a draft auto-save is still in flight, wait for it to settle before finalising
-         to avoid a race where the draft write arrives at the backend after the finalise write. */
-      if (_draftSaveInFlight) {
-        showToast('Saving draft — finalising in a moment…', 'info', 2500);
-        var retries = 0;
-        var waitAndFinalise = setInterval(function() {
-          if (!_draftSaveInFlight || ++retries > 20) {
-            clearInterval(waitAndFinalise);
-            if (!_draftSaveInFlight) doFinalise();
-            else { _finalising = false; startAutoSave(); showToast('Could not finalise — please try again', 'error', 4000); }
-          }
-        }, 300);
-        return;
+      const dscc = (formData.dsccRef || '').trim().toUpperCase();
+      if (dscc && (dscc.length !== 10 || dscc.charAt(9) !== 'A')) {
+        missing.push({ key: 'dsccRef', label: 'DSCC Number (must be 10 chars ending in A)', section: 0 });
       }
-      const c = typeof calculateProfitCosts === 'function' && calculateProfitCosts();
-      if (c && c.isEscape) {
-        showConfirm('ESCAPE CASE – Total costs exceed £' + (LAA.escapeThreshold || 650) + '. You must submit CRM18 to claim at hourly rates. Continue to finalise?').then(ok => {
-          if (ok) saveForm('finalised');
-          else { _finalising = false; startAutoSave(); }
-        });
-      } else {
-        saveForm('finalised');
+
+      const checkDuplicate = (window.api.attendanceCheckDuplicate && currentAttendanceId != null)
+        ? window.api.attendanceCheckDuplicate({
+            dsccRef: (formData.dsccRef || '').trim(),
+            clientName: [(formData.surname || ''), (formData.forename || '')].filter(Boolean).join(', '),
+            attendanceDate: formData.date || '',
+            stationName: formData.policeStationName || '',
+            excludeId: currentAttendanceId,
+          })
+        : Promise.resolve([]);
+
+      function doFinalise() {
+        console.log('[FINALISE] doFinalise called. _draftSaveInFlight=' + _draftSaveInFlight);
+        if (_draftSaveInFlight) {
+          showToast('Saving draft — finalising in a moment…', 'info', 2500);
+          var retries = 0;
+          var waitAndFinalise = setInterval(function() {
+            if (!_draftSaveInFlight || ++retries > 20) {
+              clearInterval(waitAndFinalise);
+              if (!_draftSaveInFlight) doFinalise();
+              else { _finalising = false; startAutoSave(); showToast('Could not finalise — please try again', 'error', 4000); }
+            }
+          }, 300);
+          return;
+        }
+        showToast('Saving finalised record…', 'info', 3000);
+        const c = typeof calculateProfitCosts === 'function' && calculateProfitCosts();
+        if (c && c.isEscape) {
+          showConfirm('ESCAPE CASE – Total costs exceed £' + (LAA.escapeThreshold || 650) + '. You must submit CRM18 to claim at hourly rates. Continue to finalise?').then(ok => {
+            if (ok) saveForm('finalised');
+            else { _finalising = false; startAutoSave(); }
+          });
+        } else {
+          saveForm('finalised');
+        }
       }
-    }
-    function showPreFinaliseChecklistThenFinalise() {
-      const inst = formData.instructionDateTime || '—';
-      const fc = (formData.timeFirstContactWithClient || formData.timeArrival || '').trim() || '—';
-      const sbt = (formData.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ') || '—';
-      const conflict = formData.conflictCheckResult || '—';
-      const outcome = formData.outcomeDecision || '—';
-      const msg = 'LAA key items before finalising:\n\n' +
-        '• Instruction time: ' + inst + '\n' +
-        '• First contact: ' + fc + '\n' +
-        '• Sufficient Benefit Test: ' + sbt + '\n' +
-        '• Conflict check: ' + conflict + '\n' +
-        '• Outcome: ' + outcome + '\n\nContinue to finalise?';
-      showConfirm(msg, 'Pre-finalise checklist').then(ok => {
-        if (ok) doFinalise();
-        else { _finalising = false; startAutoSave(); }
-      });
-    }
-    function showValidationModal(dupes) {
-      _finalising = false; startAutoSave(); /* Release lock — user must review issues first */
-      const modal = document.getElementById('validation-modal');
-      const list = document.getElementById('validation-list');
-      if (!modal || !list) return;
-      list.innerHTML = '';
-      if (dupes && dupes.length) {
-        dupes.forEach(function(d) {
+
+      function showValidationModal(dupes) {
+        _finalising = false; startAutoSave();
+        const modal = document.getElementById('validation-modal');
+        const list = document.getElementById('validation-list');
+        if (!modal || !list) {
+          showToast('Some fields are incomplete — finalising anyway', 'warning', 3000);
+          _finalising = true;
+          doFinalise();
+          return;
+        }
+        list.innerHTML = '';
+        if (dupes && dupes.length) {
+          dupes.forEach(function(d) {
+            const li = document.createElement('li');
+            li.className = 'val-warning';
+            li.innerHTML = '⚠️ <strong>Possible duplicate billing:</strong> ' + esc(d.matchReason) +
+              ' — Record #' + d.id + ' (' + esc(d.client_name) + ', ' + esc(d.attendance_date) + ')';
+            list.appendChild(li);
+          });
+        }
+        missing.forEach(function(m) {
           const li = document.createElement('li');
-          li.className = 'val-warning';
-          li.innerHTML = '⚠️ <strong>Possible duplicate billing:</strong> ' + esc(d.matchReason) +
-            ' — Record #' + d.id + ' (' + esc(d.client_name) + ', ' + esc(d.attendance_date) + ')';
+          li.innerHTML = '<span class="val-section">S' + (m.section + 1) + ': ' + esc(activeFormSections[m.section].title.split('. ')[1] || '') + '</span>' +
+            '<span class="val-field">' + esc(m.label) + '</span>';
+          li.addEventListener('click', function() { modal.classList.add('hidden'); showSection(m.section); });
           list.appendChild(li);
         });
+        modal.classList.remove('hidden');
+        console.log('[FINALISE] Validation modal shown with ' + missing.length + ' missing fields. User must click "Finalise Anyway" to proceed.');
+        showToast(missing.length + ' field(s) incomplete — click "Finalise Anyway" to proceed or fix the fields', 'warning', 5000);
       }
-      missing.forEach(function(m) {
-        const li = document.createElement('li');
-        li.innerHTML = '<span class="val-section">S' + (m.section + 1) + ': ' + esc(activeFormSections[m.section].title.split('. ')[1] || '') + '</span>' +
-          '<span class="val-field">' + esc(m.label) + '</span>';
-        li.addEventListener('click', function() { modal.classList.add('hidden'); showSection(m.section); });
-        list.appendChild(li);
-      });
-      modal.classList.remove('hidden');
-    }
 
-    _finalising = true;
-    _finalisingStartedAt = Date.now();
-    checkDuplicate.then(function(dupes) {
-      if (missing.length === 0 && (!dupes || !dupes.length)) { showPreFinaliseChecklistThenFinalise(); return; }
-      const modal = document.getElementById('validation-modal');
-      const list = document.getElementById('validation-list');
-      if (!modal || !list) { doFinalise(); return; }
-      showValidationModal(dupes);
-    }).catch(function() {
-      if (missing.length === 0) { showPreFinaliseChecklistThenFinalise(); return; }
-      const modal = document.getElementById('validation-modal');
-      const list = document.getElementById('validation-list');
-      if (!modal || !list) { doFinalise(); return; }
-      showValidationModal([]);
-    });
+      _finalising = true;
+      _finalisingStartedAt = Date.now();
+      console.log('[FINALISE] Starting. missing=' + missing.length + ', checking duplicates...');
+      checkDuplicate.then(function(dupes) {
+        console.log('[FINALISE] Duplicate check done. missing=' + missing.length + ', dupes=' + (dupes ? dupes.length : 0));
+        if (missing.length === 0 && (!dupes || !dupes.length)) {
+          /* No validation issues — proceed directly to finalise (skip informational checklist) */
+          doFinalise();
+          return;
+        }
+        showValidationModal(dupes);
+      }).catch(function(err) {
+        console.error('[FINALISE] Duplicate check failed:', err);
+        if (missing.length === 0) {
+          doFinalise();
+          return;
+        }
+        showValidationModal([]);
+      });
+
+    } catch (e) {
+      console.error('[FINALISE] UNCAUGHT ERROR in validateBeforeFinalise:', e);
+      _finalising = false;
+      startAutoSave();
+      showToast('Finalise error: ' + (e && e.message ? e.message : 'Unknown error'), 'error', 6000);
+    }
   }
 
   /* ─── SECTIONS INDEX WITH PROGRESS (#7) ─── */
