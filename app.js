@@ -1575,11 +1575,10 @@ var LAA = {
     /* ─────── 8. OUTCOME ─────── */
     {
       id: 'outcome', title: '8. Outcome',
-      keyFields: ['outcomeDecision', 'caseOutcomeStatus'],
+      keyFields: ['outcomeDecision'],
       fields: [
-        { key: 'caseOutcomeStatus', label: 'Case outcome status', type: 'select', options: ['unknown','ongoing','officer_to_notify','referred_to_cps','released_under_investigation','charged','nfa','concluded'], cols: 2 },
         { key: 'interviewCompleted', label: 'Interview completed?', type: 'select', options: ['Yes','No'] },
-        { key: 'outcomeDecision', label: 'Decision', type: 'select', options: ['Charged without Bail','Charged with Bail','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Community Resolution','Penalty Notice (PND)','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
+        { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Referred to diversion programme','Further voluntary interview required','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
@@ -1588,19 +1587,9 @@ var LAA = {
         ], cols: 2 },
         { key: 'stageReachedOrFeeCode', label: 'Stage reached / Fee code', type: 'text', placeholder: 'e.g. INVC', cols: 2 },
         { key: 'preChargeEngagementFlag', label: 'Pre-charge engagement?', type: 'select', options: ['Yes','No','N/A'] },
-        { key: 'outcomeOffence1Details', label: 'Charge 1 \u2013 Details', type: 'text', cols: 2, showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail'] } },
-        { key: 'outcomeOffence1Statute', label: 'Charge 1 \u2013 Statute', type: 'text', cols: 2, showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail'] } },
-        { key: 'outcomeOffence2Details', label: 'Charge 2 \u2013 Details', type: 'text', cols: 2, showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail'] } },
-        { key: 'outcomeOffence2Statute', label: 'Charge 2 \u2013 Statute', type: 'text', cols: 2, showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail'] } },
-        { key: 'courtName', label: 'Court Name', type: 'text', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail'] } },
-        { key: 'courtDate', label: 'Court Date', type: 'date', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail'] } },
         { key: 'nextLocationName', label: 'Next Location', type: 'text' },
         { key: 'nextDate', label: 'Next Date', type: 'date' },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
-        { key: '_h_aftercare', label: 'Client Aftercare', type: 'sectionHeading' },
-        { key: 'whatExplainedAfterInterview', label: 'What was explained after interview', type: 'textarea', cols: 2 },
-        { key: 'nextStepsForClient', label: 'Next steps for client', type: 'textarea', cols: 2 },
-        { key: 'followUpTasks', label: 'Follow-up tasks', type: 'textarea', cols: 2 },
       ],
     },
 
@@ -3121,17 +3110,6 @@ var REQUIRED_FIELD_KEYS = [
     return '';
   }
 
-  function autoFetchNextInvoice() {
-    if (!window.api || typeof window.api.quickfileFetchInvoices !== 'function') return;
-    window.api.quickfileFetchInvoices().then(res => {
-      const next = nextInvoiceFromResult(res);
-      if (next) {
-        formData.fileReference = next;
-        const inp = document.querySelector('input[name="fileReference"]');
-        if (inp) inp.value = next;
-      }
-    }).catch(() => {});
-  }
 
   /* ─── AUTOSAVE (#1) ─── */
   function startAutoSave() {
@@ -3402,24 +3380,6 @@ var REQUIRED_FIELD_KEYS = [
       if (cloudUrlEl) cloudUrlEl.value = s.cloudBackupUrl || '';
       const cloudTokenEl = document.getElementById('setting-cloud-backup-token');
       if (cloudTokenEl) cloudTokenEl.value = s.cloudBackupToken || '';
-      const qfAcc = document.getElementById('setting-quickfile-account');
-      const qfKey = document.getElementById('setting-quickfile-apikey');
-      const qfApp = document.getElementById('setting-quickfile-appid');
-      if (qfAcc) qfAcc.value = s.quickfileAccountNumber || '';
-      if (qfKey) qfKey.value = s.quickfileApiKey || '';
-      if (qfApp) qfApp.value = s.quickfileAppId || '';
-      if (s.laaRates) {
-        try {
-          const lr = typeof s.laaRates === 'string' ? JSON.parse(s.laaRates) : s.laaRates;
-          if (lr.fixedFee) { LAA.fixedFee = +lr.fixedFee; document.getElementById('rate-fixedFee').value = lr.fixedFee; }
-          if (lr.escapeThreshold) { LAA.escapeThreshold = +lr.escapeThreshold; document.getElementById('rate-escapeThreshold').value = lr.escapeThreshold; }
-          if (lr.attendanceSocial) { LAA.national.attendance.social = +lr.attendanceSocial; document.getElementById('rate-attendanceSocial').value = lr.attendanceSocial; }
-          if (lr.attendanceUnsocial) { LAA.national.attendance.unsocial = +lr.attendanceUnsocial; document.getElementById('rate-attendanceUnsocial').value = lr.attendanceUnsocial; }
-          if (lr.travelWaiting) { LAA.national.travel.social = +lr.travelWaiting; LAA.national.travel.unsocial = +lr.travelWaiting; LAA.national.waiting.social = +lr.travelWaiting; LAA.national.waiting.unsocial = +lr.travelWaiting; document.getElementById('rate-travelWaiting').value = lr.travelWaiting; }
-          if (lr.mileage) { LAA.mileageRate = +lr.mileage; document.getElementById('rate-mileage').value = lr.mileage; }
-          if (lr.vat) { LAA.vatRate = +lr.vat / 100; document.getElementById('rate-vat').value = lr.vat; }
-        } catch (_) {}
-      }
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
       const dm = document.getElementById('setting-dark-mode');
@@ -3505,21 +3465,9 @@ var REQUIRED_FIELD_KEYS = [
       offsiteBackupFolder: document.getElementById('setting-offsite-backup-folder')?.value?.trim() || '',
       cloudBackupUrl: document.getElementById('setting-cloud-backup-url')?.value?.trim() || '',
       cloudBackupToken: document.getElementById('setting-cloud-backup-token')?.value?.trim() || '',
-      quickfileAccountNumber: document.getElementById('setting-quickfile-account')?.value?.trim() || '',
-      quickfileApiKey: document.getElementById('setting-quickfile-apikey')?.value?.trim() || '',
-      quickfileAppId: document.getElementById('setting-quickfile-appid')?.value?.trim() || '',
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
       darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
       fontSize: document.getElementById('setting-font-size')?.value || '16',
-      laaRates: JSON.stringify({
-        fixedFee: document.getElementById('rate-fixedFee')?.value || '320.00',
-        escapeThreshold: document.getElementById('rate-escapeThreshold')?.value || '650.00',
-        attendanceSocial: document.getElementById('rate-attendanceSocial')?.value || '62.16',
-        attendanceUnsocial: document.getElementById('rate-attendanceUnsocial')?.value || '77.68',
-        travelWaiting: document.getElementById('rate-travelWaiting')?.value || '30.36',
-        mileage: document.getElementById('rate-mileage')?.value || '0.45',
-        vat: document.getElementById('rate-vat')?.value || '20',
-      }),
     }).then(() => showToast('Settings saved', 'success'));
   }
 
@@ -3678,56 +3626,6 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
-  function importFirmsFromQuickFile() {
-    var btn = document.getElementById('btn-import-qf-clients');
-    var status = document.getElementById('qf-import-status');
-    if (!window.api || !window.api.quickfileFetchClients) {
-      showToast('QuickFile client import is not available', 'error');
-      return;
-    }
-    btn.disabled = true;
-    btn.textContent = 'Fetching from QuickFile…';
-    if (status) status.textContent = '';
-    window.api.quickfileFetchClients().then(function (res) {
-      var clients = res.clients || [];
-      if (!clients.length) {
-        showToast('No clients found in your QuickFile account', 'warning');
-        return;
-      }
-      var existingNames = firms.map(function (f) { return f.name.toLowerCase().trim(); });
-      var added = 0;
-      var skipped = 0;
-      var saves = [];
-      clients.forEach(function (c) {
-        if (!c.companyName) return;
-        if (existingNames.indexOf(c.companyName.toLowerCase().trim()) >= 0) {
-          skipped++;
-          return;
-        }
-        added++;
-        saves.push(window.api.firmSave({
-          name: c.companyName,
-          contact_name: c.contactName || '',
-          contact_email: c.email || '',
-          contact_phone: c.telephone || '',
-          address: c.address || ''
-        }));
-      });
-      return Promise.all(saves).then(function () {
-        loadFirmsList();
-        window.api.firmsList().then(function (f) { firms = f; });
-        var msg = added + ' firm' + (added !== 1 ? 's' : '') + ' imported';
-        if (skipped) msg += ', ' + skipped + ' already existed';
-        if (status) status.textContent = msg;
-        showToast(msg, 'success');
-      });
-    }).catch(function (err) {
-      showToast('QuickFile error: ' + (err.message || err), 'error');
-    }).finally(function () {
-      btn.disabled = false;
-      btn.textContent = 'Import firms from QuickFile';
-    });
-  }
 
   /* ─── DARK MODE (#13) ─── */
   function applyDarkMode(enabled) {
@@ -4221,7 +4119,8 @@ var REQUIRED_FIELD_KEYS = [
     var w = [];
     if (d._formType === 'telephone') return w;
     if (!(d.matterTypeCode || '').trim()) w.push('Criminal matter type missing');
-    var caseConcluded = (d.caseOutcomeStatus || '') === 'concluded';
+    var volOd = (d.outcomeDecision || '').trim();
+    var caseConcluded = d.attendanceMode === 'voluntary' ? (volOd && volOd !== 'Ongoing / Unknown') : (d.caseOutcomeStatus || '') === 'concluded';
     if (caseConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code missing (matter concluded)');
     if (d.attendanceMode === 'voluntary') {
       if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim()) w.push('DSCC reference or reason missing');
@@ -7230,7 +7129,8 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── VALIDATION: VOLUNTARY ATTENDANCE FORM ─── */
   function validateVoluntaryForm() {
     var m = [];
-    var volCaseConcluded = (formData.caseOutcomeStatus || '') === 'concluded';
+    var od = (formData.outcomeDecision || '').trim();
+    var volCaseConcluded = od && od !== 'Ongoing / Unknown';
     var required = [
       { key: 'date', label: 'Date of attendance', section: 0 },
       { key: 'instructionSource', label: 'Instruction source', section: 0 },
@@ -10635,7 +10535,6 @@ PDF_CASENOTE_ADVERT +
     if (firmPhoneInput) attachPhoneValidation(firmPhoneInput);
     var firmEmailInput = document.getElementById('new-firm-email');
     if (firmEmailInput) attachEmailValidation(firmEmailInput);
-    document.getElementById('btn-import-qf-clients')?.addEventListener('click', importFirmsFromQuickFile);
     ['crm1', 'crm2', 'crm3', 'declaration'].forEach(function(ft) {
       var btn = document.getElementById('settings-laa-' + ft);
       if (btn) btn.addEventListener('click', function() {
@@ -10862,9 +10761,6 @@ PDF_CASENOTE_ADVERT +
     const settingsFields = [
       ['setting-email', 'email'],
       ['setting-dscc-pin', 'dsccPin'],
-      ['setting-quickfile-account', 'quickfileAccountNumber'],
-      ['setting-quickfile-apikey', 'quickfileApiKey'],
-      ['setting-quickfile-appid', 'quickfileAppId'],
       ['setting-backup-folder', 'backupFolder'],
       ['setting-offsite-backup-folder', 'offsiteBackupFolder'],
       ['setting-cloud-backup-url', 'cloudBackupUrl'],
@@ -10886,31 +10782,6 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('setting-fee-earner-name')?.addEventListener('input', debounce((e) => {
       window.api.setSettings({ feeEarnerNameDefault: e.target.value.trim() }).then(showSettingsSavedToast);
     }, 800));
-
-    // LAA rate fields — save all rates as a JSON blob whenever any rate changes
-    function saveLaaRates() {
-      const rates = {
-        fixedFee: document.getElementById('rate-fixedFee')?.value || '320.00',
-        escapeThreshold: document.getElementById('rate-escapeThreshold')?.value || '650.00',
-        attendanceSocial: document.getElementById('rate-attendanceSocial')?.value || '62.16',
-        attendanceUnsocial: document.getElementById('rate-attendanceUnsocial')?.value || '77.68',
-        travelWaiting: document.getElementById('rate-travelWaiting')?.value || '30.36',
-        mileage: document.getElementById('rate-mileage')?.value || '0.45',
-        vat: document.getElementById('rate-vat')?.value || '20',
-      };
-      // Also update the in-memory LAA object so fee calculations use new rates immediately
-      if (rates.fixedFee) LAA.fixedFee = +rates.fixedFee;
-      if (rates.escapeThreshold) LAA.escapeThreshold = +rates.escapeThreshold;
-      if (rates.attendanceSocial) LAA.national.attendance.social = +rates.attendanceSocial;
-      if (rates.attendanceUnsocial) LAA.national.attendance.unsocial = +rates.attendanceUnsocial;
-      if (rates.travelWaiting) { LAA.national.travel.social = +rates.travelWaiting; LAA.national.travel.unsocial = +rates.travelWaiting; LAA.national.waiting.social = +rates.travelWaiting; LAA.national.waiting.unsocial = +rates.travelWaiting; }
-      if (rates.mileage) LAA.mileageRate = +rates.mileage;
-      if (rates.vat) LAA.vatRate = +rates.vat / 100;
-      window.api.setSettings({ laaRates: JSON.stringify(rates) }).then(showSettingsSavedToast);
-    }
-    ['rate-fixedFee','rate-escapeThreshold','rate-attendanceSocial','rate-attendanceUnsocial','rate-travelWaiting','rate-mileage','rate-vat'].forEach(id => {
-      document.getElementById(id)?.addEventListener('change', debounce(saveLaaRates, 600));
-    });
 
     document.getElementById('setting-dark-mode')?.addEventListener('change', (e) => {
       applyDarkMode(e.target.checked);

@@ -1517,9 +1517,6 @@ html.dark .form-group.firm-field select {
 }
 .form-group.file-reference-field label { font-size: 0.95rem; }
 .form-group.file-reference-field input { font-size: 1rem; font-weight: 600; }
-.form-group.file-reference-field .quickfile-row { margin-top: 0.5rem; }
-.form-group.file-reference-field .btn-quickfile { font-size: 0.85rem; }
-
 /* Sufficient Benefit Test (LAA) */
 .field-hint.sbt-hint {
   font-size: 0.8rem;
@@ -2080,8 +2077,6 @@ html.dark .interview-notes-warning {
 #view-settings .settings-card input[type="number"],
 #view-settings .settings-card input[type="password"] { color: #1e293b; background: #f8fafc; }
 #view-settings .settings-card .settings-path-display { color: #1e293b; background: #f1f5f9; }
-#view-settings .rates-table td { color: #1e293b; }
-#view-settings .rate-input { color: #1e293b; background: #f8fafc; }
 html.dark #view-settings .settings-card .settings-hint { color: #94a3b8; }
 html.dark #view-settings .settings-card label { color: var(--text); }
 html.dark #view-settings .settings-card input[type="text"],
@@ -2090,8 +2085,6 @@ html.dark #view-settings .settings-card input[type="url"],
 html.dark #view-settings .settings-card input[type="number"],
 html.dark #view-settings .settings-card input[type="password"] { color: var(--text); background: var(--surface-alt); }
 html.dark #view-settings .settings-card .settings-path-display { color: var(--text); background: var(--surface-alt); }
-html.dark #view-settings .rates-table td { color: var(--text); }
-html.dark #view-settings .rate-input { color: var(--text); background: var(--surface-alt); }
 .laa-link { display: inline-block; margin-top: 0.5rem; text-decoration: none; color: inherit; }
 
 /* Useful links grid */
@@ -2211,20 +2204,6 @@ html.dark .useful-links-category { color: var(--corporate-accent, #93c5fd); }
   display: none; align-items: center; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;
 }
 .firms-page-info { font-size: 0.9rem; color: var(--text-muted); }
-
-/* ═══ RATES TABLE ═══ */
-.rates-table { width: 100%; max-width: 400px; border-collapse: collapse; }
-.rates-table td {
-  padding: 4px 8px; font-size: 0.9rem;
-  border-bottom: 1px solid var(--border); color: var(--on-surface);
-}
-.rates-table td:last-child { text-align: right; }
-.rate-input {
-  width: 80px; padding: 0.3rem 0.4rem; border: 1px solid var(--border);
-  border-radius: 4px; font-size: 0.88rem; text-align: right;
-  background: var(--input-bg); color: var(--on-surface);
-}
-.rate-input:focus { outline: none; border-color: var(--primary); }
 
 /* ═══ KEYBOARD SHORTCUTS HINT ═══ */
 .shortcut-hint {
@@ -2707,7 +2686,6 @@ kbd {
   .help-content { padding: 0 0.9rem 0.9rem; }
   .template-dropdown { min-width: 220px; left: auto; right: 0; }
   .qc-form { padding: 0.75rem 0.5rem; }
-  .rates-table { max-width: 100%; }
   .font-size-row { max-width: 100%; }
   .theme-picker { gap: 0.4rem; }
   .cn-modal-inner { width: calc(100vw - 1.5rem); }

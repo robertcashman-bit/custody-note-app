@@ -1,9 +1,24 @@
 {
   "releases": [
     {
-      "version": "1.4.40",
+      "version": "1.4.41",
       "date": "2026-03-11",
       "latest": true,
+      "changes": [
+        "Voluntary outcome simplified — merged caseOutcomeStatus and outcomeDecision into single Outcome field",
+        "Added new voluntary outcomes: Officer to Notify, Released Under Investigation, Youth caution, Referred to diversion programme, Further voluntary interview required",
+        "Removed Charged options from voluntary form (use convert-to-custody instead)",
+        "Removed Client Aftercare section from voluntary form",
+        "Removed QuickFile integration from settings",
+        "Removed editable LAA fee rates from settings (hardcoded defaults retained)",
+        "Added Additional Modules Installed section to settings (placeholder for future modules)",
+        "Website changelog now shows only the last 5 releases"
+      ]
+    },
+    {
+      "version": "1.4.40",
+      "date": "2026-03-11",
+      "latest": false,
       "changes": [
         "Voluntary form rebuild — now mirrors the custody form with custody-specific fields removed, instead of a separate rewritten form",
         "Voluntary form gains full Offences section (4 offences with dates, mode of trial, statute)",

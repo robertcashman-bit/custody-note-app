@@ -234,24 +234,24 @@ describe('Finalise: Voluntary form validation', () => {
   try { validate = buildVoluntaryValidator(); } catch (_) {}
 
   it('passes with caseOutcomeStatus=unknown', { skip: !validate }, () => {
-    const data = baseVoluntaryData({ caseOutcomeStatus: 'unknown' });
+    const data = baseVoluntaryData({ outcomeDecision: '' });
     const errors = validate(data);
     const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
     assert.strictEqual(outcomeErr, undefined);
   });
 
-  it('passes with caseOutcomeStatus=bail_to_return', { skip: !validate }, () => {
-    const data = baseVoluntaryData({ caseOutcomeStatus: 'bail_to_return' });
+  it('passes with outcomeDecision=Ongoing / Unknown', { skip: !validate }, () => {
+    const data = baseVoluntaryData({ outcomeDecision: 'Ongoing / Unknown' });
     const errors = validate(data);
-    const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
+    const outcomeErr = errors.find(e => e.key === 'outcomeCode');
     assert.strictEqual(outcomeErr, undefined);
   });
 
   it('requires outcomeDecision when concluded', { skip: !validate }, () => {
-    const data = baseVoluntaryData({ caseOutcomeStatus: 'concluded' });
+    const data = baseVoluntaryData({ outcomeDecision: 'Released NFA', outcomeCode: '' });
     const errors = validate(data);
-    const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
-    assert.ok(outcomeErr);
+    const codeErr = errors.find(e => e.key === 'outcomeCode');
+    assert.ok(codeErr, 'outcomeCode should be required when a definitive outcome is selected');
   });
 });
 

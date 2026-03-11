@@ -426,10 +426,6 @@
               <input type="email" id="new-firm-email" placeholder="Contact email">
               <button type="button" id="add-firm-btn" class="btn btn-primary">Add Firm</button>
             </div>
-            <div style="margin-top:0.75rem;">
-              <button type="button" id="btn-import-qf-clients" class="btn btn-secondary">Import firms from QuickFile</button>
-              <span id="qf-import-status" class="settings-hint" style="margin-left:0.5rem;"></span>
-            </div>
           </div>
           <div id="firms-use-existing-section" class="firms-section-hidden">
             <label for="firms-search-input" class="sr-only">Search firms</label>
@@ -636,16 +632,6 @@
           <input type="email" id="setting-email" placeholder="you@example.com">
         </div>
 
-        <div class="settings-card">
-          <h2>QuickFile (invoice numbers)</h2>
-          <p class="settings-hint">Link the File reference / Invoice number field to your QuickFile account. Get your API key and create an app in QuickFile &rarr; Account settings &rarr; 3rd Party Integrations.</p>
-          <label>Account number</label>
-          <input type="text" id="setting-quickfile-account" placeholder="Your QuickFile account number" autocomplete="off">
-          <label>API key</label>
-          <input type="password" id="setting-quickfile-apikey" placeholder="API key from QuickFile" autocomplete="off">
-          <label>Application ID</label>
-          <input type="text" id="setting-quickfile-appid" placeholder="From your registered QuickFile app" autocomplete="off">
-        </div>
 
         <div class="settings-card">
           <h2>Appearance</h2>
@@ -811,7 +797,7 @@
           <p id="settings-offsite-backup-path-display" class="settings-path-display">Loading...</p>
           <label>Connectivity</label>
           <p id="settings-connectivity" class="settings-path-display">Checking...</p>
-          <p class="settings-hint">The app works fully offline. All data is stored locally on this computer in an SQLite database. No internet connection is required for core functionality. The QuickFile invoicing integration requires internet when used.</p>
+          <p class="settings-hint">The app works fully offline. All data is stored locally on this computer in an SQLite database. No internet connection is required for core functionality.</p>
         </div>
 
         <div class="settings-card">
@@ -823,47 +809,10 @@
           <button type="button" class="btn btn-secondary laa-link" id="settings-laa-declaration" style="margin-top:0.5rem;display:block;text-align:left;">Applicant Declaration (v7 Feb 2025)</button>
         </div>
 
-        <div class="settings-card">
-          <h2>LAA Fee Rates (editable)</h2>
-          <div style="background:#eff6ff;border:1px solid #3b82f6;border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.85rem;">
-            <p style="margin:0 0 0.3rem 0;font-weight:700;font-size:0.9rem;color:#1e40af;">&#128196; Standard Crime Contract 2025 &mdash; SI 2025/1251 (in force 22 Dec 2025)</p>
-            <p style="margin:0 0 0.4rem 0;font-size:0.82rem;color:#1e3a8a;">Fixed fee and escape threshold are <strong>confirmed and harmonised</strong> across all police stations in England &amp; Wales. The hourly attendance rates for escape fee calculation are set in Schedule 4 of the Remuneration Regulations &mdash; <strong>check Section 5 of your Standard Crime Contract 2025</strong> or <a href="https://www.legislation.gov.uk/uksi/2025/1251/made" target="_blank" rel="noopener" style="color:#1e40af;font-weight:600;">SI 2025/1251</a> and edit the values below to match.</p>
-            <p style="margin:0;font-size:0.8rem;color:#1e3a8a;">&#9888; The attendance hourly rates below are editable defaults &mdash; verify them against your own contract before using for LAA claims.</p>
-          </div>
-          <table class="rates-table rates-editable">
-            <tr>
-              <td>Fixed Fee (all stations)<br><span style="font-size:0.78rem;color:#059669;font-weight:600;">&#10003; Confirmed &mdash; harmonised for every police station in England &amp; Wales (SI 2025/1251, para 2(4))</span></td>
-              <td>&pound;<input type="number" id="rate-fixedFee" step="0.01" value="320.00" class="rate-input"></td>
-            </tr>
-            <tr>
-              <td>Escape Threshold (all stations)<br><span style="font-size:0.78rem;color:#059669;font-weight:600;">&#10003; Confirmed &mdash; harmonised for every police station (SI 2025/1251, para 2(5))</span></td>
-              <td>&pound;<input type="number" id="rate-escapeThreshold" step="0.01" value="650.00" class="rate-input"></td>
-            </tr>
-            <tr>
-              <td>Attendance (social hours) /hr<br><span style="font-size:0.78rem;color:#d97706;">&#9888; Verify against Schedule 4 of your contract &mdash; court duty national rate is £62.16 (SI 2025/1251)</span></td>
-              <td>&pound;<input type="number" id="rate-attendanceSocial" step="0.01" value="62.16" class="rate-input"></td>
-            </tr>
-            <tr>
-              <td>Attendance (unsocial hours) /hr<br><span style="font-size:0.78rem;color:#d97706;">&#9888; Verify against Schedule 4 of your contract &mdash; court duty national rate is £77.68 (SI 2025/1251)</span></td>
-              <td>&pound;<input type="number" id="rate-attendanceUnsocial" step="0.01" value="77.68" class="rate-input"></td>
-            </tr>
-            <tr>
-              <td>Travel &amp; Waiting /hr<br><span style="font-size:0.78rem;color:#059669;font-weight:600;">&#10003; Confirmed &mdash; out-of-hours / call-out rate (SI 2025/1251, multiple tables)</span></td>
-              <td>&pound;<input type="number" id="rate-travelWaiting" step="0.01" value="30.36" class="rate-input"></td>
-            </tr>
-            <tr>
-              <td>Mileage /mile<br><span style="font-size:0.78rem;color:#059669;font-weight:600;">&#10003; Confirmed &mdash; HMRC approved rate (unchanged)</span></td>
-              <td>&pound;<input type="number" id="rate-mileage" step="0.01" value="0.45" class="rate-input"></td>
-            </tr>
-            <tr>
-              <td>VAT (%)</td>
-              <td><input type="number" id="rate-vat" step="1" value="20" class="rate-input">%</td>
-            </tr>
-            <tr>
-              <td>Unsocial hours<br><span style="font-size:0.78rem;color:#d97706;">&#9888; Check Section 1 (Definitions) of your 2025 Crime Contract Specification &mdash; typically any time outside normal Business Hours (Mon&ndash;Fri) and all day weekends / bank holidays</span></td>
-              <td style="font-size:0.9rem;color:#475569;">Outside Business Hours &amp; weekends/BH</td>
-            </tr>
-          </table>
+        <div class="settings-card" id="modules-installed-card">
+          <h2>Additional Modules Installed</h2>
+          <p class="settings-hint">No additional modules installed.</p>
+          <div id="modules-list"></div>
         </div>
 
         <div class="settings-card">
@@ -1145,7 +1094,7 @@
                 <li><strong>Communications Log</strong> &mdash; Log telephone calls, emails, and text messages. Each entry: type, direction, date, time, party, summary. Use <strong>+ Add entry</strong> for each.</li>
                 <li><strong>Supervisor Review</strong> &mdash; Only shown if enabled in Settings. For firms that require supervisor sign-off.</li>
                 <li><strong>LAA Declaration</strong> &mdash; Declaration text, client and fee earner names (fee earner auto-fills from Settings), signatures (pads or full-screen canvas).</li>
-                <li><strong>Admin &amp; Billing</strong> &mdash; File number (ours) / invoice number (can link QuickFile), UFN, LAA account, MAAT ID.</li>
+                <li><strong>Admin &amp; Billing</strong> &mdash; File number (ours) / invoice number, UFN, LAA account, MAAT ID.</li>
               </ul>
             </div>
           </details>
@@ -1250,7 +1199,6 @@
                 <li><strong>Add a new firm</strong> &mdash; enter firm name, contact name, phone, and email.</li>
                 <li><strong>Use existing firm</strong> &mdash; search your saved firms by name or contact.</li>
                 <li><strong>Star a firm</strong> &mdash; click the star icon to set a firm as your default. The default firm is auto-selected on new records.</li>
-                <li><strong>Import from QuickFile</strong> &mdash; if you use QuickFile for invoicing, you can import your client list as firms.</li>
               </ul>
               <p>When creating a new record, you can select from your saved firms or add a new firm inline.</p>
             </div>
@@ -1281,8 +1229,6 @@
                 <li><strong>Email</strong> &mdash; PDFs can be sent here for checking.</li>
                 <li><strong>Supervisor Review</strong> &mdash; toggle on only if a firm requires supervisor sign-off.</li>
               </ul>
-              <h4>QuickFile Integration</h4>
-              <p>Link your QuickFile account to pull invoice numbers automatically. Enter your Account Number, API Key, and Application ID from QuickFile &gt; Account Settings &gt; 3rd Party Integrations.</p>
               <h4>Appearance</h4>
               <ul>
                 <li><strong>Colour Theme</strong> &mdash; choose from Deep Navy, Classic Light, Slate Blue, Midnight, or Teal.</li>
@@ -1298,8 +1244,6 @@
               <p>All backups are encrypted. Set a <strong>recovery password</strong> (Settings &gt; Security) so you can open a backup on another computer if needed.</p>
               <h4>Security &amp; Encryption</h4>
               <p>Your database is encrypted with AES-256-GCM. Set a <strong>recovery password</strong> so you can access your data on a new computer. Keep this password safe.</p>
-              <h4>LAA Fee Rates</h4>
-              <p>Edit the fixed fee, escape threshold, attendance rates (social/unsocial), travel and waiting rates, mileage, and VAT. Changes apply immediately to all fee calculations.</p>
             </div>
           </details>
 

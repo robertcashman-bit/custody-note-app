@@ -40,8 +40,6 @@ contextBridge.exposeInMainWorld('api', {
   openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),
   printPdfFile: (filePath) => ipcRenderer.invoke('print-pdf-file', filePath),
-  quickfileFetchInvoices: () => ipcRenderer.invoke('quickfile-fetch-invoices'),
-  quickfileFetchClients: () => ipcRenderer.invoke('quickfile-fetch-clients'),
   pickImage: () => ipcRenderer.invoke('pick-image'),
   pickFile: () => ipcRenderer.invoke('pick-file'),
   importRecordFromFile: () => ipcRenderer.invoke('import-record-from-file'),

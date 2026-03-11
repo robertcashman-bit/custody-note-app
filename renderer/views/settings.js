@@ -21,24 +21,6 @@ function loadSettings() {
     if (cloudUrlEl) cloudUrlEl.value = s.cloudBackupUrl || '';
     var cloudTokenEl = document.getElementById('setting-cloud-backup-token');
     if (cloudTokenEl) cloudTokenEl.value = s.cloudBackupToken || '';
-    var qfAcc = document.getElementById('setting-quickfile-account');
-    var qfKey = document.getElementById('setting-quickfile-apikey');
-    var qfApp = document.getElementById('setting-quickfile-appid');
-    if (qfAcc) qfAcc.value = s.quickfileAccountNumber || '';
-    if (qfKey) qfKey.value = s.quickfileApiKey || '';
-    if (qfApp) qfApp.value = s.quickfileAppId || '';
-    if (s.laaRates) {
-      try {
-        var lr = typeof s.laaRates === 'string' ? JSON.parse(s.laaRates) : s.laaRates;
-        if (lr.fixedFee) { LAA.fixedFee = +lr.fixedFee; document.getElementById('rate-fixedFee').value = lr.fixedFee; }
-        if (lr.escapeThreshold) { LAA.escapeThreshold = +lr.escapeThreshold; document.getElementById('rate-escapeThreshold').value = lr.escapeThreshold; }
-        if (lr.attendanceSocial) { LAA.national.attendance.social = +lr.attendanceSocial; document.getElementById('rate-attendanceSocial').value = lr.attendanceSocial; }
-        if (lr.attendanceUnsocial) { LAA.national.attendance.unsocial = +lr.attendanceUnsocial; document.getElementById('rate-attendanceUnsocial').value = lr.attendanceUnsocial; }
-        if (lr.travelWaiting) { LAA.national.travel.social = +lr.travelWaiting; LAA.national.travel.unsocial = +lr.travelWaiting; LAA.national.waiting.social = +lr.travelWaiting; LAA.national.waiting.unsocial = +lr.travelWaiting; document.getElementById('rate-travelWaiting').value = lr.travelWaiting; }
-        if (lr.mileage) { LAA.mileageRate = +lr.mileage; document.getElementById('rate-mileage').value = lr.mileage; }
-        if (lr.vat) { LAA.vatRate = +lr.vat / 100; document.getElementById('rate-vat').value = lr.vat; }
-      } catch (_) {}
-    }
     var forumUrlEl = document.getElementById('suggestions-forum-url');
     if (forumUrlEl) forumUrlEl.value = s.suggestionsForumUrl || '';
     var dm = document.getElementById('setting-dark-mode');
@@ -170,9 +152,6 @@ function saveSettings() {
     offsiteBackupFolder: (document.getElementById('setting-offsite-backup-folder') || {value:''}).value.trim() || '',
     cloudBackupUrl: (document.getElementById('setting-cloud-backup-url') || {value:''}).value.trim() || '',
     cloudBackupToken: (document.getElementById('setting-cloud-backup-token') || {value:''}).value.trim() || '',
-    quickfileAccountNumber: (document.getElementById('setting-quickfile-account') || {value:''}).value.trim() || '',
-    quickfileApiKey: (document.getElementById('setting-quickfile-apikey') || {value:''}).value.trim() || '',
-    quickfileAppId: (document.getElementById('setting-quickfile-appid') || {value:''}).value.trim() || '',
     feeEarnerNameDefault: (document.getElementById('setting-fee-earner-name') || {value:''}).value.trim() || '',
     suggestionsForumUrl: (document.getElementById('suggestions-forum-url') || {value:''}).value.trim() || '',
     darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
@@ -180,15 +159,6 @@ function saveSettings() {
     showSupervisorReview: document.getElementById('setting-show-supervisor-review')?.checked ? 'true' : 'false',
     autoImportEnabled: document.getElementById('setting-auto-import-enabled')?.checked ? 'true' : 'false',
     autoImportFolder: (document.getElementById('setting-auto-import-folder') || {value:''}).value.trim() || '',
-    laaRates: JSON.stringify({
-      fixedFee: (document.getElementById('rate-fixedFee') || {value:'320.00'}).value || '320.00',
-      escapeThreshold: (document.getElementById('rate-escapeThreshold') || {value:'650.00'}).value || '650.00',
-      attendanceSocial: (document.getElementById('rate-attendanceSocial') || {value:'62.16'}).value || '62.16',
-      attendanceUnsocial: (document.getElementById('rate-attendanceUnsocial') || {value:'77.68'}).value || '77.68',
-      travelWaiting: (document.getElementById('rate-travelWaiting') || {value:'30.36'}).value || '30.36',
-      mileage: (document.getElementById('rate-mileage') || {value:'0.45'}).value || '0.45',
-      vat: (document.getElementById('rate-vat') || {value:'20'}).value || '20',
-    }),
   }).then(function() {
     showToast('Settings saved', 'success');
   }).catch(function(err) {
@@ -265,41 +235,5 @@ function addFirm() {
     showToast('Firm saved', 'success');
   }).catch(function(err) {
     showToast('Failed to save firm: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
-  });
-}
-
-function importFirmsFromQuickFile() {
-  var btn = document.getElementById('btn-import-qf-clients');
-  var status = document.getElementById('qf-import-status');
-  if (!window.api || !window.api.quickfileFetchClients) {
-    showToast('QuickFile client import is not available', 'error');
-    return;
-  }
-  btn.disabled = true;
-  btn.textContent = 'Fetching from QuickFile\u2026';
-  if (status) status.textContent = '';
-  window.api.quickfileFetchClients().then(function(res) {
-    var clients = res.clients || [];
-    if (!clients.length) { showToast('No clients found in your QuickFile account', 'warning'); return; }
-    var existingNames = firms.map(function(f) { return f.name.toLowerCase().trim(); });
-    var added = 0, skipped = 0, saves = [];
-    clients.forEach(function(c) {
-      if (!c.companyName) return;
-      if (existingNames.indexOf(c.companyName.toLowerCase().trim()) >= 0) { skipped++; return; }
-      added++;
-      saves.push(window.api.firmSave({ name: c.companyName, contact_name: c.contactName || '', contact_email: c.email || '', contact_phone: c.telephone || '', address: c.address || '' }));
-    });
-    return Promise.all(saves).then(function() {
-      loadFirmsList();
-      window.api.firmsList().then(function(f) { firms = f; });
-      var msg = added + ' firm' + (added !== 1 ? 's' : '') + ' imported' + (skipped ? ', ' + skipped + ' already existed' : '');
-      if (status) status.textContent = msg;
-      showToast(msg, 'success');
-    });
-  }).catch(function(err) {
-    showToast('QuickFile error: ' + (err.message || err), 'error');
-  }).finally(function() {
-    btn.disabled = false;
-    btn.textContent = 'Import firms from QuickFile';
   });
 }

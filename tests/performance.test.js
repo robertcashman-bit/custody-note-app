@@ -286,6 +286,51 @@ describe('Voluntary form and outcome statuses', () => {
     assert.ok(!volBlock.includes("'bail_to_return'"), 'voluntary must not have bail_to_return outcome');
   });
 
+  it('voluntary outcome has no caseOutcomeStatus (merged into outcomeDecision)', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(!volBlock.includes("'caseOutcomeStatus'"), 'voluntary must not have caseOutcomeStatus field');
+  });
+
+  it('voluntary outcomeDecision includes Officer to Notify and new options', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(volBlock.includes("'Officer to Notify'"), 'must include Officer to Notify');
+    assert.ok(volBlock.includes("'Referred to CPS'"), 'must include Referred to CPS');
+    assert.ok(volBlock.includes("'Youth caution / Youth conditional caution'"), 'must include Youth caution');
+    assert.ok(volBlock.includes("'Referred to diversion programme'"), 'must include diversion');
+    assert.ok(volBlock.includes("'Further voluntary interview required'"), 'must include further interview');
+    assert.ok(volBlock.includes("'Ongoing / Unknown'"), 'must include Ongoing / Unknown');
+  });
+
+  it('voluntary outcomeDecision does NOT include Charged options', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(!volBlock.includes("'Charged without Bail'"), 'must not include Charged without Bail');
+    assert.ok(!volBlock.includes("'Charged with Bail'"), 'must not include Charged with Bail');
+  });
+
+  it('voluntary outcome has no Client Aftercare section', () => {
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    const volBlock = appJsSource.substring(volStart, volEnd);
+    assert.ok(!volBlock.includes("'_h_aftercare'"), 'must not have aftercare heading');
+    assert.ok(!volBlock.includes("'whatExplainedAfterInterview'"), 'must not have whatExplainedAfterInterview');
+  });
+
+  it('no QuickFile references in settings HTML', () => {
+    assert.ok(!indexHtmlSource.includes('QuickFile'), 'index.html must not contain QuickFile');
+    assert.ok(!indexHtmlSource.includes('quickfile'), 'index.html must not contain quickfile');
+  });
+
+  it('settings has Additional Modules card', () => {
+    assert.ok(indexHtmlSource.includes('modules-installed-card'), 'must have modules-installed-card');
+    assert.ok(indexHtmlSource.includes('No additional modules installed'), 'must show no modules message');
+  });
+
   it('home screen has prominent primary cards for custody and voluntary', () => {
     assert.ok(indexHtmlSource.includes('home-primary-actions'), 'home must have primary actions container');
     assert.ok(indexHtmlSource.includes('home-primary-custody'), 'home must have primary custody card');
