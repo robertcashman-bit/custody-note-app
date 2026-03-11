@@ -5,18 +5,13 @@
       "date": "2026-03-11",
       "latest": true,
       "changes": [
-        "UX: Enhanced keyboard shortcuts — Ctrl+N (new record), Ctrl+Enter (finalise), Ctrl+F (search focus), / (quick search)",
-        "UX: Arrow key navigation in list view — ↑/↓ to navigate, Enter to open, Esc to clear search",
-        "Performance: Record LRU cache — last 20 records cached for instant switching (<10ms vs ~250ms DB fetch)",
-        "Performance: Cache hit rate tracking in performance panel (Ctrl+Shift+P)",
-        "Visual: Larger, more readable form inputs (1.05rem font, 0.65rem padding, focus shadows)",
-        "Visual: Enhanced form footer — larger buttons (48px min-height), prominent primary actions with gradients",
-        "Visual: Larger progress dots (12px) with smooth scaling and hover effects",
-        "Visual: Smooth animations on list items, badges, and inputs (<150ms transitions)",
-        "Visual: Prominent status badges with borders and hover effects",
-        "Visual: Responsive design — footer and buttons scale properly on mobile/tablet",
-        "Updated keyboard shortcuts modal to show all new shortcuts",
-        "Fix: Auto-updater — corrected installer filenames to use hyphens instead of dots"
+        "Footer cleanup — version/licence/update actions and online/sync/backup/cloud states are now grouped into compact status chips that are easier to scan",
+        "Calmer status updates — sync and backup indicators now use pushed status events with shorter wording instead of noisy footer text and frequent renderer polling",
+        "Sync tuning — idle background sync now polls every 60 seconds while saves, reconnects, and manual sync still trigger prompt updates",
+        "Backup tuning — quick backups wait at least 15 minutes, require 45 seconds of user idle time, and periodic checks run every 3 minutes",
+        "Scrolling feels more native — removed global smooth-scroll behavior and the permanent main-pane scroll-position hint",
+        "Fix: Auto-updater — corrected installer filenames to use hyphens instead of dots",
+        "Regression coverage — added tests for footer rendering, calmer sync cadence, calmer backup cadence, and scrolling safeguards"
       ]
     },
     {
