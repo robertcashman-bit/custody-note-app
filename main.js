@@ -884,6 +884,7 @@ async function initDb() {
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_date ON attendances(attendance_date);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_dscc ON attendances(dscc_ref);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_status ON attendances(status);`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_att_list ON attendances(deleted_at, archived_at, updated_at);`);
 
   const existing = dbGet("SELECT 1 FROM settings WHERE key = 'backupFolder'");
   if (!existing) {
@@ -3029,10 +3030,10 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       return { error: 'locked', message: 'This record is finalised and cannot be modified.' };
     }
 
-    /* Compute diff for audit log */
+    /* Compute diff for audit log (skip expensive diff on draft autosaves for performance) */
     let previousSnapshot = null;
     let changedFields = null;
-    if (existing) {
+    if (existing && st === 'finalised') {
       previousSnapshot = existing.data;
       try {
         const prev = JSON.parse(existing.data);

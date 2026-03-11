@@ -2878,15 +2878,23 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   var _quietSaveDebounceTimer = null;
-  var QUIET_SAVE_DEBOUNCE_MS = 1000;
+  var QUIET_SAVE_DEBOUNCE_MS = 1200;
+  var _editorActivityDebounceTimer = null;
+  var EDITOR_ACTIVITY_DEBOUNCE_MS = 5000;
 
   function scheduleQuietSave() {
     clearTimeout(_quietSaveDebounceTimer);
     _quietSaveDebounceTimer = setTimeout(quietSave, QUIET_SAVE_DEBOUNCE_MS);
     if (window.api && window.api.reportEditorActivity) {
-      window.api.reportEditorActivity();
+      clearTimeout(_editorActivityDebounceTimer);
+      _editorActivityDebounceTimer = setTimeout(function() {
+        window.api.reportEditorActivity();
+      }, EDITOR_ACTIVITY_DEBOUNCE_MS);
     }
   }
+
+  var _lastQuietSaveStart = 0;
+  var _lastQuietSaveDurationMs = null;
 
   function quietSave() {
     clearTimeout(_quietSaveDebounceTimer);
@@ -2898,6 +2906,7 @@ var REQUIRED_FIELD_KEYS = [
     if (!hasMeaningfulData(data)) return;
     if (_draftSaveInFlight) { _draftSaveQueued = true; return; }
     _draftSaveInFlight = true;
+    _lastQuietSaveStart = Date.now();
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
       if (result && typeof result === 'object' && result.error === 'locked') {
         console.log('[quietSave] draft write blocked — record is finalised');
@@ -2919,6 +2928,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function showAutoSaveIndicator() {
     var now = new Date();
+    _lastQuietSaveDurationMs = _lastQuietSaveStart ? (now.getTime() - _lastQuietSaveStart) : null;
     _lastDbWrite = now.toISOString();
     var txt = 'Saved ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
@@ -3506,9 +3516,14 @@ var REQUIRED_FIELD_KEYS = [
     if (!ul || !window.api) return;
     setupListDelegation();
     window.api.attendanceListFull().then(rows => {
+      var parsedCache = {};
+      function getParsed(r) {
+        if (!parsedCache[r.id]) parsedCache[r.id] = safeJson(r.data);
+        return parsedCache[r.id];
+      }
       const q = (document.getElementById('list-search')?.value || '').toLowerCase();
       let filtered = q ? rows.filter(r => {
-        const d = safeJson(r.data);
+        const d = getParsed(r);
         const hay = [
           r.client_name, r.station_name, r.dscc_ref, r.attendance_date, r.status,
           d.forename, d.middleName, d.surname, d.custodyNumber, d.ufn, d.date, d.policeStationName, d.fileReference, d.dsccRef, d.ourFileNumber
@@ -3517,18 +3532,18 @@ var REQUIRED_FIELD_KEYS = [
       }) : rows.slice();
       if (listStatusFilter === 'draft') filtered = filtered.filter(r => (r.status || 'draft') === 'draft');
       else if (listStatusFilter === 'finalised') filtered = filtered.filter(r => r.status === 'finalised');
-      if (listModeFilter === 'custody') filtered = filtered.filter(r => { var d = safeJson(r.data); return d._formType !== 'telephone' && d.attendanceMode !== 'voluntary'; });
-      else if (listModeFilter === 'voluntary') filtered = filtered.filter(r => safeJson(r.data).attendanceMode === 'voluntary');
-      else if (listModeFilter === 'telephone') filtered = filtered.filter(r => safeJson(r.data)._formType === 'telephone');
+      if (listModeFilter === 'custody') filtered = filtered.filter(r => { var d = getParsed(r); return d._formType !== 'telephone' && d.attendanceMode !== 'voluntary'; });
+      else if (listModeFilter === 'voluntary') filtered = filtered.filter(r => getParsed(r).attendanceMode === 'voluntary');
+      else if (listModeFilter === 'telephone') filtered = filtered.filter(r => getParsed(r)._formType === 'telephone');
       if (listSortMode === 'oldest') filtered.reverse();
       else if (listSortMode === 'name') filtered.sort((a, b) => {
-        const da = safeJson(a.data), db = safeJson(b.data);
+        const da = getParsed(a), db = getParsed(b);
         const na = (a.client_name || [da.surname, da.forename].filter(Boolean).join(', ') || '').toLowerCase();
         const nb = (b.client_name || [db.surname, db.forename].filter(Boolean).join(', ') || '').toLowerCase();
         return na.localeCompare(nb);
       });
       else if (listSortMode === 'station') filtered.sort((a, b) => {
-        const da = safeJson(a.data), db = safeJson(b.data);
+        const da = getParsed(a), db = getParsed(b);
         const sa = (a.station_name || da.policeStationName || '').toLowerCase();
         const sb = (b.station_name || db.policeStationName || '').toLowerCase();
         return sa.localeCompare(sb);
@@ -3548,7 +3563,7 @@ var REQUIRED_FIELD_KEYS = [
       var frag = document.createDocumentFragment();
       pageItems.forEach(r => {
         _listItemIndex[r.id] = r;
-        const d = safeJson(r.data);
+        const d = getParsed(r);
         const title = (r.client_name && String(r.client_name).trim()) || [d.surname, d.forename].filter(Boolean).join(', ') || 'Draft (no name)';
         const rawDate = r.attendance_date || d.date || (r.updated_at ? String(r.updated_at).slice(0, 10) : '') || '';
         let dateLabel = rawDate ? formatDateGB(rawDate) : '';
@@ -3854,6 +3869,7 @@ var REQUIRED_FIELD_KEYS = [
     updateContextBar();
     refreshSectionsIndexIfOpen();
     updateProgressBar();
+    buildSectionIndexBar();
     const form = document.getElementById('attendance-form');
     if (form) form.scrollTop = 0;
   }
@@ -4174,19 +4190,17 @@ var REQUIRED_FIELD_KEYS = [
         updateFormBarVisibility();
         const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
         const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
-        var _saVisDebounce = null, _saCtxDebounce = null;
+        var _standaloneUiDebounce = null;
         form.querySelectorAll('select, input, textarea').forEach(el => {
           el.addEventListener('change', () => {
             if (_suppressChangeHandlers) return;
             var field = el.dataset.field || el.name;
             if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
-            clearTimeout(_saVisDebounce);
-            _saVisDebounce = setTimeout(function() { collectCurrentData(); applyConditionalVisibility(); }, 150);
-            clearTimeout(_saCtxDebounce);
-            _saCtxDebounce = setTimeout(updateContextBar, 250);
+            clearTimeout(_standaloneUiDebounce);
+            _standaloneUiDebounce = setTimeout(function() { collectCurrentData(); applyConditionalVisibility(); updateContextBar(); }, 200);
             scheduleQuietSave();
           });
-          el.addEventListener('blur', () => { if (_suppressChangeHandlers) return; collectCurrentData(); scheduleQuietSave(); });
+          el.addEventListener('blur', () => { if (_suppressChangeHandlers) return; scheduleQuietSave(); });
         });
         startAutoSave();
         return;
@@ -4207,32 +4221,17 @@ var REQUIRED_FIELD_KEYS = [
     const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
     const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
 
-    var _progressDebounce = null;
-    function debouncedProgressUpdate() {
-      clearTimeout(_progressDebounce);
-      _progressDebounce = setTimeout(updateProgressBar, 300);
+    var _uiRefreshDebounce = null;
+    var UI_REFRESH_DEBOUNCE_MS = 200;
+    function scheduleUIRefresh() {
+      clearTimeout(_uiRefreshDebounce);
+      _uiRefreshDebounce = setTimeout(function() {
+        applyConditionalVisibility();
+        updateContextBar();
+        updateProgressBar();
+        updateBillingReadinessPanel();
+      }, UI_REFRESH_DEBOUNCE_MS);
     }
-
-    var _contextBarDebounce = null;
-    function debouncedContextBar() {
-      clearTimeout(_contextBarDebounce);
-      _contextBarDebounce = setTimeout(updateContextBar, 250);
-    }
-
-    var _visibilityDebounce = null;
-    function debouncedVisibility() {
-      clearTimeout(_visibilityDebounce);
-      _visibilityDebounce = setTimeout(applyConditionalVisibility, 120);
-    }
-
-    var _billingDebounce = null;
-    function debouncedBillingPanel() {
-      clearTimeout(_billingDebounce);
-      _billingDebounce = setTimeout(updateBillingReadinessPanel, 350);
-    }
-
-    var _collectTimer = null;
-    function scheduleCollect() { clearTimeout(_collectTimer); _collectTimer = setTimeout(collectCurrentData, 400); }
 
     function attachSectionListeners(sectionEl) {
       sectionEl.querySelectorAll('select, input, textarea').forEach(el => {
@@ -4243,8 +4242,6 @@ var REQUIRED_FIELD_KEYS = [
           if (field && sharedClientFields.includes(field)) {
             setFieldValueSilent(field, el.value);
           }
-          debouncedVisibility();
-          debouncedContextBar();
           if (field === 'instructionDateTime' && el.value) {
             formData.date = el.value.slice(0, 10);
             const dow = new Date(formData.date).getDay();
@@ -4263,16 +4260,13 @@ var REQUIRED_FIELD_KEYS = [
           if (formData.attendanceMode === 'voluntary' && ['consultationStart','consultationEnd','interviewStart','interviewEnd'].includes(field)) { autoCalcVoluntaryTimes(); }
           if (field === 'timeDetentionAuthorised') { setFieldValue('relevantTime', el.value || ''); calcReviewTimes(); }
           if (field === 'relevantTime') { calcReviewTimes(); }
-          debouncedProgressUpdate();
-          debouncedBillingPanel();
-          scheduleCollect();
+          scheduleUIRefresh();
           scheduleQuietSave();
         });
         el.addEventListener('blur', () => {
           if (_suppressChangeHandlers) return;
           var field = el.dataset.field || el.name;
           if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
-          scheduleCollect();
           scheduleQuietSave();
         });
       });
@@ -4585,6 +4579,7 @@ var REQUIRED_FIELD_KEYS = [
     startAutoSave();
     startPaceClock();
     updateProgressBar();
+    buildSectionIndexBar();
   }
 
   function renderField(f, data, grid) {
@@ -7284,7 +7279,6 @@ var REQUIRED_FIELD_KEYS = [
         bar.appendChild(dot);
       });
     });
-    buildSectionIndexBar();
   }
 
   /* ═══════════════════════════════════════════════
@@ -8558,6 +8552,55 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
+  function populatePerformancePanel() {
+    var lines = [
+      '=== Renderer ===',
+      'Autosave debounce: ' + QUIET_SAVE_DEBOUNCE_MS + ' ms',
+      'Draft save in flight: ' + _draftSaveInFlight,
+      'Draft save queued: ' + _draftSaveQueued,
+      'AutoSave timer active: ' + !!autoSaveTimer,
+      'Last autosave duration: ' + (_lastQuietSaveDurationMs != null ? _lastQuietSaveDurationMs + ' ms' : '—'),
+      'Last DB write: ' + (_lastDbWrite || '—'),
+      'Current record: ' + (currentAttendanceId || '—') + ' (' + (currentRecordStatus || '—') + ')',
+      ''
+    ];
+    if (!window.api) {
+      document.getElementById('performance-panel-content').textContent = lines.join('\n') + '\n(IPC not available)';
+      return;
+    }
+    Promise.all([
+      window.api.syncStatus ? window.api.syncStatus() : {},
+      window.api.backupStatus ? window.api.backupStatus() : {},
+      window.api.syncGetDiagnostics ? window.api.syncGetDiagnostics() : {}
+    ]).then(function(results) {
+      var syncStatus = results[0] || {};
+      var backup = results[1] || {};
+      var diag = results[2] || {};
+      var queue = (diag.queue || []);
+      lines.push('=== Sync ===');
+      lines.push('Queue length: ' + queue.length);
+      lines.push('Last sync: ' + (syncStatus.lastSyncTime || '—'));
+      lines.push('');
+      lines.push('=== Backup ===');
+      lines.push('Last backup: ' + (backup.lastQuickBackupTime || backup.lastBackupTime || '—'));
+      lines.push('DB dirty since backup: ' + (backup.dbDirtySinceQuickBackup ? 'yes' : 'no'));
+      document.getElementById('performance-panel-content').textContent = lines.join('\n');
+    }).catch(function() {
+      document.getElementById('performance-panel-content').textContent = lines.join('\n') + '\n(Failed to load sync/backup status)';
+    });
+  }
+
+  function togglePerformancePanel() {
+    var ov = document.getElementById('performance-panel-overlay');
+    if (!ov) return;
+    if (ov.style.display === 'none' || !ov.style.display) {
+      populatePerformancePanel();
+      ov.style.display = 'flex';
+    } else {
+      ov.style.display = 'none';
+    }
+  }
+
   function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
       if (e.ctrlKey && e.shiftKey && e.key === 'D') {
@@ -8570,6 +8613,15 @@ PDF_CASENOTE_ADVERT +
           ov.style.display = 'none';
         }
       }
+      if (e.ctrlKey && e.shiftKey && e.key === 'P') {
+        e.preventDefault();
+        togglePerformancePanel();
+        return;
+      }
+    });
+    document.getElementById('performance-panel-close')?.addEventListener('click', function() {
+      var ov = document.getElementById('performance-panel-overlay');
+      if (ov) ov.style.display = 'none';
     });
     document.getElementById('sync-diagnostics-close')?.addEventListener('click', function() {
       var ov = document.getElementById('sync-diagnostics-overlay');
@@ -8625,7 +8677,7 @@ PDF_CASENOTE_ADVERT +
         e.preventDefault();
         printAttendanceNote();
       }
-      if (e.ctrlKey && e.shiftKey && e.key === 'P') {
+      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
         e.preventDefault();
         previewPdf();
       }

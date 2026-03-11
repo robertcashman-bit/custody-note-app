@@ -1,9 +1,24 @@
 {
   "releases": [
     {
+      "version": "1.4.37",
+      "date": "2026-03-10",
+      "latest": true,
+      "changes": [
+        "Performance: typing is now smooth — single 200ms UI refresh instead of six cascading debounce timers per keystroke",
+        "Autosave debounced to 1200ms; editor activity reported at most every 5s (no longer on every keystroke)",
+        "Form change/blur no longer run full collectCurrentData on every field change — only before save/navigation",
+        "Progress bar no longer rebuilds section index on every keystroke; list view caches parsed data per row",
+        "Main process: audit diff skipped for draft saves (only computed on finalise); new index for list query",
+        "Performance panel (Ctrl+Shift+P): shows autosave duration, sync queue, backup status",
+        "PDF preview shortcut moved to Ctrl+Shift+F (Ctrl+Shift+P now opens performance panel)",
+        "9 automated performance tests added"
+      ]
+    },
+    {
       "version": "1.4.36",
       "date": "2026-03-11",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Critical finalise fix: replaced confusing validation modal with simple confirm dialog — user now sees 'X field(s) incomplete. Finalise anyway?' with OK/Cancel",
         "Fixed sync pull crash: removed undeclared ctx variable reference that caused ReferenceError on every sync pull",
