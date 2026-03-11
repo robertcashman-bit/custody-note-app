@@ -1,9 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.4.33",
+      "date": "2026-03-11",
+      "latest": true,
+      "changes": [
+        "Replaced 2-minute backup interval with idle-aware scheduler — backups now defer while typing and only run when there are real changes (minimum 10-minute gap)",
+        "Fixed finalise not persisting — autosave race condition eliminated by stopping autosave and setting record status before the save IPC",
+        "Calmer sync messages — 'Saved locally' instead of alarming 'API unreachable' when offline at police stations",
+        "Enhanced diagnostics panel (Ctrl+Shift+D) with backup state, timing, and renderer status",
+        "65 automated tests covering backup scheduling, finalise flow, and stale-write protection"
+      ]
+    },
+    {
       "version": "1.4.32",
       "date": "2026-03-10",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Reduced sync frequency 10s to 30s for better performance",
         "Fixed finalise race condition where autosave could block finalisation",
