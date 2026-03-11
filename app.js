@@ -1987,20 +1987,24 @@ var REQUIRED_FIELD_KEYS = [
       _syncRetryableErrorCount = 0;
       refreshSyncCounts();
     } else if (data.status === 'syncing') {
-      el.textContent = '\u2601 Syncing now';
-      el.style.color = '#2563eb';
+      el.textContent = 'Syncing\u2026';
+      el.className = 'footer-indicator syncing';
+      el.style.color = '';
     } else if (data.status === 'error') {
       if (!data.retryable) {
-        el.textContent = '\u2601 Sync blocked \u2014 check licence';
-        el.style.color = '#dc2626';
+        el.textContent = 'Sync blocked \u2014 check licence';
+        el.className = 'footer-indicator offline';
+        el.style.color = '';
       } else {
         _syncRetryableErrorCount++;
         if (_syncRetryableErrorCount >= 5) {
-          el.textContent = '\u23F1 Saved locally \u00b7 sync will retry when connected';
-          el.style.color = '#d97706';
+          el.textContent = 'Saved locally \u00b7 sync retrying';
+          el.className = 'footer-indicator backup-active';
+          el.style.color = '';
         } else {
-          el.textContent = '\u23F1 Saved locally \u00b7 will sync when available';
-          el.style.color = '#64748b';
+          el.textContent = 'Saved locally \u00b7 syncing soon';
+          el.className = 'footer-indicator backup-ok';
+          el.style.color = '';
         }
       }
     } else {
@@ -2018,22 +2022,27 @@ var REQUIRED_FIELD_KEYS = [
       var failed = st.failedCount || 0;
       var blocked = st.blockedCount || 0;
       if (pending === 0 && st.lastSync) {
-        el.innerHTML = '\u2713 <strong>Synced</strong> (' + formatSyncTime(st.lastSync) + ')';
-        el.style.color = '#059669';
+        el.textContent = 'Synced (' + formatSyncTime(st.lastSync) + ')';
+        el.className = 'footer-indicator synced';
+        el.style.color = '';
       } else if (blocked > 0) {
-        el.innerHTML = '\u26A0 <strong>' + blocked + ' sync blocked</strong> \u00b7 retrying soon';
-        el.style.color = '#dc2626';
+        el.textContent = blocked + ' sync blocked \u00b7 retrying';
+        el.className = 'footer-indicator offline';
+        el.style.color = '';
         if (st.lastError) el.title = st.lastError;
       } else if (failed > 0) {
-        el.innerHTML = '\u26A0 <strong>' + failed + ' sync failed</strong> \u00b7 retrying soon';
-        el.style.color = '#dc2626';
+        el.textContent = failed + ' sync failed \u00b7 retrying';
+        el.className = 'footer-indicator offline';
+        el.style.color = '';
         if (st.lastError) el.title = st.lastError;
       } else if (pending > 0) {
-        el.innerHTML = '\u23F1 <strong>' + pending + ' pending sync</strong> \u00b7 saved locally';
-        el.style.color = '#d97706';
+        el.textContent = pending + ' pending \u00b7 saved locally';
+        el.className = 'footer-indicator syncing';
+        el.style.color = '';
       } else if (!st.lastSync) {
-        el.textContent = '\u23F1 Saved locally \u00b7 waiting for connection';
-        el.style.color = '#64748b';
+        el.textContent = 'Saved locally \u00b7 connecting';
+        el.className = 'footer-indicator backup-ok';
+        el.style.color = '';
       }
     }).catch(function() {});
   }
@@ -9210,8 +9219,8 @@ PDF_CASENOTE_ADVERT +
     var netStatusEl = document.getElementById('net-status-text');
     function setNetStatus(online) {
       if (netStatusEl) {
-        netStatusEl.textContent = online ? 'Internet: Connected' : 'Internet: Not connected';
-        netStatusEl.className = 'footer-status ' + (online ? 'online' : 'offline');
+        netStatusEl.textContent = online ? 'Internet: Connected' : 'No internet';
+        netStatusEl.className = 'footer-indicator ' + (online ? 'connected' : 'offline');
       }
       var homeNet = document.getElementById('home-net-status');
       if (homeNet) {
@@ -9276,29 +9285,29 @@ PDF_CASENOTE_ADVERT +
         window.api.backupStatus().then(function(bs) {
           if (!bs || bs.state === 'not-initialised') {
             backupStatusEl.textContent = 'Auto backup: starting\u2026';
-            backupStatusEl.className = 'footer-status';
+            backupStatusEl.className = 'footer-indicator';
             return;
           }
           if (bs.state === 'running') {
             backupStatusEl.textContent = 'Backup running\u2026';
-            backupStatusEl.className = 'footer-status online';
+            backupStatusEl.className = 'footer-indicator backup-active';
           } else if (bs.state === 'deferred') {
             backupStatusEl.textContent = 'Auto backup: idle-based';
-            backupStatusEl.className = 'footer-status online';
+            backupStatusEl.className = 'footer-indicator backup-ok';
           } else if (bs.state === 'error') {
-            backupStatusEl.textContent = 'Backup error — will retry';
-            backupStatusEl.className = 'footer-status offline';
+            backupStatusEl.textContent = 'Backup error \u2014 will retry';
+            backupStatusEl.className = 'footer-indicator offline';
           } else if (bs.quickDirty || bs.hourlyDirty) {
             backupStatusEl.textContent = 'Auto backup: pending';
-            backupStatusEl.className = 'footer-status online';
+            backupStatusEl.className = 'footer-indicator backup-active';
           } else {
             window.api.getSettings().then(function(s) {
               if (s && s.backupFolder) {
                 backupStatusEl.textContent = 'Auto backup: idle-based';
-                backupStatusEl.className = 'footer-status online';
+                backupStatusEl.className = 'footer-indicator backup-ok';
               } else {
-                backupStatusEl.textContent = 'Auto backup: OFF \u2014 no folder set';
-                backupStatusEl.className = 'footer-status offline';
+                backupStatusEl.textContent = 'Auto backup: OFF';
+                backupStatusEl.className = 'footer-indicator offline';
               }
             });
           }
@@ -9310,10 +9319,10 @@ PDF_CASENOTE_ADVERT +
           var folder = s && s.backupFolder;
           if (folder) {
             backupStatusEl.textContent = 'Auto backup: idle-based';
-            backupStatusEl.className = 'footer-status online';
+            backupStatusEl.className = 'footer-indicator backup-ok';
           } else {
-            backupStatusEl.textContent = 'Auto backup: OFF \u2014 no folder set';
-            backupStatusEl.className = 'footer-status offline';
+            backupStatusEl.textContent = 'Auto backup: OFF';
+            backupStatusEl.className = 'footer-indicator offline';
           }
         });
       }
