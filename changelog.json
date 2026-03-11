@@ -1,9 +1,25 @@
 {
   "releases": [
     {
+      "version": "1.4.38",
+      "date": "2026-03-11",
+      "latest": true,
+      "changes": [
+        "UX: Enhanced keyboard shortcuts — Ctrl+N (new record), Ctrl+Enter (finalise), Ctrl+F (search focus), / (quick search)",
+        "UX: Arrow key navigation in list view — ↑/↓ to navigate, Enter to open, Esc to clear search",
+        "Performance: Record LRU cache — last 20 records cached for instant switching (<10ms vs ~250ms DB fetch)",
+        "Performance: Cache hit rate tracking in performance panel (Ctrl+Shift+P)",
+        "Visual: Larger, more readable form inputs (1rem → 1.05rem font size)",
+        "Visual: Smooth animations on list items, badges, and inputs (<150ms transitions)",
+        "Visual: Prominent status badges with borders and hover effects",
+        "Visual: Focus glow on inputs for better accessibility",
+        "Updated keyboard shortcuts modal to show all new shortcuts"
+      ]
+    },
+    {
       "version": "1.4.37",
       "date": "2026-03-10",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Performance: typing is now smooth — single 200ms UI refresh instead of six cascading debounce timers per keystroke",
         "Autosave debounced to 1200ms; editor activity reported at most every 5s (no longer on every keystroke)",

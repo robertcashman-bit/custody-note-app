@@ -27,6 +27,12 @@ var paceTimer = null;
 var listPage = 1;
 var LIST_PER_PAGE = 50;
 
+/* ─── PERFORMANCE: LRU CACHE FOR RECORDS ─── */
+var _recordCache = new Map(); // { id: { row, timestamp } }
+var _recordCacheMaxSize = 20;
+var _recordCacheHits = 0;
+var _recordCacheMisses = 0;
+
 /* ─── UK BANK HOLIDAYS 2025-2027 (England & Wales) ─── */
 var UK_BANK_HOLIDAYS = [
     '2025-01-01','2025-04-18','2025-04-21','2025-05-05','2025-05-26','2025-08-25','2025-12-25','2025-12-26',
@@ -2908,6 +2914,11 @@ var REQUIRED_FIELD_KEYS = [
     _draftSaveInFlight = true;
     _lastQuietSaveStart = Date.now();
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
+      /* Invalidate cache on save */
+      if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
+        _recordCache.delete(currentAttendanceId);
+      }
+      
       if (result && typeof result === 'object' && result.error === 'locked') {
         console.log('[quietSave] draft write blocked — record is finalised');
         currentRecordStatus = 'finalised';
@@ -3715,10 +3726,51 @@ var REQUIRED_FIELD_KEYS = [
   function openAttendance(id) {
     currentStandaloneSectionId = null;
     currentAttendanceId = id;
+    
+    /* Check LRU cache first for instant loading */
+    if (_recordCache.has(id)) {
+      _recordCacheHits++;
+      const cached = _recordCache.get(id);
+      const row = cached.row;
+      currentRecordStatus = row ? row.status : null;
+      currentRecordArchived = !!(row && row.archived_at);
+      formData = row && row.data ? safeJson(row.data) : {};
+      
+      /* Move to end (most recently used) */
+      _recordCache.delete(id);
+      _recordCache.set(id, { row, timestamp: Date.now() });
+      
+      /* Apply form sections based on type */
+      if (!formData.attendanceMode && formData._formType !== 'telephone') formData.attendanceMode = 'custody';
+      if (formData._formType === 'telephone') {
+        activeFormSections = telFormSections;
+      } else if (formData.attendanceMode === 'voluntary') {
+        activeFormSections = voluntaryFormSections;
+      } else {
+        activeFormSections = formSections;
+      }
+      currentSectionIdx = 0;
+      renderForm(formData);
+      showView('new');
+      return;
+    }
+    
+    /* Cache miss: fetch from database */
+    _recordCacheMisses++;
     window.api.attendanceGet(id).then(row => {
       currentRecordStatus = row ? row.status : null;
       currentRecordArchived = !!(row && row.archived_at);
       formData = row && row.data ? safeJson(row.data) : {};
+      
+      /* Add to cache */
+      _recordCache.set(id, { row, timestamp: Date.now() });
+      
+      /* Evict oldest if cache is full */
+      if (_recordCache.size > _recordCacheMaxSize) {
+        const firstKey = _recordCache.keys().next().value;
+        _recordCache.delete(firstKey);
+      }
+      
       /* Legacy records: default to custody */
       if (!formData.attendanceMode && formData._formType !== 'telephone') formData.attendanceMode = 'custody';
       if (formData._formType === 'telephone') {
@@ -6706,6 +6758,11 @@ var REQUIRED_FIELD_KEYS = [
         console.log('[FINALISE] IPC attempt #' + attemptNum + ': id=' + currentAttendanceId);
       }
       window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
+        /* Invalidate cache on save */
+        if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
+          _recordCache.delete(currentAttendanceId);
+        }
+        
         if (status === 'finalised') {
           console.log('[FINALISE] IPC #' + attemptNum + ' returned: ' + JSON.stringify(result));
         }
@@ -8553,6 +8610,10 @@ PDF_CASENOTE_ADVERT +
   }
 
   function populatePerformancePanel() {
+    var cacheHitRate = (_recordCacheHits + _recordCacheMisses) > 0 
+      ? ((_recordCacheHits / (_recordCacheHits + _recordCacheMisses)) * 100).toFixed(1) + '%'
+      : '—';
+    
     var lines = [
       '=== Renderer ===',
       'Autosave debounce: ' + QUIET_SAVE_DEBOUNCE_MS + ' ms',
@@ -8562,6 +8623,12 @@ PDF_CASENOTE_ADVERT +
       'Last autosave duration: ' + (_lastQuietSaveDurationMs != null ? _lastQuietSaveDurationMs + ' ms' : '—'),
       'Last DB write: ' + (_lastDbWrite || '—'),
       'Current record: ' + (currentAttendanceId || '—') + ' (' + (currentRecordStatus || '—') + ')',
+      '',
+      '=== Record Cache (LRU) ===',
+      'Cache size: ' + _recordCache.size + ' / ' + _recordCacheMaxSize,
+      'Cache hits: ' + _recordCacheHits,
+      'Cache misses: ' + _recordCacheMisses,
+      'Hit rate: ' + cacheHitRate,
       ''
     ];
     if (!window.api) {
@@ -8618,6 +8685,36 @@ PDF_CASENOTE_ADVERT +
         togglePerformancePanel();
         return;
       }
+      /* NEW: Ctrl+N = New record (from any view) */
+      if (e.ctrlKey && e.key === 'n') {
+        e.preventDefault();
+        showView('quickcapture');
+        return;
+      }
+      /* NEW: Ctrl+F = Focus search in list view */
+      if (e.ctrlKey && e.key === 'f') {
+        const listView = document.getElementById('view-list');
+        if (listView && listView.classList.contains('active')) {
+          e.preventDefault();
+          const searchInput = document.getElementById('list-search');
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+          }
+        }
+        return;
+      }
+      /* NEW: / = Quick focus search in list */
+      if (e.key === '/' && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        const listView = document.getElementById('view-list');
+        const activeEl = document.activeElement;
+        if (listView && listView.classList.contains('active') && activeEl.tagName !== 'INPUT' && activeEl.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          const searchInput = document.getElementById('list-search');
+          if (searchInput) searchInput.focus();
+        }
+        return;
+      }
     });
     document.getElementById('performance-panel-close')?.addEventListener('click', function() {
       var ov = document.getElementById('performance-panel-overlay');
@@ -8656,6 +8753,15 @@ PDF_CASENOTE_ADVERT +
       }
       const formViewActive = document.getElementById('view-form')?.classList.contains('active');
       if (!formViewActive) return;
+
+      /* NEW: Ctrl+Enter = Finalise record */
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        if (currentAttendanceId && currentRecordStatus !== 'finalised') {
+          saveForm(true);
+        }
+        return;
+      }
 
       if (e.ctrlKey && e.key === 's') {
         e.preventDefault();
@@ -8737,6 +8843,7 @@ PDF_CASENOTE_ADVERT +
      ENTER KEY NAVIGATION
      ═══════════════════════════════════════════════ */
   function initEnterNavigation() {
+    /* Form field Enter key navigation */
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Enter') return;
       const el = e.target;
@@ -8753,6 +8860,61 @@ PDF_CASENOTE_ADVERT +
         if (idx >= 0 && idx < visible.length - 1) {
           visible[idx + 1].focus();
         }
+      }
+    });
+
+    /* NEW: Arrow key navigation in list view */
+    document.addEventListener('keydown', (e) => {
+      const listView = document.getElementById('view-list');
+      if (!listView || !listView.classList.contains('active')) return;
+      
+      const activeEl = document.activeElement;
+      // Don't intercept if user is typing in search or other input
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'SELECT')) return;
+
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const listItems = Array.from(document.querySelectorAll('#attendance-list .list-item'));
+        if (listItems.length === 0) return;
+
+        let selectedItem = document.querySelector('#attendance-list .list-item.list-item-selected');
+        let nextIndex = 0;
+
+        if (selectedItem) {
+          const currentIndex = listItems.indexOf(selectedItem);
+          if (e.key === 'ArrowDown') {
+            nextIndex = Math.min(currentIndex + 1, listItems.length - 1);
+          } else {
+            nextIndex = Math.max(currentIndex - 1, 0);
+          }
+          selectedItem.classList.remove('list-item-selected');
+        } else {
+          nextIndex = e.key === 'ArrowDown' ? 0 : listItems.length - 1;
+        }
+
+        listItems[nextIndex].classList.add('list-item-selected');
+        listItems[nextIndex].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const selectedItem = document.querySelector('#attendance-list .list-item.list-item-selected');
+        if (selectedItem) {
+          const id = selectedItem.dataset.id;
+          if (id) openAttendance(parseInt(id, 10));
+        }
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        const searchInput = document.getElementById('list-search');
+        if (searchInput && searchInput.value) {
+          searchInput.value = '';
+          searchInput.dispatchEvent(new Event('input'));
+        }
+        // Remove selection
+        const selectedItem = document.querySelector('#attendance-list .list-item.list-item-selected');
+        if (selectedItem) selectedItem.classList.remove('list-item-selected');
       }
     });
   }

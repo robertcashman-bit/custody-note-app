@@ -1157,18 +1157,38 @@ html.dark .home-attention-item:hover {
 .attendance-list { list-style: none; }
 .attendance-list li {
   background: var(--surface); border-radius: var(--radius);
-  padding: 0.85rem 1.2rem; margin-bottom: 0.45rem;
+  padding: 0.95rem 1.3rem; margin-bottom: 0.5rem;
   border: 1px solid var(--border); border-left: 4px solid var(--primary);
   display: flex; justify-content: space-between; align-items: center;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
-.attendance-list li:hover { background: var(--list-hover); }
+.attendance-list li:hover { 
+  background: var(--list-hover);
+  transform: translateX(2px);
+  box-shadow: var(--card-shadow);
+}
+.attendance-list li.list-item-selected {
+  background: var(--list-hover);
+  border-left-color: var(--accent-brand);
+  box-shadow: 0 0 0 2px var(--accent-brand, #3b82f6);
+}
 .attendance-list .meta { font-size: 0.8rem; color: var(--on-surface-muted); margin-top: 2px; }
 .attendance-list .title { font-weight: 700; font-size: 0.95rem; color: var(--on-surface); }
-.badge { padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; }
-.badge.draft { background: #fef3c7; color: #92400e; }
-.badge.finalised { background: #d1fae5; color: #065f46; }
+.badge { 
+  padding: 0.25rem 0.6rem; 
+  border-radius: 999px; 
+  font-size: 0.75rem; 
+  font-weight: 700; 
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  transition: transform 0.15s ease;
+}
+.badge:hover {
+  transform: scale(1.05);
+}
+.badge.draft { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
+.badge.finalised { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }
 .badge.badge-tel { background: #dbeafe; color: #1e40af; font-size: 0.6rem; }
 .badge.badge-att { background: #f1f5f9; color: #475569; font-size: 0.6rem; }
 .badge.badge-vol { background: #ccfbf1; color: #0f766e; font-size: 0.6rem; }
@@ -1436,16 +1456,25 @@ html.dark .station-code { color: var(--primary); }
 .form-group select,
 .form-group textarea {
   width: 100%;
-  padding: 0.6rem 0.85rem;
+  padding: 0.65rem 0.9rem;
   border: 2px solid var(--border); border-radius: 6px;
-  font-size: 1rem; font-family: inherit;
+  font-size: 1.05rem; font-family: inherit;
   background: var(--input-bg); color: var(--on-surface);
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 .form-group input:focus,
 .form-group select:focus,
-.form-group textarea:focus { outline: none; border-color: var(--primary); background: var(--input-focus-bg); }
-.form-group textarea { min-height: 90px; resize: vertical; }
+.form-group textarea:focus { 
+  outline: none; 
+  border-color: var(--primary); 
+  background: var(--input-focus-bg);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.form-group textarea { 
+  min-height: 100px; 
+  resize: vertical;
+  line-height: 1.5;
+}
 .form-group input[readonly] { background: var(--surface-alt); color: var(--on-surface-muted); }
 
 /* Native time input + Now button */
