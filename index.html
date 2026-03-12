@@ -92,7 +92,6 @@
       <div class="header-right">
         <span id="header-form-actions" class="header-form-actions">
           <span id="header-autosave" class="autosave-indicator"></span>
-          <button type="button" class="btn btn-small btn-accent" id="header-export-pdf-btn" title="Export PDF to Desktop">&#128196; PDF</button>
           <button type="button" class="btn btn-small btn-backup-now" id="header-backup-now-btn" title="Save &amp; backup now">&#128190; Backup</button>
           <button type="button" class="btn-small" id="header-kb-help" title="Keyboard shortcuts">?</button>
           <button type="button" class="btn btn-small" id="header-laa-forms" title="Generate LAA forms">LAA Forms</button>
@@ -536,7 +535,6 @@
           <button type="button" id="form-prev" class="bottom-btn prev-btn" title="Previous section (Ctrl+←)">&#9664; Prev</button>
           <div id="section-progress-bar" class="section-progress-bar"></div>
           <button type="button" id="form-sections-btn" class="bottom-btn sections-btn" title="Jump to section">&#9783;</button>
-          <button type="button" id="form-bottom-export-pdf" class="bottom-btn export-pdf-btn" title="Export PDF to Desktop">&#128196; PDF</button>
           <button type="button" id="form-save-exit" class="bottom-btn save-btn" title="Save and exit (Ctrl+S)">Save</button>
           <div id="section-progress-bar-2" class="section-progress-bar"></div>
           <button type="button" id="form-next" class="bottom-btn next-btn" title="Next section (Ctrl+→)">Next &#9654;</button>
@@ -1090,7 +1088,7 @@
               <p>The main attendance form has <strong>9 sections</strong> in the flow (1–9), navigated with Previous/Next or the <strong>Sections</strong> button. <strong>Consents &amp; Retainer, Third Party Authority, Authorities, Communications Log, Supervisor Review, LAA Declaration, and Admin &amp; Billing</strong> are <em>not</em> part of this flow &mdash; they open in a <strong>separate screen</strong> when you tap their card on section 1 or from Home.</p>
 
               <h4>1. Case Reference &amp; Arrival</h4>
-              <p>DSCC number, UFN, work type, instruction time, first contact with client, police station (typeahead search), instructing firm, OIC details. The police station field lets you type the first few letters and select from the LAA station list.</p>
+              <p>The first field is <strong>Attendance type</strong> &mdash; choose <em>Custody</em> (client under arrest) or <em>Voluntary</em> (client attending voluntarily). Changing this switches the form to the appropriate layout. Then: DSCC number, UFN, work type, instruction time, first contact with client, police station (typeahead search), instructing firm, OIC details. The police station field lets you type the first few letters and select from the LAA station list.</p>
 
               <h4>2. Journey to Station</h4>
               <p>Set-off time, arrival time, mileage. Used for travel and waiting time calculations.</p>
@@ -1144,7 +1142,7 @@
                 <li><strong>Welfare &amp; Safeguards</strong> &mdash; Youth/vulnerable adult, appropriate adult, interpreter, fitness to be interviewed.</li>
                 <li><strong>Disclosure &amp; Preparation</strong> &mdash; Disclosure summary, advice given, reasons, interview strategy.</li>
                 <li><strong>Attendance Record</strong> &mdash; Consultation and interview times, representations made. If the client is <strong>arrested during attendance</strong>, complete arrest time and conversion notes, then use <strong>Convert to custody workflow</strong> to create a new custody record with audit trail.</li>
-                <li><strong>Outcome &amp; Billing</strong> &mdash; Outcome code (CN04–CN13), sufficient benefit, time recording.</li>
+                <li><strong>Outcome &amp; Billing</strong> &mdash; Outcome code (CN04–CN11), sufficient benefit, time recording.</li>
                 <li><strong>Client Aftercare</strong> &mdash; What was explained, next steps, follow-up tasks.</li>
               </ol>
               <p>The <strong>Billing readiness</strong> panel (near Finalise) shows warnings for missing UFN, outcome code, DSCC reference, or sufficient benefit note. A <strong>confidentiality reminder</strong> appears before exporting or emailing.</p>
@@ -1199,9 +1197,11 @@
                 <li><strong>Compact view</strong> &mdash; toggle compact view for a denser list.</li>
               </ul>
               <h4>Record Actions</h4>
-              <p>Each record in the list has three action buttons:</p>
+              <p>Each record in the list has action buttons:</p>
               <ul>
                 <li><strong>Edit</strong> &mdash; Opens the record for editing. If the record is finalised, you will be asked to confirm; the status reverts to draft until you re-finalise.</li>
+                <li><strong>Print PDF</strong> &mdash; Opens an in-app print preview of the full attendance note with a Print dialog.</li>
+                <li><strong>Export PDF</strong> &mdash; Saves the attendance note as a PDF file to your Desktop.</li>
                 <li><strong>Duplicate</strong> &mdash; Creates a copy of the record for a further visit. Client details are carried over; attendance-specific details are cleared.</li>
                 <li><strong>New matter</strong> &mdash; Creates a new matter for the same client (same as duplicate but clearly a new matter).</li>
                 <li><strong>Delete</strong> &mdash; Deletes the record. Finalised records are soft-deleted (can be recovered). You will be asked for a reason.</li>
@@ -1229,11 +1229,13 @@
           <details class="help-section">
             <summary class="help-heading">Firms</summary>
             <div class="help-content">
-              <p>Manage firms that instruct you from the <strong>Firms</strong> page (gear menu).</p>
+              <p>Manage firms that instruct you from the <strong>Firms</strong> page (gear menu or bottom navigation).</p>
               <ul>
-                <li><strong>Add a new firm</strong> &mdash; enter firm name, contact name, phone, and email.</li>
+                <li><strong>Add a new firm</strong> &mdash; enter firm name, LAA account number, contact name, phone, and email.</li>
                 <li><strong>Use existing firm</strong> &mdash; search your saved firms by name or contact.</li>
+                <li><strong>Edit a firm</strong> &mdash; click the <strong>Edit</strong> button on any firm row to amend its name, LAA account, contact details, phone, or email. Click <strong>Save</strong> to confirm.</li>
                 <li><strong>Star a firm</strong> &mdash; click the star icon to set a firm as your default. The default firm is auto-selected on new records.</li>
+                <li><strong>Remove a firm</strong> &mdash; click <strong>Remove</strong> to delete a firm from your list.</li>
               </ul>
               <p>When creating a new record, you can select from your saved firms or add a new firm inline.</p>
             </div>
@@ -1291,7 +1293,7 @@
                 <li><strong>Finalised</strong> &mdash; locked for editing. To make changes, use the <strong>Amend</strong> button in All Records, which reverts the record to draft.</li>
               </ul>
               <p>To finalise a record, press <strong>Save / Exit</strong> and choose <strong>Finalise</strong>. The app checks for missing required fields and warns you before finalising.</p>
-              <p>To export a PDF, press <kbd>Ctrl</kbd> + <kbd>E</kbd> or use the PDF export button. The PDF is saved to your Desktop. Before export, print, or email, a <strong>confidentiality reminder</strong> appears &mdash; only share with authorised recipients and ensure client confidentiality (SRA standards).</p>
+              <p>To export a PDF, press <kbd>Ctrl</kbd> + <kbd>E</kbd> or use the <strong>Export PDF</strong> button. The PDF (including the LAA declaration) is saved to your Desktop as a single file. To print, use the <strong>Print Attendance Note</strong> button or press <kbd>Ctrl</kbd> + <kbd>P</kbd> for an in-app print preview with a Print dialog. Before export, print, or email, a <strong>confidentiality reminder</strong> appears &mdash; only share with authorised recipients and ensure client confidentiality (SRA standards).</p>
               <p>Official LAA forms (CRM1, CRM2, CRM3, Applicant Declaration) are available in Settings and from the <strong>LAA Forms</strong> button in the form header. Forms are pre-filled from the current record where possible.</p>
               <h4>LAA billing codes</h4>
               <p>The form uses standard LAA codes for billing and claims. Key fields: <strong>DSCC number</strong> (from the duty solicitor call centre), <strong>UFN</strong> (Unique File Number from the instructing firm), <strong>MAAT ID</strong> (client identifier on the Legal Aid Agency system), and <strong>LAA account</strong> (for case tracking). These appear in Admin &amp; Billing and in the form header. Use them to match your exported PDFs and time records to LAA claims and firm file systems.</p>

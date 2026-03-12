@@ -325,12 +325,6 @@
     html += rowAlways('LAA Account No.', s.firmLaaAccount || d.firmLaaAccount);
     html += '</table>';
 
-    /* ─── Signature ─── */
-    html += '<div class="lf-sig-row">';
-    html += sigBlock('Client Signature', 'clientSig', d);
-    html += '<div class="lf-sig-box"><div class="lf-sig-label">Date</div>' + esc(fmtDate(d.laaSignatureDate) || fmtDate(d.date) || '') + '</div>';
-    html += '</div>';
-
     html += privacyNotice();
     html += formEnd('CRM1', 'Version 16 February 2025');
     return html;

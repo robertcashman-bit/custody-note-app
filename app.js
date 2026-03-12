@@ -465,6 +465,7 @@ var LAA = {
       id: 'caseArrival', title: '1. Case Reference & Arrival',
       keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'ourFileNumber', 'sufficientBenefitTest'],
       fields: [
+        { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: ['custody','voluntary'], cols: 2, helpTitle: 'Custody = client under arrest. Voluntary = client attending voluntarily (free to leave).' },
         { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Type invoice number (auto-assigned on create if left blank)' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
@@ -1211,9 +1212,7 @@ var LAA = {
           'CN08 \u2013 Fixed Penalty Notice',
           'CN09 \u2013 Released no bail',
           'CN10 \u2013 Bail varied / extended',
-          'CN11 \u2013 Bail not varied / extended',
-          'CN12 \u2013 Pre-Charge Engagement agreed',
-          'CN13 \u2013 Pre-Charge Engagement not agreed'
+          'CN11 \u2013 Bail not varied / extended'
         ], cols: 2 },
         { key: 'furtherAttendance', label: 'Further attendance likely?', type: 'select', options: ['Yes','No'] },
         { key: '_note_spec974', label: 'Spec 9.74: If telephone advice is followed by attendance, claim INVC only (not both INVB + INVC).', type: 'sectionNote', showIf: { field: 'furtherAttendance', value: 'Yes' } },
@@ -1261,6 +1260,7 @@ var LAA = {
       id: 'caseArrival', title: '1. Case Reference & Arrival',
       keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'ourFileNumber', 'sufficientBenefitTest'],
       fields: [
+        { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: ['voluntary','custody'], cols: 2, helpTitle: 'Voluntary = client attending voluntarily (free to leave). Custody = client under arrest.' },
         { key: '_note_voluntary', label: 'This is a voluntary attendance. Client is free to leave unless arrested.', type: 'sectionNote' },
         { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Type invoice number (auto-assigned on create if left blank)' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
@@ -1614,10 +1614,9 @@ var LAA = {
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
           'CN04 \u2013 No further action','CN05 \u2013 Simple caution / reprimand / warning','CN06 \u2013 Charge / Summons','CN07 \u2013 Conditional caution','CN08 \u2013 Fixed penalty notice',
-          'CN12 \u2013 Pre-charge engagement agreed','CN13 \u2013 Pre-charge engagement not agreed','Draft'
+          'Draft'
         ], cols: 2 },
         { key: 'stageReachedOrFeeCode', label: 'Stage reached / Fee code', type: 'text', placeholder: 'e.g. INVC', cols: 2 },
-        { key: 'preChargeEngagementFlag', label: 'Pre-charge engagement?', type: 'select', options: ['Yes','No','N/A'] },
         { key: 'nextLocationName', label: 'Next Location', type: 'text' },
         { key: 'nextDate', label: 'Next Date', type: 'date' },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
@@ -3905,7 +3904,12 @@ var REQUIRED_FIELD_KEYS = [
         switch (actionBtn.dataset.action) {
           case 'amend': amendAttendance(id, rec.status, title); break;
           case 'print': printFromList(id); break;
-          case 'print-declaration': printDeclarationFromList(id); break;
+          case 'print-preview': confirmConfidentialityThen(function() {
+            window.api.attendanceGet(id).then(function(row) {
+              if (!row || !row.data) { showToast('Could not load record', 'error'); return; }
+              printAttendanceNoteWithData(safeJson(row.data));
+            });
+          }); break;
           case 'dup': duplicateAttendance(id); break;
           case 'newMatter': newMatterFromAttendance(id); break;
           case 'delete': deleteAttendance(id, title); break;
@@ -3995,8 +3999,8 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
-              '<button type="button" class="btn-list-action" data-action="print" title="Export attendance note and declaration to Desktop">Export PDF</button>' +
-              '<button type="button" class="btn-list-action" data-action="print-declaration" title="Print Applicant Declaration only">Declaration</button>' +
+              '<button type="button" class="btn-list-action" data-action="print-preview" title="Print preview the full attendance note">Print PDF</button>' +
+              '<button type="button" class="btn-list-action" data-action="print" title="Export attendance note PDF to Desktop">Export PDF</button>' +
               '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
               '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
               '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>' +
@@ -4559,7 +4563,7 @@ var REQUIRED_FIELD_KEYS = [
     else if (formData.attendanceMode === 'voluntary') leftParts.push('<span class="context-vol-badge">Voluntary</span>');
     leftParts.push('<span><span class="context-label">Client:</span>' + esc(clientName) + '</span>');
     leftParts.push('<span><span class="context-label">Station:</span>' + esc(station) + '</span>');
-    if (formData.custodyNumber) leftParts.push('<span><span class="context-label">Custody:</span>' + esc(formData.custodyNumber) + '</span>');
+    if (formData.custodyNumber && formData.attendanceMode !== 'voluntary') leftParts.push('<span><span class="context-label">Custody:</span>' + esc(formData.custodyNumber) + '</span>');
     if (formData.ufn) leftParts.push('<span><span class="context-label">UFN:</span>' + esc(formData.ufn) + '</span>');
     if (formData.timeArrival && formData.date) {
       const dur = getAttendanceDuration();
@@ -4788,6 +4792,16 @@ var REQUIRED_FIELD_KEYS = [
               if (formData.policeStationName) { formData.bailReturnStationName = formData.policeStationName; setFieldValueSilent('bailReturnStationName', formData.policeStationName); }
               if (formData.schemeId) { formData.bailReturnStationCode = formData.schemeId; setFieldValueSilent('bailReturnStationCode', formData.schemeId); }
             }
+          }
+          if (field === 'attendanceMode') {
+            var isVol = formData.attendanceMode === 'voluntary';
+            activeFormSections = isVol ? voluntaryFormSections : formSections;
+            formData.workType = isVol ? 'Voluntary Police Station Attendance' : (formData.workType || 'First Police Station Attendance');
+            currentSectionIdx = 0;
+            _renderedSections = {};
+            renderForm(formData);
+            showView('new');
+            return;
           }
           if (timeAndCalcFields.includes(field)) { autoCalcTimes(); }
           else if (['travelSocial','travelUnsocial','waitingSocial','waitingUnsocial','adviceSocial','adviceUnsocial','milesClaimable'].includes(field)) recalcTotal();
@@ -7849,7 +7863,10 @@ var REQUIRED_FIELD_KEYS = [
      PDF GENERATION – comprehensive LAA-compliant
      ═══════════════════════════════════════════════ */
   /* Free-trial advert last page – keep in sync with index.html splash-advert */
-  var PDF_CASENOTE_ADVERT = '<div style="margin-top:32px;padding:12px 16px;border-top:1px solid #e2e8f0;text-align:center;font-size:9px;color:#94a3b8;">Created with <strong style="color:#2563eb;">Custody Note</strong> &mdash; Fast, compliant police-station attendance notes. Free trial available at custodynote.com. <a href="https://www.custodynote.com" style="color:#2563eb;">www.custodynote.com</a> | <a href="mailto:robertcashman@defencelegalservices.com" style="color:#2563eb;">robertcashman@defencelegalservices.com</a></div>';
+  var PDF_CASENOTE_ADVERT = '<div style="margin-top:32px;padding:14px 20px;border-top:2px solid #2563eb;text-align:center;font-size:10px;color:#475569;background:#f8fafc;border-radius:0 0 6px 6px;">' +
+    '<strong style="color:#2563eb;font-size:11px;">Custody Note</strong> &mdash; Digital attendance notes for police station representatives.<br>' +
+    '<span style="font-size:11px;font-weight:600;color:#0f172a;">Free trial? Go to <a href="https://www.custodynote.com" style="color:#2563eb;text-decoration:underline;">www.custodynote.com</a></span>' +
+    '</div>';
   function formatInstructionDateTime(val) {
     if (!val || typeof val !== 'string') return '';
     var s = val.trim();
@@ -7944,7 +7961,7 @@ var REQUIRED_FIELD_KEYS = [
 '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>DSCC number:</strong> ' + h(d.dsccRef || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
-'<div class="cover-item"><strong>Custody no.:</strong> ' + h(d.custodyNumber || '\u2014') + '</div>' +
+(d.attendanceMode !== 'voluntary' ? '<div class="cover-item"><strong>Custody no.:</strong> ' + h(d.custodyNumber || '\u2014') + '</div>' : '') +
 '<div class="cover-item"><strong>Firm:</strong> ' + h(firmName || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
@@ -8668,7 +8685,6 @@ PDF_CASENOTE_ADVERT +
       (d.handedBackToDSCCReason ? row('Reason handed back to DSCC', d.handedBackToDSCCReason) : '') +
       (d.nonAttendanceReason ? row('Reason for non-attendance', d.nonAttendanceReason) : '') +
       row('Outcome code (LAA)', d.outcomeCode) + row('Stage / fee code', d.stageReachedOrFeeCode) +
-      row('Pre-charge engagement?', d.preChargeEngagementFlag) +
       row('Next location', d.nextLocationName) + row('Next date', fmtDate(d.nextDate)) +
       row('Further attendance needed?', d.furtherAttendance) +
       '</table>' +
@@ -9747,7 +9763,13 @@ PDF_CASENOTE_ADVERT +
               showView('new');
               break;
             case 'laa-forms': showLaaFormsNav(); break;
-            case 'shortcut-print-pdf': showAttendancePickerModal('print'); break;
+            case 'shortcut-print-pdf':
+              if (document.getElementById('view-form')?.classList.contains('active') && currentAttendanceId) {
+                confirmConfidentialityThen(printAttendanceNote);
+              } else {
+                showAttendancePickerModal('print');
+              }
+              break;
             case 'shortcut-email-solicitor': showAttendancePickerModal('email'); break;
             case 'firms': showView('firms'); break;
             case 'reports': showView('reports'); break;
@@ -9793,7 +9815,13 @@ PDF_CASENOTE_ADVERT +
             case 'laa-forms': showLaaFormsNav(); break;
             case 'firms': showView('firms'); break;
             case 'reports': showView('reports'); break;
-            case 'shortcut-print-pdf': showAttendancePickerModal('print'); break;
+            case 'shortcut-print-pdf':
+              if (document.getElementById('view-form')?.classList.contains('active') && currentAttendanceId) {
+                confirmConfidentialityThen(printAttendanceNote);
+              } else {
+                showAttendancePickerModal('print');
+              }
+              break;
             case 'shortcut-email-solicitor': showAttendancePickerModal('email'); break;
             case 'shortcut-backup-now':
               window.api.backupNow().then(function(p) { showToast('Backup saved: ' + p, 'success'); }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); });
@@ -10025,7 +10053,9 @@ PDF_CASENOTE_ADVERT +
       window.api.getAppVersion().then(function(info) {
         var vEl = document.getElementById('app-version');
         var uEl = document.getElementById('app-updated');
+        var ssVer = document.getElementById('ss-app-version');
         if (vEl && info.version) vEl.textContent = info.version;
+        if (ssVer && info.version) ssVer.textContent = info.version;
         if (uEl && info.lastUpdated) uEl.textContent = info.lastUpdated;
         if (info.version) window.__appVersion = info.version;
       });

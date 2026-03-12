@@ -573,6 +573,7 @@ html.dark .gear-section-label { color: var(--text-muted); }
 }
 .footer-status-group {
   display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+  flex: 1;
 }
 .app-footer .footer-brand {
   color: color-mix(in srgb, var(--text-muted) 80%, white 20%);
@@ -2691,8 +2692,8 @@ kbd {
   .home-section-title { padding-left: 1rem; padding-right: 1rem; }
   .reports-grid { grid-template-columns: 1fr 1fr; }
   .app-footer { padding: 0.45rem 0.75rem; font-size: 0.76rem; }
-  .footer-row { justify-content: center; }
-  .footer-status-group { justify-content: center; }
+  .footer-row { justify-content: space-between; }
+  .footer-status-group { flex: 1; }
   .list-item-actions { flex-wrap: wrap; gap: 0.25rem; }
   .home-status-strip { padding: 0.75rem 1rem; flex-wrap: wrap; }
   .help-page { padding: 0 0.75rem 2rem; }
@@ -2741,10 +2742,10 @@ kbd {
   .standalone-option-card { padding: 0.5rem; font-size: 0.75rem; }
   .standalone-option-card-icon { font-size: 1.1rem; }
   .app-footer { padding: 0.35rem 0.5rem; font-size: 0.74rem; }
-  .footer-row { flex-wrap: wrap; justify-content: center; gap: 0.3rem; }
-  .footer-status-group { justify-content: center; }
+  .footer-row { flex-wrap: wrap; justify-content: space-between; gap: 0.3rem; }
+  .footer-status-group { flex: 1; }
   .footer-chip { min-height: 28px; padding: 0.15rem 0.5rem; }
-  .footer-brand { text-align: center; }
+  .footer-brand { text-align: right; white-space: nowrap; }
   .btn-list-action { padding: 0.25rem 0.45rem; font-size: 0.72rem; }
   .settings-card { border-radius: 8px; }
   .settings-card input[type="text"],
