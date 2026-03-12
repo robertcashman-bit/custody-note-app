@@ -74,6 +74,52 @@ function buildEmailBody(templateId, data, feeEarnerName) {
   var timeStr    = _oicFmtTime(_oicClean(data.timeArrival));
   var dateTime   = [dateStr, timeStr ? 'at ' + timeStr : ''].filter(Boolean).join(' ');
 
+  /* ── Outcome-aware helpers ── */
+  var od = _oicClean(data.outcomeDecision);
+  var isChargedNoBail  = od === 'Charged without Bail' || od === 'Remanded in Custody';
+  var isChargedWithBail = od === 'Charged with Bail';
+  var isCharged        = isChargedNoBail || isChargedWithBail;
+  var isBailNoCharge   = od === 'Bail without charge' || od === 'Released Under Investigation';
+  var outcomeKnown     = !!(od);
+
+  /* Build a list of charges from record data (up to 4) */
+  function _chargeLines() {
+    var lines = [];
+    for (var n = 1; n <= 4; n++) {
+      var det = _oicClean(data['outcomeOffence' + n + 'Details']);
+      if (det) lines.push('\u2022 ' + det);
+    }
+    return lines;
+  }
+
+  /* Court paragraph when charged */
+  function _courtPara() {
+    var courtName = _oicClean(data.courtName);
+    var courtDate = _oicFmtDate(_oicClean(data.courtDate));
+    var courtTime = _oicClean(data.courtTime) || '10:00';
+    var parts = [];
+    if (courtDate) parts.push('The court date is ' + courtDate + ' at ' + courtTime + '.');
+    if (courtName) parts.push('The relevant court is ' + courtName + '.');
+    return parts.join(' ');
+  }
+
+  /* Bail conditions paragraph (only when bailed) */
+  function _bailCondsPara() {
+    var bailType = _oicClean(data.bailType);
+    var bailDate = _oicFmtDate(_oicClean(data.bailDate));
+    if (bailType === 'Unconditional') {
+      return 'The client was released on unconditional bail' + (bailDate ? ', with a return date of ' + bailDate : '') + '.';
+    }
+    if (bailType === 'Conditional') {
+      var conds = _oicClean(data.bailConditions) || _oicClean(data.bailConditionsChecklist || '').replace(/\|/g, ', ');
+      return 'The client was released on conditional bail' +
+        (bailDate ? ' with a return date of ' + bailDate : '') +
+        (conds ? '. Bail conditions: ' + conds + '.' : '.');
+    }
+    if (bailDate) return 'The client was bailed to return on ' + bailDate + '.';
+    return '';
+  }
+
   /* ── Template 1: First Attendance Disclosure Request ── */
   if (templateId === 'first_attendance' || !templateId) {
     var intro;
@@ -99,55 +145,101 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     ].join('\n');
   }
 
+  /* ── Templates 2 & 3: build outcome-specific paragraphs ── */
+  function _outcomeParas(concise) {
+    if (!outcomeKnown) {
+      /* No outcome recorded — use generic "please confirm" language */
+      if (concise) {
+        return [
+          'I should be grateful if you would please now confirm the outcome of this matter.',
+          '',
+          'If the client was bailed, please provide the bail return date and time, the police station ' +
+            'to which they are bailed, and details of any bail conditions.',
+          '',
+          'If the client was charged, please provide details of the charges, the court date and time, ' +
+            'the relevant Magistrates\u2019 Court, and whether the client was granted bail or remanded ' +
+            'together with any bail conditions if applicable.'
+        ];
+      }
+      return [
+        'I would be grateful if you could please confirm the outcome of this matter.',
+        '',
+        'If the client was bailed, could you please provide:',
+        '\u2022 bail return date and time',
+        '\u2022 the police station to which they are bailed',
+        '\u2022 details of any bail conditions',
+        '',
+        'If the client was charged, could you please provide:',
+        '\u2022 details of the charges',
+        '\u2022 the court date and time',
+        '\u2022 the relevant Magistrates\u2019 Court',
+        '\u2022 whether the client was granted bail or remanded',
+        '\u2022 any bail conditions if applicable'
+      ];
+    }
+
+    var paras = [];
+
+    if (isCharged) {
+      var charges = _chargeLines();
+      if (charges.length) {
+        paras.push('The client was charged with the following:');
+        charges.forEach(function(c) { paras.push(c); });
+        paras.push('');
+      }
+      var courtP = _courtPara();
+      if (courtP) { paras.push(courtP); paras.push(''); }
+
+      if (isChargedWithBail) {
+        var bailP = _bailCondsPara();
+        if (bailP) { paras.push(bailP); paras.push(''); }
+      } else {
+        /* Charged without Bail / Remanded — do NOT ask about bail conditions */
+        paras.push('The client was ' + (od === 'Remanded in Custody' ? 'remanded in custody' : 'charged without bail') + '.');
+        paras.push('');
+      }
+
+      paras.push('Could you please confirm the above details and provide any additional information?');
+    } else if (isBailNoCharge) {
+      var bailP2 = _bailCondsPara();
+      if (bailP2) { paras.push(bailP2); paras.push(''); }
+      paras.push('Could you please confirm these details and advise of the outcome of the investigation?');
+    } else {
+      /* Other known outcome — just confirm */
+      paras.push('The outcome recorded is: ' + od + '.');
+      paras.push('');
+      paras.push('Could you please confirm this and provide any further information?');
+    }
+
+    return paras;
+  }
+
   /* ── Template 2: Follow-Up / Outcome Request ── */
   if (templateId === 'follow_up') {
-    return [
+    var body2 = [
       salutation,
       '',
       'I write further to my attendance upon ' + clientName + ' at ' + station +
         ' Police Station on behalf of ' + firmName + '.',
-      '',
-      'I would be grateful if you could please confirm the outcome of this matter.',
-      '',
-      'If the client was bailed, could you please provide:',
-      '\u2022 bail return date and time',
-      '\u2022 the police station to which they are bailed',
-      '\u2022 details of any bail conditions',
-      '',
-      'If the client was charged, could you please provide:',
-      '\u2022 details of the charges',
-      '\u2022 the court date and time',
-      '\u2022 the relevant Magistrates\u2019 Court',
-      '\u2022 whether the client was granted bail or remanded',
-      '\u2022 any bail conditions if applicable',
-      '',
-      'Many thanks,',
-      '',
-      feeName
-    ].join('\n');
+      ''
+    ];
+    _outcomeParas(false).forEach(function(l) { body2.push(l); });
+    body2.push('', 'Many thanks,', '', feeName);
+    return body2.join('\n');
   }
 
   /* ── Template 3: No Reply Follow-Up ── */
   if (templateId === 'no_reply') {
-    return [
+    var body3 = [
       salutation,
       '',
       'I refer to my previous email regarding ' + clientName + ', following my attendance upon them at ' +
         station + ' Police Station on behalf of ' + firmName + '.',
-      '',
-      'I should be grateful if you would please now confirm the outcome of this matter.',
-      '',
-      'If the client was bailed, please provide the bail return date and time, the police station to ' +
-        'which they are bailed, and details of any bail conditions.',
-      '',
-      'If the client was charged, please provide details of the charges, the court date and time, ' +
-        'the relevant Magistrates\u2019 Court, and whether the client was granted bail or remanded ' +
-        'together with any bail conditions if applicable.',
-      '',
-      'Many thanks,',
-      '',
-      feeName
-    ].join('\n');
+      ''
+    ];
+    _outcomeParas(true).forEach(function(l) { body3.push(l); });
+    body3.push('', 'Many thanks,', '', feeName);
+    return body3.join('\n');
   }
 
   return '';

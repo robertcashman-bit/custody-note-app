@@ -744,6 +744,19 @@
             <p id="cloud-backup-error" class="settings-hint" style="color:#c00;display:none;"></p>
             <p id="cloud-backup-error-support" class="settings-hint" style="display:none;margin-top:0.25rem;font-size:0.85rem;">Include the reference from the message above when you <a href="https://www.custodynote.com/support" target="_blank" rel="noopener">contact support</a>.</p>
           </div>
+          <!-- Restore from local backup -->
+          <div style="margin:0.75rem 0 0.5rem;">
+            <button type="button" id="btn-local-backup-restore" class="btn btn-secondary">Restore from Local Backup</button>
+          </div>
+          <div id="local-restore-panel" style="display:none;margin-top:0.75rem;">
+            <p class="settings-hint">Backups found in your local and off-site folders. Select one to restore. <strong>A safety copy of your current database is saved first.</strong></p>
+            <select id="local-restore-select" style="width:100%;max-width:480px;padding:0.5rem;margin-bottom:0.5rem;font-size:0.85rem;"></select>
+            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.25rem;">
+              <button type="button" id="btn-local-restore-confirm" class="btn btn-primary">Restore selected backup</button>
+              <button type="button" id="btn-local-restore-cancel" class="btn btn-secondary">Cancel</button>
+              <span id="local-restore-status" class="settings-hint" style="margin:0;"></span>
+            </div>
+          </div>
           <p class="settings-hint" style="margin-top:0;">Your attendance data is backed up automatically as encrypted files. Syncing to a cloud folder keeps an off-site copy safe.</p>
           <label>Local backup folder</label>
           <div class="setting-row">

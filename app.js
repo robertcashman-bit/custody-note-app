@@ -3420,35 +3420,93 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function refreshSettingsStatusCard() {
+    /* Version */
     var ssVer = document.getElementById('ss-app-version');
     if (ssVer) {
       var av = document.getElementById('app-version');
       ssVer.textContent = av ? av.textContent : '—';
     }
+
+    /* Network — read live, don't copy from footer which may not have updated yet */
     var ssNet = document.getElementById('ss-net-val');
     if (ssNet) {
-      var netEl = document.getElementById('net-status-text');
-      ssNet.textContent = netEl ? netEl.textContent : '—';
+      ssNet.textContent = navigator.onLine ? 'Online' : 'Offline';
     }
+
+    /* Backup — query IPC directly so value is always fresh */
     var ssBkp = document.getElementById('ss-backup-val');
     if (ssBkp) {
-      var bkpEl = document.getElementById('backup-status-text');
-      ssBkp.textContent = bkpEl ? bkpEl.textContent : '—';
+      if (window.api && window.api.backupStatus) {
+        window.api.backupStatus().then(function(bs) {
+          if (!bs || bs.state === 'not-initialised') {
+            ssBkp.textContent = 'Starting…';
+          } else if (bs.state === 'running') {
+            ssBkp.textContent = 'Running';
+          } else if (bs.state === 'error') {
+            ssBkp.textContent = 'Error — retrying';
+          } else if (bs.lastSuccess) {
+            var d = new Date(bs.lastSuccess);
+            ssBkp.textContent = 'OK — ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+          } else {
+            ssBkp.textContent = 'Idle';
+          }
+        }).catch(function() { ssBkp.textContent = '—'; });
+      } else {
+        /* Fallback: copy from footer if IPC not available */
+        var bkpEl = document.getElementById('backup-status-text');
+        if (bkpEl && bkpEl.textContent && !bkpEl.textContent.includes('checking')) {
+          ssBkp.textContent = bkpEl.textContent;
+        } else {
+          ssBkp.textContent = '—';
+        }
+      }
     }
+
+    /* Check for Update — call triggerUpdateCheck() directly (safe even before it's defined,
+       because refreshSettingsStatusCard runs after init completes) */
     var ssUpd = document.getElementById('ss-check-update-btn');
     if (ssUpd && !ssUpd._wired) {
       ssUpd._wired = true;
       ssUpd.addEventListener('click', function() {
-        var btn = document.getElementById('home-check-update-btn');
-        if (btn) btn.click();
+        if (typeof triggerUpdateCheck === 'function') {
+          triggerUpdateCheck();
+        } else {
+          /* triggerUpdateCheck is defined later in the same scope; use the settings button as fallback */
+          var settingsBtn = document.getElementById('check-updates-btn');
+          if (settingsBtn) settingsBtn.click();
+        }
       });
     }
+
+    /* Backup Now — call IPC directly, no need for a form to be open */
     var ssBkpNow = document.getElementById('ss-backup-now-btn');
     if (ssBkpNow && !ssBkpNow._wired) {
       ssBkpNow._wired = true;
       ssBkpNow.addEventListener('click', function() {
-        var btn = document.getElementById('header-backup-now-btn');
-        if (btn) btn.click();
+        if (ssBkpNow.classList.contains('backing-up')) return;
+        ssBkpNow.classList.add('backing-up');
+        var orig = ssBkpNow.textContent;
+        ssBkpNow.textContent = 'Saving…';
+        var backupFn = (window.api && (window.api.flushAndBackup || window.api.backupNow));
+        if (!backupFn) {
+          ssBkpNow.textContent = orig;
+          ssBkpNow.classList.remove('backing-up');
+          showToast('Backup not available', 'error');
+          return;
+        }
+        backupFn().then(function() {
+          ssBkpNow.textContent = '✓ Done';
+          showToast('Backup completed', 'success');
+          /* Refresh the backup value */
+          setTimeout(function() { refreshSettingsStatusCard(); }, 500);
+        }).catch(function(err) {
+          showToast('Backup failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error');
+        }).finally(function() {
+          setTimeout(function() {
+            ssBkpNow.textContent = orig;
+            ssBkpNow.classList.remove('backing-up');
+          }, 2500);
+        });
       });
     }
   }
@@ -10758,6 +10816,64 @@ PDF_CASENOTE_ADVERT +
         });
       }
     });
+    /* ── Local backup restore panel ── */
+    document.getElementById('btn-local-backup-restore')?.addEventListener('click', function() {
+      var panel = document.getElementById('local-restore-panel');
+      if (!panel) return;
+      var isOpen = panel.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : '';
+      if (!isOpen && window.api.localBackupList) {
+        var sel = document.getElementById('local-restore-select');
+        var status = document.getElementById('local-restore-status');
+        if (sel) sel.innerHTML = '<option value="">Scanning backups…</option>';
+        if (status) status.textContent = '';
+        window.api.localBackupList().then(function(resp) {
+          if (!sel) return;
+          sel.innerHTML = '';
+          if (!resp.ok || !resp.files || !resp.files.length) {
+            sel.innerHTML = '<option value="">No local backups found</option>';
+            return;
+          }
+          resp.files.forEach(function(f) {
+            var opt = document.createElement('option');
+            opt.value = f.path;
+            var kb = Math.round(f.sizeBytes / 1024);
+            var dt = new Date(f.modifiedAt).toLocaleString('en-GB');
+            opt.textContent = f.name + ' — ' + kb + ' KB — ' + dt + ' (' + f.dir + ')';
+            sel.appendChild(opt);
+          });
+        }).catch(function() {
+          if (sel) sel.innerHTML = '<option value="">Could not read backup folder</option>';
+        });
+      }
+    });
+
+    document.getElementById('btn-local-restore-cancel')?.addEventListener('click', function() {
+      var panel = document.getElementById('local-restore-panel');
+      if (panel) panel.style.display = 'none';
+    });
+
+    document.getElementById('btn-local-restore-confirm')?.addEventListener('click', function() {
+      var sel = document.getElementById('local-restore-select');
+      var status = document.getElementById('local-restore-status');
+      var filePath = sel ? sel.value : '';
+      if (!filePath) { if (status) status.textContent = 'Select a backup first'; return; }
+      showConfirm('Restore from this backup? Your current database will be replaced. A safety copy is saved first.').then(function(ok) {
+        if (!ok) { if (status) status.textContent = 'Cancelled'; return; }
+        if (status) status.textContent = 'Restoring…';
+        window.api.localBackupRestore({ filePath: filePath }).then(function(result) {
+          if (result.ok) {
+            if (status) status.textContent = '✓ Restored successfully — reloading…';
+            setTimeout(function() { location.reload(); }, 1500);
+          } else {
+            if (status) status.textContent = 'Error: ' + (result.error || 'Restore failed');
+          }
+        }).catch(function(e) {
+          if (status) status.textContent = 'Error: ' + (e && e.message ? e.message : 'Unknown');
+        });
+      });
+    });
+
     // Auto-update status listener
     if (window.api.onAppUpdateStatus) {
       window.api.onAppUpdateStatus(function(data) {

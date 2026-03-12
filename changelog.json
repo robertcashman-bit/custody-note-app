@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.60",
+      "version": "1.4.61",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Settings: fix permanent 'Checking\u2026' spinners in the Status card — network and backup values now update instantly when Settings opens.",
+        "Settings: fix 'Backup now' button — now calls backup directly without requiring a record to be open.",
+        "Settings: fix 'Check for update' button — now triggers the update check correctly from the Status card.",
+        "Settings: add 'Restore from Local Backup' panel — lists backups from your local and off-site folders, lets you select and restore any one. Safety copy saved first.",
+        "Email OIC templates: outcome-aware body text. When outcome is known, Templates 2 and 3 pre-fill charges, court date/time, and bail details from the record. When charged without bail or remanded, bail conditions are never mentioned."
+      ]
+    },
+    {
+      "version": "1.4.60",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Installer: Start Menu shortcut now reliably appears in the Windows apps list. Added menu category folder 'Custody Note' and explicit shortcut name so the app is easy to find and pin."
       ]
