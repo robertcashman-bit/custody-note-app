@@ -3408,6 +3408,7 @@ var REQUIRED_FIELD_KEYS = [
       if (bf) bf.value = s.backupFolder || '';
       const obf = document.getElementById('setting-offsite-backup-folder');
       if (obf) obf.value = s.offsiteBackupFolder || '';
+      refreshOffsiteBackupChooser(s);
       const cloudUrlEl = document.getElementById('setting-cloud-backup-url');
       if (cloudUrlEl) cloudUrlEl.value = s.cloudBackupUrl || '';
       const cloudTokenEl = document.getElementById('setting-cloud-backup-token');
@@ -3472,6 +3473,92 @@ var REQUIRED_FIELD_KEYS = [
     loadFirmsList();
   }
 
+  function refreshOffsiteBackupChooser(currentSettings) {
+    var container = document.getElementById('offsite-backup-chooser');
+    var inputEl = document.getElementById('setting-offsite-backup-folder');
+    if (!container || !inputEl) return;
+    var currentPath = (currentSettings && currentSettings.offsiteBackupFolder) ? currentSettings.offsiteBackupFolder.trim() : '';
+    container.innerHTML = '<div class="offsite-scanning">Scanning for OneDrive, Dropbox, Google Drive&hellip;</div>';
+    window.api.detectCloudFolders().then(function(folders) {
+      var iconMap = { 'OneDrive': '\u2601', 'Dropbox': '\uD83D\uDCE6', 'Google Drive': '\uD83D\uDCC1', 'iCloud Drive': '\u2601' };
+      var matched = (folders || []).some(function(f) { return f.path === currentPath; });
+      var html = '';
+      if (currentPath && !matched) {
+        var folderName = currentPath.split('\\').pop().split('/').pop() || 'Custom folder';
+        html += '<div class="offsite-option selected" data-path="' + esc(currentPath) + '"><span class="offsite-icon">\uD83D\uDCC1</span><span class="offsite-label"><strong>' + esc(folderName) + '</strong><small>' + esc(currentPath) + '</small></span></div>';
+      }
+      (folders || []).forEach(function(f) {
+        var icon = '\u2601';
+        for (var k in iconMap) { if (f.name.indexOf(k.split(' ')[0]) !== -1) { icon = iconMap[k]; break; } }
+        var sel = f.path === currentPath ? ' selected' : '';
+        html += '<div class="offsite-option' + sel + '" data-path="' + esc(f.path) + '"><span class="offsite-icon">' + icon + '</span><span class="offsite-label"><strong>' + esc(f.name) + '</strong><small>' + esc(f.path) + '</small></span></div>';
+      });
+      html += '<div class="offsite-option" data-path="__browse__"><span class="offsite-icon">\uD83D\uDCC2</span><span class="offsite-label"><strong>Choose a different folder&hellip;</strong><small>Browse for OneDrive, Dropbox, or any folder</small></span></div>';
+      html += '<div class="offsite-option' + (!currentPath ? ' selected' : '') + '" data-path=""><span class="offsite-icon">\u2717</span><span class="offsite-label"><strong>Don&rsquo;t sync</strong><small>Backups stay on this computer only</small></span></div>';
+      container.innerHTML = html;
+      if (folders.length === 0) {
+        container.insertAdjacentHTML('afterbegin', '<div class="offsite-none-msg">No cloud folders found. Use &ldquo;Choose a different folder&rdquo; below to browse.</div>');
+      }
+      container.querySelectorAll('.offsite-option').forEach(function(el) {
+        el.addEventListener('click', function() {
+          var p = this.dataset.path;
+          if (p === '__browse__') {
+            window.api.chooseFolder({ forOffsite: true }).then(function(chosen) {
+              if (chosen) {
+                inputEl.value = chosen;
+                window.api.setSettings({ offsiteBackupFolder: chosen }).then(function() {
+                  showSettingsSavedToast();
+                  window.api.getSettings().then(function(s) {
+                    updateBackupDestSummary(s);
+                    refreshOffsiteBackupChooser(s);
+                  });
+                });
+              }
+            });
+            return;
+          }
+          inputEl.value = p || '';
+          container.querySelectorAll('.offsite-option').forEach(function(o) { o.classList.remove('selected'); });
+          el.classList.add('selected');
+          window.api.setSettings({ offsiteBackupFolder: p || '' }).then(function() {
+            showSettingsSavedToast();
+            window.api.getSettings().then(updateBackupDestSummary);
+          });
+        });
+      });
+    }).catch(function() {
+      container.innerHTML = '<div class="offsite-none-msg">Could not scan for cloud folders. Use &ldquo;Choose a different folder&rdquo; to browse.</div>' +
+        '<div class="offsite-option" data-path="__browse__"><span class="offsite-icon">\uD83D\uDCC2</span><span class="offsite-label"><strong>Choose a folder&hellip;</strong></span></div>' +
+        '<div class="offsite-option' + (!currentPath ? ' selected' : '') + '" data-path=""><span class="offsite-icon">\u2717</span><span class="offsite-label"><strong>Don&rsquo;t sync</strong></span></div>';
+      container.querySelectorAll('.offsite-option').forEach(function(el) {
+        el.addEventListener('click', function() {
+          if (this.dataset.path === '__browse__') {
+            window.api.chooseFolder({ forOffsite: true }).then(function(chosen) {
+              if (chosen) {
+                inputEl.value = chosen;
+                window.api.setSettings({ offsiteBackupFolder: chosen }).then(function() {
+                  showSettingsSavedToast();
+                  window.api.getSettings().then(function(s) {
+                    updateBackupDestSummary(s);
+                    refreshOffsiteBackupChooser(s);
+                  });
+                });
+              }
+            });
+          } else {
+            inputEl.value = '';
+            container.querySelectorAll('.offsite-option').forEach(function(o) { o.classList.remove('selected'); });
+            el.classList.add('selected');
+            window.api.setSettings({ offsiteBackupFolder: '' }).then(function() {
+              showSettingsSavedToast();
+              window.api.getSettings().then(updateBackupDestSummary);
+            });
+          }
+        });
+      });
+    });
+  }
+
   function updateBackupDestSummary(s) {
     var localEl = document.getElementById('backup-dest-local-path');
     if (localEl) localEl.textContent = s.backupFolder || 'Desktop (default)';
@@ -3483,7 +3570,7 @@ var REQUIRED_FIELD_KEYS = [
         offsitePathEl.textContent = folderName + ' (' + ofp + ')';
         offsitePathEl.style.color = '#059669';
       } else {
-        offsitePathEl.textContent = 'Not configured — click Detect or Browse in the section below';
+        offsitePathEl.textContent = 'Not configured — choose a folder in the section below';
         offsitePathEl.style.color = '';
       }
     }
@@ -10008,34 +10095,6 @@ PDF_CASENOTE_ADVERT +
           if (el) { el.value = p; window.api.setSettings({ backupFolder: p }).then(showSettingsSavedToast); }
         }
       });
-    });
-    document.getElementById('setting-offsite-backup-browse')?.addEventListener('click', () => {
-      window.api.chooseFolder({ forOffsite: true }).then(p => {
-        if (p) {
-          const el = document.getElementById('setting-offsite-backup-folder');
-          if (el) { el.value = p; window.api.setSettings({ offsiteBackupFolder: p }).then(function() { showSettingsSavedToast(); window.api.getSettings().then(updateBackupDestSummary); }); }
-        }
-      });
-    });
-    document.getElementById('setting-offsite-detect')?.addEventListener('click', () => {
-      var panel = document.getElementById('offsite-detected-folders');
-      if (!panel) return;
-      panel.style.display = '';
-      panel.innerHTML = '<p style="font-size:0.85rem;color:var(--text-muted);">Scanning&hellip;</p>';
-      window.api.detectCloudFolders().then(function(folders) {
-        if (!folders || folders.length === 0) { panel.innerHTML = '<p style="font-size:0.85rem;color:#d97706;">No cloud sync folders found (OneDrive, Dropbox, Google Drive). Use Browse to select a folder manually.</p>'; return; }
-        var html = '<p style="font-size:0.85rem;font-weight:600;margin:0 0 0.4rem;">Cloud folders found on this PC:</p>';
-        folders.forEach(function(f) { html += '<button type="button" class="btn btn-secondary offsite-pick-btn" data-path="' + f.path.replace(/"/g, '&quot;') + '" style="display:block;margin-bottom:0.3rem;text-align:left;font-size:0.85rem;width:100%;">' + f.name + ' &mdash; ' + f.path + '</button>'; });
-        panel.innerHTML = html;
-        panel.querySelectorAll('.offsite-pick-btn').forEach(function(btn) {
-          btn.addEventListener('click', function() {
-            var p = this.dataset.path;
-            var el = document.getElementById('setting-offsite-backup-folder');
-            if (el) el.value = p;
-            window.api.setSettings({ offsiteBackupFolder: p }).then(function() { showSettingsSavedToast(); panel.style.display = 'none'; window.api.getSettings().then(updateBackupDestSummary); });
-          });
-        });
-      }).catch(function() { panel.innerHTML = '<p style="font-size:0.85rem;color:#dc2626;">Detection failed.</p>'; });
     });
     document.getElementById('settings-save-btn')?.addEventListener('click', function() {
       if (typeof saveSettings === 'function') saveSettings();

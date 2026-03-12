@@ -105,15 +105,22 @@
           <div id="gear-dropdown" class="gear-dropdown hidden">
             <button type="button" class="gear-item gear-item-licence" data-action="enter-licence-key">Enter licence key</button>
             <div class="gear-divider gear-divider-licence"></div>
-            <button type="button" class="gear-item" data-action="records">Records</button>
-            <button type="button" class="gear-item" data-action="laa-forms">LAA Forms</button>
-            <div class="gear-divider"></div>
-            <button type="button" class="gear-item" data-action="firms">Firms</button>
-            <button type="button" class="gear-item" data-action="reports">Reports</button>
-            <button type="button" class="gear-item" data-action="settings">Settings</button>
-            <div class="gear-divider"></div>
+            <div class="gear-section-label">Navigate</div>
+            <button type="button" class="gear-item" data-action="home">&#8962; Home</button>
+            <button type="button" class="gear-item" data-action="records">&#128196; Records</button>
+            <button type="button" class="gear-item" data-action="new-attendance">&#10133; New attendance</button>
+            <div class="gear-section-label">Forms &amp; documents</div>
+            <button type="button" class="gear-item" data-action="laa-forms">&#128203; LAA Forms</button>
+            <button type="button" class="gear-item" data-action="shortcut-print-pdf">&#128424; Print PDF</button>
+            <button type="button" class="gear-item" data-action="shortcut-email-solicitor">&#9993; Email to solicitor</button>
+            <div class="gear-section-label">Manage</div>
+            <button type="button" class="gear-item" data-action="firms">&#127970; Firms</button>
+            <button type="button" class="gear-item" data-action="reports">&#128202; Reports</button>
+            <div class="gear-section-label">App</div>
+            <button type="button" class="gear-item" data-action="shortcut-backup-now">&#128190; Backup now</button>
             <button type="button" class="gear-item" data-action="check-updates" id="gear-check-updates">&#8635; Check for updates</button>
-            <button type="button" class="gear-item" data-action="help">Help / Instructions</button>
+            <button type="button" class="gear-item" data-action="settings">&#9881; Settings</button>
+            <button type="button" class="gear-item" data-action="help">&#10067; Help</button>
           </div>
         </div>
         <button type="button" id="dark-mode-toggle" class="header-icon-btn" title="Toggle dark mode">&#9790;</button>
@@ -719,14 +726,12 @@
             <li><strong>Hourly archive</strong> &mdash; A timestamped copy is saved every hour. Up to 48 hourly files are kept; older ones are removed automatically.</li>
             <li><strong>Backup now</strong> &mdash; On the Attendance List (Records), use the &ldquo;Backup now&rdquo; button to create an immediate backup plus refresh the latest file.</li>
           </ul>
-          <label>Off-site backup folder <span style="color:#059669;font-weight:600;">(recommended)</span></label>
-          <div class="setting-row">
-            <input type="text" id="setting-offsite-backup-folder" readonly placeholder="Not configured — click Detect or Browse">
-            <button type="button" id="setting-offsite-detect" class="btn btn-secondary" title="Scan for OneDrive, Dropbox, Google Drive folders">Detect</button>
-            <button type="button" id="setting-offsite-backup-browse" class="btn btn-secondary">Browse</button>
+          <label>Sync backups to the cloud <span style="color:#059669;font-weight:600;">(recommended)</span></label>
+          <p class="settings-hint" style="margin:0 0 0.5rem;">Choose a folder that syncs to the cloud. Encrypted backups are copied there automatically.</p>
+          <div id="offsite-backup-chooser" class="offsite-backup-chooser">
+            <div class="offsite-scanning">Scanning for OneDrive, Dropbox, Google Drive&hellip;</div>
           </div>
-          <div id="offsite-detected-folders" style="display:none;margin:0.5rem 0;"></div>
-          <p class="settings-hint">Choose a folder that syncs to the cloud (e.g. <strong>OneDrive</strong>, <strong>Dropbox</strong>, <strong>Google Drive</strong>). Encrypted backups are copied there automatically so you have a copy away from this computer. Click <strong>Detect</strong> to find cloud folders on this PC.</p>
+          <input type="text" id="setting-offsite-backup-folder" readonly style="display:none;" aria-hidden="true">
           <label>Custom cloud backup URL (optional)</label>
           <input type="url" id="setting-cloud-backup-url" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
           <p class="settings-hint" style="margin-top:0.25rem;">For your own backup API only. Leave blank to use Custody Note&rsquo;s managed AWS backup (included with your licence).</p>

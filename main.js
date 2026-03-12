@@ -3698,11 +3698,19 @@ ipcMain.handle('detect-cloud-folders', () => {
     { name: 'Dropbox', sub: 'Dropbox' },
     { name: 'Google Drive', sub: 'Google Drive' },
     { name: 'iCloud Drive', sub: 'iCloudDrive' },
+    { name: 'iCloud Drive', sub: 'iCloud Drive' },
   ];
+  const seenPaths = new Set();
   const found = [];
   for (const c of candidates) {
     const full = path.join(home, c.sub);
-    try { if (fs.existsSync(full) && fs.statSync(full).isDirectory()) found.push({ name: c.name, path: full }); } catch (_) {}
+    if (seenPaths.has(full)) continue;
+    try {
+      if (fs.existsSync(full) && fs.statSync(full).isDirectory()) {
+        found.push({ name: c.name, path: full });
+        seenPaths.add(full);
+      }
+    } catch (_) {}
   }
   try {
     const entries = fs.readdirSync(home, { withFileTypes: true });

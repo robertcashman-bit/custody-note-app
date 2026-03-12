@@ -17,6 +17,7 @@ function loadSettings() {
     document.getElementById('setting-backup-folder').value = s.backupFolder || '';
     var obf = document.getElementById('setting-offsite-backup-folder');
     if (obf) obf.value = s.offsiteBackupFolder || '';
+    if (typeof refreshOffsiteBackupChooser === 'function') refreshOffsiteBackupChooser(s);
     var cloudUrlEl = document.getElementById('setting-cloud-backup-url');
     if (cloudUrlEl) cloudUrlEl.value = s.cloudBackupUrl || '';
     var cloudTokenEl = document.getElementById('setting-cloud-backup-token');
