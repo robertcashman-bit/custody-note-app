@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.59",
+      "version": "1.4.60",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Installer: Start Menu shortcut now reliably appears in the Windows apps list. Added menu category folder 'Custody Note' and explicit shortcut name so the app is easy to find and pin."
+      ]
+    },
+    {
+      "version": "1.4.59",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Records list: add PDF button to each row — exports directly to Desktop without opening the record.",
         "First-launch setup: add email address field; email is saved to Settings and pre-fills the From address. Test-email button appears as you type your address.",
