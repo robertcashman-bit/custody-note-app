@@ -1,9 +1,23 @@
 {
   "releases": [
     {
-      "version": "1.4.50",
+      "version": "1.4.51",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Bottom nav bar",
+        "sticky PDF export button",
+        "compact PDF layout",
+        "firm inline edit",
+        "auto-fill default firm on new record",
+        "settings status card",
+        "backup off label when unconfigured"
+      ]
+    },
+    {
+      "version": "1.4.50",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Voluntary interview: hide custody/arrest/PACE fields",
         "LAA declaration partner question",
