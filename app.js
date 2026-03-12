@@ -3906,7 +3906,7 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
-              '<button type="button" class="btn-list-action" data-action="print" title="Export PDF and open for print">Print</button>' +
+              '<button type="button" class="btn-list-action" data-action="print" title="Export attendance note and declaration to Desktop">Export PDF</button>' +
               '<button type="button" class="btn-list-action" data-action="print-declaration" title="Print Applicant Declaration only">Declaration</button>' +
               '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
               '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
@@ -3945,13 +3945,46 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  /* ─── PRINT FROM LIST ─── */
+  /* ─── EXPORT PDF FROM LIST (attendance + declaration when applicable) ─── */
   function printFromList(id) {
     window.api.attendanceGet(id).then(function(row) {
       if (!row || !row.data) { showToast('Could not load record', 'error'); return; }
       var data = safeJson(row.data);
-      previewPdfWithData(data);
-    }).catch(function(e) { showToast('Print failed: ' + (e && e.message), 'error'); });
+      window.api.getSettings().then(function(settings) {
+        const builder = getPdfBuilderForData(data);
+        const html = builder(data, settings);
+        const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
+        const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
+        const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
+        window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
+          if (window.api.openPath) window.api.openPath(p);
+          showToast('PDF saved: ' + p, 'success');
+          if (data._formType === 'attendance' && (data.laaClientFullName || data.clientSig || data.feeEarnerSig)) {
+            window.api.laaGenerateOfficialPdf({ formType: 'declaration', data: data }).then(function(res) {
+              if (res.error) return;
+              showToast('Declaration PDF saved: ' + (res.path || '').replace(/\\/g, '/').split('/').pop(), 'success');
+            }).catch(function() {});
+          }
+        }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
+      }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
+    }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
+  }
+
+  function printDeclarationFromForm() {
+    var data = getFormData();
+    if (!data.clientSig) {
+      showPrompt('Why is the applicant declaration not signed? This reason will appear on the printed form.', 'Declaration not signed', 'e.g. Telephone advice – client to sign later; Client released before signing; etc.', data.declarationUnsignedReason).then(function(reason) {
+        if (reason === null) return;
+        data.declarationUnsignedReason = reason || 'Not signed';
+        if (reason && currentAttendanceId) {
+          var merged = Object.assign({}, data);
+          window.api.attendanceSave({ id: currentAttendanceId, data: merged }).catch(function() {});
+        }
+        generateLaaFormPdf('declaration', 'Applicant Declaration', data);
+      });
+    } else {
+      generateLaaFormPdf('declaration', 'Applicant Declaration', data);
+    }
   }
 
   /* ─── PRINT DECLARATION FROM LIST ─── */
@@ -4944,6 +4977,8 @@ var REQUIRED_FIELD_KEYS = [
         endActions.className = 'form-actions form-end-actions';
         endActions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
+          '<button type="button" class="btn btn-accent" id="form-pdf" title="Save attendance note and declaration to Desktop">Export PDF</button>' +
+          '<button type="button" class="btn btn-accent" id="form-declaration" title="Export Applicant Declaration only">Declaration</button>' +
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
           '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>';
         section.appendChild(endActions);
@@ -8442,7 +8477,15 @@ PDF_CASENOTE_ADVERT +
       const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-      window.api.printToPdf({ html: html, filename: fn }).then(p => showToast('PDF saved: ' + p, 'success')).catch(e => showToast('PDF failed: ' + (e && e.message), 'error'));
+      window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
+        showToast('PDF saved: ' + p, 'success');
+        if (data._formType === 'attendance' && (data.laaClientFullName || data.clientSig || data.feeEarnerSig)) {
+          window.api.laaGenerateOfficialPdf({ formType: 'declaration', data: data }).then(function(res) {
+            if (res.error) return;
+            showToast('Declaration PDF saved: ' + (res.path || '').replace(/\\/g, '/').split('/').pop(), 'success');
+          }).catch(function() {});
+        }
+      }).catch(e => showToast('PDF failed: ' + (e && e.message), 'error'));
     });
   }
 
@@ -9796,6 +9839,7 @@ PDF_CASENOTE_ADVERT +
       switch (btn.id) {
         case 'form-finalise': validateBeforeFinalise(); break;
         case 'form-pdf': confirmConfidentialityThen(exportPdf); break;
+        case 'form-declaration': confirmConfidentialityThen(printDeclarationFromForm); break;
         case 'form-print': confirmConfidentialityThen(printAttendanceNote); break;
         case 'form-email': confirmConfidentialityThen(emailPdf); break;
         case 'form-email-solicitor': confirmConfidentialityThen(function() { emailToSolicitorWithData(getFormData()); }); break;
