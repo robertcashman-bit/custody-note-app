@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.4.49",
+      "version": "1.4.50",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Voluntary interview: hide custody/arrest/PACE fields",
+        "LAA declaration partner question",
+        "gear menu Documents/Data labels",
+        "backup settings simplified with Detect cloud folders",
+        "auto-update checks every 45 min and on app focus",
+        "PDF export now renders all form sections"
+      ]
+    },
+    {
+      "version": "1.4.49",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Export PDF and Declaration in custody and voluntary forms",
         "Declaration saved separately with attendance",
