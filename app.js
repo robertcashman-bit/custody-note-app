@@ -10109,6 +10109,7 @@ PDF_CASENOTE_ADVERT +
     /* First-launch setup check: hide splash immediately so user can complete setup */
     window.api.getSettings().then(function(s) {
       window._appSettingsCache = s || {};
+      window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
       if (!s.dsccPin || !s.feeEarnerNameDefault) {
         hideSplash();
         initFirstLaunchModal();
