@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.43",
+      "version": "1.4.44",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Print PDF button added to records list — export and open PDF directly from the record list",
+        "LAA Declaration with client signature now embedded in Consultation section (after client understanding checkboxes, before conflict check) for both custody and voluntary attendances",
+        "Fixed voluntary form checklist groups not rendering ('Data & disclosure' group was missing from render order)"
+      ]
+    },
+    {
+      "version": "1.4.43",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Check for Updates button added to hamburger menu — visible on every page",
         "DB export cached — avoids re-serialising the entire database when data hasn't changed",

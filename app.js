@@ -710,6 +710,7 @@ var LAA = {
     {
       id: 'attend', title: '6. Consultation (Attend on Client)',
       keyFields: ['conflictCheckResult', 'niNumber', 'clientInstructions', 'clientDecision'],
+      inlineDeclaration: true,
       checklist: [
         { key: 'chkConflictCheck', label: 'Conflict of interest check completed', group: 'Conflict & independence' },
         { key: 'chkConfidentiality', label: 'Advised on Confidentiality', group: 'Conflict & independence' },
@@ -724,6 +725,12 @@ var LAA = {
         { key: 'chkDisclosure', label: 'Explained Disclosure', group: 'Custody record & disclosure' },
       ],
       fields: [
+        { key: '_h_laa_inline', label: 'Legal Aid Declaration', type: 'sectionHeading' },
+        { key: '_note_laa_inline', label: 'The applicant should read and sign the declaration below. This records the client\'s consent for legal aid.', type: 'sectionNote' },
+        { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
+        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig' },
+        { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
+        { key: 'laaSignatureTime', label: 'Time of Signature (auto)', type: 'time', readonly: true },
         { key: '_h_conflict', label: 'Conflict Check', type: 'sectionHeading' },
         { key: '_note_conflict_mandatory', label: 'A conflict of interest check MUST be completed before advising the client. Record the result below.', type: 'sectionNote' },
         { key: 'conflictCheckResult', label: 'Conflict check result', type: 'select', options: ['Negative','Positive','N/A'] },
@@ -1440,6 +1447,7 @@ var LAA = {
     {
       id: 'attend', title: '6. Consultation (Attend on Client)',
       keyFields: ['conflictCheckResult', 'niNumber', 'clientInstructions', 'clientDecision'],
+      inlineDeclaration: true,
       checklist: [
         { key: 'chkConflictCheck', label: 'Conflict of interest check completed', group: 'Conflict & independence' },
         { key: 'chkConfidentiality', label: 'Advised on Confidentiality', group: 'Conflict & independence' },
@@ -1453,6 +1461,12 @@ var LAA = {
         { key: 'chkDisclosure', label: 'Explained Disclosure', group: 'Data & disclosure' },
       ],
       fields: [
+        { key: '_h_laa_inline', label: 'Legal Aid Declaration', type: 'sectionHeading' },
+        { key: '_note_laa_inline', label: 'The applicant should read and sign the declaration below. This records the client\'s consent for legal aid.', type: 'sectionNote' },
+        { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
+        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig' },
+        { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
+        { key: 'laaSignatureTime', label: 'Time of Signature (auto)', type: 'time', readonly: true },
         { key: '_h_conflict', label: 'Conflict Check', type: 'sectionHeading' },
         { key: '_note_conflict_mandatory', label: 'A conflict of interest check MUST be completed before advising the client. Record the result below.', type: 'sectionNote' },
         { key: 'conflictCheckResult', label: 'Conflict check result', type: 'select', options: ['Negative','Positive','N/A'] },
@@ -3703,6 +3717,7 @@ var REQUIRED_FIELD_KEYS = [
         e.stopPropagation();
         switch (actionBtn.dataset.action) {
           case 'amend': amendAttendance(id, rec.status, title); break;
+          case 'print': printFromList(id); break;
           case 'dup': duplicateAttendance(id); break;
           case 'newMatter': newMatterFromAttendance(id); break;
           case 'delete': deleteAttendance(id, title); break;
@@ -3789,6 +3804,7 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
+              '<button type="button" class="btn-list-action" data-action="print" title="Export PDF and open for print">Print</button>' +
               '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
               '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
               '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>' +
@@ -3824,6 +3840,15 @@ var REQUIRED_FIELD_KEYS = [
     } else {
       openAttendance(id);
     }
+  }
+
+  /* ─── PRINT FROM LIST ─── */
+  function printFromList(id) {
+    window.api.attendanceGet(id).then(function(row) {
+      if (!row || !row.data) { showToast('Could not load record', 'error'); return; }
+      var data = safeJson(row.data);
+      previewPdfWithData(data);
+    }).catch(function(e) { showToast('Print failed: ' + (e && e.message), 'error'); });
   }
 
   /* ─── DELETE ATTENDANCE (#13) ─── */
@@ -4561,7 +4586,7 @@ var REQUIRED_FIELD_KEYS = [
           if (!groups[g]) groups[g] = [];
           groups[g].push(c);
         });
-        const groupOrder = ['Conflict & independence', 'Advice to client', 'Client understanding', 'Custody record & disclosure', ''];
+        const groupOrder = ['Conflict & independence', 'Advice to client', 'Client understanding', 'Custody record & disclosure', 'Data & disclosure', ''];
         groupOrder.forEach(grpLabel => {
           const items = groups[grpLabel];
           if (!items || !items.length) return;
@@ -4584,6 +4609,16 @@ var REQUIRED_FIELD_KEYS = [
           cl.appendChild(row);
         });
         section.appendChild(cl);
+      }
+
+      if (sec.inlineDeclaration && refData.laaDeclarationText) {
+        const decl = document.createElement('div');
+        decl.className = 'declaration-box inline-declaration';
+        decl.innerHTML = '<h3>Applicant\u2019s Declaration</h3><p class="declaration-text">' + esc(refData.laaDeclarationText) + '</p>';
+        if (refData.privacyNoticeText) {
+          decl.innerHTML += '<p class="privacy-text">' + esc(refData.privacyNoticeText) + '</p>';
+        }
+        section.appendChild(decl);
       }
 
       const grid = document.createElement('div');
