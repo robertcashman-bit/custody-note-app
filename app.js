@@ -4324,23 +4324,29 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   /* ─── AUTO-FILL DECLARATION & RETAINER FROM CLIENT (#4) ─── */
+  function autoFillDeclarationFields() {
+    if (!formData) return;
+    const dateSource = formData.date || (formData.instructionDateTime && formData.instructionDateTime.slice(0, 10));
+    if (!formData.laaClientFullName && (formData.forename || formData.surname)) {
+      const full = [formData.forename, formData.surname].filter(Boolean).join(' ').toUpperCase();
+      setFieldValue('laaClientFullName', full);
+      formData.laaClientFullName = full;
+    }
+    if (!formData.laaSignatureDate && dateSource) {
+      setFieldValueSilent('laaSignatureDate', dateSource);
+      formData.laaSignatureDate = dateSource;
+    }
+    if (!formData.laaFeeEarnerFullName && formData.feeEarnerName) {
+      setFieldValue('laaFeeEarnerFullName', formData.feeEarnerName);
+      formData.laaFeeEarnerFullName = formData.feeEarnerName;
+    }
+  }
+
   function autoFillFromClient() {
     const sec = activeFormSections[currentSectionIdx];
-    if (sec.id === 'laaDeclaration' || sec.id === 'telDeclaration') {
-      if (!formData.laaClientFullName && (formData.forename || formData.surname)) {
-        const full = [formData.forename, formData.surname].filter(Boolean).join(' ').toUpperCase();
-        setFieldValue('laaClientFullName', full);
-        formData.laaClientFullName = full;
-      }
-      // Auto-fill signature date from form date when empty.
-      if (!formData.laaSignatureDate && formData.date) {
-        setFieldValueSilent('laaSignatureDate', formData.date);
-        formData.laaSignatureDate = formData.date;
-      }
-      if (!formData.laaFeeEarnerFullName && formData.feeEarnerName) {
-        setFieldValue('laaFeeEarnerFullName', formData.feeEarnerName);
-        formData.laaFeeEarnerFullName = formData.feeEarnerName;
-      }
+    if (!sec) return;
+    if (sec.id === 'laaDeclaration' || sec.id === 'telSignOff' || (sec.id === 'attend' && sec.inlineDeclaration)) {
+      autoFillDeclarationFields();
     }
     if (sec.id === 'consents') {
       if (!formData.retainerClientName && (formData.forename || formData.surname)) {
@@ -4531,7 +4537,7 @@ var REQUIRED_FIELD_KEYS = [
         if (sec.hasDeclarationText && refData.laaDeclarationText) {
           const decl = document.createElement('div');
           decl.className = 'declaration-box';
-          if (refData.privacyNoticeText) decl.innerHTML = '<p class="privacy-text"><strong>Privacy Notice</strong>: ' + esc(refData.privacyNoticeText) + '</p>';
+          if (refData.privacyNoticeText) decl.innerHTML = '<p class="privacy-text">' + esc(refData.privacyNoticeText) + '</p>';
           decl.innerHTML += '<h3>Applicant\'s Declaration</h3><p class="declaration-text">' + esc(refData.laaDeclarationText) + '</p>';
           section.appendChild(decl);
         }
@@ -4579,16 +4585,8 @@ var REQUIRED_FIELD_KEYS = [
           section.appendChild(supActions);
         }
         form.appendChild(section);
-        if (sec.id === 'laaDeclaration' || sec.id === 'telDeclaration') {
-          if (!formData.laaClientFullName && (formData.forename || formData.surname)) {
-            const full = [formData.forename, formData.surname].filter(Boolean).join(' ').toUpperCase();
-            setFieldValue('laaClientFullName', full);
-            formData.laaClientFullName = full;
-          }
-          if (!formData.laaSignatureDate && formData.date) {
-            setFieldValueSilent('laaSignatureDate', formData.date);
-            formData.laaSignatureDate = formData.date;
-          }
+        if (sec.id === 'laaDeclaration') {
+          autoFillDeclarationFields();
         }
         applyConditionalVisibility();
         updateContextBar();
@@ -4703,7 +4701,7 @@ var REQUIRED_FIELD_KEYS = [
         const decl = document.createElement('div');
         decl.className = 'declaration-box';
         if (refData.privacyNoticeText) {
-          decl.innerHTML = '<p class="privacy-text"><strong>Privacy Notice</strong>: ' + esc(refData.privacyNoticeText) + '</p>';
+          decl.innerHTML = '<p class="privacy-text">' + esc(refData.privacyNoticeText) + '</p>';
         }
         decl.innerHTML += '<h3>Applicant\'s Declaration</h3><p class="declaration-text">' + esc(refData.laaDeclarationText) + '</p>';
         section.appendChild(decl);
@@ -4751,7 +4749,7 @@ var REQUIRED_FIELD_KEYS = [
         const decl = document.createElement('div');
         decl.className = 'declaration-box inline-declaration';
         if (refData.privacyNoticeText) {
-          decl.innerHTML = '<p class="privacy-text"><strong>Privacy Notice</strong>: ' + esc(refData.privacyNoticeText) + '</p>';
+          decl.innerHTML = '<p class="privacy-text">' + esc(refData.privacyNoticeText) + '</p>';
         }
         decl.innerHTML += '<h3>Applicant\u2019s Declaration</h3><p class="declaration-text">' + esc(refData.laaDeclarationText) + '</p>';
         section.appendChild(decl);
