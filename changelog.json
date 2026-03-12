@@ -1,9 +1,28 @@
 {
   "releases": [
     {
-      "version": "1.4.46",
+      "version": "1.4.48",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Privacy notice above declaration",
+        "auto-fill client name and date on LAA declaration",
+        "compliance fixes for Consultation and telephone Sign Off"
+      ]
+    },
+    {
+      "version": "1.4.47",
+      "date": "2026-03-12",
+      "latest": false,
+      "changes": [
+        "Privacy notice above declaration",
+        "auto-fill client name and date on LAA declaration"
+      ]
+    },
+    {
+      "version": "1.4.46",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Off-site backup: auto-detect OneDrive/Dropbox/Google Drive, simple one-click folder choice",
         "Improved iCloud Drive detection"
