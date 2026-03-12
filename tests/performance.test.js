@@ -45,12 +45,12 @@ describe('Performance — typing path', () => {
     assert.ok(appJsSource.includes('EDITOR_ACTIVITY_DEBOUNCE_MS'), 'must define editor activity debounce');
   });
 
-  it('autosave debounce is 800–1200ms', () => {
-    assert.ok(appJsSource.includes('QUIET_SAVE_DEBOUNCE_MS = 1200'), 'QUIET_SAVE_DEBOUNCE_MS should be 1200');
+  it('autosave debounce is 3000ms for fluid typing', () => {
+    assert.ok(appJsSource.includes('QUIET_SAVE_DEBOUNCE_MS = 3000'), 'QUIET_SAVE_DEBOUNCE_MS should be 3000');
   });
 
-  it('autosave interval is 15 seconds (not 10)', () => {
-    assert.ok(appJsSource.includes('setInterval(quietSave, 15000)'), 'autoSaveTimer should be 15000ms');
+  it('autosave interval is 30 seconds for fluid typing', () => {
+    assert.ok(appJsSource.includes('setInterval(quietSave, 30000)'), 'autoSaveTimer should be 30000ms');
     assert.ok(!appJsSource.includes('setInterval(quietSave, 10000)'), 'autoSaveTimer must not be 10000ms');
   });
 });
@@ -80,12 +80,12 @@ describe('Performance — main process', () => {
   });
 
   it('configures calmer backup scheduler timings', () => {
-    assert.ok(mainJsSource.includes('quickMinIntervalMs: 15 * 60 * 1000'),
-      'main.js should set a 15 minute quick backup interval');
-    assert.ok(mainJsSource.includes('userIdleGraceMs: 45 * 1000'),
-      'main.js should defer backups until the user is idle for 45 seconds');
-    assert.ok(mainJsSource.includes('periodicCheckMs: 3 * 60 * 1000'),
-      'main.js should reduce periodic backup checks to every 3 minutes');
+    assert.ok(mainJsSource.includes('quickMinIntervalMs: 30 * 60 * 1000'),
+      'main.js should set a 30 minute quick backup interval');
+    assert.ok(mainJsSource.includes('userIdleGraceMs: 90 * 1000'),
+      'main.js should defer backups until the user is idle for 90 seconds');
+    assert.ok(mainJsSource.includes('periodicCheckMs: 10 * 60 * 1000'),
+      'main.js should reduce periodic backup checks to every 10 minutes');
   });
 });
 

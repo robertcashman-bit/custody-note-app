@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   loadReferenceData: () => ipcRenderer.invoke('load-reference-data'),
   saveCsv: (payload) => ipcRenderer.invoke('save-csv', payload),
   backupNow: () => ipcRenderer.invoke('backup-now'),
+  flushAndBackup: () => ipcRenderer.invoke('flush-and-backup'),
   backupStatus: () => ipcRenderer.invoke('backup-status'),
   onBackupStatusChanged: (cb) => ipcRenderer.on('backup-status-changed', (_, data) => cb(data)),
   reportEditorActivity: () => ipcRenderer.send('editor-activity'),

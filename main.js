@@ -403,7 +403,7 @@ let _saveDbInProgress = false;
 
 function saveDb() {
   if (!db) return;
-  if (_saveDbInProgress) return; /* Prevent concurrent saves – avoids ENOENT race on rename */
+  if (_saveDbInProgress) return;
   _saveDbInProgress = true;
   try {
     const data = db.export();
@@ -412,13 +412,21 @@ function saveDb() {
     const dir = path.dirname(dbPath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const tmpPath = dbPath + '.tmp';
-    fs.writeFileSync(tmpPath, encrypted);
-    if (fs.existsSync(tmpPath)) {
-      fs.renameSync(tmpPath, dbPath);
-    }
+    fs.writeFile(tmpPath, encrypted, (err) => {
+      if (err) {
+        console.error('[saveDb] Failed to write temp file:', err.message);
+        _saveDbInProgress = false;
+        return;
+      }
+      try {
+        fs.renameSync(tmpPath, dbPath);
+      } catch (renameErr) {
+        console.error('[saveDb] Failed to rename temp file:', renameErr.message);
+      }
+      _saveDbInProgress = false;
+    });
   } catch (err) {
     console.error('[saveDb] Failed to save database:', err.message);
-  } finally {
     _saveDbInProgress = false;
   }
 }
@@ -442,7 +450,7 @@ function dbAll(sql, params = []) {
 
 let _dbDirty = false;
 let _dbSaveTimer = null;
-const DB_SAVE_DEBOUNCE_MS = 500;
+const DB_SAVE_DEBOUNCE_MS = 30000;
 
 function markDbDirtyForSave() {
   _dbDirty = true;
@@ -933,9 +941,9 @@ let _backupScheduler = null;
 function getBackupScheduler() {
   if (_backupScheduler) return _backupScheduler;
   _backupScheduler = createBackupScheduler({
-    quickMinIntervalMs: 15 * 60 * 1000,
-    userIdleGraceMs: 45 * 1000,
-    periodicCheckMs: 3 * 60 * 1000,
+    quickMinIntervalMs: 30 * 60 * 1000,
+    userIdleGraceMs: 90 * 1000,
+    periodicCheckMs: 10 * 60 * 1000,
     runBackup: (kind, reason) => {
       console.log('[Backup] Scheduler triggered:', kind, reason);
       if (kind === 'hourly') {
@@ -3342,6 +3350,12 @@ ipcMain.handle('backup-now', () => {
     console.error('[backup-now] Backup failed:', msg);
     throw new Error('Backup failed: ' + msg);
   }
+});
+
+ipcMain.handle('flush-and-backup', async () => {
+  flushDb();
+  await new Promise(r => setTimeout(r, 200));
+  return 'flushed';
 });
 
 ipcMain.handle('backup-status', () => {

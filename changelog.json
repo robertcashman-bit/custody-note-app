@@ -1,9 +1,24 @@
 {
   "releases": [
     {
+      "version": "1.4.42",
+      "date": "2026-03-12",
+      "latest": true,
+      "changes": [
+        "Renamed 'First contact within 45 mins of instruction' to 'Within 45 mins of duty call' with Yes/No/N/A options (all form types)",
+        "Fee Earner / Rep field added to custody form section 1, auto-fills from settings",
+        "Firm contact details (name, phone, email) now saved back to firm database for auto-populate on future use",
+        "Major performance fix — DB flush interval increased from 500ms to 30s, disk writes made async to stop main-process blocking",
+        "Autosave debounce increased to 3s, autosave interval to 30s, backup scheduler much calmer (30min quick, 90s idle grace)",
+        "Sync worker deferred from 1s to 15s after record change to reduce contention",
+        "Added prominent green Backup Now button in form and app header for manual save+backup on demand",
+        "Scrollbar widened from 8px to 16px with visible track and larger grab area"
+      ]
+    },
+    {
       "version": "1.4.41",
       "date": "2026-03-11",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Voluntary outcome simplified — merged caseOutcomeStatus and outcomeDecision into single Outcome field",
         "Added new voluntary outcomes: Officer to Notify, Released Under Investigation, Youth caution, Referred to diversion programme, Further voluntary interview required",

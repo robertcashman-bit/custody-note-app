@@ -348,7 +348,7 @@ function createSyncWorker(ctx) {
     _scheduleSoonTimer = setTimeout(() => {
       _scheduleSoonTimer = null;
       runCycle().catch(() => {});
-    }, 1000);
+    }, 15000);
   }
 
   function getDiagnostics() {

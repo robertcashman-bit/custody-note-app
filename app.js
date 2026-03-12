@@ -469,12 +469,13 @@ var LAA = {
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
-        { key: 'firstContactWithin45Mins', label: 'First contact within 45 mins of instruction?', type: 'select', options: ['Yes','No'], helpTitle: 'LAA requires first contact within 45 mins in 80% of matters. If No, reason must be noted.' },
+        { key: 'firstContactWithin45Mins', label: 'Within 45 mins of duty call?', type: 'select', options: ['Yes','No','N/A'], helpTitle: 'LAA requires first contact within 45 mins in 80% of matters. If No, reason must be noted.' },
         { key: 'firstContactOver45MinsReason', label: 'Reason first contact exceeded 45 mins', type: 'textarea', placeholder: 'Required if first contact was more than 45 mins after instruction received (Spec 9.25)', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
         { key: 'firmId', label: 'Instructing Firm', type: 'firm', cols: 2 },
         { key: 'firmContactName', label: 'Contact at Firm', type: 'text', placeholder: 'e.g. Richard Chamberlain' },
         { key: 'firmContactPhone', label: 'Contact phone', type: 'tel' },
         { key: 'firmContactEmail', label: 'Contact email', type: 'email' },
+        { key: 'feeEarnerName', label: 'Fee Earner / Rep', type: 'text', cols: 2 },
         { type: 'nameRow', label: 'Client Name', fields: [
             { key: 'forename', label: 'First name', placeholder: 'First name' },
             { key: 'middleName', label: 'Middle name(s)', placeholder: 'Middle' },
@@ -1143,7 +1144,7 @@ var LAA = {
         { key: 'clientPhone', label: 'Client Telephone', type: 'tel', placeholder: 'Essential for telephone advice', className: 'field-mandatory' },
         { key: '_h_contact_timing', label: 'First Contact', type: 'sectionHeading' },
         { key: 'timeFirstContactWithClient', label: 'Time of first contact with client', type: 'time' },
-        { key: 'firstContactWithin45Mins', label: 'First contact within 45 mins?', type: 'select', options: ['Yes','No'] },
+        { key: 'firstContactWithin45Mins', label: 'Within 45 mins of duty call?', type: 'select', options: ['Yes','No','N/A'] },
         { key: 'firstContactOver45MinsReason', label: 'Reason >45 mins', type: 'textarea', placeholder: 'Required if first contact exceeded 45 mins', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
         { key: 'conflictCheckResult', label: 'Conflict check', type: 'select', options: ['Negative','Positive','N/A'] },
         { key: 'conflictCheckNotes', label: 'Conflict notes', type: 'textarea', placeholder: 'Required if positive', cols: 2, showIf: { field: 'conflictCheckResult', value: 'Positive' } },
@@ -1241,7 +1242,7 @@ var LAA = {
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
-        { key: 'firstContactWithin45Mins', label: 'First contact within 45 mins of instruction?', type: 'select', options: ['Yes','No'], helpTitle: 'LAA requires first contact within 45 mins in 80% of matters. If No, reason must be noted.' },
+        { key: 'firstContactWithin45Mins', label: 'Within 45 mins of duty call?', type: 'select', options: ['Yes','No','N/A'], helpTitle: 'LAA requires first contact within 45 mins in 80% of matters. If No, reason must be noted.' },
         { key: 'firstContactOver45MinsReason', label: 'Reason first contact exceeded 45 mins', type: 'textarea', placeholder: 'Required if first contact was more than 45 mins after instruction received (Spec 9.25)', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
         { key: 'firmId', label: 'Instructing Firm', type: 'firm', cols: 2 },
         { key: 'firmContactName', label: 'Contact at Firm', type: 'text', placeholder: 'e.g. Richard Chamberlain' },
@@ -3084,8 +3085,14 @@ var REQUIRED_FIELD_KEYS = [
     if (!formData.bailType && formData.bailConditionsChecklist) formData.bailType = 'Conditional';
     window.api.getSettings().then(s => {
       window._appSettingsCache = s || {};
-      if (!formData.feeEarnerName && s.feeEarnerNameDefault) formData.feeEarnerName = s.feeEarnerNameDefault;
-      if (!formData.laaFeeEarnerFullName && s.feeEarnerNameDefault) formData.laaFeeEarnerFullName = s.feeEarnerNameDefault;
+      if (!formData.feeEarnerName && s.feeEarnerNameDefault) {
+        formData.feeEarnerName = s.feeEarnerNameDefault;
+        setFieldValue('feeEarnerName', s.feeEarnerNameDefault);
+      }
+      if (!formData.laaFeeEarnerFullName && s.feeEarnerNameDefault) {
+        formData.laaFeeEarnerFullName = s.feeEarnerNameDefault;
+        setFieldValue('laaFeeEarnerFullName', s.feeEarnerNameDefault);
+      }
       const today = new Date().toISOString().slice(0, 10);
       const dow = new Date().getDay();
       const isWeekend = dow === 0 || dow === 6;
@@ -3114,7 +3121,7 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── AUTOSAVE (#1) ─── */
   function startAutoSave() {
     stopAutoSave();
-    autoSaveTimer = setInterval(quietSave, 15000);
+    autoSaveTimer = setInterval(quietSave, 30000);
   }
 
   function stopAutoSave() {
@@ -3129,9 +3136,9 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   var _quietSaveDebounceTimer = null;
-  var QUIET_SAVE_DEBOUNCE_MS = 1200;
+  var QUIET_SAVE_DEBOUNCE_MS = 3000;
   var _editorActivityDebounceTimer = null;
-  var EDITOR_ACTIVITY_DEBOUNCE_MS = 5000;
+  var EDITOR_ACTIVITY_DEBOUNCE_MS = 10000;
 
   function scheduleQuietSave() {
     clearTimeout(_quietSaveDebounceTimer);
@@ -3624,6 +3631,25 @@ var REQUIRED_FIELD_KEYS = [
       loadFirmsList();
       window.api.firmsList().then(f => { firms = f; });
     });
+  }
+
+  var _firmContactSyncTimer = null;
+  function syncFirmContactToDb() {
+    clearTimeout(_firmContactSyncTimer);
+    _firmContactSyncTimer = setTimeout(function() {
+      var fid = formData.firmId;
+      if (!fid) return;
+      var firm = firms.find(function(x) { return String(x.id) === String(fid); });
+      if (!firm) return;
+      var updated = Object.assign({}, firm, {
+        contact_name: formData.firmContactName || firm.contact_name || '',
+        contact_phone: formData.firmContactPhone || firm.contact_phone || '',
+        contact_email: formData.firmContactEmail || firm.contact_email || '',
+      });
+      window.api.firmSave(updated).then(function() {
+        return window.api.firmsList();
+      }).then(function(f) { firms = f; });
+    }, 1500);
   }
 
 
@@ -4418,7 +4444,15 @@ var REQUIRED_FIELD_KEYS = [
             _standaloneUiDebounce = setTimeout(function() { collectCurrentData(); applyConditionalVisibility(); updateContextBar(); }, 200);
             scheduleQuietSave();
           });
-          el.addEventListener('blur', () => { if (_suppressChangeHandlers) return; scheduleQuietSave(); });
+          el.addEventListener('blur', () => {
+            if (_suppressChangeHandlers) return;
+            var field = el.dataset.field || el.name;
+            if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
+            if (['firmContactName','firmContactPhone','firmContactEmail'].includes(field) && formData.firmId) {
+              syncFirmContactToDb();
+            }
+            scheduleQuietSave();
+          });
         });
         startAutoSave();
         return;
@@ -4440,7 +4474,7 @@ var REQUIRED_FIELD_KEYS = [
     const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
 
     var _uiRefreshDebounce = null;
-    var UI_REFRESH_DEBOUNCE_MS = 200;
+    var UI_REFRESH_DEBOUNCE_MS = 400;
     function scheduleUIRefresh() {
       clearTimeout(_uiRefreshDebounce);
       _uiRefreshDebounce = setTimeout(function() {
@@ -4485,6 +4519,9 @@ var REQUIRED_FIELD_KEYS = [
           if (_suppressChangeHandlers) return;
           var field = el.dataset.field || el.name;
           if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
+          if (['firmContactName','firmContactPhone','firmContactEmail'].includes(field) && formData.firmId) {
+            syncFirmContactToDb();
+          }
           scheduleQuietSave();
         });
       });
@@ -7102,7 +7139,7 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'gender', label: 'Gender', section: 1 },
       { key: 'clientPhone', label: 'Client Telephone', section: 1 },
       { key: 'timeFirstContactWithClient', label: 'Time of first contact with client', section: 1 },
-      { key: 'firstContactWithin45Mins', label: 'First contact within 45 mins?', section: 1 },
+      { key: 'firstContactWithin45Mins', label: 'Within 45 mins of duty call?', section: 1 },
       { key: 'telephoneAdviceSummary', label: 'Summary of advice given', section: 1 },
     ];
     if (telCaseConcluded) {
@@ -7618,7 +7655,7 @@ row('Date', fmtDate(d.date)) + row('Weekend/Bank Holiday', d.weekendBankHoliday)
 row('Referral', d.sourceOfReferral) + row('Work Type', d.workType) + row('Telephone advice given?', d.telephoneAdviceGiven) + row('Fee Earner (telephone advice)', d.feeEarnerTelephoneAdvice) +
 row('Scheme ID', d.schemeId) + row('Duty Solicitor', d.dutySolicitor) +
 row('Client Status', d.clientStatus) + row('Case Status', d.caseStatus) +
-row('Time first contact (LAA 9.25)', d.timeFirstContactWithClient) + row('First contact within 45 mins?', d.firstContactWithin45Mins) + (d.firstContactOver45MinsReason ? row('Reason first contact >45 mins', d.firstContactOver45MinsReason) : '') +
+row('Time first contact (LAA 9.25)', d.timeFirstContactWithClient) + row('Within 45 mins of duty call?', d.firstContactWithin45Mins) + (d.firstContactOver45MinsReason ? row('Reason first contact >45 mins', d.firstContactOver45MinsReason) : '') +
 row('Sufficient Benefit Test', (d.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ')) + (d.sufficientBenefitNotes ? row('Sufficient Benefit Test notes', d.sufficientBenefitNotes) : '') +
 (d.telephoneAdviceSummary ? row('Summary of advice given (telephone)', d.telephoneAdviceSummary) : '') +
 '</table>' +
@@ -8045,7 +8082,7 @@ PDF_CASENOTE_ADVERT +
       row('Gender', d.gender) +
       row('Telephone', d.clientPhone) +
       row('First contact', d.timeFirstContactWithClient) +
-      row('Within 45 mins?', d.firstContactWithin45Mins) +
+      row('Within 45 mins of duty call?', d.firstContactWithin45Mins) +
       (d.firstContactOver45MinsReason ? row('Reason >45 mins', d.firstContactOver45MinsReason) : '') +
       row('Conflict check', d.conflictCheckResult) +
       (d.conflictCheckNotes ? row('Conflict notes', d.conflictCheckNotes) : '') +
@@ -9638,6 +9675,28 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('header-sections-idx')?.addEventListener('click', openSectionsIndex);
     document.getElementById('header-laa-forms')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('header-kb-help')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
+
+    function handleBackupNowClick(btn) {
+      if (!btn || btn.classList.contains('backing-up')) return;
+      btn.classList.add('backing-up');
+      var origText = btn.innerHTML;
+      btn.innerHTML = '&#128190; Saving…';
+      quietSave();
+      var backupFn = window.api.flushAndBackup || window.api.backupNow;
+      backupFn().then(function() {
+        return window.api.backupNow();
+      }).then(function() {
+        btn.innerHTML = '&#10003; Backed up';
+        showToast('Backup completed', 'success');
+        setTimeout(function() { btn.innerHTML = origText; btn.classList.remove('backing-up'); }, 2000);
+      }).catch(function(err) {
+        btn.innerHTML = origText;
+        btn.classList.remove('backing-up');
+        showToast('Backup failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
+      });
+    }
+    document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
+    document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
 
     (function initScrollAutoHide() {
       var form = document.getElementById('attendance-form');

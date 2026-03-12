@@ -41,16 +41,18 @@
 }
 
 /* ═══ APP SCROLLBARS ═══ */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar { width: 16px; height: 16px; }
+::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.08); border-radius: 99px; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.38);
+  background: rgba(148, 163, 184, 0.45);
   border-radius: 99px;
-  border: 2px solid transparent;
+  border: 3px solid transparent;
   background-clip: padding-box;
+  min-height: 48px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.55); }
-* { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,0.38) transparent; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.65); }
+::-webkit-scrollbar-thumb:active { background: rgba(148, 163, 184, 0.75); }
+* { scrollbar-width: auto; scrollbar-color: rgba(148,163,184,0.45) rgba(148,163,184,0.08); }
 
 /* ═══ COLOUR THEMES ═══ */
 html.theme-light {
@@ -441,6 +443,12 @@ html, body {
   margin-top: 0; font-size: 0.78rem; padding: 0.3rem 0.6rem;
 }
 .header-form-actions .btn-small:hover { background: rgba(255,255,255,0.2); color: #fff; }
+.btn-backup-now {
+  background: #16a34a !important; color: #fff !important; border-color: #15803d !important;
+  font-weight: 600; letter-spacing: 0.01em;
+}
+.btn-backup-now:hover { background: #15803d !important; }
+.btn-backup-now.backing-up { opacity: 0.7; pointer-events: none; }
 body.form-active .header-form-title { display: inline; }
 body.form-active #header-app-title { display: none; }
 body.form-active .header-form-actions { display: flex; }
