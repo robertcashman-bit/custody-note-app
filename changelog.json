@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.55",
+      "version": "1.4.56",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Fix Officer Email Templates add-on toggle: corrected layout rendering in Settings, toggle now auto-saves instantly without requiring the Save button, and the Records list updates immediately when the add-on is enabled or disabled."
+      ]
+    },
+    {
+      "version": "1.4.55",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Fix: Officer Email Templates add-on now activates correctly on app startup. Previously the Email OIC button would not appear until Settings had been visited in the same session."
       ]
