@@ -109,11 +109,11 @@
             <button type="button" class="gear-item" data-action="home">&#8962; Home</button>
             <button type="button" class="gear-item" data-action="records">&#128196; Records</button>
             <button type="button" class="gear-item" data-action="new-attendance">&#10133; New attendance</button>
-            <div class="gear-section-label">Forms &amp; documents</div>
+            <div class="gear-section-label">Documents</div>
             <button type="button" class="gear-item" data-action="laa-forms">&#128203; LAA Forms</button>
             <button type="button" class="gear-item" data-action="shortcut-print-pdf">&#128424; Print PDF</button>
             <button type="button" class="gear-item" data-action="shortcut-email-solicitor">&#9993; Email to solicitor</button>
-            <div class="gear-section-label">Manage</div>
+            <div class="gear-section-label">Data</div>
             <button type="button" class="gear-item" data-action="firms">&#127970; Firms</button>
             <button type="button" class="gear-item" data-action="reports">&#128202; Reports</button>
             <div class="gear-section-label">App</div>
@@ -715,22 +715,18 @@
             <p id="cloud-backup-error" class="settings-hint" style="color:#c00;display:none;"></p>
             <p id="cloud-backup-error-support" class="settings-hint" style="display:none;margin-top:0.25rem;font-size:0.85rem;">Include the reference from the message above when you <a href="https://www.custodynote.com/support" target="_blank" rel="noopener">contact support</a>.</p>
           </div>
-          <p class="settings-hint" style="margin-top:0;">Your attendance data is also backed up locally as encrypted files. Choose where to save them below.</p>
-          <label>Backup folder</label>
+          <p class="settings-hint" style="margin-top:0;">Your attendance data is backed up automatically as encrypted files. Syncing to a cloud folder keeps an off-site copy safe.</p>
+          <label>Local backup folder</label>
           <div class="setting-row">
             <input type="text" id="setting-backup-folder" readonly placeholder="Desktop">
             <button type="button" id="setting-backup-browse" class="btn btn-secondary">Browse</button>
           </div>
-          <ul class="settings-hint" style="margin:0.25rem 0 1rem 1.25rem;">
-            <li><strong>Quick backup</strong> &mdash; Runs every 2 minutes when you&rsquo;ve made changes. Saves a single file <code>attendance-latest.db</code> (overwritten each time).</li>
-            <li><strong>Hourly archive</strong> &mdash; A timestamped copy is saved every hour. Up to 48 hourly files are kept; older ones are removed automatically.</li>
-            <li><strong>Backup now</strong> &mdash; On the Attendance List (Records), use the &ldquo;Backup now&rdquo; button to create an immediate backup plus refresh the latest file.</li>
-          </ul>
-          <label>Sync backups to the cloud <span style="color:#059669;font-weight:600;">(recommended)</span></label>
-          <p class="settings-hint" style="margin:0 0 0.5rem;">Choose a folder that syncs to the cloud. Encrypted backups are copied there automatically.</p>
+          <label style="margin-top:0.75rem;">Sync backups to the cloud <span style="color:#059669;font-weight:600;">(recommended)</span></label>
+          <p class="settings-hint" style="margin:0 0 0.5rem;">Choose a folder that syncs to OneDrive, Dropbox, or Google Drive. Encrypted backups are copied there automatically.</p>
           <div id="offsite-backup-chooser" class="offsite-backup-chooser">
-            <div class="offsite-scanning">Scanning for OneDrive, Dropbox, Google Drive&hellip;</div>
+            <div class="offsite-scanning">Scanning for cloud folders&hellip;</div>
           </div>
+          <button type="button" id="setting-detect-cloud-folders" class="btn btn-secondary" style="margin-top:0.5rem;">Detect cloud folders</button>
           <input type="text" id="setting-offsite-backup-folder" readonly style="display:none;" aria-hidden="true">
           <label>Custom cloud backup URL (optional)</label>
           <input type="url" id="setting-cloud-backup-url" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">

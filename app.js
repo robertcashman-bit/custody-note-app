@@ -530,10 +530,11 @@ var LAA = {
       id: 'custody', title: '3. Custody Record',
       keyFields: ['custodyNumber', 'groundsForArrest', 'dateOfArrest'],
       fields: [
-        { key: '_h_custody_record', label: 'Custody Record', type: 'sectionHeading' },
-        { key: 'custodyNumber', label: 'Custody Number', type: 'text' },
-        { key: 'custodyRecordRead', label: 'Custody record read?', type: 'select', options: ['Yes','No'] },
-        { key: '_h_client_from_record', label: 'Client Details (from custody record)', type: 'sectionHeading' },
+        { key: '_h_custody_record', label: 'Custody Record', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'custodyNumber', label: 'Custody Number', type: 'text', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'custodyRecordRead', label: 'Custody record read?', type: 'select', options: ['Yes','No'], showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: '_h_client_details_vol', label: 'Client Details', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'Yes' } },
+        { key: '_h_client_from_record', label: 'Client Details (from custody record)', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'title', label: 'Title', type: 'select', options: ['Mr','Mrs','Miss','Ms','Mx','Dr','Other'] },
         { type: 'nameRow', label: 'Name', fields: [
             { key: 'forename', label: 'First name' },
@@ -561,8 +562,8 @@ var LAA = {
 
         { key: '_h_arrest', label: 'Arrest & Detention', type: 'sectionHeading' },
         { key: 'voluntaryInterview', label: 'Voluntary Interview?', type: 'select', options: ['Yes','No'] },
-        { key: '_note_voluntary', label: 'If voluntary interview, arrest/detention grounds and PACE clock do not apply.', type: 'sectionNote' },
-        { key: 'groundsForArrest', label: 'Grounds for Arrest (PACE s.24)', type: 'checkboxGroup', cols: 2, allowOther: true, options: [
+        { key: '_note_voluntary', label: 'If voluntary interview, arrest/detention grounds and PACE clock do not apply.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'Yes' } },
+        { key: 'groundsForArrest', label: 'Grounds for Arrest (PACE s.24)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
           'To ascertain the person\'s name/address',
           'To prevent physical injury to self or others',
           'To prevent damage to property',
@@ -572,22 +573,22 @@ var LAA = {
           'To exercise search powers under PACE',
           'To prevent disappearance of the person'
         ] },
-        { key: 'groundsForDetention', label: 'Grounds for Detention (PACE s.37)', type: 'checkboxGroup', cols: 2, allowOther: true, options: [
+        { key: 'groundsForDetention', label: 'Grounds for Detention (PACE s.37)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
           'To secure or preserve evidence',
           'To obtain evidence by questioning',
           'Insufficient evidence to charge \u2013 further investigation needed'
         ] },
-        { key: 'dateOfArrest', label: 'Date of Arrest', type: 'date' },
-        { key: 'timeOfArrest', label: 'Time of Arrest', type: 'time' },
-        { key: 'timeArrivalStation', label: 'Time Arrived at Station', type: 'time' },
-        { key: 'relevantTime', label: 'Relevant Time (auto = detention authorised)', type: 'time', readonly: true },
-        { key: 'timeDetentionAuthorised', label: 'Detention Authorised', type: 'time' },
+        { key: 'dateOfArrest', label: 'Date of Arrest', type: 'date', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'timeOfArrest', label: 'Time of Arrest', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'timeArrivalStation', label: 'Time Arrived at Station', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'relevantTime', label: 'Relevant Time (auto = detention authorised)', type: 'time', readonly: true, showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'timeDetentionAuthorised', label: 'Detention Authorised', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
 
-        { key: '_h_pace_reviews', label: 'PACE Reviews', type: 'sectionHeading' },
-        { key: 'firstReviewDue', label: '1st Review due (6 hrs)', type: 'time', readonly: true },
-        { key: 'firstReviewActual', label: '1st Review \u2013 Actual Time', type: 'time' },
-        { key: 'firstReviewNotes', label: '1st Review Notes', type: 'textarea', placeholder: 'Notes from 1st review', cols: 2 },
-        { key: 'showMoreReviews', label: 'Further PACE reviews needed?', type: 'select', options: ['No','Yes'] },
+        { key: '_h_pace_reviews', label: 'PACE Reviews', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'firstReviewDue', label: '1st Review due (6 hrs)', type: 'time', readonly: true, showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'firstReviewActual', label: '1st Review \u2013 Actual Time', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'firstReviewNotes', label: '1st Review Notes', type: 'textarea', placeholder: 'Notes from 1st review', cols: 2, showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'showMoreReviews', label: 'Further PACE reviews needed?', type: 'select', options: ['No','Yes'], showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'secondReviewDue', label: '2nd Review due (15 hrs)', type: 'time', readonly: true, showIf: { field: 'showMoreReviews', value: 'Yes' } },
         { key: 'secondReviewActual', label: '2nd Review \u2013 Actual Time', type: 'time', showIf: { field: 'showMoreReviews', value: 'Yes' } },
         { key: 'secondReviewNotes', label: '2nd Review Notes', type: 'textarea', placeholder: 'Notes from 2nd review', cols: 2, showIf: { field: 'showMoreReviews', value: 'Yes' } },
@@ -1047,6 +1048,11 @@ var LAA = {
       { key: 'previousAdvice', label: 'Has client received advice on this matter before?', type: 'select', options: ['Yes','No'] },
       { key: 'previousAdviceDetails', label: 'Previous advice details', type: 'text', cols: 2, showIf: { field: 'previousAdvice', value: 'Yes' } },
       { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['Yes','No'] },
+      { key: 'laaHasPartner', label: 'Does the client have a partner?', type: 'select', options: ['Yes','No'] },
+      { key: '_note_partner_decl', label: 'Partner\u2019s declaration: I declare that the information included in this application is a true statement of all my financial circumstances to the best of my knowledge and belief. I agree to the LAA checking the information I have given. I authorise those organisations to provide the information for which the LAA may ask. I have read the Fraud Notice.', type: 'sectionNote', showIf: { field: 'laaHasPartner', value: 'Yes' } },
+      { key: 'laaPartnerFullName', label: 'Partner\u2019s full name (BLOCK CAPITALS)', type: 'text', cols: 2, showIf: { field: 'laaHasPartner', value: 'Yes' } },
+      { key: 'laaPartnerSignature', label: 'Partner signature', type: 'signature', sigKey: 'laaPartnerSig', showIf: { field: 'laaHasPartner', value: 'Yes' } },
+      { key: 'laaPartnerSignatureDate', label: 'Partner signature date (auto)', type: 'date', readonly: true, showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig' },
       { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
       { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
@@ -8083,15 +8089,18 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
 (function() {
   var laaRows = row('Previous advice?', d.previousAdvice) + row('Details', d.previousAdviceDetails) +
     row('Privacy Notice', d.privacyNoticeAccepted) +
+    row('Client has partner?', d.laaHasPartner) +
     row('Client name', d.laaClientFullName) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
+    (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
     row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
-  var hasSig = d.clientSig || d.feeEarnerSig;
+  var hasSig = d.clientSig || d.feeEarnerSig || d.laaPartnerSig;
   if (!laaRows && !hasSig) return '';
   return '<h2 class="pdf-break-before">10. LAA Declaration</h2>' +
     ((d.workType === 'Police Station Telephone Attendance' || (d.sufficientBenefitTest && d.sufficientBenefitTest.split('|').indexOf('Telephone advice only') >= 0)) ? '<p style="font-size:10px;color:#64748b;margin-bottom:8px;"><em>For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.</em></p>' : '') +
     '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
     '<table>' + laaRows + '</table>' +
     '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' +
+    (d.laaHasPartner === 'Yes' ? '<div class="sig-block"><p class="sig-label">Partner signature</p>' + sig('laaPartnerSig') + '</div>' : '') +
     '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>';
 })() +
 
@@ -8469,7 +8478,14 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
+  function ensureAllSectionsRendered() {
+    if (_formEnsureSectionRendered) {
+      activeFormSections.forEach(function(_, i) { _formEnsureSectionRendered(i); });
+    }
+  }
+
   function exportPdf() {
+    ensureAllSectionsRendered();
     const data = getFormData();
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
@@ -8490,6 +8506,7 @@ PDF_CASENOTE_ADVERT +
   }
 
   function printAttendanceNote() {
+    ensureAllSectionsRendered();
     const data = getFormData();
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
@@ -8508,6 +8525,7 @@ PDF_CASENOTE_ADVERT +
 
   /** Generate PDF and open in default viewer so user can review before printing/saving. */
   function previewPdf() {
+    ensureAllSectionsRendered();
     const data = getFormData();
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
@@ -10149,6 +10167,15 @@ PDF_CASENOTE_ADVERT +
           if (el) { el.value = p; window.api.setSettings({ backupFolder: p }).then(showSettingsSavedToast); }
         }
       });
+    });
+    document.getElementById('setting-detect-cloud-folders')?.addEventListener('click', function() {
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Scanning\u2026';
+      window.api.getSettings().then(function(s) {
+        refreshOffsiteBackupChooser(s);
+        setTimeout(function() { btn.disabled = false; btn.textContent = 'Detect cloud folders'; }, 2000);
+      }).catch(function() { btn.disabled = false; btn.textContent = 'Detect cloud folders'; });
     });
     document.getElementById('settings-save-btn')?.addEventListener('click', function() {
       if (typeof saveSettings === 'function') saveSettings();

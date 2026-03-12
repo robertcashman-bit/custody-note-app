@@ -1655,6 +1655,9 @@ function createWindow() {
   ses.clearCache().catch(() => {});
   ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
   mainWindow.on('closed', () => { mainWindow = null; });
+  if (app.isPackaged) {
+    mainWindow.on('focus', () => { autoUpdater.checkForUpdates().catch(() => {}); });
+  }
 
   if (isCaptureMode) {
     const outputDir = process.env.CAPTURE_OUTPUT_DIR || path.join(__dirname, '..', 'custody note - website production', 'public', 'screenshots');
@@ -2710,9 +2713,19 @@ app.whenReady().then(async () => {
       console.log('[AutoUpdate] No update available');
       if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'up-to-date' });
     });
+    var _updateRetryTimer = null;
+    var _updateRetrying = false;
     autoUpdater.on('error', (err) => {
       console.warn('[AutoUpdate] Error:', err?.message || err);
       if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'error', message: err?.message || 'Update check failed' });
+      if (!_updateRetrying) {
+        _updateRetrying = true;
+        clearTimeout(_updateRetryTimer);
+        _updateRetryTimer = setTimeout(() => {
+          _updateRetrying = false;
+          autoUpdater.checkForUpdates().catch(() => {});
+        }, 2 * 60 * 1000);
+      }
     });
 
     ipcMain.handle('app-check-updates', async () => {
@@ -2728,7 +2741,7 @@ app.whenReady().then(async () => {
     });
 
     autoUpdater.checkForUpdates().catch(() => {});
-    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 45 * 60 * 1000);
   } else {
     ipcMain.handle('app-check-updates', async () => ({ status: 'dev', message: 'Updates only apply to the installed app' }));
   }
