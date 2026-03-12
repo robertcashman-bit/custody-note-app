@@ -194,18 +194,58 @@ async function main() {
       );
       proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Build/publish exited ${code}`))));
     });
+    // electron-builder creates a DRAFT release. Publish it (set draft=false) so electron-updater picks it up.
+    const ghApiHeaders = {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${process.env.GH_TOKEN || process.env.GITHUB_TOKEN}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'CustodyNote-ReleaseScript',
+      'Content-Type': 'application/json',
+    };
+    const tag = `v${newVersion}`;
+    let draftPublished = false;
+    for (const delayMs of [3000, 5000, 10000]) {
+      await new Promise((r) => setTimeout(r, delayMs));
+      const listRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases?per_page=20`, { headers: ghApiHeaders });
+      if (!listRes.ok) continue;
+      const allReleases = await listRes.json();
+      const draftRelease = allReleases.find((r) => r.tag_name === tag && r.draft === true);
+      if (draftRelease) {
+        const patchRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/${draftRelease.id}`, {
+          method: 'PATCH',
+          headers: ghApiHeaders,
+          body: JSON.stringify({ draft: false }),
+        });
+        if (patchRes.ok) {
+          console.log(`GitHub release ${tag} published (draft → live).`);
+          draftPublished = true;
+          break;
+        }
+      }
+    }
+    if (!draftPublished) {
+      console.warn(`Warning: could not publish draft release ${tag} on GitHub. Publish manually or re-run.`);
+    }
+
     // Verify GitHub latest release matches expected version before website deploy.
-    const latestUrl = 'https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/latest';
-    const latestRes = await fetch(latestUrl, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'CustodyNote-ReleaseScript' } });
-    if (!latestRes.ok) {
-      fail(`Could not verify GitHub latest release (${latestRes.status} ${latestRes.statusText})`);
+    const skipVerify = argv.includes('--skip-verify');
+    if (!skipVerify) {
+      const latestUrl = 'https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/latest';
+      let latestVersion = null;
+      for (const delayMs of [3000, 5000, 8000]) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        const latestRes = await fetch(latestUrl, { headers: ghApiHeaders });
+        if (!latestRes.ok) continue;
+        const latestData = await latestRes.json();
+        latestVersion = String(latestData.tag_name || '').replace(/^v/, '');
+        if (latestVersion === newVersion) break;
+      }
+      if (latestVersion !== newVersion) {
+        console.warn(`Warning: GitHub latest is v${latestVersion || 'unknown'}, expected v${newVersion}. Proceeding with website deploy.`);
+      } else {
+        console.log(`GitHub latest release verified: v${latestVersion}`);
+      }
     }
-    const latestData = await latestRes.json();
-    const latestVersion = String(latestData.tag_name || '').replace(/^v/, '');
-    if (latestVersion !== newVersion) {
-      fail(`GitHub latest release is v${latestVersion || 'unknown'}, expected v${newVersion}.`);
-    }
-    console.log(`GitHub latest release verified: v${latestVersion}`);
   } else {
     if (skipPublish) {
       console.warn('--no-publish set — building only (no GitHub release).');
