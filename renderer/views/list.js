@@ -104,6 +104,7 @@ function refreshList() {
             archiveBtn +
             '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + r.id + '">Edit</button>' +
             '<button type="button" class="btn-list-action dup-btn" title="Duplicate for further visit" data-id="' + r.id + '">Duplicate</button>' +
+            '<button type="button" class="btn-list-action pdf-btn" title="Export PDF to Desktop" data-id="' + r.id + '">PDF</button>' +
             '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + r.id + '">Delete</button>' +
             emailOicBtn +
           '</div>' +
@@ -112,6 +113,14 @@ function refreshList() {
       li.querySelector('.list-item-text').addEventListener('click', function() { openAttendance(r.id); });
       li.querySelector('.amend-btn').addEventListener('click', function(e) { e.stopPropagation(); amendAttendance(r.id, r.status, title); });
       li.querySelector('.dup-btn').addEventListener('click', function(e) { e.stopPropagation(); duplicateAttendance(r.id); });
+      li.querySelector('.pdf-btn').addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (typeof window.exportPdfById === 'function') {
+          window.exportPdfById(r.id);
+        } else {
+          openAttendance(r.id);
+        }
+      });
       li.querySelector('.delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteAttendance(r.id, title); });
       if (r.archived_at && li.querySelector('.unarchive-btn')) {
         li.querySelector('.unarchive-btn').addEventListener('click', function(e) { e.stopPropagation(); unarchiveAttendance(r.id); });

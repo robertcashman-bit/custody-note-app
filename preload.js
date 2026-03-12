@@ -76,6 +76,8 @@ contextBridge.exposeInMainWorld('api', {
   cloudBackupSubscribe: () => ipcRenderer.invoke('cloud-backup-subscribe'),
   cloudBackupList: () => ipcRenderer.invoke('cloud-backup-list'),
   cloudBackupRestore: (params) => ipcRenderer.invoke('cloud-backup-restore', params),
+  localBackupList: () => ipcRenderer.invoke('local-backup-list'),
+  localBackupRestore: (params) => ipcRenderer.invoke('local-backup-restore', params),
   onCloudBackupStatusChanged: (cb) => ipcRenderer.on('cloud-backup-status-changed', (_, data) => cb(data)),
   /* Cross-device sync */
   syncNow: () => ipcRenderer.invoke('sync-now'),

@@ -1392,6 +1392,8 @@ html.dark .home-attention-item:hover {
 .btn-list-action.delete-btn:hover { background: #fef2f2; color: var(--accent-red); }
 .btn-list-action.email-oic-btn { color: #0369a1; border-color: #0369a1; }
 .btn-list-action.email-oic-btn:hover { background: #e0f2fe; color: #075985; }
+.btn-list-action.pdf-btn { color: #7c3aed; border-color: #7c3aed; }
+.btn-list-action.pdf-btn:hover { background: #ede9fe; color: #5b21b6; }
 
 /* OIC Sent badge */
 .badge-oic-sent { background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; font-size: 0.65rem; }

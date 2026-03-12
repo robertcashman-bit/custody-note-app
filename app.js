@@ -8811,6 +8811,25 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
+  /* Export PDF directly from a record ID — used by the list view PDF button */
+  window.exportPdfById = function(recordId) {
+    window.api.attendanceGet(recordId).then(function(row) {
+      if (!row) { showToast('Record not found', 'error'); return; }
+      var data = {};
+      try { data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {}); } catch (_) {}
+      window.api.getSettings().then(function(settings) {
+        var builder = getPdfBuilderForData(data);
+        var html = builder(data, settings);
+        var label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
+        var n = [data.surname, data.forename].filter(Boolean).join('_') || label;
+        var fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
+        window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
+          showToast('PDF saved: ' + p, 'success');
+        }).catch(function(e) { showToast('PDF failed: ' + (e && e.message), 'error'); });
+      });
+    }).catch(function() { showToast('Could not load record', 'error'); });
+  };
+
   function printAttendanceNote() {
     ensureAllSectionsRendered();
     const data = getFormData();
@@ -11880,6 +11899,39 @@ PDF_CASENOTE_ADVERT +
       });
     }
 
+    /* Show/hide test email button as user types their email */
+    var flEmailInput = document.getElementById('fl-email');
+    var flTestWrap   = document.getElementById('fl-send-test-wrap');
+    if (flEmailInput && flTestWrap) {
+      flEmailInput.addEventListener('input', function() {
+        flTestWrap.style.display = flEmailInput.value.trim() ? '' : 'none';
+        var sentBadge = document.getElementById('fl-test-email-sent');
+        if (sentBadge) sentBadge.style.display = 'none';
+      });
+    }
+
+    /* Test email button */
+    var flTestBtn = document.getElementById('fl-send-test-email');
+    if (flTestBtn) {
+      flTestBtn.addEventListener('click', function() {
+        var emailVal = (document.getElementById('fl-email').value || '').trim();
+        var nameVal  = (document.getElementById('fl-fee-earner-name').value || '').trim() || 'there';
+        if (!emailVal) return;
+        var subject = 'Custody Note — test email';
+        var body    = 'Hi ' + nameVal + ',\n\nThis is a test email from Custody Note to confirm your email address is set up correctly.\n\nYou\'re all set!\n\nCustody Note';
+        var href    = 'mailto:' + encodeURIComponent(emailVal) +
+          '?subject=' + encodeURIComponent(subject) +
+          '&body='    + encodeURIComponent(body);
+        if (window.api && window.api.openExternal) {
+          window.api.openExternal(href);
+        } else {
+          window.open(href);
+        }
+        var sentBadge = document.getElementById('fl-test-email-sent');
+        if (sentBadge) sentBadge.style.display = '';
+      });
+    }
+
     /* Step 1 -> Step 2 */
     document.getElementById('fl-next').addEventListener('click', function() {
       var name = (document.getElementById('fl-fee-earner-name').value || '').trim();
@@ -11899,7 +11951,9 @@ PDF_CASENOTE_ADVERT +
       var pin = (document.getElementById('fl-dscc-pin').value || '').trim();
       if (!name || !pin) { showStep(1); showToast('Please fill in your details first', 'error'); return; }
 
+      var emailVal = (document.getElementById('fl-email').value || '').trim();
       var settings = { dsccPin: pin, feeEarnerNameDefault: name };
+      if (emailVal) settings.email = emailVal;
       if (selectedBackupPath && selectedBackupPath !== '__desktop__' && selectedBackupPath !== '__browse__') {
         settings.offsiteBackupFolder = selectedBackupPath;
       }
@@ -11909,6 +11963,8 @@ PDF_CASENOTE_ADVERT +
         window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
         var offsiteEl = document.getElementById('setting-offsite-backup-folder');
         if (offsiteEl && settings.offsiteBackupFolder) offsiteEl.value = settings.offsiteBackupFolder;
+        var emailSettingEl = document.getElementById('setting-email');
+        if (emailSettingEl && settings.email) emailSettingEl.value = settings.email;
         var msg = 'Setup saved — welcome to Custody Note, ' + name + '!';
         if (settings.offsiteBackupFolder) msg += ' Backups will sync to ' + selectedBackupPath.split('\\').pop().split('/').pop() + '.';
         showToast(msg, 'success', 5000);

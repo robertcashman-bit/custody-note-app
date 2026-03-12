@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.58",
+      "version": "1.4.59",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Records list: add PDF button to each row — exports directly to Desktop without opening the record.",
+        "First-launch setup: add email address field; email is saved to Settings and pre-fills the From address. Test-email button appears as you type your address.",
+        "First-launch setup: email is now saved when you click Save & Finish."
+      ]
+    },
+    {
+      "version": "1.4.58",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Outcome section: add Court Time field. When 'Charged without Bail', 'Charged with Bail', or 'Remanded in Custody' is selected, Court Date auto-fills to the next day and Court Time auto-fills to 10:00 — both remain fully editable. Court time also appears in the custody note print view."
       ]

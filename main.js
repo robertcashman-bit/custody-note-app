@@ -3565,6 +3565,66 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
   }
 });
 
+/* ─── Local backup list + restore ─── */
+ipcMain.handle('local-backup-list', async () => {
+  try {
+    const dirs = [getBackupFolder()];
+    const row = dbGet("SELECT value FROM settings WHERE key = 'offsiteBackupFolder'");
+    if (row && row.value && row.value.trim()) dirs.push(row.value.trim());
+    const seen = new Set();
+    const files = [];
+    for (const dir of dirs) {
+      if (!dir || !fs.existsSync(dir)) continue;
+      let entries;
+      try { entries = fs.readdirSync(dir); } catch (_) { continue; }
+      for (const f of entries) {
+        if (!f.endsWith('.db')) continue;
+        const fullPath = path.join(dir, f);
+        if (seen.has(fullPath)) continue;
+        seen.add(fullPath);
+        let stat;
+        try { stat = fs.statSync(fullPath); } catch (_) { continue; }
+        files.push({ name: f, path: fullPath, dir, sizeBytes: stat.size, modifiedAt: stat.mtimeMs });
+      }
+    }
+    files.sort((a, b) => b.modifiedAt - a.modifiedAt);
+    return { ok: true, files: files.slice(0, 30) };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
+  if (!filePath || typeof filePath !== 'string') return { ok: false, error: 'No file path provided' };
+  const resolved = path.resolve(filePath);
+  if (!resolved.endsWith('.db')) return { ok: false, error: 'Invalid file type' };
+  if (!fs.existsSync(resolved)) return { ok: false, error: 'File not found' };
+  try {
+    const rawBuf = fs.readFileSync(resolved);
+    createDbSafetyCopy('pre-local-restore');
+    const decrypted = await decryptBufferWithRecovery(rawBuf);
+    if (!decrypted) return { ok: false, error: 'Could not decrypt the backup. Check your recovery password.' };
+    const SQL = await initSqlJs();
+    const newDb = new SQL.Database(decrypted);
+    db = newDb;
+    try { db.run("ALTER TABLE attendances ADD COLUMN sync_id TEXT DEFAULT NULL"); } catch (_) {}
+    try { db.run("ALTER TABLE attendances ADD COLUMN sync_dirty INTEGER DEFAULT 1"); } catch (_) {}
+    try { db.run("ALTER TABLE attendances ADD COLUMN sync_version INTEGER DEFAULT 1"); } catch (_) {}
+    db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id)");
+    db.run("CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty)");
+    db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
+    backfillSyncIds();
+    dbRun("UPDATE attendances SET sync_dirty=1");
+    dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
+    saveDb();
+    console.log('[Restore] Database restored from local backup:', resolved);
+    return { ok: true };
+  } catch (e) {
+    console.error('[Restore] Local restore failed:', e && e.message ? e.message : e);
+    return { ok: false, error: e && e.message ? e.message : 'Restore failed' };
+  }
+});
+
 /* ─── Cross-device sync IPC handlers ─── */
 ipcMain.handle('sync-now', async () => {
   try {
