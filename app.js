@@ -9263,6 +9263,7 @@ PDF_CASENOTE_ADVERT +
             case 'firms': showView('firms'); break;
             case 'reports': showView('reports'); break;
             case 'settings': showView('settings'); break;
+            case 'check-updates': triggerUpdateCheck(); break;
             case 'help': showView('help'); break;
           }
           return;
@@ -10217,25 +10218,40 @@ PDF_CASENOTE_ADVERT +
         }
       });
     }
-    document.getElementById('check-updates-btn')?.addEventListener('click', function() {
-      var btn = document.getElementById('check-updates-btn');
-      var statusEl = document.getElementById('check-updates-status');
-      if (!window.api.appCheckUpdates) return;
-      if (btn) btn.disabled = true;
-      if (statusEl) statusEl.textContent = 'Checking\u2026';
+    function triggerUpdateCheck() {
+      if (!window.api || !window.api.appCheckUpdates) {
+        showToast('Updates only work in the installed app', 'info');
+        return;
+      }
+      var gearBtn = document.getElementById('gear-check-updates');
+      if (gearBtn) { gearBtn.textContent = '\u21BB Checking\u2026'; gearBtn.disabled = true; }
+      showToast('Checking for updates\u2026', 'info');
       window.api.appCheckUpdates().then(function(res) {
-        if (statusEl) {
-          if (res.status === 'up-to-date') statusEl.textContent = '\u2713 You\'re up to date';
-          else if (res.status === 'available') statusEl.textContent = 'Update v' + (res.version || '') + ' found \u2014 downloading\u2026';
-          else if (res.status === 'dev') statusEl.textContent = 'Updates only apply to the installed app.';
-          else statusEl.textContent = 'Could not check: ' + (res.message || 'Unknown error');
+        var statusEl = document.getElementById('check-updates-status');
+        if (res.status === 'up-to-date') {
+          showToast('You\'re up to date', 'success');
+          if (gearBtn) gearBtn.textContent = '\u2713 Up to date';
+          if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
+        } else if (res.status === 'available') {
+          showToast('Update v' + (res.version || '') + ' found \u2014 downloading\u2026', 'success');
+          if (gearBtn) gearBtn.textContent = '\u21BB Downloading v' + (res.version || '') + '\u2026';
+          if (statusEl) statusEl.textContent = 'Update v' + (res.version || '') + ' found \u2014 downloading\u2026';
+        } else if (res.status === 'dev') {
+          showToast('Updates only apply to the installed app', 'info');
+          if (statusEl) statusEl.textContent = 'Updates only apply to the installed app.';
+        } else {
+          showToast('Could not check: ' + (res.message || 'Unknown error'), 'error');
+          if (statusEl) statusEl.textContent = 'Could not check: ' + (res.message || 'Unknown error');
         }
-        if (res.status === 'up-to-date') showToast('You\'re up to date', 'success');
       }).catch(function() {
-        if (statusEl) statusEl.textContent = 'Update check failed.';
+        showToast('Update check failed', 'error');
       }).finally(function() {
-        if (btn) btn.disabled = false;
+        if (gearBtn) { gearBtn.disabled = false; }
+        setTimeout(function() { if (gearBtn) gearBtn.textContent = '\u21BB Check for updates'; }, 5000);
       });
+    }
+    document.getElementById('check-updates-btn')?.addEventListener('click', function() {
+      triggerUpdateCheck();
     });
 
     // Cloud backup status listener

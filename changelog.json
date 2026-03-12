@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.42",
+      "version": "1.4.43",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Check for Updates button added to hamburger menu — visible on every page",
+        "DB export cached — avoids re-serialising the entire database when data hasn't changed",
+        "saveDb() is now idle-aware — defers disk writes until user has been idle for 3 seconds",
+        "All backup functions (quick, hourly, manual) now use async file writes instead of blocking synchronous ones",
+        "Manual Backup Now button uses cached export for near-instant response"
+      ]
+    },
+    {
+      "version": "1.4.42",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Renamed 'First contact within 45 mins of instruction' to 'Within 45 mins of duty call' with Yes/No/N/A options (all form types)",
         "Fee Earner / Rep field added to custody form section 1, auto-fills from settings",
