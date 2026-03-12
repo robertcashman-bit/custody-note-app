@@ -819,17 +819,18 @@
         <!-- Add-Ons -->
         <div class="settings-card" id="settings-addons-card">
           <h2>Add-Ons</h2>
-          <p class="settings-hint" style="margin-bottom:1rem;">Optional modules that extend CustodyNote. Enable or disable them here. Disabled add-ons have no effect on the core app.</p>
+          <p class="settings-hint" style="margin-bottom:1rem;">Optional modules that extend CustodyNote. Toggle to enable or disable instantly &mdash; no save required.</p>
           <div class="addon-row">
             <div class="addon-info">
               <strong>Officer Email Templates</strong>
               <p class="addon-desc">Generate pre-filled emails to the Officer in Charge directly from the Records list. Includes three templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up.</p>
             </div>
             <div class="addon-toggle-group">
-              <label class="toggle-row addon-toggle-row" for="setting-officer-email-templates">
+              <label class="toggle-row" for="setting-officer-email-templates">
+                <span>Enable</span>
                 <input type="checkbox" id="setting-officer-email-templates">
-                <span id="officer-email-templates-status" class="addon-status addon-status-off">Disabled</span>
               </label>
+              <span id="officer-email-templates-status" class="addon-status addon-status-off">Disabled</span>
             </div>
           </div>
         </div>

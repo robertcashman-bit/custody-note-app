@@ -3507,9 +3507,7 @@ kbd {
 .addon-info { flex: 1; min-width: 0; }
 .addon-info strong { display: block; font-size: 0.95rem; margin-bottom: 0.25rem; color: var(--on-surface, #1e293b); }
 .addon-desc { margin: 0; font-size: 0.8rem; color: var(--on-surface-muted, #64748b); line-height: 1.45; }
-.addon-toggle-group { flex-shrink: 0; display: flex; align-items: center; gap: 0.5rem; padding-top: 0.1rem; }
-.addon-toggle-row { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; }
-.addon-toggle-row input[type="checkbox"] { width: 1.1rem; height: 1.1rem; cursor: pointer; accent-color: #0369a1; }
+.addon-toggle-group { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; padding-top: 0.1rem; }
 .addon-status { font-size: 0.78rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 20px; white-space: nowrap; }
 .addon-status-on  { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }
 .addon-status-off { background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1; }
