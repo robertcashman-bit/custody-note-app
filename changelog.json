@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.44",
+      "version": "1.4.45",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Applicant declarations in records: Declared badge, Print Declaration button",
+        "Unsigned declaration prompts for reason and shows on PDF"
+      ]
+    },
+    {
+      "version": "1.4.44",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Print PDF button added to records list — export and open PDF directly from the record list",
         "LAA Declaration with client signature now embedded in Consultation section (after client understanding checkboxes, before conflict check) for both custody and voluntary attendances",
