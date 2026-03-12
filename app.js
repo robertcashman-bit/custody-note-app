@@ -1063,6 +1063,7 @@ var LAA = {
       { key: 'maatId', label: 'MAAT ID', type: 'text', placeholder: 'Firm provides after charge', firmCompletes: true },
     ]},
     { id: 'crm14', title: 'Legal Aid application (Apply / CRM14)', keyFields: ['crm14CaseType', 'crm14MaatRef'], fields: [
+      { key: '_warning_fraud', label: 'Please note: Making a false declaration is an offence. If you are found doing so, you may be prosecuted, potentially leading to a fine and/or prison sentence. The Legal Aid Agency has a zero tolerance approach to fraud and will look to prosecute where there is evidence of fraud.', type: 'sectionNote', className: 'fraud-warning' },
       { key: '_note_crm14', label: 'Apply for criminal legal aid: The LAA\'s mandatory route is the Apply for criminal legal aid service (apply-for-criminal-legal-aid.service.justice.gov.uk). This section captures the same information required for that application. The paper CRM14/CRM15 forms are only used in limited circumstances (e.g. no portal access, civil contempt, breach of civil injunction). Complete this section to support either route.', type: 'sectionNote' },
       { key: '_note_crm14_retain', label: 'The Apply service produces an online form signed by the client (typically 2 pages). You must retain a copy of this signed form on the client file.', type: 'sectionNote' },
       { key: 'crm14SignedFormOnFile', label: 'Signed Apply application (client-signed, 2-page) on file?', type: 'select', options: ['Yes','No','To follow','N/A (paper CRM14 used)'] },
@@ -1098,6 +1099,10 @@ var LAA = {
       { key: 'crm14PartnerRelationship', label: 'Relationship to partner', type: 'select', options: ['Married','Civil partnership','Cohabiting'], showIf: { field: 'crm14HasPartner', value: 'Yes' } },
       { key: 'crm14PartnerAddress', label: "Partner's address (if different from yours)", type: 'textarea', cols: 2, showIf: { field: 'crm14HasPartner', value: 'Yes' } },
       { key: 'crm14PartnerVictimWitnessCoDef', label: 'Is your partner a victim, prosecution witness, or co-defendant in this case?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'crm14HasPartner', value: 'Yes' } },
+      { key: '_h_partner_declaration', label: 'Partner\'s declaration', type: 'sectionHeading', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
+      { key: '_note_partner_declaration', label: 'I declare that the information included in this application is a true statement of all my financial circumstances to the best of my knowledge and belief. I agree to the LAA and HMCTS, or my partner\'s solicitor, checking the information I have given, with the Department for Work and Pensions, HM Revenue and Customs or other people and organisations. I authorise those people and organisations to provide the information for which the LAA, HMCTS or my partner\'s solicitor may ask. I understand that this application will be made electronically by the legal representative. I have read the Fraud Notice.', type: 'sectionNote', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
+      { key: 'crm14PartnerSignature', label: 'Partner signature', type: 'signature', sigKey: 'crm14PartnerSig', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
+      { key: 'crm14PartnerSignatureDate', label: 'Partner signature date', type: 'date', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
       { key: '_h_crm14_financial', label: 'Financial assessment', type: 'sectionHeading' },
       { key: 'crm14PassportingBenefits', label: 'Do you or your partner receive any of these? (Income-Related ESA, JSA, Guarantee State Pension Credit)', type: 'select', options: ['Yes – Income-Related ESA','Yes – Income-Based JSA','Yes – Guarantee State Pension Credit','Yes – Universal Credit (passported)','No'] },
       { key: 'crm14IncomeOverThreshold', label: 'Is your total household income over £12,475 per year (£239.90 per week)?', type: 'select', options: ['Yes','No','Passported (automatic)'] },
@@ -1105,6 +1110,12 @@ var LAA = {
       { key: 'crm14Crm15Required', label: 'CRM15 financial statement required?', type: 'select', options: ['Yes','No','Completed'] },
       { key: '_h_crm14_ioj', label: 'Interests of Justice', type: 'sectionHeading' },
       { key: 'crm14InterestsOfJustice', label: 'Interests of Justice test – outcome and notes', type: 'textarea', cols: 2 },
+      { key: '_h_crm14_rep_declaration', label: 'Declaration by the legal representative', type: 'sectionHeading' },
+      { key: 'crm14RepAuthorised', label: 'I represent the applicant. I confirm that I am authorised to provide representation under a contract issued by the LAA', type: 'select', options: ['','Yes','No'], cols: 2 },
+      { key: '_note_crm14_instructed', label: 'I confirm that I have been instructed to provide representation by:', type: 'sectionNote' },
+      { key: 'crm14InstructedByFirm', label: 'a firm which holds a contract issued by the LAA', type: 'select', options: ['','Yes','No'], cols: 2 },
+      { key: 'crm14InstructedByPds', label: 'a solicitor employed by the LAA in the Public Defender Service who is authorised to provide representation', type: 'select', options: ['','Yes','No'], cols: 2 },
+      { key: '_note_crm14_rep_declaration', label: 'I confirm that I have gone through the questions on the Interests of Justice and financial assessment aspects of the application with the applicant. I confirm that the applicant has not provided me with any information which contradicts the information provided in this application.', type: 'sectionNote' },
     ]},
   ];
 
@@ -3718,6 +3729,7 @@ var REQUIRED_FIELD_KEYS = [
         switch (actionBtn.dataset.action) {
           case 'amend': amendAttendance(id, rec.status, title); break;
           case 'print': printFromList(id); break;
+          case 'print-declaration': printDeclarationFromList(id); break;
           case 'dup': duplicateAttendance(id); break;
           case 'newMatter': newMatterFromAttendance(id); break;
           case 'delete': deleteAttendance(id, title); break;
@@ -3793,6 +3805,8 @@ var REQUIRED_FIELD_KEYS = [
         const fileNumLabel = d.ourFileNumber ? '#' + d.ourFileNumber : '';
         const meta = [fileNumLabel, dateLabel, stationLabel, dsccLabel].filter(Boolean).join(' \u00B7 ');
         const formTypeBadge = d._formType === 'telephone' ? '<span class="badge badge-tel">TEL</span>' : (d.attendanceMode === 'voluntary' ? '<span class="badge badge-vol">VOL</span>' : '<span class="badge badge-att">ATT</span>');
+        const hasDecl = !!(d.clientSig);
+        const declBadge = hasDecl ? '<span class="badge badge-decl" title="Applicant declaration signed">Declared</span>' : '';
         const li = document.createElement('li');
         li.dataset.id = r.id;
         li.dataset.title = title;
@@ -3800,11 +3814,13 @@ var REQUIRED_FIELD_KEYS = [
           '<div class="list-item-actions">' +
             '<div class="list-item-badges">' +
               formTypeBadge +
+              declBadge +
               '<span class="badge ' + (r.status || 'draft') + '">' + (r.status || 'draft') + '</span>' +
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
               '<button type="button" class="btn-list-action" data-action="print" title="Export PDF and open for print">Print</button>' +
+              '<button type="button" class="btn-list-action" data-action="print-declaration" title="Print Applicant Declaration only">Declaration</button>' +
               '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
               '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
               '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>' +
@@ -3849,6 +3865,27 @@ var REQUIRED_FIELD_KEYS = [
       var data = safeJson(row.data);
       previewPdfWithData(data);
     }).catch(function(e) { showToast('Print failed: ' + (e && e.message), 'error'); });
+  }
+
+  /* ─── PRINT DECLARATION FROM LIST ─── */
+  function printDeclarationFromList(id) {
+    window.api.attendanceGet(id).then(function(row) {
+      if (!row || !row.data) { showToast('Could not load record', 'error'); return; }
+      var data = safeJson(row.data);
+      if (!data.clientSig) {
+        showPrompt('Why is the applicant declaration not signed? This reason will appear on the printed form.', 'Declaration not signed', 'e.g. Telephone advice – client to sign later; Client released before signing; etc.', data.declarationUnsignedReason).then(function(reason) {
+          if (reason === null) return; /* cancelled */
+          data.declarationUnsignedReason = reason || 'Not signed';
+          if (reason && id) {
+            var merged = Object.assign({}, data);
+            window.api.attendanceSave({ id: id, data: merged }).catch(function() {});
+          }
+          generateLaaFormPdf('declaration', 'Applicant Declaration', data);
+        });
+      } else {
+        generateLaaFormPdf('declaration', 'Applicant Declaration', data);
+      }
+    }).catch(function(e) { showToast('Declaration print failed: ' + (e && e.message), 'error'); });
   }
 
   /* ─── DELETE ATTENDANCE (#13) ─── */
@@ -4886,14 +4923,16 @@ var REQUIRED_FIELD_KEYS = [
           sib = sib.nextElementSibling;
         }
       });
-      grid.appendChild(h);
+      const wrap = f.showIf ? document.createElement('div') : null;
+      if (wrap) { wrap.style.gridColumn = '1 / -1'; wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); wrap.appendChild(h); grid.appendChild(wrap); } else grid.appendChild(h);
       return;
     }
     if (f.type === 'sectionNote') {
       const p = document.createElement('p');
-      p.className = 'section-note';
+      p.className = 'section-note' + (f.className ? ' ' + f.className : '');
       p.textContent = f.label;
-      grid.appendChild(p);
+      const wrap = f.showIf ? document.createElement('div') : null;
+      if (wrap) { wrap.style.gridColumn = '1 / -1'; wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); wrap.appendChild(p); grid.appendChild(wrap); } else grid.appendChild(p);
       return;
     }
     if (f.type === 'actionButton') {
@@ -7581,7 +7620,7 @@ var REQUIRED_FIELD_KEYS = [
      PDF GENERATION – comprehensive LAA-compliant
      ═══════════════════════════════════════════════ */
   /* Free-trial advert last page – keep in sync with index.html splash-advert */
-  var PDF_CASENOTE_ADVERT = '<div style="margin-top:32px;padding:12px 16px;border-top:1px solid #e2e8f0;text-align:center;font-size:9px;color:#94a3b8;">Created with <strong style="color:#2563eb;">Custody Note</strong> &mdash; Fast, compliant police-station attendance notes. <a href="https://www.custodynote.com" style="color:#2563eb;">www.custodynote.com</a> | <a href="mailto:robertcashman@defencelegalservices.com" style="color:#2563eb;">robertcashman@defencelegalservices.com</a></div>';
+  var PDF_CASENOTE_ADVERT = '<div style="margin-top:32px;padding:12px 16px;border-top:1px solid #e2e8f0;text-align:center;font-size:9px;color:#94a3b8;">Created with <strong style="color:#2563eb;">Custody Note</strong> &mdash; Fast, compliant police-station attendance notes. Free trial available at custodynote.com. <a href="https://www.custodynote.com" style="color:#2563eb;">www.custodynote.com</a> | <a href="mailto:robertcashman@defencelegalservices.com" style="color:#2563eb;">robertcashman@defencelegalservices.com</a></div>';
   function formatInstructionDateTime(val) {
     if (!val || typeof val !== 'string') return '';
     var s = val.trim();
@@ -8266,6 +8305,8 @@ PDF_CASENOTE_ADVERT +
 
       convertedHtml +
 
+      PDF_CASENOTE_ADVERT +
+
       (function() {
         try {
           var payload = JSON.stringify(d);
@@ -8684,6 +8725,7 @@ PDF_CASENOTE_ADVERT +
       '<div class="sig-box"></div>' +
       '<p>Name: ' + esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ____________</p>' +
       '<div class="footer">© Defence Legal Services Ltd &nbsp;|&nbsp; Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
+      PDF_CASENOTE_ADVERT +
       '</body></html>';
     printGeneratedDoc(html);
   }
@@ -8722,6 +8764,7 @@ PDF_CASENOTE_ADVERT +
       '<div class="sig-box"></div>' +
       '<p>Name (BLOCK CAPITALS): ______________________________&nbsp;&nbsp;&nbsp;&nbsp; Date: ' + esc(date) + (time ? ' &nbsp;&nbsp; Time: ' + esc(time) : '') + '</p>' +
       '<div class="footer">© Defence Legal Services Ltd &nbsp;|&nbsp; Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
+      PDF_CASENOTE_ADVERT +
       '</body></html>';
     printGeneratedDoc(html);
   }
@@ -8758,6 +8801,7 @@ PDF_CASENOTE_ADVERT +
       '<div class="sig-box"></div>' +
       '<p>Name: ' + esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ' + esc(date) + '</p>' +
       '<div class="footer">© Defence Legal Services Ltd &nbsp;|&nbsp; Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
+      PDF_CASENOTE_ADVERT +
       '</body></html>';
     printGeneratedDoc(html);
   }
@@ -9293,10 +9337,27 @@ PDF_CASENOTE_ADVERT +
             case 'enter-licence-key':
               if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Enter your licence key', message: 'Paste the key from your email (trial or purchase at custodynote.com).' });
               break;
+            case 'home': showView('home'); break;
             case 'records': showView('list'); break;
+            case 'new-attendance':
+              currentStandaloneSectionId = null;
+              formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
+              activeFormSections = formSections;
+              formData.attendanceMode = 'custody';
+              formData.workType = 'First Police Station Attendance';
+              formData._formType = 'attendance';
+              prefillDefaults();
+              renderForm(formData);
+              showView('new');
+              break;
             case 'laa-forms': showLaaFormsNav(); break;
+            case 'shortcut-print-pdf': showAttendancePickerModal('print'); break;
+            case 'shortcut-email-solicitor': showAttendancePickerModal('email'); break;
             case 'firms': showView('firms'); break;
             case 'reports': showView('reports'); break;
+            case 'shortcut-backup-now':
+              window.api.backupNow().then(function(p) { showToast('Backup saved: ' + p, 'success'); }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); });
+              break;
             case 'settings': showView('settings'); break;
             case 'check-updates': triggerUpdateCheck(); break;
             case 'help': showView('help'); break;

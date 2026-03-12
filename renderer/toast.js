@@ -84,6 +84,73 @@
     });
   }
 
+  /* ── Prompt (text input) modal ── */
+  function showPrompt(message, title, placeholder, defaultValue) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'cn-confirm-overlay';
+
+      var box = document.createElement('div');
+      box.className = 'cn-confirm-box';
+
+      if (title) {
+        var h = document.createElement('h3');
+        h.className = 'cn-confirm-title';
+        h.textContent = title;
+        box.appendChild(h);
+      }
+
+      var p = document.createElement('p');
+      p.className = 'cn-confirm-msg';
+      p.style.whiteSpace = 'pre-line';
+      p.textContent = message;
+      box.appendChild(p);
+
+      var input = document.createElement('textarea');
+      input.className = 'form-input';
+      input.rows = 3;
+      input.placeholder = placeholder || '';
+      input.value = (defaultValue != null && defaultValue !== '') ? String(defaultValue) : '';
+      input.style.width = '100%';
+      input.style.marginTop = '0.75rem';
+      input.style.marginBottom = '0.75rem';
+      input.style.boxSizing = 'border-box';
+      box.appendChild(input);
+
+      var btns = document.createElement('div');
+      btns.className = 'cn-confirm-btns';
+
+      var cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'btn btn-secondary';
+      cancelBtn.textContent = 'Cancel';
+
+      var okBtn = document.createElement('button');
+      okBtn.type = 'button';
+      okBtn.className = 'btn btn-primary';
+      okBtn.textContent = 'OK';
+
+      btns.appendChild(cancelBtn);
+      btns.appendChild(okBtn);
+      box.appendChild(btns);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      function done(result) {
+        document.body.removeChild(overlay);
+        resolve(result);
+      }
+
+      okBtn.addEventListener('click', function () { done(input.value ? input.value.trim() : ''); });
+      cancelBtn.addEventListener('click', function () { done(null); });
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) done(null); });
+      document.addEventListener('keydown', function esc(e) {
+        if (e.key === 'Escape') { document.removeEventListener('keydown', esc); done(null); }
+      });
+      input.focus();
+    });
+  }
+
   /* ── Generic modal ── */
   function showModal(title, html) {
     return new Promise(function (resolve) {
@@ -130,5 +197,6 @@
   /* Export to global scope */
   window.showToast = showToast;
   window.showConfirm = showConfirm;
+  window.showPrompt = showPrompt;
   window.showModal = showModal;
 })();

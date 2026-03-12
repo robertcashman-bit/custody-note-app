@@ -4002,7 +4002,7 @@ ipcMain.handle('print-pdf-file', async (_, filePath) => {
 });
 
 /* ─── LAA Official PDF prefill ─── */
-const { PDFDocument } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 
 const LAA_FORM_FILES = {
   crm1: 'crm1-v16-feb-2025.pdf',
@@ -4208,6 +4208,23 @@ async function fillDeclaration(pdfDoc, form, d, settings) {
 
   await embedSignature(pdfDoc, form, 'Signature1', d.clientSig);
   await embedSignature(pdfDoc, form, 'Signature3', d.feeEarnerSig);
+
+  // If client signature missing, add reason-why-unsigned on the form (when provided)
+  const reason = d.declarationUnsignedReason;
+  if (!d.clientSig && reason) {
+    try {
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const pages = pdfDoc.getPages();
+      const page = pages[0];
+      const { height } = page.getSize();
+      const line1 = 'Declaration not signed. Reason:';
+      const line2 = String(reason).slice(0, 120);
+      page.drawText(line1, { x: 50, y: height - 380, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+      page.drawText(line2, { x: 50, y: height - 392, size: 8, font });
+    } catch (e) {
+      console.error('[Declaration unsigned reason]', e.message);
+    }
+  }
 }
 
 ipcMain.handle('laa-generate-official-pdf', async (_, { formType, data }) => {

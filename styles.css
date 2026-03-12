@@ -238,6 +238,7 @@ html.dark .badge.finalised { background: #064e3b; color: #6ee7b7; }
 html.dark .badge.badge-tel { background: #1e3a5f; color: #93c5fd; }
 html.dark .badge.badge-att { background: #1e293b; color: #94a3b8; }
 html.dark .badge.badge-vol { background: #134e4a; color: #5eead4; }
+html.dark .badge.badge-decl { background: #14532d; color: #86efac; }
 html.dark .badge.archived { background: #334155; color: #94a3b8; }
 html.dark .escape-yes { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
 html.dark .escape-no { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
@@ -497,7 +498,7 @@ body.form-active #view-form > .form-page-header { display: none; }
   position: absolute; top: calc(100% + 6px); right: 0;
   background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-  min-width: 200px; z-index: 500; padding: 0.35rem 0;
+  min-width: 220px; z-index: 500; padding: 0.35rem 0;
   animation: gear-fade-in 0.15s ease-out;
 }
 .gear-dropdown.hidden { display: none; }
@@ -510,8 +511,13 @@ body.form-active #view-form > .form-page-header { display: none; }
 }
 .gear-item:hover { background: #f1f5f9; }
 .gear-divider { height: 1px; background: #e2e8f0; margin: 0.3rem 0; }
+.gear-section-label {
+  padding: 0.35rem 1rem 0.15rem; font-size: 0.7rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8;
+}
 html.dark .gear-item { color: var(--text); }
 html.dark .gear-divider { background: var(--border); }
+html.dark .gear-section-label { color: var(--text-muted); }
 
 /* ═══ MAIN ═══ */
 .app-main { flex: 1; overflow: hidden; display: flex; flex-direction: column; width: 100%; min-width: 0; }
@@ -1319,6 +1325,7 @@ html.dark .home-attention-item:hover {
 .badge.badge-tel { background: #dbeafe; color: #1e40af; font-size: 0.6rem; }
 .badge.badge-att { background: #f1f5f9; color: #475569; font-size: 0.6rem; }
 .badge.badge-vol { background: #ccfbf1; color: #0f766e; font-size: 0.6rem; }
+.badge.badge-decl { background: #dcfce7; color: #166534; font-size: 0.6rem; }
 .badge.archived { background: #e2e8f0; color: #475569; }
 .empty-state { text-align: center; padding: 3rem; color: #94a3b8; border-left: none !important; font-size: 1rem; }
 
@@ -1688,6 +1695,15 @@ html.dark .station-code { color: var(--primary); }
   color: var(--text-muted);
   margin: 0 0 0.25rem 0;
   line-height: 1.4;
+}
+.section-note.fraud-warning {
+  padding: 0.75rem 1rem;
+  margin: 0 0 1rem 0;
+  background: rgba(185, 28, 28, 0.08);
+  border: 1px solid rgba(185, 28, 28, 0.3);
+  border-radius: var(--radius);
+  color: #b91c1c;
+  font-weight: 500;
 }
 .action-btn-group {
   grid-column: 1 / -1;
