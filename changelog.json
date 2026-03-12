@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.48",
+      "version": "1.4.49",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Export PDF and Declaration in custody and voluntary forms",
+        "Declaration saved separately with attendance",
+        "accessible from form and Records list"
+      ]
+    },
+    {
+      "version": "1.4.48",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Privacy notice above declaration",
         "auto-fill client name and date on LAA declaration",
