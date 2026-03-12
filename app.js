@@ -5067,7 +5067,8 @@ var REQUIRED_FIELD_KEYS = [
         endActions.className = 'form-actions form-end-actions';
         endActions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
-          '<button type="button" class="btn btn-accent" id="form-pdf" title="Save attendance note and declaration to Desktop">Export PDF</button>' +
+          '<button type="button" class="btn btn-accent" id="form-pdf-end" title="Save full attendance note (including declaration) to Desktop">Export PDF</button>' +
+          '<button type="button" class="btn btn-accent" id="form-print-end" title="Print preview the full attendance note">Print Preview</button>' +
           '<button type="button" class="btn btn-accent" id="form-declaration" title="Export Applicant Declaration only">Declaration</button>' +
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
           '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>';
@@ -8642,12 +8643,23 @@ PDF_CASENOTE_ADVERT +
       '</table>' +
       (d.repInstructionsSignature || d.clientInstructionsSignature ? '<div class="sig-block"><p class="sig-label">Rep confirmation of instructions</p>' + sig('repInstructionsSignature') + '</div><div class="sig-block"><p class="sig-label">Client confirmation of instructions</p>' + sig('clientInstructionsSignature') + '</div>' : '') +
 
-      '<h2>7. Interview</h2><table>' +
-      row('Interview start', d.startTime) + row('Interview end', d.endTime) +
-      row('Those present', d.present) + row('Client cautioned?', d.cautioned) +
-      row('Arrested during attendance?', d.arrestedDuringAttendance) +
-      '</table>' +
-      (d.notes ? '<div class="nar">' + h(d.notes) + '</div>' : '') +
+      (function() {
+        var interviews = d.interviews || [];
+        if (!interviews.length && (d.startTime || d.notes || d.present)) {
+          interviews = [{ startTime: d.startTime, endTime: d.endTime, present: d.present, cautioned: d.cautioned, notes: d.notes }];
+        }
+        if (!interviews.length) return '<h2>7. Interview</h2><p style="font-size:10px;color:#64748b;">No interview recorded.</p>';
+        var html = '';
+        html += '<p class="decl" style="margin-bottom:8px;font-size:9px;color:#b91c1c;">These notes are not verbatim and should not be relied upon as if a transcript.</p>';
+        interviews.forEach(function(iv, idx) {
+          html += '<h2>7. Interview' + (interviews.length > 1 ? ' ' + (idx + 1) : '') + '</h2><table>' +
+            row('Interview start', iv.startTime) + row('Interview end', iv.endTime) +
+            row('Those present', iv.present) + row('Client cautioned?', iv.cautioned) +
+            '</table>' + (iv.notes ? '<div class="nar">' + h(iv.notes) + '</div>' : '');
+        });
+        html += '<table>' + row('Arrested during attendance?', d.arrestedDuringAttendance) + '</table>';
+        return html;
+      })() +
       convertedHtml +
 
       '<h2>8. Outcome</h2><table>' +
@@ -8750,12 +8762,6 @@ PDF_CASENOTE_ADVERT +
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
         showToast('PDF saved: ' + p, 'success');
-        if (data._formType === 'attendance' && (data.laaClientFullName || data.clientSig || data.feeEarnerSig)) {
-          window.api.laaGenerateOfficialPdf({ formType: 'declaration', data: data }).then(function(res) {
-            if (res.error) return;
-            showToast('Declaration PDF saved: ' + (res.path || '').replace(/\\/g, '/').split('/').pop(), 'success');
-          }).catch(function() {});
-        }
       }).catch(e => showToast('PDF failed: ' + (e && e.message), 'error'));
     });
   }
@@ -8766,34 +8772,18 @@ PDF_CASENOTE_ADVERT +
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
-      const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
-      const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-      window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
-        if (window.api.openPath) window.api.openPath(p);
-        showToast('PDF saved: ' + p, 'success');
-      }).catch(function(e) {
-        showToast('PDF failed: ' + (e && e.message), 'error');
-      });
+      printGeneratedDoc(html);
     });
   }
 
-  /** Generate PDF and open in default viewer so user can review before printing/saving. */
+  /** Generate PDF and open in-app print preview window. */
   function previewPdf() {
     ensureAllSectionsRendered();
     const data = getFormData();
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
-      const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
-      const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-      window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
-        if (window.api.openPath) window.api.openPath(p);
-        showToast('PDF opened for preview', 'success');
-      }).catch(function(e) {
-        showToast('PDF failed: ' + (e && e.message), 'error');
-      });
+      printGeneratedDoc(html);
     });
   }
 
@@ -8825,21 +8815,13 @@ PDF_CASENOTE_ADVERT +
     }).catch(e => showToast('Print failed: ' + (e && e.message), 'error'));
   }
 
-  /** Generate PDF from given attendance data and open in default viewer (for picker flow). */
+  /** Generate PDF from given attendance data and open in-app print preview (for picker flow). */
   function previewPdfWithData(data) {
     if (!data) return;
     window.api.getSettings().then(settings => {
       const builder = getPdfBuilderForData(data);
       const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
-      const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
-      const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-      window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
-        if (window.api.openPath) window.api.openPath(p);
-        showToast('PDF opened for preview', 'success');
-      }).catch(function(e) {
-        showToast('PDF failed: ' + (e && e.message), 'error');
-      });
+      printGeneratedDoc(html);
     }).catch(e => showToast('Preview failed: ' + (e && e.message), 'error'));
   }
 
@@ -10117,9 +10099,9 @@ PDF_CASENOTE_ADVERT +
       if (!btn || !btn.id || !btn.id.startsWith('form-')) return;
       switch (btn.id) {
         case 'form-finalise': validateBeforeFinalise(); break;
-        case 'form-pdf': confirmConfidentialityThen(exportPdf); break;
+        case 'form-pdf': case 'form-pdf-end': confirmConfidentialityThen(exportPdf); break;
         case 'form-declaration': confirmConfidentialityThen(printDeclarationFromForm); break;
-        case 'form-print': confirmConfidentialityThen(printAttendanceNote); break;
+        case 'form-print': case 'form-print-end': confirmConfidentialityThen(printAttendanceNote); break;
         case 'form-email': confirmConfidentialityThen(emailPdf); break;
         case 'form-email-solicitor': confirmConfidentialityThen(function() { emailToSolicitorWithData(getFormData()); }); break;
         case 'form-report-firm': confirmConfidentialityThen(sendReportToFirm); break;
