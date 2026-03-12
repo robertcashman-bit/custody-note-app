@@ -41,6 +41,12 @@ function loadSettings() {
     var aif = document.getElementById('setting-auto-import-folder');
     if (aif) aif.value = s.autoImportFolder || '';
 
+    /* Officer Email Templates add-on */
+    var oetToggle = document.getElementById('setting-officer-email-templates');
+    if (oetToggle) oetToggle.checked = s.officerEmailTemplatesEnabled === 'true';
+    window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
+    _updateAddonStatusLabel();
+
     // Cloud backup status – trigger fresh check when Settings opens
     var cloudBackupApplyStatus = function(status) {
       var checking = document.getElementById('cloud-backup-checking');
@@ -160,7 +166,11 @@ function saveSettings() {
     showSupervisorReview: document.getElementById('setting-show-supervisor-review')?.checked ? 'true' : 'false',
     autoImportEnabled: document.getElementById('setting-auto-import-enabled')?.checked ? 'true' : 'false',
     autoImportFolder: (document.getElementById('setting-auto-import-folder') || {value:''}).value.trim() || '',
+    officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
   }).then(function() {
+    /* Sync global flag so list refreshes immediately reflect the toggle */
+    window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;
+    _updateAddonStatusLabel();
     showToast('Settings saved', 'success');
   }).catch(function(err) {
     console.error('[Settings] Failed to save settings:', err);
@@ -217,6 +227,14 @@ function renderFirmsPage() {
   if (pageInfoEl) pageInfoEl.textContent = totalPages > 1 ? 'Page ' + firmsPage + ' of ' + totalPages : '';
   if (prevBtn) prevBtn.disabled = firmsPage <= 1;
   if (nextBtn) nextBtn.disabled = firmsPage >= totalPages;
+}
+
+function _updateAddonStatusLabel() {
+  var lbl = document.getElementById('officer-email-templates-status');
+  if (!lbl) return;
+  var enabled = window._emailTemplatesAddonEnabled;
+  lbl.textContent = enabled ? 'Enabled' : 'Disabled';
+  lbl.className   = 'addon-status ' + (enabled ? 'addon-status-on' : 'addon-status-off');
 }
 
 function addFirm() {

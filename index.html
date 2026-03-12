@@ -816,6 +816,24 @@
           <p class="settings-hint">The app checks the folder periodically and imports the newest files first.</p>
         </div>
 
+        <!-- Add-Ons -->
+        <div class="settings-card" id="settings-addons-card">
+          <h2>Add-Ons</h2>
+          <p class="settings-hint" style="margin-bottom:1rem;">Optional modules that extend CustodyNote. Enable or disable them here. Disabled add-ons have no effect on the core app.</p>
+          <div class="addon-row">
+            <div class="addon-info">
+              <strong>Officer Email Templates</strong>
+              <p class="addon-desc">Generate pre-filled emails to the Officer in Charge directly from the Records list. Includes three templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up.</p>
+            </div>
+            <div class="addon-toggle-group">
+              <label class="toggle-row addon-toggle-row" for="setting-officer-email-templates">
+                <input type="checkbox" id="setting-officer-email-templates">
+                <span id="officer-email-templates-status" class="addon-status addon-status-off">Disabled</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
         <div class="settings-card">
           <h2>Storage &amp; Connectivity</h2>
           <label>Database location</label>
@@ -1517,6 +1535,8 @@
   <script src="app.js"></script>
   <script src="renderer/views/reports.js"></script>
   <script src="renderer/views/settings.js"></script>
+  <script src="renderer/email-templates.js"></script>
+  <script src="renderer/views/email-modal.js"></script>
   <script src="renderer/views/list.js"></script>
   <script src="renderer/csv-exporter.js"></script>
   <!-- laa-forms.js retired: official PDFs now used via laa-generate-official-pdf IPC -->

@@ -77,6 +77,16 @@ function refreshList() {
         ? '<button type="button" class="btn-list-action unarchive-btn" title="Restore from archive" data-id="' + r.id + '">Unarchive</button>'
         : '<button type="button" class="btn-list-action archive-btn" title="Archive this record" data-id="' + r.id + '">Archive</button>';
 
+      /* Officer Email Templates add-on — Email OIC button + Sent badge */
+      var emailOicBtn  = '';
+      var oicSentBadge = '';
+      if (window._emailTemplatesAddonEnabled) {
+        emailOicBtn = '<button type="button" class="btn-list-action email-oic-btn" title="Email Officer in Charge" data-id="' + r.id + '">Email OIC</button>';
+        if (d.officerEmailStatus === 'sent') {
+          oicSentBadge = ' <span class="badge badge-oic-sent" title="OIC email sent on ' + esc(d.lastOfficerEmailSentDate ? new Date(d.lastOfficerEmailSentDate).toLocaleDateString('en-GB') : '') + '">&#9993; Sent</span>';
+        }
+      }
+
       var li = document.createElement('li');
       li.innerHTML =
         '<div class="list-item-text">' +
@@ -88,12 +98,14 @@ function refreshList() {
             '<span class="badge ' + esc(r.status || 'draft') + '">' + esc(r.status || 'draft') + '</span>' +
             approved +
             archivedBadge +
+            oicSentBadge +
           '</div>' +
           '<div class="list-item-btns" role="group" aria-label="Record actions">' +
             archiveBtn +
             '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + r.id + '">Edit</button>' +
             '<button type="button" class="btn-list-action dup-btn" title="Duplicate for further visit" data-id="' + r.id + '">Duplicate</button>' +
             '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + r.id + '">Delete</button>' +
+            emailOicBtn +
           '</div>' +
         '</div>';
 
@@ -105,6 +117,14 @@ function refreshList() {
         li.querySelector('.unarchive-btn').addEventListener('click', function(e) { e.stopPropagation(); unarchiveAttendance(r.id); });
       } else if (!r.archived_at && li.querySelector('.archive-btn')) {
         li.querySelector('.archive-btn').addEventListener('click', function(e) { e.stopPropagation(); archiveAttendance(r.id, title); });
+      }
+      if (window._emailTemplatesAddonEnabled && li.querySelector('.email-oic-btn')) {
+        li.querySelector('.email-oic-btn').addEventListener('click', (function(rowData, rowStatus) {
+          return function(e) {
+            e.stopPropagation();
+            openEmailModal(r.id, rowData, rowStatus);
+          };
+        })(d, r.status));
       }
       ul.appendChild(li);
     });

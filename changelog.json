@@ -1,9 +1,33 @@
 {
   "releases": [
     {
-      "version": "1.4.51",
+      "version": "1.4.54",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Add Officer Email Templates add-on module. When enabled in Settings → Add-Ons, an Email OIC button appears on each record in the Records list. Click it to open a modal with three pre-filled templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up. Templates auto-populate officer, client, station, firm, date and fee earner details from the record. Supports Open Email App (mailto), Copy Email, Mark Sent, and Cancel. A Sent badge appears on the list row after marking sent. Feature is fully optional and has no effect on the core app when disabled. Designed for future paid licensing."
+      ]
+    },
+    {
+      "version": "1.4.53",
+      "date": "2026-03-12",
+      "latest": false,
+      "changes": [
+        "Remove PDF buttons from header and bottom bar. Add Print PDF button to each record in the list. First form section now has attendance type selector (custody/voluntary) to switch modes. Remove CRM1 signature requirement. Remove pre-charge engagement field and CN12/CN13 codes. Fix app version display in Settings. Updated PDF advert: Free trial at www.custodynote.com. Hide custody number from voluntary records. Responsive footer layout. Updated help documentation."
+      ]
+    },
+    {
+      "version": "1.4.52",
+      "date": "2026-03-12",
+      "latest": false,
+      "changes": [
+        "Fix PDF: attendance note and declaration now combined into a single PDF. Print buttons now open in-app print preview with Print dialog. Fixed voluntary attendance interview data missing from PDF output. Removed duplicate form element ID."
+      ]
+    },
+    {
+      "version": "1.4.51",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Bottom nav bar",
         "sticky PDF export button",
