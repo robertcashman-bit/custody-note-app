@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.54",
+      "version": "1.4.55",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Fix: Officer Email Templates add-on now activates correctly on app startup. Previously the Email OIC button would not appear until Settings had been visited in the same session."
+      ]
+    },
+    {
+      "version": "1.4.54",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Add Officer Email Templates add-on module. When enabled in Settings → Add-Ons, an Email OIC button appears on each record in the Records list. Click it to open a modal with three pre-filled templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up. Templates auto-populate officer, client, station, firm, date and fee earner details from the record. Supports Open Email App (mailto), Copy Email, Mark Sent, and Cancel. A Sent badge appears on the list row after marking sent. Feature is fully optional and has no effect on the core app when disabled. Designed for future paid licensing."
       ]
