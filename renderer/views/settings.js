@@ -82,6 +82,32 @@ function loadSettings() {
     window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
     _updateAddonStatusLabel();
 
+    /* Idle timeout */
+    var idleEl = document.getElementById('setting-idle-timeout');
+    if (idleEl) {
+      idleEl.value = s.idleTimeoutMinutes || '0';
+      if (!idleEl._idleListenerAttached) {
+        idleEl._idleListenerAttached = true;
+        idleEl.addEventListener('change', function() {
+          window.api.setSettings({ idleTimeoutMinutes: idleEl.value }).then(function() {
+            showToast('Auto-lock setting saved', 'success');
+            if (typeof window._resetIdleTimer === 'function') window._resetIdleTimer();
+          });
+        });
+      }
+    }
+
+    /* Start/reset idle timer with current setting */
+    if (typeof window._resetIdleTimer === 'function') window._resetIdleTimer();
+
+    /* safeStorage warning */
+    if (window.api.getSafeStorageStatus) {
+      window.api.getSafeStorageStatus().then(function(ok) {
+        var el = document.getElementById('safeStorage-warning');
+        if (el) el.style.display = ok ? 'none' : '';
+      }).catch(function() {});
+    }
+
     // Cloud backup status – trigger fresh check when Settings opens
     var cloudBackupApplyStatus = function(status) {
       var checking = document.getElementById('cloud-backup-checking');
@@ -202,6 +228,7 @@ function saveSettings() {
     autoImportEnabled: document.getElementById('setting-auto-import-enabled')?.checked ? 'true' : 'false',
     autoImportFolder: (document.getElementById('setting-auto-import-folder') || {value:''}).value.trim() || '',
     officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
+    idleTimeoutMinutes: (document.getElementById('setting-idle-timeout') || {value:'0'}).value || '0',
   }).then(function() {
     /* Sync global flag so list refreshes immediately reflect the toggle */
     window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;
@@ -247,15 +274,57 @@ function renderFirmsPage() {
         '<td>' + esc(firm.contact_phone || '') + '</td>' +
         '<td class="firms-actions-col">' +
           '<button type="button" class="btn-star ' + (firm.is_default ? 'default' : '') + '" data-id="' + firm.id + '" title="Set as default">\u2605</button>' +
+          '<button type="button" class="btn-small firm-edit" data-id="' + firm.id + '">Edit</button>' +
           '<button type="button" class="btn-small firm-del" data-id="' + firm.id + '">Remove</button>' +
         '</td>';
+
+      /* Inline edit row (hidden by default) */
+      var editTr = document.createElement('tr');
+      editTr.className = 'firm-edit-row';
+      editTr.style.display = 'none';
+      editTr.innerHTML =
+        '<td colspan="5" style="padding:0.5rem;background:var(--input-bg,#f8fafc);border-top:1px solid var(--border,#e2e8f0);">' +
+          '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">' +
+            '<input class="edit-firm-name form-input" placeholder="Firm name" style="flex:2;min-width:120px;" value="' + esc(firm.name) + '">' +
+            '<input class="edit-firm-contact form-input" placeholder="Contact name" style="flex:2;min-width:120px;" value="' + esc(firm.contact_name || '') + '">' +
+            '<input class="edit-firm-email form-input" placeholder="Email" style="flex:2;min-width:120px;" value="' + esc(firm.contact_email || '') + '">' +
+            '<input class="edit-firm-phone form-input" placeholder="Phone" style="flex:2;min-width:100px;" value="' + esc(firm.contact_phone || '') + '">' +
+            '<button type="button" class="btn btn-primary btn-small edit-firm-save">Save</button>' +
+            '<button type="button" class="btn btn-secondary btn-small edit-firm-cancel">Cancel</button>' +
+          '</div>' +
+        '</td>';
+
       tr.querySelector('.firm-del').addEventListener('click', function() {
         showConfirm('Remove ' + firm.name + '?').then(function(ok) { if (ok) window.api.firmDelete(firm.id).then(loadFirmsList); });
       });
       tr.querySelector('.btn-star').addEventListener('click', function() {
         window.api.firmSetDefault(firm.id).then(loadFirmsList);
       });
+      tr.querySelector('.firm-edit').addEventListener('click', function() {
+        editTr.style.display = editTr.style.display === 'none' ? '' : 'none';
+      });
+      editTr.querySelector('.edit-firm-cancel').addEventListener('click', function() {
+        editTr.style.display = 'none';
+      });
+      editTr.querySelector('.edit-firm-save').addEventListener('click', function() {
+        var newName = editTr.querySelector('.edit-firm-name').value.trim();
+        if (!newName) { showToast('Firm name is required', 'error'); return; }
+        window.api.firmSave({
+          id: firm.id,
+          name: newName,
+          contact_name: editTr.querySelector('.edit-firm-contact').value.trim(),
+          contact_email: editTr.querySelector('.edit-firm-email').value.trim(),
+          contact_phone: editTr.querySelector('.edit-firm-phone').value.trim(),
+        }).then(function() {
+          showToast('Firm updated', 'success');
+          loadFirmsList();
+        }).catch(function() {
+          showToast('Failed to update firm', 'error');
+        });
+      });
+
       container.appendChild(tr);
+      container.appendChild(editTr);
     });
   }
   if (paginationEl) paginationEl.style.display = firms.length > FIRMS_PER_PAGE ? 'flex' : 'none';

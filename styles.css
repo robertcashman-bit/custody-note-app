@@ -2802,6 +2802,19 @@ kbd {
 .cn-toast.cn-toast-error   { background: #dc2626; }
 .cn-toast.cn-toast-warning { background: #d97706; }
 .cn-toast.cn-toast-info    { background: #1d4ed8; }
+.cn-undo-toast { bottom: 3.5rem; display: flex; align-items: center; gap: 0.75rem; }
+.cn-undo-btn {
+  background: rgba(255,255,255,0.25);
+  border: 1px solid rgba(255,255,255,0.5);
+  color: #fff;
+  padding: 0.2rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cn-undo-btn:hover { background: rgba(255,255,255,0.4); }
 
 .cn-confirm-overlay {
   position: fixed;
@@ -3139,6 +3152,57 @@ kbd {
   font-size: 0.85rem;
   text-align: center;
   cursor: pointer;
+}
+.pin-tip-banner {
+  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.pin-tip-banner .pin-tip-dismiss {
+  margin-left: 0.75rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.pin-tip-banner .pin-tip-dismiss:hover { opacity: 1; }
+
+/* ── Session lock overlay ── */
+#session-lock-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  backdrop-filter: blur(6px);
+}
+#session-lock-box {
+  background: #fff;
+  border-radius: 16px;
+  padding: 2.5rem 3rem;
+  text-align: center;
+  max-width: 380px;
+  width: 90vw;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+#session-lock-icon { font-size: 3rem; margin-bottom: 0.5rem; }
+#session-lock-box h2 { margin: 0 0 0.5rem; font-size: 1.4rem; }
+#session-lock-box p { color: #64748b; margin: 0 0 1.25rem; font-size: 0.95rem; }
+.dark-mode #session-lock-box { background: #1e293b; color: #f1f5f9; }
+.dark-mode #session-lock-box p { color: #94a3b8; }
+.settings-warning-banner {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  color: #92400e;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
 }
 
 .licence-warning-banner {

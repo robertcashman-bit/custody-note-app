@@ -52,6 +52,9 @@ contextBridge.exposeInMainWorld('api', {
   supervisorApprove: (params) => ipcRenderer.invoke('supervisor-approve', params),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getBankHolidays: () => ipcRenderer.invoke('get-bank-holidays'),
+  getSafeStorageStatus: () => ipcRenderer.invoke('get-safe-storage-status'),
+  auditLogGetHistory: (id) => ipcRenderer.invoke('audit-log-get-history', id),
+  attendanceExportCsv: (params) => ipcRenderer.invoke('attendance-export-csv', params),
   /* Photo file storage */
   photoSave: (params) => ipcRenderer.invoke('photo-save', params),
   photoLoad: (params) => ipcRenderer.invoke('photo-load', params),

@@ -324,7 +324,18 @@ async function promptForRecoveryPassword() {
       });
     }
   }
-  dialog.showErrorBox('Recovery Failed', 'Too many incorrect attempts. The database cannot be unlocked.\nThe app will start with a fresh database.');
+  const { response } = await dialog.showMessageBox(mainWindow || null, {
+    type: 'error',
+    title: 'Recovery Failed',
+    message: 'Too many incorrect attempts. The database could not be unlocked.',
+    detail: 'Your records are safe — nothing has been deleted.\n\nYou can quit the app and try again later, or start with a fresh (empty) database.\n\nIMPORTANT: Starting fresh will NOT delete your backup files. You can restore from backup in Settings.',
+    buttons: ['Quit App (try again later)', 'Start with fresh database'],
+    defaultId: 0,
+    cancelId: 0,
+  });
+  if (response === 0) {
+    app.quit();
+  }
   return null;
 }
 
@@ -902,6 +913,7 @@ async function initDb() {
   try { db.run("ALTER TABLE attendances ADD COLUMN supervisor_approved_at TEXT DEFAULT NULL"); } catch (_) {}
   try { db.run("ALTER TABLE attendances ADD COLUMN supervisor_note TEXT DEFAULT ''"); } catch (_) {}
   try { db.run("ALTER TABLE attendances ADD COLUMN archived_at TEXT DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN work_type TEXT DEFAULT ''"); } catch (_) {}
 
   /* ─── Cross-device sync columns ─── */
   try { db.run("ALTER TABLE attendances ADD COLUMN sync_id TEXT DEFAULT NULL"); } catch (_) {}
@@ -958,7 +970,8 @@ function loadStationsFromFile() {
 /* ─── SMART BACKUP SYSTEM ─── */
 let dbDirtySinceQuickBackup = false;
 let dbDirtySinceHourlyBackup = false;
-const MAX_HOURLY_BACKUPS = 48;
+const MAX_HOURLY_BACKUPS = 24; /* last 24 hourly archives (~1 working day) */
+const MAX_DAILY_BACKUPS  = 7;  /* one representative per day for 7 days */
 
 let _backupScheduler = null;
 
@@ -1074,14 +1087,34 @@ function pruneOldBackups(backupDir) {
   try {
     const files = fs.readdirSync(backupDir)
       .filter(f => f.startsWith('attendance-backup-') && f.endsWith('.db'))
-      .map(f => ({ name: f, time: fs.statSync(path.join(backupDir, f)).mtimeMs }))
-      .sort((a, b) => b.time - a.time);
-    if (files.length > MAX_HOURLY_BACKUPS) {
-      files.slice(MAX_HOURLY_BACKUPS).forEach(f => {
-        try { fs.unlinkSync(path.join(backupDir, f.name)); } catch (_) {}
-      });
-      console.log('[Backup] Pruned', files.length - MAX_HOURLY_BACKUPS, 'old archives');
-    }
+      .map(f => ({ name: f, path: path.join(backupDir, f), time: fs.statSync(path.join(backupDir, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time); /* newest first */
+
+    const keep = new Set();
+
+    /* Keep the most recent MAX_HOURLY_BACKUPS files (last ~24 hours) */
+    files.slice(0, MAX_HOURLY_BACKUPS).forEach(f => keep.add(f.name));
+
+    /* Also keep one representative file per calendar day for the last MAX_DAILY_BACKUPS days */
+    const seenDays = new Set();
+    const cutoff = Date.now() - MAX_DAILY_BACKUPS * 24 * 60 * 60 * 1000;
+    files.forEach(f => {
+      if (f.time < cutoff) return;
+      const day = new Date(f.time).toISOString().slice(0, 10); /* YYYY-MM-DD */
+      if (!seenDays.has(day)) {
+        seenDays.add(day);
+        keep.add(f.name);
+      }
+    });
+
+    /* Delete everything not in the keep set */
+    let pruned = 0;
+    files.forEach(f => {
+      if (!keep.has(f.name)) {
+        try { fs.unlinkSync(f.path); pruned++; } catch (_) {}
+      }
+    });
+    if (pruned > 0) console.log('[Backup] Pruned', pruned, 'old archives; keeping', keep.size);
   } catch (_) {}
 }
 
@@ -2321,6 +2354,10 @@ ipcMain.handle('get-bank-holidays', () => {
   } catch (_) { return null; }
 });
 
+ipcMain.handle('get-safe-storage-status', () => {
+  try { return safeStorage.isEncryptionAvailable(); } catch (_) { return false; }
+});
+
 /* ═══════════════════════════════════════════════
    LICENCE / SUBSCRIPTION SYSTEM
    ═══════════════════════════════════════════════ */
@@ -2974,7 +3011,7 @@ ipcMain.handle('attendance-home-stats', () => {
 });
 
 ipcMain.handle('attendance-search', (_, params) => {
-  const { query, status, page, pageSize, sortField, sortDir, archived } = params || {};
+  const { query, status, page, pageSize, sortField, sortDir, archived, workType } = params || {};
   const p = Math.max(1, page || 1);
   const ps = Math.max(1, pageSize || 50);
   const offset = (p - 1) * ps;
@@ -2998,6 +3035,10 @@ ipcMain.handle('attendance-search', (_, params) => {
   if (status && status !== 'all') {
     where += ' AND status = ?';
     params2.push(status);
+  }
+  if (workType && workType !== 'all') {
+    where += ' AND work_type = ?';
+    params2.push(workType);
   }
 
   const countRow = dbGet(`SELECT COUNT(*) as total FROM attendances ${where}`, params2);
@@ -3070,6 +3111,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   const stationName = parsed.policeStationName || '';
   const dsccRef = parsed.dsccRef || '';
   const attendanceDate = parsed.date || '';
+  const workType = parsed.workType || '';
 
   if (id) {
     const existing = dbGet('SELECT status, data, sync_version FROM attendances WHERE id = ?', [id]);
@@ -3102,8 +3144,8 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
 
     const nextVer = (existing && existing.sync_version || 1) + 1;
     dbRun(
-      'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, sync_dirty=1, sync_version=? WHERE id=?',
-      [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, nextVer, id]
+      'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
+      [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, workType, nextVer, id]
     );
 
     if (st === 'finalised') {
@@ -3134,8 +3176,8 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       const ev = dbGet('SELECT sync_version FROM attendances WHERE id=?', [existingId]);
       const nv = (ev && ev.sync_version || 1) + 1;
       dbRun(
-        'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, sync_dirty=1, sync_version=? WHERE id=?',
-        [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, nv, existingId]
+        'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
+        [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, workType, nv, existingId]
       );
       db.run(
         'INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)',
@@ -3155,8 +3197,8 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       if (recentDup && recentDup.id) {
         const nv = (recentDup.sync_version || 1) + 1;
         dbRun(
-          'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, sync_dirty=1, sync_version=? WHERE id=?',
-          [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, nv, recentDup.id]
+          'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
+          [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, workType, nv, recentDup.id]
         );
         markDbDirty();
         enqueueSyncForRecord(recentDup.id);
@@ -3183,8 +3225,8 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   const newSyncId = generateSyncId();
 
   dbRun(
-    'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date, sync_id, sync_dirty, sync_version) VALUES (?,?,?,?,?,?,?,?,1,1)',
-    [insertDataStr, st, now, clientName, stationName, dsccRef, attendanceDate, newSyncId]
+    'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date, work_type, sync_id, sync_dirty, sync_version) VALUES (?,?,?,?,?,?,?,?,?,1,1)',
+    [insertDataStr, st, now, clientName, stationName, dsccRef, attendanceDate, workType, newSyncId]
   );
   markDbDirty();
   // sql.js + our dbRun/saveDb flow can occasionally yield 0 for last_insert_rowid().
@@ -3266,6 +3308,49 @@ ipcMain.handle('audit-log-get', (_, attendanceId) => {
     'SELECT id, action, changed_fields, timestamp, user_note FROM audit_log WHERE attendance_id=? ORDER BY timestamp DESC',
     [attendanceId]
   );
+});
+
+ipcMain.handle('audit-log-get-history', (_, attendanceId) => {
+  return dbAll(
+    'SELECT id, action, changed_fields, previous_snapshot, timestamp, user_note FROM audit_log WHERE attendance_id=? ORDER BY timestamp ASC',
+    [attendanceId]
+  );
+});
+
+ipcMain.handle('attendance-export-csv', (_, { fromDate, toDate }) => {
+  try {
+    let where = "WHERE deleted_at IS NULL AND archived_at IS NULL";
+    const params = [];
+    if (fromDate) { where += " AND attendance_date >= ?"; params.push(fromDate); }
+    if (toDate)   { where += " AND attendance_date <= ?"; params.push(toDate); }
+    const rows = dbAll(
+      `SELECT id, attendance_date, client_name, station_name, dscc_ref, status, work_type, data FROM attendances ${where} ORDER BY attendance_date ASC`,
+      params
+    );
+    const headers = ['ID','Date','Client Name','Station','DSCC Ref','Status','Work Type','Firm','Matter Type','DSCC/UFN','Court Date'];
+    const csvRows = [headers.map(h => '"' + h + '"').join(',')];
+    rows.forEach(function(r) {
+      let d = {};
+      try { d = JSON.parse(r.data || '{}'); } catch (_) {}
+      const cols = [
+        r.id,
+        r.attendance_date || '',
+        r.client_name || '',
+        r.station_name || '',
+        r.dscc_ref || '',
+        r.status || '',
+        r.work_type || d.workType || '',
+        d.firmName || '',
+        d.matterTypeCode || '',
+        d.dsccRef || '',
+        d.courtDate || '',
+      ];
+      csvRows.push(cols.map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(','));
+    });
+    return { ok: true, csv: csvRows.join('\r\n'), count: rows.length };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
 });
 
 ipcMain.handle('supervisor-approve', (_, { id, note }) => {
@@ -3557,6 +3642,10 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     dbRun("UPDATE attendances SET sync_dirty=1");
     dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
     saveDb();
+    /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
+       then trigger one quick backup of the restored state as the new baseline. */
+    if (_backupScheduler) _backupScheduler.suppressNext(60000);
+    setTimeout(() => { _runQuickBackupAsync().catch(() => {}); }, 3000);
     console.log('[Restore] Database restored from cloud backup:', backupKey);
     return { ok: true };
   } catch (e) {
@@ -3617,6 +3706,10 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     dbRun("UPDATE attendances SET sync_dirty=1");
     dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
     saveDb();
+    /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
+       then trigger one quick backup of the restored state as the new baseline. */
+    if (_backupScheduler) _backupScheduler.suppressNext(60000);
+    setTimeout(() => { _runQuickBackupAsync().catch(() => {}); }, 3000);
     console.log('[Restore] Database restored from local backup:', resolved);
     return { ok: true };
   } catch (e) {

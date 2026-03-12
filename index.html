@@ -315,6 +315,8 @@
             <option value="oldest">Oldest first</option>
             <option value="name">Client name A-Z</option>
             <option value="station">Station</option>
+            <option value="date">Date (newest)</option>
+            <option value="date-asc">Date (oldest)</option>
           </select>
           <button type="button" id="list-density-toggle" class="btn-small" title="Toggle compact view">Compact</button>
         </div>
@@ -469,6 +471,7 @@
           <span class="form-page-title" id="form-page-title">1. Case Reference & Arrival</span>
           <div class="header-right-group">
             <span id="autosave-indicator" class="autosave-indicator"></span>
+            <button type="button" id="form-header-history-btn" class="btn btn-small" title="View change history for this record">&#128203; History</button>
             <button type="button" id="form-header-export-pdf" class="btn btn-small btn-accent" title="Export PDF to Desktop">&#128196; Export PDF</button>
             <button type="button" id="backup-now-btn" class="btn btn-small btn-backup-now" title="Save &amp; backup now">&#128190; Backup</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
@@ -547,6 +550,14 @@
           <button type="button" id="reports-back-btn" class="btn btn-secondary">&larr; Home</button>
           <h2 style="margin:0;color:var(--primary);">Reports</h2>
         </div>
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+          <label style="font-size:0.9rem;font-weight:500;">Export range:</label>
+          <input type="date" id="report-export-from" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;">
+          <span style="font-size:0.9rem;">to</span>
+          <input type="date" id="report-export-to" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;">
+          <button type="button" id="btn-export-csv" class="btn btn-secondary">Export CSV</button>
+          <span id="report-export-status" style="font-size:0.85rem;color:#64748b;"></span>
+        </div>
         <div class="reports-grid">
           <div class="settings-card">
             <h2>This Month</h2>
@@ -583,33 +594,6 @@
             <span id="settings-saved-toast" class="settings-saved-toast">Settings saved</span>
           </div>
           <button type="button" id="settings-save-btn" class="btn btn-primary">Save settings</button>
-        </div>
-        <!-- Backup status summary card -->
-        <div class="settings-card settings-status-card" id="settings-backup-status-card">
-          <h2>App Status</h2>
-          <div class="settings-status-row">
-            <span class="settings-status-icon" id="ss-backup-icon">&#128190;</span>
-            <div>
-              <div class="settings-status-label">Backup</div>
-              <div class="settings-status-value" id="ss-backup-val">Checking&hellip;</div>
-            </div>
-            <button type="button" class="btn btn-small btn-secondary" id="ss-backup-now-btn">Backup now</button>
-          </div>
-          <div class="settings-status-row" style="margin-top:0.5rem;">
-            <span class="settings-status-icon">&#127760;</span>
-            <div>
-              <div class="settings-status-label">Network</div>
-              <div class="settings-status-value" id="ss-net-val">Checking&hellip;</div>
-            </div>
-          </div>
-          <div class="settings-status-row" style="margin-top:0.5rem;">
-            <span class="settings-status-icon">&#9881;</span>
-            <div>
-              <div class="settings-status-label">App version</div>
-              <div class="settings-status-value">v<span id="ss-app-version">—</span></div>
-            </div>
-            <button type="button" class="btn btn-small btn-secondary" id="ss-check-update-btn">Check for update</button>
-          </div>
         </div>
 
         <div class="settings-card" id="licence-settings-card">
@@ -781,6 +765,20 @@
         <div class="settings-card">
           <h2>Security &amp; Encryption</h2>
           <p id="encryption-status" class="settings-path-display">Checking...</p>
+          <div id="safeStorage-warning" style="display:none;" class="settings-warning-banner">
+            Windows credential protection is unavailable on this machine. Your licence file is stored without OS encryption. Consider moving to a supported Windows account type.
+          </div>
+          <div style="margin-top:0.75rem;">
+            <label>Auto-lock after inactivity</label>
+            <p class="settings-hint">Locks the screen after the selected period of no activity. Recommended for shared or unattended machines.</p>
+            <select id="setting-idle-timeout" style="width:200px;">
+              <option value="0">Disabled</option>
+              <option value="5">5 minutes</option>
+              <option value="10">10 minutes</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+            </select>
+          </div>
           <label>Recovery Password</label>
           <p class="settings-hint">Set a recovery password so you can access your data if you move to a new computer or your laptop is lost/stolen. <strong>Keep this password safe</strong> &mdash; if you forget it and lose your computer, your data cannot be recovered.</p>
           <p class="settings-hint">If you need to recover (e.g. new computer), start the app with your database and recovery.dat in place; a window will ask for this password.</p>
@@ -857,6 +855,24 @@
               <option value="aol">AOL Mail</option>
             </select>
             <p class="settings-hint" style="margin:0.2rem 0 0;">You can also change this at any time inside the Email OIC modal.</p>
+          </div>
+
+          <div style="margin-top:1.25rem;">
+            <strong>Custom Email Templates</strong>
+            <p class="settings-hint">Add your own templates. Use <code>{{clientName}}</code>, <code>{{oicName}}</code>, <code>{{offenceType}}</code>, <code>{{station}}</code>, <code>{{date}}</code> as placeholders.</p>
+            <div id="custom-templates-list" style="margin-bottom:0.75rem;"></div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+              <input type="text" id="new-template-name" placeholder="Template name" style="flex:2;min-width:140px;">
+              <button type="button" id="btn-add-custom-template" class="btn btn-secondary btn-small">+ Add template</button>
+            </div>
+            <div id="custom-template-editor" style="display:none;margin-top:0.5rem;">
+              <input type="text" id="new-template-subject" placeholder="Subject (use {{placeholders}})" style="width:100%;margin-bottom:0.4rem;">
+              <textarea id="new-template-body" rows="5" placeholder="Body text (use {{placeholders}})" style="width:100%;font-size:0.88rem;font-family:inherit;"></textarea>
+              <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
+                <button type="button" id="btn-save-custom-template" class="btn btn-primary btn-small">Save template</button>
+                <button type="button" id="btn-cancel-custom-template" class="btn btn-secondary btn-small">Cancel</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1468,7 +1484,19 @@
           <div id="fl-backup-options" class="fl-backup-options">
             <div class="fl-backup-scanning">Scanning for cloud folders&hellip;</div>
           </div>
-          <div class="first-launch-footer">
+
+          <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;">
+            <strong style="color:#92400e;">&#9888; Set a Recovery Password — important</strong>
+            <p style="font-size:0.85rem;color:#92400e;margin:0.35rem 0 0.5rem;">Your database is encrypted using a key tied to this specific machine. If you move to a new computer, replace hardware, or your laptop is lost, <strong>you will not be able to access your records without a recovery password</strong>.</p>
+            <p style="font-size:0.85rem;color:#92400e;margin:0 0 0.5rem;">Set one now in the field below and write it somewhere safe.</p>
+            <div style="display:flex;gap:0.5rem;align-items:center;">
+              <input type="password" id="fl-recovery-pw" placeholder="Choose a recovery password" style="flex:1;">
+              <button type="button" id="fl-recovery-pw-toggle" class="btn btn-small">Show</button>
+            </div>
+            <p id="fl-recovery-pw-note" style="font-size:0.78rem;color:#92400e;margin:0.3rem 0 0;"></p>
+          </div>
+
+          <div class="first-launch-footer" style="margin-top:1rem;">
             <button type="button" id="fl-back" class="btn btn-secondary">&larr; Back</button>
             <button type="button" id="fl-save" class="btn btn-primary">Save &amp; Finish</button>
           </div>
@@ -1641,6 +1669,16 @@
         <div id="admin-results" style="margin-top:1rem;font-size:0.85rem;"></div>
       </div>
       <button type="button" id="admin-close-btn" class="btn btn-secondary" style="margin-top:1rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Session lock overlay -->
+  <div id="session-lock-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Session locked">
+    <div id="session-lock-box">
+      <div id="session-lock-icon">&#128274;</div>
+      <h2>Screen Locked</h2>
+      <p>This session has been locked due to inactivity.</p>
+      <button type="button" id="session-lock-unlock-btn" class="btn btn-primary" style="width:100%;margin-top:0.5rem;">Unlock</button>
     </div>
   </div>
 </body>

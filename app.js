@@ -38,6 +38,10 @@ var UK_BANK_HOLIDAYS = [
     '2025-01-01','2025-04-18','2025-04-21','2025-05-05','2025-05-26','2025-08-25','2025-12-25','2025-12-26',
     '2026-01-01','2026-04-03','2026-04-06','2026-05-04','2026-05-25','2026-08-31','2026-12-25','2026-12-28',
     '2027-01-01','2027-03-26','2027-03-29','2027-05-03','2027-05-31','2027-08-30','2027-12-27','2027-12-28',
+    /* 2028–2030 provisional; replaced at runtime by GOV.UK API cache */
+    '2028-01-03','2028-04-14','2028-04-17','2028-05-07','2028-05-29','2028-08-28','2028-12-25','2028-12-26',
+    '2029-01-01','2029-03-30','2029-04-02','2029-05-06','2029-05-28','2029-08-27','2029-12-25','2029-12-26',
+    '2030-01-01','2030-04-19','2030-04-22','2030-05-06','2030-05-27','2030-08-26','2030-12-25','2030-12-26',
   ];
 
   /* ─── UK CRIMINAL OFFENCES (grouped, CPS-based) – SO/EW/IO = mode of trial; matterType = LAA matter type code (1–21) ─── */
@@ -3419,102 +3423,9 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
-  function refreshSettingsStatusCard() {
-    /* Version */
-    var ssVer = document.getElementById('ss-app-version');
-    if (ssVer) {
-      var av = document.getElementById('app-version');
-      ssVer.textContent = av ? av.textContent : '—';
-    }
-
-    /* Network — read live, don't copy from footer which may not have updated yet */
-    var ssNet = document.getElementById('ss-net-val');
-    if (ssNet) {
-      ssNet.textContent = navigator.onLine ? 'Online' : 'Offline';
-    }
-
-    /* Backup — query IPC directly so value is always fresh */
-    var ssBkp = document.getElementById('ss-backup-val');
-    if (ssBkp) {
-      if (window.api && window.api.backupStatus) {
-        window.api.backupStatus().then(function(bs) {
-          if (!bs || bs.state === 'not-initialised') {
-            ssBkp.textContent = 'Starting…';
-          } else if (bs.state === 'running') {
-            ssBkp.textContent = 'Running';
-          } else if (bs.state === 'error') {
-            ssBkp.textContent = 'Error — retrying';
-          } else if (bs.lastSuccess) {
-            var d = new Date(bs.lastSuccess);
-            ssBkp.textContent = 'OK — ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-          } else {
-            ssBkp.textContent = 'Idle';
-          }
-        }).catch(function() { ssBkp.textContent = '—'; });
-      } else {
-        /* Fallback: copy from footer if IPC not available */
-        var bkpEl = document.getElementById('backup-status-text');
-        if (bkpEl && bkpEl.textContent && !bkpEl.textContent.includes('checking')) {
-          ssBkp.textContent = bkpEl.textContent;
-        } else {
-          ssBkp.textContent = '—';
-        }
-      }
-    }
-
-    /* Check for Update — call triggerUpdateCheck() directly (safe even before it's defined,
-       because refreshSettingsStatusCard runs after init completes) */
-    var ssUpd = document.getElementById('ss-check-update-btn');
-    if (ssUpd && !ssUpd._wired) {
-      ssUpd._wired = true;
-      ssUpd.addEventListener('click', function() {
-        if (typeof triggerUpdateCheck === 'function') {
-          triggerUpdateCheck();
-        } else {
-          /* triggerUpdateCheck is defined later in the same scope; use the settings button as fallback */
-          var settingsBtn = document.getElementById('check-updates-btn');
-          if (settingsBtn) settingsBtn.click();
-        }
-      });
-    }
-
-    /* Backup Now — call IPC directly, no need for a form to be open */
-    var ssBkpNow = document.getElementById('ss-backup-now-btn');
-    if (ssBkpNow && !ssBkpNow._wired) {
-      ssBkpNow._wired = true;
-      ssBkpNow.addEventListener('click', function() {
-        if (ssBkpNow.classList.contains('backing-up')) return;
-        ssBkpNow.classList.add('backing-up');
-        var orig = ssBkpNow.textContent;
-        ssBkpNow.textContent = 'Saving…';
-        var backupFn = (window.api && (window.api.flushAndBackup || window.api.backupNow));
-        if (!backupFn) {
-          ssBkpNow.textContent = orig;
-          ssBkpNow.classList.remove('backing-up');
-          showToast('Backup not available', 'error');
-          return;
-        }
-        backupFn().then(function() {
-          ssBkpNow.textContent = '✓ Done';
-          showToast('Backup completed', 'success');
-          /* Refresh the backup value */
-          setTimeout(function() { refreshSettingsStatusCard(); }, 500);
-        }).catch(function(err) {
-          showToast('Backup failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error');
-        }).finally(function() {
-          setTimeout(function() {
-            ssBkpNow.textContent = orig;
-            ssBkpNow.classList.remove('backing-up');
-          }, 2500);
-        });
-      });
-    }
-  }
-
   function loadSettings() {
     if (!window.api) return;
     loadLicenceSettingsUI();
-    refreshSettingsStatusCard();
     // Trigger System Status card refresh whenever Settings is opened
     document.dispatchEvent(new CustomEvent('view-settings-shown'));
     window.api.getSettings().then(s => {
@@ -8869,7 +8780,8 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
-  /* Export PDF directly from a record ID — used by the list view PDF button */
+  /* Export PDF directly from a record ID — used by the list view PDF button.
+     Opens the OS print/preview dialog so the user can print or save as PDF. */
   window.exportPdfById = function(recordId) {
     window.api.attendanceGet(recordId).then(function(row) {
       if (!row) { showToast('Record not found', 'error'); return; }
@@ -8878,12 +8790,7 @@ PDF_CASENOTE_ADVERT +
       window.api.getSettings().then(function(settings) {
         var builder = getPdfBuilderForData(data);
         var html = builder(data, settings);
-        var label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
-        var n = [data.surname, data.forename].filter(Boolean).join('_') || label;
-        var fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-        window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
-          showToast('PDF saved: ' + p, 'success');
-        }).catch(function(e) { showToast('PDF failed: ' + (e && e.message), 'error'); });
+        printGeneratedDoc(html);
       });
     }).catch(function() { showToast('Could not load record', 'error'); });
   };
@@ -10309,6 +10216,31 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('kb-help-btn')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
     document.getElementById('form-header-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
+
+    document.getElementById('form-header-history-btn')?.addEventListener('click', function() {
+      if (!currentAttendanceId) { showToast('Save the record first to view history', 'info'); return; }
+      window.api.auditLogGetHistory(currentAttendanceId).then(function(entries) {
+        if (!entries || !entries.length) { showModal('Record History', '<p style="color:#64748b;">No history recorded yet. History is captured each time a record is saved.</p>'); return; }
+        var rows = entries.map(function(e) {
+          var dt = e.timestamp ? new Date(e.timestamp).toLocaleString('en-GB') : '';
+          var action = (e.action || '').replace(/_/g, ' ');
+          var fields = '';
+          try {
+            var cf = e.changed_fields ? JSON.parse(e.changed_fields) : null;
+            if (cf && cf.length) fields = '<div style="font-size:0.8rem;color:#64748b;margin-top:2px;">Fields: ' + cf.join(', ') + '</div>';
+          } catch (_) {}
+          var note = e.user_note ? '<div style="font-size:0.8rem;color:#64748b;">Note: ' + esc(e.user_note) + '</div>' : '';
+          return '<div style="padding:0.5rem 0;border-bottom:1px solid #e2e8f0;">' +
+            '<strong>' + esc(action) + '</strong>' +
+            '<span style="float:right;font-size:0.82rem;color:#94a3b8;">' + dt + '</span>' +
+            fields + note +
+            '</div>';
+        }).join('');
+        showModal('Record History', rows);
+      }).catch(function() {
+        showToast('Could not load record history', 'error');
+      });
+    });
     document.getElementById('form-bottom-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
     document.getElementById('header-export-pdf-btn')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
     document.getElementById('header-sections-idx')?.addEventListener('click', openSectionsIndex);
@@ -10395,8 +10327,9 @@ PDF_CASENOTE_ADVERT +
       homeBackupEl.addEventListener('click', function() {
         window.api.backupNow().then(function(p) {
           showToast('Backup saved: ' + p, 'success');
+        }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); }).finally(function() {
           if (typeof updateHomeStatus === 'function') updateHomeStatus();
-        }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); });
+        });
       });
     }
     // Manual sync button on home screen
@@ -10528,6 +10461,36 @@ PDF_CASENOTE_ADVERT +
       renderFirmsSearchResults(filterFirmsBySearch(q));
     });
     /* reports-back-btn already attached above */
+
+    /* ── CSV export ── */
+    (function() {
+      var today = new Date().toISOString().slice(0, 10);
+      var firstOfMonth = today.slice(0, 8) + '01';
+      var fromEl = document.getElementById('report-export-from');
+      var toEl = document.getElementById('report-export-to');
+      if (fromEl) fromEl.value = firstOfMonth;
+      if (toEl) toEl.value = today;
+      document.getElementById('btn-export-csv')?.addEventListener('click', function() {
+        var statusEl = document.getElementById('report-export-status');
+        var from = (fromEl && fromEl.value) || '';
+        var to = (toEl && toEl.value) || '';
+        if (statusEl) statusEl.textContent = 'Exporting…';
+        window.api.attendanceExportCsv({ fromDate: from, toDate: to }).then(function(res) {
+          if (!res.ok) { if (statusEl) statusEl.textContent = 'Error: ' + res.error; return; }
+          var blob = new Blob([res.csv], { type: 'text/csv' });
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          var fname = 'custody-records-' + (from || 'all') + '-to-' + (to || 'all') + '.csv';
+          a.href = url;
+          a.download = fname;
+          a.click();
+          URL.revokeObjectURL(url);
+          if (statusEl) statusEl.textContent = res.count + ' records exported';
+        }).catch(function() {
+          if (statusEl) statusEl.textContent = 'Export failed';
+        });
+      });
+    })();
     document.getElementById('firms-page-prev')?.addEventListener('click', () => { firmsPage--; renderFirmsPage(); });
     document.getElementById('firms-page-next')?.addEventListener('click', () => { firmsPage++; renderFirmsPage(); });
     document.getElementById('list-search')?.addEventListener('input', () => { listPage = 1; refreshList(); });
@@ -10543,7 +10506,67 @@ PDF_CASENOTE_ADVERT +
       });
     });
     document.getElementById('list-sort')?.addEventListener('change', (e) => { listSortMode = e.target.value; listPage = 1; refreshList(); });
-    document.getElementById('list-mode-filter')?.addEventListener('change', (e) => { listModeFilter = e.target.value; listPage = 1; refreshList(); });
+    document.getElementById('list-mode-filter')?.addEventListener('change', (e) => { listTypeFilter = e.target.value; listPage = 1; refreshList(); });
+
+    /* ── Custom email templates ── */
+    function _getCustomTemplates() {
+      try { return JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]'); } catch (_) { return []; }
+    }
+    function _saveCustomTemplates(tpls) {
+      try { localStorage.setItem('cn-custom-email-templates', JSON.stringify(tpls)); } catch (_) {}
+    }
+    window._getCustomEmailTemplates = _getCustomTemplates;
+
+    function _renderCustomTemplatesList() {
+      var listEl = document.getElementById('custom-templates-list');
+      if (!listEl) return;
+      var tpls = _getCustomTemplates();
+      if (!tpls.length) { listEl.innerHTML = '<p class="settings-hint" style="color:#94a3b8;">No custom templates yet.</p>'; return; }
+      listEl.innerHTML = '';
+      tpls.forEach(function(t, idx) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;border-bottom:1px solid #f1f5f9;';
+        row.innerHTML = '<span style="flex:1;font-size:0.9rem;">' + esc(t.name) + '</span>' +
+          '<button type="button" class="btn-small ct-del" data-idx="' + idx + '">Remove</button>';
+        row.querySelector('.ct-del').addEventListener('click', function() {
+          var updated = _getCustomTemplates();
+          updated.splice(idx, 1);
+          _saveCustomTemplates(updated);
+          _renderCustomTemplatesList();
+        });
+        listEl.appendChild(row);
+      });
+    }
+    _renderCustomTemplatesList();
+
+    var _editingTemplateIdx = -1;
+    document.getElementById('btn-add-custom-template')?.addEventListener('click', function() {
+      _editingTemplateIdx = -1;
+      document.getElementById('new-template-subject').value = '';
+      document.getElementById('new-template-body').value = '';
+      var ed = document.getElementById('custom-template-editor');
+      if (ed) ed.style.display = '';
+    });
+    document.getElementById('btn-cancel-custom-template')?.addEventListener('click', function() {
+      var ed = document.getElementById('custom-template-editor');
+      if (ed) ed.style.display = 'none';
+    });
+    document.getElementById('btn-save-custom-template')?.addEventListener('click', function() {
+      var name = (document.getElementById('new-template-name').value || '').trim();
+      var subject = (document.getElementById('new-template-subject').value || '').trim();
+      var body = (document.getElementById('new-template-body').value || '').trim();
+      if (!name) { showToast('Enter a template name', 'error'); return; }
+      if (!subject || !body) { showToast('Subject and body are required', 'error'); return; }
+      var tpls = _getCustomTemplates();
+      tpls.push({ name: name, subject: subject, body: body });
+      _saveCustomTemplates(tpls);
+      document.getElementById('new-template-name').value = '';
+      document.getElementById('new-template-subject').value = '';
+      document.getElementById('new-template-body').value = '';
+      document.getElementById('custom-template-editor').style.display = 'none';
+      _renderCustomTemplatesList();
+      showToast('Template saved', 'success');
+    });
     document.getElementById('list-density-toggle')?.addEventListener('click', () => {
       const ul = document.getElementById('attendance-list');
       if (ul) ul.classList.toggle('compact');
@@ -10781,7 +10804,20 @@ PDF_CASENOTE_ADVERT +
             var opt = document.createElement('option');
             opt.value = b.key;
             var sizeKB = Math.round(b.size / 1024);
-            opt.textContent = b.key + ' (' + sizeKB + ' KB, ' + new Date(b.lastModified).toLocaleString('en-GB') + ')';
+            var fname = b.key.split('/').pop();
+            var _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var label;
+            if (fname === 'attendance-latest.db') {
+              label = 'Latest snapshot';
+            } else {
+              var _bm = fname.match(/attendance-backup-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})/);
+              if (_bm) {
+                label = _bm[3] + ' ' + _months[parseInt(_bm[2], 10) - 1] + ' ' + _bm[1] + ', ' + _bm[4] + ':' + _bm[5] + ' — hourly archive';
+              } else {
+                label = fname;
+              }
+            }
+            opt.textContent = label + ' (' + sizeKB + ' KB, saved ' + new Date(b.lastModified).toLocaleString('en-GB') + ')';
             sel.appendChild(opt);
           });
         });
@@ -10822,7 +10858,7 @@ PDF_CASENOTE_ADVERT +
       if (!panel) return;
       var isOpen = panel.style.display !== 'none';
       panel.style.display = isOpen ? 'none' : '';
-      if (!isOpen && window.api.localBackupList) {
+      if (!isOpen && window.api && window.api.localBackupList) {
         var sel = document.getElementById('local-restore-select');
         var status = document.getElementById('local-restore-status');
         if (sel) sel.innerHTML = '<option value="">Scanning backups…</option>';
@@ -10839,7 +10875,19 @@ PDF_CASENOTE_ADVERT +
             opt.value = f.path;
             var kb = Math.round(f.sizeBytes / 1024);
             var dt = new Date(f.modifiedAt).toLocaleString('en-GB');
-            opt.textContent = f.name + ' — ' + kb + ' KB — ' + dt + ' (' + f.dir + ')';
+            var _lmonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            var llabel;
+            if (f.name === 'attendance-latest.db') {
+              llabel = 'Latest snapshot';
+            } else {
+              var _lm = f.name.match(/attendance-backup-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})/);
+              if (_lm) {
+                llabel = _lm[3] + ' ' + _lmonths[parseInt(_lm[2], 10) - 1] + ' ' + _lm[1] + ', ' + _lm[4] + ':' + _lm[5] + ' — hourly archive';
+              } else {
+                llabel = f.name;
+              }
+            }
+            opt.textContent = llabel + ' (' + kb + ' KB, saved ' + dt + ', ' + f.dir + ')';
             sel.appendChild(opt);
           });
         }).catch(function() {
@@ -10858,6 +10906,7 @@ PDF_CASENOTE_ADVERT +
       var status = document.getElementById('local-restore-status');
       var filePath = sel ? sel.value : '';
       if (!filePath) { if (status) status.textContent = 'Select a backup first'; return; }
+      if (!window.api || !window.api.localBackupRestore) { if (status) status.textContent = 'Restore not available'; return; }
       showConfirm('Restore from this backup? Your current database will be replaced. A safety copy is saved first.').then(function(ok) {
         if (!ok) { if (status) status.textContent = 'Cancelled'; return; }
         if (status) status.textContent = 'Restoring…';
@@ -12061,6 +12110,14 @@ PDF_CASENOTE_ADVERT +
     /* Step 2 -> Step 1 */
     document.getElementById('fl-back').addEventListener('click', function() { showStep(1); });
 
+    /* Recovery password show/hide toggle in first-launch wizard */
+    document.getElementById('fl-recovery-pw-toggle')?.addEventListener('click', function() {
+      var inp = document.getElementById('fl-recovery-pw');
+      if (!inp) return;
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+      this.textContent = inp.type === 'password' ? 'Show' : 'Hide';
+    });
+
     /* Save & Finish */
     document.getElementById('fl-save').addEventListener('click', function() {
       var name = (document.getElementById('fl-fee-earner-name').value || '').trim();
@@ -12074,17 +12131,39 @@ PDF_CASENOTE_ADVERT +
         settings.offsiteBackupFolder = selectedBackupPath;
       }
 
-      window.api.setSettings(settings).then(function() {
-        modal.style.display = 'none';
-        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
-        var offsiteEl = document.getElementById('setting-offsite-backup-folder');
-        if (offsiteEl && settings.offsiteBackupFolder) offsiteEl.value = settings.offsiteBackupFolder;
-        var emailSettingEl = document.getElementById('setting-email');
-        if (emailSettingEl && settings.email) emailSettingEl.value = settings.email;
-        var msg = 'Setup saved — welcome to Custody Note, ' + name + '!';
-        if (settings.offsiteBackupFolder) msg += ' Backups will sync to ' + selectedBackupPath.split('\\').pop().split('/').pop() + '.';
-        showToast(msg, 'success', 5000);
-      });
+      var recoveryPw = (document.getElementById('fl-recovery-pw')?.value || '').trim();
+      var noteEl = document.getElementById('fl-recovery-pw-note');
+
+      function finishSetup() {
+        window.api.setSettings(settings).then(function() {
+          modal.style.display = 'none';
+          window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
+          var offsiteEl = document.getElementById('setting-offsite-backup-folder');
+          if (offsiteEl && settings.offsiteBackupFolder) offsiteEl.value = settings.offsiteBackupFolder;
+          var emailSettingEl = document.getElementById('setting-email');
+          if (emailSettingEl && settings.email) emailSettingEl.value = settings.email;
+          var msg = 'Setup saved — welcome to Custody Note, ' + name + '!';
+          if (settings.offsiteBackupFolder) msg += ' Backups will sync to ' + selectedBackupPath.split('\\').pop().split('/').pop() + '.';
+          showToast(msg, 'success', 5000);
+        });
+      }
+
+      if (recoveryPw) {
+        if (recoveryPw.length < 8) {
+          if (noteEl) noteEl.textContent = 'Password must be at least 8 characters.';
+          return;
+        }
+        if (noteEl) noteEl.textContent = 'Saving recovery password…';
+        window.api.setRecoveryPassword(recoveryPw).then(function(ok) {
+          if (noteEl) noteEl.textContent = ok ? '✓ Recovery password set.' : 'Could not set recovery password — you can set one in Settings.';
+          finishSetup();
+        }).catch(function() {
+          if (noteEl) noteEl.textContent = 'Could not set recovery password — you can set one in Settings.';
+          finishSetup();
+        });
+      } else {
+        finishSetup();
+      }
     });
 
     /* Skip */
@@ -12101,9 +12180,73 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
+/* ── Session lock / idle timeout ── */
+(function() {
+  var _idleTimer = null;
+  var _locked = false;
+
+  function _lock() {
+    if (_locked) return;
+    _locked = true;
+    var overlay = document.getElementById('session-lock-overlay');
+    if (overlay) overlay.style.display = 'flex';
+    var unlockBtn = document.getElementById('session-lock-unlock-btn');
+    if (unlockBtn) { unlockBtn.focus(); }
+  }
+
+  function _unlock() {
+    _locked = false;
+    var overlay = document.getElementById('session-lock-overlay');
+    if (overlay) overlay.style.display = 'none';
+    _resetIdleTimer();
+  }
+
+  function _resetIdleTimer() {
+    if (_idleTimer) clearTimeout(_idleTimer);
+    var mins = parseInt((window._appSettingsCache && window._appSettingsCache.idleTimeoutMinutes) || '0', 10);
+    if (!mins || mins <= 0) return;
+    _idleTimer = setTimeout(_lock, mins * 60 * 1000);
+  }
+  window._resetIdleTimer = _resetIdleTimer;
+
+  ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(function(ev) {
+    document.addEventListener(ev, function() {
+      if (!_locked) _resetIdleTimer();
+    }, { passive: true });
+  });
+
+  document.addEventListener('DOMContentLoaded', function() {
+    var unlockBtn = document.getElementById('session-lock-unlock-btn');
+    if (unlockBtn) unlockBtn.addEventListener('click', _unlock);
+    document.addEventListener('keydown', function(e) {
+      if (_locked && e.key === 'Enter') _unlock();
+    });
+  });
+})();
+
+function _showPinTipIfNeeded() {
+  /* Only show on Windows (Electron exposes process.platform via navigator.userAgent or window.api) */
+  if (!navigator.userAgent.includes('Windows') && !navigator.platform.includes('Win')) return;
+  try {
+    if (localStorage.getItem('cn-pin-tip-dismissed')) return;
+  } catch (_) { return; }
+  setTimeout(function() {
+    var banner = document.createElement('div');
+    banner.className = 'setup-warning-banner pin-tip-banner';
+    banner.innerHTML = 'Tip: right-click <strong>Custody Note</strong> in the Start Menu or Taskbar and choose <strong>Pin to taskbar</strong> for quick access. <span class="pin-tip-dismiss" title="Dismiss">&times;</span>';
+    banner.querySelector('.pin-tip-dismiss').addEventListener('click', function(e) {
+      e.stopPropagation();
+      banner.remove();
+      try { localStorage.setItem('cn-pin-tip-dismissed', '1'); } catch (_) {}
+    });
+    document.querySelector('.app-header')?.insertAdjacentElement('afterend', banner);
+  }, 2000);
+}
+
 function safeInit() {
   try {
     init();
+    _showPinTipIfNeeded();
   } catch (err) {
     console.error('[init] FATAL ERROR in init():', err);
   }

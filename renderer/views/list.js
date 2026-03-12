@@ -8,15 +8,17 @@
 
 var listStatusFilter = 'all';
 var listSortMode = 'newest';
+var listTypeFilter = 'all';
 
 /* Map UI sort mode to attendanceSearch params */
 function _listSortParams() {
   switch (listSortMode) {
-    case 'oldest':  return { sortField: 'updated_at',    sortDir: 'ASC' };
-    case 'name':    return { sortField: 'client_name',   sortDir: 'ASC' };
-    case 'station': return { sortField: 'station_name',  sortDir: 'ASC' };
-    case 'date':    return { sortField: 'attendance_date', sortDir: 'DESC' };
-    default:        return { sortField: 'updated_at',    sortDir: 'DESC' };
+    case 'oldest':    return { sortField: 'updated_at',    sortDir: 'ASC' };
+    case 'name':      return { sortField: 'client_name',   sortDir: 'ASC' };
+    case 'station':   return { sortField: 'station_name',  sortDir: 'ASC' };
+    case 'date':      return { sortField: 'attendance_date', sortDir: 'DESC' };
+    case 'date-asc':  return { sortField: 'attendance_date', sortDir: 'ASC' };
+    default:          return { sortField: 'updated_at',    sortDir: 'DESC' };
   }
 }
 
@@ -31,6 +33,7 @@ function refreshList() {
     query: q || '',
     status: listStatusFilter === 'archived' ? '' : (listStatusFilter === 'all' ? '' : listStatusFilter),
     archived: listStatusFilter === 'archived',
+    workType: listTypeFilter === 'all' ? '' : listTypeFilter,
     page: listPage,
     pageSize: LIST_PER_PAGE,
     sortField: sort.sortField,
@@ -158,12 +161,27 @@ function renderListPagination(total) {
 }
 
 function archiveAttendance(id, title) {
-  window.api.attendanceArchive(id).then(function() {
-    showToast('Record archived', 'info');
-    refreshList();
-  }).catch(function() {
-    showToast('Failed to archive record', 'error');
+  /* Delay the actual archive call by 5 seconds to allow undo */
+  var undone = false;
+  var toast = document.createElement('div');
+  toast.className = 'cn-toast cn-toast-visible cn-toast-info cn-undo-toast';
+  toast.innerHTML = 'Record archived. <button class="cn-undo-btn" type="button">Undo</button>';
+  document.body.appendChild(toast);
+  toast.querySelector('.cn-undo-btn').addEventListener('click', function() {
+    undone = true;
+    toast.remove();
+    showToast('Archive undone', 'success');
   });
+  var timer = setTimeout(function() {
+    toast.remove();
+    if (undone) return;
+    window.api.attendanceArchive(id).then(function() {
+      refreshList();
+    }).catch(function() {
+      showToast('Failed to archive record', 'error');
+    });
+  }, 5000);
+  void timer;
 }
 
 function unarchiveAttendance(id) {
@@ -182,14 +200,18 @@ function deleteAttendance(id, title) {
       if (result && result.soft) showToast('Record archived (finalised \u2014 kept in audit trail)', 'info');
       else showToast('Draft deleted', 'info');
       refreshList();
+    }).catch(function() {
+      showToast('Failed to delete record', 'error');
     });
   });
 }
 
 function duplicateAttendance(id) {
   window.api.attendanceGet(id).then(function(row) {
-    if (!row || !row.data) return;
+    if (!row || !row.data) { showToast('Could not load record to duplicate', 'error'); return; }
     var src = safeJson(row.data);
+    /* Time-sensitive fields intentionally excluded: instructionDateTime, waitingTimeStart,
+       waitingTimeEnd, waitingTimeNotes, arrivalNotes — must be re-entered for the new visit */
     var copyKeys = ['title','surname','forename','middleName','gender','dob','custodyNumber','clientPhone','clientEmail',
       'clientEmailConsent','address1','address2','address3','postCode','accommodationStatus',
       'accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber',
@@ -206,9 +228,9 @@ function duplicateAttendance(id) {
       'offence3Details','offence3Date','offence3ModeOfTrial','offence3Statute',
       'offence4Details','offence4Date','offence4ModeOfTrial','offence4Statute','otherOffencesNotes',
       'matterTypeCode','policeStationId','policeStationName','firmId','firmLaaAccount','firmName',
-      'multipleJourneys','waitingTimeStart','waitingTimeEnd','waitingTimeNotes',
+      'multipleJourneys',
       'dsccRef','sourceOfReferral','fileReference','travelOriginPostcode','schemeId',
-      'instructionDateTime','weekendBankHoliday','otherLocation','dutySolicitor','clientStatus','telephoneAdviceGiven','arrivalNotes'];
+      'weekendBankHoliday','otherLocation','dutySolicitor','clientStatus','telephoneAdviceGiven'];
     formData = {};
     copyKeys.forEach(function(k) { if (src[k]) formData[k] = src[k]; });
     formData.workType = 'Further Police Station Attendance';
@@ -225,6 +247,8 @@ function duplicateAttendance(id) {
       renderForm(formData);
       showView('new');
     }, 200);
+  }).catch(function() {
+    showToast('Failed to duplicate record', 'error');
   });
 }
 
@@ -237,5 +261,7 @@ function openAttendance(id) {
     currentSectionIdx = 0;
     renderForm(formData);
     showView('new');
+  }).catch(function() {
+    showToast('Failed to open record', 'error');
   });
 }

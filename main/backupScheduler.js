@@ -241,6 +241,25 @@ function createBackupScheduler(options = {}) {
     getStatus() {
       return snapshot();
     },
+    /* Suppress scheduler-initiated backups for `ms` milliseconds after a restore.
+       Prevents the restored DB being immediately overwritten by a stale scheduled run.
+       Manually-triggered backups (forceRun) are unaffected. */
+    suppressNext(ms) {
+      const wait = Math.max(0, ms || 60000);
+      quickDirty = false;
+      hourlyDirty = false;
+      clearScheduledTimer();
+      currentState = 'idle';
+      deferredReason = 'post-restore-suppress';
+      emit();
+      setTimer(() => {
+        /* Re-enable dirty tracking after suppression window */
+        quickDirty = true;
+        hourlyDirty = true;
+        deferredReason = null;
+        schedule(0, 'post-restore');
+      }, wait);
+    },
     dispose() {
       clearScheduledTimer();
     },

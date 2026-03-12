@@ -1,9 +1,53 @@
 {
   "releases": [
     {
-      "version": "1.4.61",
+      "version": "1.4.65",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Records list: type filter (Custody/Voluntary/Telephone) now works; date sort has newest and oldest options.",
+        "List actions: open, delete and duplicate show error toasts on failure; archive has 5-second Undo before committing.",
+        "Duplicate record: time-sensitive fields (instruction time, waiting times, arrival notes) are cleared for the new visit.",
+        "Bank holidays: fallback extended to 2030; GOV.UK API cache used when available.",
+        "Recovery password: after 3 wrong attempts you can quit and try again later instead of being forced to a fresh database.",
+        "Settings: auto-lock after inactivity (5/10/15/30 min); plaintext licence warning when safeStorage unavailable.",
+        "First-launch wizard: recovery password prompt with machine-ID warning; optional set before finishing.",
+        "Reports: CSV export with date range; Firms table: Edit button for in-place editing.",
+        "Record form: History button shows amendment log; Add-Ons: custom email templates with placeholders.",
+        "Fix: home backup status refreshes after success or failure; local restore checks for IPC before calling APIs."
+      ]
+    },
+    {
+      "version": "1.4.64",
+      "date": "2026-03-12",
+      "latest": false,
+      "changes": [
+        "First launch: a dismissible tip banner now appears suggesting users pin Custody Note to their taskbar or Start Menu for quick access. Shown once on Windows only."
+      ]
+    },
+    {
+      "version": "1.4.63",
+      "date": "2026-03-12",
+      "latest": false,
+      "changes": [
+        "Settings: backup restore lists now show readable labels — 'Latest snapshot' or '12 Mar 2026, 10:00 — hourly archive' — instead of raw filenames, for both cloud and local restore panels."
+      ]
+    },
+    {
+      "version": "1.4.62",
+      "date": "2026-03-12",
+      "latest": false,
+      "changes": [
+        "Settings: remove redundant App Status card (Backup/Network/Version). These values are shown in the footer and the main Backup card.",
+        "Records list: PDF button now opens a print/preview window instead of silently saving to Desktop — choose Print or Save as PDF from the dialog.",
+        "Backup: smarter retention — keeps last 24 hourly archives plus one per day for 7 days (max 31 files). Previously kept 48 hourly which only gave 2 days of history.",
+        "Backup restore: after restoring from cloud or local backup, the scheduler is suppressed for 60 seconds then takes a fresh backup of the restored state — prevents the restored database being immediately overwritten by a stale scheduled run."
+      ]
+    },
+    {
+      "version": "1.4.61",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Settings: fix permanent 'Checking\u2026' spinners in the Status card — network and backup values now update instantly when Settings opens.",
         "Settings: fix 'Backup now' button — now calls backup directly without requiring a record to be open.",
