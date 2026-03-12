@@ -164,3 +164,65 @@ function buildMailtoHref(toEmail, subject, body) {
     '?subject=' + encodeURIComponent(subject || '') +
     '&body='    + encodeURIComponent(bodyForHref);
 }
+
+/* ── Email client definitions ─────────────────────────────── */
+
+var EMAIL_CLIENTS = [
+  { id: 'default',  label: 'Default Mail App' },
+  { id: 'gmail',    label: 'Gmail' },
+  { id: 'owa',      label: 'Outlook Web (work)' },
+  { id: 'outlook',  label: 'Outlook.com (personal)' },
+  { id: 'yahoo',    label: 'Yahoo Mail' },
+  { id: 'aol',      label: 'AOL Mail' }
+];
+
+function getEmailClientLabel(clientId) {
+  var found = EMAIL_CLIENTS.filter(function(c) { return c.id === clientId; })[0];
+  return found ? found.label : 'Default Mail App';
+}
+
+function buildEmailClientUrl(clientId, toEmail, subject, body) {
+  var to  = encodeURIComponent(_oicClean(toEmail));
+  var sub = encodeURIComponent(String(subject || ''));
+  /* Web clients have generous body limits; still cap at 4000 chars to be safe */
+  var bodyTrunc = String(body || '').length > 4000
+    ? String(body || '').slice(0, 4000) + '\n\n[continued]'
+    : String(body || '');
+  var bod = encodeURIComponent(bodyTrunc);
+
+  switch (clientId) {
+    case 'gmail':
+      return 'https://mail.google.com/mail/?view=cm' +
+        '&to='   + to +
+        '&su='   + sub +
+        '&body=' + bod;
+
+    case 'owa':
+      return 'https://outlook.office.com/mail/deeplink/compose' +
+        '?to='      + to +
+        '&subject=' + sub +
+        '&body='    + bod;
+
+    case 'outlook':
+      return 'https://outlook.live.com/mail/0/deeplink/compose' +
+        '?to='      + to +
+        '&subject=' + sub +
+        '&body='    + bod;
+
+    case 'yahoo':
+      return 'https://compose.mail.yahoo.com/' +
+        '?to='    + to +
+        '&subj='  + sub +
+        '&body='  + bod;
+
+    case 'aol':
+      return 'https://mail.aol.com/webmail-std/en-us/suite' +
+        '?compose=1' +
+        '&to='      + to +
+        '&subject=' + sub +
+        '&body='    + bod;
+
+    default:
+      return buildMailtoHref(toEmail, subject, body);
+  }
+}

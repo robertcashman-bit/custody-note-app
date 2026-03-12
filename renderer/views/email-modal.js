@@ -1,6 +1,8 @@
 /* ═══════════════════════════════════════════════════════
    EMAIL MODAL — Officer Email Templates Add-On
-   Depends on: buildEmailBody, buildEmailSubject, buildMailtoHref (email-templates.js)
+   Depends on: buildEmailBody, buildEmailSubject, buildMailtoHref,
+               buildEmailClientUrl, getEmailClientLabel, EMAIL_CLIENTS
+               (email-templates.js)
                showToast, refreshList, esc (app.js globals)
                window._appSettingsCache, window.api
    ═══════════════════════════════════════════════════════ */
@@ -12,24 +14,43 @@ var _EMAIL_TEMPLATES = [
 ];
 
 function openEmailModal(recordId, recordData, recordStatus) {
-  /* Remove any stale modal */
   var stale = document.getElementById('email-oic-modal');
   if (stale) stale.remove();
 
-  var data         = recordData || {};
-  var settings     = window._appSettingsCache || {};
+  var data          = recordData || {};
+  var settings      = window._appSettingsCache || {};
   var feeEarnerName = _oicClean(data.feeEarnerName) || _oicClean(settings.feeEarnerNameDefault) || '';
-  var currentTpl   = 'first_attendance';
+  var currentTpl    = 'first_attendance';
+  var pickerVisible = false;
 
-  /* ── Render helpers ──────────────────────────────────── */
+  /* ── Helpers ─────────────────────────────────────────── */
 
   function _escAttr(str) {
     return String(str || '')
-      .replace(/&/g, '&amp;')
-      .replace(/"/g, '&quot;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
+
+  function _currentClient() {
+    return _oicClean((window._appSettingsCache || {}).preferredEmailClient) || 'default';
+  }
+
+  function _openBtnLabel() {
+    var c = _currentClient();
+    var label = getEmailClientLabel(c);
+    return c === 'default' ? 'Open Email App \u25be' : 'Open in ' + label + ' \u25be';
+  }
+
+  function _openUrl(to, subject, body) {
+    var url = buildEmailClientUrl(_currentClient(), to, subject, body);
+    if (window.api && window.api.openExternal) {
+      window.api.openExternal(url);
+    } else {
+      window.open(url, '_blank');
+    }
+  }
+
+  /* ── Render ──────────────────────────────────────────── */
 
   function _renderModal() {
     var stale2 = document.getElementById('email-oic-modal');
@@ -56,9 +77,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
             '<h3 class="email-oic-title">&#9993; Email OIC</h3>' +
             '<button type="button" class="email-oic-close" aria-label="Close modal">&times;</button>' +
           '</div>' +
-          '<div class="email-oic-tabs" role="group" aria-label="Email template">' +
-            tabsHtml +
-          '</div>' +
+          '<div class="email-oic-tabs" role="group" aria-label="Email template">' + tabsHtml + '</div>' +
           '<div class="email-oic-fields">' +
             noEmailNote +
             '<label class="email-oic-label" for="email-oic-to">To</label>' +
@@ -69,11 +88,23 @@ function openEmailModal(recordId, recordData, recordStatus) {
             '<label class="email-oic-label" for="email-oic-body">Message</label>' +
             '<textarea id="email-oic-body" class="email-oic-textarea" rows="14">' + _escAttr(body) + '</textarea>' +
           '</div>' +
+          /* Inline client picker — hidden by default */
+          '<div id="email-client-picker" class="email-client-picker" style="display:none;">' +
+            '<p class="email-client-picker-label">Choose your email app:</p>' +
+            '<div class="email-client-picker-grid">' +
+              EMAIL_CLIENTS.map(function(c) {
+                return '<button type="button" class="email-client-btn' +
+                  (_currentClient() === c.id ? ' active' : '') +
+                  '" data-client="' + c.id + '">' + _escAttr(c.label) + '</button>';
+              }).join('') +
+            '</div>' +
+          '</div>' +
           '<div class="email-oic-actions">' +
-            '<button type="button" id="email-oic-open-app"   class="btn btn-primary">Open Email App</button>' +
-            '<button type="button" id="email-oic-copy"       class="btn btn-secondary">Copy Email</button>' +
-            '<button type="button" id="email-oic-mark-sent"  class="btn btn-secondary">Mark Sent</button>' +
-            '<button type="button" id="email-oic-cancel"     class="btn btn-secondary">Cancel</button>' +
+            '<button type="button" id="email-oic-open-app" class="btn btn-primary">' + _escAttr(_openBtnLabel()) + '</button>' +
+            '<button type="button" id="email-oic-change-client" class="btn-link-subtle" title="Change email app">Change app</button>' +
+            '<button type="button" id="email-oic-copy"      class="btn btn-secondary">Copy Email</button>' +
+            '<button type="button" id="email-oic-mark-sent" class="btn btn-secondary">Mark Sent</button>' +
+            '<button type="button" id="email-oic-cancel"    class="btn btn-secondary">Cancel</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -82,26 +113,22 @@ function openEmailModal(recordId, recordData, recordStatus) {
     _bindEvents();
   }
 
-  /* ── Event wiring ────────────────────────────────────── */
+  /* ── Events ──────────────────────────────────────────── */
 
   function _bindEvents() {
     var modal = document.getElementById('email-oic-modal');
     if (!modal) return;
 
-    /* Close on X button, Cancel, or backdrop click */
     modal.querySelector('.email-oic-close').addEventListener('click', closeEmailModal);
     document.getElementById('email-oic-cancel').addEventListener('click', closeEmailModal);
-    modal.addEventListener('click', function(e) {
-      if (e.target === modal) closeEmailModal();
-    });
+    modal.addEventListener('click', function(e) { if (e.target === modal) closeEmailModal(); });
 
-    /* Escape key */
     function _onKeyDown(e) {
       if (e.key === 'Escape') { closeEmailModal(); document.removeEventListener('keydown', _onKeyDown); }
     }
     document.addEventListener('keydown', _onKeyDown);
 
-    /* Template tab switching — update subject + body, preserve To field */
+    /* Template tabs */
     modal.querySelectorAll('.email-oic-tab').forEach(function(btn) {
       btn.addEventListener('click', function() {
         currentTpl = btn.getAttribute('data-tpl');
@@ -113,41 +140,88 @@ function openEmailModal(recordId, recordData, recordStatus) {
       });
     });
 
-    /* Open Email App via mailto */
+    /* Open Email App — uses current preference */
     document.getElementById('email-oic-open-app').addEventListener('click', function() {
       var to      = document.getElementById('email-oic-to').value.trim();
       var subject = document.getElementById('email-oic-subject').value.trim();
       var body    = document.getElementById('email-oic-body').value;
-      var href    = buildMailtoHref(to, subject, body);
-      if (window.api && window.api.openExternal) {
-        window.api.openExternal(href);
+      if (_currentClient() === 'default' && !((window._appSettingsCache || {}).preferredEmailClient)) {
+        /* No preference set yet — show picker first */
+        _togglePicker(true);
       } else {
-        window.open(href, '_blank');
+        _openUrl(to, subject, body);
       }
     });
 
-    /* Copy email body to clipboard */
+    /* Change app — always shows picker */
+    document.getElementById('email-oic-change-client').addEventListener('click', function() {
+      _togglePicker(!pickerVisible);
+    });
+
+    /* Client picker buttons */
+    modal.querySelectorAll('.email-client-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var clientId = btn.getAttribute('data-client');
+        _saveClientPreference(clientId, function() {
+          /* Update active state */
+          modal.querySelectorAll('.email-client-btn').forEach(function(b) {
+            b.classList.toggle('active', b.getAttribute('data-client') === clientId);
+          });
+          /* Update Open button label */
+          document.getElementById('email-oic-open-app').textContent = _openBtnLabel();
+          /* Open the email */
+          var to      = document.getElementById('email-oic-to').value.trim();
+          var subject = document.getElementById('email-oic-subject').value.trim();
+          var body    = document.getElementById('email-oic-body').value;
+          _openUrl(to, subject, body);
+          _togglePicker(false);
+        });
+      });
+    });
+
+    /* Copy */
     document.getElementById('email-oic-copy').addEventListener('click', function() {
       var body = document.getElementById('email-oic-body').value;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(body).then(function() {
           showToast('Email copied to clipboard', 'success');
-        }).catch(function() {
-          _fallbackCopy(body);
-        });
+        }).catch(function() { _fallbackCopy(body); });
       } else {
         _fallbackCopy(body);
       }
     });
 
-    /* Mark Sent — persists tracking fields and shows badge on list row */
+    /* Mark Sent */
     document.getElementById('email-oic-mark-sent').addEventListener('click', function() {
       var recipient = document.getElementById('email-oic-to').value.trim();
       _markEmailSent(recordId, data, recordStatus, currentTpl, recipient);
     });
   }
 
-  /* ── Clipboard fallback (execCommand) ─────────────────── */
+  /* ── Picker toggle ───────────────────────────────────── */
+
+  function _togglePicker(show) {
+    pickerVisible = show;
+    var picker = document.getElementById('email-client-picker');
+    if (picker) picker.style.display = show ? '' : 'none';
+  }
+
+  /* ── Save client preference ──────────────────────────── */
+
+  function _saveClientPreference(clientId, cb) {
+    window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { preferredEmailClient: clientId });
+    /* Also update the Settings dropdown if it exists */
+    var sel = document.getElementById('setting-preferred-email-client');
+    if (sel) sel.value = clientId;
+    window.api.setSettings({ preferredEmailClient: clientId }).then(function() {
+      if (typeof cb === 'function') cb();
+    }).catch(function() {
+      showToast('Could not save email app preference', 'error');
+      if (typeof cb === 'function') cb();
+    });
+  }
+
+  /* ── Clipboard fallback ──────────────────────────────── */
 
   function _fallbackCopy(text) {
     try {
@@ -167,14 +241,14 @@ function openEmailModal(recordId, recordData, recordStatus) {
   _renderModal();
 }
 
-/* ── Close modal ─────────────────────────────────────────── */
+/* ── Close ───────────────────────────────────────────────── */
 
 function closeEmailModal() {
   var modal = document.getElementById('email-oic-modal');
   if (modal) modal.remove();
 }
 
-/* ── Mark Sent — writes follow-up tracking to record data blob ── */
+/* ── Mark Sent ───────────────────────────────────────────── */
 
 function _markEmailSent(recordId, existingData, recordStatus, templateId, recipientEmail) {
   var updated = Object.assign({}, existingData, {
@@ -184,7 +258,6 @@ function _markEmailSent(recordId, existingData, recordStatus, templateId, recipi
     lastOfficerEmailRecipient:    recipientEmail || ''
   });
 
-  /* Preserve existing status — finalised records must be re-saved as finalised */
   var status = recordStatus || 'draft';
 
   window.api.attendanceSave({ id: recordId, data: updated, status: status })

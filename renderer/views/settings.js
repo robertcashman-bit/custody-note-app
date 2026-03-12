@@ -42,6 +42,22 @@ function loadSettings() {
     if (aif) aif.value = s.autoImportFolder || '';
 
     /* Officer Email Templates add-on */
+    var prefClientSel = document.getElementById('setting-preferred-email-client');
+    if (prefClientSel) {
+      prefClientSel.value = s.preferredEmailClient || 'default';
+      if (!prefClientSel._oetClientListenerAttached) {
+        prefClientSel._oetClientListenerAttached = true;
+        prefClientSel.addEventListener('change', function() {
+          var val = prefClientSel.value;
+          window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { preferredEmailClient: val });
+          window.api.setSettings({ preferredEmailClient: val }).then(function() {
+            showToast('Email app preference saved', 'success');
+          });
+        });
+      }
+    }
+    window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { preferredEmailClient: s.preferredEmailClient || 'default' });
+
     var oetToggle = document.getElementById('setting-officer-email-templates');
     if (oetToggle) {
       oetToggle.checked = s.officerEmailTemplatesEnabled === 'true';

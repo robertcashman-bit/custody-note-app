@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.56",
+      "version": "1.4.57",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Add Email Client Picker to Officer Email Templates: the 'Open Email App' button now shows your chosen app (Gmail, Outlook Web, Outlook.com, Yahoo, AOL, or system default). Switch instantly from the modal via 'Change app', or set your preference in Settings \u2192 Add-Ons."
+      ]
+    },
+    {
+      "version": "1.4.56",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Fix Officer Email Templates add-on toggle: corrected layout rendering in Settings, toggle now auto-saves instantly without requiring the Save button, and the Records list updates immediately when the add-on is enabled or disabled."
       ]
