@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.57",
+      "version": "1.4.58",
       "date": "2026-03-12",
       "latest": true,
+      "changes": [
+        "Outcome section: add Court Time field. When 'Charged without Bail', 'Charged with Bail', or 'Remanded in Custody' is selected, Court Date auto-fills to the next day and Court Time auto-fills to 10:00 — both remain fully editable. Court time also appears in the custody note print view."
+      ]
+    },
+    {
+      "version": "1.4.57",
+      "date": "2026-03-12",
+      "latest": false,
       "changes": [
         "Add Email Client Picker to Officer Email Templates: the 'Open Email App' button now shows your chosen app (Gmail, Outlook Web, Outlook.com, Yahoo, AOL, or system default). Switch instantly from the modal via 'Change app', or set your preference in Settings \u2192 Add-Ons."
       ]

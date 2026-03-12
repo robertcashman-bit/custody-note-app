@@ -876,6 +876,7 @@ var LAA = {
         { key: 'bailDate', label: 'Bail / Return Date', type: 'date', showIf: { field: 'outcomeDecision', value: 'Released Under Investigation' } },
         { key: 'courtName', label: 'Court Name', type: 'text', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
         { key: 'courtDate', label: 'Court Date', type: 'date', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
+        { key: 'courtTime', label: 'Court Time', type: 'time', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
         { key: 'nextLocationName', label: 'Next Location', type: 'text', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
         { key: 'nextDate', label: 'Next Date', type: 'date', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
@@ -4520,6 +4521,19 @@ var REQUIRED_FIELD_KEYS = [
             formData._chargesPrefilled = true;
           });
         }
+        /* Auto-fill court date (tomorrow) and time (10:00) if not yet set */
+        if (!formData.courtDate) {
+          var _tmrw = new Date(); _tmrw.setDate(_tmrw.getDate() + 1);
+          var _tmrwStr = _tmrw.getFullYear() + '-' +
+            ('0' + (_tmrw.getMonth() + 1)).slice(-2) + '-' +
+            ('0' + _tmrw.getDate()).slice(-2);
+          formData.courtDate = _tmrwStr;
+          setFieldValue('courtDate', _tmrwStr);
+        }
+        if (!formData.courtTime) {
+          formData.courtTime = '10:00';
+          setFieldValue('courtTime', '10:00');
+        }
       }
     }
   }
@@ -4791,6 +4805,21 @@ var REQUIRED_FIELD_KEYS = [
             if (formData.outcomeDecision === 'Bail without charge' && (!formData.bailReturnStationName || !formData.bailReturnStationCode)) {
               if (formData.policeStationName) { formData.bailReturnStationName = formData.policeStationName; setFieldValueSilent('bailReturnStationName', formData.policeStationName); }
               if (formData.schemeId) { formData.bailReturnStationCode = formData.schemeId; setFieldValueSilent('bailReturnStationCode', formData.schemeId); }
+            }
+            var _chargedOutcomes = ['Charged without Bail','Charged with Bail','Remanded in Custody'];
+            if (_chargedOutcomes.indexOf(formData.outcomeDecision) !== -1) {
+              if (!formData.courtDate) {
+                var _tomorrow = new Date(); _tomorrow.setDate(_tomorrow.getDate() + 1);
+                var _tomorrowStr = _tomorrow.getFullYear() + '-' +
+                  ('0' + (_tomorrow.getMonth() + 1)).slice(-2) + '-' +
+                  ('0' + _tomorrow.getDate()).slice(-2);
+                formData.courtDate = _tomorrowStr;
+                setFieldValue('courtDate', _tomorrowStr);
+              }
+              if (!formData.courtTime) {
+                formData.courtTime = '10:00';
+                setFieldValue('courtTime', '10:00');
+              }
             }
           }
           if (field === 'attendanceMode') {
@@ -8110,7 +8139,7 @@ row('Bail type', d.bailType) +
   if (d.bailConditionsChecklist) return row('Bail conditions', d.bailConditionsChecklist.replace(/\|/g, '; ')) + (d.bailConditions ? row('Bail conditions details', d.bailConditions) : '');
   return '';
 })() +
-row('Court', d.courtName) + row('Court date', fmtDate(d.courtDate)) +
+row('Court', d.courtName) + row('Court date', fmtDate(d.courtDate)) + (d.courtTime ? row('Court time', d.courtTime) : '') +
 row('Next location', d.nextLocationName) + row('Next date', fmtDate(d.nextDate)) + row('Further attendance', d.furtherAttendance) +
 (d.handedBackToDSCCReason ? row('Reason handed back to DSCC (Spec 9.53)', d.handedBackToDSCCReason) : '') +
 (d.nonAttendanceReason ? row('Reason for non-attendance (Spec 9.39/9.44)', d.nonAttendanceReason) : '') +
