@@ -532,7 +532,41 @@ html.dark .gear-section-label { color: var(--text-muted); }
   border-top: 1px solid var(--border);
   background: var(--header-bg, #0f172a);
   line-height: 1.4;
+  /* leave room for fixed bottom nav */
+  padding-bottom: calc(0.6rem + 58px);
 }
+
+/* ── Bottom Navigation Bar ─────────────────────────────── */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 900;
+  display: flex; align-items: stretch;
+  background: var(--header-bg, #0f172a);
+  border-top: 1px solid rgba(255,255,255,0.1);
+  height: 58px;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.4);
+}
+.bottom-nav-btn {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: none; border: none; color: #94a3b8;
+  cursor: pointer; gap: 2px; padding: 0.25rem 0.1rem;
+  transition: color 0.12s ease, background 0.12s ease;
+  position: relative;
+}
+.bottom-nav-btn:hover, .bottom-nav-btn.active {
+  color: #ffffff;
+  background: rgba(255,255,255,0.07);
+}
+.bottom-nav-btn.active { color: #60a5fa; }
+.bottom-nav-icon { font-size: 1.35rem; line-height: 1; }
+.bottom-nav-label { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.02em; white-space: nowrap; }
+.bottom-nav-new {
+  background: rgba(29,78,216,0.25);
+  border-left: 1px solid rgba(255,255,255,0.08);
+  border-right: 1px solid rgba(255,255,255,0.08);
+}
+.bottom-nav-new .bottom-nav-icon { font-size: 1.65rem; font-weight: 700; color: #60a5fa; }
+.bottom-nav-new:hover { background: rgba(29,78,216,0.45); }
+/* bottom nav clearance handled per-view */
 .footer-row {
   display: flex; justify-content: space-between; align-items: center; width: 100%;
   gap: 0.75rem;
@@ -609,6 +643,7 @@ html.dark .gear-section-label { color: var(--text-muted); }
   padding: 0; overflow-y: auto;
   background-color: var(--bg);
   background-image: none;
+  padding-bottom: 72px;
 }
 html.theme-light #view-home {
   background-color: #0f172a;
@@ -1256,7 +1291,7 @@ html.dark .home-attention-item:hover {
 .home-status-sep { color: var(--border); }
 
 /* ═══ LIST VIEW ═══ */
-#view-list { padding: 1rem; overflow-y: auto; }
+#view-list { padding: 1rem; overflow-y: auto; padding-bottom: 72px; }
 .list-top-bar {
   display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;
 }
@@ -2028,6 +2063,8 @@ html.dark .interview-notes-warning {
   background: var(--primary-hover); border-color: var(--primary-hover);
 }
 .bottom-btn.sections-btn { flex: 0 0 auto; font-size: 0.85rem; padding: 0.1rem 0.35rem; }
+.bottom-btn.export-pdf-btn { background: #0f766e; color: white; border-color: #0f766e; font-weight: 700; }
+.bottom-btn.export-pdf-btn:hover { background: #0d6460; border-color: #0d6460; color: white; }
 
 /* Form actions on last page */
 .billing-readiness-panel {
@@ -2063,10 +2100,10 @@ html.dark .interview-notes-warning {
 .btn-finalise:hover { background: #1e3a8a; }
 
 /* ═══ FIRMS VIEW ═══ */
-#view-firms { padding: 1rem; overflow-y: auto; }
+#view-firms { padding: 1rem; overflow-y: auto; padding-bottom: 72px; }
 
 /* ═══ SETTINGS ═══ */
-#view-settings { padding: 1rem; overflow-y: auto; }
+#view-settings { padding: 1rem; overflow-y: auto; padding-bottom: 72px; }
 .settings-card {
   background: var(--card-bg); border-radius: 14px;
   box-shadow: var(--card-shadow); padding: 1.25rem; margin-bottom: 1rem;
@@ -2223,6 +2260,16 @@ html.dark .useful-links-category { color: var(--corporate-accent, #93c5fd); }
 .firm-name-cell { font-weight: 600; }
 .firms-actions-col { white-space: nowrap; }
 .firms-actions-col .btn-star { margin-right: 0.25rem; }
+.settings-status-card { border-left: 4px solid var(--primary); }
+.settings-status-row { display: flex; align-items: center; gap: 0.75rem; }
+.settings-status-icon { font-size: 1.4rem; flex-shrink: 0; }
+.settings-status-label { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.settings-status-value { font-size: 0.9rem; font-weight: 600; color: var(--on-surface, #1e293b); }
+.settings-status-row .btn { margin-left: auto; flex-shrink: 0; }
+.firm-edit-panel { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.75rem; background: var(--surface-alt); border-radius: var(--radius); }
+.firm-edit-panel label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); flex: 1 1 140px; }
+.firm-edit-panel label input { font-size: 0.875rem; padding: 0.3rem 0.5rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.firm-edit-actions { width: 100%; display: flex; gap: 0.5rem; padding-top: 0.25rem; }
 .firms-empty { color: var(--text-muted); font-style: italic; padding: 1rem !important; }
 .firms-pagination {
   display: none; align-items: center; gap: 1rem; margin-top: 0.75rem; flex-wrap: wrap;

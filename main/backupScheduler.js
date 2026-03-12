@@ -24,6 +24,7 @@ function createBackupScheduler(options = {}) {
   let lastBackupReason = null;
   let lastError = null;
   let lastRequestedAt = null;
+  let lastSkipReason = null;
   let deferredReason = null;
   let currentState = 'idle';
   let nextRunAt = 0;
@@ -44,6 +45,7 @@ function createBackupScheduler(options = {}) {
       lastBackupReason,
       lastError,
       lastRequestedAt,
+      lastSkipReason,
       nextRunAt: nextRunAt || null,
       deferredReason,
       userIdleGraceMs: USER_IDLE_GRACE_MS,
@@ -139,6 +141,7 @@ function createBackupScheduler(options = {}) {
       const result = await Promise.resolve(runBackup(kind, reason, { force }));
       if (result && result.skipped) {
         currentState = 'idle';
+        lastSkipReason = result.reason || reason;
         deferredReason = result.reason || reason;
       } else {
         lastBackupAt = now();
@@ -147,6 +150,7 @@ function createBackupScheduler(options = {}) {
         lastBackupKind = kind;
         lastBackupReason = reason;
         lastError = null;
+        lastSkipReason = null;
         if (kind === 'hourly') {
           hourlyDirty = false;
           quickDirty = false;
@@ -219,6 +223,7 @@ function createBackupScheduler(options = {}) {
       lastBackupKind = kind;
       lastBackupReason = reason;
       lastError = null;
+      lastSkipReason = null;
       if (kind === 'hourly' || clearsAll) {
         hourlyDirty = false;
         quickDirty = false;

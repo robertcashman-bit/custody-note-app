@@ -1305,8 +1305,7 @@ var LAA = {
           'Police station attendance \u2013 interview, advise on caution',
           'Police station attendance \u2013 interview, charge',
           'Telephone advice only',
-          'Post-charge attendance',
-          'Warrant of further detention'
+          'Post-charge attendance'
         ], cols: 2 },
         { key: 'sufficientBenefitNotes', label: 'SBT Additional Notes', type: 'textarea', placeholder: 'Any additional details about the sufficient benefit provided', cols: 2 },
       ],
@@ -1326,7 +1325,7 @@ var LAA = {
 
     /* ─────── 3. CLIENT DETAILS & WELFARE ─────── */
     {
-      id: 'custody', title: '3. Client Details & Welfare',
+      id: 'voluntaryClientDetails', title: '3. Client Details & Welfare',
       keyFields: ['forename', 'surname', 'dob'],
       fields: [
         { key: '_h_vol_status', label: 'Voluntary Status & Rights', type: 'sectionHeading' },
@@ -1610,12 +1609,12 @@ var LAA = {
       keyFields: ['outcomeDecision'],
       fields: [
         { key: 'interviewCompleted', label: 'Interview completed?', type: 'select', options: ['Yes','No'] },
-        { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Referred to diversion programme','Further voluntary interview required','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
+        { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Referred to diversion programme','Further voluntary interview required','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
           'CN04 \u2013 No further action','CN05 \u2013 Simple caution / reprimand / warning','CN06 \u2013 Charge / Summons','CN07 \u2013 Conditional caution','CN08 \u2013 Fixed penalty notice',
-          'CN09 \u2013 Released no bail','CN10 \u2013 Bail varied / extended','CN11 \u2013 Bail not varied / extended','CN12 \u2013 Pre-charge engagement agreed','CN13 \u2013 Pre-charge engagement not agreed','Draft'
+          'CN12 \u2013 Pre-charge engagement agreed','CN13 \u2013 Pre-charge engagement not agreed','Draft'
         ], cols: 2 },
         { key: 'stageReachedOrFeeCode', label: 'Stage reached / Fee code', type: 'text', placeholder: 'e.g. INVC', cols: 2 },
         { key: 'preChargeEngagementFlag', label: 'Pre-charge engagement?', type: 'select', options: ['Yes','No','N/A'] },
@@ -2363,6 +2362,11 @@ var REQUIRED_FIELD_KEYS = [
     if (name === 'reports') loadReports();
     if (name === 'settings') loadSettings();
     if (name === 'new' && !currentAttendanceId && !Object.keys(formData).length) { activeFormSections = formSections; formData = {}; currentSectionIdx = 0; prefillDefaults(); renderForm(formData); }
+    // sync bottom nav active state
+    var navMap = { home: 'home', list: 'list', new: 'new-attendance', firms: 'firms', settings: 'settings' };
+    document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.nav === (navMap[name] || name));
+    });
   }
 
   /* ─── HOME / COMMAND CENTER ─── */
@@ -3131,6 +3135,21 @@ var REQUIRED_FIELD_KEYS = [
       const wbh = (isWeekend || isBH) ? 'Yes' : 'No';
       if (!formData.date) setFieldValue('date', today);
       setFieldValue('weekendBankHoliday', wbh);
+      if (!formData.firmId && firms && firms.length) {
+        var defaultFirm = firms.find(function(f) { return f.is_default; });
+        if (defaultFirm) {
+          formData.firmId = String(defaultFirm.id);
+          formData.firmName = defaultFirm.name || '';
+          setFieldValueSilent('firmLaaAccount', defaultFirm.laa_account || '');
+          setFieldValueSilent('firmContactName', defaultFirm.contact_name || '');
+          setFieldValueSilent('firmContactPhone', defaultFirm.contact_phone || '');
+          setFieldValueSilent('firmContactEmail', defaultFirm.contact_email || '');
+          if (defaultFirm.source_of_referral) {
+            setFieldValueSilent('sourceOfReferral', defaultFirm.source_of_referral);
+            setFieldValueSilent('instructionSource', defaultFirm.source_of_referral);
+          }
+        }
+      }
     });
   }
 
@@ -3400,9 +3419,44 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  function refreshSettingsStatusCard() {
+    var ssVer = document.getElementById('ss-app-version');
+    if (ssVer) {
+      var av = document.getElementById('app-version');
+      ssVer.textContent = av ? av.textContent : '—';
+    }
+    var ssNet = document.getElementById('ss-net-val');
+    if (ssNet) {
+      var netEl = document.getElementById('net-status-text');
+      ssNet.textContent = netEl ? netEl.textContent : '—';
+    }
+    var ssBkp = document.getElementById('ss-backup-val');
+    if (ssBkp) {
+      var bkpEl = document.getElementById('backup-status-text');
+      ssBkp.textContent = bkpEl ? bkpEl.textContent : '—';
+    }
+    var ssUpd = document.getElementById('ss-check-update-btn');
+    if (ssUpd && !ssUpd._wired) {
+      ssUpd._wired = true;
+      ssUpd.addEventListener('click', function() {
+        var btn = document.getElementById('home-check-update-btn');
+        if (btn) btn.click();
+      });
+    }
+    var ssBkpNow = document.getElementById('ss-backup-now-btn');
+    if (ssBkpNow && !ssBkpNow._wired) {
+      ssBkpNow._wired = true;
+      ssBkpNow.addEventListener('click', function() {
+        var btn = document.getElementById('header-backup-now-btn');
+        if (btn) btn.click();
+      });
+    }
+  }
+
   function loadSettings() {
     if (!window.api) return;
     loadLicenceSettingsUI();
+    refreshSettingsStatusCard();
     // Trigger System Status card refresh whenever Settings is opened
     document.dispatchEvent(new CustomEvent('view-settings-shown'));
     window.api.getSettings().then(s => {
@@ -3715,15 +3769,44 @@ var REQUIRED_FIELD_KEYS = [
           '<td>' + esc(firm.contact_phone || '') + '</td>' +
           '<td class="firms-actions-col">' +
             '<button type="button" class="btn-star ' + (firm.is_default ? 'default' : '') + '" data-id="' + firm.id + '" title="Set as default">\u2605</button>' +
+            '<button type="button" class="btn-small firm-edit" data-id="' + firm.id + '">Edit</button>' +
             '<button type="button" class="btn-small firm-del" data-id="' + firm.id + '">Remove</button>' +
           '</td>';
+        const editRow = document.createElement('tr');
+        editRow.className = 'firm-edit-row';
+        editRow.style.display = 'none';
+        editRow.innerHTML = '<td colspan="5"><div class="firm-edit-panel">' +
+          '<label>Name <input class="fe-name" value="' + esc(firm.name) + '" placeholder="Firm name"></label>' +
+          '<label>LAA Account <input class="fe-laa" value="' + esc(firm.laa_account || '') + '" placeholder="LAA account no."></label>' +
+          '<label>Contact <input class="fe-contact" value="' + esc(firm.contact_name || '') + '" placeholder="Contact name"></label>' +
+          '<label>Phone <input class="fe-phone" value="' + esc(firm.contact_phone || '') + '" placeholder="Phone"></label>' +
+          '<label>Email <input class="fe-email" value="' + esc(firm.contact_email || '') + '" placeholder="Email"></label>' +
+          '<div class="firm-edit-actions"><button type="button" class="btn btn-primary btn-small fe-save">Save</button><button type="button" class="btn btn-secondary btn-small fe-cancel">Cancel</button></div>' +
+          '</div></td>';
         tr.querySelector('.firm-del').addEventListener('click', () => {
           showConfirm('Remove ' + firm.name + '?').then(function(ok) { if (ok) window.api.firmDelete(firm.id).then(loadFirmsList); });
         });
         tr.querySelector('.btn-star').addEventListener('click', () => {
           window.api.firmSetDefault(firm.id).then(loadFirmsList);
         });
+        tr.querySelector('.firm-edit').addEventListener('click', () => {
+          const wasOpen = editRow.style.display !== 'none';
+          container.querySelectorAll('.firm-edit-row').forEach(r => { r.style.display = 'none'; });
+          editRow.style.display = wasOpen ? 'none' : '';
+        });
+        editRow.querySelector('.fe-cancel').addEventListener('click', () => { editRow.style.display = 'none'; });
+        editRow.querySelector('.fe-save').addEventListener('click', () => {
+          const updated = Object.assign({}, firm, {
+            name: editRow.querySelector('.fe-name').value.trim() || firm.name,
+            laa_account: editRow.querySelector('.fe-laa').value.trim(),
+            contact_name: editRow.querySelector('.fe-contact').value.trim(),
+            contact_phone: editRow.querySelector('.fe-phone').value.trim(),
+            contact_email: editRow.querySelector('.fe-email').value.trim(),
+          });
+          window.api.firmSave(updated).then(() => { showToast('Firm updated', 'success'); loadFirmsList(); });
+        });
         container.appendChild(tr);
+        container.appendChild(editRow);
       });
     }
     if (paginationEl) paginationEl.style.display = firms.length > FIRMS_PER_PAGE ? 'flex' : 'none';
@@ -3977,6 +4060,7 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function printDeclarationFromForm() {
+    ensureAllSectionsRendered();
     var data = getFormData();
     if (!data.clientSig) {
       showPrompt('Why is the applicant declaration not signed? This reason will appear on the printed form.', 'Declaration not signed', 'e.g. Telephone advice – client to sign later; Client released before signing; etc.', data.declarationUnsignedReason).then(function(reason) {
@@ -5910,7 +5994,10 @@ var REQUIRED_FIELD_KEYS = [
               setFieldValue('firmContactName', fi.contact_name || '');
               setFieldValue('firmContactPhone', fi.contact_phone || '');
               setFieldValue('firmContactEmail', fi.contact_email || '');
-              if (fi.source_of_referral) setFieldValue('sourceOfReferral', fi.source_of_referral);
+              if (fi.source_of_referral) {
+                setFieldValue('sourceOfReferral', fi.source_of_referral);
+                setFieldValue('instructionSource', fi.source_of_referral);
+              }
               useExistingWrap.style.display = 'none';
               searchInp.value = '';
               updateSelectedLine();
@@ -5979,7 +6066,10 @@ var REQUIRED_FIELD_KEYS = [
             setFieldValue('firmContactName', added.contact_name || '');
             setFieldValue('firmContactPhone', added.contact_phone || '');
             setFieldValue('firmContactEmail', added.contact_email || '');
-            if (added.source_of_referral) setFieldValue('sourceOfReferral', added.source_of_referral);
+            if (added.source_of_referral) {
+              setFieldValue('sourceOfReferral', added.source_of_referral);
+              setFieldValue('instructionSource', added.source_of_referral);
+            }
             showToast('Firm saved and selected', 'success');
           }
           addRow.style.display = 'none';
@@ -7802,38 +7892,38 @@ var REQUIRED_FIELD_KEYS = [
     const myRefForTitle = d.ourFileNumber || d.fileReference || '—';
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | ' + h(myRefForTitle) + '</title><style>' +
-'@page{margin:15mm;size:A4;}' +
-'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 56px;color:#111;line-height:1.45;max-width:100%;}' +
+'@page{margin:12mm 14mm;size:A4;}' +
+'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:9.5px;padding:12px 16px 40px;color:#111;line-height:1.35;max-width:100%;}' +
 '@media print{.pdf-section,.fee-box,.decl-box,.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.pdf-break-before{page-break-before:always;}.watermark{print-color-adjust:exact;}}' +
 '.pdf-break-before{page-break-before:always;}' +
-'h1{font-size:18px;font-weight:700;color:#2563eb;margin:0 0 8px;letter-spacing:-0.02em;}' +
-'h2{font-size:12px;font-weight:700;margin:24px 0 8px;padding:8px 10px;background:#eef2ff;color:#1e40af;border-radius:4px;border-left:4px solid #2563eb;border-top:1px solid #e2e8f0;padding-top:16px;print-color-adjust:exact;}' +
+'h1{font-size:14px;font-weight:700;color:#2563eb;margin:0 0 5px;letter-spacing:-0.02em;}' +
+'h2{font-size:9.5px;font-weight:700;margin:12px 0 4px;padding:4px 8px;background:#eef2ff;color:#1e40af;border-radius:3px;border-left:3px solid #2563eb;print-color-adjust:exact;}' +
 '.pdf-section{page-break-inside:avoid;}' +
-'table{width:100%;border-collapse:collapse;margin-bottom:8px;}' +
-'td{padding:6px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
+'table{width:100%;border-collapse:collapse;margin-bottom:4px;}' +
+'td{padding:3px 7px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
 'tr:nth-child(even) td{background:#f8fafc;print-color-adjust:exact;}' +
-'.l{color:#475569;width:40%;font-weight:500;word-break:break-word;}' +
-'.chk{display:inline-block;font-size:9px;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;background:#d1fae5;color:#065f46;font-weight:600;print-color-adjust:exact;}' +
+'.l{color:#475569;width:38%;font-weight:500;word-break:break-word;}' +
+'.chk{display:inline-block;font-size:8px;margin:1px 3px 1px 0;padding:2px 6px;border-radius:10px;background:#d1fae5;color:#065f46;font-weight:600;print-color-adjust:exact;}' +
 '.unc{background:transparent;border:1px solid #cbd5e1;color:#94a3b8;font-weight:400;}' +
-'.chk-list{list-style:none;padding:0;margin:6px 0;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;}' +
+'.chk-list{list-style:none;padding:0;margin:4px 0;display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;}' +
 '.chk-list li{break-inside:avoid;}' +
 '.chk{display:block;}' +
-'.nar{white-space:pre-wrap;font-size:10px;background:#f8fafc;padding:8px 10px 8px 13px;border-radius:4px;margin:6px 0;border:1px solid #e2e8f0;border-left:3px solid #2563eb;line-height:1.55;}' +
-'.letterhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:12px;padding:8px 0 10px;border-bottom:1px solid #e2e8f0;margin:0 0 10px;}' +
-'.lh-left{font-size:10px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
-'.lh-center{font-size:11px;font-weight:800;letter-spacing:0.08em;color:#1e40af;text-transform:uppercase;}' +
-'.lh-right{font-size:9px;color:#475569;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
-'.fee-box{border:2px solid #2563eb;border-radius:8px;padding:10px;margin:10px 0;background:#f0f4ff;print-color-adjust:exact;}' +
-'.fee-box table td{border:none;padding:4px 8px;} .fee-box .r{text-align:right;}' +
-'.escape-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-weight:700;font-size:10px;margin-top:4px;}' +
+'.nar{white-space:pre-wrap;font-size:9px;background:#f8fafc;padding:5px 8px 5px 10px;border-radius:3px;margin:4px 0;border:1px solid #e2e8f0;border-left:3px solid #2563eb;line-height:1.45;}' +
+'.letterhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:8px;padding:4px 0 6px;border-bottom:1px solid #e2e8f0;margin:0 0 6px;}' +
+'.lh-left{font-size:8.5px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+'.lh-center{font-size:10px;font-weight:800;letter-spacing:0.08em;color:#1e40af;text-transform:uppercase;}' +
+'.lh-right{font-size:8px;color:#475569;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+'.fee-box{border:2px solid #2563eb;border-radius:6px;padding:6px 8px;margin:6px 0;background:#f0f4ff;print-color-adjust:exact;}' +
+'.fee-box table td{border:none;padding:2px 6px;} .fee-box .r{text-align:right;}' +
+'.escape-tag{display:inline-block;padding:1px 6px;border-radius:4px;font-weight:700;font-size:8.5px;margin-top:2px;}' +
 '.escape-yes{background:#fecaca;color:#991b1b;} .escape-no{background:#d1fae5;color:#065f46;}' +
-'.decl-box{font-size:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 12px;margin:10px 0;white-space:pre-wrap;print-color-adjust:exact;}' +
-'.sig-block{margin:10px 0;}' +
-'.sig-block .sig-label{font-size:10px;font-weight:600;margin-bottom:4px;color:#334155;}' +
-'.sig-img{max-width:320px;max-height:90px;display:block;}' +
+'.decl-box{font-size:8.5px;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:6px 9px;margin:6px 0;white-space:pre-wrap;print-color-adjust:exact;}' +
+'.sig-block{margin:6px 0;}' +
+'.sig-block .sig-label{font-size:8.5px;font-weight:600;margin-bottom:3px;color:#334155;}' +
+'.sig-img{max-width:240px;max-height:65px;display:block;}' +
 '.sig-unsigned{font-style:italic;color:#64748b;}' +
-'.cover-block{background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px 16px;margin:10px 0 16px;display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;print-color-adjust:exact;}' +
-'.cover-item{font-size:10px;line-height:1.4;}.cover-item strong{color:#1e40af;}' +
+'.cover-block{background:#f0f4ff;border:1px solid #c7d2fe;border-radius:6px;padding:6px 10px;margin:5px 0 8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 16px;print-color-adjust:exact;}' +
+'.cover-item{font-size:8.5px;line-height:1.35;}.cover-item strong{color:#1e40af;}' +
 '.watermark{position:fixed;top:30%;left:5%;font-size:110px;font-weight:900;color:rgba(0,0,0,0.04);transform:rotate(-30deg);pointer-events:none;z-index:0;letter-spacing:12px;print-color-adjust:exact;}' +
 '</style></head><body>' +
 '<div class="letterhead">' +
@@ -7854,6 +7944,9 @@ var REQUIRED_FIELD_KEYS = [
 '<div class="cover-item"><strong>DSCC number:</strong> ' + h(d.dsccRef || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Custody no.:</strong> ' + h(d.custodyNumber || '\u2014') + '</div>' +
+'<div class="cover-item"><strong>Firm:</strong> ' + h(firmName || '\u2014') + '</div>' +
+'<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || '\u2014') + '</div>' +
+'<div class="cover-item"><strong>Ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
 '</div>' +
 (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">CUSTODY NOTE</div>' : '') +
 
@@ -7866,7 +7959,9 @@ row('Officer in Charge', d.oicName) + row('Officer in Charge email', d.oicEmail)
 row('Date', fmtDate(d.date)) + row('Weekend/Bank Holiday', d.weekendBankHoliday) + row('Other Location', d.otherLocation) +
 row('Referral', d.sourceOfReferral) + row('Work Type', d.workType) + row('Telephone advice given?', d.telephoneAdviceGiven) + row('Fee Earner (telephone advice)', d.feeEarnerTelephoneAdvice) +
 row('Scheme ID', d.schemeId) + row('Duty Solicitor', d.dutySolicitor) +
+row('Fee Earner', d.feeEarnerName) +
 row('Client Status', d.clientStatus) + row('Case Status', d.caseStatus) +
+row('Previous advice on this matter?', d.previousAdvice) + (d.previousAdvice === 'Yes' ? row('Previous advice details', d.previousAdviceDetails) : '') +
 row('Time first contact (LAA 9.25)', d.timeFirstContactWithClient) + row('Within 45 mins of duty call?', d.firstContactWithin45Mins) + (d.firstContactOver45MinsReason ? row('Reason first contact >45 mins', d.firstContactOver45MinsReason) : '') +
 row('Sufficient Benefit Test', (d.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ')) + (d.sufficientBenefitNotes ? row('Sufficient Benefit Test notes', d.sufficientBenefitNotes) : '') +
 (d.telephoneAdviceSummary ? row('Summary of advice given (telephone)', d.telephoneAdviceSummary) : '') +
@@ -8342,6 +8437,8 @@ PDF_CASENOTE_ADVERT +
   function buildVoluntaryPdfHtml(d, settings) {
     var h = function(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
     var row = function(l, v) { return v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : ''; };
+    var check = function(k, l) { return d[k] ? '<span class="chk">\u2611 ' + h(l) + '</span>' : '<span class="chk unc">\u2610 ' + h(l) + '</span>'; };
+    var sig = function(k) { return d[k] ? '<img src="' + d[k] + '" class="sig-img" alt="">' : '<em class="sig-unsigned">Not signed</em>'; };
     var sn = d.policeStationName || d.policeStationId || '';
     var firmName = d.firmName || d.firmId || '';
     var brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
@@ -8350,21 +8447,56 @@ PDF_CASENOTE_ADVERT +
     var clientNameForTitle = [d.forename, d.surname].filter(Boolean).join(' ') || '\u2014';
     var myRefForTitle = d.ourFileNumber || d.fileReference || '\u2014';
 
+    var offenceRows = '';
+    for (var oi = 1; oi <= 4; oi++) {
+      var od = d['offence' + oi + 'Details'];
+      if (!od) continue;
+      offenceRows += '<tr><td class="l">Offence ' + oi + '</td><td>' + h(od) + '</td></tr>';
+      var oDate = d['offence' + oi + 'Date'];
+      var oQual = d['offence' + oi + 'DateQualifier'];
+      var oEnd = d['offence' + oi + 'DateEnd'];
+      var oMode = d['offence' + oi + 'ModeOfTrial'];
+      var oStat = d['offence' + oi + 'Statute'];
+      if (oDate) offenceRows += row('  Date', (oQual && oQual !== 'On') ? oQual + ' ' + fmtDate(oDate) + (oEnd ? ' – ' + fmtDate(oEnd) : '') : fmtDate(oDate));
+      if (oMode) offenceRows += row('  Mode of trial', oMode);
+      if (oStat) offenceRows += row('  Statute / section', oStat);
+    }
+
+    var disbursementsHtml = '';
+    if (d.disbursements && d.disbursements.length) {
+      disbursementsHtml = d.disbursements.filter(function(dis) {
+        return (dis.description || '').trim() || (parseFloat(dis.amount) > 0);
+      }).map(function(dis, i) {
+        return row('Disbursement ' + (i + 1), (dis.description || '') + ' \u2013 \u00A3' + (dis.amount || '0') + ' (' + (dis.vatTreatment || 'No VAT') + ')');
+      }).join('');
+    }
+
     var convertedHtml = '';
-    if (d.arrestedDuringAttendance === 'Yes' && (d.arrestTimeIfConverted || d.conversionNotes)) {
-      convertedHtml = '<h2>Attendance converted to arrest</h2><table>' +
+    if (d.arrestedDuringAttendance === 'Yes') {
+      convertedHtml = '<h2>Attendance Converted to Arrest</h2><table>' +
         row('Arrest time', d.arrestTimeIfConverted) +
         row('Conversion notes', d.conversionNotes) +
-        '</table><p style="font-size:10px;color:#64748b;">Post-arrest custody workflow would be recorded separately. Voluntary chronology preserved above.</p>';
+        '</table><p style="font-size:10px;color:#b91c1c;font-weight:600;">Note: client was arrested during this attendance. A separate custody note should be created for the post-arrest period.</p>';
     }
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | Voluntary | ' + h(myRefForTitle) + '</title>' +
       '<style>' +
-      '@page{margin:15mm;size:A4;} body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 48px;color:#111;line-height:1.45;}' +
+      '@page{margin:15mm;size:A4;}' +
+      'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 56px;color:#111;line-height:1.45;max-width:100%;}' +
+      '@media print{.pdf-section,.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.pdf-break-before{page-break-before:always;}.watermark{print-color-adjust:exact;}}' +
+      '.pdf-break-before{page-break-before:always;}' +
       'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
       'h2{font-size:12px;font-weight:700;margin:24px 0 8px;padding:8px 10px;background:#f0fdfa;color:#0f766e;border-radius:4px;border-left:4px solid #0f766e;border-top:1px solid #e2e8f0;padding-top:16px;print-color-adjust:exact;}' +
-      'table{width:100%;border-collapse:collapse;margin-bottom:8px;} td{padding:6px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
-      'tr:nth-child(even) td{background:#f8fafc;print-color-adjust:exact;} .l{color:#475569;width:40%;font-weight:500;word-break:break-word;}' +
+      '.pdf-section{page-break-inside:avoid;}' +
+      'table{width:100%;border-collapse:collapse;margin-bottom:8px;}' +
+      'td{padding:6px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
+      'tr:nth-child(even) td{background:#f8fafc;print-color-adjust:exact;}' +
+      '.l{color:#475569;width:40%;font-weight:500;word-break:break-word;}' +
+      '.chk{display:inline-block;font-size:9px;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;background:#d1fae5;color:#065f46;font-weight:600;print-color-adjust:exact;}' +
+      '.unc{background:transparent;border:1px solid #cbd5e1;color:#94a3b8;font-weight:400;}' +
+      '.chk-list{list-style:none;padding:0;margin:6px 0;display:grid;grid-template-columns:1fr 1fr;gap:6px 10px;}' +
+      '.chk-list li{break-inside:avoid;}' +
+      '.chk{display:block;}' +
       '.nar{white-space:pre-wrap;font-size:10px;background:#f8fafc;padding:8px 10px 8px 13px;border-radius:4px;margin:6px 0;border:1px solid #e2e8f0;border-left:3px solid #0f766e;line-height:1.55;}' +
       '.letterhead{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:12px;padding:8px 0 10px;border-bottom:1px solid #e2e8f0;margin:0 0 10px;}' +
       '.lh-left{font-size:10px;font-weight:700;color:#0f172a;}.lh-center{font-size:11px;font-weight:800;letter-spacing:0.08em;color:#0f766e;text-transform:uppercase;}.lh-right{font-size:9px;color:#475569;text-align:right;}' +
@@ -8372,79 +8504,202 @@ PDF_CASENOTE_ADVERT +
       '.cover-item{font-size:10px;line-height:1.4;}.cover-item strong{color:#0f766e;}' +
       '.vol-badge{display:inline-block;background:#0f766e;color:white;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700;margin-left:8px;}' +
       '.watermark{position:fixed;top:30%;left:5%;font-size:90px;font-weight:900;color:rgba(0,0,0,0.04);transform:rotate(-30deg);pointer-events:none;z-index:0;letter-spacing:8px;print-color-adjust:exact;}' +
-      '@media print{.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.watermark{print-color-adjust:exact;}}' +
+      '.sig-block{margin:10px 0;} .sig-block .sig-label{font-size:10px;font-weight:600;margin-bottom:4px;color:#334155;}' +
+      '.sig-img{max-width:320px;max-height:90px;display:block;} .sig-unsigned{font-style:italic;color:#64748b;}' +
+      '.decl-box{font-size:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 12px;margin:10px 0;white-space:pre-wrap;print-color-adjust:exact;}' +
       '</style></head><body>' +
       '<div class="letterhead"><div class="lh-left">' + h(brand) + '</div><div class="lh-center">Voluntary Attendance Note</div><div class="lh-right">Ref ' + h(myRefForTitle) + (d.date ? (' \u00B7 ' + h(fmtDate(d.date))) : '') + '</div></div>' +
       '<h1>Voluntary Interview Attendance Note <span class="vol-badge">Voluntary</span></h1>' +
-      '<p style="font-size:10px;color:#64748b;"><strong>Client attending voluntarily. Client free to leave unless arrested.</strong></p>' +
+      '<p style="font-size:10px;color:#64748b;"><strong>Client attending voluntarily. Client free to leave unless arrested. Not under arrest or detention.</strong></p>' +
       '<div class="cover-block">' +
-      '<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>Client:</strong> ' + h(clientNameForTitle) + '</div>' +
       '<div class="cover-item"><strong>Location:</strong> ' + h(sn || d.otherLocation || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>DSCC:</strong> ' + h(d.dsccRef || '\u2014') + '</div>' +
-      '<div class="cover-item"><strong>Instruction source:</strong> ' + h(d.instructionSource || '\u2014') + '</div>' +
-      '<div class="cover-item"><strong>Constable present:</strong> ' + h(d.constablePresent || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>File No.:</strong> ' + h(myRefForTitle) + '</div>' +
+      '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || settings.feeEarnerNameDefault || '\u2014') + '</div>' +
       '</div>' +
       (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">VOLUNTARY</div>' : '') +
 
-      '<h2>1. Matter Setup</h2><table>' +
-      row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) + row('Firm', firmName) + row('Fee Earner', d.feeEarnerName) +
-      row('Client', [d.forename, d.surname].filter(Boolean).join(' ')) + row('DOB', fmtDate(d.dob)) +
-      row('Location', sn || d.otherLocation) + row('Location type', d.locationType) +
-      row('OIC / Interviewer', d.oicName) + row('Instruction source', d.instructionSource) +
-      row('DSCC reference', d.dsccRef) + row('DSCC notification status', d.dsccNotificationStatus) +
-      row('UFN', d.ufn) + row('Matter type', codeLookup('matterTypeCodes', d.matterTypeCode)) +
-      row('Allegation / Offence', d.offenceSummary) +
+      '<h2>1. Case Reference &amp; Arrival</h2><table>' +
+      row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) +
+      row('Within 45 mins of duty call?', d.firstContactWithin45Mins) +
+      (d.firstContactOver45MinsReason ? row('Reason (over 45 mins)', d.firstContactOver45MinsReason) : '') +
+      row('Firm', firmName) + row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
+      row('Fee Earner / Rep', d.feeEarnerName) +
+      row('Client', clientNameForTitle) +
+      row('File number (ours) / Invoice no.', myRefForTitle) +
+      row('Offence (summary)', d.offenceSummary) +
+      row('Station / Location', sn || d.otherLocation) + row('Location type', d.locationType) +
+      row('Scheme ID', d.schemeId) +
+      row('DSCC number', d.dsccRef) + row('DSCC notification status', d.dsccNotificationStatus) +
+      (d.dsccReferenceMissingReason ? row('DSCC missing reason', d.dsccReferenceMissingReason) : '') +
+      row('Officer in Charge', d.oicName) + row('OIC email', d.oicEmail) + row('OIC telephone', d.oicPhone) +
+      row('Weekend / Bank Holiday?', d.weekendBankHoliday) + row('Instruction source', d.instructionSource) +
+      row('Duty Solicitor?', d.dutySolicitor) + row('Case Status', d.caseStatus) +
+      row('Telephone advice already given?', d.telephoneAdviceGiven) + row('Fee Earner (telephone advice)', d.feeEarnerTelephoneAdvice) +
+      row('Voluntary interview booked by', d.voluntaryInterviewBookedBy) +
+      '</table>' +
+      (d.arrivalNotes ? '<div class="nar">' + h(d.arrivalNotes) + '</div>' : '') +
+      '<table>' +
+      row('Sufficient Benefit Test (LAA)', (d.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ')) +
+      (d.sufficientBenefitNotes ? row('SBT notes', d.sufficientBenefitNotes) : '') +
       '</table>' +
 
-      '<h2>2. Voluntary Status &amp; Rights</h2><table>' +
+      '<h2>2. Journey to Station</h2><table>' +
+      row('Already at station?', d.alreadyAtStation) + row('Origin postcode', d.travelOriginPostcode) +
+      row('Time set off', d.timeSetOff) + row('Time of arrival', d.timeArrival) +
+      '</table>' +
+
+      '<h2>3. Client Details &amp; Welfare</h2><table>' +
       row('Attending voluntarily?', d.voluntaryStatusConfirmed) + row('Free to leave explained?', d.freeToLeaveExplained) +
       row('Caution given?', d.cautionGiven) + row('Notice of rights explained?', d.noticeOfRightsExplained) +
       row('Legal advice requested?', d.legalAdviceRequested) + row('Constable present?', d.constablePresent) +
       row('Attendance sub-type', d.attendanceSubType) +
+      row('Title', d.title) + row('Full name', [d.forename, d.middleName, d.surname].filter(Boolean).join(' ')) +
+      row('Date of birth', fmtDate(d.dob)) + row('Gender', d.gender) +
+      row('Nationality', d.nationality === 'Other' ? d.nationalityOther : d.nationality) +
+      row('Address', [d.address1, d.address2, d.address3, d.city, d.county, d.postCode].filter(Boolean).join(', ')) +
+      row('Client phone', d.clientPhone) + row('Client email', d.clientEmail) +
+      row('Language issues?', d.languageIssues) +
+      (d.languageIssues === 'Yes' ? row('Interpreter', d.interpreterName) + row('Language', d.interpreterLanguage) : '') +
+      row('Youth / Vulnerable?', d.juvenileVulnerable) +
+      (d.juvenileVulnerable && d.juvenileVulnerable !== 'No' ? row('Appropriate Adult', d.appropriateAdultName) + row('AA relationship', d.appropriateAdultRelation) + row('AA phone', d.appropriateAdultPhone) + row('AA email', d.appropriateAdultEmail) + row('AA organisation', d.appropriateAdultOrganisation) + (d.appropriateAdultAddress ? row('AA address', d.appropriateAdultAddress) : '') : '') +
+      row('Injuries to client?', d.injuriesToClient) + (d.injuriesToClient === 'Yes' ? row('Injury details', d.injuryDetails) : '') +
+      row('Medication', d.medication) +
+      row('Psychiatric / mental health issues?', d.psychiatricIssues) + (d.psychiatricNotes ? row('Details', d.psychiatricNotes) : '') +
+      row('Fit to be interviewed?', d.fitToBeInterviewed) +
       '</table>' +
 
-      '<h2>3. Welfare &amp; Safeguards</h2><table>' +
-      row('Youth / Vulnerable?', d.juvenileVulnerable) + row('Appropriate adult required?', d.appropriateAdultRequired) +
-      row('Appropriate adult present?', d.appropriateAdultPresent) + row('Interpreter required?', d.languageIssues) +
-      row('Interpreter present?', d.interpreterPresent) + row('Language', d.interpreterLanguage) +
-      row('Fitness to be interviewed?', d.fitToBeInterviewed) + (d.fitnessAdjustments ? row('Adjustments', d.fitnessAdjustments) : '') +
-      row('Mental health / intoxication?', d.psychiatricIssues) + (d.psychiatricNotes ? row('Details', d.psychiatricNotes) : '') +
+      '<h2>4. Offences</h2>' +
+      (offenceRows ? '<table>' + offenceRows + '</table>' : '<p style="font-size:10px;color:#64748b;">No offences recorded.</p>') +
+      (d.otherOffencesNotes ? '<div class="nar">' + h(d.otherOffencesNotes) + '</div>' : '') +
+
+      '<h2>5. Disclosure &amp; Evidence</h2><table>' +
+      row('Disclosure type', d.disclosureType) +
+      row('Disclosure officer is OIC?', d.disclosureOfficerIsOIC) +
+      (d.disclosureOfficerIsOIC === 'No' ? row('Disclosure officer', d.disclosureOfficerName) + row('D/O phone', d.disclosureOfficerPhone) + row('D/O email', d.disclosureOfficerEmail) + row('D/O unit', d.disclosureOfficerUnit) : '') +
+      row('Significant statements?', d.significantStatements) +
+      row('Client signed EAB?', d.clientSignedEAB) +
+      row('Co-suspects?', d.coSuspects) +
+      (d.coSuspects === 'Yes' ? row('Co-suspect details', d.coSuspectDetails) + row('Conflict?', d.coSuspectConflict) + (d.coSuspectConflict === 'Yes' ? row('Conflict notes', d.coSuspectConflictNotes) : '') : '') +
+      row('Name of complainant', d.nameOfComplainant) + row('Prosecution witnesses', d.prosecutionWitnesses) +
+      row('Witness intimidation?', d.witnessIntimidation) +
+      row('CCTV visual?', d.cctvVisual) + (d.cctvVisual === 'Yes' ? row('CCTV viewed?', d.cctvViewed) + (d.cctvNotes ? row('CCTV notes', d.cctvNotes) : '') : '') +
+      row('Written evidence?', d.writtenEvidence) + (d.writtenEvidenceDetails ? row('Evidence details', d.writtenEvidenceDetails) : '') +
+      row('Exhibits to inspect?', d.exhibitsToInspect) + (d.exhibitsToInspect === 'Yes' ? row('Inspected?', d.exhibitsInspected) + (d.exhibitsNotes ? row('Exhibit notes', d.exhibitsNotes) : '') : '') +
+      row('PNC disclosed?', d.pncDisclosed) + (d.pncNotes ? row('PNC notes', d.pncNotes) : '') +
       '</table>' +
+      (d.disclosureNarrative ? '<div class="nar">' + h(d.disclosureNarrative) + '</div>' : '') +
 
-      '<h2>4. Disclosure &amp; Preparation</h2><table>' +
-      row('Disclosure received (time)', d.disclosureReceivedTime) + row('Disclosure type', d.disclosureType) +
-      '</table>' + (d.disclosureNarrative ? '<div class="nar">' + h(d.disclosureNarrative) + '</div>' : '') +
-      '<table>' + row('Documents reviewed', d.documentsReviewed) + row('Client initial account', d.clientInstructionsInitial) +
-      row('Advice given', d.adviceGiven) + row('Reasons for advice', d.reasonsForAdvice) +
-      row('Interview strategy', d.interviewStrategy) + '</table>' +
+      '<h2>6. Consultation</h2>' +
+      '<ul class="chk-list">' +
+      '<li>' + check('chkConflictCheck', 'Conflict check done') + '</li>' +
+      '<li>' + check('chkConfidentiality', 'Confidentiality explained') + '</li>' +
+      '<li>' + check('chkIndependence', 'Independence confirmed') + '</li>' +
+      '<li>' + check('chkFreeRep', 'Advised free representation') + '</li>' +
+      '<li>' + check('chkWelfare', 'Checked client welfare') + '</li>' +
+      '<li>' + check('chkDontDiscuss', 'Advised not to discuss case') + '</li>' +
+      '<li>' + check('chkDontSign', 'Advised not to sign without legal advice') + '</li>' +
+      '<li>' + check('chkUnderstands', 'Client understands advice given') + '</li>' +
+      '<li>' + check('chkPersonalData', 'Confirmed personal data') + '</li>' +
+      '<li>' + check('chkReasonForArrest', 'Explained reason for attendance') + '</li>' +
+      '<li>' + check('chkDisclosure', 'Explained disclosure') + '</li>' +
+      '</ul>' +
+      '<table>' +
+      row('Conflict check result', d.conflictCheckResult) + row('Conflict check notes', d.conflictCheckNotes) +
+      row('Client type', d.clientType) + row('National Insurance number', d.niNumber) + row('ARC number', d.arcNumber) +
+      row('Benefits', d.benefits) + row('Benefit type', d.benefitType === 'Other' ? d.benefitOther : d.benefitType) + row('Benefit notes', d.benefitNotes) +
+      row('Passported benefit', d.passportedBenefit) +
+      (d.passportedBenefit === 'No' ? row('Gross income', d.grossIncome) + row('Partner income', d.partnerIncome) + row('Partner name', d.partnerName) + row('Income notes', d.incomeNotes) : '') +
+      row('Employment', d.employmentStatus) + row('Accommodation', d.accommodationStatus) + (d.accommodationDetails ? row('Accommodation notes', d.accommodationDetails) : '') +
+      row('Marital status', d.maritalStatus) +
+      row('Ethnicity', codeLookup('ethnicCodes', d.ethnicOriginCode)) + row('Disability', codeLookup('disabilityCodes', d.disabilityCode)) +
+      row('Risk assessment', d.riskAssessment) +
+      row('Case assessment', d.caseAssessment) + (d.caseAssessmentWhy ? row('Assessment notes', d.caseAssessmentWhy) : '') +
+      row('Likely sentence', d.likelySentence) +
+      '</table>' +
+      (d.lawElements ? '<div class="nar">' + h(d.lawElements) + '</div>' : '') +
+      (d.clientInstructions ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Summary of client instructions</p><div class="nar">' + h(d.clientInstructions) + '</div>' : '') +
+      '<p style="font-size:9px;font-weight:600;">Advice given:</p>' +
+      '<ul class="chk-list">' +
+      '<li>' + check('advSilence', 'Right to Silence &amp; Inferences Explained') + '</li>' +
+      '<li>' + check('advCaution', 'Caution Explained') + '</li>' +
+      '<li>' + check('advConsequences', 'Consequences of lying / later different version') + '</li>' +
+      '<li>' + check('advBadCharacter', 'Bad Character') + '</li>' +
+      '<li>' + check('advSpecialWarning', 'Special Warning Explained') + '</li>' +
+      '<li>' + check('advInterviewProcedure', 'Interview Procedure Explained') + '</li>' +
+      '<li>' + check('advRights', 'Rights: Answer / No Answer / Prepared statement') + '</li>' +
+      '<li>' + check('advStopInterview', 'Right to Stop Interview for advice') + '</li>' +
+      '<li>' + check('advIDProcedures', 'ID procedures explained') + '</li>' +
+      '<li>' + check('advCourtProcedure', 'Court procedure explained') + '</li>' +
+      '<li>' + check('advAlibis', 'Alibis discussed') + '</li>' +
+      '<li>' + check('advFailureToAttendBail', 'Failure to attend bail explained') + '</li>' +
+      '</ul>' +
+      '<table>' +
+      row('Advice re interview', d.adviceReInterview) + row('Reason (quick)', d.reasonsForAdviceSelect) + row('Reasons (detail)', d.reasonsForAdvice) +
+      row('Client decision', d.clientDecision) +
+      '</table>' +
+      (d.repInstructionsSignature || d.clientInstructionsSignature ? '<div class="sig-block"><p class="sig-label">Rep confirmation of instructions</p>' + sig('repInstructionsSignature') + '</div><div class="sig-block"><p class="sig-label">Client confirmation of instructions</p>' + sig('clientInstructionsSignature') + '</div>' : '') +
 
-      '<h2>5. Attendance Record</h2><table>' +
-      row('Consultation start', d.consultationStart) + row('Consultation end', d.consultationEnd) +
-      row('Interview start', d.interviewStart) + row('Interview end', d.interviewEnd) +
-      row('Key representations made', d.keyRepresentationsMade) + row('Key questions / topics', d.keyQuestionsTopics) +
-      row('Anything adverse or unfair', d.anythingAdverseOrUnfair) +
-      row('Interview stopped / postponed?', d.interviewStoppedPostponed) +
+      '<h2>7. Interview</h2><table>' +
+      row('Interview start', d.startTime) + row('Interview end', d.endTime) +
+      row('Those present', d.present) + row('Client cautioned?', d.cautioned) +
       row('Arrested during attendance?', d.arrestedDuringAttendance) +
       '</table>' +
-
-      '<h2>6. Outcome &amp; Billing</h2><table>' +
-      row('Interview completed?', d.interviewCompleted) + row('Outcome', d.outcomeDecision) +
-      row('Outcome code', d.outcomeCode) + row('Stage / fee code', d.stageReachedOrFeeCode) +
-      row('Sufficient benefit note', d.sufficientBenefitNote) + row('Follow-up required?', d.followUpRequired) +
-      row('Total minutes', d.totalMinutes) + row('Miles claimable', d.milesClaimable) + row('Parking cost', d.parkingCost) +
-      '</table>' +
-
-      '<h2>7. Client Aftercare</h2><table>' +
-      row('What explained after interview', d.whatExplainedAfterInterview) +
-      row('Next steps for client', d.nextStepsForClient) +
-      row('Next date', fmtDate(d.nextDate)) + row('Bail / return date', fmtDate(d.bailDate)) +
-      row('Follow-up tasks', d.followUpTasks) +
-      row('Client full name', d.laaClientFullName) + row('Fee earner', d.laaFeeEarnerFullName) +
-      row('Ethnic origin', codeLookup('ethnicCodes', d.ethnicOriginCode)) + row('Disability', codeLookup('disabilityCodes', d.disabilityCode)) +
-      '</table>' +
-
+      (d.notes ? '<div class="nar">' + h(d.notes) + '</div>' : '') +
       convertedHtml +
+
+      '<h2>8. Outcome</h2><table>' +
+      row('Interview completed?', d.interviewCompleted) +
+      row('Outcome', d.outcomeDecision) +
+      (d.handedBackToDSCCReason ? row('Reason handed back to DSCC', d.handedBackToDSCCReason) : '') +
+      (d.nonAttendanceReason ? row('Reason for non-attendance', d.nonAttendanceReason) : '') +
+      row('Outcome code (LAA)', d.outcomeCode) + row('Stage / fee code', d.stageReachedOrFeeCode) +
+      row('Pre-charge engagement?', d.preChargeEngagementFlag) +
+      row('Next location', d.nextLocationName) + row('Next date', fmtDate(d.nextDate)) +
+      row('Further attendance needed?', d.furtherAttendance) +
+      '</table>' +
+
+      '<h2>9. Time Recording &amp; Fees</h2><table>' +
+      row('Time departure from station', d.timeDeparture) + row('Time arrival office/home', d.timeOfficeHome) +
+      row('Multiple journeys?', d.multipleJourneys) +
+      row('Waiting time start', d.waitingTimeStart) + row('Waiting time end', d.waitingTimeEnd) + (d.waitingTimeNotes ? row('Waiting notes', d.waitingTimeNotes) : '') +
+      row('Travel \u2013 social (mins)', d.travelSocial) + row('Travel \u2013 unsocial (mins)', d.travelUnsocial) +
+      row('Waiting \u2013 social (mins)', d.waitingSocial) + row('Waiting \u2013 unsocial (mins)', d.waitingUnsocial) +
+      row('Attendance &amp; Advice \u2013 social (mins)', d.adviceSocial) + row('Attendance &amp; Advice \u2013 unsocial (mins)', d.adviceUnsocial) +
+      row('Total minutes', d.totalMinutes) + row('Miles claimable (45p)', d.milesClaimable) + row('Parking cost', d.parkingCost) +
+      disbursementsHtml +
+      row('Number of suspects', d.numSuspects) + row('No. Attendances', d.numAttendances) + row('Case stage', d.caseStage) +
+      row('Date police station finalised', fmtDate(d.policeStationFinalisedDate)) + row('Time police station finalised', d.policeStationFinalisedTime) +
+      row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice sent date', fmtDate(d.invoiceSentDate)) + row('Invoice sent time', d.invoiceSentTime) : '') +
+      row('Invoice notes', d.invoiceNotes) +
+      '</table>' +
+      (d.repConfirmationSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation</p>' + sig('repConfirmationSig') + '</div>' : '') +
+      (d.notesToOffice ? '<div class="nar">' + h(d.notesToOffice) + '</div>' : '') +
+
+      (function() {
+        var laaRows = row('Previous advice?', d.previousAdvice) + row('Details', d.previousAdviceDetails) +
+          row('Privacy Notice', d.privacyNoticeAccepted) +
+          row('Client has partner?', d.laaHasPartner) +
+          row('Client name', d.laaClientFullName) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
+          (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
+          row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
+        var hasSig = d.clientSig || d.feeEarnerSig || d.laaPartnerSig;
+        if (!laaRows && !hasSig) return '';
+        return '<h2 class="pdf-break-before">10. LAA Declaration</h2>' +
+          '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
+          '<table>' + laaRows + '</table>' +
+          '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' +
+          (d.laaHasPartner === 'Yes' ? '<div class="sig-block"><p class="sig-label">Partner signature</p>' + sig('laaPartnerSig') + '</div>' : '') +
+          '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>';
+      })() +
+
+      (function() {
+        var adminRows = row('File number (ours) / Invoice no.', myRefForTitle) + row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
+        if (!adminRows) return '';
+        return '<h2>11. Admin &amp; Billing</h2><table>' + adminRows + '</table>';
+      })() +
 
       PDF_CASENOTE_ADVERT +
 
@@ -8543,6 +8798,7 @@ PDF_CASENOTE_ADVERT +
   }
 
   function emailPdf() {
+    ensureAllSectionsRendered();
     const data = getFormData();
     window.api.getSettings().then(settings => {
       const email = (settings.email || '').trim();
@@ -9738,7 +9994,12 @@ PDF_CASENOTE_ADVERT +
       } else if (bs.state === 'error') {
         setFooterIndicator(backupStatusEl, 'Backup retrying', 'offline', bs.lastError || '');
       } else if (bs.quickDirty || bs.hourlyDirty) {
-        setFooterIndicator(backupStatusEl, 'Backup queued', 'backup-active');
+        var noFolder = bs.lastSkipReason === 'backup-folder-missing' || bs.lastSkipReason === 'db-missing' || bs.lastSkipReason === 'export-failed';
+        if (noFolder) {
+          setFooterIndicator(backupStatusEl, 'Backup off', 'offline');
+        } else {
+          setFooterIndicator(backupStatusEl, 'Backup queued', 'backup-active');
+        }
       } else {
         return false;
       }
@@ -9928,9 +10189,32 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('sections-index-close')?.addEventListener('click', closeSectionsIndex);
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('kb-help-btn')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
+    document.getElementById('form-header-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
+    document.getElementById('form-bottom-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
+    document.getElementById('header-export-pdf-btn')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
     document.getElementById('header-sections-idx')?.addEventListener('click', openSectionsIndex);
     document.getElementById('header-laa-forms')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('header-kb-help')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
+
+    // Bottom navigation bar
+    document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var nav = btn.dataset.nav;
+        if (nav === 'home') { showView('home'); }
+        else if (nav === 'list') { showView('list'); }
+        else if (nav === 'firms') { showView('firms'); }
+        else if (nav === 'settings') { showView('settings'); }
+        else if (nav === 'new-attendance') {
+          if (currentAttendanceId || Object.keys(formData).length > 0) {
+            showConfirm('Start a new record? Any unsaved changes will be lost.').then(function(ok) {
+              if (ok) { currentAttendanceId = null; formData = {}; showView('new'); }
+            });
+          } else {
+            showView('new');
+          }
+        }
+      });
+    });
 
     function handleBackupNowClick(btn) {
       if (!btn || btn.classList.contains('backing-up')) return;
