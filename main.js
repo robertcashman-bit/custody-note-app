@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const { URL } = require('url');
 const initSqlJs = require('sql.js');
 const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-import');
+const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
 const { createBackupScheduler } = require('./main/backupScheduler');
 
@@ -425,9 +426,47 @@ function getEncryptedDbExport() {
   return _cachedDbExport;
 }
 
+function getAtomicTempPath(destPath) {
+  return `${destPath}.${process.pid}.${Date.now()}.${crypto.randomBytes(6).toString('hex')}.tmp`;
+}
+
+function writeFileAtomic(destPath, data, done) {
+  const dir = path.dirname(destPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = getAtomicTempPath(destPath);
+  fs.writeFile(tmpPath, data, (writeErr) => {
+    if (writeErr) {
+      done(writeErr);
+      return;
+    }
+    fs.rename(tmpPath, destPath, (renameErr) => {
+      if (!renameErr) {
+        done(null);
+        return;
+      }
+      try {
+        if (!fs.existsSync(tmpPath)) {
+          throw renameErr;
+        }
+        fs.copyFileSync(tmpPath, destPath);
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        done(null);
+      } catch (copyErr) {
+        try {
+          if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+        } catch (_) {}
+        done(copyErr);
+      }
+    });
+  });
+}
+
 function saveDb() {
   if (!db) return;
-  if (_saveDbInProgress) return;
+  if (_saveDbInProgress) {
+    _dbSaveRequestedWhileBusy = true;
+    return;
+  }
   const sinceActivity = Date.now() - _lastEditorActivityAt;
   if (sinceActivity < SAVE_IDLE_GRACE_MS) {
     if (!_dbSaveTimer) {
@@ -443,25 +482,27 @@ function saveDb() {
     const encrypted = getEncryptedDbExport();
     if (!encrypted) { _saveDbInProgress = false; return; }
     const dbPath = getDbPath();
-    const dir = path.dirname(dbPath);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const tmpPath = dbPath + '.tmp';
-    fs.writeFile(tmpPath, encrypted, (err) => {
+    writeFileAtomic(dbPath, encrypted, (err) => {
+      let writeFailed = false;
       if (err) {
-        console.error('[saveDb] Failed to write temp file:', err.message);
-        _saveDbInProgress = false;
-        return;
-      }
-      try {
-        fs.renameSync(tmpPath, dbPath);
-      } catch (renameErr) {
-        console.error('[saveDb] Failed to rename temp file:', renameErr.message);
+        console.error('[saveDb] Failed to persist database:', err.message);
+        writeFailed = true;
       }
       _saveDbInProgress = false;
+      if (writeFailed) {
+        _dbDirty = true;
+        _cachedDbExportDirty = true;
+      }
+      if (_dbDirty || _dbSaveRequestedWhileBusy) {
+        _dbSaveRequestedWhileBusy = false;
+        saveDb();
+      }
     });
   } catch (err) {
     console.error('[saveDb] Failed to save database:', err.message);
     _saveDbInProgress = false;
+    _dbDirty = true;
+    _cachedDbExportDirty = true;
   }
 }
 
@@ -484,6 +525,7 @@ function dbAll(sql, params = []) {
 
 let _dbDirty = false;
 let _dbSaveTimer = null;
+let _dbSaveRequestedWhileBusy = false;
 const DB_SAVE_DEBOUNCE_MS = 30000;
 
 function markDbDirtyForSave() {
@@ -903,6 +945,24 @@ async function initDb() {
   );`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sync_attempts_created ON sync_attempts(created_at);`);
 
+  db.run(`CREATE TABLE IF NOT EXISTS sync_conflicts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    attendance_id INTEGER,
+    sync_id TEXT,
+    reason TEXT,
+    local_version INTEGER DEFAULT 0,
+    remote_version INTEGER DEFAULT 0,
+    local_updated_at TEXT,
+    remote_updated_at TEXT,
+    remote_status TEXT,
+    local_snapshot TEXT,
+    remote_snapshot TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    resolved_at TEXT DEFAULT NULL,
+    resolution_note TEXT DEFAULT ''
+  );`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sync_conflicts_open ON sync_conflicts(resolved_at, attendance_id);`);
+
   /* ─── Soft-delete & indexed search columns (idempotent) ─── */
   try { db.run("ALTER TABLE attendances ADD COLUMN deleted_at TEXT DEFAULT NULL"); } catch (_) {}
   try { db.run("ALTER TABLE attendances ADD COLUMN deletion_reason TEXT DEFAULT NULL"); } catch (_) {}
@@ -1005,11 +1065,9 @@ function _runQuickBackupAsync() {
   try {
     const encrypted = getEncryptedDbExport();
     if (!encrypted) return Promise.resolve({ skipped: true, reason: 'export-failed' });
-    const tmp = dest + '.tmp';
     return new Promise((resolve, reject) => {
-      fs.writeFile(tmp, encrypted, (err) => {
+      writeFileAtomic(dest, encrypted, (err) => {
         if (err) { console.error('[Backup] Quick backup write failed:', err.message); return reject(err); }
-        try { fs.renameSync(tmp, dest); } catch (e) { console.error('[Backup] Quick rename failed:', e.message); return reject(e); }
         console.log('[Backup] Quick backup saved (encrypted), took', Date.now() - start, 'ms,', encrypted.length, 'bytes');
         copyToOffsiteBackup(dest);
         uploadToCloudIfConfigured(encrypted);
@@ -1034,11 +1092,9 @@ function _runHourlyBackupAsync() {
   try {
     const encrypted = getEncryptedDbExport();
     if (!encrypted) return Promise.resolve({ skipped: true, reason: 'export-failed' });
-    const tmp = dest + '.tmp';
     return new Promise((resolve, reject) => {
-      fs.writeFile(tmp, encrypted, (err) => {
+      writeFileAtomic(dest, encrypted, (err) => {
         if (err) { console.error('[Backup] Hourly write failed:', err.message); return reject(err); }
-        try { fs.renameSync(tmp, dest); } catch (e) { console.error('[Backup] Hourly rename failed:', e.message); return reject(e); }
         console.log('[Backup] Hourly archive saved (encrypted):', name, 'took', Date.now() - start, 'ms');
         pruneOldBackups(backupDir);
         copyToOffsiteBackup(dest);
@@ -1489,6 +1545,100 @@ function migrateSyncDirtyToQueue() {
   }
 }
 
+function rebuildSyncQueueForDirtyRecords() {
+  if (!db) return 0;
+  try {
+    dbRun('DELETE FROM sync_queue');
+    migrateSyncDirtyToQueue();
+    const row = dbGet('SELECT COUNT(*) as c FROM sync_queue');
+    return row ? (row.c || 0) : 0;
+  } catch (e) {
+    console.warn('[Sync] rebuildSyncQueueForDirtyRecords failed:', e && e.message ? e.message : e);
+    return 0;
+  }
+}
+
+function clearOpenSyncConflicts(attendanceId, resolutionNote) {
+  if (!db || !attendanceId) return;
+  const existing = dbGet('SELECT COUNT(*) as c FROM sync_conflicts WHERE attendance_id=? AND resolved_at IS NULL', [attendanceId]);
+  if (!existing || !existing.c) return;
+  dbRun(
+    'UPDATE sync_conflicts SET resolved_at=?, resolution_note=? WHERE attendance_id=? AND resolved_at IS NULL',
+    [new Date().toISOString(), resolutionNote || 'resolved', attendanceId]
+  );
+}
+
+function recordSyncConflict(localId, localRow, remote, reason) {
+  if (!db || !localId) return;
+  const now = new Date().toISOString();
+  const existing = dbGet(
+    `SELECT data, status, updated_at, deleted_at, deletion_reason, supervisor_approved_at,
+            supervisor_note, archived_at, sync_version
+       FROM attendances WHERE id=?`,
+    [localId]
+  );
+  const localSnapshot = existing ? JSON.stringify({
+    data: existing.data,
+    status: existing.status,
+    updatedAt: existing.updated_at,
+    deletedAt: existing.deleted_at || null,
+    deletionReason: existing.deletion_reason || null,
+    supervisorApprovedAt: existing.supervisor_approved_at || null,
+    supervisorNote: existing.supervisor_note || '',
+    archivedAt: existing.archived_at || null,
+    version: existing.sync_version || (localRow && localRow.sync_version) || 1,
+  }) : null;
+  const remoteSnapshot = JSON.stringify({
+    syncId: remote.syncId,
+    data: remote.data,
+    status: remote.status || 'draft',
+    createdAt: remote.createdAt,
+    updatedAt: remote.updatedAt,
+    deletedAt: remote.deletedAt || null,
+    deletionReason: remote.deletionReason || null,
+    clientName: remote.clientName || '',
+    stationName: remote.stationName || '',
+    dsccRef: remote.dsccRef || '',
+    attendanceDate: remote.attendanceDate || '',
+    supervisorApprovedAt: remote.supervisorApprovedAt || null,
+    supervisorNote: remote.supervisorNote || '',
+    archivedAt: remote.archivedAt || null,
+    version: remote.version || 1,
+  });
+  dbRun('DELETE FROM sync_conflicts WHERE attendance_id=? AND resolved_at IS NULL', [localId]);
+  dbRun(
+    `INSERT INTO sync_conflicts (
+      attendance_id, sync_id, reason, local_version, remote_version, local_updated_at,
+      remote_updated_at, remote_status, local_snapshot, remote_snapshot, created_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      localId,
+      remote.syncId || null,
+      reason || 'remote_newer',
+      (localRow && localRow.sync_version) || (existing && existing.sync_version) || 1,
+      remote.version || 1,
+      (localRow && localRow.updated_at) || (existing && existing.updated_at) || null,
+      remote.updatedAt || null,
+      remote.status || 'draft',
+      localSnapshot,
+      remoteSnapshot,
+      now,
+    ]
+  );
+  db.run(
+    'INSERT INTO audit_log (attendance_id, action, previous_snapshot, timestamp, user_note) VALUES (?,?,?,?,?)',
+    [
+      localId,
+      'sync_conflict_blocked',
+      existing ? existing.data : null,
+      now,
+      reason === 'protect_finalised'
+        ? 'Remote draft was blocked because the local record is finalised.'
+        : 'Remote changes were held back because the local record has unsynced edits.',
+    ]
+  );
+}
+
 function getSyncApiUrl() {
   const base = getManagedCloudApiUrl();
   return base || null;
@@ -1527,6 +1677,7 @@ async function syncPull(opts) {
 
   const remoteRecords = resp.records || [];
   let merged = 0;
+  let conflicts = 0;
 
   for (const remote of remoteRecords) {
     const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty FROM attendances WHERE sync_id=?', [remote.syncId]);
@@ -1560,6 +1711,8 @@ async function syncPull(opts) {
     if (localStatus === 'finalised' && remote.status !== 'finalised') {
       console.log('[SYNC-PULL] BLOCKED: refusing to overwrite finalised record id=' + local.id +
         ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
+      recordSyncConflict(local.id, local, remote, 'protect_finalised');
+      conflicts++;
       continue;
     }
 
@@ -1568,12 +1721,11 @@ async function syncPull(opts) {
 
     if (remoteNewer) {
       if (local.sync_dirty === 1) {
-        const existing = dbGet('SELECT data FROM attendances WHERE id=?', [local.id]);
-        db.run(
-          'INSERT INTO audit_log (attendance_id, action, previous_snapshot, timestamp, user_note) VALUES (?,?,?,?,?)',
-          [local.id, 'sync_overwritten', existing ? existing.data : null, new Date().toISOString(), 'Local changes overwritten by newer remote version']
-        );
+        recordSyncConflict(local.id, local, remote, 'preserve_local_dirty');
+        conflicts++;
+        continue;
       }
+      clearOpenSyncConflicts(local.id, 'remote_applied');
       dbRun(
         `UPDATE attendances SET data=?, status=?, updated_at=?, deleted_at=?, deletion_reason=?,
          client_name=?, station_name=?, dscc_ref=?, attendance_date=?,
@@ -1593,10 +1745,10 @@ async function syncPull(opts) {
     setLastSyncTimestamp(resp.serverTime);
   }
 
-  if (merged > 0) {
+  if (merged > 0 || conflicts > 0) {
     saveDb();
   }
-  return { pulled: merged };
+  return { pulled: merged, conflicts };
 }
 
 let _syncWorker = null;
@@ -1615,6 +1767,7 @@ function getSyncWorker() {
       httpPost: (url, body, opts) => httpPost(url, body, { ...opts, timeout: opts && opts.timeout || 8000 }),
       httpGetWithTimeout,
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
+      resolveSyncConflictsForRecord: (recordId, resolutionNote) => clearOpenSyncConflicts(Number(recordId), resolutionNote),
       onStatusChange: () => {},
       sendToRenderer: (channel, data) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data); },
     });
@@ -1749,6 +1902,152 @@ function createWindow() {
 
               function log(msg) { results.push(msg); console.log('[TEST] ' + msg); }
               function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+              function isViewActive(id) {
+                var el = document.getElementById(id);
+                return !!(el && el.classList.contains('active'));
+              }
+              async function waitFor(predicate, timeoutMs, label) {
+                var started = Date.now();
+                while ((Date.now() - started) < timeoutMs) {
+                  try {
+                    if (predicate()) return true;
+                  } catch (_) {}
+                  await sleep(100);
+                }
+                if (label) errors.push(label);
+                return false;
+              }
+              async function waitForView(id, timeoutMs, label) {
+                return waitFor(function() { return isViewActive(id); }, timeoutMs || 5000, label || ('Expected view active: ' + id));
+              }
+              function setInputValue(el, value) {
+                if (!el) return false;
+                try { el.focus(); } catch (_) {}
+                el.value = value;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                return true;
+              }
+              function parseRowData(row) {
+                if (!row) return {};
+                if (row.data && typeof row.data === 'object') return row.data;
+                if (row.data) {
+                  try { return JSON.parse(row.data); } catch (_) {}
+                }
+                return {};
+              }
+              async function findSavedRecord(matchFn) {
+                if (!window.api || !window.api.attendanceListFull) return null;
+                var rows = await window.api.attendanceListFull();
+                return (rows || []).find(matchFn) || null;
+              }
+              async function saveExitToDraftAndWait() {
+                var saveExitBtn = document.getElementById('form-save-exit');
+                if (!saveExitBtn) return false;
+                saveExitBtn.click();
+                var modalOrHome = await waitFor(function() {
+                  return isViewActive('view-home') || !!document.getElementById('save-exit-draft');
+                }, 3000, 'Save & exit dialog did not appear');
+                if (!modalOrHome) return false;
+                if (isViewActive('view-home')) return true;
+                var draftBtn = document.getElementById('save-exit-draft');
+                if (!draftBtn) {
+                  errors.push('Save & exit draft option not found');
+                  return false;
+                }
+                draftBtn.click();
+                return waitForView('view-home', 10000, 'Save & exit did not return to home');
+              }
+              async function openListAndSearch(query) {
+                var viewAllBtn = document.getElementById('home-view-all');
+                if (viewAllBtn) {
+                  viewAllBtn.click();
+                } else if (gearBtn) {
+                  gearBtn.click();
+                  await sleep(200);
+                  var gearDd = document.getElementById('gear-dropdown');
+                  var recordsItem = gearDd ? gearDd.querySelector('[data-action="records"]') : null;
+                  if (recordsItem) recordsItem.click();
+                }
+                var listReady = await waitForView('view-list', 5000, 'List view not active');
+                if (!listReady) return false;
+                var search = document.getElementById('list-search');
+                if (!search) {
+                  errors.push('List search not found');
+                  return false;
+                }
+                setInputValue(search, query);
+                return waitFor(function() {
+                  return !!document.querySelector('#attendance-list li[data-id] .list-item-text');
+                }, 5000, 'List search returned no rows for: ' + query);
+              }
+              async function openFirstListResult() {
+                var item = document.querySelector('#attendance-list li[data-id] .list-item-text');
+                if (!item) {
+                  errors.push('No list item available to open');
+                  return false;
+                }
+                item.click();
+                return waitForView('view-form', 5000, 'Form view not active after opening list item');
+              }
+              async function clickPrimaryConfirm(timeoutMs) {
+                var shown = await waitFor(function() {
+                  return !!document.querySelector('.cn-confirm-overlay .btn.btn-primary');
+                }, timeoutMs || 4000, 'Confirmation dialog did not appear');
+                if (!shown) return false;
+                var okBtn = document.querySelector('.cn-confirm-overlay .btn.btn-primary');
+                if (!okBtn) {
+                  errors.push('Confirmation OK button not found');
+                  return false;
+                }
+                okBtn.click();
+                return true;
+              }
+              async function openRecordById(recordId, missingLabel) {
+                if (!recordId) {
+                  errors.push('Missing record id for reopen step');
+                  return false;
+                }
+                if (typeof openAttendance === 'function') {
+                  openAttendance(recordId);
+                  return waitForView('view-form', 5000, 'Form view not active after opening saved record');
+                }
+                var viewAllBtn = document.getElementById('home-view-all');
+                if (viewAllBtn) {
+                  viewAllBtn.click();
+                } else if (gearBtn) {
+                  gearBtn.click();
+                  await sleep(200);
+                  var gearDd = document.getElementById('gear-dropdown');
+                  var recordsItem = gearDd ? gearDd.querySelector('[data-action="records"]') : null;
+                  if (recordsItem) recordsItem.click();
+                }
+                var listReady = await waitForView('view-list', 5000, 'List view not active');
+                if (!listReady) return false;
+                var rowReady = await waitFor(function() {
+                  return !!document.querySelector('#attendance-list li[data-id="' + recordId + '"] .list-item-text');
+                }, 5000, missingLabel || ('Saved record not visible in list: ' + recordId));
+                if (!rowReady) return false;
+                document.querySelector('#attendance-list li[data-id="' + recordId + '"] .list-item-text').click();
+                return waitForView('view-form', 5000, 'Form view not active after opening saved record');
+              }
+              var testStamp = String(Date.now());
+              var qcExpected = {
+                forename: 'QCSmoke' + testStamp.slice(-5),
+                surname: 'User' + testStamp.slice(-6),
+                custody: 'CU/' + testStamp.slice(-6),
+                notes: 'Smoke QC note ' + testStamp,
+                firmName: 'Smoke Firm ' + testStamp.slice(-6),
+                firmContact: 'QC Contact ' + testStamp.slice(-4),
+                firmPhone: '07700 9' + testStamp.slice(-6),
+                firmEmail: 'qc' + testStamp.slice(-5) + '@example.com'
+              };
+              var attExpected = {
+                surname: 'Stress' + testStamp.slice(-6),
+                forename: 'Bot' + testStamp.slice(-5)
+              };
+              var qcRecordId = null;
+              var attendanceRecordId = null;
 
               /* 1. Basic checks — home view is now the landing view */
               if (document.getElementById('splash')) { errors.push('Splash still present'); }
@@ -1780,9 +2079,9 @@ function createWindow() {
               var netText = document.getElementById('net-status-text');
               var backupText = document.getElementById('backup-status-text');
               if (!netText) errors.push('Footer: net-status-text missing');
-              else if (netText.textContent.indexOf('Internet') < 0) errors.push('Footer: net status text unexpected: ' + netText.textContent);
+              else if (!/^(Online|Offline|Internet: Connected|Internet: Not connected)$/.test((netText.textContent || '').trim())) errors.push('Footer: net status text unexpected: ' + netText.textContent);
               if (!backupText) errors.push('Footer: backup-status-text missing');
-              else if (backupText.textContent.indexOf('Auto backup') < 0) errors.push('Footer: backup text unexpected: ' + backupText.textContent);
+              else if (!/(backup|local only)/i.test((backupText.textContent || '').trim())) errors.push('Footer: backup text unexpected: ' + backupText.textContent);
               log('1f. Footer status text OK');
 
               /* 2. Test New Attendance from home card */
@@ -1818,12 +2117,8 @@ function createWindow() {
               /* 3. Save & exit returns to home */
               var saveExit0 = document.getElementById('form-save-exit');
               if (saveExit0) {
-                saveExit0.click();
-                await sleep(1000);
-                if (document.getElementById('view-home')?.classList.contains('active')) {
+                if (await saveExitToDraftAndWait()) {
                   log('3. Save & exit returns to home');
-                } else {
-                  errors.push('Save & exit did not return to home');
                 }
               }
 
@@ -1959,12 +2254,16 @@ function createWindow() {
                     var detailsEl = document.getElementById('support-faq-details');
                     if (detailsEl && !detailsEl.open) { detailsEl.setAttribute('open', ''); await sleep(100); }
                     var supportFaqLinks = document.querySelectorAll('.support-faq-link');
-                    if (supportFaqLinks.length >= 4) {
+                    var supportUrls = Array.from(supportFaqLinks).map(function(btn) { return btn.dataset.url || ''; });
+                    var missingSupportUrls = ['https://www.custodynote.com/support', 'https://www.custodynote.com/faq', 'https://www.custodynote.com/contact'].filter(function(url) {
+                      return supportUrls.indexOf(url) < 0;
+                    });
+                    if (supportFaqLinks.length >= 3 && !missingSupportUrls.length) {
                       supportFaqLinks[0].click();
                       await sleep(150);
                       log('12b. support-faq-link clicked (Open forum)');
                     } else {
-                      errors.push('support-faq-link buttons not found or wrong count: ' + supportFaqLinks.length);
+                      errors.push('support-faq-link buttons missing expected destinations: ' + supportUrls.join(', '));
                     }
                     var usefulLinks = document.querySelectorAll('.useful-link-btn');
                     var supportLink = Array.from(usefulLinks).find(function(a){ return (a.dataset.extUrl || a.href || '').indexOf('support') >= 0; });
@@ -2019,28 +2318,90 @@ function createWindow() {
                 var fn = document.getElementById('qc-forename');
                 var sn = document.getElementById('qc-surname');
                 var off = document.getElementById('qc-offence');
-                if (fn) fn.value = 'Test';
-                if (sn) sn.value = 'User';
-                if (off) off.value = 'Theft';
+                if (fn) setInputValue(fn, qcExpected.forename);
+                if (sn) setInputValue(sn, qcExpected.surname);
+                if (off) setInputValue(off, 'Theft');
+                if (off) {
+                  var offenceShown = await waitFor(function() {
+                    return !!document.querySelector('.offence-autocomplete-dropdown.open .offence-autocomplete-option');
+                  }, 3000, 'Quick Capture offence suggestions did not appear');
+                  if (offenceShown) {
+                    document.querySelector('.offence-autocomplete-dropdown.open .offence-autocomplete-option').dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                    log('15a. Quick Capture offence autocomplete shows suggestions');
+                  }
+                }
                 var refName = document.getElementById('qc-referral-name');
                 var refPhone = document.getElementById('qc-referral-phone');
                 var oic = document.getElementById('qc-oic-name');
                 var custody = document.getElementById('qc-custody-number');
                 var notes = document.getElementById('qc-notes');
-                if (refName) refName.value = 'Jane Smith';
-                if (refPhone) refPhone.value = '07700 900123';
-                if (oic) oic.value = 'DC Jones';
-                if (custody) custody.value = 'CU/99999';
-                if (notes) notes.value = 'Test notes from stress test';
+                if (refName) setInputValue(refName, 'Jane Smith');
+                if (refPhone) setInputValue(refPhone, '07700 900123');
+                if (oic) setInputValue(oic, 'DC Jones');
+                if (custody) setInputValue(custody, qcExpected.custody);
+                if (notes) setInputValue(notes, qcExpected.notes);
+                var qcAddFirmBtn = document.getElementById('qc-firm-add-btn');
+                if (qcAddFirmBtn) {
+                  qcAddFirmBtn.click();
+                  await sleep(150);
+                  setInputValue(document.getElementById('qc-new-firm-name'), qcExpected.firmName);
+                  setInputValue(document.getElementById('qc-new-firm-contact'), qcExpected.firmContact);
+                  setInputValue(document.getElementById('qc-new-firm-phone'), qcExpected.firmPhone);
+                  setInputValue(document.getElementById('qc-new-firm-email'), qcExpected.firmEmail);
+                  var qcAddFirmConfirm = document.getElementById('qc-add-firm-btn');
+                  if (qcAddFirmConfirm) {
+                    qcAddFirmConfirm.click();
+                    var firmAdded = await waitFor(function() {
+                      var fid = document.getElementById('qc-firm');
+                      return !!(fid && fid.value);
+                    }, 5000, 'Quick Capture new firm was not saved');
+                    if (firmAdded) log('15aa. Quick Capture new firm saved and selected');
+                  }
+                }
 
                 var qcSave = document.getElementById('qc-save');
                 if (qcSave) {
                   qcSave.click();
-                  await sleep(1000);
-                  if (document.getElementById('view-home')?.classList.contains('active')) {
+                  if (await waitForView('view-home', 8000, 'QC save: did not return to home')) {
                     log('15. QC save draft works (all new fields present and filled)');
-                  } else {
-                    errors.push('QC save: did not return to home');
+                    var qcRow = await findSavedRecord(function(r) {
+                      var d = parseRowData(r);
+                      return d.surname === qcExpected.surname && d.forename === qcExpected.forename;
+                    });
+                    if (qcRow) {
+                      qcRecordId = qcRow.id;
+                      log('15b. Quick Capture record persisted to database');
+                    } else {
+                      errors.push('Quick Capture record not found after save');
+                    }
+                    if (window.api && window.api.firmsList) {
+                      var qcFirmRows = await window.api.firmsList();
+                      var savedFirm = (qcFirmRows || []).find(function(f) { return f.name === qcExpected.firmName; });
+                      if (savedFirm &&
+                          savedFirm.contact_name === qcExpected.firmContact &&
+                          savedFirm.contact_phone === qcExpected.firmPhone &&
+                          savedFirm.contact_email === qcExpected.firmEmail) {
+                        log('15bb. Quick Capture firm contact details persisted to database');
+                      } else {
+                        errors.push('Quick Capture firm details did not persist to database');
+                      }
+                    }
+                    if (await openRecordById(qcRecordId, 'Quick Capture saved record not visible in list')) {
+                      var qcSurnameField = document.querySelector('[data-field="surname"]');
+                      var qcForenameField = document.querySelector('[data-field="forename"]');
+                      var qcDbRow = qcRecordId && window.api && window.api.attendanceGet ? await window.api.attendanceGet(qcRecordId) : null;
+                      var qcDbData = parseRowData(qcDbRow);
+                      if (qcSurnameField && qcForenameField &&
+                          qcSurnameField.value === qcExpected.surname &&
+                          qcForenameField.value === qcExpected.forename &&
+                          qcDbData.custodyNumber === qcExpected.custody &&
+                          qcDbData.arrivalNotes === qcExpected.notes) {
+                        log('15c. Quick Capture record re-opened with saved values intact');
+                      } else {
+                        errors.push('Quick Capture persisted values did not match after re-open');
+                      }
+                      await saveExitToDraftAndWait();
+                    }
                   }
                 }
               }
@@ -2049,11 +2410,8 @@ function createWindow() {
               var viewAllBtn = document.getElementById('home-view-all');
               if (viewAllBtn) {
                 viewAllBtn.click();
-                await sleep(500);
-                if (document.getElementById('view-list')?.classList.contains('active')) {
+                if (await waitForView('view-list', 5000, 'View All did not navigate to list')) {
                   log('16a. View All navigates to list');
-                } else {
-                  errors.push('View All did not navigate to list');
                 }
               }
               var filterDraft = document.querySelector('.filter-btn[data-filter="draft"]');
@@ -2081,10 +2439,10 @@ function createWindow() {
                 var formForename = document.querySelector('[data-field="forename"]');
                 var formDate = document.querySelector('[data-field="date"]');
                 var instrDt = document.querySelector('[data-field="instructionDateTime"]');
-                if (formSurname) { formSurname.value = 'StressTest'; formSurname.dispatchEvent(new Event('input', { bubbles: true })); }
-                if (formForename) { formForename.value = 'Bot'; formForename.dispatchEvent(new Event('input', { bubbles: true })); }
-                if (formDate) { formDate.value = new Date().toISOString().slice(0, 10); formDate.dispatchEvent(new Event('input', { bubbles: true })); }
-                if (instrDt) { instrDt.value = new Date().toISOString().slice(0, 16); instrDt.dispatchEvent(new Event('input', { bubbles: true })); }
+                if (formSurname) setInputValue(formSurname, attExpected.surname);
+                if (formForename) setInputValue(formForename, attExpected.forename);
+                if (formDate) setInputValue(formDate, new Date().toISOString().slice(0, 10));
+                if (instrDt) setInputValue(instrDt, new Date().toISOString().slice(0, 16));
                 log('17. New Attendance opened, minimal data filled');
               }
 
@@ -2105,18 +2463,62 @@ function createWindow() {
                 }
               }
 
-              /* 19. Save & exit returns to home */
-              var saveExit = document.getElementById('form-save-exit');
-              if (saveExit) {
-                saveExit.click();
-                await sleep(1000);
-                if (document.getElementById('view-home')?.classList.contains('active')) {
-                  log('19. New Attendance save & exit works');
+              /* 19. Save draft, reopen, and finalise */
+              if (window.api && typeof getFormData === 'function') {
+                try {
+                  var attDraftId = await window.api.attendanceSave({ id: currentAttendanceId || null, data: getFormData(), status: 'draft' });
+                  if (attDraftId) {
+                    attendanceRecordId = attDraftId;
+                    if (typeof showView === 'function') showView('home');
+                    await waitForView('view-home', 5000, 'Attendance draft save did not return to home');
+                    log('19. Attendance draft save works');
+                  } else {
+                    errors.push('Attendance draft save did not return an id');
+                  }
+                } catch (e) {
+                  errors.push('Attendance draft save failed: ' + (e && e.message ? e.message : e));
+                }
+                var attRow = await findSavedRecord(function(r) {
+                  var d = parseRowData(r);
+                  return d.surname === attExpected.surname && d.forename === attExpected.forename;
+                });
+                if (attRow) {
+                  attendanceRecordId = attRow.id;
+                  log('19b. Attendance draft persisted to database');
                 } else {
-                  errors.push('New Attendance: did not return to home after save');
+                  errors.push('Attendance draft record not found after save');
+                }
+                if (await openRecordById(attendanceRecordId, 'Attendance saved record not visible in list')) {
+                  var reSurname = document.querySelector('[data-field="surname"]');
+                  var reForename = document.querySelector('[data-field="forename"]');
+                  if (reSurname && reForename &&
+                      reSurname.value === attExpected.surname &&
+                      reForename.value === attExpected.forename) {
+                    log('19c. Attendance draft re-opened with saved values intact');
+                  } else {
+                    errors.push('Attendance draft values did not persist after re-open');
+                  }
+                  var formFinalise = document.getElementById('form-finalise') || document.getElementById('form-finalise-bar');
+                  if (formFinalise || typeof validateBeforeFinalise === 'function') {
+                    if (formFinalise) formFinalise.click();
+                    else validateBeforeFinalise();
+                    if (await clickPrimaryConfirm(4000)) {
+                      var finalisedList = await waitForView('view-list', 12000, 'Finalise did not return to list view');
+                      if (finalisedList) {
+                        var finalisedRow = attendanceRecordId && window.api && window.api.attendanceGet ? await window.api.attendanceGet(attendanceRecordId) : null;
+                        if (finalisedRow && finalisedRow.status === 'finalised') {
+                          log('19d. Attendance finalise persisted finalised status');
+                        } else {
+                          errors.push('Attendance finalise did not persist finalised status');
+                        }
+                      }
+                    }
+                  } else {
+                    errors.push('form-finalise button not found after re-open');
+                  }
                 }
               } else {
-                errors.push('form-save-exit button not found');
+                errors.push('Attendance draft save helpers not available');
               }
 
               /* 20. Telephone Advice Call from home card */
@@ -2138,11 +2540,20 @@ function createWindow() {
                   } else {
                     errors.push('Telephone form: DSCC field missing');
                   }
+                  var telNext = document.getElementById('form-next');
+                  if (telNext) {
+                    telNext.click();
+                    await sleep(350);
+                  }
                   var telAdviceField = document.querySelector('[data-field="telephoneAdviceSummary"]');
                   if (telAdviceField) {
                     log('20d. Telephone advice summary field present');
                   } else {
                     errors.push('Telephone form: telephoneAdviceSummary field missing');
+                  }
+                  if (telNext) {
+                    var telPrev = document.getElementById('form-prev');
+                    if (telPrev) { telPrev.click(); await sleep(250); }
                   }
                   var firstTitle = document.getElementById('form-page-title');
                   if (firstTitle && firstTitle.textContent.includes('Call Details')) {
@@ -2150,7 +2561,7 @@ function createWindow() {
                   } else {
                     errors.push('Telephone form: first section title unexpected: ' + (firstTitle ? firstTitle.textContent : 'missing'));
                   }
-                  var progDots = document.querySelectorAll('.prog-dot');
+                  var progDots = document.querySelectorAll('#section-progress-bar .prog-dot');
                   if (progDots.length === 4) {
                     log('20f. Progress bar shows 4 dots');
                   } else {
@@ -2163,7 +2574,7 @@ function createWindow() {
 
               /* 21. Navigate back, test LAA forms via gear menu */
               var saveExit2 = document.getElementById('form-save-exit');
-              if (saveExit2) { saveExit2.click(); await sleep(800); }
+              if (saveExit2) { await saveExitToDraftAndWait(); }
               if (gearBtn) {
                 gearBtn.click();
                 await sleep(200);
@@ -2218,7 +2629,7 @@ function createWindow() {
                   }
                 }
                 var saveExit3 = document.getElementById('form-save-exit');
-                if (saveExit3) { saveExit3.click(); await sleep(800); }
+                if (saveExit3) { await saveExitToDraftAndWait(); }
               }
 
               /* 23. Verify official PDF API is available */
@@ -2260,11 +2671,50 @@ function createWindow() {
               } else {
                 errors.push('printPdfFile API not available');
               }
+              if (window.api && typeof window.api.printToPdf === 'function') {
+                try {
+                  var smokePdf = await window.api.printToPdf({
+                    html: '<html><body><h1>Custody Note Smoke</h1><p>' + testStamp + '</p></body></html>',
+                    filename: 'custody-note-smoke-' + testStamp + '.pdf'
+                  });
+                  if (smokePdf && /\.pdf$/i.test(smokePdf)) {
+                    log('25c. printToPdf generated a PDF file');
+                  } else {
+                    errors.push('printToPdf did not return a PDF path');
+                  }
+                } catch (e) {
+                  errors.push('printToPdf failed: ' + (e && e.message ? e.message : e));
+                }
+              } else {
+                errors.push('printToPdf API not available');
+              }
 
               /* 26. Global search bar exists */
               var globalSearch = document.getElementById('global-search');
               if (!globalSearch) errors.push('Global search bar missing');
               else log('26. Global search bar present');
+
+              /* 27. Backup status and local backup listing are available */
+              if (window.api && typeof window.api.backupStatus === 'function' && typeof window.api.localBackupList === 'function') {
+                try {
+                  var backupSnapshot = await window.api.backupStatus();
+                  if (backupSnapshot && backupSnapshot.state) {
+                    log('27. Backup status API returned current state');
+                  } else {
+                    errors.push('Backup status did not return a valid state');
+                  }
+                  var backupList = await window.api.localBackupList();
+                  if (backupList && backupList.ok && backupList.files && backupList.files.length) {
+                    log('27b. Local backup list returned backups');
+                  } else {
+                    errors.push('Local backup list did not return any backups');
+                  }
+                } catch (e) {
+                  errors.push('Backup flow failed: ' + (e && e.message ? e.message : e));
+                }
+              } else {
+                errors.push('Backup APIs not available');
+              }
 
               /* Summary */
               log('--- RESULTS ---');
@@ -2551,6 +3001,7 @@ async function validateLicenceOnline(key, machineId) {
       isTrial: !!resp.isTrial,
       offline: false,
       serverStatus: resp.status || null,
+      entitlements: resp.entitlements || null,
     };
   } catch (e) {
     return { valid: null, offline: true, message: 'Could not reach validation server: ' + e.message, serverStatus: null };
@@ -2558,29 +3009,35 @@ async function validateLicenceOnline(key, machineId) {
 }
 
 function computeLicenceStatus(data) {
-  if (!data || !data.key) return { status: 'none', message: 'No licence activated' };
+  const noAddons = { quickfile: false, emailAddon: false };
+  if (!data || !data.key) return { status: 'none', message: 'No licence activated', addons: noAddons };
+  const isAddonValid = (exp) => exp && new Date(exp).getTime() > Date.now();
+  const addons = {
+    quickfile: isAddonValid(data.entitlements?.quickfile?.expiresAt),
+    emailAddon: isAddonValid(data.entitlements?.emailAddon?.expiresAt),
+  };
   if (data.status === 'revoked' || data.status === 'invalid') {
-    return { status: 'revoked', message: 'Licence has been revoked. Please enter a new licence key or contact support.', key: data.key, email: data.email };
+    return { status: 'revoked', message: 'Licence has been revoked. Please enter a new licence key or contact support.', key: data.key, email: data.email, addons, entitlements: data.entitlements || null };
   }
   const now = Date.now();
   if (data.expiresAt) {
     const expiryMs = new Date(data.expiresAt).getTime();
     const daysRemaining = Math.ceil((expiryMs - now) / (24 * 60 * 60 * 1000));
     if (expiryMs < now) {
-      return { status: 'expired', message: 'Your subscription expired on ' + new Date(data.expiresAt).toLocaleDateString('en-GB') + '. Please renew to continue using Custody Note.', key: data.key, email: data.email, daysRemaining: 0, isTrial: !!data.isTrial, trialDays: TRIAL_DAYS };
+      return { status: 'expired', message: 'Your subscription expired on ' + new Date(data.expiresAt).toLocaleDateString('en-GB') + '. Please renew to continue using Custody Note.', key: data.key, email: data.email, daysRemaining: 0, isTrial: !!data.isTrial, trialDays: TRIAL_DAYS, addons, entitlements: data.entitlements || null };
     }
     if (daysRemaining <= 7) {
-      return { status: 'expiring_soon', message: 'Your ' + (data.isTrial ? 'trial' : 'subscription') + ' expires in ' + daysRemaining + ' day' + (daysRemaining !== 1 ? 's' : '') + '. Please renew to avoid interruption.', key: data.key, email: data.email || '', expiresAt: data.expiresAt, activatedAt: data.activatedAt, lastValidated: data.lastValidated, daysRemaining: daysRemaining, isTrial: !!data.isTrial, trialDays: TRIAL_DAYS };
+      return { status: 'expiring_soon', message: 'Your ' + (data.isTrial ? 'trial' : 'subscription') + ' expires in ' + daysRemaining + ' day' + (daysRemaining !== 1 ? 's' : '') + '. Please renew to avoid interruption.', key: data.key, email: data.email || '', expiresAt: data.expiresAt, activatedAt: data.activatedAt, lastValidated: data.lastValidated, daysRemaining: daysRemaining, isTrial: !!data.isTrial, trialDays: TRIAL_DAYS, addons, entitlements: data.entitlements || null };
     }
   }
   if (data.lastValidated) {
     const sinceLast = now - new Date(data.lastValidated).getTime();
     const graceMs = LICENCE_GRACE_DAYS * 24 * 60 * 60 * 1000;
     if (sinceLast > graceMs) {
-      return { status: 'grace_expired', message: 'Licence could not be verified for ' + LICENCE_GRACE_DAYS + ' days. Please connect to the internet.', key: data.key, email: data.email };
+      return { status: 'grace_expired', message: 'Licence could not be verified for ' + LICENCE_GRACE_DAYS + ' days. Please connect to the internet.', key: data.key, email: data.email, addons, entitlements: data.entitlements || null };
     }
   }
-  const result = { status: 'active', key: data.key, email: data.email || '', expiresAt: data.expiresAt || null, activatedAt: data.activatedAt, lastValidated: data.lastValidated, isTrial: !!data.isTrial, trialDays: data.isTrial ? TRIAL_DAYS : undefined };
+  const result = { status: 'active', key: data.key, email: data.email || '', expiresAt: data.expiresAt || null, activatedAt: data.activatedAt, lastValidated: data.lastValidated, isTrial: !!data.isTrial, trialDays: data.isTrial ? TRIAL_DAYS : undefined, addons, entitlements: data.entitlements || null };
   if (data.expiresAt) {
     result.daysRemaining = Math.ceil((new Date(data.expiresAt).getTime() - now) / (24 * 60 * 60 * 1000));
   }
@@ -2625,6 +3082,7 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     machineId,
     status: 'active',
     isTrial: result.isTrial === true,
+    entitlements: result.entitlements || null,
   };
   writeLicenceData(data);
   checkCloudBackupEntitlement().catch(() => {});
@@ -2642,13 +3100,16 @@ ipcMain.handle('licence:validate', async () => {
     if (result.email) data.email = result.email;
     if (result.isTrial !== undefined) data.isTrial = !!result.isTrial;
     if (result.serverStatus) data.status = result.serverStatus;
+    if (result.entitlements !== undefined) data.entitlements = result.entitlements;
     writeLicenceData(data);
   } else if (result.valid === false) {
     const serverStatus = result.serverStatus || 'revoked';
     if (serverStatus === 'expired') data.expiresAt = result.expiresAt || data.expiresAt;
     data.status = serverStatus;
     writeLicenceData(data);
-    return { valid: false, status: { status: serverStatus, message: result.message || 'Licence is not valid' } };
+    const status = computeLicenceStatus(data);
+    status.message = result.message || status.message || 'Licence is not valid';
+    return { valid: false, status };
   }
   return { valid: result.valid !== false, status: computeLicenceStatus(data) };
 });
@@ -2984,30 +3445,28 @@ ipcMain.handle('attendance-list-full', () => {
 });
 
 ipcMain.handle('attendance-home-stats', () => {
-  const rows = dbAll(
-    'SELECT id, created_at, updated_at, client_name, attendance_date, status, data FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC'
+  return dbAll(
+    `SELECT
+       id,
+       created_at,
+       updated_at,
+       client_name,
+       attendance_date,
+       status,
+       COALESCE(json_extract(data, '$.clientSig'), '') AS clientSig,
+       COALESCE(json_extract(data, '$.feeEarnerSig'), '') AS feeEarnerSig,
+       COALESCE(json_extract(data, '$.firmId'), '') AS firmId,
+       COALESCE(json_extract(data, '$.outcomeDecision'), '') AS outcomeDecision,
+       COALESCE(json_extract(data, '$.caseOutcomeStatus'), '') AS caseOutcomeStatus,
+       COALESCE(json_extract(data, '$.totalTimeClaimed'), '') AS totalTimeClaimed,
+       COALESCE(json_extract(data, '$.totalHoursWorked'), '') AS totalHoursWorked,
+       COALESCE(json_extract(data, '$.forename'), '') AS forename,
+       COALESCE(json_extract(data, '$.surname'), '') AS surname
+     FROM attendances
+     WHERE deleted_at IS NULL
+       AND archived_at IS NULL
+     ORDER BY updated_at DESC`
   );
-  return rows.map(r => {
-    let clientSig, feeEarnerSig, firmId, caseOutcomeStatus, totalTimeClaimed, totalHoursWorked, forename, surname;
-    if (r.data) {
-      try {
-        const d = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
-        clientSig = d.clientSig || '';
-        feeEarnerSig = d.feeEarnerSig || '';
-        firmId = d.firmId || '';
-        caseOutcomeStatus = d.caseOutcomeStatus || '';
-        totalTimeClaimed = d.totalTimeClaimed || '';
-        totalHoursWorked = d.totalHoursWorked || '';
-        forename = d.forename || '';
-        surname = d.surname || '';
-      } catch (_) {}
-    }
-    return {
-      id: r.id, created_at: r.created_at, updated_at: r.updated_at,
-      client_name: r.client_name, attendance_date: r.attendance_date, status: r.status,
-      data: { clientSig, feeEarnerSig, firmId, caseOutcomeStatus, totalTimeClaimed, totalHoursWorked, forename, surname }
-    };
-  });
 });
 
 ipcMain.handle('attendance-search', (_, params) => {
@@ -3286,21 +3745,19 @@ ipcMain.handle('attendance-unarchive', (_, id) => {
 ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
   if (!id) return false;
   const existing = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
-  if (existing && existing.status === 'finalised') {
+  if (existing) {
     const now = new Date().toISOString();
     const nv = (existing.sync_version || 1) + 1;
     dbRun('UPDATE attendances SET deleted_at=?, deletion_reason=?, sync_dirty=1, sync_version=? WHERE id=?', [now, reason || '', nv, id]);
     db.run(
       'INSERT INTO audit_log (attendance_id, action, user_note, timestamp) VALUES (?,?,?,?)',
-      [id, 'soft_deleted', reason || '', now]
+      [id, existing.status === 'finalised' ? 'soft_deleted' : 'draft_soft_deleted', reason || '', now]
     );
     markDbDirty();
     enqueueSyncForRecord(id);
     return { soft: true };
   }
-  dbRun('DELETE FROM attendances WHERE id = ?', [id]);
-  markDbDirty();
-  return { hard: true };
+  return false;
 });
 
 ipcMain.handle('audit-log-get', (_, attendanceId) => {
@@ -3319,6 +3776,11 @@ ipcMain.handle('audit-log-get-history', (_, attendanceId) => {
 
 ipcMain.handle('attendance-export-csv', (_, { fromDate, toDate }) => {
   try {
+    function csvSafe(val) {
+      let s = String(val || '');
+      if (/^[=+\-@]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
     let where = "WHERE deleted_at IS NULL AND archived_at IS NULL";
     const params = [];
     if (fromDate) { where += " AND attendance_date >= ?"; params.push(fromDate); }
@@ -3328,7 +3790,7 @@ ipcMain.handle('attendance-export-csv', (_, { fromDate, toDate }) => {
       params
     );
     const headers = ['ID','Date','Client Name','Station','DSCC Ref','Status','Work Type','Firm','Matter Type','DSCC/UFN','Court Date'];
-    const csvRows = [headers.map(h => '"' + h + '"').join(',')];
+    const csvRows = [headers.map(csvSafe).join(',')];
     rows.forEach(function(r) {
       let d = {};
       try { d = JSON.parse(r.data || '{}'); } catch (_) {}
@@ -3345,7 +3807,7 @@ ipcMain.handle('attendance-export-csv', (_, { fromDate, toDate }) => {
         d.dsccRef || '',
         d.courtDate || '',
       ];
-      csvRows.push(cols.map(v => '"' + String(v || '').replace(/"/g, '""') + '"').join(','));
+      csvRows.push(cols.map(csvSafe).join(','));
     });
     return { ok: true, csv: csvRows.join('\r\n'), count: rows.length };
   } catch (e) {
@@ -3353,15 +3815,23 @@ ipcMain.handle('attendance-export-csv', (_, { fromDate, toDate }) => {
   }
 });
 
-ipcMain.handle('supervisor-approve', (_, { id, note }) => {
+ipcMain.handle('supervisor-approve', (_, { id, note, credential }) => {
+  const auth = verifySensitiveActionCredential(credential, 'supervisor-approval');
+  if (!auth.ok) throw new Error(auth.error);
+  const existing = dbGet('SELECT sync_version FROM attendances WHERE id=?', [id]);
+  if (!existing) throw new Error('Record not found');
   const now = new Date().toISOString();
-  dbRun('UPDATE attendances SET supervisor_approved_at=?, supervisor_note=? WHERE id=?', [now, note || '', id]);
+  const nextVersion = (existing.sync_version || 1) + 1;
+  dbRun(
+    'UPDATE attendances SET supervisor_approved_at=?, supervisor_note=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?',
+    [now, note || '', now, nextVersion, id]
+  );
   db.run(
     'INSERT INTO audit_log (attendance_id, action, user_note, timestamp) VALUES (?,?,?,?)',
     [id, 'supervisor_approved', note || '', now]
   );
-  markDbDirty();
-  return true;
+  enqueueSyncForRecord(id);
+  return { ok: true, credentialType: auth.credentialType };
 });
 
 ipcMain.handle('stations-list', () => {
@@ -3638,8 +4108,10 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id)");
     db.run("CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty)");
     db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
+    db.run(`CREATE TABLE IF NOT EXISTS sync_conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, attendance_id INTEGER, sync_id TEXT, reason TEXT, local_version INTEGER DEFAULT 0, remote_version INTEGER DEFAULT 0, local_updated_at TEXT, remote_updated_at TEXT, remote_status TEXT, local_snapshot TEXT, remote_snapshot TEXT, created_at TEXT DEFAULT (datetime('now')), resolved_at TEXT DEFAULT NULL, resolution_note TEXT DEFAULT '')`);
     backfillSyncIds();
     dbRun("UPDATE attendances SET sync_dirty=1");
+    rebuildSyncQueueForDirtyRecords();
     dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
     saveDb();
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
@@ -3702,8 +4174,10 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id)");
     db.run("CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty)");
     db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
+    db.run(`CREATE TABLE IF NOT EXISTS sync_conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, attendance_id INTEGER, sync_id TEXT, reason TEXT, local_version INTEGER DEFAULT 0, remote_version INTEGER DEFAULT 0, local_updated_at TEXT, remote_updated_at TEXT, remote_status TEXT, local_snapshot TEXT, remote_snapshot TEXT, created_at TEXT DEFAULT (datetime('now')), resolved_at TEXT DEFAULT NULL, resolution_note TEXT DEFAULT '')`);
     backfillSyncIds();
     dbRun("UPDATE attendances SET sync_dirty=1");
+    rebuildSyncQueueForDirtyRecords();
     dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
     saveDb();
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
@@ -3735,6 +4209,7 @@ ipcMain.handle('sync-status', () => {
   const queuePending = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing')");
   const queueFailed = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status='failed'");
   const queueBlocked = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status='blocked'");
+  const conflicts = dbGet("SELECT COUNT(*) as c FROM sync_conflicts WHERE resolved_at IS NULL");
   const totalCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const apiUrl = getSyncApiUrl();
   const diag = getSyncWorker() ? getSyncWorker().getDiagnostics() : {};
@@ -3753,6 +4228,7 @@ ipcMain.handle('sync-status', () => {
   const pendingCount = (queuePending ? queuePending.c : 0) || 0;
   const failedCount = (queueFailed ? queueFailed.c : 0) || 0;
   const blockedCount = (queueBlocked ? queueBlocked.c : 0) || 0;
+  const conflictCount = (conflicts ? conflicts.c : 0) || 0;
   const pending = pendingCount + failedCount + blockedCount;
   return {
     enabled: !!apiUrl,
@@ -3761,6 +4237,7 @@ ipcMain.handle('sync-status', () => {
     pendingChanges: pending,
     failedCount,
     blockedCount,
+    conflictCount,
     totalRecords: totalCount ? totalCount.c : 0,
     lastAttempts,
     connectivity: diag.connectivity,
@@ -3812,6 +4289,89 @@ ipcMain.handle('set-recovery-password', async (_, password) => {
 });
 
 ipcMain.handle('has-recovery-password', () => hasRecoveryPassword());
+
+function getSecurityCredentialStatus() {
+  const hasRecovery = hasRecoveryPassword();
+  const hasAdmin = adminAuth.hasAdminPassword(app);
+  if (hasRecovery) {
+    return {
+      canLock: true,
+      hasRecoveryPassword: true,
+      hasAdminPassword: hasAdmin,
+      preferred: 'recovery',
+      label: 'recovery password',
+    };
+  }
+  if (hasAdmin) {
+    return {
+      canLock: true,
+      hasRecoveryPassword: false,
+      hasAdminPassword: true,
+      preferred: 'admin',
+      label: 'admin password',
+    };
+  }
+  return {
+    canLock: false,
+    hasRecoveryPassword: false,
+    hasAdminPassword: false,
+    preferred: 'none',
+    label: 'password',
+  };
+}
+
+function verifySensitiveActionCredential(password, purpose) {
+  const credential = getSecurityCredentialStatus();
+  const value = typeof password === 'string' ? password : '';
+  const actionLabel = purpose === 'supervisor-approval' ? 'supervisor approval' : 'unlock';
+  if (!credential.canLock) {
+    return {
+      ok: false,
+      code: 'credential_not_configured',
+      credentialType: 'none',
+      error: `Set a recovery password or admin password in Settings before using ${actionLabel}.`,
+    };
+  }
+  if (!value) {
+    return {
+      ok: false,
+      code: 'missing_password',
+      credentialType: credential.preferred,
+      error: 'Enter your ' + credential.label + '.',
+    };
+  }
+  if (credential.hasRecoveryPassword) {
+    const recovered = tryRecoverMasterKey(value);
+    if (recovered) return { ok: true, credentialType: 'recovery' };
+  }
+  if (credential.hasAdminPassword) {
+    const adminResult = adminAuth.login(app, value);
+    if (adminResult && adminResult.ok) return { ok: true, credentialType: 'admin' };
+    if (adminResult && adminResult.error === 'Locked out') {
+      return {
+        ok: false,
+        code: 'locked_out',
+        credentialType: 'admin',
+        error: 'Admin login is temporarily locked. Try again later.',
+        retryAfter: adminResult.retryAfter || 0,
+      };
+    }
+  }
+  return {
+    ok: false,
+    code: 'invalid_password',
+    credentialType: credential.preferred,
+    error: credential.hasRecoveryPassword && credential.hasAdminPassword
+      ? 'Password did not match the recovery or admin credential.'
+      : 'Incorrect ' + credential.label + '.',
+  };
+}
+
+ipcMain.handle('session-lock-status', () => getSecurityCredentialStatus());
+
+ipcMain.handle('session-unlock', (_, password) => {
+  return verifySensitiveActionCredential(password, 'session-unlock');
+});
 
 ipcMain.handle('recover-key-from-cloud', async () => {
   const apiUrl = getManagedCloudApiUrl();
@@ -3992,10 +4552,12 @@ function insertImportedDraftAttendance(data) {
   }
 
   const now = new Date().toISOString();
-  const clientName = [data.surname || '', data.forename || ''].filter(Boolean).join(', ');
-  const stationName = data.policeStationName || '';
-  const dsccRef = data.dsccRef || '';
-  const attendanceDate = data.date || (data.instructionDateTime ? String(data.instructionDateTime).slice(0, 10) : '') || '';
+  const indexed = extractIndexedAttendanceFields(data);
+  const clientName = indexed.clientName;
+  const stationName = indexed.stationName;
+  const dsccRef = indexed.dsccRef;
+  const attendanceDate = indexed.attendanceDate;
+  const workType = data.workType || '';
 
   const dataStr = JSON.stringify(data);
 
@@ -4013,21 +4575,37 @@ function insertImportedDraftAttendance(data) {
   }
   if (!existingId) existingId = findExistingDraftIdByCaseKey(data);
   if (existingId) {
+    const existing = dbGet('SELECT sync_version, data FROM attendances WHERE id=?', [existingId]);
+    const nextVer = (existing && existing.sync_version || 1) + 1;
     dbRun(
-      'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=? WHERE id=?',
-      [dataStr, 'draft', now, clientName, stationName, dsccRef, attendanceDate, existingId]
+      'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
+      [dataStr, 'draft', now, clientName, stationName, dsccRef, attendanceDate, workType, nextVer, existingId]
+    );
+    db.run(
+      'INSERT INTO audit_log (attendance_id, action, previous_snapshot, timestamp, user_note) VALUES (?,?,?,?,?)',
+      [existingId, 'import_updated', existing && existing.data ? existing.data : null, now, 'Imported record merged into existing draft']
     );
     markDbDirty();
+    enqueueSyncForRecord(existingId);
     return existingId;
   }
 
+  const newSyncId = generateSyncId();
   dbRun(
-    'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date) VALUES (?,?,?,?,?,?,?)',
-    [dataStr, 'draft', now, clientName, stationName, dsccRef, attendanceDate]
+    'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date, work_type, sync_id, sync_dirty, sync_version) VALUES (?,?,?,?,?,?,?,?,?,1,1)',
+    [dataStr, 'draft', now, clientName, stationName, dsccRef, attendanceDate, workType, newSyncId]
   );
   markDbDirty();
   const r = dbGet('SELECT id FROM attendances ORDER BY id DESC LIMIT 1');
-  return r ? r.id : null;
+  const newId = r ? r.id : null;
+  if (newId) {
+    db.run(
+      'INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)',
+      [newId, 'import_created', now, 'Imported record created as draft']
+    );
+    enqueueSyncForRecord(newId);
+  }
+  return newId;
 }
 
 ipcMain.handle('import-record-from-file', async () => {
@@ -4451,5 +5029,204 @@ ipcMain.handle('laa-open-official-template', async (_, formType) => {
   } catch (err) {
     return { error: err.message || String(err) };
   }
+});
+
+/* ─── QuickFile API: import firms directory ─── */
+function getQuickFileAuth() {
+  const rows = dbAll('SELECT key, value FROM settings');
+  const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const accountNumber = (settings.quickfileAccountNumber || '').trim();
+  const apiKey = (settings.quickfileApiKey || '').trim();
+  const applicationId = (settings.quickfileAppId || '').trim();
+  if (!accountNumber || !apiKey || !applicationId) {
+    throw new Error('QuickFile not configured. Add account number, API key and application ID in Settings.');
+  }
+  const submissionNumber = 'cn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  const hashInput = accountNumber + apiKey + submissionNumber;
+  const md5Value = crypto.createHash('md5').update(hashInput, 'utf8').digest('hex').toLowerCase();
+  return { accountNumber, submissionNumber, md5Value, applicationId };
+}
+
+function quickFileRequest(apiPath, bodyContent) {
+  const auth = getQuickFileAuth();
+  const postData = JSON.stringify({
+    payload: {
+      Header: {
+        MessageType: 'Request',
+        SubmissionNumber: auth.submissionNumber,
+        Authentication: {
+          AccNumber: auth.accountNumber,
+          MD5Value: auth.md5Value,
+          ApplicationID: auth.applicationId,
+        },
+      },
+      Body: bodyContent,
+    },
+  });
+
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'api.quickfile.co.uk',
+        path: apiPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData, 'utf8'),
+        },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            if (json?.Errors) {
+              const errs = json.Errors.Error || json.Errors;
+              return reject(new Error(Array.isArray(errs) ? errs.join('; ') : String(errs)));
+            }
+            const rootKey = Object.keys(json).find((k) => typeof json[k] === 'object' && json[k]?.Header);
+            const msg = rootKey ? json[rootKey] : (json?.payload?.Message || json?.Message || json);
+            const header = msg?.Header;
+            if (header?.Status === 'Error') {
+              const errMsg = header?.StatusMessage || header?.ErrorMessage || msg?.Body?.ErrorMessage || 'Unknown QuickFile error';
+              return reject(new Error(String(errMsg)));
+            }
+            resolve(msg?.Body || {});
+          } catch (err) {
+            reject(err instanceof Error ? err : new Error(String(err)));
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.write(postData, 'utf8');
+    req.end();
+  });
+}
+
+function quickFileJoinAddress(parts) {
+  return parts.map((part) => String(part || '').trim()).filter(Boolean).join(', ');
+}
+
+function quickFileExtractAddress(client) {
+  if (!client || typeof client !== 'object') return '';
+  const candidates = [
+    client.Address,
+    client.InvoiceAddress,
+    client.DeliveryAddress,
+    client.PostalAddress,
+    client.PrimaryAddress,
+    client.AddressDetails,
+  ];
+  for (const address of candidates) {
+    if (!address) continue;
+    if (typeof address === 'string') {
+      const text = address.trim();
+      if (text) return text;
+      continue;
+    }
+    if (typeof address === 'object') {
+      const joined = quickFileJoinAddress([
+        address.Line1,
+        address.Line2,
+        address.Line3,
+        address.Line4,
+        address.Line5,
+        address.AddressLine1,
+        address.AddressLine2,
+        address.AddressLine3,
+        address.AddressLine4,
+        address.AddressLine5,
+        address.City,
+        address.Town,
+        address.County,
+        address.Postcode,
+        address.PostCode,
+        address.Zip,
+        address.Country,
+      ]);
+      if (joined) return joined;
+    }
+  }
+  return quickFileJoinAddress([
+    client.AddressLine1,
+    client.AddressLine2,
+    client.AddressLine3,
+    client.AddressLine4,
+    client.AddressLine5,
+    client.City,
+    client.Town,
+    client.County,
+    client.Postcode,
+    client.PostCode,
+    client.Zip,
+    client.Country,
+  ]);
+}
+
+function quickFileExtractRecords(body) {
+  const clientList = body.Record || body.Records || body.ClientDetails || body.Clients || [];
+  return Array.isArray(clientList) ? clientList : [clientList].filter(Boolean);
+}
+
+function quickFileNormaliseClient(client) {
+  const primary = client.PrimaryContact || client.Contact || {};
+  return {
+    clientId: client.ClientID || client.ClientId || '',
+    companyName: client.ClientName || client.CompanyName || client.Name || '',
+    contactName: (
+      client.ContactName ||
+      [primary.FirstName || client.ContactFirstName || '', primary.Surname || client.ContactLastName || ''].filter(Boolean).join(' ')
+    ).trim(),
+    email: client.Email || primary.Email || '',
+    telephone: client.Telephone || primary.Telephone || primary.Phone || '',
+    address: quickFileExtractAddress(client),
+  };
+}
+
+async function quickFileFetchAllClients() {
+  const pageSize = 200;
+  let offset = 0;
+  const clients = [];
+  while (true) {
+    const body = await quickFileRequest('/1_2/client/search', {
+      SearchParameters: {
+        ReturnCount: pageSize,
+        Offset: offset,
+        OrderResultsBy: 'CompanyName',
+        OrderDirection: 'ASC',
+      },
+    });
+    const records = quickFileExtractRecords(body);
+    clients.push(...records);
+    if (records.length < pageSize) break;
+    offset += pageSize;
+  }
+  return clients;
+}
+
+ipcMain.handle('quickfile-fetch-clients', async () => {
+  const records = await quickFileFetchAllClients();
+  const clients = records.map((client) => {
+    return quickFileNormaliseClient(client);
+  }).filter((client) => client.companyName);
+  return { clients };
+});
+
+ipcMain.handle('quickfile-test-connection', async () => {
+  const body = await quickFileRequest('/1_2/client/search', {
+    SearchParameters: {
+      ReturnCount: 1,
+      Offset: 0,
+      OrderResultsBy: 'CompanyName',
+      OrderDirection: 'ASC',
+    },
+  });
+  const records = quickFileExtractRecords(body);
+  return {
+    ok: true,
+    sampleCount: records.length,
+  };
 });
 

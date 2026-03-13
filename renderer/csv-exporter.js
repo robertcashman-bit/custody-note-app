@@ -6,6 +6,7 @@
 function csvSafe(val) {
   if (val == null) return '';
   var s = String(val);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
   if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
     return '"' + s.replace(/"/g, '""') + '"';
   }

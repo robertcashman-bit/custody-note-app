@@ -80,10 +80,11 @@ function refreshList() {
         ? '<button type="button" class="btn-list-action unarchive-btn" title="Restore from archive" data-id="' + r.id + '">Unarchive</button>'
         : '<button type="button" class="btn-list-action archive-btn" title="Archive this record" data-id="' + r.id + '">Archive</button>';
 
-      /* Officer Email Templates add-on — Email OIC button + Sent badge */
+      /* Officer Email Templates add-on — Email OIC button + Sent badge (gated on licence entitlement + user setting) */
       var emailOicBtn  = '';
       var oicSentBadge = '';
-      if (window._emailTemplatesAddonEnabled) {
+      var emailAddonEntitled = window._addons && window._addons.emailAddon && window._emailTemplatesAddonEnabled;
+      if (emailAddonEntitled) {
         emailOicBtn = '<button type="button" class="btn-list-action email-oic-btn" title="Email Officer in Charge" data-id="' + r.id + '">Email OIC</button>';
         if (d.officerEmailStatus === 'sent') {
           oicSentBadge = ' <span class="badge badge-oic-sent" title="OIC email sent on ' + esc(d.lastOfficerEmailSentDate ? new Date(d.lastOfficerEmailSentDate).toLocaleDateString('en-GB') : '') + '">&#9993; Sent</span>';
@@ -130,7 +131,7 @@ function refreshList() {
       } else if (!r.archived_at && li.querySelector('.archive-btn')) {
         li.querySelector('.archive-btn').addEventListener('click', function(e) { e.stopPropagation(); archiveAttendance(r.id, title); });
       }
-      if (window._emailTemplatesAddonEnabled && li.querySelector('.email-oic-btn')) {
+      if (emailAddonEntitled && li.querySelector('.email-oic-btn')) {
         li.querySelector('.email-oic-btn').addEventListener('click', (function(rowData, rowStatus) {
           return function(e) {
             e.stopPropagation();

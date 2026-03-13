@@ -214,12 +214,13 @@ describe('Performance — compact bottom bar', () => {
 
 describe('Voluntary form and outcome statuses', () => {
 
-  it('custody caseOutcomeStatus includes officer_to_notify and referred_to_cps', () => {
-    const custodyOutcome = appJsSource.match(/id:\s*'outcome'[\s\S]*?caseOutcomeStatus[\s\S]*?options:\s*\[([^\]]+)\]/);
+  it('custody outcomeDecision includes ongoing and referral options', () => {
+    const custodyOutcome = appJsSource.match(/id:\s*'outcome'[\s\S]*?outcomeDecision[\s\S]*?options:\s*\[([^\]]+)\]/);
     assert.ok(custodyOutcome, 'custody outcome section must exist');
     const opts = custodyOutcome[1];
-    assert.ok(opts.includes("'officer_to_notify'"), 'custody must include officer_to_notify');
-    assert.ok(opts.includes("'referred_to_cps'"), 'custody must include referred_to_cps');
+    assert.ok(opts.includes("'Ongoing / Unknown'"), 'custody must include Ongoing / Unknown');
+    assert.ok(opts.includes("'Officer to Notify'"), 'custody must include Officer to Notify');
+    assert.ok(opts.includes("'Referred to CPS'"), 'custody must include Referred to CPS');
   });
 
   it('voluntary form uses same section IDs as custody (not custom vol* IDs)', () => {
@@ -321,9 +322,39 @@ describe('Voluntary form and outcome statuses', () => {
     assert.ok(!volBlock.includes("'whatExplainedAfterInterview'"), 'must not have whatExplainedAfterInterview');
   });
 
-  it('no QuickFile references in settings HTML', () => {
-    assert.ok(!indexHtmlSource.includes('QuickFile'), 'index.html must not contain QuickFile');
-    assert.ok(!indexHtmlSource.includes('quickfile'), 'index.html must not contain quickfile');
+  it('settings and firms UI include QuickFile import controls', () => {
+    assert.ok(indexHtmlSource.includes('QuickFile Directory Import'), 'settings should include QuickFile credentials section');
+    assert.ok(indexHtmlSource.includes('setting-quickfile-account'), 'settings should include QuickFile account input');
+    assert.ok(indexHtmlSource.includes('setting-quickfile-apikey'), 'settings should include QuickFile API key input');
+    assert.ok(indexHtmlSource.includes('setting-quickfile-appid'), 'settings should include QuickFile application ID input');
+    assert.ok(indexHtmlSource.includes('btn-open-qf-settings'), 'firms view should include a QuickFile settings shortcut');
+    assert.ok(indexHtmlSource.includes('btn-test-qf-connection'), 'firms view should include QuickFile connection test button');
+    assert.ok(indexHtmlSource.includes('btn-import-qf-clients'), 'firms view should include QuickFile import button');
+    assert.ok(indexHtmlSource.includes('btn-resync-qf-clients'), 'firms view should include QuickFile re-sync button');
+    assert.ok(indexHtmlSource.includes('btn-save-test-qf'), 'settings should include a save and test QuickFile button');
+    assert.ok(indexHtmlSource.includes('btn-save-import-qf'), 'settings should include a save and import QuickFile button');
+    assert.ok(indexHtmlSource.includes('qf-last-import'), 'firms view should show last QuickFile import note');
+  });
+
+  it('QuickFile import maps address into firms', () => {
+    assert.ok(mainJsSource.includes('quickFileExtractAddress'), 'main process should extract QuickFile address data');
+    assert.ok(mainJsSource.includes('function quickFileFetchAllClients()'), 'main process should page through QuickFile client results');
+    assert.ok(mainJsSource.includes('ReturnCount: pageSize'), 'main process should request a supported QuickFile page size');
+    assert.ok(mainJsSource.includes('client.ClientName || client.CompanyName || client.Name'), 'QuickFile client mapping should support ClientName values');
+    assert.ok(mainJsSource.includes('address: quickFileExtractAddress(client)'), 'QuickFile client payload should include address');
+    assert.ok(appJsSource.includes('address: nextAddress'), 'firm import should save QuickFile address');
+  });
+
+  it('charged outcomes auto-copy offences into empty outcome charge fields', () => {
+    assert.ok(appJsSource.includes('function prefillOutcomeChargesFromOffences()'), 'charge prefill helper should exist');
+    assert.ok(appJsSource.includes("prefillOutcomeChargesFromOffences();"), 'charged outcome flow should call auto-prefill helper');
+    assert.ok(!appJsSource.includes("showConfirm('Pre-fill charges from offences recorded in Section 4?')"), 'charge prefill should no longer require a confirmation prompt');
+  });
+
+  it('bail outcome fields match disposal rules', () => {
+    assert.ok(appJsSource.includes("{ key: 'bailDate', label: 'Date to return', type: 'date', showIf: { field: 'outcomeDecision', value: 'Bail without charge' } }"), 'date to return should only show for bail without charge');
+    assert.ok(!appJsSource.includes("{ key: 'bailDate', label: 'Bail / Return Date', type: 'date', showIf: { field: 'outcomeDecision', value: 'Released Under Investigation' } }"), 'released under investigation should not show bail date');
+    assert.ok(appJsSource.includes("function isBailReturnOutcomeDecision(decision)"), 'bail return helper should exist');
   });
 
   it('settings has Additional Modules card', () => {

@@ -111,6 +111,7 @@
             <button type="button" class="gear-item" data-action="new-attendance">&#10133; New attendance</button>
             <div class="gear-section-label">Documents</div>
             <button type="button" class="gear-item" data-action="laa-forms">&#128203; LAA Forms</button>
+            <button type="button" class="gear-item" data-action="authorities">&#128220; Authorities</button>
             <button type="button" class="gear-item" data-action="shortcut-print-pdf">&#128424; Print PDF</button>
             <button type="button" class="gear-item" data-action="shortcut-email-solicitor">&#9993; Email to solicitor</button>
             <div class="gear-section-label">Data</div>
@@ -219,6 +220,59 @@
             <div id="home-stats" class="home-stats"></div>
           </div>
 
+          <div class="home-grid">
+            <div class="home-card-widget home-card-full home-card-widget-muted" id="home-focus-card">
+              <div class="home-widget-header">
+                <h3 class="home-widget-title">Continue Working</h3>
+                <span class="home-widget-note">Pick up where you left off</span>
+              </div>
+              <div class="home-focus-panel">
+                <div class="home-focus-copy">
+                  <div id="home-focus-title" class="home-focus-title">Loading latest draft…</div>
+                  <div id="home-focus-meta" class="home-focus-meta">Checking your most recent record.</div>
+                  <div id="home-focus-badges" class="home-focus-badges"></div>
+                  <p id="home-focus-helper" class="home-focus-helper">We will highlight the most recent draft and any missing items here.</p>
+                </div>
+                <button type="button" id="home-focus-open" class="btn btn-primary home-focus-btn">Open draft</button>
+              </div>
+            </div>
+
+            <div class="home-card-widget">
+              <div class="home-widget-header">
+                <h3 class="home-widget-title">This Week</h3>
+                <span class="home-widget-note">Live totals</span>
+              </div>
+              <div class="home-summary-grid">
+                <div class="home-summary-tile">
+                  <span class="home-summary-label">Cases</span>
+                  <strong id="hw-cases" class="home-summary-value">0</strong>
+                </div>
+                <div class="home-summary-tile">
+                  <span class="home-summary-label">Hours</span>
+                  <strong id="hw-hours" class="home-summary-value">0</strong>
+                </div>
+                <div class="home-summary-tile">
+                  <span class="home-summary-label">Drafts</span>
+                  <strong id="hw-drafts" class="home-summary-value">0</strong>
+                </div>
+                <div class="home-summary-tile">
+                  <span class="home-summary-label">Finalised</span>
+                  <strong id="hw-finalised" class="home-summary-value">0</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="home-card-widget">
+              <div class="home-widget-header">
+                <h3 class="home-widget-title">Needs Attention</h3>
+                <span class="home-widget-note">Actionable items only</span>
+              </div>
+              <ul id="home-needs-attention" class="home-attention-list">
+                <li class="home-attention-empty">Checking recent drafts…</li>
+              </ul>
+            </div>
+          </div>
+
           <!-- Shortcuts -->
           <h2 class="home-section-title">Shortcuts</h2>
           <div class="home-shortcuts">
@@ -227,6 +281,7 @@
               <button type="button" class="home-tool-btn" data-action="records" title="View and search all records">Records</button>
               <button type="button" class="home-tool-btn" data-action="firms" title="Firms you work for">Firms</button>
               <button type="button" class="home-tool-btn" data-action="reports" title="Attendance and fee reports">Reports</button>
+              <button type="button" class="home-tool-btn" data-action="authorities" title="Authority forms for criminal defence">Authorities</button>
               <button type="button" class="home-tool-btn" data-action="shortcut-print-pdf" title="Print attendance note PDF">Print PDF</button>
               <button type="button" class="home-tool-btn" data-action="shortcut-email-solicitor" title="Email attendance note to instructing solicitor">Email to solicitor</button>
               <button type="button" class="home-tool-btn" data-action="shortcut-backup-now" title="Create a backup now">Backup now</button>
@@ -428,6 +483,23 @@
             <button type="button" id="firms-action-add" class="btn btn-primary firms-choice-btn">Add a new firm</button>
             <button type="button" id="firms-action-use-existing" class="btn btn-secondary firms-choice-btn">Use existing firm</button>
           </div>
+          <div style="margin-top:0.9rem;padding:0.9rem 1rem;border:1px solid rgba(15,23,42,0.08);border-radius:14px;background:#f8fafc;" id="qf-firms-block">
+            <div id="qf-firms-locked" class="addon-locked-message" style="display:none;">
+              <p>QuickFile add-on requires a licence. Buy it on the website to import firms from QuickFile.</p>
+              <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy QuickFile add-on</a>
+            </div>
+            <div id="qf-firms-content">
+              <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;">
+                <button type="button" id="btn-open-qf-settings" class="btn btn-secondary">Open QuickFile settings</button>
+                <button type="button" id="btn-test-qf-connection" class="btn btn-secondary">Test QuickFile connection</button>
+                <button type="button" id="btn-import-qf-clients" class="btn btn-secondary">Import firms from QuickFile</button>
+                <button type="button" id="btn-resync-qf-clients" class="btn btn-secondary">Re-sync existing firms</button>
+              </div>
+              <p class="settings-hint" style="margin-top:0.55rem;">QuickFile pulls in firm name, contact, phone and email. Imported details stay editable in the app. Set it up once in Settings, then import from here whenever needed.</p>
+              <p id="qf-import-status" class="settings-hint" style="margin-top:0.35rem;"></p>
+              <p id="qf-last-import" class="settings-hint" style="margin-top:0.35rem;">QuickFile has not been imported yet.</p>
+            </div>
+          </div>
           <div id="firms-add-section" class="firms-section-hidden">
             <h3 style="margin-top:1.25rem;margin-bottom:0.5rem;font-size:0.95rem;">Add a Firm</h3>
             <div class="add-firm-row">
@@ -586,6 +658,126 @@
         </div>
       </div>
 
+      <!-- AUTHORITIES VIEW -->
+      <div id="view-authorities" class="view">
+        <div class="firms-page-header">
+          <button type="button" id="authorities-back-btn" class="btn btn-secondary">&larr; Home</button>
+          <h2 style="margin:0;color:var(--primary);">Authorities</h2>
+        </div>
+        <p class="settings-hint" style="margin-bottom:1rem;">Standard authority forms for criminal defence work. Expand each to see proposed wording. Adapt as required for your firm and matter.</p>
+        <div class="authorities-list">
+          <div class="settings-card authority-card">
+            <h3 class="authority-title">Medical Authority</h3>
+            <p class="settings-hint">Authorises release of medical records (GP, hospital, mental health) to your firm for the purpose of the client&rsquo;s defence.</p>
+            <details class="authority-details">
+              <summary>Proposed wording</summary>
+              <div class="authority-wording">
+                <p><strong>MEDICAL AUTHORITY</strong></p>
+                <p>I, <em>[Client full name]</em>, of <em>[address]</em>, hereby authorise and request:</p>
+                <p>1. My General Practitioner and any medical practice holding my records;</p>
+                <p>2. Any hospital or NHS Trust that has treated me;</p>
+                <p>3. Any mental health service or professional that has assessed or treated me;</p>
+                <p>to release and disclose to <em>[Firm name]</em>, my solicitors, all medical records, reports, notes and information relating to my physical and/or mental health that they hold, for the purpose of my legal proceedings and my defence.</p>
+                <p>I understand that this information will be treated in confidence and used only for that purpose. I consent to copies of this authority being sent to the above in support of a request for disclosure.</p>
+                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
+              </div>
+            </details>
+          </div>
+          <div class="settings-card authority-card">
+            <h3 class="authority-title">Legal Aid Declaration</h3>
+            <p class="settings-hint">Client declaration as to financial circumstances and consent for legal aid application (adapt for CRM2 / means assessment).</p>
+            <details class="authority-details">
+              <summary>Proposed wording</summary>
+              <div class="authority-wording">
+                <p><strong>LEGAL AID DECLARATION</strong></p>
+                <p>I, <em>[Client full name]</em>, declare that the information I have given to <em>[Firm name]</em> about my income, capital and outgoings for the purpose of my application for criminal legal aid is true and complete to the best of my knowledge and belief.</p>
+                <p>I understand that I must tell the Legal Aid Agency (or my solicitors) immediately if my financial circumstances change. I consent to my solicitors passing my details and this declaration to the Legal Aid Agency and to the use of my information for the assessment of my eligibility for legal aid.</p>
+                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
+              </div>
+            </details>
+          </div>
+          <div class="settings-card authority-card">
+            <h3 class="authority-title">Authority to Transfer Papers</h3>
+            <p class="settings-hint">Client authorises transfer of the case file to another firm or solicitor (e.g. on change of solicitor or transfer of matter).</p>
+            <details class="authority-details">
+              <summary>Proposed wording</summary>
+              <div class="authority-wording">
+                <p><strong>AUTHORITY TO TRANSFER PAPERS</strong></p>
+                <p>I, <em>[Client full name]</em>, hereby authorise <em>[Current firm name]</em> to send to <em>[New firm / solicitor name and address]</em> all papers, documents, correspondence and other material held in connection with my matter (including <em>[brief case description, e.g. police station attendance / magistrates&rsquo; court matter]</em>).</p>
+                <p>I understand that my file will be transferred in its entirety and that my current solicitors will retain no copies unless required by law or professional rules. I consent to the disclosure of such information as is necessary to effect the transfer and to enable the new firm to act for me.</p>
+                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
+              </div>
+            </details>
+          </div>
+          <div class="settings-card authority-card">
+            <h3 class="authority-title">Authority to Obtain Documents</h3>
+            <p class="settings-hint">General authority to request documents from police, CPS, court, previous solicitors or other third parties.</p>
+            <details class="authority-details">
+              <summary>Proposed wording</summary>
+              <div class="authority-wording">
+                <p><strong>AUTHORITY TO OBTAIN DOCUMENTS</strong></p>
+                <p>I, <em>[Client full name]</em>, hereby authorise <em>[Firm name]</em>, my solicitors, to request and receive from:</p>
+                <p>• The police (including the investigating force and any custody/evidence holder);<br>• The Crown Prosecution Service;<br>• Any court or tribunal;<br>• Any previous solicitors or legal representatives who have acted for me;</p>
+                <p>all documents, statements, exhibits, unused material, disclosure, and any other papers or information relating to my matter/case. I consent to my solicitors providing a copy of this authority where necessary to support such requests.</p>
+                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
+              </div>
+            </details>
+          </div>
+          <div class="settings-card authority-card">
+            <h3 class="authority-title">Authority to Instruct Expert</h3>
+            <p class="settings-hint">Client authorises the firm to instruct a named expert (e.g. medical, forensic, psychiatrist) and to disclose relevant papers.</p>
+            <details class="authority-details">
+              <summary>Proposed wording</summary>
+              <div class="authority-wording">
+                <p><strong>AUTHORITY TO INSTRUCT EXPERT</strong></p>
+                <p>I, <em>[Client full name]</em>, authorise <em>[Firm name]</em>, my solicitors, to instruct <em>[Expert name / type, e.g. a consultant psychiatrist / forensic expert]</em> to prepare a report and, if required, to give evidence in connection with my case.</p>
+                <p>I consent to my solicitors disclosing to the expert such of my papers, medical records and other information as they consider necessary for the expert to carry out their instructions. I understand that the expert may need to examine me or discuss my case and I agree to cooperate. I consent to the report and any related correspondence being shared with the court, prosecution and legal aid authority as appropriate.</p>
+                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
+              </div>
+            </details>
+          </div>
+          <div class="settings-card authority-card">
+            <h3 class="authority-title">Consent to Disclosure (Third Parties)</h3>
+            <p class="settings-hint">Client consents to disclosure of information to specified third parties (e.g. court, counsel, expert, family) where needed for the conduct of the case.</p>
+            <details class="authority-details">
+              <summary>Proposed wording</summary>
+              <div class="authority-wording">
+                <p><strong>CONSENT TO DISCLOSURE</strong></p>
+                <p>I, <em>[Client full name]</em>, consent to <em>[Firm name]</em>, my solicitors, disclosing such information and documents relating to my case as they consider necessary to:</p>
+                <p>• The court and any tribunal;<br>• Counsel and other advocates instructed on my behalf;<br>• Experts instructed on my behalf;<br>• <em>[Other: e.g. a named family member / interpreter / intermediary]</em> where relevant to my defence or to the conduct of my case.</p>
+                <p>I understand that such disclosure will be limited to what is necessary and that confidentiality will be maintained so far as possible. This consent may be withdrawn in writing at any time.</p>
+                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
+              </div>
+            </details>
+          </div>
+          <div class="settings-card authority-card">
+            <h3 class="authority-title">Authority to Act</h3>
+            <p class="settings-hint">Client confirms instruction of the firm and authority to act (useful for court, LAA or third-party confirmation).</p>
+            <details class="authority-details">
+              <summary>Proposed wording</summary>
+              <div class="authority-wording">
+                <p><strong>AUTHORITY TO ACT</strong></p>
+                <p>I, <em>[Client full name]</em>, confirm that I have instructed <em>[Firm name]</em> to act for me in connection with <em>[brief description of matter]</em>. I authorise them to conduct my case, to correspond and communicate with the court, prosecution, Legal Aid Agency and any other body or person as they consider necessary, and to sign documents on my behalf where I have given them specific authority to do so.</p>
+                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
+              </div>
+            </details>
+          </div>
+          <div class="settings-card authority-card">
+            <h3 class="authority-title">DWP / Benefits Records Authority</h3>
+            <p class="settings-hint">Authorises release of DWP, Jobcentre Plus or benefits records &mdash; often needed for means assessment, mitigation, or benefit fraud cases.</p>
+            <details class="authority-details">
+              <summary>Proposed wording</summary>
+              <div class="authority-wording">
+                <p><strong>AUTHORITY TO OBTAIN DWP / BENEFITS RECORDS</strong></p>
+                <p>I, <em>[Client full name]</em>, of <em>[address]</em>, National Insurance number <em>[NI number]</em>, hereby authorise <em>[Firm name]</em>, my solicitors, to request and obtain from the Department for Work and Pensions, Jobcentre Plus, or any other benefits authority, all records, claim histories, assessments, correspondence and information relating to my benefits and financial circumstances that may be relevant to my legal proceedings and my defence.</p>
+                <p>I consent to such records being disclosed to my solicitors. This request is made under the UK GDPR and the Data Protection Act 2018 and the information will be used only for the purpose of my case.</p>
+                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+
       <!-- SETTINGS VIEW -->
       <div id="view-settings" class="view">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
@@ -595,6 +787,16 @@
           </div>
           <button type="button" id="settings-save-btn" class="btn btn-primary">Save settings</button>
         </div>
+
+        <div class="settings-quick-actions">
+          <button type="button" id="settings-quick-backup" class="btn btn-secondary">Backup now</button>
+          <button type="button" id="settings-quick-cloud" class="btn btn-secondary">Check cloud backup</button>
+          <button type="button" id="settings-quick-diagnostics" class="btn btn-secondary">Refresh diagnostics</button>
+          <button type="button" id="settings-quick-firms" class="btn btn-secondary">Open firms</button>
+          <button type="button" id="settings-quick-support" class="btn btn-secondary">Open support forum</button>
+        </div>
+
+        <div class="settings-section-label">Setup &amp; personalisation</div>
 
         <div class="settings-card" id="licence-settings-card">
           <h2>Licence</h2>
@@ -655,6 +857,29 @@
           <input type="email" id="setting-email" placeholder="you@example.com">
         </div>
 
+        <div class="settings-card" id="quickfile-settings-card">
+          <h2>QuickFile Directory Import</h2>
+          <div id="quickfile-settings-locked" class="addon-locked-message" style="display:none;">
+            <p>QuickFile add-on requires a licence. Buy it on the website to import your client directory from QuickFile.</p>
+            <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy QuickFile add-on</a>
+          </div>
+          <div id="quickfile-settings-content">
+            <p class="settings-hint">Connect your QuickFile account to import your client directory into <strong>Firms You Work For</strong>. Imported entries map to firm name, contact name, email and telephone, and can still be edited afterwards.</p>
+            <label>Account number</label>
+            <input type="text" id="setting-quickfile-account" placeholder="Your QuickFile account number" autocomplete="off">
+            <label>API key</label>
+            <input type="password" id="setting-quickfile-apikey" placeholder="API key from QuickFile" autocomplete="off">
+            <label>Application ID</label>
+            <input type="text" id="setting-quickfile-appid" placeholder="Application ID from QuickFile" autocomplete="off">
+            <div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:0.9rem;">
+              <button type="button" id="btn-save-qf-settings" class="btn btn-secondary">Save QuickFile settings</button>
+              <button type="button" id="btn-save-test-qf" class="btn btn-secondary">Save and test QuickFile</button>
+              <button type="button" id="btn-save-import-qf" class="btn btn-primary">Save and import firms now</button>
+            </div>
+            <p class="settings-hint" style="margin-top:0.55rem;">Use <strong>Save and import firms now</strong> for the quickest setup. It saves these details and jumps straight to the firm import.</p>
+          </div>
+        </div>
+
 
         <div class="settings-card">
           <h2>Appearance</h2>
@@ -684,6 +909,7 @@
           </div>
         </div>
 
+        <div class="settings-section-label">Protection, backup &amp; security</div>
         <div class="settings-card">
           <h2>Backup &amp; Data Protection</h2>
           <div id="backup-destination-summary" style="background:var(--input-bg,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:0.85rem 1rem;margin-bottom:1.25rem;">
@@ -798,6 +1024,7 @@
           <p id="cloud-recover-status" class="settings-hint" style="margin-top:0.35rem;"></p>
         </div>
 
+        <div class="settings-section-label">Import, workflows &amp; add-ons</div>
         <div class="settings-card">
           <h2>Import record (Admin)</h2>
           <p class="settings-hint">Load a previous record from a PDF exported by this app, or from a JSON backup. The record will be added as a new draft and opened for editing.</p>
@@ -831,17 +1058,23 @@
         <div class="settings-card" id="settings-addons-card">
           <h2>Add-Ons</h2>
           <p class="settings-hint" style="margin-bottom:1rem;">Optional modules that extend CustodyNote. Toggle to enable or disable instantly &mdash; no save required.</p>
-          <div class="addon-row">
-            <div class="addon-info">
-              <strong>Officer Email Templates</strong>
-              <p class="addon-desc">Generate pre-filled emails to the Officer in Charge directly from the Records list. Includes three templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up.</p>
+          <div class="addon-row" id="addon-officer-email-row">
+            <div id="addon-email-locked" class="addon-locked-message" style="display:none;">
+              <p>Officer Email Templates add-on requires a licence. Buy it on the website to enable the Email OIC feature.</p>
+              <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy Email add-on</a>
             </div>
-            <div class="addon-toggle-group">
-              <label class="toggle-row" for="setting-officer-email-templates">
-                <span>Enable</span>
-                <input type="checkbox" id="setting-officer-email-templates">
-              </label>
-              <span id="officer-email-templates-status" class="addon-status addon-status-off">Disabled</span>
+            <div id="addon-email-content">
+              <div class="addon-info">
+                <strong>Officer Email Templates</strong>
+                <p class="addon-desc">Generate pre-filled emails to the Officer in Charge directly from the Records list. Includes three templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up.</p>
+              </div>
+              <div class="addon-toggle-group">
+                <label class="toggle-row" for="setting-officer-email-templates">
+                  <span>Enable</span>
+                  <input type="checkbox" id="setting-officer-email-templates">
+                </label>
+                <span id="officer-email-templates-status" class="addon-status addon-status-off">Disabled</span>
+              </div>
             </div>
           </div>
           <div class="addon-email-client-row" id="addon-email-client-row">
@@ -876,6 +1109,7 @@
           </div>
         </div>
 
+        <div class="settings-section-label">Support, diagnostics &amp; reference</div>
         <div class="settings-card">
           <h2>Storage &amp; Connectivity</h2>
           <label>Database location</label>
@@ -1595,6 +1829,7 @@
   <script src="renderer/licence.js"></script>
   <script src="app.js"></script>
   <script src="renderer/views/reports.js"></script>
+  <script src="renderer/views/authorities.js"></script>
   <script src="renderer/views/settings.js"></script>
   <script src="renderer/email-templates.js"></script>
   <script src="renderer/views/email-modal.js"></script>
@@ -1677,7 +1912,13 @@
     <div id="session-lock-box">
       <div id="session-lock-icon">&#128274;</div>
       <h2>Screen Locked</h2>
-      <p>This session has been locked due to inactivity.</p>
+      <p id="session-lock-copy">This session has been locked due to inactivity.</p>
+      <p id="session-lock-hint" class="session-lock-hint">Enter your recovery password or admin password to continue.</p>
+      <div class="session-lock-input-row">
+        <input type="password" id="session-lock-password" class="form-input" autocomplete="current-password" placeholder="Password" />
+        <button type="button" id="session-lock-toggle" class="btn btn-secondary" aria-label="Show password">Show</button>
+      </div>
+      <div id="session-lock-error" class="session-lock-error" aria-live="polite"></div>
       <button type="button" id="session-lock-unlock-btn" class="btn btn-primary" style="width:100%;margin-top:0.5rem;">Unlock</button>
     </div>
   </div>

@@ -111,7 +111,6 @@ function baseAttendanceData(overrides = {}) {
     previousAdvice: 'No',
     workType: 'First Police Station Attendance',
     disclosureType: 'Written',
-    caseOutcomeStatus: 'unknown',
     ...overrides,
   };
 }
@@ -133,7 +132,6 @@ function baseTelephoneData(overrides = {}) {
     firstContactWithin45Mins: 'Yes',
     telephoneAdviceSummary: 'Advised on rights',
     previousAdvice: 'No',
-    caseOutcomeStatus: 'unknown',
     ...overrides,
   };
 }
@@ -148,7 +146,6 @@ function baseVoluntaryData(overrides = {}) {
     voluntaryStatusConfirmed: 'Yes',
     policeStationId: 'PS001',
     previousAdvice: 'No',
-    caseOutcomeStatus: 'unknown',
     ...overrides,
   };
 }
@@ -158,39 +155,25 @@ describe('Finalise: Attendance form validation', () => {
   let validate;
   try { validate = buildAttendanceValidator(); } catch (_) {}
 
-  it('passes with caseOutcomeStatus=unknown (no outcome required)', { skip: !validate }, () => {
-    const data = baseAttendanceData({ caseOutcomeStatus: 'unknown' });
+  it('requires outcomeDecision for attendance finalisation', { skip: !validate }, () => {
+    const data = baseAttendanceData({ outcomeDecision: '' });
     const errors = validate(data);
     const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
-    assert.strictEqual(outcomeErr, undefined, 'Should not require outcomeDecision when case is unknown');
+    assert.ok(outcomeErr, 'Should require outcomeDecision');
   });
 
-  it('passes with caseOutcomeStatus=bail_to_return', { skip: !validate }, () => {
-    const data = baseAttendanceData({ caseOutcomeStatus: 'bail_to_return' });
+  it('passes with ongoing outcome selected', { skip: !validate }, () => {
+    const data = baseAttendanceData({ outcomeDecision: 'Ongoing / Unknown' });
     const errors = validate(data);
     const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
     assert.strictEqual(outcomeErr, undefined);
   });
 
-  it('passes with caseOutcomeStatus=released_under_investigation', { skip: !validate }, () => {
-    const data = baseAttendanceData({ caseOutcomeStatus: 'released_under_investigation' });
+  it('clears bail requirements for charged without bail path', { skip: !validate }, () => {
+    const data = baseAttendanceData({ outcomeDecision: 'Charged without Bail' });
     const errors = validate(data);
-    const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
-    assert.strictEqual(outcomeErr, undefined);
-  });
-
-  it('requires outcomeDecision when caseOutcomeStatus=concluded', { skip: !validate }, () => {
-    const data = baseAttendanceData({ caseOutcomeStatus: 'concluded' });
-    const errors = validate(data);
-    const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
-    assert.ok(outcomeErr, 'Should require outcomeDecision when case is concluded');
-  });
-
-  it('passes concluded with outcomeDecision filled', { skip: !validate }, () => {
-    const data = baseAttendanceData({ caseOutcomeStatus: 'concluded', outcomeDecision: 'Released NFA' });
-    const errors = validate(data);
-    const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
-    assert.strictEqual(outcomeErr, undefined);
+    const bailErr = errors.find(e => e.key === 'bailType' || e.key === 'bailConditions');
+    assert.strictEqual(bailErr, undefined);
   });
 });
 
@@ -199,32 +182,32 @@ describe('Finalise: Telephone form validation', () => {
   let validate;
   try { validate = buildTelephoneValidator(); } catch (_) {}
 
-  it('passes with caseOutcomeStatus=unknown', { skip: !validate }, () => {
-    const data = baseTelephoneData({ caseOutcomeStatus: 'unknown' });
+  it('requires outcomeDecision for telephone finalisation', { skip: !validate }, () => {
+    const data = baseTelephoneData({ outcomeDecision: '' });
     const errors = validate(data);
     const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
-    assert.strictEqual(outcomeErr, undefined);
+    assert.ok(outcomeErr, 'Should require an outcome selection');
   });
 
-  it('requires outcomeDecision when concluded', { skip: !validate }, () => {
-    const data = baseTelephoneData({ caseOutcomeStatus: 'concluded' });
+  it('does not require outcomeCode when the telephone outcome is still ongoing', { skip: !validate }, () => {
+    const data = baseTelephoneData({ outcomeDecision: 'Ongoing / Unknown' });
     const errors = validate(data);
-    const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
-    assert.ok(outcomeErr, 'Should require outcomeDecision when concluded');
+    const codeErr = errors.find(e => e.key === 'outcomeCode');
+    assert.strictEqual(codeErr, undefined);
   });
 
-  it('requires outcomeCode when concluded', { skip: !validate }, () => {
-    const data = baseTelephoneData({ caseOutcomeStatus: 'concluded', outcomeDecision: 'NFA' });
+  it('requires outcomeCode when the telephone matter is concluded', { skip: !validate }, () => {
+    const data = baseTelephoneData({ outcomeDecision: 'NFA – no further action' });
     const errors = validate(data);
     const codeErr = errors.find(e => e.key === 'outcomeCode');
     assert.ok(codeErr, 'Should require outcomeCode when concluded');
   });
 
-  it('does not require outcomeCode when not concluded', { skip: !validate }, () => {
-    const data = baseTelephoneData({ caseOutcomeStatus: 'ongoing' });
+  it('requires caseConcludedDate when the telephone matter is concluded', { skip: !validate }, () => {
+    const data = baseTelephoneData({ outcomeDecision: 'Charged', outcomeCode: 'CN06 – Charge / Summons' });
     const errors = validate(data);
-    const codeErr = errors.find(e => e.key === 'outcomeCode');
-    assert.strictEqual(codeErr, undefined);
+    const dateErr = errors.find(e => e.key === 'caseConcludedDate');
+    assert.ok(dateErr, 'Should require caseConcludedDate when concluded');
   });
 });
 
@@ -233,7 +216,7 @@ describe('Finalise: Voluntary form validation', () => {
   let validate;
   try { validate = buildVoluntaryValidator(); } catch (_) {}
 
-  it('passes with caseOutcomeStatus=unknown', { skip: !validate }, () => {
+  it('passes with blank voluntary outcome', { skip: !validate }, () => {
     const data = baseVoluntaryData({ outcomeDecision: '' });
     const errors = validate(data);
     const outcomeErr = errors.find(e => e.key === 'outcomeDecision');
@@ -260,31 +243,31 @@ describe('Billing readiness warnings', () => {
   let getBillingWarnings;
   try { getBillingWarnings = buildBillingRunner(); } catch (_) {}
 
-  it('no outcome warning when caseOutcomeStatus=unknown', { skip: !getBillingWarnings }, () => {
+  it('warns when attendance outcome is missing', { skip: !getBillingWarnings }, () => {
     const w = getBillingWarnings({
       matterTypeCode: 'CRM14',
-      caseOutcomeStatus: 'unknown',
       totalMinutes: '60',
       sufficientBenefitTest: 'Yes',
     });
     const outcomeWarn = w.find(msg => msg.toLowerCase().includes('outcome'));
-    assert.strictEqual(outcomeWarn, undefined, 'Should not warn about outcome when status is unknown');
+    assert.ok(outcomeWarn, 'Should warn when no outcome is recorded');
   });
 
-  it('no outcome warning when caseOutcomeStatus=ongoing', { skip: !getBillingWarnings }, () => {
+  it('no outcome code warning for custody when a decision is selected', { skip: !getBillingWarnings }, () => {
     const w = getBillingWarnings({
       matterTypeCode: 'CRM14',
-      caseOutcomeStatus: 'ongoing',
+      outcomeDecision: 'Charged without Bail',
       totalMinutes: '60',
     });
     const outcomeWarn = w.find(msg => msg.toLowerCase().includes('outcome'));
     assert.strictEqual(outcomeWarn, undefined);
   });
 
-  it('warns about outcome code when concluded but missing', { skip: !getBillingWarnings }, () => {
+  it('warns about outcome code for concluded voluntary matters when missing', { skip: !getBillingWarnings }, () => {
     const w = getBillingWarnings({
       matterTypeCode: 'CRM14',
-      caseOutcomeStatus: 'concluded',
+      attendanceMode: 'voluntary',
+      outcomeDecision: 'Released NFA',
       outcomeCode: '',
       totalMinutes: '60',
     });
@@ -292,10 +275,11 @@ describe('Billing readiness warnings', () => {
     assert.ok(outcomeWarn, 'Should warn when case is concluded but outcomeCode missing');
   });
 
-  it('no warning when concluded with outcomeCode', { skip: !getBillingWarnings }, () => {
+  it('no warning when voluntary conclusion has outcomeCode', { skip: !getBillingWarnings }, () => {
     const w = getBillingWarnings({
       matterTypeCode: 'CRM14',
-      caseOutcomeStatus: 'concluded',
+      attendanceMode: 'voluntary',
+      outcomeDecision: 'Released NFA',
       outcomeCode: 'CN04',
       totalMinutes: '60',
     });

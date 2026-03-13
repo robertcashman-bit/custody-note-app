@@ -178,6 +178,9 @@ function createSyncWorker(ctx) {
     } else if (recordId) {
       ctx.dbRun('UPDATE attendances SET sync_dirty=0 WHERE id=?', [recordId]);
     }
+    if (recordId && ctx.resolveSyncConflictsForRecord) {
+      ctx.resolveSyncConflictsForRecord(recordId, 'local_push_succeeded');
+    }
     ctx.flushDb && ctx.flushDb();
   }
 
@@ -325,6 +328,10 @@ function createSyncWorker(ctx) {
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('records-updated-from-sync', { count: pullResult.pulled });
         }
+        if (pullResult && pullResult.conflicts > 0 && ctx.sendToRenderer) {
+          ctx.sendToRenderer('sync-conflicts-detected', { count: pullResult.conflicts });
+          notifyRenderer({});
+        }
       }
     } finally {
       _inProgress = false;
@@ -357,23 +364,37 @@ function createSyncWorker(ctx) {
     const failed = ctx.dbGet('SELECT COUNT(*) as c FROM sync_queue WHERE status=\'failed\'') || { c: 0 };
     const blocked = ctx.dbGet('SELECT COUNT(*) as c FROM sync_queue WHERE status=\'blocked\'') || { c: 0 };
     const lastSync = ctx.dbGet("SELECT value FROM settings WHERE key='lastSyncPullAt'");
+    let conflicts = { c: 0 };
     let queueItems = [];
+    let conflictItems = [];
     try {
       queueItems = ctx.dbAll(
         `SELECT id, record_id, status, retry_count, error, last_attempt, created_at
          FROM sync_queue WHERE status != 'synced' ORDER BY created_at ASC LIMIT 50`
       ) || [];
     } catch (_) {}
+    try {
+      conflicts = ctx.dbGet('SELECT COUNT(*) as c FROM sync_conflicts WHERE resolved_at IS NULL') || { c: 0 };
+      conflictItems = ctx.dbAll(
+        `SELECT id, attendance_id, sync_id, reason, local_version, remote_version, local_updated_at,
+                remote_updated_at, remote_status, created_at
+           FROM sync_conflicts
+          WHERE resolved_at IS NULL
+          ORDER BY created_at DESC LIMIT 20`
+      ) || [];
+    } catch (_) {}
     return {
       queueLength: pending.c || 0,
       failedCount: failed.c || 0,
       blockedCount: blocked.c || 0,
+      conflictCount: conflicts.c || 0,
       lastSyncAt: lastSync && lastSync.value !== '1970-01-01T00:00:00.000Z' ? lastSync.value : _lastSyncAt,
       connectivity: _connectivityState,
       lastError: _lastError,
       inProgress: _inProgress,
       lastSuccessfulPushAt: _lastSuccessfulPushAt || null,
       queueItems,
+      conflictItems,
     };
   }
 

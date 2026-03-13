@@ -53,13 +53,13 @@ function _oicFmtTime(timeStr) {
 
 function buildEmailSubject(templateId, data) {
   data = data || {};
-  var parts = [_oicClean(data.surname), _oicClean(data.forename)].filter(Boolean);
-  var clientName = parts.join(', ') || 'Client';
-  switch (templateId) {
-    case 'follow_up': return 'Outcome Request \u2013 ' + clientName;
-    case 'no_reply':  return 'Outcome Request Follow-Up \u2013 ' + clientName;
-    default:          return 'First Attendance Disclosure Request \u2013 ' + clientName;
-  }
+  var subjectParts = [
+    _oicClean(data.forename) || 'Client',
+    _oicClean(data.surname),
+    _oicClean(data.policeStationName) || 'Police Station',
+    _oicFmtDate(_oicClean(data.date || data.instructionDateTime))
+  ].filter(Boolean);
+  return subjectParts.join(' - ');
 }
 
 function buildEmailBody(templateId, data, feeEarnerName) {
@@ -68,8 +68,8 @@ function buildEmailBody(templateId, data, feeEarnerName) {
   var salutation = _oicSalutation(parsed.rank, parsed.surname);
   var clientName = [_oicClean(data.forename), _oicClean(data.surname)].filter(Boolean).join(' ') || 'your client';
   var station    = _oicClean(data.policeStationName) || 'the police station';
-  var firmName   = _oicClean(data.firmName) || 'the firm';
   var feeName    = _oicClean(feeEarnerName) || 'Fee Earner';
+  var solicitorName = feeName !== 'Fee Earner' ? feeName : (_oicClean(data.firmName) || 'the solicitor');
   var dateStr    = _oicFmtDate(_oicClean(data.date || data.instructionDateTime));
   var timeStr    = _oicFmtTime(_oicClean(data.timeArrival));
   var dateTime   = [dateStr, timeStr ? 'at ' + timeStr : ''].filter(Boolean).join(' ');
@@ -107,28 +107,26 @@ function buildEmailBody(templateId, data, feeEarnerName) {
   function _bailCondsPara() {
     var bailType = _oicClean(data.bailType);
     var bailDate = _oicFmtDate(_oicClean(data.bailDate));
+    var includeReturnDate = od === 'Bail without charge';
     if (bailType === 'Unconditional') {
-      return 'The client was released on unconditional bail' + (bailDate ? ', with a return date of ' + bailDate : '') + '.';
+      return 'The client was released on unconditional bail' + (includeReturnDate && bailDate ? ', with a return date of ' + bailDate : '') + '.';
     }
     if (bailType === 'Conditional') {
       var conds = _oicClean(data.bailConditions) || _oicClean(data.bailConditionsChecklist || '').replace(/\|/g, ', ');
       return 'The client was released on conditional bail' +
-        (bailDate ? ' with a return date of ' + bailDate : '') +
+        (includeReturnDate && bailDate ? ' with a return date of ' + bailDate : '') +
         (conds ? '. Bail conditions: ' + conds + '.' : '.');
     }
-    if (bailDate) return 'The client was bailed to return on ' + bailDate + '.';
+    if (includeReturnDate && bailDate) return 'The client was bailed to return on ' + bailDate + '.';
     return '';
   }
 
   /* ── Template 1: First Attendance Disclosure Request ── */
   if (templateId === 'first_attendance' || !templateId) {
     var intro;
-    if (feeName !== 'Fee Earner' && firmName !== 'the firm') {
-      intro = 'I have been asked by ' + feeName + ' of ' + firmName +
+    if (solicitorName && solicitorName !== 'the solicitor') {
+      intro = 'I have been asked by ' + solicitorName +
               ' to cover this matter' + (dateTime ? ' on ' + dateTime : '') + '.';
-    } else if (firmName !== 'the firm') {
-      intro = 'I have been asked to cover this matter on behalf of ' + firmName +
-              (dateTime ? ' on ' + dateTime : '') + '.';
     } else {
       intro = 'I have been asked to cover this matter' + (dateTime ? ' on ' + dateTime : '') + '.';
     }
@@ -220,7 +218,7 @@ function buildEmailBody(templateId, data, feeEarnerName) {
       salutation,
       '',
       'I write further to my attendance upon ' + clientName + ' at ' + station +
-        ' Police Station on behalf of ' + firmName + '.',
+        ' Police Station on behalf of ' + solicitorName + '.',
       ''
     ];
     _outcomeParas(false).forEach(function(l) { body2.push(l); });
@@ -234,7 +232,7 @@ function buildEmailBody(templateId, data, feeEarnerName) {
       salutation,
       '',
       'I refer to my previous email regarding ' + clientName + ', following my attendance upon them at ' +
-        station + ' Police Station on behalf of ' + firmName + '.',
+        station + ' Police Station on behalf of ' + solicitorName + '.',
       ''
     ];
     _outcomeParas(true).forEach(function(l) { body3.push(l); });

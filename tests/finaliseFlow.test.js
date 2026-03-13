@@ -357,24 +357,17 @@ describe('Toast / Confirm rendering', () => {
    ══════════════════════════════════════════════════════════════ */
 describe('Validation functions', () => {
 
-  it('validateAttendanceForm requires outcomeDecision only when case is concluded', () => {
+  it('validateAttendanceForm always requires outcomeDecision', () => {
     const vafBody = extractFunctionBody(appJsSource, 'validateAttendanceForm');
     assert.ok(vafBody, 'validateAttendanceForm must exist');
-    assert.ok(vafBody.includes('caseConcluded'), 'must use caseConcluded');
-    assert.ok(vafBody.includes("=== 'concluded'"), 'must check for concluded');
-    const caseConcCheck = vafBody.indexOf("if (caseConcluded)");
-    assert.ok(caseConcCheck !== -1, 'caseConcluded check must exist');
-    const afterCaseConcCheck = vafBody.substring(caseConcCheck);
-    assert.ok(afterCaseConcCheck.includes("outcomeDecision"),
-      'outcomeDecision must be gated by caseConcluded');
-    assert.ok(!vafBody.substring(0, caseConcCheck).includes("key: 'outcomeDecision'"),
-      'outcomeDecision must not be in unconditional required list');
+    assert.ok(vafBody.includes("key: 'outcomeDecision'"), 'outcomeDecision must be in the required list');
   });
 
-  it('validateTelephoneForm requires outcomeDecision only when concluded', () => {
+  it('validateTelephoneForm uses telCaseConcluded for concluded-only fields', () => {
     const vtfBody = extractFunctionBody(appJsSource, 'validateTelephoneForm');
     assert.ok(vtfBody, 'validateTelephoneForm must exist');
     assert.ok(vtfBody.includes('telCaseConcluded'), 'must use telCaseConcluded');
+    assert.ok(vtfBody.includes("key: 'outcomeDecision'"), 'telephone outcomeDecision must be required');
   });
 
   it('validateVoluntaryForm requires outcomeDecision only when concluded', () => {

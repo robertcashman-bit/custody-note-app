@@ -1,9 +1,42 @@
 {
   "releases": [
     {
+      "version": "1.4.70",
+      "date": "2026-03-13",
+      "latest": true,
+      "changes": [
+        "Add-on licensing now gates QuickFile and Officer Email Templates by entitlement",
+        "New Authorities section with proposed wordings and shortcut access from home and the gear menu"
+      ]
+    },
+    {
+      "version": "1.4.69",
+      "date": "2026-03-13",
+      "latest": false,
+      "changes": [
+        "QuickFile: easier setup and import flow with Save and test / Save and import actions, plus a direct shortcut from Firms to QuickFile settings",
+        "QuickFile: firm import now fetches clients in supported pages, improves client/contact mapping, and keeps imported firm details editable in the app",
+        "Outcomes: removed case outcome status in favour of decision-only flows, with corrected bail fields for charged with bail, bail without charge and released under investigation",
+        "Charges and email add-on: charged outcomes now pre-fill offence details from earlier sections, and email subject/body wording has been updated",
+        "QuickFile firms remain local to each user's own encrypted app database and are not bundled into app updates"
+      ]
+    },
+    {
+      "version": "1.4.66",
+      "date": "2026-03-13",
+      "latest": false,
+      "changes": [
+        "Reliability: database and backup writes now use atomic temp-file persistence to avoid dropped saves and rename races",
+        "Sync: remote pull no longer overwrites dirty local records and now surfaces protected conflicts in diagnostics and the footer",
+        "Security: supervisor approval now requires re-auth with the recovery or admin password before it is logged",
+        "Security: idle session lock now requires a real password check before unlocking",
+        "Sync: supervisor approvals now update sync metadata so approval state propagates correctly across devices"
+      ]
+    },
+    {
       "version": "1.4.65",
       "date": "2026-03-12",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Records list: type filter (Custody/Voluntary/Telephone) now works; date sort has newest and oldest options.",
         "List actions: open, delete and duplicate show error toasts on failure; archive has 5-second Undo before committing.",
@@ -49,7 +82,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Settings: fix permanent 'Checking\u2026' spinners in the Status card — network and backup values now update instantly when Settings opens.",
+        "Settings: fix permanent 'Checking…' spinners in the Status card — network and backup values now update instantly when Settings opens.",
         "Settings: fix 'Backup now' button — now calls backup directly without requiring a record to be open.",
         "Settings: fix 'Check for update' button — now triggers the update check correctly from the Status card.",
         "Settings: add 'Restore from Local Backup' panel — lists backups from your local and off-site folders, lets you select and restore any one. Safety copy saved first.",
@@ -87,7 +120,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Add Email Client Picker to Officer Email Templates: the 'Open Email App' button now shows your chosen app (Gmail, Outlook Web, Outlook.com, Yahoo, AOL, or system default). Switch instantly from the modal via 'Change app', or set your preference in Settings \u2192 Add-Ons."
+        "Add Email Client Picker to Officer Email Templates: the 'Open Email App' button now shows your chosen app (Gmail, Outlook Web, Outlook.com, Yahoo, AOL, or system default). Switch instantly from the modal via 'Change app', or set your preference in Settings → Add-Ons."
       ]
     },
     {
