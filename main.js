@@ -3288,13 +3288,16 @@ async function validateLicenceOnline(key, machineId) {
   }
 }
 
+const ADMIN_EMAILS_LOCAL = ['robertdavidcashman@gmail.com'];
+
 function computeLicenceStatus(data) {
   const noAddons = { quickfile: false, emailAddon: false };
   if (!data || !data.key) return { status: 'none', message: 'No licence activated', addons: noAddons };
+  const isAdmin = data.email && ADMIN_EMAILS_LOCAL.includes(data.email.toLowerCase());
   const isAddonValid = (exp) => exp && new Date(exp).getTime() > Date.now();
   const addons = {
-    quickfile: isAddonValid(data.entitlements?.quickfile?.expiresAt),
-    emailAddon: isAddonValid(data.entitlements?.emailAddon?.expiresAt),
+    quickfile: isAdmin || isAddonValid(data.entitlements?.quickfile?.expiresAt),
+    emailAddon: isAdmin || isAddonValid(data.entitlements?.emailAddon?.expiresAt),
   };
   if (data.status === 'revoked' || data.status === 'invalid') {
     return { status: 'revoked', message: 'Licence has been revoked. Please enter a new licence key or contact support.', key: data.key, email: data.email, addons, entitlements: data.entitlements || null };

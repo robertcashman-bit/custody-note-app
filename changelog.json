@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.73",
+      "version": "1.4.74",
       "date": "2026-03-14",
       "latest": true,
+      "changes": [
+        "Admin and authorised accounts now automatically receive all add-ons (QuickFile, Email Templates)"
+      ]
+    },
+    {
+      "version": "1.4.73",
+      "date": "2026-03-14",
+      "latest": false,
       "changes": [
         "Font size slider range extended up to 50px for maximum readability",
         "Header and navigation auto-clamp at large font sizes so controls stay usable",
