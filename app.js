@@ -3998,6 +3998,11 @@ var REQUIRED_FIELD_KEYS = [
       if (fs && s.fontSize) { fs.value = s.fontSize; }
       const fv = document.getElementById('font-size-val');
       if (fv && s.fontSize) { fv.textContent = s.fontSize + 'px'; }
+      var sbs = document.getElementById('setting-scrollbar-size');
+      if (sbs && s.scrollbarScale) { sbs.value = s.scrollbarScale; }
+      var sbv = document.getElementById('scrollbar-size-val');
+      if (sbv) { sbv.textContent = (s.scrollbarScale || '1') + 'x'; }
+      applyDensity(s.displayDensity || 'default');
       updateBackupDestSummary(s);
     });
     if (window.api.getDbPath) {
@@ -5170,6 +5175,7 @@ var REQUIRED_FIELD_KEYS = [
     refreshSectionsIndexIfOpen();
     updateProgressBar();
     buildSectionIndexBar();
+    buildSectionSidebar();
     const form = document.getElementById('attendance-form');
     if (form) form.scrollTop = 0;
   }
@@ -5948,6 +5954,7 @@ var REQUIRED_FIELD_KEYS = [
     startPaceClock();
     updateProgressBar();
     buildSectionIndexBar();
+    buildSectionSidebar();
   }
 
   function renderField(f, data, grid) {
@@ -10350,6 +10357,71 @@ PDF_CASENOTE_ADVERT +
   }
 
   /* ═══════════════════════════════════════════════
+     SCROLLBAR SIZE
+     ═══════════════════════════════════════════════ */
+  function applyScrollbarSize(scale) {
+    var w = 20 * Number(scale || 1);
+    document.documentElement.style.setProperty('--scrollbar-w', w + 'px');
+  }
+
+  function initScrollbarSize() {
+    window.api.getSettings().then(s => {
+      var sc = s.scrollbarScale || '1';
+      applyScrollbarSize(sc);
+      var slider = document.getElementById('setting-scrollbar-size');
+      if (slider) slider.value = sc;
+      var label = document.getElementById('scrollbar-size-val');
+      if (label) label.textContent = sc + 'x';
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
+     DISPLAY DENSITY
+     ═══════════════════════════════════════════════ */
+  function applyDensity(density) {
+    document.documentElement.classList.remove('density-compact', 'density-comfortable');
+    if (density === 'compact') document.documentElement.classList.add('density-compact');
+    else if (density === 'comfortable') document.documentElement.classList.add('density-comfortable');
+    document.querySelectorAll('.density-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-density') === (density || 'default'));
+    });
+  }
+
+  function initDensity() {
+    window.api.getSettings().then(s => {
+      applyDensity(s.displayDensity || 'default');
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
+     SECTION SIDEBAR (persistent on wide screens)
+     ═══════════════════════════════════════════════ */
+  function buildSectionSidebar() {
+    var container = document.getElementById('form-section-sidebar');
+    if (!container) return;
+    container.innerHTML = '';
+    var visibleIdx = 0;
+    activeFormSections.forEach(function(sec, i) {
+      var section = document.querySelector('.form-section[data-sec-idx="' + i + '"]');
+      if (section && section.style.display === 'none') return;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sidebar-section-btn';
+      if (i === currentSectionIdx) btn.classList.add('current');
+      if (formData.sectionComplete && formData.sectionComplete[i]) btn.classList.add('filled');
+      var dot = document.createElement('span');
+      dot.className = 'sidebar-dot';
+      btn.appendChild(dot);
+      var num = visibleIdx + 1;
+      var label = sec.title.replace(/^\d+\.\s*/, '');
+      btn.appendChild(document.createTextNode(num + '. ' + label));
+      btn.addEventListener('click', function() { showSection(i); });
+      container.appendChild(btn);
+      visibleIdx++;
+    });
+  }
+
+  /* ═══════════════════════════════════════════════
      SCRATCHPAD
      ═══════════════════════════════════════════════ */
   function initScratchpad() {
@@ -10992,6 +11064,8 @@ PDF_CASENOTE_ADVERT +
 
     initDarkMode();
     initFontSize();
+    initScrollbarSize();
+    initDensity();
     initKeyboardShortcuts();
     initScratchpad();
     initEnterNavigation();
@@ -12559,6 +12633,21 @@ PDF_CASENOTE_ADVERT +
       applyFontSize(sz);
       document.getElementById('font-size-val').textContent = sz + 'px';
       window.api.setSettings({ fontSize: sz }).then(showSettingsSavedToast);
+    });
+
+    document.getElementById('setting-scrollbar-size')?.addEventListener('input', (e) => {
+      var sc = e.target.value;
+      applyScrollbarSize(sc);
+      document.getElementById('scrollbar-size-val').textContent = sc + 'x';
+      window.api.setSettings({ scrollbarScale: sc }).then(showSettingsSavedToast);
+    });
+
+    document.querySelectorAll('.density-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var density = btn.getAttribute('data-density') || 'default';
+        applyDensity(density);
+        window.api.setSettings({ displayDensity: density }).then(showSettingsSavedToast);
+      });
     });
 
     document.getElementById('validation-close')?.addEventListener('click', () => {

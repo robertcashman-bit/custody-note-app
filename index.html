@@ -607,7 +607,10 @@
           </div>
         </div>
 
-        <form id="attendance-form" class="attendance-form"></form>
+        <div class="form-layout-wrap">
+          <div id="form-section-sidebar" class="form-section-sidebar"></div>
+          <form id="attendance-form" class="attendance-form"></form>
+        </div>
 
         <div class="form-bottom-bar">
           <button type="button" id="form-prev" class="bottom-btn prev-btn" title="Previous section (Ctrl+←)">&#9664; Prev</button>
@@ -941,9 +944,22 @@
           <label style="margin-top:1rem;">Font Size</label>
           <div class="font-size-row">
             <span class="font-label">A</span>
-            <input type="range" id="setting-font-size" min="12" max="28" value="16" step="1">
+            <input type="range" id="setting-font-size" min="12" max="50" value="16" step="1">
             <span class="font-label font-label-lg">A</span>
             <span id="font-size-val" class="font-size-val">16px</span>
+          </div>
+          <label style="margin-top:1rem;">Scrollbar Size</label>
+          <div class="font-size-row">
+            <span class="font-label" style="font-size:0.75rem;">Thin</span>
+            <input type="range" id="setting-scrollbar-size" min="1" max="4" value="1" step="1">
+            <span class="font-label" style="font-size:0.75rem;">Wide</span>
+            <span id="scrollbar-size-val" class="font-size-val">1x</span>
+          </div>
+          <label style="margin-top:1rem;">Display Density</label>
+          <div style="display:flex;gap:0.5rem;margin-top:0.35rem;flex-wrap:wrap;">
+            <button type="button" class="btn btn-small density-btn" data-density="compact">Compact</button>
+            <button type="button" class="btn btn-small density-btn" data-density="default">Default</button>
+            <button type="button" class="btn btn-small density-btn" data-density="comfortable">Comfortable</button>
           </div>
         </div>
 

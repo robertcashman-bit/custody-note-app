@@ -1,9 +1,36 @@
 {
   "releases": [
     {
-      "version": "1.4.71",
+      "version": "1.4.73",
       "date": "2026-03-14",
       "latest": true,
+      "changes": [
+        "Font size slider range extended up to 50px for maximum readability",
+        "Header and navigation auto-clamp at large font sizes so controls stay usable",
+        "Adjustable scrollbar size slider in Settings (1x to 4x width)",
+        "Display density toggle: Compact, Default, or Comfortable spacing",
+        "Persistent section sidebar on wide screens (1200px+) for quick navigation",
+        "Context bar stays visible while scrolling instead of auto-hiding"
+      ]
+    },
+    {
+      "version": "1.4.72",
+      "date": "2026-03-14",
+      "latest": false,
+      "changes": [
+        "Larger, more visible scrollbar that is easier to grab",
+        "Font size slider now goes up to 28px for better readability",
+        "Offence field in Quick Capture is now full-width for longer descriptions",
+        "Time arrived labels clarified: your arrival vs client arrival at station",
+        "New client arrival time field in Quick Capture separate from your arrival",
+        "Offence auto-populates from Quick Details into Section 4 when empty",
+        "Scroll performance improvements to reduce glitching"
+      ]
+    },
+    {
+      "version": "1.4.71",
+      "date": "2026-03-14",
+      "latest": false,
       "changes": [
         "Billing: new Billing & Generated Documents panel on each custody record with matter details, billing preview, document list, review confirmation checklist, and one-click QuickFile invoice creation",
         "Billing: invoice narrative auto-generated from client, station, date and offence with manual editing, live recalculation of attendance fee, mileage, parking, VAT and totals",
