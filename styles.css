@@ -4084,6 +4084,13 @@ html.home-priority-recent #home-focus-card { order: 0; }
 html.home-widgets-compact .home-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 html.home-widgets-compact .home-summary-tile { padding: 0.65rem 0.7rem; }
 html.home-widgets-compact .home-summary-value { font-size: 1.05rem; }
+html.hide-home-active #home-active-section,
+html.hide-home-dashboard #home-dashboard-grid,
+html.hide-home-shortcuts #home-shortcuts-section,
+html.hide-home-laa #home-laa-section,
+html.hide-home-status #home-status-section {
+  display: none !important;
+}
 
 .home-priority-lane {
   padding: 0 2rem 0.5rem;
@@ -4517,6 +4524,16 @@ html.section-accents-enabled .sidebar-section-btn.section-accent-9 { border-left
   margin: 0 0 0.8rem;
   font-size: 0.92rem;
   color: var(--primary);
+}
+.settings-subsection-label {
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
 
 @media (min-width: 1280px) {

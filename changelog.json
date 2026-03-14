@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.75",
+      "version": "1.4.76",
       "date": "2026-03-14",
       "latest": true,
+      "changes": [
+        "Added home-page section visibility controls so busy front-page blocks can be hidden",
+        "Saved the new home visibility preferences in settings for a cleaner default workspace"
+      ]
+    },
+    {
+      "version": "1.4.75",
+      "date": "2026-03-14",
+      "latest": false,
       "changes": [
         "Visual layout redesign across dashboard, editor shell, and settings control centre",
         "Added layout/display/accessibility preferences with richer status states and responsive polish"

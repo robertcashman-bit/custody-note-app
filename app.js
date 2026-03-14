@@ -4062,6 +4062,16 @@ var REQUIRED_FIELD_KEYS = [
       if (homePriority) homePriority.value = s.homePriority || 'active';
       var homeWidgetsMode = document.getElementById('setting-home-widgets-mode');
       if (homeWidgetsMode) homeWidgetsMode.value = s.homeWidgetsMode || 'expanded';
+      var homeShowActive = document.getElementById('setting-home-show-active');
+      if (homeShowActive) homeShowActive.checked = s.homeShowActive !== 'false';
+      var homeShowDashboard = document.getElementById('setting-home-show-dashboard');
+      if (homeShowDashboard) homeShowDashboard.checked = s.homeShowDashboard !== 'false';
+      var homeShowShortcuts = document.getElementById('setting-home-show-shortcuts');
+      if (homeShowShortcuts) homeShowShortcuts.checked = s.homeShowShortcuts !== 'false';
+      var homeShowLaa = document.getElementById('setting-home-show-laa');
+      if (homeShowLaa) homeShowLaa.checked = s.homeShowLaa !== 'false';
+      var homeShowStatus = document.getElementById('setting-home-show-status');
+      if (homeShowStatus) homeShowStatus.checked = s.homeShowStatus !== 'false';
       var showContextPanel = document.getElementById('setting-show-context-panel');
       if (showContextPanel) showContextPanel.checked = s.showContextPanel !== 'false';
       var stickyHeadings = document.getElementById('setting-sticky-section-headings');
@@ -4249,6 +4259,11 @@ var REQUIRED_FIELD_KEYS = [
       navMode: document.getElementById('setting-nav-mode')?.value || 'auto',
       homePriority: document.getElementById('setting-home-priority')?.value || 'active',
       homeWidgetsMode: document.getElementById('setting-home-widgets-mode')?.value || 'expanded',
+      homeShowActive: document.getElementById('setting-home-show-active')?.checked ? 'true' : 'false',
+      homeShowDashboard: document.getElementById('setting-home-show-dashboard')?.checked ? 'true' : 'false',
+      homeShowShortcuts: document.getElementById('setting-home-show-shortcuts')?.checked ? 'true' : 'false',
+      homeShowLaa: document.getElementById('setting-home-show-laa')?.checked ? 'true' : 'false',
+      homeShowStatus: document.getElementById('setting-home-show-status')?.checked ? 'true' : 'false',
       showContextPanel: document.getElementById('setting-show-context-panel')?.checked ? 'true' : 'false',
       stickySectionHeadings: document.getElementById('setting-sticky-section-headings')?.checked ? 'true' : 'false',
       largerTextareas: document.getElementById('setting-larger-textareas')?.checked ? 'true' : 'false',
@@ -10508,6 +10523,11 @@ PDF_CASENOTE_ADVERT +
 
     root.classList.toggle('home-priority-recent', homePriority === 'recent');
     root.classList.toggle('home-widgets-compact', widgetsMode === 'compact');
+    root.classList.toggle('hide-home-active', settings && settings.homeShowActive === 'false');
+    root.classList.toggle('hide-home-dashboard', settings && settings.homeShowDashboard === 'false');
+    root.classList.toggle('hide-home-shortcuts', settings && settings.homeShowShortcuts === 'false');
+    root.classList.toggle('hide-home-laa', settings && settings.homeShowLaa === 'false');
+    root.classList.toggle('hide-home-status', settings && settings.homeShowStatus === 'false');
 
     document.querySelectorAll('.layout-preview-btn').forEach(function(btn) {
       btn.classList.toggle('active', btn.getAttribute('data-layout-mode') === layoutMode);
@@ -12895,6 +12915,23 @@ PDF_CASENOTE_ADVERT +
         if (id === 'setting-nav-mode') payload.navMode = this.value;
         if (id === 'setting-home-priority') payload.homePriority = this.value;
         if (id === 'setting-home-widgets-mode') payload.homeWidgetsMode = this.value;
+        window.api.setSettings(payload).then(function() {
+          return window.api.getSettings();
+        }).then(function(s) {
+          applyLayoutPreferences(s || {});
+          showSettingsSavedToast();
+        });
+      });
+    });
+
+    ['setting-home-show-active', 'setting-home-show-dashboard', 'setting-home-show-shortcuts', 'setting-home-show-laa', 'setting-home-show-status'].forEach(function(id) {
+      document.getElementById(id)?.addEventListener('change', function() {
+        var payload = {};
+        if (id === 'setting-home-show-active') payload.homeShowActive = this.checked ? 'true' : 'false';
+        if (id === 'setting-home-show-dashboard') payload.homeShowDashboard = this.checked ? 'true' : 'false';
+        if (id === 'setting-home-show-shortcuts') payload.homeShowShortcuts = this.checked ? 'true' : 'false';
+        if (id === 'setting-home-show-laa') payload.homeShowLaa = this.checked ? 'true' : 'false';
+        if (id === 'setting-home-show-status') payload.homeShowStatus = this.checked ? 'true' : 'false';
         window.api.setSettings(payload).then(function() {
           return window.api.getSettings();
         }).then(function(s) {

@@ -209,7 +209,7 @@
             </div>
           </div>
 
-          <div class="home-priority-lane">
+          <div id="home-active-section" class="home-priority-lane">
             <div class="home-card-widget home-card-widget-priority home-card-full home-card-widget-first">
               <div class="home-widget-header">
                 <div>
@@ -226,7 +226,7 @@
             </div>
           </div>
 
-          <div class="home-grid">
+          <div id="home-dashboard-grid" class="home-grid">
             <div class="home-card-widget home-card-full home-card-widget-muted" id="home-focus-card">
               <div class="home-widget-header">
                 <h3 class="home-widget-title">Continue Working</h3>
@@ -290,54 +290,58 @@
             </div>
           </div>
 
-          <!-- Shortcuts -->
-          <h2 class="home-section-title">Shortcuts</h2>
-          <div class="home-shortcuts">
-            <h3 class="home-shortcuts-subhead">Tools &amp; options</h3>
-            <div class="home-tools">
-              <button type="button" class="home-tool-btn" data-action="records" title="View and search all records">Records</button>
-              <button type="button" class="home-tool-btn" data-action="firms" title="Firms you work for">Firms</button>
-              <button type="button" class="home-tool-btn" data-action="reports" title="Attendance and fee reports">Reports</button>
-              <button type="button" class="home-tool-btn" data-action="authorities" title="Authority forms for criminal defence">Authorities</button>
-              <button type="button" class="home-tool-btn" data-action="shortcut-print-pdf" title="Print attendance note PDF">Print PDF</button>
-              <button type="button" class="home-tool-btn" data-action="shortcut-email-solicitor" title="Email attendance note to instructing solicitor">Email to solicitor</button>
-              <button type="button" class="home-tool-btn" data-action="shortcut-backup-now" title="Create a backup now">Backup now</button>
-              <button type="button" class="home-tool-btn" data-action="settings" title="App settings and backup">Settings</button>
-              <button type="button" class="home-tool-btn" data-action="help" title="How to use Custody Note">Help</button>
+          <div id="home-shortcuts-section">
+            <!-- Shortcuts -->
+            <h2 class="home-section-title">Shortcuts</h2>
+            <div class="home-shortcuts">
+              <h3 class="home-shortcuts-subhead">Tools &amp; options</h3>
+              <div class="home-tools">
+                <button type="button" class="home-tool-btn" data-action="records" title="View and search all records">Records</button>
+                <button type="button" class="home-tool-btn" data-action="firms" title="Firms you work for">Firms</button>
+                <button type="button" class="home-tool-btn" data-action="reports" title="Attendance and fee reports">Reports</button>
+                <button type="button" class="home-tool-btn" data-action="authorities" title="Authority forms for criminal defence">Authorities</button>
+                <button type="button" class="home-tool-btn" data-action="shortcut-print-pdf" title="Print attendance note PDF">Print PDF</button>
+                <button type="button" class="home-tool-btn" data-action="shortcut-email-solicitor" title="Email attendance note to instructing solicitor">Email to solicitor</button>
+                <button type="button" class="home-tool-btn" data-action="shortcut-backup-now" title="Create a backup now">Backup now</button>
+                <button type="button" class="home-tool-btn" data-action="settings" title="App settings and backup">Settings</button>
+                <button type="button" class="home-tool-btn" data-action="help" title="How to use Custody Note">Help</button>
+              </div>
             </div>
           </div>
 
-          <!-- LAA Forms -->
-          <h2 class="home-section-title">LAA Forms</h2>
-          <div class="home-standalone-options home-standalone-options-detailed" style="margin-bottom:1.5rem;">
-            <button type="button" class="home-standalone-card" data-laa-form="crm1" title="CRM1 &mdash; Client Details">
-              <span class="home-standalone-card-icon" aria-hidden="true">&#128203;</span>
-              <span class="home-standalone-card-text">
-                <span class="home-standalone-card-label">CRM1 &mdash; Client Details</span>
-                <span class="home-standalone-card-desc">Client&rsquo;s personal details, capital, income. Auto-filled from your record.</span>
-              </span>
-            </button>
-            <button type="button" class="home-standalone-card" data-laa-form="crm2" title="CRM2 &mdash; Advice &amp; Assistance">
-              <span class="home-standalone-card-icon" aria-hidden="true">&#128221;</span>
-              <span class="home-standalone-card-text">
-                <span class="home-standalone-card-label">CRM2 &mdash; Advice &amp; Assistance</span>
-                <span class="home-standalone-card-desc">Application for A&amp;A at the police station. Auto-filled from your record.</span>
-              </span>
-            </button>
-            <button type="button" class="home-standalone-card" data-laa-form="crm3" title="CRM3 &mdash; Advocacy Assistance">
-              <span class="home-standalone-card-icon" aria-hidden="true">&#9878;</span>
-              <span class="home-standalone-card-text">
-                <span class="home-standalone-card-label">CRM3 &mdash; Advocacy Assistance</span>
-                <span class="home-standalone-card-desc">Application for Advocacy Assistance (bail, WFD). Auto-filled from your record.</span>
-              </span>
-            </button>
-            <button type="button" class="home-standalone-card" data-laa-form="declaration" title="Applicant Declaration">
-              <span class="home-standalone-card-icon" aria-hidden="true">&#128196;</span>
-              <span class="home-standalone-card-text">
-                <span class="home-standalone-card-label">Applicant Declaration</span>
-                <span class="home-standalone-card-desc">Criminal legal aid applicant&rsquo;s declaration for online submissions. Auto-filled from your record.</span>
-              </span>
-            </button>
+          <div id="home-laa-section">
+            <!-- LAA Forms -->
+            <h2 class="home-section-title">LAA Forms</h2>
+            <div class="home-standalone-options home-standalone-options-detailed" style="margin-bottom:1.5rem;">
+              <button type="button" class="home-standalone-card" data-laa-form="crm1" title="CRM1 &mdash; Client Details">
+                <span class="home-standalone-card-icon" aria-hidden="true">&#128203;</span>
+                <span class="home-standalone-card-text">
+                  <span class="home-standalone-card-label">CRM1 &mdash; Client Details</span>
+                  <span class="home-standalone-card-desc">Client&rsquo;s personal details, capital, income. Auto-filled from your record.</span>
+                </span>
+              </button>
+              <button type="button" class="home-standalone-card" data-laa-form="crm2" title="CRM2 &mdash; Advice &amp; Assistance">
+                <span class="home-standalone-card-icon" aria-hidden="true">&#128221;</span>
+                <span class="home-standalone-card-text">
+                  <span class="home-standalone-card-label">CRM2 &mdash; Advice &amp; Assistance</span>
+                  <span class="home-standalone-card-desc">Application for A&amp;A at the police station. Auto-filled from your record.</span>
+                </span>
+              </button>
+              <button type="button" class="home-standalone-card" data-laa-form="crm3" title="CRM3 &mdash; Advocacy Assistance">
+                <span class="home-standalone-card-icon" aria-hidden="true">&#9878;</span>
+                <span class="home-standalone-card-text">
+                  <span class="home-standalone-card-label">CRM3 &mdash; Advocacy Assistance</span>
+                  <span class="home-standalone-card-desc">Application for Advocacy Assistance (bail, WFD). Auto-filled from your record.</span>
+                </span>
+              </button>
+              <button type="button" class="home-standalone-card" data-laa-form="declaration" title="Applicant Declaration">
+                <span class="home-standalone-card-icon" aria-hidden="true">&#128196;</span>
+                <span class="home-standalone-card-text">
+                  <span class="home-standalone-card-label">Applicant Declaration</span>
+                  <span class="home-standalone-card-desc">Criminal legal aid applicant&rsquo;s declaration for online submissions. Auto-filled from your record.</span>
+                </span>
+              </button>
+            </div>
           </div>
 
           <!-- Attendance picker for Print PDF / Email to solicitor from home -->
@@ -350,7 +354,7 @@
             </div>
           </div>
 
-          <div class="home-status-strip">
+          <div id="home-status-section" class="home-status-strip">
             <span id="home-net-status" class="home-status-item">Checking connection&hellip;</span>
             <span class="home-status-sep">&middot;</span>
             <span id="home-backup-status" class="home-status-item">Auto backup: checking&hellip;</span>
@@ -1030,6 +1034,27 @@
               <label class="toggle-row" style="margin-top:0.9rem;">
                 <span>Section colour accents</span>
                 <input type="checkbox" id="setting-section-accents">
+              </label>
+              <div class="settings-subsection-label">Front page sections</div>
+              <label class="toggle-row" style="margin-top:0.75rem;">
+                <span>Show active matters strip</span>
+                <input type="checkbox" id="setting-home-show-active">
+              </label>
+              <label class="toggle-row" style="margin-top:0.75rem;">
+                <span>Show dashboard cards</span>
+                <input type="checkbox" id="setting-home-show-dashboard">
+              </label>
+              <label class="toggle-row" style="margin-top:0.75rem;">
+                <span>Show shortcuts/tools</span>
+                <input type="checkbox" id="setting-home-show-shortcuts">
+              </label>
+              <label class="toggle-row" style="margin-top:0.75rem;">
+                <span>Show LAA forms section</span>
+                <input type="checkbox" id="setting-home-show-laa">
+              </label>
+              <label class="toggle-row" style="margin-top:0.75rem;">
+                <span>Show status strip</span>
+                <input type="checkbox" id="setting-home-show-status">
               </label>
             </div>
 
