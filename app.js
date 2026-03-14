@@ -2721,6 +2721,55 @@ var REQUIRED_FIELD_KEYS = [
     }).join('');
   }
 
+  function formatRelativeUpdated(value) {
+    if (!value) return 'Updated recently';
+    var diff = Math.max(0, Date.now() - new Date(value).getTime());
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Updated just now';
+    if (mins < 60) return 'Updated ' + mins + 'm ago';
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return 'Updated ' + hours + 'h ago';
+    var days = Math.floor(hours / 24);
+    return 'Updated ' + days + 'd ago';
+  }
+
+  function loadHomeActiveMatters(rows) {
+    var el = document.getElementById('home-active-matters');
+    if (!el) return;
+    var activeRows = (rows || []).filter(function(r) { return (r.status || 'draft') !== 'finalised'; }).slice(0, 6);
+    if (!activeRows.length) {
+      el.innerHTML = '<div class="home-active-empty">No active drafts right now. Use the quick actions above to start a new note.</div>';
+      return;
+    }
+    el.innerHTML = activeRows.map(function(r) {
+      var d = getHomeStatsDetails(r);
+      var name = [d.forename, d.surname].filter(Boolean).join(' ') || r.client_name || 'Unnamed';
+      var offence = d.offenceSummary || 'Offence not yet entered';
+      var updated = formatRelativeUpdated(r.updated_at || r.created_at);
+      var status = (r.status || 'draft');
+      var station = r.station_name || 'Station not yet chosen';
+      var mode = d._formType === 'telephone' ? 'Telephone' : (d.attendanceMode === 'voluntary' ? 'Voluntary' : 'Custody');
+      return '' +
+        '<div class="home-active-item" data-id="' + esc(String(r.id)) + '">' +
+          '<div class="home-active-top">' +
+            '<div class="home-active-stack">' +
+              '<span class="home-active-title">' + esc(name) + '</span>' +
+              '<span class="home-active-subtitle">' + esc(station) + '</span>' +
+            '</div>' +
+            '<span class="badge ' + esc(status === 'finalised' ? 'finalised' : 'draft') + '">' + esc(status) + '</span>' +
+          '</div>' +
+          '<div class="home-active-subtitle">' + esc(offence) + '</div>' +
+          '<div class="home-active-footer">' +
+            '<div class="home-active-kpis">' +
+              '<span class="home-kpi-chip">' + esc(mode) + '</span>' +
+              '<span class="home-kpi-chip">' + esc(updated) + '</span>' +
+            '</div>' +
+            '<span class="home-view-all">Resume</span>' +
+          '</div>' +
+        '</div>';
+    }).join('');
+  }
+
   function loadHomeFocus(rows) {
     var card = document.getElementById('home-focus-card');
     var titleEl = document.getElementById('home-focus-title');
@@ -2767,12 +2816,14 @@ var REQUIRED_FIELD_KEYS = [
       if (!rows || !rows.length) {
         list.innerHTML = '<li class="home-recent-empty">No records yet. Create your first attendance above.</li>';
         if (statsEl) statsEl.textContent = '';
+        loadHomeActiveMatters([]);
         loadHomeFocus([]);
         return;
       }
       var sorted = rows.slice().sort(function(a, b) { return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''); });
       var HOME_RECENT_LIMIT = 10;
       var showRows = sorted.slice(0, HOME_RECENT_LIMIT);
+      loadHomeActiveMatters(sorted);
       loadHomeFocus(sorted);
       list.innerHTML = showRows.map(function(r) {
         var name = (r.client_name && String(r.client_name).trim()) || 'Unnamed';
@@ -4003,6 +4054,29 @@ var REQUIRED_FIELD_KEYS = [
       var sbv = document.getElementById('scrollbar-size-val');
       if (sbv) { sbv.textContent = (s.scrollbarScale || '1') + 'x'; }
       applyDensity(s.displayDensity || 'default');
+      var layoutMode = document.getElementById('setting-layout-mode');
+      if (layoutMode) layoutMode.value = s.layoutMode || 'standard';
+      var navMode = document.getElementById('setting-nav-mode');
+      if (navMode) navMode.value = s.navMode || 'auto';
+      var homePriority = document.getElementById('setting-home-priority');
+      if (homePriority) homePriority.value = s.homePriority || 'active';
+      var homeWidgetsMode = document.getElementById('setting-home-widgets-mode');
+      if (homeWidgetsMode) homeWidgetsMode.value = s.homeWidgetsMode || 'expanded';
+      var showContextPanel = document.getElementById('setting-show-context-panel');
+      if (showContextPanel) showContextPanel.checked = s.showContextPanel !== 'false';
+      var stickyHeadings = document.getElementById('setting-sticky-section-headings');
+      if (stickyHeadings) stickyHeadings.checked = s.stickySectionHeadings !== 'false';
+      var largerTextareas = document.getElementById('setting-larger-textareas');
+      if (largerTextareas) largerTextareas.checked = s.largerTextareas === 'true';
+      var sectionAccents = document.getElementById('setting-section-accents');
+      if (sectionAccents) sectionAccents.checked = s.sectionAccents !== 'false';
+      var highContrast = document.getElementById('setting-high-contrast');
+      if (highContrast) highContrast.checked = s.highContrast === 'true';
+      var largeControls = document.getElementById('setting-large-controls');
+      if (largeControls) largeControls.checked = s.largeControls === 'true';
+      var reducedMotion = document.getElementById('setting-reduced-motion');
+      if (reducedMotion) reducedMotion.checked = s.reducedMotion === 'true';
+      applyLayoutPreferences(s || {});
       updateBackupDestSummary(s);
     });
     if (window.api.getDbPath) {
@@ -4171,7 +4245,21 @@ var REQUIRED_FIELD_KEYS = [
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
       darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
       fontSize: document.getElementById('setting-font-size')?.value || '16',
-    }).then(() => showToast('Settings saved', 'success'));
+      layoutMode: document.getElementById('setting-layout-mode')?.value || 'standard',
+      navMode: document.getElementById('setting-nav-mode')?.value || 'auto',
+      homePriority: document.getElementById('setting-home-priority')?.value || 'active',
+      homeWidgetsMode: document.getElementById('setting-home-widgets-mode')?.value || 'expanded',
+      showContextPanel: document.getElementById('setting-show-context-panel')?.checked ? 'true' : 'false',
+      stickySectionHeadings: document.getElementById('setting-sticky-section-headings')?.checked ? 'true' : 'false',
+      largerTextareas: document.getElementById('setting-larger-textareas')?.checked ? 'true' : 'false',
+      sectionAccents: document.getElementById('setting-section-accents')?.checked ? 'true' : 'false',
+      highContrast: document.getElementById('setting-high-contrast')?.checked ? 'true' : 'false',
+      largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
+      reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
+    }).then(() => window.api.getSettings()).then(function(s) {
+      applyLayoutPreferences(s || {});
+      showToast('Settings saved', 'success');
+    });
   }
 
   function loadFirmsList() {
@@ -5447,8 +5535,8 @@ var REQUIRED_FIELD_KEYS = [
         document.getElementById('form-next')?.classList.add('hidden');
         setFormTitle(sec.title);
 
-        const section = document.createElement('div');
-        section.className = 'form-section active';
+      const section = document.createElement('div');
+      section.className = 'form-section active section-accent-1';
         section.dataset.sectionId = sec.id;
         if (sec.hasDeclarationText && refData.laaDeclarationText) {
           const decl = document.createElement('div');
@@ -5927,7 +6015,7 @@ var REQUIRED_FIELD_KEYS = [
 
     activeFormSections.forEach((sec, secIdx) => {
       const section = document.createElement('div');
-      section.className = 'form-section' + (secIdx === currentSectionIdx ? ' active' : '');
+      section.className = 'form-section ' + getSectionAccentClass(secIdx) + (secIdx === currentSectionIdx ? ' active' : '');
       section.dataset.secIdx = secIdx;
       section.dataset.sectionId = sec.id || '';
       if (sec.id === 'supervisorReview' && !isSupervisorSectionEnabled()) {
@@ -8679,7 +8767,9 @@ var REQUIRED_FIELD_KEYS = [
         dot.type = 'button';
         dot.className = 'prog-dot';
         dot.title = sec.title;
-        if (formData.sectionComplete && formData.sectionComplete[i]) dot.classList.add('filled');
+        var state = computeSectionVisualState(i);
+        dot.classList.add('state-' + state);
+        if (state === 'complete') dot.classList.add('filled');
         if (i === currentSectionIdx) dot.classList.add('current');
         dot.addEventListener('click', function() { showSection(i); });
         bar.appendChild(dot);
@@ -10394,6 +10484,128 @@ PDF_CASENOTE_ADVERT +
   }
 
   /* ═══════════════════════════════════════════════
+     VISUAL LAYOUT PREFERENCES
+     ═══════════════════════════════════════════════ */
+  function applyLayoutPreferences(settings) {
+    var root = document.documentElement;
+    var layoutMode = (settings && settings.layoutMode) || 'standard';
+    var homePriority = (settings && settings.homePriority) || 'active';
+    var widgetsMode = (settings && settings.homeWidgetsMode) || 'expanded';
+    var navMode = (settings && settings.navMode) || 'auto';
+
+    root.classList.remove('layout-mode-standard', 'layout-mode-wide', 'layout-mode-focus', 'layout-mode-tablet');
+    root.classList.add('layout-mode-' + layoutMode);
+    root.classList.remove('nav-mode-auto', 'nav-mode-sidebar', 'nav-mode-topbar');
+    root.classList.add('nav-mode-' + navMode);
+
+    root.classList.toggle('context-panel-open', !settings || settings.showContextPanel !== 'false');
+    root.classList.toggle('section-accents-enabled', !settings || settings.sectionAccents !== 'false');
+    root.classList.toggle('sticky-section-headings', !settings || settings.stickySectionHeadings !== 'false');
+    root.classList.toggle('larger-textareas', settings && settings.largerTextareas === 'true');
+    root.classList.toggle('high-contrast', settings && settings.highContrast === 'true');
+    root.classList.toggle('accessibility-large-controls', settings && settings.largeControls === 'true');
+    root.classList.toggle('reduced-motion', settings && settings.reducedMotion === 'true');
+
+    root.classList.toggle('home-priority-recent', homePriority === 'recent');
+    root.classList.toggle('home-widgets-compact', widgetsMode === 'compact');
+
+    document.querySelectorAll('.layout-preview-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-layout-mode') === layoutMode);
+    });
+  }
+
+  function initLayoutPreferences() {
+    if (!window.api || !window.api.getSettings) return;
+    window.api.getSettings().then(function(s) {
+      applyLayoutPreferences(s || {});
+    });
+  }
+
+  function getSectionAccentClass(idx) {
+    return 'section-accent-' + (idx + 1);
+  }
+
+  function hasMeaningfulFieldValue(v) {
+    if (v === null || v === undefined) return false;
+    if (typeof v === 'string') return !!v.trim();
+    if (Array.isArray(v)) return v.some(hasMeaningfulFieldValue);
+    if (typeof v === 'object') return Object.values(v).some(hasMeaningfulFieldValue);
+    return !!v;
+  }
+
+  function computeSectionVisualState(secIdx) {
+    var sec = activeFormSections && activeFormSections[secIdx];
+    if (!sec || !sec.fields) return (formData.sectionComplete && formData.sectionComplete[secIdx]) ? 'complete' : 'empty';
+    if (formData.sectionComplete && formData.sectionComplete[secIdx]) return 'complete';
+    var keys = sec.fields
+      .filter(function(f) {
+        return f && f.key && ['sectionHeading', 'sectionNote', 'actionButton', 'checklistHeading'].indexOf(f.type) === -1;
+      })
+      .map(function(f) { return f.key; });
+    if (!keys.length) return 'empty';
+    var any = keys.some(function(k) { return hasMeaningfulFieldValue(formData[k]); });
+    return any ? 'partial' : 'empty';
+  }
+
+  function updateFormContextPanel() {
+    var matterEl = document.getElementById('form-panel-matter');
+    var statusEl = document.getElementById('form-panel-section-status');
+    var elapsedEl = document.getElementById('form-panel-elapsed');
+    var billingEl = document.getElementById('form-panel-billing');
+    var reminderEl = document.getElementById('form-panel-reminder');
+    if (!matterEl || !statusEl || !elapsedEl || !billingEl || !reminderEl) return;
+
+    var name = [formData.forename, formData.surname].filter(Boolean).join(' ').trim() || 'Unnamed client';
+    var station = formData.policeStationName || 'Station not entered';
+    var offence = formData.offenceSummary || 'Offence not entered';
+    var custody = formData.custodyNumber || 'Not recorded';
+    var oic = formData.oicName || 'Not recorded';
+    matterEl.innerHTML =
+      '<div class="form-panel-row"><span>Client</span><strong>' + esc(name) + '</strong></div>' +
+      '<div class="form-panel-row"><span>Station</span><strong>' + esc(station) + '</strong></div>' +
+      '<div class="form-panel-row"><span>Offence</span><strong>' + esc(offence) + '</strong></div>' +
+      '<div class="form-panel-row"><span>Custody no.</span><strong>' + esc(custody) + '</strong></div>' +
+      '<div class="form-panel-row"><span>OIC</span><strong>' + esc(oic) + '</strong></div>';
+
+    var current = activeFormSections && activeFormSections[currentSectionIdx];
+    var visibleStatuses = [];
+    activeFormSections.forEach(function(sec, idx) {
+      var section = document.querySelector('.form-section[data-sec-idx="' + idx + '"]');
+      if (section && section.style.display === 'none') return;
+      visibleStatuses.push({
+        idx: idx,
+        title: sec.title.replace(/^\d+\.\s*/, ''),
+        state: computeSectionVisualState(idx)
+      });
+    });
+    statusEl.innerHTML = visibleStatuses.map(function(item) {
+      return '<div class="form-panel-row"><span>' + esc(item.title) + '</span><strong>' + esc(item.state === 'complete' ? 'Complete' : (item.state === 'partial' ? 'In progress' : 'Not started')) + '</strong></div>';
+    }).join('');
+
+    var arrival = formData.timeArrival || '';
+    if (arrival) {
+      var parts = arrival.split(':').map(Number);
+      if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+        var mins = parts[0] * 60 + parts[1];
+        var now = new Date();
+        var nowMins = now.getHours() * 60 + now.getMinutes();
+        var diff = nowMins - mins;
+        if (diff < 0) diff += 1440;
+        var hrs = Math.floor(diff / 60);
+        var rem = diff % 60;
+        elapsedEl.textContent = hrs > 0 ? (hrs + 'h ' + rem + 'm') : (rem + 'm');
+      } else {
+        elapsedEl.textContent = '—';
+      }
+    } else {
+      elapsedEl.textContent = '—';
+    }
+
+    billingEl.textContent = formData.quickfileInvoiceNumber ? 'Invoiced' : (current && current.id === 'timeRecording' ? 'Ready to review' : 'Draft in progress');
+    reminderEl.textContent = current ? ('Current section: ' + current.title.replace(/^\d+\.\s*/, '') + '. Keep the key facts concise and review before moving on.') : 'Complete the current section before moving on where possible.';
+  }
+
+  /* ═══════════════════════════════════════════════
      SECTION SIDEBAR (persistent on wide screens)
      ═══════════════════════════════════════════════ */
   function buildSectionSidebar() {
@@ -10407,18 +10619,24 @@ PDF_CASENOTE_ADVERT +
       var btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'sidebar-section-btn';
+      var state = computeSectionVisualState(i);
+      btn.classList.add('state-' + state, getSectionAccentClass(i));
       if (i === currentSectionIdx) btn.classList.add('current');
-      if (formData.sectionComplete && formData.sectionComplete[i]) btn.classList.add('filled');
+      if (state === 'complete') btn.classList.add('filled');
       var dot = document.createElement('span');
       dot.className = 'sidebar-dot';
       btn.appendChild(dot);
       var num = visibleIdx + 1;
       var label = sec.title.replace(/^\d+\.\s*/, '');
-      btn.appendChild(document.createTextNode(num + '. ' + label));
+      var textWrap = document.createElement('span');
+      textWrap.className = 'sidebar-text';
+      textWrap.textContent = num + '. ' + label;
+      btn.appendChild(textWrap);
       btn.addEventListener('click', function() { showSection(i); });
       container.appendChild(btn);
       visibleIdx++;
     });
+    updateFormContextPanel();
   }
 
   /* ═══════════════════════════════════════════════
@@ -10659,6 +10877,12 @@ PDF_CASENOTE_ADVERT +
 
         /* Home recent item click (li, not button) */
         if (!t) {
+          var activeItem = e.target && (e.target.closest ? e.target.closest('.home-active-item') : null);
+          if (activeItem && activeItem.dataset.id) {
+            e.preventDefault();
+            openAttendance(parseInt(activeItem.dataset.id, 10));
+            return;
+          }
           var li = e.target && (e.target.closest ? e.target.closest('.home-recent-item') : null);
           if (li && li.dataset.id) {
             e.preventDefault();
@@ -11066,6 +11290,7 @@ PDF_CASENOTE_ADVERT +
     initFontSize();
     initScrollbarSize();
     initDensity();
+    initLayoutPreferences();
     initKeyboardShortcuts();
     initScratchpad();
     initEnterNavigation();
@@ -12648,6 +12873,62 @@ PDF_CASENOTE_ADVERT +
         applyDensity(density);
         window.api.setSettings({ displayDensity: density }).then(showSettingsSavedToast);
       });
+    });
+
+    document.querySelectorAll('.layout-preview-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var mode = btn.getAttribute('data-layout-mode') || 'standard';
+        var input = document.getElementById('setting-layout-mode');
+        if (input) input.value = mode;
+        window.api.setSettings({ layoutMode: mode }).then(function() {
+          return window.api.getSettings();
+        }).then(function(s) {
+          applyLayoutPreferences(s || {});
+          showSettingsSavedToast();
+        });
+      });
+    });
+
+    ['setting-nav-mode', 'setting-home-priority', 'setting-home-widgets-mode'].forEach(function(id) {
+      document.getElementById(id)?.addEventListener('change', function() {
+        var payload = {};
+        if (id === 'setting-nav-mode') payload.navMode = this.value;
+        if (id === 'setting-home-priority') payload.homePriority = this.value;
+        if (id === 'setting-home-widgets-mode') payload.homeWidgetsMode = this.value;
+        window.api.setSettings(payload).then(function() {
+          return window.api.getSettings();
+        }).then(function(s) {
+          applyLayoutPreferences(s || {});
+          showSettingsSavedToast();
+        });
+      });
+    });
+
+    ['setting-show-context-panel', 'setting-sticky-section-headings', 'setting-larger-textareas', 'setting-section-accents', 'setting-high-contrast', 'setting-large-controls', 'setting-reduced-motion'].forEach(function(id) {
+      document.getElementById(id)?.addEventListener('change', function() {
+        var payload = {};
+        if (id === 'setting-show-context-panel') payload.showContextPanel = this.checked ? 'true' : 'false';
+        if (id === 'setting-sticky-section-headings') payload.stickySectionHeadings = this.checked ? 'true' : 'false';
+        if (id === 'setting-larger-textareas') payload.largerTextareas = this.checked ? 'true' : 'false';
+        if (id === 'setting-section-accents') payload.sectionAccents = this.checked ? 'true' : 'false';
+        if (id === 'setting-high-contrast') payload.highContrast = this.checked ? 'true' : 'false';
+        if (id === 'setting-large-controls') payload.largeControls = this.checked ? 'true' : 'false';
+        if (id === 'setting-reduced-motion') payload.reducedMotion = this.checked ? 'true' : 'false';
+        window.api.setSettings(payload).then(function() {
+          return window.api.getSettings();
+        }).then(function(s) {
+          applyLayoutPreferences(s || {});
+          showSettingsSavedToast();
+        });
+      });
+    });
+
+    document.addEventListener('input', debounce(function() {
+      if (document.getElementById('view-form')?.classList.contains('active')) updateFormContextPanel();
+    }, 180));
+
+    document.addEventListener('change', function() {
+      if (document.getElementById('view-form')?.classList.contains('active')) updateFormContextPanel();
     });
 
     document.getElementById('validation-close')?.addEventListener('click', () => {

@@ -209,23 +209,28 @@
             </div>
           </div>
 
-          <!-- Recent Cases (top of content) -->
-          <div class="home-card-widget home-card-widget-first">
-            <div class="home-widget-header">
-              <h3 class="home-widget-title">Recent Cases</h3>
-              <button type="button" id="home-view-all" class="home-view-all">View all &rarr;</button>
+          <div class="home-priority-lane">
+            <div class="home-card-widget home-card-widget-priority home-card-full home-card-widget-first">
+              <div class="home-widget-header">
+                <div>
+                  <h3 class="home-widget-title">Active Matters</h3>
+                  <span class="home-widget-note">Resume live work immediately</span>
+                </div>
+                <div class="home-widget-actions">
+                  <button type="button" id="home-check-update-btn" class="btn btn-secondary btn-small">Check updates</button>
+                </div>
+              </div>
+              <div id="home-active-matters" class="home-active-matters">
+                <div class="home-active-empty">Checking active drafts and recent matters…</div>
+              </div>
             </div>
-            <ul id="home-recent-list" class="home-recent-list">
-              <li class="home-recent-empty">No records yet. Create your first attendance above.</li>
-            </ul>
-            <div id="home-stats" class="home-stats"></div>
           </div>
 
           <div class="home-grid">
             <div class="home-card-widget home-card-full home-card-widget-muted" id="home-focus-card">
               <div class="home-widget-header">
                 <h3 class="home-widget-title">Continue Working</h3>
-                <span class="home-widget-note">Pick up where you left off</span>
+                <span class="home-widget-note">Pick up where you left off fastest</span>
               </div>
               <div class="home-focus-panel">
                 <div class="home-focus-copy">
@@ -238,7 +243,18 @@
               </div>
             </div>
 
-            <div class="home-card-widget">
+            <div class="home-card-widget home-card-widget-spotlight">
+              <div class="home-widget-header">
+                <h3 class="home-widget-title">Recent Cases</h3>
+                <button type="button" id="home-view-all" class="home-view-all">View all &rarr;</button>
+              </div>
+              <ul id="home-recent-list" class="home-recent-list">
+                <li class="home-recent-empty">No records yet. Create your first attendance above.</li>
+              </ul>
+              <div id="home-stats" class="home-stats"></div>
+            </div>
+
+            <div class="home-card-widget home-card-widget-metric">
               <div class="home-widget-header">
                 <h3 class="home-widget-title">This Week</h3>
                 <span class="home-widget-note">Live totals</span>
@@ -263,7 +279,7 @@
               </div>
             </div>
 
-            <div class="home-card-widget">
+            <div class="home-card-widget home-card-widget-attention">
               <div class="home-widget-header">
                 <h3 class="home-widget-title">Needs Attention</h3>
                 <span class="home-widget-note">Actionable items only</span>
@@ -610,6 +626,37 @@
         <div class="form-layout-wrap">
           <div id="form-section-sidebar" class="form-section-sidebar"></div>
           <form id="attendance-form" class="attendance-form"></form>
+          <aside id="form-context-panel" class="form-context-panel">
+            <div class="form-panel-card">
+              <div class="form-panel-card-label">Matter Summary</div>
+              <div id="form-panel-matter" class="form-panel-stack">
+                <div class="form-panel-empty">Open a matter to see the key facts here.</div>
+              </div>
+            </div>
+            <div class="form-panel-card">
+              <div class="form-panel-card-label">Section Status</div>
+              <div id="form-panel-section-status" class="form-panel-stack">
+                <div class="form-panel-empty">Section progress will appear here.</div>
+              </div>
+            </div>
+            <div class="form-panel-card">
+              <div class="form-panel-card-label">Live Reference</div>
+              <div id="form-panel-reference" class="form-panel-reference">
+                <div class="form-panel-reference-item">
+                  <span class="form-panel-reference-label">Elapsed since arrival</span>
+                  <strong id="form-panel-elapsed">—</strong>
+                </div>
+                <div class="form-panel-reference-item">
+                  <span class="form-panel-reference-label">Billing readiness</span>
+                  <strong id="form-panel-billing">Draft in progress</strong>
+                </div>
+                <div class="form-panel-reference-item">
+                  <span class="form-panel-reference-label">Quick reminder</span>
+                  <span id="form-panel-reminder" class="form-panel-reminder">Complete the current section before moving on where possible.</span>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
 
         <div class="form-bottom-bar">
@@ -921,6 +968,88 @@
           </div>
         </div>
 
+        <div class="settings-card settings-display-studio">
+          <h2>Display &amp; Layout Studio</h2>
+          <p class="settings-hint">Control readability, panel layout, home screen emphasis, and accessibility without changing your legal workflow.</p>
+
+          <div class="settings-preview-grid">
+            <button type="button" class="settings-preview-card layout-preview-btn" data-layout-mode="standard">
+              <span class="settings-preview-title">Standard</span>
+              <span class="settings-preview-desc">Balanced layout for everyday use</span>
+            </button>
+            <button type="button" class="settings-preview-card layout-preview-btn" data-layout-mode="wide">
+              <span class="settings-preview-title">Wide Editor</span>
+              <span class="settings-preview-desc">Uses more width for longer notes</span>
+            </button>
+            <button type="button" class="settings-preview-card layout-preview-btn" data-layout-mode="focus">
+              <span class="settings-preview-title">Focus</span>
+              <span class="settings-preview-desc">Cleaner screen with less chrome</span>
+            </button>
+            <button type="button" class="settings-preview-card layout-preview-btn" data-layout-mode="tablet">
+              <span class="settings-preview-title">Tablet Friendly</span>
+              <span class="settings-preview-desc">Larger controls and simplified layout</span>
+            </button>
+          </div>
+          <input type="hidden" id="setting-layout-mode" value="standard">
+
+          <div class="settings-layout-grid">
+            <div class="settings-mini-card">
+              <h3>Editor Layout</h3>
+              <label>Section navigation</label>
+              <select id="setting-nav-mode">
+                <option value="auto">Auto</option>
+                <option value="sidebar">Sidebar first</option>
+                <option value="topbar">Top bar first</option>
+              </select>
+              <label class="toggle-row" style="margin-top:0.9rem;">
+                <span>Show right context panel by default</span>
+                <input type="checkbox" id="setting-show-context-panel">
+              </label>
+              <label class="toggle-row" style="margin-top:0.9rem;">
+                <span>Sticky section headings</span>
+                <input type="checkbox" id="setting-sticky-section-headings">
+              </label>
+              <label class="toggle-row" style="margin-top:0.9rem;">
+                <span>Larger textareas for note writing</span>
+                <input type="checkbox" id="setting-larger-textareas">
+              </label>
+            </div>
+
+            <div class="settings-mini-card">
+              <h3>Home Screen</h3>
+              <label>Home priority</label>
+              <select id="setting-home-priority">
+                <option value="active">Active matters first</option>
+                <option value="recent">Recent cases first</option>
+              </select>
+              <label style="margin-top:0.9rem;">System widgets</label>
+              <select id="setting-home-widgets-mode">
+                <option value="expanded">Expanded</option>
+                <option value="compact">Compact</option>
+              </select>
+              <label class="toggle-row" style="margin-top:0.9rem;">
+                <span>Section colour accents</span>
+                <input type="checkbox" id="setting-section-accents">
+              </label>
+            </div>
+
+            <div class="settings-mini-card">
+              <h3>Accessibility</h3>
+              <label class="toggle-row">
+                <span>High contrast mode</span>
+                <input type="checkbox" id="setting-high-contrast">
+              </label>
+              <label class="toggle-row" style="margin-top:0.9rem;">
+                <span>Larger controls</span>
+                <input type="checkbox" id="setting-large-controls">
+              </label>
+              <label class="toggle-row" style="margin-top:0.9rem;">
+                <span>Reduced motion</span>
+                <input type="checkbox" id="setting-reduced-motion">
+              </label>
+            </div>
+          </div>
+        </div>
 
         <div class="settings-card">
           <h2>Appearance</h2>

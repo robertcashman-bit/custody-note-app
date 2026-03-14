@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.74",
+      "version": "1.4.75",
       "date": "2026-03-14",
       "latest": true,
+      "changes": [
+        "Visual layout redesign across dashboard, editor shell, and settings control centre",
+        "Added layout/display/accessibility preferences with richer status states and responsive polish"
+      ]
+    },
+    {
+      "version": "1.4.74",
+      "date": "2026-03-14",
+      "latest": false,
       "changes": [
         "Admin and authorised accounts now automatically receive all add-ons (QuickFile, Email Templates)"
       ]
