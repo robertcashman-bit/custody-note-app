@@ -410,7 +410,7 @@
               <label>Police Station</label>
               <div class="station-search-wrap" id="qc-station-search-wrap"></div>
             </div>
-            <div class="form-group"><label>Offence (summary)</label><input type="text" id="qc-offence" placeholder="e.g. Theft"></div>
+            <div class="form-group" style="grid-column:1/-1;"><label>Offence (summary)</label><input type="text" id="qc-offence" placeholder="e.g. Theft, Assault occasioning ABH, Possession with intent to supply"></div>
             <div class="form-group"><label>DSCC Number</label><input type="text" id="qc-dscc" placeholder="e.g. 110154321A"></div>
             <div class="form-group"><label>Instruction received</label><input type="datetime-local" id="qc-instruction"></div>
             <div class="form-group"><label>Time of first contact with client</label><div class="time-input-wrap"><input type="time" id="qc-first-contact" title="LAA 9.25 – when you first spoke to/saw client"><button type="button" class="btn-now" id="qc-first-contact-now">Now</button></div></div>
@@ -462,7 +462,8 @@
               <select id="qc-weekend-bh"><option value="">--</option><option>Yes</option><option>No</option></select>
             </div>
             <div class="form-group"><label>Time set off</label><div class="time-input-wrap"><input type="time" id="qc-setoff"><button type="button" class="btn-now" id="qc-setoff-now">Now</button></div></div>
-            <div class="form-group"><label>Time arrived</label><div class="time-input-wrap"><input type="time" id="qc-arrived"><button type="button" class="btn-now" id="qc-arrived-now">Now</button></div></div>
+            <div class="form-group"><label>Time arrived (you)</label><div class="time-input-wrap"><input type="time" id="qc-arrived" title="Time YOU arrived at the police station"><button type="button" class="btn-now" id="qc-arrived-now">Now</button></div></div>
+            <div class="form-group"><label>Client arrived at station</label><div class="time-input-wrap"><input type="time" id="qc-client-arrived" title="Time the client arrived / was brought to the station (from custody record)"><button type="button" class="btn-now" id="qc-client-arrived-now">Now</button></div></div>
             <div class="form-group" style="grid-column:1/-1;"><label>General Notes</label><textarea id="qc-notes" rows="3" placeholder="General notes about the case or attendance"></textarea></div>
           </div>
           <div style="display:flex;gap:0.75rem;margin-top:1.25rem;">
@@ -940,7 +941,7 @@
           <label style="margin-top:1rem;">Font Size</label>
           <div class="font-size-row">
             <span class="font-label">A</span>
-            <input type="range" id="setting-font-size" min="12" max="20" value="16" step="1">
+            <input type="range" id="setting-font-size" min="12" max="28" value="16" step="1">
             <span class="font-label font-label-lg">A</span>
             <span id="font-size-val" class="font-size-val">16px</span>
           </div>

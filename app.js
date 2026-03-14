@@ -527,7 +527,7 @@ var LAA = {
         { key: 'alreadyAtStation', label: 'Already at the station?', type: 'select', options: ['Yes','No'] },
         { key: 'travelOriginPostcode', label: 'Origin postcode', type: 'text', placeholder: 'e.g. ME1 1AA' },
         { key: 'timeSetOff', label: 'Time set off', type: 'time' },
-        { key: 'timeArrival', label: 'Time of arrival at station', type: 'time' },
+        { key: 'timeArrival', label: 'Time you arrived at station', type: 'time' },
       ],
     },
 
@@ -586,7 +586,7 @@ var LAA = {
         ] },
         { key: 'dateOfArrest', label: 'Date of Arrest', type: 'date', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'timeOfArrest', label: 'Time of Arrest', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
-        { key: 'timeArrivalStation', label: 'Time Arrived at Station', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'timeArrivalStation', label: 'Time client arrived at station', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'relevantTime', label: 'Relevant Time (auto = detention authorised)', type: 'time', readonly: true, showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'timeDetentionAuthorised', label: 'Detention Authorised', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
 
@@ -1325,7 +1325,7 @@ var LAA = {
         { key: 'alreadyAtStation', label: 'Already at the station?', type: 'select', options: ['Yes','No'] },
         { key: 'travelOriginPostcode', label: 'Origin postcode', type: 'text', placeholder: 'e.g. ME1 1AA' },
         { key: 'timeSetOff', label: 'Time set off', type: 'time' },
-        { key: 'timeArrival', label: 'Time of arrival at station', type: 'time' },
+        { key: 'timeArrival', label: 'Time you arrived at station', type: 'time' },
       ],
     },
 
@@ -2982,6 +2982,8 @@ var REQUIRED_FIELD_KEYS = [
     document.getElementById('qc-dscc').value = '';
     document.getElementById('qc-setoff').value = '';
     document.getElementById('qc-arrived').value = '';
+    const qcClientArrived = document.getElementById('qc-client-arrived');
+    if (qcClientArrived) qcClientArrived.value = '';
     const qcFirstContact = document.getElementById('qc-first-contact');
     if (qcFirstContact) qcFirstContact.value = '';
     document.getElementById('qc-referral-name').value = '';
@@ -3402,7 +3404,8 @@ var REQUIRED_FIELD_KEYS = [
     data.arrivalNotes = document.getElementById('qc-notes').value.trim();
     data.timeSetOff = document.getElementById('qc-setoff').value;
     data.timeArrival = document.getElementById('qc-arrived').value;
-    if (data.timeArrival) data.timeArrivalStation = data.timeArrival;
+    const qcClientArrivedEl = document.getElementById('qc-client-arrived');
+    data.timeArrivalStation = (qcClientArrivedEl && qcClientArrivedEl.value) ? qcClientArrivedEl.value : (data.timeArrival || '');
     const qcFirstContact = document.getElementById('qc-first-contact');
     data.timeFirstContactWithClient = (qcFirstContact && qcFirstContact.value) ? qcFirstContact.value : (data.timeArrival || '');
     const firmId = document.getElementById('qc-firm').value;
@@ -4375,6 +4378,14 @@ var REQUIRED_FIELD_KEYS = [
     }).catch(function() {});
   }
 
+  function prefillOffence1FromSummary() {
+    if ((formData.offence1Details || '').trim()) return;
+    var summary = (formData.offenceSummary || '').trim();
+    if (!summary) return;
+    formData.offence1Details = summary;
+    setFieldValue('offence1Details', summary);
+  }
+
   function prefillOutcomeChargesFromOffences() {
     var chargedOutcomes = ['Charged without Bail', 'Charged with Bail', 'Remanded in Custody'];
     if (chargedOutcomes.indexOf(String(formData.outcomeDecision || '').trim()) === -1) return false;
@@ -5152,6 +5163,7 @@ var REQUIRED_FIELD_KEYS = [
     if (activeFormSections[currentSectionIdx].id === 'journeyTime') { autoCalcTimes(); }
     if (activeFormSections[currentSectionIdx].id === 'timeRecording' && formData.attendanceMode === 'voluntary') { autoCalcVoluntaryTimes(); }
     if (activeFormSections[currentSectionIdx].id === 'timeRecording') { updateBillingReadinessPanel(); }
+    if (activeFormSections[currentSectionIdx].id === 'offences') { prefillOffence1FromSummary(); }
     autoFillFromClient();
     applyConditionalVisibility();
     updateContextBar();
@@ -11330,6 +11342,7 @@ PDF_CASENOTE_ADVERT +
     /* btn-new-attendance, btn-quick-capture, qc-* already attached above */
     document.getElementById('qc-setoff-now')?.addEventListener('click', () => { document.getElementById('qc-setoff').value = pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()); });
     document.getElementById('qc-arrived-now')?.addEventListener('click', () => { document.getElementById('qc-arrived').value = pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()); });
+    document.getElementById('qc-client-arrived-now')?.addEventListener('click', () => { const el = document.getElementById('qc-client-arrived'); if (el) el.value = pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()); });
     document.getElementById('qc-first-contact-now')?.addEventListener('click', () => { const el = document.getElementById('qc-first-contact'); if (el) el.value = pad2(new Date().getHours()) + ':' + pad2(new Date().getMinutes()); });
     /* firms-back-btn already attached above */
     document.getElementById('firms-action-add')?.addEventListener('click', showFirmsAddSection);

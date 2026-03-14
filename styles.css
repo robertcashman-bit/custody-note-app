@@ -41,18 +41,18 @@
 }
 
 /* ═══ APP SCROLLBARS ═══ */
-::-webkit-scrollbar { width: 16px; height: 16px; }
-::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.08); border-radius: 99px; }
+::-webkit-scrollbar { width: 20px; height: 20px; }
+::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.12); border-radius: 99px; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.45);
+  background: rgba(100, 116, 139, 0.55);
   border-radius: 99px;
-  border: 3px solid transparent;
+  border: 2px solid transparent;
   background-clip: padding-box;
-  min-height: 48px;
+  min-height: 56px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.65); }
-::-webkit-scrollbar-thumb:active { background: rgba(148, 163, 184, 0.75); }
-* { scrollbar-width: auto; scrollbar-color: rgba(148,163,184,0.45) rgba(148,163,184,0.08); }
+::-webkit-scrollbar-thumb:hover { background: rgba(100, 116, 139, 0.75); }
+::-webkit-scrollbar-thumb:active { background: rgba(100, 116, 139, 0.85); }
+* { scrollbar-width: auto; scrollbar-color: rgba(100,116,139,0.55) rgba(148,163,184,0.12); }
 
 /* ═══ COLOUR THEMES ═══ */
 html.theme-light {
@@ -1585,9 +1585,11 @@ html.dark .home-attention-item:hover {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
+  will-change: scroll-position;
+  contain: layout style;
 }
 
-.form-section { display: none; width: 100%; min-width: 0; }
+.form-section { display: none; width: 100%; min-width: 0; contain: content; }
 .form-section.active { display: block; }
 
 .form-row-2col {
