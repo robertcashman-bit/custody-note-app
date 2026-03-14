@@ -22,6 +22,13 @@ function loadSettings() {
     if (cloudUrlEl) cloudUrlEl.value = s.cloudBackupUrl || '';
     var cloudTokenEl = document.getElementById('setting-cloud-backup-token');
     if (cloudTokenEl) cloudTokenEl.value = s.cloudBackupToken || '';
+    /* QuickFile: persist so saved values are restored when opening Settings */
+    var qfAcc = document.getElementById('setting-quickfile-account');
+    if (qfAcc) qfAcc.value = s.quickfileAccountNumber || '';
+    var qfKey = document.getElementById('setting-quickfile-apikey');
+    if (qfKey) qfKey.value = s.quickfileApiKey || '';
+    var qfApp = document.getElementById('setting-quickfile-appid');
+    if (qfApp) qfApp.value = s.quickfileAppId || '';
     var forumUrlEl = document.getElementById('suggestions-forum-url');
     if (forumUrlEl) forumUrlEl.value = s.suggestionsForumUrl || '';
     var dm = document.getElementById('setting-dark-mode');

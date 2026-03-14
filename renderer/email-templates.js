@@ -69,10 +69,15 @@ function buildEmailBody(templateId, data, feeEarnerName) {
   var clientName = [_oicClean(data.forename), _oicClean(data.surname)].filter(Boolean).join(' ') || 'your client';
   var station    = _oicClean(data.policeStationName) || 'the police station';
   var feeName    = _oicClean(feeEarnerName) || 'Fee Earner';
-  var solicitorName = feeName !== 'Fee Earner' ? feeName : (_oicClean(data.firmName) || 'the solicitor');
+  var firmName   = _oicClean(data.firmName) || 'the firm';
+  var contactName = _oicClean(data.firmContactName);
+  var requestedBy = contactName && firmName
+    ? contactName + ' of ' + firmName
+    : (contactName || firmName || feeName || 'the firm');
   var dateStr    = _oicFmtDate(_oicClean(data.date || data.instructionDateTime));
   var timeStr    = _oicFmtTime(_oicClean(data.timeArrival));
   var dateTime   = [dateStr, timeStr ? 'at ' + timeStr : ''].filter(Boolean).join(' ');
+  var attendanceRef = ' at ' + station + (dateStr ? ' on ' + dateStr : '');
 
   /* ── Outcome-aware helpers ── */
   var od = _oicClean(data.outcomeDecision);
@@ -123,19 +128,14 @@ function buildEmailBody(templateId, data, feeEarnerName) {
 
   /* ── Template 1: First Attendance Disclosure Request ── */
   if (templateId === 'first_attendance' || !templateId) {
-    var intro;
-    if (solicitorName && solicitorName !== 'the solicitor') {
-      intro = 'I have been asked by ' + solicitorName +
-              ' to cover this matter' + (dateTime ? ' on ' + dateTime : '') + '.';
-    } else {
-      intro = 'I have been asked to cover this matter' + (dateTime ? ' on ' + dateTime : '') + '.';
-    }
+    var intro = 'I have been asked by ' + requestedBy +
+      ' to cover this matter' + (dateTime ? ' on ' + dateTime : '') + '.';
     return [
       salutation,
       '',
       intro,
       '',
-      'Please would you confirm that the attendance will be effective and provide disclosure to the email address below.',
+      'Please would you confirm that the attendance will be effective and provide disclosure to this email address.',
       '',
       'Many thanks,',
       '',
@@ -212,16 +212,28 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     return paras;
   }
 
+  function _genericOutcomeRequestDetails() {
+    return [
+      'If the client was bailed, please provide the bail return date and time, the police station to which they are bailed, and details of any bail conditions.',
+      '',
+      'If the client was charged, please provide details of the charges, the court date and time, the relevant Magistrates\' Court, and whether the client was granted bail or remanded, together with any bail conditions if applicable.'
+    ];
+  }
+
   /* ── Template 2: Follow-Up / Outcome Request ── */
   if (templateId === 'follow_up') {
     var body2 = [
       salutation,
       '',
-      'I write further to my attendance upon ' + clientName + ' at ' + station +
-        ' Police Station on behalf of ' + solicitorName + '.',
+      'I write following my attendance upon ' + clientName + attendanceRef + '.',
       ''
     ];
-    _outcomeParas(false).forEach(function(l) { body2.push(l); });
+    if (!outcomeKnown) {
+      body2.push('I would be grateful if you could confirm the outcome of this matter when convenient.', '');
+      _genericOutcomeRequestDetails().forEach(function(l) { body2.push(l); });
+    } else {
+      _outcomeParas(false).forEach(function(l) { body2.push(l); });
+    }
     body2.push('', 'Many thanks,', '', feeName);
     return body2.join('\n');
   }
@@ -232,11 +244,20 @@ function buildEmailBody(templateId, data, feeEarnerName) {
       salutation,
       '',
       'I refer to my previous email regarding ' + clientName + ', following my attendance upon them at ' +
-        station + ' Police Station on behalf of ' + solicitorName + '.',
+        station + (dateStr ? ' on ' + dateStr : '') + '. I have not yet received a reply and would be grateful if you could confirm the outcome at your earliest convenience.',
+      '',
+      'For ease of reference, I set out a copy of my previous email below.',
+      '',
+      'I write following my attendance upon ' + clientName + attendanceRef + '.',
       ''
     ];
-    _outcomeParas(true).forEach(function(l) { body3.push(l); });
-    body3.push('', 'Many thanks,', '', feeName);
+    if (!outcomeKnown) {
+      body3.push('I would be grateful if you could confirm the outcome of this matter when convenient.', '');
+      _genericOutcomeRequestDetails().forEach(function(l) { body3.push(l); });
+    } else {
+      _outcomeParas(false).forEach(function(l) { body3.push(l); });
+    }
+    body3.push('', 'If you have already replied to the firm, please disregard this email and accept my apologies.', '', 'Many thanks,', '', feeName);
     return body3.join('\n');
   }
 

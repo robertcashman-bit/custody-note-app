@@ -885,6 +885,7 @@
           <button type="button" id="settings-quick-cloud" class="btn btn-secondary">Check cloud backup</button>
           <button type="button" id="settings-quick-diagnostics" class="btn btn-secondary">Refresh diagnostics</button>
           <button type="button" id="settings-quick-firms" class="btn btn-secondary">Open firms</button>
+          <button type="button" id="settings-quick-quickfile" class="btn btn-secondary">QuickFile</button>
           <button type="button" id="settings-quick-support" class="btn btn-secondary">Open support forum</button>
         </div>
 
@@ -949,6 +950,7 @@
           <input type="email" id="setting-email" placeholder="you@example.com">
         </div>
 
+        <div class="settings-section-label">Integrations</div>
         <div class="settings-card" id="quickfile-settings-card">
           <h2>QuickFile Directory Import</h2>
           <div id="quickfile-settings-locked" class="addon-locked-message" style="display:none;">
@@ -1346,7 +1348,7 @@
 
         <div class="settings-card" id="modules-installed-card">
           <h2>Additional Modules Installed</h2>
-          <p class="settings-hint">No additional modules installed.</p>
+          <p class="settings-hint" id="modules-installed-empty">No additional modules installed.</p>
           <div id="modules-list"></div>
         </div>
 
@@ -2115,6 +2117,23 @@
         <div id="admin-results" style="margin-top:1rem;font-size:0.85rem;"></div>
       </div>
       <button type="button" id="admin-close-btn" class="btn btn-secondary" style="margin-top:1rem;">Close</button>
+    </div>
+  </div>
+
+  <!-- Cloud backup restore prompt (when backups exist and user has not dismissed recently) -->
+  <div id="cloud-backup-restore-prompt-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Cloud backups available">
+    <div class="first-launch-box" style="max-width:420px;">
+      <h2 style="margin:0 0 0.5rem;">Cloud backups available</h2>
+      <p style="margin:0 0 1rem;font-size:0.9rem;color:var(--text-muted,#64748b);">You have cloud backups. Restore from a backup or continue with data on this device.</p>
+      <label for="cloud-backup-restore-select" style="display:block;margin-bottom:0.35rem;font-weight:600;">Choose a backup</label>
+      <select id="cloud-backup-restore-select" style="width:100%;padding:0.5rem;margin-bottom:1rem;font-size:0.9rem;">
+        <option value="">Loading…</option>
+      </select>
+      <p id="cloud-backup-restore-prompt-note" class="settings-hint" style="margin:0 0 1rem;font-size:0.8rem;">Restoring replaces this device's data with the selected backup. A safety copy is saved first.</p>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <button type="button" id="cloud-backup-restore-prompt-continue" class="btn btn-secondary">Continue with this device</button>
+        <button type="button" id="cloud-backup-restore-prompt-restore" class="btn btn-primary">Restore selected backup</button>
+      </div>
     </div>
   </div>
 

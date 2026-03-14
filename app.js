@@ -2588,6 +2588,18 @@ var REQUIRED_FIELD_KEYS = [
       emailContent.style.display = addons.emailAddon ? '' : 'none';
     }
     if (emailClientRow) emailClientRow.style.display = addons.emailAddon ? '' : 'none';
+
+    var modulesList = document.getElementById('modules-list');
+    var modulesEmpty = document.getElementById('modules-installed-empty');
+    if (modulesList) {
+      var installed = [];
+      if (addons.quickfile) installed.push('QuickFile');
+      if (addons.emailAddon) installed.push('Officer Email Templates');
+      modulesList.innerHTML = installed.length
+        ? '<ul style="margin:0.4rem 0 0 1.1rem;line-height:1.7;"><li>' + installed.join('</li><li>') + '</li></ul>'
+        : '';
+      if (modulesEmpty) modulesEmpty.style.display = installed.length ? 'none' : '';
+    }
   }
 
   function updateHomeLicenceCard() {
@@ -4242,6 +4254,12 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function saveSettings() {
+    var qfPayload = getQuickFileSettingsPayload();
+    var cache = window._appSettingsCache || {};
+    /* Don't overwrite saved QuickFile with blank if inputs are empty (e.g. race before load) */
+    var qfAccount = qfPayload.quickfileAccountNumber || cache.quickfileAccountNumber || '';
+    var qfApiKey = qfPayload.quickfileApiKey || cache.quickfileApiKey || '';
+    var qfAppId = qfPayload.quickfileAppId || cache.quickfileAppId || '';
     window.api.setSettings({
       email: document.getElementById('setting-email')?.value?.trim() || '',
       dsccPin: document.getElementById('setting-dscc-pin')?.value?.trim() || '',
@@ -4249,9 +4267,9 @@ var REQUIRED_FIELD_KEYS = [
       offsiteBackupFolder: document.getElementById('setting-offsite-backup-folder')?.value?.trim() || '',
       cloudBackupUrl: document.getElementById('setting-cloud-backup-url')?.value?.trim() || '',
       cloudBackupToken: document.getElementById('setting-cloud-backup-token')?.value?.trim() || '',
-      quickfileAccountNumber: getQuickFileSettingsPayload().quickfileAccountNumber,
-      quickfileApiKey: getQuickFileSettingsPayload().quickfileApiKey,
-      quickfileAppId: getQuickFileSettingsPayload().quickfileAppId,
+      quickfileAccountNumber: qfAccount,
+      quickfileApiKey: qfApiKey,
+      quickfileAppId: qfAppId,
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
       darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
       fontSize: document.getElementById('setting-font-size')?.value || '16',
@@ -11496,6 +11514,9 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('settings-quick-firms')?.addEventListener('click', function() {
       showView('firms');
     });
+    document.getElementById('settings-quick-quickfile')?.addEventListener('click', function() {
+      document.getElementById('quickfile-settings-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
     document.getElementById('settings-quick-support')?.addEventListener('click', function() {
       var url = (window._appSettingsCache && window._appSettingsCache.suggestionsForumUrl) ? window._appSettingsCache.suggestionsForumUrl : 'https://www.custodynote.com/support';
       if (window.api && window.api.openExternal) window.api.openExternal(url);
@@ -12289,6 +12310,7 @@ PDF_CASENOTE_ADVERT +
         if (status && status.enabled) {
           if (footerEl) { setFooterIndicator(footerEl, 'AWS backup on', 'backup-ok'); footerEl.style.cursor = ''; }
           if (homeWarning) homeWarning.style.display = 'none';
+          if (typeof checkCloudBackupAndPromptRestore === 'function') checkCloudBackupAndPromptRestore();
         } else {
           if (footerEl) { setFooterIndicator(footerEl, 'Local only', 'warning'); footerEl.style.cursor = 'pointer'; }
           // Show warning unless recently dismissed (within 7 days)
@@ -12302,6 +12324,82 @@ PDF_CASENOTE_ADVERT +
         }
       });
     }
+
+    /* Cloud backup: check for backups and prompt to restore or continue (remembers dismissal for 7 days) */
+    var _cloudBackupRestorePromptChecked = false;
+    function checkCloudBackupAndPromptRestore() {
+      if (_cloudBackupRestorePromptChecked || !window.api || !window.api.cloudBackupList || !window.api.cloudBackupStatus) return;
+      _cloudBackupRestorePromptChecked = true;
+      window.api.cloudBackupStatus().then(function(status) {
+        if (!status || !status.enabled) return;
+        window.api.cloudBackupList().then(function(resp) {
+          if (resp && resp.error) return;
+          if (!resp || !resp.backups || resp.backups.length === 0) return;
+          try {
+            var dismissedAt = localStorage.getItem('cloudBackupRestorePromptDismissedAt');
+            var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+            if (dismissedAt && (Date.now() - parseInt(dismissedAt, 10)) < sevenDaysMs) return;
+          } catch (_) {}
+          showCloudBackupRestorePromptModal(resp.backups);
+        });
+      });
+    }
+    function showCloudBackupRestorePromptModal(backups) {
+      var modal = document.getElementById('cloud-backup-restore-prompt-modal');
+      var sel = document.getElementById('cloud-backup-restore-select');
+      if (!modal || !sel) return;
+      sel.innerHTML = '';
+      var _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      backups.forEach(function(b) {
+        var opt = document.createElement('option');
+        opt.value = b.key;
+        var sizeKB = Math.round(b.size / 1024);
+        var fname = b.key.split('/').pop();
+        var label = fname === 'attendance-latest.db' ? 'Latest snapshot' : (function() {
+          var m = fname.match(/attendance-backup-(\d{4})-(\d{2})-(\d{2})T(\d{2})-(\d{2})/);
+          return m ? m[3] + ' ' + _months[parseInt(m[2], 10) - 1] + ' ' + m[1] + ', ' + m[4] + ':' + m[5] : fname;
+        })();
+        opt.textContent = label + ' (' + sizeKB + ' KB)';
+        sel.appendChild(opt);
+      });
+      modal.style.display = '';
+      document.getElementById('cloud-backup-restore-prompt-restore')?.addEventListener('click', function onRestore() {
+        var key = sel.value;
+        if (!key) { if (typeof showToast === 'function') showToast('Select a backup first', 'warning'); return; }
+        modal.style.display = 'none';
+        if (typeof showConfirm === 'function') {
+          showConfirm('Restore from this cloud backup? Your current data will be replaced. A safety copy is saved first.').then(function(ok) {
+            if (!ok) return;
+            window.api.cloudBackupRestore({ backupKey: key }).then(function(result) {
+              if (result && result.ok) {
+                if (typeof showToast === 'function') showToast('Restored. Reloading…', 'success');
+                setTimeout(function() { location.reload(); }, 1200);
+              } else {
+                if (typeof showToast === 'function') showToast(result && result.error ? result.error : 'Restore failed', 'error');
+              }
+            });
+          });
+        } else {
+          window.api.cloudBackupRestore({ backupKey: key }).then(function(result) {
+            if (result && result.ok) setTimeout(function() { location.reload(); }, 1200);
+          });
+        }
+      }, { once: true });
+      document.getElementById('cloud-backup-restore-prompt-continue')?.addEventListener('click', function onContinue() {
+        try { localStorage.setItem('cloudBackupRestorePromptDismissedAt', String(Date.now())); } catch (_) {}
+        modal.style.display = 'none';
+      }, { once: true });
+    }
+    if (window.api && window.api.onCloudBackupStatusChanged) {
+      window.api.onCloudBackupStatusChanged(function(data) {
+        if (data && data.enabled && typeof checkCloudBackupAndPromptRestore === 'function') checkCloudBackupAndPromptRestore();
+      });
+    }
+    setTimeout(function() {
+      if (window.api && window.api.cloudBackupStatus && !_cloudBackupRestorePromptChecked) {
+        window.api.cloudBackupStatus().then(function(s) { if (s && s.enabled && typeof checkCloudBackupAndPromptRestore === 'function') checkCloudBackupAndPromptRestore(); });
+      }
+    }, 2500);
 
     // ── System Status Diagnostic Panel ──────────────────────────────────────
     (function initSystemStatus() {
