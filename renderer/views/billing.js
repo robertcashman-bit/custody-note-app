@@ -421,7 +421,13 @@ function _handleCreateInvoice(recordId, opts) {
     userName: userName,
   }).then(function (result) {
     if (result.ok) {
+      if (typeof formData === 'object' && formData) {
+        formData.quickfileInvoiceNumber = result.invoiceNumber || '';
+        formData.quickfileInvoiceUrl = result.invoiceUrl || '';
+      }
       showToast('Invoice created: ' + (result.invoiceNumber || result.invoiceId), 'success');
+      if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
+      if (typeof updateContextBar === 'function') updateContextBar();
       closeBillingPanel();
       if (window.api && window.api.billingAuditLogAdd) {
         window.api.billingAuditLogAdd({

@@ -5361,14 +5361,44 @@ var REQUIRED_FIELD_KEYS = [
   function updateBillingReadinessPanel() {
     var list = document.getElementById('billing-readiness-list');
     var panel = document.getElementById('billing-readiness-panel');
-    if (!list || !panel) return;
+    var statusEl = document.getElementById('billing-readiness-status');
+    var summaryEl = document.getElementById('billing-readiness-summary');
+    var warningsWrap = document.getElementById('billing-readiness-warnings-wrap');
+    var openBtn = document.getElementById('billing-readiness-open');
+    if (!list || !panel || !statusEl || !summaryEl || !warningsWrap || !openBtn) return;
     var w = getBillingReadinessWarnings();
-    if (!w.length) {
-      panel.style.display = 'none';
-      return;
+    var hasInvoice = !!(formData.quickfileInvoiceNumber || formData.quickfileInvoiceUrl);
+    var invoiceSent = formData.invoiceSent === 'Yes';
+    var quickFileReady = hasQuickFileSettingsConfigured();
+    var statusText = 'Needs review';
+    var statusClass = 'state-review';
+    var summary = '';
+    if (invoiceSent) {
+      statusText = 'Sent';
+      statusClass = 'state-sent';
+      summary = 'Invoice sent is already marked on this record' + (formData.invoiceNotes ? ' - ' + formData.invoiceNotes : '') + '.';
+    } else if (hasInvoice) {
+      statusText = 'Invoiced';
+      statusClass = 'state-invoiced';
+      summary = 'QuickFile invoice ' + (formData.quickfileInvoiceNumber || 'created') + ' is linked to this record. Mark "Invoice sent?" as Yes after dispatching it.';
+    } else if (!quickFileReady) {
+      statusText = 'Setup needed';
+      statusClass = 'state-setup';
+      summary = 'Add your QuickFile account details in Settings first, then open the billing panel to create the invoice.';
+    } else if (!w.length) {
+      statusText = 'Ready to invoice';
+      statusClass = 'state-ready';
+      summary = 'Charges look ready to review. Open the billing panel to confirm fee, mileage, parking, VAT, and create the QuickFile invoice.';
+    } else {
+      summary = 'Complete the checks below, then open the billing panel to create and send the invoice.';
     }
-    panel.style.display = '';
+    statusEl.className = 'billing-readiness-status ' + statusClass;
+    statusEl.textContent = statusText;
+    summaryEl.textContent = summary;
+    openBtn.textContent = hasInvoice ? 'Review Billing & Invoice' : 'Open Billing & Invoice';
     list.innerHTML = w.map(function(msg) { return '<li>' + esc(msg) + '</li>'; }).join('');
+    warningsWrap.style.display = w.length ? '' : 'none';
+    panel.style.display = '';
   }
 
   /* ─── AUTO-FILL DECLARATION & RETAINER FROM CLIENT (#4) ─── */
@@ -5954,6 +5984,34 @@ var REQUIRED_FIELD_KEYS = [
       }
 
       if (sec.id === 'timeRecording') {
+        const billingPanel = document.createElement('div');
+        billingPanel.id = 'billing-readiness-panel';
+        billingPanel.className = 'billing-readiness-panel';
+        billingPanel.innerHTML =
+          '<div class="billing-readiness-head">' +
+            '<div>' +
+              '<h4 class="billing-readiness-title">Billing &amp; Invoice</h4>' +
+              '<p class="billing-readiness-copy">Review charges, create the QuickFile invoice, then mark the invoice as sent once it has gone to the firm or portal.</p>' +
+            '</div>' +
+            '<span id="billing-readiness-status" class="billing-readiness-status state-review">Needs review</span>' +
+          '</div>' +
+          '<div class="billing-readiness-actions">' +
+            '<button type="button" id="billing-readiness-open" class="btn btn-primary">Open Billing &amp; Invoice</button>' +
+            '<p id="billing-readiness-summary" class="billing-readiness-summary"></p>' +
+          '</div>' +
+          '<ol class="billing-readiness-steps">' +
+            '<li>Review fee, mileage, parking, VAT, and invoice narrative.</li>' +
+            '<li>Create the QuickFile invoice from the billing panel.</li>' +
+            '<li>After sending it, set Invoice sent? to Yes and add any note if needed.</li>' +
+          '</ol>' +
+          '<div id="billing-readiness-warnings-wrap" class="billing-readiness-warnings">' +
+            '<p class="billing-readiness-warning-title">Still to check before invoicing:</p>' +
+            '<ul id="billing-readiness-list" class="billing-readiness-list"></ul>' +
+          '</div>';
+        billingPanel.querySelector('#billing-readiness-open').onclick = function() {
+          if (typeof openBillingPanel === 'function') openBillingPanel();
+        };
+        section.appendChild(billingPanel);
         const photoWrap = document.createElement('div');
         photoWrap.className = 'photo-attach-area photo-attach-area-prominent';
         photoWrap.innerHTML = '<div class="photo-attach-header">' +
@@ -6011,11 +6069,6 @@ var REQUIRED_FIELD_KEYS = [
       }
 
       if (sec.id === 'timeRecording') {
-        const billingPanel = document.createElement('div');
-        billingPanel.id = 'billing-readiness-panel';
-        billingPanel.className = 'billing-readiness-panel';
-        billingPanel.innerHTML = '<h4 class="billing-readiness-title">Billing readiness</h4><ul id="billing-readiness-list" class="billing-readiness-list"></ul>';
-        section.appendChild(billingPanel);
         const endActions = document.createElement('div');
         endActions.className = 'form-actions form-end-actions';
         endActions.innerHTML =

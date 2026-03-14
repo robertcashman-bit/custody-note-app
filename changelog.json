@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.78",
+      "version": "1.4.79",
       "date": "2026-03-14",
       "latest": true,
+      "changes": [
+        "Surface Billing & Invoice directly in the time recording section",
+        "Show invoice status and the billing workflow in a clearer in-form card",
+        "Refresh the billing card immediately after QuickFile invoice creation"
+      ]
+    },
+    {
+      "version": "1.4.78",
+      "date": "2026-03-14",
+      "latest": false,
       "changes": [
         "Make attachments easier to spot in the time recording section",
         "Promote the add attachment action with clearer styling and messaging",

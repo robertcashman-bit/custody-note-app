@@ -2143,14 +2143,99 @@ html.dark .interview-notes-warning {
 
 /* Form actions on last page */
 .billing-readiness-panel {
-  margin-top: 1rem; padding: 0.75rem 1rem;
-  background: linear-gradient(135deg, #fef3c7, #fffbeb);
-  border: 1px solid #f59e0b;
-  border-radius: 8px;
-  font-size: 0.85rem;
+  margin-top: 1rem;
+  padding: 1rem 1.05rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, white 90%), color-mix(in srgb, var(--surface-alt, #f8fafc) 82%, white 18%));
+  border: 2px solid color-mix(in srgb, var(--primary) 24%, var(--border, #cbd5e1) 76%);
+  border-radius: 12px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
 }
-.billing-readiness-title { margin: 0 0 0.5rem; font-size: 0.9rem; color: #92400e; }
-.billing-readiness-list { margin: 0; padding-left: 1.25rem; color: #78350f; }
+.billing-readiness-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+.billing-readiness-title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text, #0f172a);
+}
+.billing-readiness-copy {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted, #64748b);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  max-width: 62ch;
+}
+.billing-readiness-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.billing-readiness-status.state-ready {
+  background: #dcfce7;
+  color: #166534;
+}
+.billing-readiness-status.state-review,
+.billing-readiness-status.state-setup {
+  background: #fef3c7;
+  color: #92400e;
+}
+.billing-readiness-status.state-invoiced,
+.billing-readiness-status.state-sent {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.billing-readiness-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 0.9rem;
+}
+.billing-readiness-summary {
+  margin: 0;
+  color: var(--text, #0f172a);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  flex: 1 1 320px;
+}
+.billing-readiness-steps {
+  margin: 0.85rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--text, #0f172a);
+  font-size: 0.88rem;
+}
+.billing-readiness-steps li {
+  margin: 0.3rem 0;
+}
+.billing-readiness-warnings {
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  background: color-mix(in srgb, #fef3c7 72%, white 28%);
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+}
+.billing-readiness-warning-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #92400e;
+}
+.billing-readiness-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #78350f;
+  font-size: 0.86rem;
+}
 .billing-readiness-list li { margin: 0.2rem 0; }
 
 .form-actions {
