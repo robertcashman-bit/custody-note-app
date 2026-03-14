@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.79",
+      "version": "1.4.80",
       "date": "2026-03-14",
       "latest": true,
+      "changes": [
+        "Open the QuickFile invoice automatically after creation when a preview link is available",
+        "Improve billing panel contrast so text, inputs, and totals stay readable",
+        "Add explicit dark-mode billing panel styling for clearer review screens"
+      ]
+    },
+    {
+      "version": "1.4.79",
+      "date": "2026-03-14",
+      "latest": false,
       "changes": [
         "Surface Billing & Invoice directly in the time recording section",
         "Show invoice status and the billing workflow in a clearer in-form card",

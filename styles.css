@@ -3933,16 +3933,20 @@ html.dark .addon-buy-link { color: #7dd3fc; }
   animation: fadeIn 0.15s ease;
 }
 .billing-panel {
-  background: var(--card-bg, #fff); border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid var(--border, #dbe3ee);
+  border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.25);
   width: 95%; max-width: 860px; max-height: 92vh;
   display: flex; flex-direction: column;
   animation: slideUp 0.2s ease;
+  color: var(--text, #0f172a);
 }
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 .billing-panel-header {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 1rem 1.25rem; border-bottom: 1px solid var(--border, #e2e8f0);
+  padding: 1rem 1.25rem; border-bottom: 1px solid var(--border, #dbe3ee);
+  background: rgba(255, 255, 255, 0.92);
 }
 .billing-panel-title { margin: 0; font-size: 1.15rem; color: var(--primary, #2563eb); }
 .billing-panel-close {
@@ -3952,17 +3956,22 @@ html.dark .addon-buy-link { color: #7dd3fc; }
 .billing-panel-close:hover { color: var(--text, #0f172a); }
 .billing-panel-body {
   flex: 1; overflow-y: auto; padding: 1rem 1.25rem;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96) 0%, rgba(241, 245, 249, 0.96) 100%);
 }
 .billing-panel-footer {
   display: flex; gap: 0.5rem; padding: 0.75rem 1.25rem;
   border-top: 1px solid var(--border, #e2e8f0);
   flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.94);
 }
 .billing-section {
-  margin-bottom: 1.25rem; padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-light, #f1f5f9);
+  margin-bottom: 1rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border, #dbe3ee);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
 }
-.billing-section:last-child { border-bottom: none; }
+.billing-section:last-child { margin-bottom: 0; }
 .billing-section h3 {
   margin: 0 0 0.5rem; font-size: 0.95rem;
   color: var(--primary, #2563eb); font-weight: 600;
@@ -3975,27 +3984,35 @@ html.dark .addon-buy-link { color: #7dd3fc; }
   text-transform: uppercase; letter-spacing: 0.03em;
   font-weight: 600; display: block;
 }
-.billing-value { display: block; font-size: 0.92rem; }
+.billing-value { display: block; font-size: 0.92rem; color: var(--text, #0f172a); }
 
 .billing-docs-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-.billing-docs-table th { text-align: left; font-weight: 600; padding: 0.4rem 0.5rem; border-bottom: 2px solid var(--border, #e2e8f0); font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
-.billing-docs-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-light, #f1f5f9); }
+.billing-docs-table th { text-align: left; font-weight: 600; padding: 0.4rem 0.5rem; border-bottom: 2px solid var(--border, #e2e8f0); font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted, #64748b); background: rgba(248, 250, 252, 0.95); }
+.billing-docs-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-light, #e2e8f0); color: var(--text, #0f172a); }
 
 .billing-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; }
-.billing-edit-row label { font-size: 0.82rem; font-weight: 500; margin-bottom: 0.15rem; display: block; }
-.billing-edit-row .form-input { width: 100%; }
+.billing-edit-row label { font-size: 0.82rem; font-weight: 600; margin-bottom: 0.15rem; display: block; color: var(--text, #0f172a); }
+.billing-edit-row .form-input,
+.billing-narrative-input {
+  width: 100%;
+  background: #ffffff;
+  color: var(--text, #0f172a);
+  border: 1px solid var(--border, #cbd5e1);
+}
 
 .billing-totals {
   margin-top: 0.75rem; padding: 0.75rem;
-  background: var(--bg-alt, #f8fafc); border-radius: 8px;
+  background: rgba(248, 250, 252, 0.95);
+  border: 1px solid var(--border, #dbe3ee);
+  border-radius: 8px;
 }
 .billing-total-row {
   display: flex; justify-content: space-between; padding: 0.25rem 0;
-  font-size: 0.9rem;
+  font-size: 0.9rem; color: var(--text, #0f172a);
 }
 .billing-total-final { font-weight: 700; font-size: 1rem; border-top: 1px solid var(--border, #e2e8f0); padding-top: 0.5rem; margin-top: 0.25rem; }
 
-.billing-narrative-input { width: 100%; font-size: 0.88rem; }
+.billing-narrative-input { font-size: 0.88rem; }
 
 .billing-status-badge {
   display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px;
@@ -4009,7 +4026,7 @@ html.dark .addon-buy-link { color: #7dd3fc; }
 .billing-checklist { display: flex; flex-direction: column; gap: 0.4rem; }
 .billing-check-item {
   display: flex; align-items: center; gap: 0.5rem;
-  font-size: 0.9rem; cursor: pointer;
+  font-size: 0.9rem; cursor: pointer; color: var(--text, #0f172a);
 }
 .billing-check-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary, #2563eb); }
 
@@ -4034,6 +4051,78 @@ html.dark .addon-buy-link { color: #7dd3fc; }
 .billing-audit-action { font-weight: 600; }
 .billing-audit-user { color: var(--text-muted); }
 .billing-audit-detail { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; word-break: break-all; }
+
+html.dark .billing-overlay {
+  background: rgba(2, 6, 23, 0.78);
+}
+html.dark .billing-panel {
+  background: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+  border-color: #334155;
+  color: #e5eefb;
+}
+html.dark .billing-panel-header,
+html.dark .billing-panel-footer {
+  background: rgba(15, 23, 42, 0.94);
+  border-color: #334155;
+}
+html.dark .billing-panel-body {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96) 0%, rgba(17, 24, 39, 0.96) 100%);
+}
+html.dark .billing-panel-title {
+  color: #93c5fd;
+}
+html.dark .billing-panel-close {
+  color: #94a3b8;
+}
+html.dark .billing-panel-close:hover {
+  color: #f8fafc;
+}
+html.dark .billing-section {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: #334155;
+}
+html.dark .billing-section h3 {
+  color: #93c5fd;
+}
+html.dark .billing-label,
+html.dark .billing-status-detail,
+html.dark .billing-audit-time,
+html.dark .billing-audit-user,
+html.dark .billing-audit-detail,
+html.dark .billing-audit-details summary {
+  color: #94a3b8;
+}
+html.dark .billing-value,
+html.dark .billing-total-row,
+html.dark .billing-check-item,
+html.dark .billing-edit-row label,
+html.dark .billing-docs-table td {
+  color: #e5eefb;
+}
+html.dark .billing-docs-table th {
+  color: #cbd5e1;
+  border-bottom-color: #334155;
+  background: rgba(17, 24, 39, 0.94);
+}
+html.dark .billing-docs-table td {
+  border-bottom-color: #233042;
+}
+html.dark .billing-edit-row .form-input,
+html.dark .billing-narrative-input {
+  background: #111827;
+  color: #f8fafc;
+  border-color: #475569;
+}
+html.dark .billing-totals {
+  background: rgba(17, 24, 39, 0.96);
+  border-color: #334155;
+}
+html.dark .billing-total-final {
+  border-top-color: #334155;
+}
+html.dark .billing-invoice-link {
+  color: #7dd3fc;
+}
 
 /* ═══════════════════════════════════════════════════════
    BILLABLE ATTENDANCES TABLE

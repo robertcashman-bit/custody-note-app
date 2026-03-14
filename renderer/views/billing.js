@@ -437,6 +437,11 @@ function _handleCreateInvoice(recordId, opts) {
           userName: userName,
         });
       }
+      if (result.invoiceUrl && window.api && window.api.openExternal) {
+        setTimeout(function () {
+          window.api.openExternal(result.invoiceUrl);
+        }, 120);
+      }
       setTimeout(function () { openBillingPanel(); }, 300);
     } else {
       showToast('Invoice creation failed: ' + (result.error || 'Unknown error'), 'error');
