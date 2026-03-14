@@ -117,6 +117,7 @@
             <div class="gear-section-label">Data</div>
             <button type="button" class="gear-item" data-action="firms">&#127970; Firms</button>
             <button type="button" class="gear-item" data-action="reports">&#128202; Reports</button>
+            <button type="button" class="gear-item" data-action="station-mileage">&#128663; Station Mileage</button>
             <div class="gear-section-label">App</div>
             <button type="button" class="gear-item" data-action="shortcut-backup-now">&#128190; Backup now</button>
             <button type="button" class="gear-item" data-action="check-updates" id="gear-check-updates">&#8635; Check for updates</button>
@@ -548,6 +549,7 @@
             <button type="button" id="backup-now-btn" class="btn btn-small btn-backup-now" title="Save &amp; backup now">&#128190; Backup</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
+            <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent" title="Billing &amp; Documents">&#163; Billing</button>
             <button type="button" id="sections-index-btn" class="btn btn-sections">Sections</button>
           </div>
         </div>
@@ -656,6 +658,41 @@
             <div id="report-by-station" class="report-breakdown"></div>
           </div>
         </div>
+
+        <!-- Billable Attendances sub-report -->
+        <div id="billable-attendances-section" style="margin-top:1.5rem;">
+          <div class="settings-card" style="grid-column:1/-1;">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
+              <h2 style="margin:0;">Billable Attendances</h2>
+              <span class="settings-hint" id="billable-summary-text"></span>
+            </div>
+            <p class="settings-hint" style="margin-bottom:0.75rem;">Completed attendances not yet invoiced.</p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+              <input type="text" id="billable-search" class="form-input" placeholder="Search client, firm, station..." style="max-width:250px;">
+              <input type="date" id="billable-date-from" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;">
+              <span style="font-size:0.9rem;align-self:center;">to</span>
+              <input type="date" id="billable-date-to" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;">
+              <select id="billable-firm-filter" class="form-input" style="max-width:200px;">
+                <option value="">All firms</option>
+              </select>
+            </div>
+            <div id="billable-attendances-table-wrap" style="overflow-x:auto;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATION MILEAGE ADMIN VIEW -->
+      <div id="view-station-mileage" class="view">
+        <div class="firms-page-header">
+          <button type="button" id="station-mileage-back-btn" class="btn btn-secondary">&larr; Home</button>
+          <h2 style="margin:0;color:var(--primary);">Station Mileage</h2>
+        </div>
+        <p class="settings-hint" style="margin-bottom:1rem;">Set the mileage from your base to each police station. This auto-fills billing mileage on custody records.</p>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+          <input type="text" id="mileage-search" class="form-input" placeholder="Search stations..." style="max-width:300px;">
+          <button type="button" id="mileage-save-all" class="btn btn-primary">Save All Changes</button>
+        </div>
+        <div id="station-mileage-table-wrap" style="overflow-x:auto;"></div>
       </div>
 
       <!-- AUTHORITIES VIEW -->
@@ -1835,6 +1872,9 @@
   <script src="renderer/views/email-modal.js"></script>
   <script src="renderer/views/list.js"></script>
   <script src="renderer/csv-exporter.js"></script>
+  <script src="renderer/views/billing.js"></script>
+  <script src="renderer/views/billable-attendances.js"></script>
+  <script src="renderer/views/station-mileage-admin.js"></script>
   <!-- laa-forms.js retired: official PDFs now used via laa-generate-official-pdf IPC -->
   <script src="renderer/audit-log.js"></script>
   <!-- Unregister any stale service workers (not needed in Electron) -->

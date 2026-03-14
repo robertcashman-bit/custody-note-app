@@ -10,7 +10,7 @@ const fs = require('fs');
 
 const PROJECT_DIR = path.join(__dirname, '..');
 const ELECTRON_CLI = path.join(PROJECT_DIR, 'node_modules', 'electron', 'cli.js');
-const WAIT_MS = 120000;
+const WAIT_MS = 180000;
 
 function main() {
   if (!fs.existsSync(ELECTRON_CLI)) {

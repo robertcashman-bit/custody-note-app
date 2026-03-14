@@ -3786,3 +3786,149 @@ html.dark .addon-buy-link { color: #7dd3fc; }
   .header-date { font-size: 0.65rem; }
   .btn-sections { padding: 0.35rem 0.75rem; font-size: 0.78rem; }
 }
+
+/* ═══════════════════════════════════════════════════════
+   BILLING & GENERATED DOCUMENTS PANEL
+   ═══════════════════════════════════════════════════════ */
+
+.billing-overlay {
+  position: fixed; inset: 0; z-index: 9000;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.15s ease;
+}
+.billing-panel {
+  background: var(--card-bg, #fff); border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  width: 95%; max-width: 860px; max-height: 92vh;
+  display: flex; flex-direction: column;
+  animation: slideUp 0.2s ease;
+}
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.billing-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem; border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.billing-panel-title { margin: 0; font-size: 1.15rem; color: var(--primary, #2563eb); }
+.billing-panel-close {
+  background: none; border: none; font-size: 1.5rem; cursor: pointer;
+  color: var(--text-muted, #64748b); padding: 0.25rem;
+}
+.billing-panel-close:hover { color: var(--text, #0f172a); }
+.billing-panel-body {
+  flex: 1; overflow-y: auto; padding: 1rem 1.25rem;
+}
+.billing-panel-footer {
+  display: flex; gap: 0.5rem; padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border, #e2e8f0);
+  flex-wrap: wrap;
+}
+.billing-section {
+  margin-bottom: 1.25rem; padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-light, #f1f5f9);
+}
+.billing-section:last-child { border-bottom: none; }
+.billing-section h3 {
+  margin: 0 0 0.5rem; font-size: 0.95rem;
+  color: var(--primary, #2563eb); font-weight: 600;
+}
+.billing-detail-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.5rem;
+}
+.billing-label {
+  font-size: 0.78rem; color: var(--text-muted, #64748b);
+  text-transform: uppercase; letter-spacing: 0.03em;
+  font-weight: 600; display: block;
+}
+.billing-value { display: block; font-size: 0.92rem; }
+
+.billing-docs-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+.billing-docs-table th { text-align: left; font-weight: 600; padding: 0.4rem 0.5rem; border-bottom: 2px solid var(--border, #e2e8f0); font-size: 0.8rem; text-transform: uppercase; color: var(--text-muted); }
+.billing-docs-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border-light, #f1f5f9); }
+
+.billing-edit-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; }
+.billing-edit-row label { font-size: 0.82rem; font-weight: 500; margin-bottom: 0.15rem; display: block; }
+.billing-edit-row .form-input { width: 100%; }
+
+.billing-totals {
+  margin-top: 0.75rem; padding: 0.75rem;
+  background: var(--bg-alt, #f8fafc); border-radius: 8px;
+}
+.billing-total-row {
+  display: flex; justify-content: space-between; padding: 0.25rem 0;
+  font-size: 0.9rem;
+}
+.billing-total-final { font-weight: 700; font-size: 1rem; border-top: 1px solid var(--border, #e2e8f0); padding-top: 0.5rem; margin-top: 0.25rem; }
+
+.billing-narrative-input { width: 100%; font-size: 0.88rem; }
+
+.billing-status-badge {
+  display: inline-block; padding: 0.25rem 0.75rem; border-radius: 20px;
+  font-size: 0.82rem; font-weight: 600;
+}
+.billing-status-invoiced { background: #dcfce7; color: #166534; }
+.billing-status-not-invoiced { background: #fef3c7; color: #92400e; }
+.billing-status-detail { margin-top: 0.4rem; font-size: 0.85rem; }
+.billing-invoice-link { color: var(--primary, #2563eb); text-decoration: underline; margin-left: 0.5rem; cursor: pointer; }
+
+.billing-checklist { display: flex; flex-direction: column; gap: 0.4rem; }
+.billing-check-item {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.9rem; cursor: pointer;
+}
+.billing-check-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary, #2563eb); }
+
+.btn-billing-create {
+  font-weight: 600; min-width: 200px;
+}
+.btn-billing-create:disabled {
+  opacity: 0.5; cursor: not-allowed;
+}
+
+.billing-audit-details { margin-top: 0.5rem; }
+.billing-audit-details summary {
+  cursor: pointer; font-weight: 600; font-size: 0.88rem;
+  color: var(--text-muted, #64748b);
+}
+.billing-audit-list { margin-top: 0.5rem; }
+.billing-audit-entry {
+  padding: 0.35rem 0; border-bottom: 1px solid var(--border-light, #f1f5f9);
+  font-size: 0.82rem;
+}
+.billing-audit-time { color: var(--text-muted); }
+.billing-audit-action { font-weight: 600; }
+.billing-audit-user { color: var(--text-muted); }
+.billing-audit-detail { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; word-break: break-all; }
+
+/* ═══════════════════════════════════════════════════════
+   BILLABLE ATTENDANCES TABLE
+   ═══════════════════════════════════════════════════════ */
+
+.billable-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.billable-table th {
+  text-align: left; font-weight: 600; padding: 0.5rem 0.5rem;
+  border-bottom: 2px solid var(--border, #e2e8f0);
+  font-size: 0.78rem; text-transform: uppercase;
+  color: var(--text-muted, #64748b);
+  position: sticky; top: 0; background: var(--card-bg, #fff);
+}
+.billable-table td { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border-light, #f1f5f9); }
+.billable-table tbody tr:hover { background: var(--bg-alt, #f8fafc); }
+.billable-offence { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.billable-actions { white-space: nowrap; }
+.billable-actions .btn { margin-right: 0.25rem; }
+
+/* ═══════════════════════════════════════════════════════
+   STATION MILEAGE VIEW
+   ═══════════════════════════════════════════════════════ */
+
+#view-station-mileage .billable-table td { vertical-align: middle; }
+#view-station-mileage .mileage-input { padding: 0.3rem 0.4rem; font-size: 0.85rem; }
+
+@media (max-width: 700px) {
+  .billing-panel { width: 100%; max-width: 100%; border-radius: 0; max-height: 100vh; }
+  .billing-detail-grid { grid-template-columns: 1fr; }
+  .billing-edit-grid { grid-template-columns: 1fr; }
+  .billable-table { font-size: 0.78rem; }
+  .billable-table th, .billable-table td { padding: 0.35rem 0.3rem; }
+}

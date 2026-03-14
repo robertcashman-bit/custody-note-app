@@ -1,5 +1,5 @@
 /* ─── STATE ─── */
-var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help' };
+var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage' };
 var currentAttendanceId = null;
 var stations = [];
 var firms = [];
@@ -2456,7 +2456,8 @@ var REQUIRED_FIELD_KEYS = [
       refreshQuickFileImportMeta();
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {});
     }
-    if (name === 'reports') loadReports();
+    if (name === 'reports') { loadReports(); if (typeof loadBillableAttendances === 'function') loadBillableAttendances(); }
+    if (name === 'station-mileage') { if (typeof loadStationMileage === 'function') loadStationMileage(); }
     if (name === 'authorities') { if (typeof loadAuthorities === 'function') loadAuthorities(); }
     if (name === 'settings') {
       loadSettings();
@@ -10614,6 +10615,7 @@ PDF_CASENOTE_ADVERT +
             case 'shortcut-email-solicitor': showAttendancePickerModal('email'); break;
             case 'firms': showView('firms'); break;
             case 'reports': showView('reports'); break;
+            case 'station-mileage': showView('station-mileage'); break;
             case 'authorities': showView('authorities'); break;
             case 'shortcut-backup-now':
               window.api.backupNow().then(function(p) { showToast('Backup saved: ' + p, 'success'); }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); });
@@ -10657,6 +10659,7 @@ PDF_CASENOTE_ADVERT +
             case 'laa-forms': showLaaFormsNav(); break;
             case 'firms': showView('firms'); break;
             case 'reports': showView('reports'); break;
+            case 'station-mileage': showView('station-mileage'); break;
             case 'authorities': showView('authorities'); break;
             case 'shortcut-print-pdf':
               if (document.getElementById('view-form')?.classList.contains('active') && currentAttendanceId) {
@@ -10771,7 +10774,7 @@ PDF_CASENOTE_ADVERT +
           case 'qc-cancel': e.preventDefault(); showView('home'); return;
           case 'qc-save': e.preventDefault(); saveQuickCapture(false); return;
           case 'qc-expand': e.preventDefault(); saveQuickCapture(true); return;
-          case 'firms-back-btn': case 'reports-back-btn': case 'authorities-back-btn': case 'settings-back-btn': case 'help-back-btn': e.preventDefault(); showView('home'); return;
+          case 'firms-back-btn': case 'reports-back-btn': case 'authorities-back-btn': case 'settings-back-btn': case 'help-back-btn': case 'station-mileage-back-btn': e.preventDefault(); showView('home'); return;
           default: break;
         }
       }, true);
@@ -11063,6 +11066,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('sections-index-btn')?.addEventListener('click', openSectionsIndex);
     document.getElementById('sections-index-close')?.addEventListener('click', closeSectionsIndex);
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
+    document.getElementById('billing-panel-btn')?.addEventListener('click', () => { if (typeof openBillingPanel === 'function') openBillingPanel(); });
     document.getElementById('kb-help-btn')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
     document.getElementById('form-header-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
 

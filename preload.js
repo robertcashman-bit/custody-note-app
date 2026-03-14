@@ -45,6 +45,18 @@ contextBridge.exposeInMainWorld('api', {
   printPdfFile: (filePath) => ipcRenderer.invoke('print-pdf-file', filePath),
   quickfileFetchClients: () => ipcRenderer.invoke('quickfile-fetch-clients'),
   quickfileTestConnection: () => ipcRenderer.invoke('quickfile-test-connection'),
+  quickfileCreateInvoice: (params) => ipcRenderer.invoke('quickfile-create-invoice', params),
+  /* Station mileage */
+  stationMileageGet: (stationId) => ipcRenderer.invoke('station-mileage-get', stationId),
+  stationsMileageList: () => ipcRenderer.invoke('stations-mileage-list'),
+  stationMileageSave: (params) => ipcRenderer.invoke('station-mileage-save', params),
+  stationMileageBulkSave: (stations) => ipcRenderer.invoke('station-mileage-bulk-save', stations),
+  /* Billing audit log */
+  billingAuditLogAdd: (params) => ipcRenderer.invoke('billing-audit-log-add', params),
+  billingAuditLogGet: (attendanceId) => ipcRenderer.invoke('billing-audit-log-get', attendanceId),
+  /* Billable attendances report */
+  billableAttendances: () => ipcRenderer.invoke('billable-attendances'),
+  attendanceInvoiceStatus: (attendanceId) => ipcRenderer.invoke('attendance-invoice-status', attendanceId),
   pickImage: () => ipcRenderer.invoke('pick-image'),
   pickFile: () => ipcRenderer.invoke('pick-file'),
   importRecordFromFile: () => ipcRenderer.invoke('import-record-from-file'),

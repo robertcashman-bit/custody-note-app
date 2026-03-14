@@ -1,9 +1,22 @@
 {
   "releases": [
     {
+      "version": "1.4.71",
+      "date": "2026-03-14",
+      "latest": true,
+      "changes": [
+        "Billing: new Billing & Generated Documents panel on each custody record with matter details, billing preview, document list, review confirmation checklist, and one-click QuickFile invoice creation",
+        "Billing: invoice narrative auto-generated from client, station, date and offence with manual editing, live recalculation of attendance fee, mileage, parking, VAT and totals",
+        "Billing: duplicate invoice protection with warning prompt, billing audit log tracking all invoice and document actions, and email pack preparation for sending invoice to instructing firm",
+        "Station Mileage: new admin view to set mileage from base for each police station, with search and bulk save — mileage auto-populates on billing panel",
+        "Reports: new Billable Attendances report showing all completed but uninvoiced records with search, date range and firm filters, summary totals, and direct invoice shortcuts",
+        "QuickFile: full invoice creation service that matches or creates the firm as a QuickFile client, adds line items for attendance fee, mileage and parking with VAT, and stores the invoice ID, number and link back on the custody record"
+      ]
+    },
+    {
       "version": "1.4.70",
       "date": "2026-03-13",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Add-on licensing now gates QuickFile and Officer Email Templates by entitlement",
         "New Authorities section with proposed wordings and shortcut access from home and the gear menu"

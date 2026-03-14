@@ -975,6 +975,37 @@ async function initDb() {
   try { db.run("ALTER TABLE attendances ADD COLUMN archived_at TEXT DEFAULT NULL"); } catch (_) {}
   try { db.run("ALTER TABLE attendances ADD COLUMN work_type TEXT DEFAULT ''"); } catch (_) {}
 
+  /* ─── Billing / QuickFile invoice columns ─── */
+  try { db.run("ALTER TABLE attendances ADD COLUMN quickfile_invoice_id TEXT DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN quickfile_invoice_number TEXT DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN quickfile_invoice_url TEXT DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_created_at TEXT DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_created_by TEXT DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_subtotal REAL DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_vat REAL DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_total REAL DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_narrative TEXT DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_mileage_miles REAL DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_mileage_rate REAL DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_parking_amount REAL DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_attendance_fee REAL DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_vat_rate REAL DEFAULT NULL"); } catch (_) {}
+
+  /* ─── Station mileage column ─── */
+  try { db.run("ALTER TABLE police_stations ADD COLUMN mileage_from_base REAL DEFAULT NULL"); } catch (_) {}
+  try { db.run("ALTER TABLE police_stations ADD COLUMN postcode TEXT DEFAULT ''"); } catch (_) {}
+
+  /* ─── Billing audit log ─── */
+  db.run(`CREATE TABLE IF NOT EXISTS billing_audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    attendance_id INTEGER,
+    action TEXT NOT NULL,
+    details TEXT DEFAULT '',
+    user_name TEXT DEFAULT '',
+    timestamp TEXT DEFAULT (datetime('now'))
+  );`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_billing_audit_att ON billing_audit_log(attendance_id);`);
+
   /* ─── Cross-device sync columns ─── */
   try { db.run("ALTER TABLE attendances ADD COLUMN sync_id TEXT DEFAULT NULL"); } catch (_) {}
   try { db.run("ALTER TABLE attendances ADD COLUMN sync_dirty INTEGER DEFAULT 1"); } catch (_) {}
@@ -2714,6 +2745,255 @@ function createWindow() {
                 }
               } else {
                 errors.push('Backup APIs not available');
+              }
+
+              /* 28. Billing panel button present in form header */
+              var cardAtt4 = document.getElementById('home-card-attendance');
+              if (cardAtt4) {
+                cardAtt4.click();
+                await sleep(800);
+                var billingBtn = document.getElementById('billing-panel-btn');
+                if (billingBtn) {
+                  log('28a. Billing panel button present in form header');
+                  billingBtn.click();
+                  await sleep(500);
+                  var billingOverlay = document.getElementById('billing-panel-overlay');
+                  if (billingOverlay) {
+                    log('28b. Billing panel overlay opens');
+                    var matterH3 = billingOverlay.querySelector('h3');
+                    if (matterH3 && matterH3.textContent === 'Matter Details') {
+                      log('28c. Billing panel shows Matter Details section');
+                    } else {
+                      errors.push('Billing panel missing Matter Details section');
+                    }
+                    var feeInput = document.getElementById('billing-attendance-fee');
+                    var milesInput = document.getElementById('billing-mileage-miles');
+                    var rateInput = document.getElementById('billing-mileage-rate');
+                    var parkingInput = document.getElementById('billing-parking');
+                    var vatInput = document.getElementById('billing-vat-rate');
+                    if (feeInput && milesInput && rateInput && parkingInput && vatInput) {
+                      log('28d. All billing input fields present');
+                    } else {
+                      errors.push('Billing panel missing input fields');
+                    }
+                    var checkAtt = document.getElementById('billing-check-attendance');
+                    var checkDocs = document.getElementById('billing-check-docs');
+                    var checkBill = document.getElementById('billing-check-billing');
+                    if (checkAtt && checkDocs && checkBill) {
+                      log('28e. Review confirmation checklist present (3 checkboxes)');
+                    } else {
+                      errors.push('Billing panel missing review checklist');
+                    }
+                    var createBtn = document.getElementById('billing-create-invoice');
+                    if (createBtn && createBtn.disabled) {
+                      log('28f. Create Invoice button present and disabled (checklist not yet confirmed)');
+                    } else if (createBtn) {
+                      errors.push('Create Invoice button should be disabled before confirming checklist');
+                    } else {
+                      errors.push('Create Invoice button missing');
+                    }
+                    if (checkAtt && checkDocs && checkBill && createBtn) {
+                      checkAtt.click(); checkDocs.click(); checkBill.click();
+                      await sleep(100);
+                      if (!createBtn.disabled) {
+                        log('28g. Create Invoice button enables after all checkboxes checked');
+                      } else {
+                        errors.push('Create Invoice button did not enable after checking all boxes');
+                      }
+                    }
+                    var subtotalEl = document.getElementById('billing-subtotal');
+                    var vatEl = document.getElementById('billing-vat');
+                    var totalEl = document.getElementById('billing-total');
+                    if (subtotalEl && vatEl && totalEl) {
+                      log('28h. Billing totals display present (subtotal, VAT, total)');
+                    } else {
+                      errors.push('Billing totals display missing');
+                    }
+                    var narrativeEl = document.getElementById('billing-narrative');
+                    if (narrativeEl && narrativeEl.value) {
+                      log('28i. Invoice narrative auto-generated: ' + narrativeEl.value.slice(0, 60));
+                    } else if (narrativeEl) {
+                      log('28i. Invoice narrative field present (empty - no data on form)');
+                    } else {
+                      errors.push('Invoice narrative field missing');
+                    }
+                    if (feeInput) {
+                      setInputValue(feeInput, '200');
+                      await sleep(100);
+                      var updatedSubtotal = subtotalEl ? subtotalEl.textContent : '';
+                      if (updatedSubtotal.indexOf('200') >= 0) {
+                        log('28j. Live billing recalculation works');
+                      } else {
+                        log('28j. Billing recalc: subtotal shows ' + updatedSubtotal);
+                      }
+                    }
+                    var closeBtn = document.getElementById('billing-cancel');
+                    if (closeBtn) {
+                      closeBtn.click();
+                      await sleep(300);
+                      var overlayGone = !document.getElementById('billing-panel-overlay');
+                      if (overlayGone) {
+                        log('28k. Billing panel closes correctly');
+                      } else {
+                        errors.push('Billing panel did not close');
+                      }
+                    }
+                  } else {
+                    errors.push('Billing panel overlay did not open');
+                  }
+                } else {
+                  errors.push('Billing panel button not found in form header');
+                }
+                var saveExit5 = document.getElementById('form-save-exit');
+                if (saveExit5) { await saveExitToDraftAndWait(); }
+              }
+
+              /* 29. Billing API surface check */
+              var billingApis = [
+                'quickfileCreateInvoice', 'stationMileageGet', 'stationsMileageList',
+                'stationMileageSave', 'stationMileageBulkSave',
+                'billingAuditLogAdd', 'billingAuditLogGet',
+                'billableAttendances', 'attendanceInvoiceStatus'
+              ];
+              var missingApis = billingApis.filter(function(name) {
+                return !(window.api && typeof window.api[name] === 'function');
+              });
+              if (!missingApis.length) {
+                log('29. All billing API methods available (' + billingApis.length + ')');
+              } else {
+                errors.push('Missing billing APIs: ' + missingApis.join(', '));
+              }
+
+              /* 30. Station Mileage view navigates correctly */
+              if (gearBtn) {
+                gearBtn.click();
+                await sleep(200);
+                var gearDd6 = document.getElementById('gear-dropdown');
+                var mileageItem = gearDd6 ? gearDd6.querySelector('[data-action="station-mileage"]') : null;
+                if (mileageItem) {
+                  mileageItem.click();
+                  await sleep(500);
+                  if (document.getElementById('view-station-mileage')?.classList.contains('active')) {
+                    log('30a. Gear > Station Mileage navigates correctly');
+                    var mileageSearch = document.getElementById('mileage-search');
+                    var mileageSaveBtn = document.getElementById('mileage-save-all');
+                    var mileageTable = document.getElementById('station-mileage-table-wrap');
+                    if (mileageSearch && mileageSaveBtn && mileageTable) {
+                      log('30b. Station Mileage UI elements present (search, save, table)');
+                    } else {
+                      errors.push('Station Mileage missing UI elements');
+                    }
+                    if (mileageTable && mileageTable.querySelector('table')) {
+                      log('30c. Station mileage table rendered with data');
+                    } else {
+                      log('30c. Station mileage table present (may be empty if no stations)');
+                    }
+                    var mileageBack = document.getElementById('station-mileage-back-btn');
+                    if (mileageBack) {
+                      mileageBack.click();
+                      await sleep(300);
+                      if (document.getElementById('view-home')?.classList.contains('active')) {
+                        log('30d. Station Mileage back button returns to home');
+                      } else {
+                        errors.push('Station Mileage back button did not return to home');
+                      }
+                    }
+                  } else {
+                    errors.push('Station Mileage view not active');
+                  }
+                } else {
+                  errors.push('Station Mileage gear menu item not found');
+                }
+              }
+
+              /* 31. Billable Attendances report renders in Reports view */
+              if (gearBtn) {
+                gearBtn.click();
+                await sleep(200);
+                var gearDd7 = document.getElementById('gear-dropdown');
+                var reportsItem2 = gearDd7 ? gearDd7.querySelector('[data-action="reports"]') : null;
+                if (reportsItem2) {
+                  reportsItem2.click();
+                  await sleep(800);
+                  if (document.getElementById('view-reports')?.classList.contains('active')) {
+                    var billableSection = document.getElementById('billable-attendances-section');
+                    if (billableSection) {
+                      log('31a. Billable Attendances section present in Reports view');
+                    } else {
+                      errors.push('Billable Attendances section missing from Reports view');
+                    }
+                    var billableSearch = document.getElementById('billable-search');
+                    var billableDateFrom = document.getElementById('billable-date-from');
+                    var billableDateTo = document.getElementById('billable-date-to');
+                    var billableFirmFilter = document.getElementById('billable-firm-filter');
+                    var billableTableWrap = document.getElementById('billable-attendances-table-wrap');
+                    if (billableSearch && billableDateFrom && billableDateTo && billableFirmFilter && billableTableWrap) {
+                      log('31b. Billable Attendances filters and table wrapper present');
+                    } else {
+                      errors.push('Billable Attendances missing filter/table elements');
+                    }
+                    var billableSummary = document.getElementById('billable-summary-text');
+                    if (billableSummary) {
+                      log('31c. Billable summary: ' + (billableSummary.textContent || '(empty)'));
+                    }
+                    var reportsBack2 = document.getElementById('reports-back-btn');
+                    if (reportsBack2) {
+                      reportsBack2.click();
+                      await sleep(300);
+                    }
+                  }
+                }
+              }
+
+              /* 32. Station mileage API returns data */
+              if (window.api && typeof window.api.stationsMileageList === 'function') {
+                try {
+                  var stationsList = await window.api.stationsMileageList();
+                  if (stationsList && stationsList.length > 0) {
+                    var sampleStation = stationsList[0];
+                    log('32a. stationsMileageList returned ' + stationsList.length + ' stations (first: ' + sampleStation.name + ')');
+                    if ('mileage_from_base' in sampleStation) {
+                      log('32b. Stations have mileage_from_base field');
+                    } else {
+                      errors.push('Station records missing mileage_from_base field');
+                    }
+                  } else {
+                    log('32a. stationsMileageList returned empty (no stations in DB)');
+                  }
+                } catch (e) {
+                  errors.push('stationsMileageList API call failed: ' + (e && e.message ? e.message : e));
+                }
+              }
+
+              /* 33. Billable attendances API returns data */
+              if (window.api && typeof window.api.billableAttendances === 'function') {
+                try {
+                  var billable = await window.api.billableAttendances();
+                  log('33. billableAttendances API returned ' + (billable ? billable.length : 0) + ' unbilled records');
+                } catch (e) {
+                  errors.push('billableAttendances API call failed: ' + (e && e.message ? e.message : e));
+                }
+              }
+
+              /* 34. Billing audit log API */
+              if (window.api && typeof window.api.billingAuditLogAdd === 'function') {
+                try {
+                  await window.api.billingAuditLogAdd({
+                    attendanceId: 0,
+                    action: 'smoke_test',
+                    details: 'Smoke test entry ' + testStamp,
+                    userName: 'SmokeTester'
+                  });
+                  var auditEntries = await window.api.billingAuditLogGet(0);
+                  var found = (auditEntries || []).find(function(e) { return e.details && e.details.indexOf(testStamp) >= 0; });
+                  if (found) {
+                    log('34. Billing audit log write+read roundtrip works');
+                  } else {
+                    errors.push('Billing audit log entry not found after write');
+                  }
+                } catch (e) {
+                  errors.push('Billing audit log roundtrip failed: ' + (e && e.message ? e.message : e));
+                }
               }
 
               /* Summary */
@@ -5228,5 +5508,268 @@ ipcMain.handle('quickfile-test-connection', async () => {
     ok: true,
     sampleCount: records.length,
   };
+});
+
+/* ═══════════════════════════════════════════════════════
+   QUICKFILE INVOICE CREATION
+   ═══════════════════════════════════════════════════════ */
+
+async function quickFileFindOrCreateClient(firmName, contactEmail) {
+  const searchBody = await quickFileRequest('/1_2/client/search', {
+    SearchParameters: {
+      CompanyName: firmName,
+      ReturnCount: 10,
+      Offset: 0,
+    },
+  });
+  const records = quickFileExtractRecords(searchBody);
+  const match = records.find(r => {
+    const name = (r.ClientName || r.CompanyName || r.Name || '').toLowerCase();
+    return name === firmName.toLowerCase();
+  });
+  if (match) return match.ClientID || match.ClientId;
+
+  const createBody = await quickFileRequest('/1_2/client/create', {
+    ClientDetails: {
+      ClientType: 'Company',
+      CompanyName: firmName,
+      Email: contactEmail || '',
+    },
+  });
+  return createBody.ClientID || createBody.ClientId || createBody.RecordID || null;
+}
+
+ipcMain.handle('quickfile-create-invoice', async (_, params) => {
+  const {
+    attendanceId,
+    firmName,
+    contactEmail,
+    attendanceFee,
+    mileageMiles,
+    mileageRate,
+    parkingAmount,
+    vatRate,
+    narrative,
+    invoiceDate,
+    userName,
+  } = params;
+
+  try {
+    const clientId = await quickFileFindOrCreateClient(firmName, contactEmail);
+    if (!clientId) throw new Error('Could not find or create QuickFile client for ' + firmName);
+
+    const lineItems = [];
+    if (attendanceFee > 0) {
+      lineItems.push({
+        ItemID: '',
+        ItemName: 'Police Station Attendance Fixed Fee',
+        ItemDescription: narrative || 'Police station attendance',
+        ItemNominalCode: '4000',
+        Qty: '1',
+        UnitCost: attendanceFee.toFixed(2),
+        VATAmount: (attendanceFee * (vatRate || 0.20)).toFixed(2),
+        VATRate: String(((vatRate || 0.20) * 100).toFixed(0)),
+      });
+    }
+
+    const mileageCost = (mileageMiles || 0) * (mileageRate || 0.45);
+    if (mileageCost > 0) {
+      lineItems.push({
+        ItemID: '',
+        ItemName: 'Mileage',
+        ItemDescription: (mileageMiles || 0) + ' miles @ £' + (mileageRate || 0.45).toFixed(2),
+        ItemNominalCode: '4000',
+        Qty: '1',
+        UnitCost: mileageCost.toFixed(2),
+        VATAmount: (mileageCost * (vatRate || 0.20)).toFixed(2),
+        VATRate: String(((vatRate || 0.20) * 100).toFixed(0)),
+      });
+    }
+
+    if (parkingAmount > 0) {
+      lineItems.push({
+        ItemID: '',
+        ItemName: 'Parking / Disbursements',
+        ItemDescription: 'Parking & disbursements',
+        ItemNominalCode: '4000',
+        Qty: '1',
+        UnitCost: parkingAmount.toFixed(2),
+        VATAmount: (parkingAmount * (vatRate || 0.20)).toFixed(2),
+        VATRate: String(((vatRate || 0.20) * 100).toFixed(0)),
+      });
+    }
+
+    if (!lineItems.length) throw new Error('No billable items to invoice');
+
+    const invDate = invoiceDate || new Date().toISOString().slice(0, 10);
+
+    const invoiceBody = await quickFileRequest('/1_2/invoice/create', {
+      InvoiceData: {
+        InvoiceType: 'INVOICE',
+        ClientID: clientId,
+        Currency: 'GBP',
+        InvoiceDate: invDate,
+        InvoiceLines: { ItemLine: lineItems },
+        TermDays: '30',
+        Notes: narrative || '',
+      },
+    });
+
+    const invoiceId = invoiceBody.InvoiceID || invoiceBody.InvoiceId || invoiceBody.RecordID || '';
+    const invoiceNumber = invoiceBody.InvoiceNumber || '';
+
+    const subtotal = (attendanceFee || 0) + mileageCost + (parkingAmount || 0);
+    const vat = subtotal * (vatRate || 0.20);
+    const total = subtotal + vat;
+
+    const invoiceUrl = invoiceId
+      ? 'https://app.quickfile.co.uk/invoice/view/' + invoiceId
+      : '';
+
+    if (attendanceId) {
+      db.run(
+        `UPDATE attendances SET
+          quickfile_invoice_id = ?,
+          quickfile_invoice_number = ?,
+          quickfile_invoice_url = ?,
+          invoice_created_at = datetime('now'),
+          invoice_created_by = ?,
+          invoice_subtotal = ?,
+          invoice_vat = ?,
+          invoice_total = ?,
+          invoice_narrative = ?,
+          invoice_mileage_miles = ?,
+          invoice_mileage_rate = ?,
+          invoice_parking_amount = ?,
+          invoice_attendance_fee = ?,
+          invoice_vat_rate = ?,
+          updated_at = datetime('now')
+        WHERE id = ?`,
+        [
+          String(invoiceId), invoiceNumber, invoiceUrl,
+          userName || '',
+          subtotal, vat, total,
+          narrative || '',
+          mileageMiles || 0, mileageRate || 0.45,
+          parkingAmount || 0, attendanceFee || 0,
+          vatRate || 0.20,
+          attendanceId,
+        ]
+      );
+      db.run(
+        `INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)`,
+        [attendanceId, 'invoice_created', JSON.stringify({ invoiceId, invoiceNumber, total }), userName || '']
+      );
+      saveDb();
+    }
+
+    return {
+      ok: true,
+      invoiceId: String(invoiceId),
+      invoiceNumber,
+      invoiceUrl,
+      subtotal,
+      vat,
+      total,
+    };
+  } catch (err) {
+    if (attendanceId) {
+      db.run(
+        `INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)`,
+        [attendanceId, 'invoice_failed', String(err.message || err), userName || '']
+      );
+      saveDb();
+    }
+    return { ok: false, error: err.message || String(err) };
+  }
+});
+
+/* ═══════════════════════════════════════════════════════
+   STATION MILEAGE
+   ═══════════════════════════════════════════════════════ */
+
+ipcMain.handle('station-mileage-get', (_, stationId) => {
+  const row = dbGet('SELECT mileage_from_base, postcode FROM police_stations WHERE id = ?', [stationId]);
+  return row || { mileage_from_base: null, postcode: '' };
+});
+
+ipcMain.handle('stations-mileage-list', () => {
+  return dbAll('SELECT id, name, code, scheme, region, mileage_from_base, postcode FROM police_stations ORDER BY name');
+});
+
+ipcMain.handle('station-mileage-save', (_, params) => {
+  const { id, mileage_from_base, postcode, userName } = params;
+  db.run(
+    'UPDATE police_stations SET mileage_from_base = ?, postcode = ? WHERE id = ?',
+    [mileage_from_base != null ? mileage_from_base : null, postcode || '', id]
+  );
+  saveDb();
+  return { ok: true };
+});
+
+ipcMain.handle('station-mileage-bulk-save', (_, stations) => {
+  stations.forEach(s => {
+    db.run(
+      'UPDATE police_stations SET mileage_from_base = ?, postcode = ? WHERE id = ?',
+      [s.mileage_from_base != null ? s.mileage_from_base : null, s.postcode || '', s.id]
+    );
+  });
+  saveDb();
+  return { ok: true };
+});
+
+/* ═══════════════════════════════════════════════════════
+   BILLING AUDIT LOG
+   ═══════════════════════════════════════════════════════ */
+
+ipcMain.handle('billing-audit-log-add', (_, params) => {
+  const { attendanceId, action, details, userName } = params;
+  db.run(
+    'INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)',
+    [attendanceId, action, details || '', userName || '']
+  );
+  saveDb();
+  return { ok: true };
+});
+
+ipcMain.handle('billing-audit-log-get', (_, attendanceId) => {
+  return dbAll(
+    'SELECT * FROM billing_audit_log WHERE attendance_id = ? ORDER BY timestamp DESC',
+    [attendanceId]
+  );
+});
+
+/* ═══════════════════════════════════════════════════════
+   BILLABLE ATTENDANCES (unbilled completed records)
+   ═══════════════════════════════════════════════════════ */
+
+ipcMain.handle('billable-attendances', () => {
+  const rows = dbAll(
+    `SELECT id, data, status, created_at, updated_at, client_name, station_name, attendance_date,
+            quickfile_invoice_id, invoice_total
+     FROM attendances
+     WHERE (status = 'finalised' OR status = 'completed')
+       AND (quickfile_invoice_id IS NULL OR quickfile_invoice_id = '')
+       AND deleted_at IS NULL
+     ORDER BY attendance_date DESC`
+  );
+  return rows;
+});
+
+/* ═══════════════════════════════════════════════════════
+   ATTENDANCE INVOICE STATUS (for billing panel)
+   ═══════════════════════════════════════════════════════ */
+
+ipcMain.handle('attendance-invoice-status', (_, attendanceId) => {
+  const row = dbGet(
+    `SELECT quickfile_invoice_id, quickfile_invoice_number, quickfile_invoice_url,
+            invoice_created_at, invoice_created_by,
+            invoice_subtotal, invoice_vat, invoice_total,
+            invoice_narrative, invoice_mileage_miles, invoice_mileage_rate,
+            invoice_parking_amount, invoice_attendance_fee, invoice_vat_rate
+     FROM attendances WHERE id = ?`,
+    [attendanceId]
+  );
+  return row || {};
 });
 
