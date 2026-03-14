@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.77",
+      "version": "1.4.78",
       "date": "2026-03-14",
       "latest": true,
+      "changes": [
+        "Make attachments easier to spot in the time recording section",
+        "Promote the add attachment action with clearer styling and messaging",
+        "Add an empty state so users can see where files will appear"
+      ]
+    },
+    {
+      "version": "1.4.77",
+      "date": "2026-03-14",
+      "latest": false,
       "changes": [
         "Fix QuickFile credential clearing and cloud backup modal listener issues",
         "Restore firm context and concise no-reply officer email templates",

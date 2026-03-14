@@ -2110,6 +2110,15 @@ var REQUIRED_FIELD_KEYS = [
     if (!container) return;
     container.innerHTML = '';
     const photos = (formData.photos && formData.photos[secId]) || [];
+    if (!photos.length) {
+      const empty = document.createElement('div');
+      empty.className = 'photo-thumbs-empty';
+      empty.textContent = secId === 'attachments'
+        ? 'No attachments added yet. Use the button below to add files to this record.'
+        : 'No files added yet.';
+      container.appendChild(empty);
+      return;
+    }
     photos.forEach((p, idx) => {
       const wrap = document.createElement('div');
       wrap.className = 'photo-thumb';
@@ -5946,23 +5955,20 @@ var REQUIRED_FIELD_KEYS = [
 
       if (sec.id === 'timeRecording') {
         const photoWrap = document.createElement('div');
-        photoWrap.className = 'photo-attach-area';
-        photoWrap.style.marginTop = '1.5rem';
-        photoWrap.style.padding = '1rem';
-        photoWrap.style.border = '1px dashed var(--border-color, #cbd5e1)';
-        photoWrap.style.borderRadius = '0.5rem';
-        photoWrap.style.background = 'var(--card-bg, #f8fafc)';
-        photoWrap.innerHTML = '<h4 class="section-heading" style="margin-top:0;cursor:default;">Attachments &amp; Documents</h4>' +
-          '<p style="font-size:0.85rem;color:var(--text-muted, #64748b);margin:0.25rem 0 0.75rem;">Attach photos, documents, or screenshots related to this attendance (e.g. custody record pages, disclosure documents, injury photos). All attachments are saved with this record and included in exports.</p>';
+        photoWrap.className = 'photo-attach-area photo-attach-area-prominent';
+        photoWrap.innerHTML = '<div class="photo-attach-header">' +
+          '<h4 class="section-heading photo-attach-title" style="margin-top:0;cursor:default;">Attachments &amp; Documents</h4>' +
+          '<span class="photo-attach-badge">Add files here</span>' +
+          '</div>' +
+          '<p class="photo-attach-copy">Attach photos, documents, screenshots, or other supporting files for this attendance. Files added here are saved with the record and included in exports.</p>';
         const thumbs = document.createElement('div');
         thumbs.className = 'photo-thumbs';
         thumbs.id = 'photo-thumbs-attachments';
         photoWrap.appendChild(thumbs);
         const attachBtn = document.createElement('button');
         attachBtn.type = 'button';
-        attachBtn.className = 'btn btn-secondary';
-        attachBtn.style.marginTop = '0.5rem';
-        attachBtn.textContent = '+ Add attachment';
+        attachBtn.className = 'btn btn-primary photo-attach-btn';
+        attachBtn.textContent = '+ Add Attachment';
         attachBtn.addEventListener('click', () => {
           const picker = (window.api && window.api.pickFile) ? window.api.pickFile : (window.api && window.api.pickImage ? window.api.pickImage : null);
           if (!picker) return;

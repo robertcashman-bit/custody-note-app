@@ -2653,7 +2653,57 @@ html.dark .useful-links-category { color: var(--corporate-accent, #93c5fd); }
 
 /* ═══ ATTACHMENTS ═══ */
 .photo-attach-area { margin-top: 0.75rem; }
+.photo-attach-area-prominent {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 2px solid color-mix(in srgb, var(--primary) 30%, var(--border) 70%);
+  border-radius: 0.75rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--surface-alt) 88%, white 12%), var(--surface));
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+.photo-attach-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.photo-attach-title {
+  margin-bottom: 0.15rem;
+}
+.photo-attach-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 14%, white 86%);
+  color: var(--primary);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.photo-attach-copy {
+  font-size: 0.88rem;
+  color: var(--text-muted, #64748b);
+  margin: 0.25rem 0 0.85rem;
+  line-height: 1.45;
+}
+.photo-attach-btn {
+  margin-top: 0.25rem;
+}
 .photo-thumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
+.photo-thumbs-empty {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  margin-bottom: 0.65rem;
+  border: 1px dashed var(--border, #cbd5e1);
+  border-radius: 0.6rem;
+  background: color-mix(in srgb, var(--surface) 85%, var(--surface-alt) 15%);
+  color: var(--text-muted, #64748b);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
 .photo-thumb {
   position: relative; width: 90px;
   border-radius: 6px; overflow: hidden; border: 2px solid var(--border);
