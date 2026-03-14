@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.76",
+      "version": "1.4.77",
       "date": "2026-03-14",
       "latest": true,
+      "changes": [
+        "Fix QuickFile credential clearing and cloud backup modal listener issues",
+        "Restore firm context and concise no-reply officer email templates",
+        "Make Auto section navigation responsive and align installed modules messaging with licensed add-ons"
+      ]
+    },
+    {
+      "version": "1.4.76",
+      "date": "2026-03-14",
+      "latest": false,
       "changes": [
         "Added home-page section visibility controls so busy front-page blocks can be hidden",
         "Saved the new home visibility preferences in settings for a cleaner default workspace"

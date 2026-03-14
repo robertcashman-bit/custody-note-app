@@ -4538,11 +4538,13 @@ html.section-accents-enabled .sidebar-section-btn.section-accent-9 { border-left
 
 @media (min-width: 1280px) {
   html.context-panel-open .form-context-panel { display: flex; }
+  html.nav-mode-auto #section-index-bar { display: none; }
   html.nav-mode-topbar .form-section-sidebar { display: none !important; }
   html.nav-mode-sidebar #section-index-bar { display: none; }
 }
 
 @media (max-width: 1279px) {
+  html.nav-mode-auto .form-section-sidebar { display: none !important; }
   .form-context-panel { display: none !important; }
 }
 

@@ -4254,12 +4254,14 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function saveSettings() {
-    var qfPayload = getQuickFileSettingsPayload();
     var cache = window._appSettingsCache || {};
-    /* Don't overwrite saved QuickFile with blank if inputs are empty (e.g. race before load) */
-    var qfAccount = qfPayload.quickfileAccountNumber || cache.quickfileAccountNumber || '';
-    var qfApiKey = qfPayload.quickfileApiKey || cache.quickfileApiKey || '';
-    var qfAppId = qfPayload.quickfileAppId || cache.quickfileAppId || '';
+    var qfAccEl = document.getElementById('setting-quickfile-account');
+    var qfKeyEl = document.getElementById('setting-quickfile-apikey');
+    var qfAppEl = document.getElementById('setting-quickfile-appid');
+    /* Preserve explicit clears; only fall back to cache if the field is not present. */
+    var qfAccount = qfAccEl ? qfAccEl.value.trim() : (cache.quickfileAccountNumber || '');
+    var qfApiKey = qfKeyEl ? qfKeyEl.value.trim() : (cache.quickfileApiKey || '');
+    var qfAppId = qfAppEl ? qfAppEl.value.trim() : (cache.quickfileAppId || '');
     window.api.setSettings({
       email: document.getElementById('setting-email')?.value?.trim() || '',
       dsccPin: document.getElementById('setting-dscc-pin')?.value?.trim() || '',
@@ -12347,7 +12349,9 @@ PDF_CASENOTE_ADVERT +
     function showCloudBackupRestorePromptModal(backups) {
       var modal = document.getElementById('cloud-backup-restore-prompt-modal');
       var sel = document.getElementById('cloud-backup-restore-select');
-      if (!modal || !sel) return;
+      var restoreBtn = document.getElementById('cloud-backup-restore-prompt-restore');
+      var continueBtn = document.getElementById('cloud-backup-restore-prompt-continue');
+      if (!modal || !sel || !restoreBtn || !continueBtn) return;
       sel.innerHTML = '';
       var _months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       backups.forEach(function(b) {
@@ -12363,7 +12367,7 @@ PDF_CASENOTE_ADVERT +
         sel.appendChild(opt);
       });
       modal.style.display = '';
-      document.getElementById('cloud-backup-restore-prompt-restore')?.addEventListener('click', function onRestore() {
+      restoreBtn.onclick = function() {
         var key = sel.value;
         if (!key) { if (typeof showToast === 'function') showToast('Select a backup first', 'warning'); return; }
         modal.style.display = 'none';
@@ -12384,11 +12388,11 @@ PDF_CASENOTE_ADVERT +
             if (result && result.ok) setTimeout(function() { location.reload(); }, 1200);
           });
         }
-      }, { once: true });
-      document.getElementById('cloud-backup-restore-prompt-continue')?.addEventListener('click', function onContinue() {
+      };
+      continueBtn.onclick = function() {
         try { localStorage.setItem('cloudBackupRestorePromptDismissedAt', String(Date.now())); } catch (_) {}
         modal.style.display = 'none';
-      }, { once: true });
+      };
     }
     if (window.api && window.api.onCloudBackupStatusChanged) {
       window.api.onCloudBackupStatusChanged(function(data) {

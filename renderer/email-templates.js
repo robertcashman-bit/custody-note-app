@@ -225,7 +225,7 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     var body2 = [
       salutation,
       '',
-      'I write following my attendance upon ' + clientName + attendanceRef + '.',
+      'I write following my attendance upon ' + clientName + attendanceRef + ' on behalf of ' + firmName + '.',
       ''
     ];
     if (!outcomeKnown) {
@@ -244,16 +244,15 @@ function buildEmailBody(templateId, data, feeEarnerName) {
       salutation,
       '',
       'I refer to my previous email regarding ' + clientName + ', following my attendance upon them at ' +
-        station + (dateStr ? ' on ' + dateStr : '') + '. I have not yet received a reply and would be grateful if you could confirm the outcome at your earliest convenience.',
+        station + (dateStr ? ' on ' + dateStr : '') + ' on behalf of ' + firmName + '. I have not yet received a reply and would be grateful if you could confirm the outcome at your earliest convenience.',
       '',
       'For ease of reference, I set out a copy of my previous email below.',
       '',
-      'I write following my attendance upon ' + clientName + attendanceRef + '.',
+      'I write following my attendance upon ' + clientName + attendanceRef + ' on behalf of ' + firmName + '.',
       ''
     ];
     if (!outcomeKnown) {
-      body3.push('I would be grateful if you could confirm the outcome of this matter when convenient.', '');
-      _genericOutcomeRequestDetails().forEach(function(l) { body3.push(l); });
+      _outcomeParas(true).forEach(function(l) { body3.push(l); });
     } else {
       _outcomeParas(false).forEach(function(l) { body3.push(l); });
     }
