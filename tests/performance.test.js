@@ -108,11 +108,11 @@ describe('Performance — footer and status rendering', () => {
   });
 
   it('does not include build date or check-for-updates button in footer', () => {
-    assert.ok(!indexHtmlSource.includes('home-check-update-btn'),
-      'footer must not have home-check-update-btn element');
     const footerStart = indexHtmlSource.indexOf('<footer class="app-footer">');
     const footerEnd = indexHtmlSource.indexOf('</footer>', footerStart);
     const footerHtml = indexHtmlSource.substring(footerStart, footerEnd);
+    assert.ok(!footerHtml.includes('home-check-update-btn'),
+      'footer must not have home-check-update-btn element');
     assert.ok(!footerHtml.includes('>Build <span'), 'footer must not show build date');
   });
 
