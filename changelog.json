@@ -1,9 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.4.82",
+      "date": "2026-03-15",
+      "latest": true,
+      "changes": [
+        "Add in-record Email Instructing Solicitor section with template picker and open-in-email-app",
+        "Custom email templates: scope (Use anywhere / Officer only / Solicitor only) and Edit in Settings",
+        "Officer Email OIC modal: saved custom templates (officer/all) with placeholders; remember last template used",
+        "Solicitor email picker shows default preset plus scoped custom templates; subject/body in PDF when present",
+        "Peer-review fields (representations, follow-up) and solicitor email block included in PDF output"
+      ]
+    },
+    {
       "version": "1.4.80",
       "date": "2026-03-14",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Open the QuickFile invoice automatically after creation when a preview link is available",
         "Improve billing panel contrast so text, inputs, and totals stay readable",
