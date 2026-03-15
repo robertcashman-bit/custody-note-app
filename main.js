@@ -4751,15 +4751,7 @@ ipcMain.handle('pick-image', async () => {
 ipcMain.handle('pick-file', async () => {
   const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
     properties: ['openFile'],
-    title: 'Attach file',
-    filters: [
-      { name: 'All supported files', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'csv', 'heic', 'heif'] },
-      { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif'] },
-      { name: 'PDF', extensions: ['pdf'] },
-      { name: 'Word / Excel', extensions: ['doc', 'docx', 'xls', 'xlsx'] },
-      { name: 'Text / CSV', extensions: ['txt', 'csv'] },
-      { name: 'All files', extensions: ['*'] },
-    ],
+    title: 'Attach file (any type)',
   });
   if (canceled || !filePaths.length) return null;
   const filePath = filePaths[0];

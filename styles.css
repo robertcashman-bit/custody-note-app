@@ -2044,6 +2044,7 @@ html.dark .grounds-card .checkbox-item.grounds-option:hover {
 }
 .sig-fs-btn-done { background: #22c55e; color: #fff; }
 .sig-fs-btn-clear { background: #64748b; color: #fff; }
+.sig-fs-btn-preset { background: #2563eb; color: #fff; }
 .sig-fs-btn-cancel { background: #ef4444; color: #fff; }
 
 
@@ -2142,6 +2143,61 @@ html.dark .interview-notes-warning {
 .bottom-btn.export-pdf-btn:hover { background: #0d6460; border-color: #0d6460; color: white; }
 
 /* Form actions on last page */
+.time-breakdown-panel {
+  margin-top: 1rem;
+  padding: 1rem 1.05rem;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--surface-alt, #f8fafc) 86%, white 14%), var(--surface, #ffffff));
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+.time-breakdown-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.time-breakdown-title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text, #0f172a);
+}
+.time-breakdown-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.32rem 0.7rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 12%, white 88%);
+  color: var(--primary, #2563eb);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.time-breakdown-summary {
+  margin: 0.45rem 0 0;
+  color: var(--text-muted, #64748b);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.time-breakdown-list {
+  margin: 0.85rem 0 0;
+  padding-left: 1.15rem;
+  color: var(--text, #0f172a);
+  font-size: 0.9rem;
+}
+.time-breakdown-list li {
+  margin: 0.35rem 0;
+  line-height: 1.45;
+}
+.time-breakdown-list strong {
+  color: var(--text, #0f172a);
+}
+.time-breakdown-empty {
+  color: var(--text-muted, #64748b);
+}
+
 .billing-readiness-panel {
   margin-top: 1rem;
   padding: 1rem 1.05rem;
@@ -2237,6 +2293,24 @@ html.dark .interview-notes-warning {
   font-size: 0.86rem;
 }
 .billing-readiness-list li { margin: 0.2rem 0; }
+
+html.dark .time-breakdown-panel {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.94));
+  border-color: #334155;
+}
+html.dark .time-breakdown-title,
+html.dark .time-breakdown-list,
+html.dark .time-breakdown-list strong {
+  color: #e5eefb;
+}
+html.dark .time-breakdown-summary,
+html.dark .time-breakdown-empty {
+  color: #94a3b8;
+}
+html.dark .time-breakdown-badge {
+  background: rgba(37, 99, 235, 0.18);
+  color: #93c5fd;
+}
 
 .form-actions {
   display: flex; gap: 0.5rem; flex-wrap: wrap;

@@ -470,7 +470,7 @@ var LAA = {
       id: 'caseArrival', title: '1. Case Reference & Arrival',
       keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'ourFileNumber', 'sufficientBenefitTest'],
       fields: [
-        { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: ['custody','voluntary'], cols: 2, helpTitle: 'Custody = client under arrest. Voluntary = client attending voluntarily (free to leave).' },
+        { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'custody', label: 'Custody' }, { value: 'voluntary', label: 'Voluntary' }], cols: 2, helpTitle: 'Custody = client under arrest. Voluntary = client attending voluntarily (free to leave).' },
         { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Type invoice number (auto-assigned on create if left blank)' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
@@ -1266,7 +1266,7 @@ var LAA = {
       id: 'caseArrival', title: '1. Case Reference & Arrival',
       keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'ourFileNumber', 'sufficientBenefitTest'],
       fields: [
-        { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: ['voluntary','custody'], cols: 2, helpTitle: 'Voluntary = client attending voluntarily (free to leave). Custody = client under arrest.' },
+        { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'voluntary', label: 'Voluntary' }, { value: 'custody', label: 'Custody' }], cols: 2, helpTitle: 'Voluntary = client attending voluntarily (free to leave). Custody = client under arrest.' },
         { key: '_note_voluntary', label: 'This is a voluntary attendance. Client is free to leave unless arrested.', type: 'sectionNote' },
         { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Type invoice number (auto-assigned on create if left blank)' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
@@ -2157,15 +2157,87 @@ var REQUIRED_FIELD_KEYS = [
   }
   function codeOptions(key) { return (refData[key] || []).map(c => ({ value: c.code, label: c.code + ' \u2013 ' + c.description })); }
 
+  function shouldOfferPresetSignature(sigKey) {
+    return sigKey === 'repConfirmationSig';
+  }
+
+  function getPresetSignatureText(sigKey) {
+    if (sigKey === 'repConfirmationSig') return 'Robert D Cashman';
+    return '';
+  }
+
+  function stampSignatureFields(sigKey) {
+    const now = new Date();
+    const date = now.toISOString().slice(0, 10);
+    const time = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    if (sigKey === 'repInstructionsSig' || sigKey === 'clientInstructionsSig') {
+      setFieldValueSilent('instructionsSignatureDate', date);
+      setFieldValueSilent('instructionsSignatureTime', time);
+    } else if (sigKey === 'clientSig' || sigKey === 'feeEarnerSig') {
+      setFieldValueSilent('laaSignatureDate', date);
+      setFieldValueSilent('laaSignatureTime', time);
+    } else if (sigKey === 'supervisorSig') {
+      setFieldValueSilent('supervisorDate', date);
+      setFieldValueSilent('supervisorTime', time);
+    } else if (sigKey === 'repConfirmationSig') {
+      setFieldValueSilent('policeStationFinalisedDate', date);
+      setFieldValueSilent('policeStationFinalisedTime', time);
+    }
+  }
+
+  function drawPresetSignature(canvas, sigKey, opts) {
+    const text = getPresetSignatureText(sigKey);
+    if (!text || !canvas) return false;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return false;
+    const fillBackground = !opts || opts.fillBackground !== false;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (fillBackground) {
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(-0.06);
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'italic ' + Math.max(42, Math.round(canvas.height * 0.34)) + 'px "Brush Script MT", "Segoe Script", "Lucida Handwriting", cursive';
+    ctx.fillText(text, 0, -8);
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = Math.max(2, canvas.height * 0.012);
+    ctx.beginPath();
+    ctx.moveTo(-canvas.width * 0.18, canvas.height * 0.13);
+    ctx.quadraticCurveTo(canvas.width * 0.06, canvas.height * 0.18, canvas.width * 0.24, canvas.height * 0.07);
+    ctx.stroke();
+    ctx.restore();
+    return true;
+  }
+
+  function saveSignatureCanvas(canvas, sigKey) {
+    formData[sigKey] = canvas.toDataURL();
+    if (canvas._strokeHistory) {
+      canvas._strokeHistory.push(formData[sigKey]);
+    }
+    stampSignatureFields(sigKey);
+    quietSave();
+  }
+
+  function applyPresetSignature(canvas, sigKey, opts) {
+    if (!drawPresetSignature(canvas, sigKey, opts)) return false;
+    saveSignatureCanvas(canvas, sigKey);
+    return true;
+  }
+
   /* ─── SOCIAL / UNSOCIAL AUTO-CALC ─── */
   function isUnsocialTime(hours, mins, isWeekendBH) {
     if (isWeekendBH) return true;
     const t = hours * 60 + mins;
-    return t < 420 || t >= 1140;
+    return t < 570 || t >= 1050;
   }
 
   /**
-   * Split a time span into social (07:00–19:00 weekday) and unsocial minutes.
+   * Split a time span into social (09:30–17:30 weekday) and unsocial minutes.
    * Handles overnight spans correctly (23:00 → 02:30 = 210 unsocial mins).
    * Pass crossesMidnight=true when the caller knows the span crosses midnight —
    * avoids the ambiguity where startTime===endTime could be 0 or 24 hours.
@@ -2187,10 +2259,77 @@ var REQUIRED_FIELD_KEYS = [
     let social = 0, unsocial = 0;
     for (let m = startMins; m < endMins; m++) {
       const hh = m % 1440;
-      if (isWeekendBH || hh < 420 || hh >= 1140) unsocial++;
+      if (isWeekendBH || hh < 570 || hh >= 1050) unsocial++;
       else social++;
     }
     return { social, unsocial };
+  }
+
+  function formatSocialUnsocialSummary(split) {
+    const social = split && split.social ? split.social : 0;
+    const unsocial = split && split.unsocial ? split.unsocial : 0;
+    const total = social + unsocial;
+    if (!total) return '0 mins';
+    if (social && !unsocial) return 'social (' + total + ' mins)';
+    if (unsocial && !social) return 'unsocial (' + total + ' mins)';
+    return 'mixed - social ' + social + ' mins, unsocial ' + unsocial + ' mins (' + total + ' mins)';
+  }
+
+  function appendTimeBreakdownItem(list, label, startTime, endTime, split) {
+    if (!list) return;
+    const li = document.createElement('li');
+    const strong = document.createElement('strong');
+    strong.textContent = label + ': ';
+    const text = document.createElement('span');
+    const range = (startTime && endTime) ? (startTime + ' to ' + endTime + ' - ') : '';
+    text.textContent = range + formatSocialUnsocialSummary(split);
+    li.appendChild(strong);
+    li.appendChild(text);
+    list.appendChild(li);
+  }
+
+  function updateTimeBreakdownPanel() {
+    const panel = document.getElementById('time-breakdown-panel');
+    const list = document.getElementById('time-breakdown-list');
+    const summary = document.getElementById('time-breakdown-summary');
+    if (!panel || !list || !summary) return;
+    const d = formData || {};
+    const isWBH = d.weekendBankHoliday === 'Yes';
+    panel.style.display = '';
+    summary.textContent = isWBH
+      ? 'Weekend / bank holiday: all recorded time is treated as unsocial.'
+      : 'Weekday rule: 09:30 to 17:30 is social; before 09:30 and from 17:30 onward is unsocial.';
+    list.innerHTML = '';
+    let hasItems = false;
+    if (d.timeSetOff && d.timeArrival) {
+      appendTimeBreakdownItem(list, 'Travel out', d.timeSetOff, d.timeArrival, splitSocialUnsocial(d.timeSetOff, d.timeArrival, isWBH));
+      hasItems = true;
+    }
+    if (d.timeArrival && d.timeDeparture) {
+      appendTimeBreakdownItem(list, 'Attendance at station', d.timeArrival, d.timeDeparture, splitSocialUnsocial(d.timeArrival, d.timeDeparture, isWBH));
+      hasItems = true;
+    }
+    if (d.waitingTimeStart && d.waitingTimeEnd) {
+      appendTimeBreakdownItem(list, 'Waiting', d.waitingTimeStart, d.waitingTimeEnd, splitSocialUnsocial(d.waitingTimeStart, d.waitingTimeEnd, isWBH));
+      hasItems = true;
+    }
+    if (d.timeArrival && d.timeDeparture) {
+      appendTimeBreakdownItem(list, 'Chargeable attendance & advice', '', '', {
+        social: parseInt(getFieldValue('adviceSocial'), 10) || 0,
+        unsocial: parseInt(getFieldValue('adviceUnsocial'), 10) || 0
+      });
+      hasItems = true;
+    }
+    if (d.timeDeparture && d.timeOfficeHome) {
+      appendTimeBreakdownItem(list, 'Return travel', d.timeDeparture, d.timeOfficeHome, splitSocialUnsocial(d.timeDeparture, d.timeOfficeHome, isWBH));
+      hasItems = true;
+    }
+    if (!hasItems) {
+      const empty = document.createElement('li');
+      empty.className = 'time-breakdown-empty';
+      empty.textContent = 'Add set-off, arrival, departure, return, and waiting times to see the automatic breakdown.';
+      list.appendChild(empty);
+    }
   }
 
   function autoCalcTimes() {
@@ -2229,6 +2368,7 @@ var REQUIRED_FIELD_KEYS = [
     fields.forEach(k => { total += parseInt(getFieldValue(k)) || 0; });
     setFieldValue('totalMinutes', total);
     updateCalcPanel();
+    updateTimeBreakdownPanel();
   }
 
   function minsBetween(start, end) {
@@ -5401,6 +5541,34 @@ var REQUIRED_FIELD_KEYS = [
     panel.style.display = '';
   }
 
+  function scrollToAttachmentsForBilling() {
+    var attachmentsArea = document.getElementById('photo-thumbs-attachments');
+    var target = attachmentsArea && attachmentsArea.closest ? attachmentsArea.closest('.photo-attach-area') : null;
+    if (target && target.scrollIntoView) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  function promptBeforeOpeningBilling() {
+    if (typeof showConfirm !== 'function') {
+      if (typeof openBillingPanel === 'function') openBillingPanel();
+      return;
+    }
+    showConfirm(
+      'Do you want to add the attendance record or forms as attachments before opening Billing?\n\n' +
+      'Select OK to stay on this record and go to Attachments now.\n' +
+      'Select Cancel to continue straight to Billing.',
+      'Attachments Before Billing'
+    ).then(function(addAttachmentsFirst) {
+      if (addAttachmentsFirst) {
+        scrollToAttachmentsForBilling();
+        showToast('Export the record or forms if needed, then add them in Attachments before opening Billing.', 'info', 5000);
+        return;
+      }
+      if (typeof openBillingPanel === 'function') openBillingPanel();
+    });
+  }
+
   /* ─── AUTO-FILL DECLARATION & RETAINER FROM CLIENT (#4) ─── */
   function autoFillDeclarationFields() {
     if (!formData) return;
@@ -5983,7 +6151,71 @@ var REQUIRED_FIELD_KEYS = [
         renderMultiInterview(section, _lazyFormData, sec);
       }
 
+      if (sec.extraActions) {
+        const actions = document.createElement('div');
+        actions.className = 'form-actions';
+        actions.innerHTML =
+          '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button>' +
+          '<button type="button" class="btn btn-accent" id="form-pdf">Export PDF to Desktop</button>' +
+          '<button type="button" class="btn btn-accent" id="form-print">Print Attendance Note</button>' +
+          '<button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button>' +
+          '<button type="button" class="btn btn-accent" id="form-email-solicitor">Email to solicitor</button>' +
+          '<button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button>' +
+          '<button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
+        section.appendChild(actions);
+      }
+
       if (sec.id === 'timeRecording') {
+        const timeBreakdownPanel = document.createElement('div');
+        timeBreakdownPanel.id = 'time-breakdown-panel';
+        timeBreakdownPanel.className = 'time-breakdown-panel';
+        timeBreakdownPanel.innerHTML =
+          '<div class="time-breakdown-head">' +
+            '<h4 class="time-breakdown-title">Calculated Time Breakdown</h4>' +
+            '<span class="time-breakdown-badge">Auto-split social / unsocial</span>' +
+          '</div>' +
+          '<p id="time-breakdown-summary" class="time-breakdown-summary"></p>' +
+          '<ul id="time-breakdown-list" class="time-breakdown-list"></ul>';
+        section.appendChild(timeBreakdownPanel);
+        const endActions = document.createElement('div');
+        endActions.className = 'form-actions form-end-actions';
+        endActions.innerHTML =
+          '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
+          '<button type="button" class="btn btn-accent" id="form-pdf-end" title="Save full attendance note (including declaration) to Desktop">Export PDF</button>' +
+          '<button type="button" class="btn btn-accent" id="form-print-end" title="Print preview the full attendance note">Print Preview</button>' +
+          '<button type="button" class="btn btn-accent" id="form-declaration" title="Export Applicant Declaration only">Declaration</button>' +
+          '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
+          '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>';
+        section.appendChild(endActions);
+        const photoWrap = document.createElement('div');
+        photoWrap.className = 'photo-attach-area photo-attach-area-prominent';
+        photoWrap.innerHTML = '<div class="photo-attach-header">' +
+          '<h4 class="section-heading photo-attach-title" style="margin-top:0;cursor:default;">Attachments &amp; Documents</h4>' +
+          '<span class="photo-attach-badge">Add files here</span>' +
+          '</div>' +
+          '<p class="photo-attach-copy">Attach photos, documents, screenshots, audio, archives, or any other supporting file for this attendance. Files added here are saved with the record and included in exports.</p>';
+        const thumbs = document.createElement('div');
+        thumbs.className = 'photo-thumbs';
+        thumbs.id = 'photo-thumbs-attachments';
+        photoWrap.appendChild(thumbs);
+        const attachBtn = document.createElement('button');
+        attachBtn.type = 'button';
+        attachBtn.className = 'btn btn-primary photo-attach-btn';
+        attachBtn.textContent = '+ Add Attachment';
+        attachBtn.addEventListener('click', () => {
+          const picker = (window.api && window.api.pickFile) ? window.api.pickFile : (window.api && window.api.pickImage ? window.api.pickImage : null);
+          if (!picker) return;
+          picker().then(result => {
+            if (!result || result.error) { if (result && result.error) showToast(result.error, 'error'); return; }
+            if (!formData.photos) formData.photos = {};
+            if (!formData.photos['attachments']) formData.photos['attachments'] = [];
+            formData.photos['attachments'].push({ dataUrl: result.dataUrl, name: result.name, mime: result.mime });
+            renderPhotoThumbs('attachments');
+            quietSave();
+          });
+        });
+        photoWrap.appendChild(attachBtn);
+        section.appendChild(photoWrap);
         const billingPanel = document.createElement('div');
         billingPanel.id = 'billing-readiness-panel';
         billingPanel.className = 'billing-readiness-panel';
@@ -6009,38 +6241,9 @@ var REQUIRED_FIELD_KEYS = [
             '<ul id="billing-readiness-list" class="billing-readiness-list"></ul>' +
           '</div>';
         billingPanel.querySelector('#billing-readiness-open').onclick = function() {
-          if (typeof openBillingPanel === 'function') openBillingPanel();
+          promptBeforeOpeningBilling();
         };
         section.appendChild(billingPanel);
-        const photoWrap = document.createElement('div');
-        photoWrap.className = 'photo-attach-area photo-attach-area-prominent';
-        photoWrap.innerHTML = '<div class="photo-attach-header">' +
-          '<h4 class="section-heading photo-attach-title" style="margin-top:0;cursor:default;">Attachments &amp; Documents</h4>' +
-          '<span class="photo-attach-badge">Add files here</span>' +
-          '</div>' +
-          '<p class="photo-attach-copy">Attach photos, documents, screenshots, or other supporting files for this attendance. Files added here are saved with the record and included in exports.</p>';
-        const thumbs = document.createElement('div');
-        thumbs.className = 'photo-thumbs';
-        thumbs.id = 'photo-thumbs-attachments';
-        photoWrap.appendChild(thumbs);
-        const attachBtn = document.createElement('button');
-        attachBtn.type = 'button';
-        attachBtn.className = 'btn btn-primary photo-attach-btn';
-        attachBtn.textContent = '+ Add Attachment';
-        attachBtn.addEventListener('click', () => {
-          const picker = (window.api && window.api.pickFile) ? window.api.pickFile : (window.api && window.api.pickImage ? window.api.pickImage : null);
-          if (!picker) return;
-          picker().then(result => {
-            if (!result || result.error) { if (result && result.error) showToast(result.error, 'error'); return; }
-            if (!formData.photos) formData.photos = {};
-            if (!formData.photos['attachments']) formData.photos['attachments'] = [];
-            formData.photos['attachments'].push({ dataUrl: result.dataUrl, name: result.name, mime: result.mime });
-            renderPhotoThumbs('attachments');
-            quietSave();
-          });
-        });
-        photoWrap.appendChild(attachBtn);
-        section.appendChild(photoWrap);
         if (formData.photos) {
           const legacyKeys = ['custody', 'disclosure', 'interview', 'injuriesAppearance'];
           for (const lk of legacyKeys) {
@@ -6052,33 +6255,7 @@ var REQUIRED_FIELD_KEYS = [
           }
         }
         renderPhotoThumbs('attachments');
-      }
-
-      if (sec.extraActions) {
-        const actions = document.createElement('div');
-        actions.className = 'form-actions';
-        actions.innerHTML =
-          '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button>' +
-          '<button type="button" class="btn btn-accent" id="form-pdf">Export PDF to Desktop</button>' +
-          '<button type="button" class="btn btn-accent" id="form-print">Print Attendance Note</button>' +
-          '<button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button>' +
-          '<button type="button" class="btn btn-accent" id="form-email-solicitor">Email to solicitor</button>' +
-          '<button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button>' +
-          '<button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
-        section.appendChild(actions);
-      }
-
-      if (sec.id === 'timeRecording') {
-        const endActions = document.createElement('div');
-        endActions.className = 'form-actions form-end-actions';
-        endActions.innerHTML =
-          '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
-          '<button type="button" class="btn btn-accent" id="form-pdf-end" title="Save full attendance note (including declaration) to Desktop">Export PDF</button>' +
-          '<button type="button" class="btn btn-accent" id="form-print-end" title="Print preview the full attendance note">Print Preview</button>' +
-          '<button type="button" class="btn btn-accent" id="form-declaration" title="Export Applicant Declaration only">Declaration</button>' +
-          '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
-          '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>';
-        section.appendChild(endActions);
+        updateTimeBreakdownPanel();
       }
 
       if (sec.id === 'supervisorReview') {
@@ -6840,7 +7017,14 @@ var REQUIRED_FIELD_KEYS = [
     if (f.type === 'select') {
       input = document.createElement('select');
       input.innerHTML = '<option value="">-- Select --</option>';
-      (f.options || []).forEach(o => { const opt = document.createElement('option'); opt.value = o; opt.textContent = o; input.appendChild(opt); });
+      (f.options || []).forEach(o => {
+        const opt = document.createElement('option');
+        const value = o && typeof o === 'object' ? o.value : o;
+        const label = o && typeof o === 'object' ? (o.label != null ? o.label : o.value) : o;
+        opt.value = value;
+        opt.textContent = label;
+        input.appendChild(opt);
+      });
     } else if (f.type === 'codedSelect') {
       input = document.createElement('select');
       input.innerHTML = '<option value="">-- Select --</option>';
@@ -7136,6 +7320,17 @@ var REQUIRED_FIELD_KEYS = [
       const signBtn = document.createElement('button'); signBtn.type = 'button'; signBtn.className = 'btn-sign-fullscreen'; signBtn.textContent = 'Sign';
       signBtn.addEventListener('click', function() { openFullscreenSignature(canvas, f.sigKey, f.label); });
       sw.appendChild(signBtn);
+      if (shouldOfferPresetSignature(f.sigKey)) {
+        const presetBtn = document.createElement('button');
+        presetBtn.type = 'button';
+        presetBtn.className = 'btn-small';
+        presetBtn.textContent = 'Use Robert D Cashman';
+        presetBtn.style.marginLeft = '4px';
+        presetBtn.addEventListener('click', function() {
+          applyPresetSignature(canvas, f.sigKey, { fillBackground: true });
+        });
+        sw.appendChild(presetBtn);
+      }
       wrap.appendChild(sw);
       initSignatureCanvas(canvas, f.sigKey, data);
       grid.appendChild(wrap);
@@ -8013,35 +8208,17 @@ var REQUIRED_FIELD_KEYS = [
     let drawing = false;
     let lastTouchEnd = 0;
     const strokeHistory = [];
-    const saveSnapshot = () => { strokeHistory.push(canvas.toDataURL()); };
-    const stampSignature = () => {
-      const now = new Date();
-      const date = now.toISOString().slice(0, 10);
-      const time = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
-      if (sigKey === 'repInstructionsSig' || sigKey === 'clientInstructionsSig') {
-        setFieldValueSilent('instructionsSignatureDate', date);
-        setFieldValueSilent('instructionsSignatureTime', time);
-      } else if (sigKey === 'clientSig' || sigKey === 'feeEarnerSig') {
-        setFieldValueSilent('laaSignatureDate', date);
-        setFieldValueSilent('laaSignatureTime', time);
-      } else if (sigKey === 'supervisorSig') {
-        setFieldValueSilent('supervisorDate', date);
-        setFieldValueSilent('supervisorTime', time);
-      } else if (sigKey === 'repConfirmationSig') {
-        setFieldValueSilent('policeStationFinalisedDate', date);
-        setFieldValueSilent('policeStationFinalisedTime', time);
-      }
-    };
     const saveSig = () => {
       drawing = false;
-      saveSnapshot();
-      formData[sigKey] = canvas.toDataURL();
-      stampSignature();
-      quietSave();
+      saveSignatureCanvas(canvas, sigKey);
     };
     const ignoreMouse = () => Date.now() - lastTouchEnd < 500;
-    if (data[sigKey]) { const img = new Image(); img.onload = () => { ctx.drawImage(img, 0, 0); saveSnapshot(); }; img.src = data[sigKey]; }
     canvas._strokeHistory = strokeHistory;
+    if (data[sigKey]) {
+      const img = new Image();
+      img.onload = () => { ctx.drawImage(img, 0, 0); strokeHistory.push(canvas.toDataURL()); };
+      img.src = data[sigKey];
+    }
     canvas.addEventListener('mousedown', e => { if (ignoreMouse()) return; drawing = true; const p = getCanvasCoords(canvas, e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
     canvas.addEventListener('mousemove', e => { if (ignoreMouse() || !drawing) return; const p = getCanvasCoords(canvas, e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
     canvas.addEventListener('mouseup', () => { if (ignoreMouse()) return; saveSig(); });
@@ -8074,11 +8251,19 @@ var REQUIRED_FIELD_KEYS = [
     var fsCanvas = document.createElement('canvas');
     fsCanvas.width = 1200; fsCanvas.height = 500;
     overlay.appendChild(fsCanvas);
+    var presetBtn = null;
     var btnRow = document.createElement('div'); btnRow.className = 'sig-fs-buttons';
     var clearBtn = document.createElement('button'); clearBtn.textContent = 'Clear'; clearBtn.className = 'sig-fs-btn-clear';
     var doneBtn = document.createElement('button'); doneBtn.textContent = 'Done'; doneBtn.className = 'sig-fs-btn-done';
     var cancelBtn = document.createElement('button'); cancelBtn.textContent = 'Cancel'; cancelBtn.className = 'sig-fs-btn-cancel';
-    btnRow.appendChild(clearBtn); btnRow.appendChild(doneBtn); btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(clearBtn);
+    if (shouldOfferPresetSignature(sigKey)) {
+      presetBtn = document.createElement('button');
+      presetBtn.textContent = 'Use Robert D Cashman';
+      presetBtn.className = 'sig-fs-btn-preset';
+      btnRow.appendChild(presetBtn);
+    }
+    btnRow.appendChild(doneBtn); btnRow.appendChild(cancelBtn);
     overlay.appendChild(btnRow);
     document.body.appendChild(overlay);
     var ctx = fsCanvas.getContext('2d');
@@ -8100,18 +8285,17 @@ var REQUIRED_FIELD_KEYS = [
     fsCanvas.addEventListener('touchend', function() { drawing = false; lastTouchEnd = Date.now(); }, { passive: true });
     fsCanvas.addEventListener('touchcancel', function() { drawing = false; lastTouchEnd = Date.now(); }, { passive: true });
     clearBtn.addEventListener('click', function() { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, fsCanvas.width, fsCanvas.height); ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 3; ctx.lineCap = 'round'; });
+    if (presetBtn) {
+      presetBtn.addEventListener('click', function() {
+        drawPresetSignature(fsCanvas, sigKey, { fillBackground: true });
+      });
+    }
     doneBtn.addEventListener('click', function() {
       var iCtx = inlineCanvas.getContext('2d');
       iCtx.clearRect(0, 0, inlineCanvas.width, inlineCanvas.height);
       iCtx.drawImage(fsCanvas, 0, 0, inlineCanvas.width, inlineCanvas.height);
-      formData[sigKey] = inlineCanvas.toDataURL();
-      if (inlineCanvas._strokeHistory) { inlineCanvas._strokeHistory.length = 0; inlineCanvas._strokeHistory.push(formData[sigKey]); }
-      var now = new Date(); var date = now.toISOString().slice(0, 10); var time = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
-      if (sigKey === 'repInstructionsSig' || sigKey === 'clientInstructionsSig') { setFieldValueSilent('instructionsSignatureDate', date); setFieldValueSilent('instructionsSignatureTime', time); }
-      else if (sigKey === 'clientSig' || sigKey === 'feeEarnerSig') { setFieldValueSilent('laaSignatureDate', date); setFieldValueSilent('laaSignatureTime', time); }
-      else if (sigKey === 'supervisorSig') { setFieldValueSilent('supervisorDate', date); setFieldValueSilent('supervisorTime', time); }
-      else if (sigKey === 'repConfirmationSig') { setFieldValueSilent('policeStationFinalisedDate', date); setFieldValueSilent('policeStationFinalisedTime', time); }
-      quietSave();
+      if (inlineCanvas._strokeHistory) inlineCanvas._strokeHistory.length = 0;
+      saveSignatureCanvas(inlineCanvas, sigKey);
       document.body.removeChild(overlay);
     });
     cancelBtn.addEventListener('click', function() { document.body.removeChild(overlay); });
@@ -11476,7 +11660,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('sections-index-btn')?.addEventListener('click', openSectionsIndex);
     document.getElementById('sections-index-close')?.addEventListener('click', closeSectionsIndex);
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
-    document.getElementById('billing-panel-btn')?.addEventListener('click', () => { if (typeof openBillingPanel === 'function') openBillingPanel(); });
+    document.getElementById('billing-panel-btn')?.addEventListener('click', () => { promptBeforeOpeningBilling(); });
     document.getElementById('kb-help-btn')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
     document.getElementById('form-header-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
 
