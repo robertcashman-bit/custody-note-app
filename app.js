@@ -824,6 +824,9 @@ var LAA = {
         { key: 'adviceFollowedInInterview', label: 'Advice followed in interview?', type: 'select', options: ['Yes','No'] },
         { key: 'adviceFollowedExplanation', label: 'If not followed – brief explanation', type: 'textarea', placeholder: 'Required when advice was not followed', cols: 2, showIf: { field: 'adviceFollowedInInterview', value: 'No' } },
         { key: 'adviceReComplaint', label: 'Advice re making a complaint given?', type: 'select', options: ['Yes','No'] },
+        { key: 'representationsMade', label: 'Representations made?', type: 'select', options: ['No','Yes'], cols: 2 },
+        { key: 'representationsChallenge', label: 'Representations / challenge', type: 'textarea', placeholder: 'What did you ask for, object to, or challenge?', cols: 2, showIf: { field: 'representationsMade', value: 'Yes' } },
+        { key: 'representationsResponse', label: 'Police response', type: 'textarea', placeholder: 'What response or decision was given?', cols: 2, showIf: { field: 'representationsMade', value: 'Yes' } },
         { key: '_h_instructions_sigs', label: 'Confirmation of Instructions', type: 'sectionHeading' },
         { key: '_note_instructions_sigs', label: 'Rep signs to confirm the record accurately reflects the advice given and instructions received. Client signs to confirm they received this advice and these are their instructions.', type: 'sectionNote' },
         { key: 'instructionsSignRequired', label: 'Signature required?', type: 'select', options: ['No','Yes'], cols: 2 },
@@ -883,6 +886,8 @@ var LAA = {
         { key: 'nextLocationName', label: 'Next Location', type: 'text', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
         { key: 'nextDate', label: 'Next Date', type: 'date', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
+        { key: 'followUpNeeded', label: 'Further follow-up needed?', type: 'select', options: ['No','Yes'], cols: 2 },
+        { key: 'followUpRequired', label: 'Follow-up required', type: 'textarea', placeholder: 'What still needs to be done, if anything?', cols: 2, showIf: { field: 'followUpNeeded', value: 'Yes' } },
       ],
     },
 
@@ -920,6 +925,13 @@ var LAA = {
         { key: 'policeStationFinalisedTime', label: 'Time police station finalised', type: 'time' },
         { key: 'repConfirmationSignature', label: 'Rep confirmation (signature)', type: 'signature', sigKey: 'repConfirmationSig' },
         { key: 'notesToOffice', label: 'Notes to Office / Firm', type: 'textarea', cols: 2 },
+        { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
+        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in your chosen email app for the firm contact.', type: 'sectionNote' },
+        { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
+        { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
+        { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
+        { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
+        { key: '_btn_send_solicitor_email', label: 'Open email app for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
@@ -1222,6 +1234,8 @@ var LAA = {
         ], cols: 2 },
         { key: 'furtherAttendance', label: 'Further attendance likely?', type: 'select', options: ['Yes','No'] },
         { key: '_note_spec974', label: 'Spec 9.74: If telephone advice is followed by attendance, claim INVC only (not both INVB + INVC).', type: 'sectionNote', showIf: { field: 'furtherAttendance', value: 'Yes' } },
+        { key: 'followUpNeeded', label: 'Further follow-up needed?', type: 'select', options: ['No','Yes'], cols: 2 },
+        { key: 'followUpRequired', label: 'Follow-up required', type: 'textarea', placeholder: 'What still needs to be done, if anything?', cols: 2, showIf: { field: 'followUpNeeded', value: 'Yes' } },
         { key: 'caseConcludedDate', label: 'Case concluded date', type: 'date', className: 'field-mandatory' },
       ],
     },
@@ -1249,6 +1263,13 @@ var LAA = {
         { key: '_h_admin', label: 'Administration', type: 'sectionHeading' },
         { key: 'ufn', label: 'UFN (Unique File Number)', type: 'text', placeholder: 'DDMMYY/NNN e.g. 220226/001', cols: 2, firmCompletes: true },
         { key: 'firmLaaAccount', label: 'Firm LAA Account No.', type: 'text', placeholder: 'Firm provides this', firmCompletes: true },
+        { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
+        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in your chosen email app for the firm contact.', type: 'sectionNote' },
+        { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
+        { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
+        { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
+        { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
+        { key: '_btn_send_solicitor_email', label: 'Open email app for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_monitoring', label: 'Equal Opportunities', type: 'sectionHeading' },
         { key: 'ethnicOriginCode', label: 'Ethnic Origin', type: 'codedSelect', codeKey: 'ethnicCodes' },
         { key: 'disabilityCode', label: 'Disability', type: 'codedSelect', codeKey: 'disabilityCodes' },
@@ -1573,6 +1594,9 @@ var LAA = {
         { key: 'adviceFollowedInInterview', label: 'Advice followed in interview?', type: 'select', options: ['Yes','No'] },
         { key: 'adviceFollowedExplanation', label: 'If not followed \u2013 brief explanation', type: 'textarea', placeholder: 'Required when advice was not followed', cols: 2, showIf: { field: 'adviceFollowedInInterview', value: 'No' } },
         { key: 'adviceReComplaint', label: 'Advice re making a complaint given?', type: 'select', options: ['Yes','No'] },
+        { key: 'representationsMade', label: 'Representations made?', type: 'select', options: ['No','Yes'], cols: 2 },
+        { key: 'representationsChallenge', label: 'Representations / challenge', type: 'textarea', placeholder: 'What did you ask for, object to, or challenge?', cols: 2, showIf: { field: 'representationsMade', value: 'Yes' } },
+        { key: 'representationsResponse', label: 'Police response', type: 'textarea', placeholder: 'What response or decision was given?', cols: 2, showIf: { field: 'representationsMade', value: 'Yes' } },
         { key: '_h_instructions_sigs', label: 'Confirmation of Instructions', type: 'sectionHeading' },
         { key: '_note_instructions_sigs', label: 'Rep signs to confirm the record accurately reflects the advice given and instructions received. Client signs to confirm they received this advice and these are their instructions.', type: 'sectionNote' },
         { key: 'instructionsSignRequired', label: 'Signature required?', type: 'select', options: ['No','Yes'], cols: 2 },
@@ -1626,6 +1650,8 @@ var LAA = {
         { key: 'nextLocationName', label: 'Next Location', type: 'text' },
         { key: 'nextDate', label: 'Next Date', type: 'date' },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
+        { key: 'followUpNeeded', label: 'Further follow-up needed?', type: 'select', options: ['No','Yes'], cols: 2 },
+        { key: 'followUpRequired', label: 'Follow-up required', type: 'textarea', placeholder: 'What still needs to be done, if anything?', cols: 2, showIf: { field: 'followUpNeeded', value: 'Yes' } },
       ],
     },
 
@@ -1663,6 +1689,13 @@ var LAA = {
         { key: 'policeStationFinalisedTime', label: 'Time police station finalised', type: 'time' },
         { key: 'repConfirmationSignature', label: 'Rep confirmation (signature)', type: 'signature', sigKey: 'repConfirmationSig' },
         { key: 'notesToOffice', label: 'Notes to Office / Firm', type: 'textarea', cols: 2 },
+        { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
+        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in your chosen email app for the firm contact.', type: 'sectionNote' },
+        { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
+        { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
+        { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
+        { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
+        { key: '_btn_send_solicitor_email', label: 'Open email app for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
@@ -6356,6 +6389,8 @@ var REQUIRED_FIELD_KEYS = [
         else if (f.action === 'generatePreparedStatement') generatePreparedStatement();
         else if (f.action === 'convertToAttendance') convertTelephoneToAttendance();
         else if (f.action === 'convertVoluntaryToCustody') convertVoluntaryToCustody();
+        else if (f.action === 'loadSolicitorEmailTemplate') loadSolicitorEmailTemplate();
+        else if (f.action === 'openSolicitorEmail') openSolicitorEmail();
       });
       wrap.appendChild(btn);
       grid.appendChild(wrap);
@@ -7017,7 +7052,10 @@ var REQUIRED_FIELD_KEYS = [
     if (f.type === 'select') {
       input = document.createElement('select');
       input.innerHTML = '<option value="">-- Select --</option>';
-      (f.options || []).forEach(o => {
+      var selectOptions = f.dynamicOptions === 'customEmailTemplates'
+        ? (typeof getSolicitorEmailTemplateOptions === 'function' ? getSolicitorEmailTemplateOptions() : [])
+        : (f.options || []);
+      selectOptions.forEach(o => {
         const opt = document.createElement('option');
         const value = o && typeof o === 'object' ? o.value : o;
         const label = o && typeof o === 'object' ? (o.label != null ? o.label : o.value) : o;
@@ -7459,6 +7497,7 @@ var REQUIRED_FIELD_KEYS = [
     input.name = f.key; input.dataset.field = f.key;
     let val = data[f.key];
     if (f.defaultValue != null) { val = f.defaultValue; input.readOnly = true; }
+    if (f.dynamicOptions === 'customEmailTemplates' && (val == null || val === '')) val = 'default_preset';
     if (val != null && val !== '') input.value = val;
     if (f.key === 'courtName') {
       const acWrap = document.createElement('div');
@@ -9279,7 +9318,7 @@ row('Sufficient Benefit Test (LAA)', (d.sufficientBenefitTest || '').split('|').
 '<li>' + check('advAlibis', 'Alibis discussed') + '</li>' +
 '<li>' + check('advFailureToAttendBail', 'Failure to attend bail explained') + '</li>' +
 '</ul>' +
-'<table>' + row('Advice re interview', d.adviceReInterview) + row('Reason (quick)', d.reasonsForAdviceSelect) + row('Reasons (detail)', d.reasonsForAdvice) + row('Decision', d.clientDecision) + row('Advice followed in interview?', d.adviceFollowedInInterview) + (d.adviceFollowedExplanation ? row('If not followed – explanation', d.adviceFollowedExplanation) : '') + row('Advice re complaint given?', d.adviceReComplaint) + '</table>' +
+'<table>' + row('Advice re interview', d.adviceReInterview) + row('Reason (quick)', d.reasonsForAdviceSelect) + row('Reasons (detail)', d.reasonsForAdvice) + row('Decision', d.clientDecision) + row('Advice followed in interview?', d.adviceFollowedInInterview) + (d.adviceFollowedExplanation ? row('If not followed – explanation', d.adviceFollowedExplanation) : '') + row('Advice re complaint given?', d.adviceReComplaint) + row('Representations made?', d.representationsMade) + (d.representationsMade === 'Yes' ? row('Representations / challenge', d.representationsChallenge) + row('Police response', d.representationsResponse) : '') + '</table>' +
 (d.repInstructionsSig || d.clientInstructionsSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation of instructions</p>' + sig('repInstructionsSig') + '</div><div class="sig-block"><p class="sig-label">Client confirmation of instructions</p>' + sig('clientInstructionsSig') + '</div>' : '') +
 
 (ivHtml || '') +
@@ -9317,6 +9356,7 @@ row('Decision', d.outcomeDecision) +
 })() +
 row('Court', d.courtName) + row('Court date', fmtDate(d.courtDate)) + (d.courtTime ? row('Court time', d.courtTime) : '') +
 row('Next location', d.nextLocationName) + row('Next date', fmtDate(d.nextDate)) + row('Further attendance', d.furtherAttendance) +
+row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes' ? row('Follow-up required', d.followUpRequired) : '') +
 (d.handedBackToDSCCReason ? row('Reason handed back to DSCC (Spec 9.53)', d.handedBackToDSCCReason) : '') +
 (d.nonAttendanceReason ? row('Reason for non-attendance (Spec 9.39/9.44)', d.nonAttendanceReason) : '') +
 '</table>' +
@@ -9335,6 +9375,7 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
 '</table>' +
 (d.repConfirmationSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation</p>' + sig('repConfirmationSig') + '</div>' : '') +
 (d.notesToOffice ? '<div class="nar">' + h(d.notesToOffice) + '</div>' : '') +
+(d.solicitorEmailSubject || d.solicitorEmailBody ? '<h2>10. Instructing Solicitor Email</h2><table>' + row('Email subject', d.solicitorEmailSubject) + row('Recipient', d.firmContactEmail) + '</table>' + (d.solicitorEmailBody ? '<div class="nar">' + h(d.solicitorEmailBody) + '</div>' : '') : '') +
 
 (function() {
   function hasAny(keys) {
@@ -9413,7 +9454,7 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
     row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
   var hasSig = d.clientSig || d.feeEarnerSig || d.laaPartnerSig;
   if (!laaRows && !hasSig) return '';
-  return '<h2 class="pdf-break-before">10. LAA Declaration</h2>' +
+  return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
     ((d.workType === 'Police Station Telephone Attendance' || (d.sufficientBenefitTest && d.sufficientBenefitTest.split('|').indexOf('Telephone advice only') >= 0)) ? '<p style="font-size:10px;color:#64748b;margin-bottom:8px;"><em>For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.</em></p>' : '') +
     '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
     '<table>' + laaRows + '</table>' +
@@ -9426,7 +9467,7 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
   var adminRows = row('File number (ours) / Invoice no.', d.ourFileNumber || d.fileReference) +
     row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
   if (!adminRows) return '';
-  return '<h2>11. Admin & Billing</h2><table>' + adminRows + '</table>';
+  return '<h2>12. Admin & Billing</h2><table>' + adminRows + '</table>';
 })() +
 
 (function() {
@@ -9439,7 +9480,7 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
     row('Appointed solicitor / firm', d.retainerSolicitorName) + row('Solicitor address', d.retainerSolicitorAddress) +
     row('Date', fmtDate(d.retainerDate)) + row('Retainer signed?', d.retainerSigned) + row('Copy on file?', d.retainerCopyOnFile);
   if (!consentRows) return '';
-  return '<h2>12. Consents & Retainer</h2>' +
+  return '<h2>13. Consents & Retainer</h2>' +
     '<p style="font-size:10px;margin-bottom:8px;"><em>I consent to the appointed firm acting for me in this matter; to communicate with the police, court, and other parties as necessary on my behalf; to instruct experts and obtain evidence where needed; and to accept and comply with Legal Aid funding (where applicable). I confirm that the information I have provided is accurate and that I have read and understood the terms of the retainer.</em></p>' +
     '<table>' + consentRows + '</table>';
 })() +
@@ -9448,7 +9489,7 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
   var hasCrm14 = d.crm14SignedFormOnFile || d.crm14NewOrChange || d.crm14Title || d.crm14CaseType || d.crm14HasPartner || d.crm14PassportingBenefits || d.crm14InterestsOfJustice || d.crm14CourtName || d.crm14Urn;
   if (!hasCrm14) return '';
   var subSect = function(title, rows) { return rows ? '<p style="font-size:10px;font-weight:600;margin:12px 0 4px;">' + h(title) + '</p><table>' + rows + '</table>' : ''; };
-  return '<h2>13. Legal Aid application (Apply for criminal legal aid / CRM14)</h2>' +
+  return '<h2>14. Legal Aid application (Apply for criminal legal aid / CRM14)</h2>' +
     '<p style="font-size:9px;color:#64748b;margin-bottom:8px;">Data required for the Apply for criminal legal aid service (mandatory) or paper CRM14 (limited circumstances). The signed online form (client-signed, typically 2 pages) must be retained on file.</p>' +
     row('Signed Apply application (client-signed, 2-page) on file?', d.crm14SignedFormOnFile) +
     subSect('About you – Personal details',
@@ -9627,6 +9668,7 @@ PDF_CASENOTE_ADVERT +
       row('Outcome', d.outcomeDecision) +
       row('Outcome Code', d.outcomeCode) +
       row('Further attendance likely?', d.furtherAttendance) +
+      row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes' ? row('Follow-up required', d.followUpRequired) : '') +
       row('Case concluded date', fmtDate(d.caseConcludedDate)) +
       '</table>' +
 
@@ -9644,6 +9686,7 @@ PDF_CASENOTE_ADVERT +
       row('UFN', d.ufn) + row('Firm LAA Account', d.firmLaaAccount) +
       row('Ethnic Origin', d.ethnicOriginCode) + row('Disability', d.disabilityCode) +
       '</table>' +
+      (d.solicitorEmailSubject || d.solicitorEmailBody ? '<h2>5. Instructing Solicitor Email</h2><table>' + row('Email subject', d.solicitorEmailSubject) + row('Recipient', d.firmContactEmail) + '</table>' + (d.solicitorEmailBody ? '<div class="nar">' + h(d.solicitorEmailBody) + '</div>' : '') : '') +
       '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
       PDF_CASENOTE_ADVERT +
       (function() {
@@ -9862,6 +9905,8 @@ PDF_CASENOTE_ADVERT +
       '<table>' +
       row('Advice re interview', d.adviceReInterview) + row('Reason (quick)', d.reasonsForAdviceSelect) + row('Reasons (detail)', d.reasonsForAdvice) +
       row('Client decision', d.clientDecision) +
+      row('Representations made?', d.representationsMade) +
+      (d.representationsMade === 'Yes' ? row('Representations / challenge', d.representationsChallenge) + row('Police response', d.representationsResponse) : '') +
       '</table>' +
       (d.repInstructionsSignature || d.clientInstructionsSignature ? '<div class="sig-block"><p class="sig-label">Rep confirmation of instructions</p>' + sig('repInstructionsSignature') + '</div><div class="sig-block"><p class="sig-label">Client confirmation of instructions</p>' + sig('clientInstructionsSignature') + '</div>' : '') +
 
@@ -9892,6 +9937,7 @@ PDF_CASENOTE_ADVERT +
       row('Outcome code (LAA)', d.outcomeCode) + row('Stage / fee code', d.stageReachedOrFeeCode) +
       row('Next location', d.nextLocationName) + row('Next date', fmtDate(d.nextDate)) +
       row('Further attendance needed?', d.furtherAttendance) +
+      row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes' ? row('Follow-up required', d.followUpRequired) : '') +
       '</table>' +
 
       '<h2>9. Time Recording &amp; Fees</h2><table>' +
@@ -9910,6 +9956,7 @@ PDF_CASENOTE_ADVERT +
       '</table>' +
       (d.repConfirmationSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation</p>' + sig('repConfirmationSig') + '</div>' : '') +
       (d.notesToOffice ? '<div class="nar">' + h(d.notesToOffice) + '</div>' : '') +
+      (d.solicitorEmailSubject || d.solicitorEmailBody ? '<h2>10. Instructing Solicitor Email</h2><table>' + row('Email subject', d.solicitorEmailSubject) + row('Recipient', d.firmContactEmail) + '</table>' + (d.solicitorEmailBody ? '<div class="nar">' + h(d.solicitorEmailBody) + '</div>' : '') : '') +
 
       (function() {
         var laaRows = row('Previous advice?', d.previousAdvice) + row('Details', d.previousAdviceDetails) +
@@ -10061,11 +10108,179 @@ PDF_CASENOTE_ADVERT +
     }).catch(e => showToast('Preview failed: ' + (e && e.message), 'error'));
   }
 
+  function getInstructingSolicitorEmailContext(data) {
+    var d = data || {};
+    var clientName = [d.forename, d.surname].filter(Boolean).join(' ').trim();
+    var station = d.policeStationName || d.otherLocation || '';
+    var attendanceType = d._formType === 'telephone'
+      ? 'telephone advice'
+      : (d.attendanceMode === 'voluntary' ? 'voluntary attendance' : 'police station attendance');
+    return {
+      contactName: (d.firmContactName || '').trim(),
+      firmName: (d.firmName || '').trim(),
+      clientName: clientName,
+      station: station,
+      date: d.date ? fmtDate(d.date) : '',
+      outcome: (d.outcomeDecision || '').trim(),
+      nextStep: [d.nextLocationName, d.nextDate ? fmtDate(d.nextDate) : ''].filter(Boolean).join(' - '),
+      followUp: (d.followUpRequired || '').trim(),
+      attendanceType: attendanceType,
+      feeEarnerName: (d.feeEarnerName || ((window._appSettingsCache || {}).feeEarnerNameDefault || '')).trim(),
+      ourFileNumber: (d.ourFileNumber || d.fileReference || '').trim(),
+      ufn: (d.ufn || '').trim()
+    };
+  }
+
+  function getSolicitorEmailTemplateOptions() {
+    var options = [{ value: 'default_preset', label: 'Default preset' }];
+    var customTemplates = typeof window._getCustomEmailTemplates === 'function'
+      ? (window._getCustomEmailTemplates() || [])
+      : [];
+    customTemplates.forEach(function(tpl, idx) {
+      var scope = tpl && tpl.scope ? tpl.scope : 'all';
+      if (scope !== 'all' && scope !== 'solicitor') return;
+      var labelPrefix = scope === 'solicitor' ? '[Solicitor] ' : '';
+      options.push({ value: 'custom:' + idx, label: labelPrefix + (tpl && tpl.name ? tpl.name : ('Custom template ' + (idx + 1))) });
+    });
+    return options;
+  }
+
+  function getSolicitorEmailTemplateById(templateId) {
+    if (!templateId || templateId === 'default_preset') return null;
+    if (String(templateId).indexOf('custom:') !== 0) return null;
+    var idx = parseInt(String(templateId).slice(7), 10);
+    if (!Number.isFinite(idx) || idx < 0) return null;
+    var customTemplates = typeof window._getCustomEmailTemplates === 'function'
+      ? (window._getCustomEmailTemplates() || [])
+      : [];
+    var tpl = customTemplates[idx] || null;
+    if (!tpl) return null;
+    var scope = tpl.scope || 'all';
+    return (scope === 'all' || scope === 'solicitor') ? tpl : null;
+  }
+
+  function getSolicitorEmailPlaceholderMap(data) {
+    var ctx = getInstructingSolicitorEmailContext(data);
+    return {
+      clientName: ctx.clientName,
+      contactName: ctx.contactName,
+      firmName: ctx.firmName,
+      station: ctx.station,
+      date: ctx.date,
+      outcome: ctx.outcome,
+      nextStep: ctx.nextStep,
+      followUp: ctx.followUp,
+      attendanceType: ctx.attendanceType,
+      feeEarnerName: ctx.feeEarnerName,
+      ourFileNumber: ctx.ourFileNumber,
+      ufn: ctx.ufn,
+      oicName: (data && data.oicName) || '',
+      offenceType: (data && data.offenceSummary) || ''
+    };
+  }
+
+  function applySolicitorEmailPlaceholders(text, data) {
+    var map = getSolicitorEmailPlaceholderMap(data || {});
+    return String(text || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
+      return map[key] != null ? String(map[key]) : '';
+    });
+  }
+
+  function buildDefaultSolicitorEmailTemplate(data) {
+    var ctx = getInstructingSolicitorEmailContext(data);
+    var subject = (ctx.attendanceType === 'telephone advice'
+      ? 'Telephone advice update'
+      : 'Attendance update') +
+      (ctx.clientName ? ' - ' + ctx.clientName : '') +
+      (ctx.date ? ' - ' + ctx.date : '');
+    var greeting = ctx.contactName ? ('Dear ' + ctx.contactName + ',') : 'Dear Sir / Madam,';
+    var lines = [
+      greeting,
+      '',
+      'I write further to my ' + ctx.attendanceType +
+        (ctx.clientName ? ' for ' + ctx.clientName : '') +
+        (ctx.station ? ' at ' + ctx.station : '') +
+        (ctx.date ? ' on ' + ctx.date : '') + '.',
+      ''
+    ];
+    if (ctx.outcome) lines.push('Outcome: ' + ctx.outcome);
+    if (ctx.nextStep) lines.push('Next step: ' + ctx.nextStep);
+    if (ctx.followUp) lines.push('Follow-up required: ' + ctx.followUp);
+    if (ctx.ourFileNumber || ctx.ufn) {
+      lines.push('Reference: ' + [ctx.ourFileNumber, ctx.ufn].filter(Boolean).join(' / '));
+    }
+    lines.push('', 'Please let me know if anything further is needed.', '', 'Kind regards,', '', ctx.feeEarnerName || 'Fee Earner');
+    return { subject: subject, body: lines.join('\n') };
+  }
+
+  function loadSolicitorEmailTemplate() {
+    var data = getFormData();
+    var templateId = (data.solicitorEmailTemplateId || 'default_preset').trim() || 'default_preset';
+    var tpl = buildDefaultSolicitorEmailTemplate(data);
+    var customTemplate = getSolicitorEmailTemplateById(templateId);
+    if (customTemplate) {
+      tpl.subject = applySolicitorEmailPlaceholders(customTemplate.subject || '', data);
+      tpl.body = applySolicitorEmailPlaceholders(customTemplate.body || '', data);
+    }
+    formData.solicitorEmailTemplateId = templateId;
+    formData.solicitorEmailSubject = tpl.subject;
+    formData.solicitorEmailBody = tpl.body;
+    setFieldValue('solicitorEmailTemplateId', templateId);
+    setFieldValue('solicitorEmailSubject', tpl.subject);
+    setFieldValue('solicitorEmailBody', tpl.body);
+    quietSave();
+    showToast(customTemplate ? 'Saved email template loaded' : 'Default email template loaded', 'success');
+  }
+
+  function openPreferredEmailClient(toEmail, subject, body) {
+    var clientId = (((window._appSettingsCache || {}).preferredEmailClient) || 'default').trim() || 'default';
+    var url = typeof buildEmailClientUrl === 'function'
+      ? buildEmailClientUrl(clientId, toEmail, subject, body)
+      : ('mailto:' + encodeURIComponent(toEmail) + '?subject=' + encodeURIComponent(subject || '') + '&body=' + encodeURIComponent(body || ''));
+    if (window.api && window.api.openExternal) window.api.openExternal(url);
+    else window.open(url, '_blank');
+  }
+
+  function openSolicitorEmail() {
+    var data = getFormData();
+    var firmEmail = (data.firmContactEmail || '').trim();
+    if (!firmEmail) {
+      showToast('No email address for the instructing solicitor contact. Add contact email in the record or Firms page.', 'error');
+      return;
+    }
+    var subject = (data.solicitorEmailSubject || '').trim();
+    var body = data.solicitorEmailBody || '';
+    if (!subject && !body) {
+      var tpl = buildDefaultSolicitorEmailTemplate(data);
+      subject = tpl.subject;
+      body = tpl.body;
+      formData.solicitorEmailSubject = subject;
+      formData.solicitorEmailBody = body;
+      setFieldValue('solicitorEmailSubject', subject);
+      setFieldValue('solicitorEmailBody', body);
+      quietSave();
+    }
+    openPreferredEmailClient(firmEmail, subject, body);
+    showToast('Opening email for ' + firmEmail, 'success');
+  }
+
   function emailToSolicitorWithData(data) {
     if (!data) return;
     const firmEmail = (data.firmContactEmail || '').trim();
     if (!firmEmail) {
       showToast('No email address for the instructing firm. Add contact email in the attendance or on the Firms page.', 'error');
+      return;
+    }
+    var savedSubject = (data.solicitorEmailSubject || '').trim();
+    var savedBody = data.solicitorEmailBody || '';
+    if (savedSubject || savedBody) {
+      if (!savedSubject || !savedBody) {
+        var tpl = buildDefaultSolicitorEmailTemplate(data);
+        if (!savedSubject) savedSubject = tpl.subject;
+        if (!savedBody) savedBody = tpl.body;
+      }
+      openPreferredEmailClient(firmEmail, savedSubject, savedBody);
+      showToast('Opening email for ' + firmEmail, 'success');
       return;
     }
     window.api.getSettings().then(settings => {
@@ -11989,11 +12204,25 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('list-mode-filter')?.addEventListener('change', (e) => { listTypeFilter = e.target.value; listPage = 1; refreshList(); });
 
     /* ── Custom email templates ── */
+    function _normalizeTemplateScope(scope) {
+      return scope === 'officer' || scope === 'solicitor' ? scope : 'all';
+    }
+    function _normalizeCustomTemplate(tpl) {
+      tpl = tpl || {};
+      return {
+        name: tpl.name || '',
+        subject: tpl.subject || '',
+        body: tpl.body || '',
+        scope: _normalizeTemplateScope(tpl.scope)
+      };
+    }
     function _getCustomTemplates() {
-      try { return JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]'); } catch (_) { return []; }
+      try {
+        return JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]').map(_normalizeCustomTemplate);
+      } catch (_) { return []; }
     }
     function _saveCustomTemplates(tpls) {
-      try { localStorage.setItem('cn-custom-email-templates', JSON.stringify(tpls)); } catch (_) {}
+      try { localStorage.setItem('cn-custom-email-templates', JSON.stringify((tpls || []).map(_normalizeCustomTemplate))); } catch (_) {}
     }
     window._getCustomEmailTemplates = _getCustomTemplates;
 
@@ -12006,8 +12235,23 @@ PDF_CASENOTE_ADVERT +
       tpls.forEach(function(t, idx) {
         var row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;border-bottom:1px solid #f1f5f9;';
-        row.innerHTML = '<span style="flex:1;font-size:0.9rem;">' + esc(t.name) + '</span>' +
+        var scopeLabel = t.scope === 'solicitor'
+          ? 'Instructing solicitor only'
+          : (t.scope === 'officer' ? 'Officer emails only' : 'Use anywhere');
+        row.innerHTML = '<span style="flex:1;font-size:0.9rem;">' + esc(t.name) + ' <span style="color:#64748b;font-size:0.8rem;">(' + esc(scopeLabel) + ')</span></span>' +
+          '<button type="button" class="btn-small ct-edit" data-idx="' + idx + '">Edit</button>' +
           '<button type="button" class="btn-small ct-del" data-idx="' + idx + '">Remove</button>';
+        row.querySelector('.ct-edit').addEventListener('click', function() {
+          var tpl = _getCustomTemplates()[idx];
+          if (!tpl) return;
+          _editingTemplateIdx = idx;
+          document.getElementById('new-template-name').value = tpl.name || '';
+          document.getElementById('new-template-scope').value = _normalizeTemplateScope(tpl.scope);
+          document.getElementById('new-template-subject').value = tpl.subject || '';
+          document.getElementById('new-template-body').value = tpl.body || '';
+          var ed = document.getElementById('custom-template-editor');
+          if (ed) ed.style.display = '';
+        });
         row.querySelector('.ct-del').addEventListener('click', function() {
           var updated = _getCustomTemplates();
           updated.splice(idx, 1);
@@ -12022,6 +12266,8 @@ PDF_CASENOTE_ADVERT +
     var _editingTemplateIdx = -1;
     document.getElementById('btn-add-custom-template')?.addEventListener('click', function() {
       _editingTemplateIdx = -1;
+      document.getElementById('new-template-name').value = '';
+      document.getElementById('new-template-scope').value = 'all';
       document.getElementById('new-template-subject').value = '';
       document.getElementById('new-template-body').value = '';
       var ed = document.getElementById('custom-template-editor');
@@ -12033,14 +12279,19 @@ PDF_CASENOTE_ADVERT +
     });
     document.getElementById('btn-save-custom-template')?.addEventListener('click', function() {
       var name = (document.getElementById('new-template-name').value || '').trim();
+      var scope = _normalizeTemplateScope(document.getElementById('new-template-scope').value || 'all');
       var subject = (document.getElementById('new-template-subject').value || '').trim();
       var body = (document.getElementById('new-template-body').value || '').trim();
       if (!name) { showToast('Enter a template name', 'error'); return; }
       if (!subject || !body) { showToast('Subject and body are required', 'error'); return; }
       var tpls = _getCustomTemplates();
-      tpls.push({ name: name, subject: subject, body: body });
+      var nextTemplate = { name: name, subject: subject, body: body, scope: scope };
+      if (_editingTemplateIdx >= 0 && _editingTemplateIdx < tpls.length) tpls[_editingTemplateIdx] = nextTemplate;
+      else tpls.push(nextTemplate);
       _saveCustomTemplates(tpls);
+      _editingTemplateIdx = -1;
       document.getElementById('new-template-name').value = '';
+      document.getElementById('new-template-scope').value = 'all';
       document.getElementById('new-template-subject').value = '';
       document.getElementById('new-template-body').value = '';
       document.getElementById('custom-template-editor').style.display = 'none';

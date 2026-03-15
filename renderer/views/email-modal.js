@@ -20,7 +20,9 @@ function openEmailModal(recordId, recordData, recordStatus) {
   var data          = recordData || {};
   var settings      = window._appSettingsCache || {};
   var feeEarnerName = _oicClean(data.feeEarnerName) || _oicClean(settings.feeEarnerNameDefault) || '';
-  var currentTpl    = 'first_attendance';
+  var lastTplUsed   = _oicClean(data.lastOfficerEmailTemplateUsed);
+  var currentTpl    = _EMAIL_TEMPLATES.some(function(t) { return t.id === lastTplUsed; }) ? lastTplUsed : 'first_attendance';
+  var currentCustomTpl = '';
   var pickerVisible = false;
 
   /* ── Helpers ─────────────────────────────────────────── */
@@ -50,6 +52,89 @@ function openEmailModal(recordId, recordData, recordStatus) {
     }
   }
 
+  function _attendanceTypeLabel() {
+    if (data._formType === 'telephone') return 'telephone advice';
+    if (data.attendanceMode === 'voluntary') return 'voluntary attendance';
+    return 'attendance';
+  }
+
+  function _fmtDateForPlaceholder(dateStr) {
+    return _oicFmtDate(_oicClean(dateStr || data.date || data.instructionDateTime));
+  }
+
+  function _getOfficerCustomTemplates() {
+    var list = typeof window._getCustomEmailTemplates === 'function'
+      ? (window._getCustomEmailTemplates() || [])
+      : [];
+    return list.map(function(tpl, idx) {
+      return { id: 'custom:' + idx, template: tpl };
+    }).filter(function(entry) {
+      var tpl = entry.template;
+      var scope = tpl && tpl.scope ? tpl.scope : 'all';
+      return scope === 'all' || scope === 'officer';
+    });
+  }
+
+  function _getOfficerCustomTemplateById(templateId) {
+    if (!templateId || String(templateId).indexOf('custom:') !== 0) return null;
+    var idx = parseInt(String(templateId).slice(7), 10);
+    if (!Number.isFinite(idx) || idx < 0) return null;
+    var list = typeof window._getCustomEmailTemplates === 'function'
+      ? (window._getCustomEmailTemplates() || [])
+      : [];
+    var tpl = list[idx] || null;
+    if (!tpl) return null;
+    var scope = tpl.scope || 'all';
+    return (scope === 'all' || scope === 'officer') ? tpl : null;
+  }
+
+  function _getOfficerPlaceholderMap() {
+    var clientName = [_oicClean(data.forename), _oicClean(data.surname)].filter(Boolean).join(' ');
+    return {
+      clientName: clientName,
+      contactName: _oicClean(data.firmContactName),
+      firmName: _oicClean(data.firmName),
+      station: _oicClean(data.policeStationName),
+      date: _fmtDateForPlaceholder(),
+      outcome: _oicClean(data.outcomeDecision),
+      nextStep: [_oicClean(data.nextLocationName), _oicFmtDate(_oicClean(data.nextDate))].filter(Boolean).join(' - '),
+      followUp: _oicClean(data.followUpRequired),
+      attendanceType: _attendanceTypeLabel(),
+      feeEarnerName: feeEarnerName,
+      ourFileNumber: _oicClean(data.ourFileNumber || data.fileReference),
+      ufn: _oicClean(data.ufn),
+      oicName: _oicClean(data.oicName),
+      offenceType: _oicClean(data.offenceSummary)
+    };
+  }
+
+  function _applyOfficerPlaceholders(text) {
+    var map = _getOfficerPlaceholderMap();
+    return String(text || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
+      return map[key] != null ? String(map[key]) : '';
+    });
+  }
+
+  function _currentTemplateKey() {
+    return currentCustomTpl || currentTpl;
+  }
+
+  function _currentTemplateContent() {
+    if (currentCustomTpl) {
+      var custom = _getOfficerCustomTemplateById(currentCustomTpl);
+      if (custom) {
+        return {
+          subject: _applyOfficerPlaceholders(custom.subject || ''),
+          body: _applyOfficerPlaceholders(custom.body || '')
+        };
+      }
+    }
+    return {
+      subject: buildEmailSubject(currentTpl, data),
+      body: buildEmailBody(currentTpl, data, feeEarnerName)
+    };
+  }
+
   /* ── Render ──────────────────────────────────────────── */
 
   function _renderModal() {
@@ -57,14 +142,35 @@ function openEmailModal(recordId, recordData, recordStatus) {
     if (stale2) stale2.remove();
 
     var oicEmail = _oicClean(data.oicEmail);
-    var subject  = buildEmailSubject(currentTpl, data);
-    var body     = buildEmailBody(currentTpl, data, feeEarnerName);
+    var customTemplates = _getOfficerCustomTemplates();
+    if (lastTplUsed && String(lastTplUsed).indexOf('custom:') === 0 && !currentCustomTpl && _getOfficerCustomTemplateById(lastTplUsed)) {
+      currentCustomTpl = lastTplUsed;
+    }
+    var tplContent = _currentTemplateContent();
+    var subject  = tplContent.subject;
+    var body     = tplContent.body;
 
     var tabsHtml = _EMAIL_TEMPLATES.map(function(t) {
       return '<button type="button" class="email-oic-tab' +
-        (t.id === currentTpl ? ' active' : '') +
+        (!currentCustomTpl && t.id === currentTpl ? ' active' : '') +
         '" data-tpl="' + t.id + '">' + _escAttr(t.label) + '</button>';
     }).join('');
+
+    var customTemplateHtml = customTemplates.length
+      ? '<label class="email-oic-label" for="email-oic-custom-template">Saved custom template</label>' +
+        '<select id="email-oic-custom-template" class="email-oic-input">' +
+          '<option value="">Use built-in templates below</option>' +
+          customTemplates.map(function(entry) {
+            var tpl = entry.template || {};
+            var templateId = entry.id || '';
+            var scope = tpl.scope || 'all';
+            var prefix = scope === 'officer' ? '[Officer] ' : '';
+            return '<option value="' + _escAttr(templateId) + '"' + (currentCustomTpl === templateId ? ' selected' : '') + '>' +
+              _escAttr(prefix + (tpl.name || 'Custom template')) + '</option>';
+          }).join('') +
+        '</select>' +
+        '<p class="email-oic-hint">Officer-only and shared templates appear here.</p>'
+      : '';
 
     var noEmailNote = !oicEmail
       ? '<p class="email-oic-hint">No OIC email address is stored for this record. Enter one below or leave blank to copy the email body manually.</p>'
@@ -80,6 +186,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
           '<div class="email-oic-tabs" role="group" aria-label="Email template">' + tabsHtml + '</div>' +
           '<div class="email-oic-fields">' +
             noEmailNote +
+            customTemplateHtml +
             '<label class="email-oic-label" for="email-oic-to">To</label>' +
             '<input type="email" id="email-oic-to" class="email-oic-input" value="' + _escAttr(oicEmail) +
               '" placeholder="Enter officer email address">' +
@@ -132,12 +239,26 @@ function openEmailModal(recordId, recordData, recordStatus) {
     modal.querySelectorAll('.email-oic-tab').forEach(function(btn) {
       btn.addEventListener('click', function() {
         currentTpl = btn.getAttribute('data-tpl');
+        currentCustomTpl = '';
         modal.querySelectorAll('.email-oic-tab').forEach(function(b) {
           b.classList.toggle('active', b.getAttribute('data-tpl') === currentTpl);
         });
-        document.getElementById('email-oic-subject').value = buildEmailSubject(currentTpl, data);
-        document.getElementById('email-oic-body').value    = buildEmailBody(currentTpl, data, feeEarnerName);
+        var customSelect = document.getElementById('email-oic-custom-template');
+        if (customSelect) customSelect.value = '';
+        var tplContent = _currentTemplateContent();
+        document.getElementById('email-oic-subject').value = tplContent.subject;
+        document.getElementById('email-oic-body').value    = tplContent.body;
       });
+    });
+
+    document.getElementById('email-oic-custom-template')?.addEventListener('change', function(e) {
+      currentCustomTpl = e.target.value || '';
+      modal.querySelectorAll('.email-oic-tab').forEach(function(b) {
+        b.classList.toggle('active', !currentCustomTpl && b.getAttribute('data-tpl') === currentTpl);
+      });
+      var tplContent = _currentTemplateContent();
+      document.getElementById('email-oic-subject').value = tplContent.subject;
+      document.getElementById('email-oic-body').value    = tplContent.body;
     });
 
     /* Open Email App — uses current preference */
@@ -194,7 +315,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
     /* Mark Sent */
     document.getElementById('email-oic-mark-sent').addEventListener('click', function() {
       var recipient = document.getElementById('email-oic-to').value.trim();
-      _markEmailSent(recordId, data, recordStatus, currentTpl, recipient);
+      _markEmailSent(recordId, data, recordStatus, _currentTemplateKey(), recipient);
     });
   }
 

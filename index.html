@@ -1302,13 +1302,18 @@
 
           <div style="margin-top:1.25rem;">
             <strong>Custom Email Templates</strong>
-            <p class="settings-hint">Add your own templates. Use <code>{{clientName}}</code>, <code>{{oicName}}</code>, <code>{{offenceType}}</code>, <code>{{station}}</code>, <code>{{date}}</code> as placeholders.</p>
+            <p class="settings-hint">Add your own templates. Use <code>{{clientName}}</code>, <code>{{contactName}}</code>, <code>{{firmName}}</code>, <code>{{station}}</code>, <code>{{date}}</code>, <code>{{outcome}}</code>, <code>{{nextStep}}</code>, <code>{{followUp}}</code>, <code>{{attendanceType}}</code>, <code>{{feeEarnerName}}</code>, <code>{{ourFileNumber}}</code>, <code>{{ufn}}</code>, <code>{{oicName}}</code>, or <code>{{offenceType}}</code> as placeholders. Scope controls where the template appears.</p>
             <div id="custom-templates-list" style="margin-bottom:0.75rem;"></div>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
               <input type="text" id="new-template-name" placeholder="Template name" style="flex:2;min-width:140px;">
               <button type="button" id="btn-add-custom-template" class="btn btn-secondary btn-small">+ Add template</button>
             </div>
             <div id="custom-template-editor" style="display:none;margin-top:0.5rem;">
+              <select id="new-template-scope" style="width:100%;margin-bottom:0.4rem;">
+                <option value="all">Use anywhere</option>
+                <option value="officer">Officer emails only</option>
+                <option value="solicitor">Instructing solicitor emails only</option>
+              </select>
               <input type="text" id="new-template-subject" placeholder="Subject (use {{placeholders}})" style="width:100%;margin-bottom:0.4rem;">
               <textarea id="new-template-body" rows="5" placeholder="Body text (use {{placeholders}})" style="width:100%;font-size:0.88rem;font-family:inherit;"></textarea>
               <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
