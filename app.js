@@ -2635,7 +2635,7 @@ var REQUIRED_FIELD_KEYS = [
       document.body.classList.remove('chrome-collapsed');
     }
     if (name === 'home') { stopAutoSave(); stopPaceClock(); _finalising = false; loadHomeView(); }
-    if (name === 'list') { stopAutoSave(); stopPaceClock(); _finalising = false; refreshList(); }
+    if (name === 'list') { stopAutoSave(); stopPaceClock(); _finalising = false; refreshList(); if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {}); }
     if (name === 'firms') {
       loadFirmsList();
       refreshQuickFileImportMeta();
@@ -2667,6 +2667,7 @@ var REQUIRED_FIELD_KEYS = [
     updateHomeStatus();
     updateHomeLicenceCard();
     updateGearLicenceItem();
+    if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {});
     initSyncStatus();
   }
 
@@ -11765,9 +11766,9 @@ PDF_CASENOTE_ADVERT +
         if (info.version) window.__appVersion = info.version;
       });
     }
-    // Populate licence footer badge on startup (visible on every screen)
+    // Populate licence footer badge + addon visibility on startup
     if (window.api && window.api.licenceStatus) {
-      window.api.licenceStatus().then(function(st) { updateLicenceFooterBadge(st); }).catch(function() {});
+      window.api.licenceStatus().then(function(st) { updateLicenceFooterBadge(st); if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {});
     }
 
     /* Load bank holidays from cache / server */

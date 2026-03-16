@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.87",
+      "version": "1.4.88",
       "date": "2026-03-16",
       "latest": true,
+      "changes": [
+        "Fix Quick Email button not appearing on Home screen and Records list after app launch"
+      ]
+    },
+    {
+      "version": "1.4.87",
+      "date": "2026-03-16",
+      "latest": false,
       "changes": [
         "Quick Email: add type of attendance, date and time fields; templates save with placeholders (e.g. {{oicName}}, {{clientName}}) for reuse"
       ]
