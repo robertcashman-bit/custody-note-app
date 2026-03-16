@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.4.83",
+      "date": "2026-03-16",
+      "latest": true,
+      "changes": [
+        "Authority auto-fill: select a record and authority type, auto-fill from record data, prompt for missing fields, generate print-ready PDF",
+        "Authorities view: dynamic cards with Fill from record button and record picker modal",
+        "In-record authority picker: Generate Authority PDF dropdown in standalone Authorities section"
+      ]
+    },
+    {
       "version": "1.4.82",
       "date": "2026-03-15",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Add in-record Email Instructing Solicitor section with template picker and open-in-email-app",
         "Custom email templates: scope (Use anywhere / Officer only / Solicitor only) and Edit in Settings",

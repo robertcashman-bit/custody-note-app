@@ -756,117 +756,31 @@
           <button type="button" id="authorities-back-btn" class="btn btn-secondary">&larr; Home</button>
           <h2 style="margin:0;color:var(--primary);">Authorities</h2>
         </div>
-        <p class="settings-hint" style="margin-bottom:1rem;">Standard authority forms for criminal defence work. Expand each to see proposed wording. Adapt as required for your firm and matter.</p>
-        <div class="authorities-list">
-          <div class="settings-card authority-card">
-            <h3 class="authority-title">Medical Authority</h3>
-            <p class="settings-hint">Authorises release of medical records (GP, hospital, mental health) to your firm for the purpose of the client&rsquo;s defence.</p>
-            <details class="authority-details">
-              <summary>Proposed wording</summary>
-              <div class="authority-wording">
-                <p><strong>MEDICAL AUTHORITY</strong></p>
-                <p>I, <em>[Client full name]</em>, of <em>[address]</em>, hereby authorise and request:</p>
-                <p>1. My General Practitioner and any medical practice holding my records;</p>
-                <p>2. Any hospital or NHS Trust that has treated me;</p>
-                <p>3. Any mental health service or professional that has assessed or treated me;</p>
-                <p>to release and disclose to <em>[Firm name]</em>, my solicitors, all medical records, reports, notes and information relating to my physical and/or mental health that they hold, for the purpose of my legal proceedings and my defence.</p>
-                <p>I understand that this information will be treated in confidence and used only for that purpose. I consent to copies of this authority being sent to the above in support of a request for disclosure.</p>
-                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
-              </div>
-            </details>
+        <p class="settings-hint" style="margin-bottom:1rem;">Standard authority forms for criminal defence work. Expand each to see proposed wording, or click <strong>Fill from record</strong> to auto-fill from an attendance and generate a print-ready PDF.</p>
+        <div id="authorities-dynamic-list" class="authorities-list"></div>
+      </div>
+
+      <!-- AUTHORITY RECORD PICKER MODAL -->
+      <div id="authority-record-picker" class="sections-index hidden">
+        <div class="sections-index-content" style="max-width:480px;width:94%;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+            <h3 id="authority-record-picker-title" style="margin:0;font-size:1.05rem;">Select record</h3>
+            <button type="button" class="btn btn-secondary btn-small" onclick="_closeAuthorityRecordPicker()">&times; Close</button>
           </div>
-          <div class="settings-card authority-card">
-            <h3 class="authority-title">Legal Aid Declaration</h3>
-            <p class="settings-hint">Client declaration as to financial circumstances and consent for legal aid application (adapt for CRM2 / means assessment).</p>
-            <details class="authority-details">
-              <summary>Proposed wording</summary>
-              <div class="authority-wording">
-                <p><strong>LEGAL AID DECLARATION</strong></p>
-                <p>I, <em>[Client full name]</em>, declare that the information I have given to <em>[Firm name]</em> about my income, capital and outgoings for the purpose of my application for criminal legal aid is true and complete to the best of my knowledge and belief.</p>
-                <p>I understand that I must tell the Legal Aid Agency (or my solicitors) immediately if my financial circumstances change. I consent to my solicitors passing my details and this declaration to the Legal Aid Agency and to the use of my information for the assessment of my eligibility for legal aid.</p>
-                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
-              </div>
-            </details>
+          <ul id="authority-record-list" class="attendance-picker-list" style="max-height:55vh;overflow-y:auto;"></ul>
+        </div>
+      </div>
+
+      <!-- AUTHORITY FILL MISSING FIELDS MODAL -->
+      <div id="authority-fill-modal" class="sections-index hidden">
+        <div class="sections-index-content" style="max-width:460px;width:94%;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+            <h3 id="authority-fill-title" style="margin:0;font-size:1.05rem;">Missing fields</h3>
+            <button type="button" class="btn btn-secondary btn-small" onclick="_closeAuthorityFillModal()">&times; Close</button>
           </div>
-          <div class="settings-card authority-card">
-            <h3 class="authority-title">Authority to Transfer Papers</h3>
-            <p class="settings-hint">Client authorises transfer of the case file to another firm or solicitor (e.g. on change of solicitor or transfer of matter).</p>
-            <details class="authority-details">
-              <summary>Proposed wording</summary>
-              <div class="authority-wording">
-                <p><strong>AUTHORITY TO TRANSFER PAPERS</strong></p>
-                <p>I, <em>[Client full name]</em>, hereby authorise <em>[Current firm name]</em> to send to <em>[New firm / solicitor name and address]</em> all papers, documents, correspondence and other material held in connection with my matter (including <em>[brief case description, e.g. police station attendance / magistrates&rsquo; court matter]</em>).</p>
-                <p>I understand that my file will be transferred in its entirety and that my current solicitors will retain no copies unless required by law or professional rules. I consent to the disclosure of such information as is necessary to effect the transfer and to enable the new firm to act for me.</p>
-                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
-              </div>
-            </details>
-          </div>
-          <div class="settings-card authority-card">
-            <h3 class="authority-title">Authority to Obtain Documents</h3>
-            <p class="settings-hint">General authority to request documents from police, CPS, court, previous solicitors or other third parties.</p>
-            <details class="authority-details">
-              <summary>Proposed wording</summary>
-              <div class="authority-wording">
-                <p><strong>AUTHORITY TO OBTAIN DOCUMENTS</strong></p>
-                <p>I, <em>[Client full name]</em>, hereby authorise <em>[Firm name]</em>, my solicitors, to request and receive from:</p>
-                <p>• The police (including the investigating force and any custody/evidence holder);<br>• The Crown Prosecution Service;<br>• Any court or tribunal;<br>• Any previous solicitors or legal representatives who have acted for me;</p>
-                <p>all documents, statements, exhibits, unused material, disclosure, and any other papers or information relating to my matter/case. I consent to my solicitors providing a copy of this authority where necessary to support such requests.</p>
-                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
-              </div>
-            </details>
-          </div>
-          <div class="settings-card authority-card">
-            <h3 class="authority-title">Authority to Instruct Expert</h3>
-            <p class="settings-hint">Client authorises the firm to instruct a named expert (e.g. medical, forensic, psychiatrist) and to disclose relevant papers.</p>
-            <details class="authority-details">
-              <summary>Proposed wording</summary>
-              <div class="authority-wording">
-                <p><strong>AUTHORITY TO INSTRUCT EXPERT</strong></p>
-                <p>I, <em>[Client full name]</em>, authorise <em>[Firm name]</em>, my solicitors, to instruct <em>[Expert name / type, e.g. a consultant psychiatrist / forensic expert]</em> to prepare a report and, if required, to give evidence in connection with my case.</p>
-                <p>I consent to my solicitors disclosing to the expert such of my papers, medical records and other information as they consider necessary for the expert to carry out their instructions. I understand that the expert may need to examine me or discuss my case and I agree to cooperate. I consent to the report and any related correspondence being shared with the court, prosecution and legal aid authority as appropriate.</p>
-                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
-              </div>
-            </details>
-          </div>
-          <div class="settings-card authority-card">
-            <h3 class="authority-title">Consent to Disclosure (Third Parties)</h3>
-            <p class="settings-hint">Client consents to disclosure of information to specified third parties (e.g. court, counsel, expert, family) where needed for the conduct of the case.</p>
-            <details class="authority-details">
-              <summary>Proposed wording</summary>
-              <div class="authority-wording">
-                <p><strong>CONSENT TO DISCLOSURE</strong></p>
-                <p>I, <em>[Client full name]</em>, consent to <em>[Firm name]</em>, my solicitors, disclosing such information and documents relating to my case as they consider necessary to:</p>
-                <p>• The court and any tribunal;<br>• Counsel and other advocates instructed on my behalf;<br>• Experts instructed on my behalf;<br>• <em>[Other: e.g. a named family member / interpreter / intermediary]</em> where relevant to my defence or to the conduct of my case.</p>
-                <p>I understand that such disclosure will be limited to what is necessary and that confidentiality will be maintained so far as possible. This consent may be withdrawn in writing at any time.</p>
-                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
-              </div>
-            </details>
-          </div>
-          <div class="settings-card authority-card">
-            <h3 class="authority-title">Authority to Act</h3>
-            <p class="settings-hint">Client confirms instruction of the firm and authority to act (useful for court, LAA or third-party confirmation).</p>
-            <details class="authority-details">
-              <summary>Proposed wording</summary>
-              <div class="authority-wording">
-                <p><strong>AUTHORITY TO ACT</strong></p>
-                <p>I, <em>[Client full name]</em>, confirm that I have instructed <em>[Firm name]</em> to act for me in connection with <em>[brief description of matter]</em>. I authorise them to conduct my case, to correspond and communicate with the court, prosecution, Legal Aid Agency and any other body or person as they consider necessary, and to sign documents on my behalf where I have given them specific authority to do so.</p>
-                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
-              </div>
-            </details>
-          </div>
-          <div class="settings-card authority-card">
-            <h3 class="authority-title">DWP / Benefits Records Authority</h3>
-            <p class="settings-hint">Authorises release of DWP, Jobcentre Plus or benefits records &mdash; often needed for means assessment, mitigation, or benefit fraud cases.</p>
-            <details class="authority-details">
-              <summary>Proposed wording</summary>
-              <div class="authority-wording">
-                <p><strong>AUTHORITY TO OBTAIN DWP / BENEFITS RECORDS</strong></p>
-                <p>I, <em>[Client full name]</em>, of <em>[address]</em>, National Insurance number <em>[NI number]</em>, hereby authorise <em>[Firm name]</em>, my solicitors, to request and obtain from the Department for Work and Pensions, Jobcentre Plus, or any other benefits authority, all records, claim histories, assessments, correspondence and information relating to my benefits and financial circumstances that may be relevant to my legal proceedings and my defence.</p>
-                <p>I consent to such records being disclosed to my solicitors. This request is made under the UK GDPR and the Data Protection Act 2018 and the information will be used only for the purpose of my case.</p>
-                <p>Signed: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip;&hellip; Date: &hellip;&hellip;&hellip;&hellip;&hellip;&hellip;</p>
-              </div>
-            </details>
-          </div>
+          <p class="settings-hint" style="margin-bottom:0.75rem;">These fields were not found in the record. Please enter them below.</p>
+          <div id="authority-fill-form"></div>
+          <button type="button" id="authority-fill-generate" class="btn btn-primary" style="width:100%;margin-top:0.75rem;">Generate PDF</button>
         </div>
       </div>
 

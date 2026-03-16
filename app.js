@@ -1033,6 +1033,9 @@ var LAA = {
       { key: '_thirdPartyEntries', label: 'Third party contacts', type: 'multiThirdParty' },
     ]},
     { id: 'appointedAuth', title: 'Authorities', keyFields: ['appointedSolicitorName'], fields: [
+      { key: '_h_gen_authority', label: 'Generate Authority PDF', type: 'sectionHeading' },
+      { key: '_note_gen_authority', label: 'Select an authority type and generate a print-ready PDF pre-filled from this record. You will be prompted for any missing information.', type: 'sectionNote' },
+      { key: '_authorityTypeSelect', label: 'Authority type', type: 'authorityTypePicker' },
       { key: '_h_appointed_sol', label: 'Appointed Solicitor', type: 'sectionHeading' },
       { key: 'appointedSolicitorName', label: 'Solicitor / Firm Name', type: 'text', cols: 2 },
       { key: 'appointedSolicitorRef', label: 'Reference', type: 'text' },
@@ -6717,6 +6720,30 @@ var REQUIRED_FIELD_KEYS = [
         container.appendChild(addBtn);
       }
       renderThirdParty(); wrap.appendChild(container); grid.appendChild(wrap); return;
+    }
+    /* ── Authority type picker (generate PDF from record) ── */
+    if (f.type === 'authorityTypePicker') {
+      var wrap = document.createElement('div'); wrap.className = 'form-group'; wrap.style.gridColumn = '1 / -1';
+      var pickerRow = document.createElement('div'); pickerRow.style.cssText = 'display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;';
+      var selWrap = document.createElement('div'); selWrap.style.cssText = 'flex:1;min-width:200px;';
+      var selLabel = document.createElement('label'); selLabel.textContent = 'Authority type'; selLabel.style.fontWeight = '600';
+      var sel = document.createElement('select'); sel.className = 'form-input'; sel.id = 'authority-type-picker-select';
+      sel.innerHTML = '<option value="">-- Select authority --</option>';
+      if (typeof _AUTHORITY_TEMPLATES !== 'undefined') {
+        _AUTHORITY_TEMPLATES.forEach(function(t) {
+          sel.innerHTML += '<option value="' + t.id + '">' + (typeof _authEsc === 'function' ? _authEsc(t.title) : t.title) + '</option>';
+        });
+      }
+      selWrap.appendChild(selLabel); selWrap.appendChild(sel);
+      var genBtn = document.createElement('button'); genBtn.type = 'button'; genBtn.className = 'btn btn-primary';
+      genBtn.textContent = 'Generate PDF'; genBtn.style.height = '38px';
+      genBtn.addEventListener('click', function() {
+        var authId = sel.value;
+        if (!authId) { showToast('Select an authority type first', 'error'); return; }
+        if (typeof generateAuthorityFromRecord === 'function') generateAuthorityFromRecord(authId);
+      });
+      pickerRow.appendChild(selWrap); pickerRow.appendChild(genBtn);
+      wrap.appendChild(pickerRow); grid.appendChild(wrap); return;
     }
     /* ── Multi-entry: Medical Authority ── */
     if (f.type === 'multiMedicalAuth') {
