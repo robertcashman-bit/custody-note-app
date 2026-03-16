@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.83",
+      "version": "1.4.84",
       "date": "2026-03-16",
       "latest": true,
+      "changes": [
+        "Fix cloud backup connectivity when antivirus HTTPS scanning is active (self-signed certificate in chain)"
+      ]
+    },
+    {
+      "version": "1.4.83",
+      "date": "2026-03-16",
+      "latest": false,
       "changes": [
         "Authority auto-fill: select a record and authority type, auto-fill from record data, prompt for missing fields, generate print-ready PDF",
         "Authorities view: dynamic cards with Fill from record button and record picker modal",

@@ -14,6 +14,11 @@ if (app.isPackaged) {
 const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
+
+// Antivirus HTTPS scanning (e.g. Avast, AVG, Kaspersky) injects its own CA into the
+// certificate chain, causing "self signed certificate in certificate chain" errors in
+// Node.js (which bundles its own CA list). Use a permissive agent for our own API only.
+const _trustedApiAgent = new https.Agent({ rejectUnauthorized: false });
 const { URL } = require('url');
 const initSqlJs = require('sql.js');
 const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-import');
@@ -3180,13 +3185,15 @@ function httpGetWithTimeout(url, timeoutMs) {
       const parsed = new URL(url);
       if (!isAllowedApiUrl(url)) { clearTimeout(hardTimer); return done(reject, new Error('URL not allowed')); }
       const mod = parsed.protocol === 'https:' ? https : http;
-      req = mod.request({
+      const reqOpts = {
         hostname: parsed.hostname,
         port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
         path: parsed.pathname + parsed.search,
         method: 'GET',
         timeout: timeoutMs || 8000,
-      }, (res) => {
+      };
+      if (parsed.protocol === 'https:' && isAllowedApiUrl(url)) reqOpts.agent = _trustedApiAgent;
+      req = mod.request(reqOpts, (res) => {
         let data = '';
         res.on('data', (c) => { data += c; });
         res.on('end', () => { clearTimeout(hardTimer); done(resolve, { statusCode: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, data }); });
@@ -3225,14 +3232,16 @@ function httpPost(url, body, opts) {
     const mod = parsed.protocol === 'https:' ? https : http;
     const payload = typeof body === 'string' ? body : JSON.stringify(body);
     const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...extraHeaders };
-    req = mod.request({
+    const reqOpts = {
       hostname: parsed.hostname,
       port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
       path: parsed.pathname + parsed.search,
       method: 'POST',
       headers,
       timeout: timeoutMs,
-    }, (res) => {
+    };
+    if (parsed.protocol === 'https:' && isAllowedApiUrl(url)) reqOpts.agent = _trustedApiAgent;
+    req = mod.request(reqOpts, (res) => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location) {
         if (maxRedirects >= 3) return done(reject, new Error('Too many redirects'));
         res.resume();
