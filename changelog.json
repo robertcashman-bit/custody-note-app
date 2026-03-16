@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.86",
+      "version": "1.4.87",
       "date": "2026-03-16",
       "latest": true,
+      "changes": [
+        "Quick Email: add type of attendance, date and time fields; templates save with placeholders (e.g. {{oicName}}, {{clientName}}) for reuse"
+      ]
+    },
+    {
+      "version": "1.4.86",
+      "date": "2026-03-16",
+      "latest": false,
       "changes": [
         "Quick Email: email an officer without creating a record first (Home screen + Records list)",
         "Save as Template: save any email you compose as a reusable template directly from the email modal",

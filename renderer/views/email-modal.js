@@ -243,6 +243,8 @@ function openEmailModal(recordId, recordData, recordStatus) {
     var modal = document.getElementById('email-oic-modal');
     if (!modal) return;
 
+    modal.getPlaceholderMap = _getOfficerPlaceholderMap;
+
     modal.querySelector('.email-oic-close').addEventListener('click', closeEmailModal);
     document.getElementById('email-oic-cancel').addEventListener('click', closeEmailModal);
     modal.addEventListener('click', function(e) { if (e.target === modal) closeEmailModal(); });
@@ -421,7 +423,31 @@ function _markEmailSent(recordId, existingData, recordStatus, templateId, recipi
 
 /* ═══════════════════════════════════════════════════════
    SAVE AS TEMPLATE — inline from any email compose modal
+   Replaces known field values with {{placeholders}} so templates are reusable.
    ═══════════════════════════════════════════════════════ */
+
+function _escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function _valuesToPlaceholders(text, map) {
+  if (!text || !map) return text;
+  var entries = [];
+  for (var key in map) {
+    if (Object.prototype.hasOwnProperty.call(map, key)) {
+      var val = map[key];
+      if (val != null && String(val).trim() !== '') entries.push({ key: key, value: String(val).trim() });
+    }
+  }
+  entries.sort(function(a, b) { return b.value.length - a.value.length; });
+  var out = text;
+  for (var i = 0; i < entries.length; i++) {
+    var escaped = _escapeRegex(entries[i].value);
+    var re = new RegExp(escaped, 'g');
+    out = out.replace(re, '{{' + entries[i].key + '}}');
+  }
+  return out;
+}
 
 function _saveAsTemplate(modalId) {
   var modal = document.getElementById(modalId);
@@ -450,9 +476,15 @@ function _saveAsTemplate(modalId) {
   wrap.querySelector('#save-tpl-confirm').addEventListener('click', function() {
     var name = wrap.querySelector('#save-tpl-name').value.trim();
     if (!name) { showToast('Please enter a template name', 'error'); return; }
+    var getMap = modal.getPlaceholderMap;
+    var map = typeof getMap === 'function' ? getMap() : {};
+    var subjectRaw = subjectEl.value || '';
+    var bodyRaw = bodyEl.value || '';
+    var subjectTpl = _valuesToPlaceholders(subjectRaw, map);
+    var bodyTpl = _valuesToPlaceholders(bodyRaw, map);
     var tpls = [];
     try { tpls = JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]'); } catch (_) {}
-    tpls.push({ name: name, subject: subjectEl.value || '', body: bodyEl.value || '', scope: 'officer' });
+    tpls.push({ name: name, subject: subjectTpl, body: bodyTpl, scope: 'officer' });
     try { localStorage.setItem('cn-custom-email-templates', JSON.stringify(tpls)); } catch (_) {}
     showToast('Template saved — available in all officer email modals', 'success');
     wrap.style.display = 'none';
@@ -520,22 +552,43 @@ function openQuickEmailModal() {
     });
   }
 
+  function _attendanceTypeLabelFromValue(val) {
+    var v = String(val || '').trim();
+    if (v === 'telephone') return 'telephone advice';
+    if (v === 'voluntary') return 'voluntary attendance';
+    if (v === 'custody') return 'attendance';
+    return '';
+  }
+
   function _getPlaceholderMap() {
     var modal = document.getElementById('quick-email-modal');
     if (!modal) return {};
+    var dateEl = modal.querySelector('#quick-email-date');
+    var dateVal = dateEl && dateEl.value ? dateEl.value : '';
+    var dateFormatted = '';
+    if (dateVal) {
+      var m = dateVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      dateFormatted = m ? m[3] + '/' + m[2] + '/' + m[1] : dateVal;
+    } else {
+      dateFormatted = new Date().toLocaleDateString('en-GB');
+    }
+    var timeEl = modal.querySelector('#quick-email-time');
+    var timeVal = (timeEl && timeEl.value ? timeEl.value : '').slice(0, 5);
+    var attendanceVal = (modal.querySelector('#quick-email-attendance-type') || {}).value || '';
     return {
       clientName: (modal.querySelector('#quick-email-client-name') || {}).value || '',
       oicName: (modal.querySelector('#quick-email-officer-name') || {}).value || '',
       station: (modal.querySelector('#quick-email-station') || {}).value || '',
       offenceType: (modal.querySelector('#quick-email-offence') || {}).value || '',
       feeEarnerName: feeEarnerName,
-      date: new Date().toLocaleDateString('en-GB'),
+      date: dateFormatted,
+      time: timeVal,
       contactName: '',
       firmName: '',
       outcome: '',
       nextStep: '',
       followUp: '',
-      attendanceType: '',
+      attendanceType: _attendanceTypeLabelFromValue(attendanceVal),
       ourFileNumber: '',
       ufn: ''
     };
@@ -570,7 +623,9 @@ function openQuickEmailModal() {
     if (!modal) return '';
     var clientName = (modal.querySelector('#quick-email-client-name') || {}).value || '';
     var station = (modal.querySelector('#quick-email-station') || {}).value || '';
-    var parts = [clientName, station, new Date().toLocaleDateString('en-GB')].filter(Boolean);
+    var map = _getPlaceholderMap();
+    var datePart = map.date || new Date().toLocaleDateString('en-GB');
+    var parts = [clientName, station, datePart].filter(Boolean);
     return parts.join(' - ');
   }
 
@@ -622,6 +677,25 @@ function openQuickEmailModal() {
                 '<input type="text" id="quick-email-offence" class="email-oic-input" placeholder="e.g. ABH">' +
               '</div>' +
             '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;">' +
+              '<div>' +
+                '<label class="email-oic-label" for="quick-email-attendance-type">Type of attendance</label>' +
+                '<select id="quick-email-attendance-type" class="email-oic-input">' +
+                  '<option value="">—</option>' +
+                  '<option value="custody">Custody</option>' +
+                  '<option value="voluntary">Voluntary</option>' +
+                  '<option value="telephone">Telephone advice</option>' +
+                '</select>' +
+              '</div>' +
+              '<div>' +
+                '<label class="email-oic-label" for="quick-email-date">Date</label>' +
+                '<input type="date" id="quick-email-date" class="email-oic-input">' +
+              '</div>' +
+              '<div>' +
+                '<label class="email-oic-label" for="quick-email-time">Time</label>' +
+                '<input type="time" id="quick-email-time" class="email-oic-input">' +
+              '</div>' +
+            '</div>' +
             '<hr style="border:none;border-top:1px solid #e2e8f0;margin:0.5rem 0;">' +
             customTemplateHtml +
             '<label class="email-oic-label" for="quick-email-subject">Subject</label>' +
@@ -656,6 +730,14 @@ function openQuickEmailModal() {
     var modal = document.getElementById('quick-email-modal');
     if (!modal) return;
 
+    modal.getPlaceholderMap = _getPlaceholderMap;
+
+    var dateInput = modal.querySelector('#quick-email-date');
+    if (dateInput && !dateInput.value) {
+      var today = new Date();
+      dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    }
+
     function _close() {
       var m = document.getElementById('quick-email-modal');
       if (m) m.remove();
@@ -668,7 +750,7 @@ function openQuickEmailModal() {
       if (e.key === 'Escape') { _close(); document.removeEventListener('keydown', _onKey); }
     });
 
-    var autoFields = ['quick-email-client-name', 'quick-email-station'];
+    var autoFields = ['quick-email-client-name', 'quick-email-station', 'quick-email-date'];
     autoFields.forEach(function(fieldId) {
       var el = modal.querySelector('#' + fieldId);
       if (el) {
