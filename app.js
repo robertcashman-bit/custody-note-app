@@ -6723,7 +6723,7 @@ var REQUIRED_FIELD_KEYS = [
     }
     /* ── Authority type picker (generate PDF from record) ── */
     if (f.type === 'authorityTypePicker') {
-      var wrap = document.createElement('div'); wrap.className = 'form-group'; wrap.style.gridColumn = '1 / -1';
+      const wrap = document.createElement('div'); wrap.className = 'form-group'; wrap.style.gridColumn = '1 / -1';
       var pickerRow = document.createElement('div'); pickerRow.style.cssText = 'display:flex;gap:0.5rem;flex-wrap:wrap;align-items:flex-end;';
       var selWrap = document.createElement('div'); selWrap.style.cssText = 'flex:1;min-width:200px;';
       var selLabel = document.createElement('label'); selLabel.textContent = 'Authority type'; selLabel.style.fontWeight = '600';

@@ -19,6 +19,7 @@ const crypto = require('crypto');
 // certificate chain, causing "self signed certificate in certificate chain" errors in
 // Node.js (which bundles its own CA list). Use a permissive agent for our own API only.
 const _trustedApiAgent = new https.Agent({ rejectUnauthorized: false });
+
 const { URL } = require('url');
 const initSqlJs = require('sql.js');
 const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-import');
@@ -3196,10 +3197,16 @@ function httpGetWithTimeout(url, timeoutMs) {
       req = mod.request(reqOpts, (res) => {
         let data = '';
         res.on('data', (c) => { data += c; });
-        res.on('end', () => { clearTimeout(hardTimer); done(resolve, { statusCode: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, data }); });
+        res.on('end', () => {
+          clearTimeout(hardTimer); done(resolve, { statusCode: res.statusCode, ok: res.statusCode >= 200 && res.statusCode < 300, data });
+        });
       });
-      req.on('error', (e) => { clearTimeout(hardTimer); const err = e instanceof Error ? e : new Error(String(e)); if (e && e.code) err.code = e.code; done(reject, err); });
-      req.on('timeout', () => { req.destroy(); clearTimeout(hardTimer); const err = new Error('Timeout'); err.code = 'ETIMEDOUT'; done(reject, err); });
+      req.on('error', (e) => {
+        clearTimeout(hardTimer); const err = e instanceof Error ? e : new Error(String(e)); if (e && e.code) err.code = e.code; done(reject, err);
+      });
+      req.on('timeout', () => {
+        req.destroy(); clearTimeout(hardTimer); const err = new Error('Timeout'); err.code = 'ETIMEDOUT'; done(reject, err);
+      });
       req.end();
     } catch (e) {
       clearTimeout(hardTimer);
