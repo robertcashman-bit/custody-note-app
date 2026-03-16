@@ -2667,7 +2667,6 @@ var REQUIRED_FIELD_KEYS = [
     updateHomeStatus();
     updateHomeLicenceCard();
     updateGearLicenceItem();
-    if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {});
     initSyncStatus();
   }
 
@@ -2798,12 +2797,11 @@ var REQUIRED_FIELD_KEYS = [
     var card = document.getElementById('home-enter-licence-card');
     if (!window.api || !window.api.licenceStatus) { if (card) card.style.display = 'none'; return; }
     window.api.licenceStatus().then(function(st) {
-      // Update footer badge (visible on every screen)
       updateLicenceFooterBadge(st);
+      if (typeof updateAddonUIs === 'function') updateAddonUIs(st);
       if (!card) return;
       var isPaid = st && st.key && (st.status === 'active' || st.status === 'expiring_soon') && !st.isTrial;
       card.style.display = isPaid ? 'none' : '';
-      // Update card text for trial vs no-licence state
       var titleEl = card.querySelector('p:first-of-type');
       var subEl = card.querySelector('p:last-of-type');
       var btnEl = card.querySelector('button');
@@ -11813,9 +11811,11 @@ PDF_CASENOTE_ADVERT +
     });
 
     /* First-launch setup check: hide splash immediately so user can complete setup */
+    window._emailTemplatesAddonEnabled = false;
     window.api.getSettings().then(function(s) {
       window._appSettingsCache = s || {};
       window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
+      if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
       if (!s.dsccPin || !s.feeEarnerNameDefault) {
         hideSplash();
         initFirstLaunchModal();

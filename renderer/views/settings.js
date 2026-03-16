@@ -75,12 +75,17 @@ function loadSettings() {
           var enabled = oetToggle.checked;
           window._emailTemplatesAddonEnabled = enabled;
           _updateAddonStatusLabel();
+          if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
           window.api.setSettings({ officerEmailTemplatesEnabled: enabled ? 'true' : 'false' })
             .then(function() {
               showToast('Officer Email Templates ' + (enabled ? 'enabled' : 'disabled'), 'success');
               if (typeof refreshList === 'function') refreshList();
             })
             .catch(function() {
+              oetToggle.checked = !enabled;
+              window._emailTemplatesAddonEnabled = !enabled;
+              _updateAddonStatusLabel();
+              if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
               showToast('Failed to save add-on setting', 'error');
             });
         });

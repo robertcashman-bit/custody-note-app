@@ -250,9 +250,10 @@ function openEmailModal(recordId, recordData, recordStatus) {
     modal.addEventListener('click', function(e) { if (e.target === modal) closeEmailModal(); });
 
     function _onKeyDown(e) {
-      if (e.key === 'Escape') { closeEmailModal(); document.removeEventListener('keydown', _onKeyDown); }
+      if (e.key === 'Escape') closeEmailModal();
     }
     document.addEventListener('keydown', _onKeyDown);
+    modal._escHandler = _onKeyDown;
 
     /* Template tabs */
     modal.querySelectorAll('.email-oic-tab').forEach(function(btn) {
@@ -390,7 +391,9 @@ function openEmailModal(recordId, recordData, recordStatus) {
 
 function closeEmailModal() {
   var modal = document.getElementById('email-oic-modal');
-  if (modal) modal.remove();
+  if (!modal) return;
+  if (modal._escHandler) document.removeEventListener('keydown', modal._escHandler);
+  modal.remove();
 }
 
 /* ── Mark Sent ───────────────────────────────────────────── */
@@ -707,8 +710,9 @@ function openQuickEmailModal() {
             '<p class="email-client-picker-label">Choose your email app:</p>' +
             '<div class="email-client-picker-grid">' +
               EMAIL_CLIENTS.map(function(c) {
-                return '<button type="button" class="email-client-btn" data-client="' + c.id + '"' +
-                  (_currentClient() === c.id ? ' style="font-weight:700;"' : '') + '>' + _escAttr(c.label) + '</button>';
+                return '<button type="button" class="email-client-btn' +
+                  (_currentClient() === c.id ? ' active' : '') +
+                  '" data-client="' + c.id + '">' + _escAttr(c.label) + '</button>';
               }).join('') +
             '</div>' +
           '</div>' +
@@ -740,15 +744,20 @@ function openQuickEmailModal() {
 
     function _close() {
       var m = document.getElementById('quick-email-modal');
-      if (m) m.remove();
+      if (!m) return;
+      if (m._escHandler) document.removeEventListener('keydown', m._escHandler);
+      m.remove();
     }
+
+    function _onKey(e) {
+      if (e.key === 'Escape') _close();
+    }
+    document.addEventListener('keydown', _onKey);
+    modal._escHandler = _onKey;
 
     modal.querySelector('.email-oic-close').addEventListener('click', _close);
     modal.querySelector('#quick-email-cancel').addEventListener('click', _close);
     modal.addEventListener('click', function(e) { if (e.target === modal) _close(); });
-    document.addEventListener('keydown', function _onKey(e) {
-      if (e.key === 'Escape') { _close(); document.removeEventListener('keydown', _onKey); }
-    });
 
     var autoFields = ['quick-email-client-name', 'quick-email-station', 'quick-email-date'];
     autoFields.forEach(function(fieldId) {
@@ -777,10 +786,10 @@ function openQuickEmailModal() {
     }
 
     modal.querySelector('#quick-email-open-app').addEventListener('click', function() {
-      var to = (modal.querySelector('#quick-email-to') || {}).value.trim();
+      var to = ((modal.querySelector('#quick-email-to') || {}).value || '').trim();
       if (!to) { showToast('Please enter an officer email address', 'error'); return; }
-      var subject = (modal.querySelector('#quick-email-subject') || {}).value.trim() || _autoSubject();
-      var body = (modal.querySelector('#quick-email-body') || {}).value;
+      var subject = ((modal.querySelector('#quick-email-subject') || {}).value || '').trim() || _autoSubject();
+      var body = (modal.querySelector('#quick-email-body') || {}).value || '';
       if (_currentClient() === 'default' && !((window._appSettingsCache || {}).preferredEmailClient)) {
         _toggleQuickPicker(true);
       } else {
@@ -802,14 +811,14 @@ function openQuickEmailModal() {
           showToast('Could not save email app preference', 'error');
         });
         modal.querySelectorAll('.email-client-btn').forEach(function(b) {
-          b.style.fontWeight = b.getAttribute('data-client') === clientId ? '700' : '';
+          b.classList.toggle('active', b.getAttribute('data-client') === clientId);
         });
         var openBtn = document.getElementById('quick-email-open-app');
         if (openBtn) openBtn.textContent = _openBtnLabel();
-        var to = (modal.querySelector('#quick-email-to') || {}).value.trim();
+        var to = ((modal.querySelector('#quick-email-to') || {}).value || '').trim();
         if (!to) { showToast('Please enter an officer email address', 'error'); _toggleQuickPicker(false); return; }
-        var subject = (modal.querySelector('#quick-email-subject') || {}).value.trim() || _autoSubject();
-        var body = (modal.querySelector('#quick-email-body') || {}).value;
+        var subject = ((modal.querySelector('#quick-email-subject') || {}).value || '').trim() || _autoSubject();
+        var body = (modal.querySelector('#quick-email-body') || {}).value || '';
         _openUrl(to, subject, body);
         _toggleQuickPicker(false);
       });
