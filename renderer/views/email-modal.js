@@ -34,7 +34,23 @@ function openEmailModal(recordId, recordData, recordStatus) {
   }
 
   function _currentClient() {
-    return _oicClean((window._appSettingsCache || {}).preferredEmailClient) || 'default';
+    var cached = _oicClean((window._appSettingsCache || {}).preferredEmailClient);
+    if (cached) return cached;
+    if (window.api && window.api.getSettings && !_currentClient._pending) {
+      _currentClient._pending = true;
+      window.api.getSettings().then(function(s) {
+        _currentClient._pending = false;
+        if (s) {
+          window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
+          var fresh = _oicClean(s.preferredEmailClient);
+          if (fresh) {
+            var btn = document.getElementById('email-oic-open-app') || document.getElementById('quick-email-open-app');
+            if (btn) btn.textContent = _openBtnLabel();
+          }
+        }
+      }).catch(function() { _currentClient._pending = false; });
+    }
+    return 'default';
   }
 
   function _openBtnLabel() {
@@ -210,6 +226,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
             '<button type="button" id="email-oic-open-app" class="btn btn-primary">' + _escAttr(_openBtnLabel()) + '</button>' +
             '<button type="button" id="email-oic-change-client" class="btn-link-subtle" title="Change email app">Change app</button>' +
             '<button type="button" id="email-oic-copy"      class="btn btn-secondary">Copy Email</button>' +
+            '<button type="button" id="email-oic-save-tpl"  class="btn btn-secondary">Save as Template</button>' +
             '<button type="button" id="email-oic-mark-sent" class="btn btn-secondary">Mark Sent</button>' +
             '<button type="button" id="email-oic-cancel"    class="btn btn-secondary">Cancel</button>' +
           '</div>' +
@@ -312,6 +329,11 @@ function openEmailModal(recordId, recordData, recordStatus) {
       }
     });
 
+    /* Save as Template */
+    document.getElementById('email-oic-save-tpl')?.addEventListener('click', function() {
+      _saveAsTemplate('email-oic-modal');
+    });
+
     /* Mark Sent */
     document.getElementById('email-oic-mark-sent').addEventListener('click', function() {
       var recipient = document.getElementById('email-oic-to').value.trim();
@@ -395,4 +417,358 @@ function _markEmailSent(recordId, existingData, recordStatus, templateId, recipi
       console.error('[EmailModal] markEmailSent failed:', err);
       showToast('Failed to save sent status — please try again', 'error');
     });
+}
+
+/* ═══════════════════════════════════════════════════════
+   SAVE AS TEMPLATE — inline from any email compose modal
+   ═══════════════════════════════════════════════════════ */
+
+function _saveAsTemplate(modalId) {
+  var modal = document.getElementById(modalId);
+  if (!modal) return;
+  var existing = modal.querySelector('.save-tpl-inline');
+  if (existing) { existing.style.display = existing.style.display === 'none' ? '' : 'none'; return; }
+
+  var subjectEl = modal.querySelector('#email-oic-subject, #quick-email-subject');
+  var bodyEl    = modal.querySelector('#email-oic-body, #quick-email-body');
+  if (!subjectEl || !bodyEl) return;
+
+  var wrap = document.createElement('div');
+  wrap.className = 'save-tpl-inline';
+  wrap.style.cssText = 'margin:0.6rem 0 0.3rem;padding:0.6rem 0.8rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;display:flex;align-items:center;gap:0.5rem;';
+  wrap.innerHTML =
+    '<input type="text" id="save-tpl-name" placeholder="Template name e.g. Disclosure request" ' +
+      'style="flex:1;padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;">' +
+    '<button type="button" id="save-tpl-confirm" class="btn btn-primary" style="white-space:nowrap;">Save</button>' +
+    '<button type="button" id="save-tpl-cancel" class="btn btn-secondary" style="white-space:nowrap;">Cancel</button>';
+
+  var actionsBar = modal.querySelector('.email-oic-actions, .quick-email-actions');
+  if (actionsBar) actionsBar.parentNode.insertBefore(wrap, actionsBar);
+  else modal.querySelector('.email-oic-box, .quick-email-box').appendChild(wrap);
+
+  wrap.querySelector('#save-tpl-cancel').addEventListener('click', function() { wrap.style.display = 'none'; });
+  wrap.querySelector('#save-tpl-confirm').addEventListener('click', function() {
+    var name = wrap.querySelector('#save-tpl-name').value.trim();
+    if (!name) { showToast('Please enter a template name', 'error'); return; }
+    var tpls = [];
+    try { tpls = JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]'); } catch (_) {}
+    tpls.push({ name: name, subject: subjectEl.value || '', body: bodyEl.value || '', scope: 'officer' });
+    try { localStorage.setItem('cn-custom-email-templates', JSON.stringify(tpls)); } catch (_) {}
+    showToast('Template saved — available in all officer email modals', 'success');
+    wrap.style.display = 'none';
+
+    var customSelect = modal.querySelector('#email-oic-custom-template, #quick-email-custom-template');
+    if (customSelect) {
+      var newIdx = tpls.length - 1;
+      var opt = document.createElement('option');
+      opt.value = 'custom:' + newIdx;
+      opt.textContent = name;
+      customSelect.appendChild(opt);
+    }
+  });
+  wrap.querySelector('#save-tpl-name').focus();
+}
+
+/* ═══════════════════════════════════════════════════════
+   QUICK EMAIL MODAL — Email an officer without a record
+   ═══════════════════════════════════════════════════════ */
+
+function openQuickEmailModal() {
+  var stale = document.getElementById('quick-email-modal');
+  if (stale) stale.remove();
+
+  var settings = window._appSettingsCache || {};
+  var feeEarnerName = _oicClean(settings.feeEarnerNameDefault) || '';
+  var currentCustomTpl = '';
+  var pickerVisible = false;
+
+  function _escAttr(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function _currentClient() {
+    var cached = _oicClean((window._appSettingsCache || {}).preferredEmailClient);
+    return cached || 'default';
+  }
+
+  function _openBtnLabel() {
+    var c = _currentClient();
+    var label = getEmailClientLabel(c);
+    return c === 'default' ? 'Open Email App \u25be' : 'Open in ' + label + ' \u25be';
+  }
+
+  function _openUrl(to, subject, body) {
+    var url = buildEmailClientUrl(_currentClient(), to, subject, body);
+    if (window.api && window.api.openExternal) {
+      window.api.openExternal(url);
+    } else {
+      window.open(url, '_blank');
+    }
+  }
+
+  function _getCustomTemplatesForQuick() {
+    var list = typeof window._getCustomEmailTemplates === 'function'
+      ? (window._getCustomEmailTemplates() || [])
+      : [];
+    return list.map(function(tpl, idx) {
+      return { id: 'custom:' + idx, template: tpl };
+    }).filter(function(entry) {
+      var scope = entry.template && entry.template.scope ? entry.template.scope : 'all';
+      return scope === 'all' || scope === 'officer';
+    });
+  }
+
+  function _getPlaceholderMap() {
+    var modal = document.getElementById('quick-email-modal');
+    if (!modal) return {};
+    return {
+      clientName: (modal.querySelector('#quick-email-client-name') || {}).value || '',
+      oicName: (modal.querySelector('#quick-email-officer-name') || {}).value || '',
+      station: (modal.querySelector('#quick-email-station') || {}).value || '',
+      offenceType: (modal.querySelector('#quick-email-offence') || {}).value || '',
+      feeEarnerName: feeEarnerName,
+      date: new Date().toLocaleDateString('en-GB'),
+      contactName: '',
+      firmName: '',
+      outcome: '',
+      nextStep: '',
+      followUp: '',
+      attendanceType: '',
+      ourFileNumber: '',
+      ufn: ''
+    };
+  }
+
+  function _applyPlaceholders(text) {
+    var map = _getPlaceholderMap();
+    return String(text || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
+      return map[key] != null ? String(map[key]) : '';
+    });
+  }
+
+  function _applyCustomTemplate(templateId) {
+    if (!templateId || String(templateId).indexOf('custom:') !== 0) return;
+    var idx = parseInt(String(templateId).slice(7), 10);
+    if (!Number.isFinite(idx) || idx < 0) return;
+    var list = typeof window._getCustomEmailTemplates === 'function'
+      ? (window._getCustomEmailTemplates() || [])
+      : [];
+    var tpl = list[idx];
+    if (!tpl) return;
+    var scope = tpl.scope || 'all';
+    if (scope !== 'all' && scope !== 'officer') return;
+    var subjectEl = document.getElementById('quick-email-subject');
+    var bodyEl = document.getElementById('quick-email-body');
+    if (subjectEl) subjectEl.value = _applyPlaceholders(tpl.subject || '');
+    if (bodyEl) bodyEl.value = _applyPlaceholders(tpl.body || '');
+  }
+
+  function _autoSubject() {
+    var modal = document.getElementById('quick-email-modal');
+    if (!modal) return '';
+    var clientName = (modal.querySelector('#quick-email-client-name') || {}).value || '';
+    var station = (modal.querySelector('#quick-email-station') || {}).value || '';
+    var parts = [clientName, station, new Date().toLocaleDateString('en-GB')].filter(Boolean);
+    return parts.join(' - ');
+  }
+
+  function _renderQuickModal() {
+    var stale2 = document.getElementById('quick-email-modal');
+    if (stale2) stale2.remove();
+
+    var customTemplates = _getCustomTemplatesForQuick();
+
+    var customTemplateHtml = customTemplates.length
+      ? '<label class="email-oic-label" for="quick-email-custom-template">Use saved template</label>' +
+        '<select id="quick-email-custom-template" class="email-oic-input">' +
+          '<option value="">— None (compose freely) —</option>' +
+          customTemplates.map(function(entry) {
+            var tpl = entry.template || {};
+            return '<option value="' + _escAttr(entry.id) + '">' +
+              _escAttr(tpl.name || 'Custom template') + '</option>';
+          }).join('') +
+        '</select>'
+      : '';
+
+    var html =
+      '<div id="quick-email-modal" class="email-oic-overlay" role="dialog" aria-modal="true" aria-label="Quick Email">' +
+        '<div class="email-oic-box quick-email-box">' +
+          '<div class="email-oic-header">' +
+            '<h3 class="email-oic-title">&#9993; Quick Email to Officer</h3>' +
+            '<button type="button" class="email-oic-close" aria-label="Close modal">&times;</button>' +
+          '</div>' +
+          '<div class="email-oic-fields">' +
+            '<label class="email-oic-label" for="quick-email-to">Officer email <span style="color:#ef4444;">*</span></label>' +
+            '<input type="email" id="quick-email-to" class="email-oic-input" placeholder="officer@police.uk">' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">' +
+              '<div>' +
+                '<label class="email-oic-label" for="quick-email-officer-name">Officer name</label>' +
+                '<input type="text" id="quick-email-officer-name" class="email-oic-input" placeholder="e.g. DC Smith">' +
+              '</div>' +
+              '<div>' +
+                '<label class="email-oic-label" for="quick-email-client-name">Client name</label>' +
+                '<input type="text" id="quick-email-client-name" class="email-oic-input" placeholder="e.g. John Doe">' +
+              '</div>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">' +
+              '<div>' +
+                '<label class="email-oic-label" for="quick-email-station">Police station</label>' +
+                '<input type="text" id="quick-email-station" class="email-oic-input" placeholder="e.g. Holborn">' +
+              '</div>' +
+              '<div>' +
+                '<label class="email-oic-label" for="quick-email-offence">Offence / case</label>' +
+                '<input type="text" id="quick-email-offence" class="email-oic-input" placeholder="e.g. ABH">' +
+              '</div>' +
+            '</div>' +
+            '<hr style="border:none;border-top:1px solid #e2e8f0;margin:0.5rem 0;">' +
+            customTemplateHtml +
+            '<label class="email-oic-label" for="quick-email-subject">Subject</label>' +
+            '<input type="text" id="quick-email-subject" class="email-oic-input" value="" placeholder="Auto-filled from fields above">' +
+            '<label class="email-oic-label" for="quick-email-body">Message</label>' +
+            '<textarea id="quick-email-body" class="email-oic-textarea" rows="10" placeholder="Type your message here..."></textarea>' +
+          '</div>' +
+          '<div id="email-client-picker-quick" class="email-client-picker" style="display:none;">' +
+            '<p class="email-client-picker-label">Choose your email app:</p>' +
+            '<div class="email-client-picker-grid">' +
+              EMAIL_CLIENTS.map(function(c) {
+                return '<button type="button" class="email-client-btn" data-client="' + c.id + '"' +
+                  (_currentClient() === c.id ? ' style="font-weight:700;"' : '') + '>' + _escAttr(c.label) + '</button>';
+              }).join('') +
+            '</div>' +
+          '</div>' +
+          '<div class="email-oic-actions quick-email-actions">' +
+            '<button type="button" id="quick-email-open-app" class="btn btn-primary">' + _escAttr(_openBtnLabel()) + '</button>' +
+            '<button type="button" id="quick-email-change-client" class="btn-link-subtle" title="Change email app">Change app</button>' +
+            '<button type="button" id="quick-email-copy" class="btn btn-secondary">Copy Email</button>' +
+            '<button type="button" id="quick-email-save-tpl" class="btn btn-secondary">Save as Template</button>' +
+            '<button type="button" id="quick-email-cancel" class="btn btn-secondary">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.body.insertAdjacentHTML('beforeend', html);
+    _bindQuickEvents();
+  }
+
+  function _bindQuickEvents() {
+    var modal = document.getElementById('quick-email-modal');
+    if (!modal) return;
+
+    function _close() {
+      var m = document.getElementById('quick-email-modal');
+      if (m) m.remove();
+    }
+
+    modal.querySelector('.email-oic-close').addEventListener('click', _close);
+    modal.querySelector('#quick-email-cancel').addEventListener('click', _close);
+    modal.addEventListener('click', function(e) { if (e.target === modal) _close(); });
+    document.addEventListener('keydown', function _onKey(e) {
+      if (e.key === 'Escape') { _close(); document.removeEventListener('keydown', _onKey); }
+    });
+
+    var autoFields = ['quick-email-client-name', 'quick-email-station'];
+    autoFields.forEach(function(fieldId) {
+      var el = modal.querySelector('#' + fieldId);
+      if (el) {
+        el.addEventListener('blur', function() {
+          var subjectEl = document.getElementById('quick-email-subject');
+          if (subjectEl && !subjectEl.dataset.userEdited) {
+            subjectEl.value = _autoSubject();
+          }
+        });
+      }
+    });
+
+    var subjectField = document.getElementById('quick-email-subject');
+    if (subjectField) {
+      subjectField.addEventListener('input', function() { subjectField.dataset.userEdited = '1'; });
+    }
+
+    var customSelect = modal.querySelector('#quick-email-custom-template');
+    if (customSelect) {
+      customSelect.addEventListener('change', function(e) {
+        currentCustomTpl = e.target.value || '';
+        if (currentCustomTpl) _applyCustomTemplate(currentCustomTpl);
+      });
+    }
+
+    modal.querySelector('#quick-email-open-app').addEventListener('click', function() {
+      var to = (modal.querySelector('#quick-email-to') || {}).value.trim();
+      if (!to) { showToast('Please enter an officer email address', 'error'); return; }
+      var subject = (modal.querySelector('#quick-email-subject') || {}).value.trim() || _autoSubject();
+      var body = (modal.querySelector('#quick-email-body') || {}).value;
+      if (_currentClient() === 'default' && !((window._appSettingsCache || {}).preferredEmailClient)) {
+        _toggleQuickPicker(true);
+      } else {
+        _openUrl(to, subject, body);
+      }
+    });
+
+    modal.querySelector('#quick-email-change-client').addEventListener('click', function() {
+      _toggleQuickPicker(!pickerVisible);
+    });
+
+    modal.querySelectorAll('.email-client-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var clientId = btn.getAttribute('data-client');
+        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { preferredEmailClient: clientId });
+        var sel = document.getElementById('setting-preferred-email-client');
+        if (sel) sel.value = clientId;
+        window.api.setSettings({ preferredEmailClient: clientId }).catch(function() {
+          showToast('Could not save email app preference', 'error');
+        });
+        modal.querySelectorAll('.email-client-btn').forEach(function(b) {
+          b.style.fontWeight = b.getAttribute('data-client') === clientId ? '700' : '';
+        });
+        var openBtn = document.getElementById('quick-email-open-app');
+        if (openBtn) openBtn.textContent = _openBtnLabel();
+        var to = (modal.querySelector('#quick-email-to') || {}).value.trim();
+        if (!to) { showToast('Please enter an officer email address', 'error'); _toggleQuickPicker(false); return; }
+        var subject = (modal.querySelector('#quick-email-subject') || {}).value.trim() || _autoSubject();
+        var body = (modal.querySelector('#quick-email-body') || {}).value;
+        _openUrl(to, subject, body);
+        _toggleQuickPicker(false);
+      });
+    });
+
+    modal.querySelector('#quick-email-copy').addEventListener('click', function() {
+      var body = (modal.querySelector('#quick-email-body') || {}).value;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(body).then(function() {
+          showToast('Email copied to clipboard', 'success');
+        }).catch(function() { _qFallbackCopy(body); });
+      } else {
+        _qFallbackCopy(body);
+      }
+    });
+
+    modal.querySelector('#quick-email-save-tpl').addEventListener('click', function() {
+      _saveAsTemplate('quick-email-modal');
+    });
+  }
+
+  function _toggleQuickPicker(show) {
+    pickerVisible = show;
+    var picker = document.getElementById('email-client-picker-quick');
+    if (picker) picker.style.display = show ? '' : 'none';
+  }
+
+  function _qFallbackCopy(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Email copied to clipboard', 'success');
+    } catch (_) {
+      showToast('Copy failed — please select the text manually', 'error');
+    }
+  }
+
+  _renderQuickModal();
 }

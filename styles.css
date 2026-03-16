@@ -770,6 +770,7 @@ html.theme-light .app-footer {
 .home-card-teal { border-left: none; }
 .home-card-amber { border-left: none; }
 .home-card-green { border-left: none; }
+.home-card-rose { border-left: none; }
 .home-card-icon {
   width: 52px; height: 52px; border-radius: 14px;
   display: flex; align-items: center; justify-content: center;
@@ -779,6 +780,7 @@ html.theme-light .app-footer {
 .home-card-teal .home-card-icon { background: rgba(255,255,255,0.15); color: #ffffff; }
 .home-card-amber .home-card-icon { background: rgba(255,255,255,0.15); color: #93c5fd; }
 .home-card-green .home-card-icon { background: rgba(255,255,255,0.15); color: #86efac; }
+.home-card-rose .home-card-icon { background: rgba(255,255,255,0.15); color: #fda4af; }
 .home-card-title {
   font-size: 1.05rem; font-weight: 700; color: #ffffff;
 }
@@ -1009,6 +1011,7 @@ html.dark .home-action-card:hover {
 html.dark .home-card-blue .home-card-icon { background: rgba(255,255,255,0.12); color: #93c5fd; }
 html.dark .home-card-teal .home-card-icon { background: rgba(255,255,255,0.12); color: #93c5fd; }
 html.dark .home-card-amber .home-card-icon { background: rgba(255,255,255,0.12); color: #60a5fa; }
+html.dark .home-card-rose .home-card-icon { background: rgba(255,255,255,0.12); color: #fda4af; }
 
 /* Recent records -- warm card section */
 .home-recent {

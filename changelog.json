@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.85",
+      "version": "1.4.86",
       "date": "2026-03-16",
       "latest": true,
+      "changes": [
+        "Quick Email: email an officer without creating a record first (Home screen + Records list)",
+        "Save as Template: save any email you compose as a reusable template directly from the email modal",
+        "Fix preferred email app not applied to OIC emails when settings cache was empty"
+      ]
+    },
+    {
+      "version": "1.4.85",
+      "date": "2026-03-16",
+      "latest": false,
       "changes": [
         "Fix app initialisation failure caused by variable scope conflict in renderField (SyntaxError: Identifier wrap already declared)",
         "Fix cloud backup connectivity when antivirus HTTPS scanning is active"

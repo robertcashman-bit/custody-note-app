@@ -2774,6 +2774,12 @@ var REQUIRED_FIELD_KEYS = [
     }
     if (emailClientRow) emailClientRow.style.display = addons.emailAddon ? '' : 'none';
 
+    var quickEmailCard = document.getElementById('home-card-quick-email');
+    var quickEmailListBtn = document.getElementById('list-quick-email-btn');
+    var emailEnabled = addons.emailAddon && window._emailTemplatesAddonEnabled;
+    if (quickEmailCard) quickEmailCard.style.display = emailEnabled ? '' : 'none';
+    if (quickEmailListBtn) quickEmailListBtn.style.display = emailEnabled ? '' : 'none';
+
     var modulesList = document.getElementById('modules-list');
     var modulesEmpty = document.getElementById('modules-installed-empty');
     if (modulesList) {
@@ -11575,6 +11581,10 @@ PDF_CASENOTE_ADVERT +
             e.preventDefault();
             openQuickCapture();
             return;
+          case 'home-card-quick-email':
+            e.preventDefault();
+            if (typeof openQuickEmailModal === 'function') openQuickEmailModal();
+            return;
           case 'home-focus-open':
             e.preventDefault();
             if (t.dataset.id) {
@@ -11977,6 +11987,9 @@ PDF_CASENOTE_ADVERT +
     }
     document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
     document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
+    document.getElementById('list-quick-email-btn')?.addEventListener('click', function() {
+      if (typeof openQuickEmailModal === 'function') openQuickEmailModal();
+    });
     document.getElementById('settings-quick-backup')?.addEventListener('click', function() { handleBackupNowClick(this); });
     document.getElementById('settings-quick-cloud')?.addEventListener('click', function() {
       var btn = this;
