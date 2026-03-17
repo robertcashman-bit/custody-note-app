@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.4.88",
+      "version": "1.4.89",
       "date": "2026-03-16",
       "latest": true,
+      "changes": [
+        "Protect attendance data on startup: stop instead of opening a blank database when encrypted records or licence files cannot be read",
+        "Prevent portable builds from auto-updating into a different data location and force a synchronous database flush on shutdown",
+        "Fix records list false-empty states for Custody / Voluntary / Telephone filters, stale pagination, and broaden indexed search",
+        "Improve new attendance screen readability with corrected form text colours, visible context bar, and better compact/high-contrast text sizing"
+      ]
+    },
+    {
+      "version": "1.4.88",
+      "date": "2026-03-16",
+      "latest": false,
       "changes": [
         "Fix Quick Email button not appearing on Home screen and Records list after app launch"
       ]

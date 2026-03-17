@@ -7795,7 +7795,7 @@ var REQUIRED_FIELD_KEYS = [
         results = results.slice(0, 20);
       }
       if (!results.length) {
-        sugList.innerHTML = '<div class="station-suggestion" style="color:var(--text-muted);">No stations found</div>';
+        sugList.innerHTML = '<div class="station-suggestion station-suggestion-empty">No stations found</div>';
         return;
       }
       results.forEach(r => {
@@ -7803,7 +7803,7 @@ var REQUIRED_FIELD_KEYS = [
         div.className = 'station-suggestion';
         div.innerHTML = '<strong>' + esc(r.station.name) + '</strong>' +
           '<span class="station-code">[' + esc(r.station.code) + ']</span> ' +
-          '<span style="color:var(--text-muted);">' + esc(r.station.scheme) + '</span>' +
+          '<span class="station-scheme">' + esc(r.station.scheme) + '</span>' +
           '<span class="station-region">' + esc(r.station.region) + '</span>' +
           (r.isRecent ? '<span class="station-recent-tag">Recent</span>' : '');
         div.addEventListener('mousedown', (e) => {

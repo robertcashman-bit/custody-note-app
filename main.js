@@ -1,15 +1,33 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu } = require('electron');
+const os = require('os');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
-/* Portable trial: when userData folder exists next to the exe, use it so trial packages work. */
-if (app.isPackaged) {
-  const exeDir = path.dirname(process.execPath);
-  const portableUserData = path.join(exeDir, 'userData');
-  if (fs.existsSync(portableUserData)) {
-    app.setPath('userData', portableUserData);
+function getFallbackAppDataRoot() {
+  if (process.platform === 'win32') {
+    return process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
   }
+  return process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+}
+
+function getDefaultUserDataPath() {
+  try {
+    return app.getPath('userData');
+  } catch (_) {
+    return path.join(getFallbackAppDataRoot(), 'custody-note');
+  }
+}
+
+const DEFAULT_USERDATA_PATH = getDefaultUserDataPath();
+const PORTABLE_USERDATA_PATH = app.isPackaged
+  ? path.join(path.dirname(process.execPath), 'userData')
+  : null;
+const IS_PORTABLE_BUILD = !!(PORTABLE_USERDATA_PATH && fs.existsSync(PORTABLE_USERDATA_PATH));
+
+/* Portable trial: when userData folder exists next to the exe, use it so trial packages work. */
+if (IS_PORTABLE_BUILD) {
+  app.setPath('userData', PORTABLE_USERDATA_PATH);
 }
 const https = require('https');
 const http = require('http');
@@ -30,6 +48,47 @@ const { createBackupScheduler } = require('./main/backupScheduler');
 let mainWindow;
 let db;
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+
+class PersistenceStartupError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = 'PersistenceStartupError';
+    this.details = details;
+  }
+}
+
+function formatPersistenceStartupError(err) {
+  const lines = [err && err.message ? err.message : 'Persistence startup failed.'];
+  const details = err && err.details ? err.details : null;
+  if (details) {
+    Object.keys(details).forEach((key) => {
+      const value = details[key];
+      if (value == null || value === '') return;
+      lines.push(`${key}: ${value}`);
+    });
+  }
+  return lines.join('\n');
+}
+
+function writeCliJson(payload) {
+  const target = process.env.CN_CLI_OUTPUT_FILE;
+  if (!target) return;
+  try {
+    fs.writeFileSync(target, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[CLI] Failed to write output file:', err.message);
+  }
+}
+
+function writeCliError(message) {
+  const target = process.env.CN_CLI_ERROR_FILE;
+  if (!target) return;
+  try {
+    fs.writeFileSync(target, String(message || ''), 'utf8');
+  } catch (err) {
+    console.warn('[CLI] Failed to write error file:', err.message);
+  }
+}
 
 /* ═══════════════════════════════════════════════
    DATABASE ENCRYPTION (AES-256-GCM + dual key)
@@ -56,7 +115,21 @@ function getFallbackKeyPath() {
   return path.join(app.getPath('userData'), 'master.fallback');
 }
 
-function getOrCreateMasterKey() {
+function buildDbPersistenceDetails(extra = {}) {
+  return Object.assign({
+    defaultUserDataPath: DEFAULT_USERDATA_PATH,
+    activeUserDataPath: app.getPath('userData'),
+    portableUserDataPath: PORTABLE_USERDATA_PATH || '',
+    isPortableBuild: IS_PORTABLE_BUILD ? 'true' : 'false',
+    dbPath: getDbPath(),
+    keyPath: getKeyFilePath(),
+    recoveryPath: getRecoveryFilePath(),
+    fallbackKeyPath: getFallbackKeyPath(),
+  }, extra);
+}
+
+function getOrCreateMasterKey(options = {}) {
+  const allowCreate = options.allowCreate !== false;
   if (_masterKey) return _masterKey;
   const keyPath = getKeyFilePath();
   const fallbackPath = getFallbackKeyPath();
@@ -69,9 +142,11 @@ function getOrCreateMasterKey() {
         return _masterKey;
       } catch (err) {
         console.warn('[Encryption] Cannot decrypt safeStorage key (new machine?):', err.message);
+        if (!allowCreate && !fs.existsSync(fallbackPath)) return null;
         // Fall through to fallback below
       }
     }
+    if (!allowCreate && !fs.existsSync(fallbackPath)) return null;
     _masterKey = crypto.randomBytes(32).toString('hex');
     saveMasterKeyToSafeStorage(_masterKey);
     return _masterKey;
@@ -102,6 +177,7 @@ function getOrCreateMasterKey() {
       console.warn('[Encryption] Cannot read fallback key:', err.message);
     }
   }
+  if (!allowCreate) return null;
   _masterKey = crypto.randomBytes(32).toString('hex');
   _writeFallbackKeyEncrypted(fallbackPath, _masterKey);
   return _masterKey;
@@ -281,7 +357,7 @@ function decryptBuffer(buf) {
   const iv = buf.slice(4, 16);
   const tag = buf.slice(16, 32);
   const data = buf.slice(32);
-  let masterKeyHex = getOrCreateMasterKey();
+  let masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
   if (!masterKeyHex) {
     return null;
   }
@@ -298,7 +374,7 @@ async function decryptBufferWithRecovery(buf) {
   const iv = buf.slice(4, 16);
   const tag = buf.slice(16, 32);
   const data = buf.slice(32);
-  let masterKeyHex = getOrCreateMasterKey();
+  let masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
   if (!masterKeyHex && hasRecoveryPassword()) {
     masterKeyHex = await promptForRecoveryPassword();
     if (masterKeyHex) {
@@ -467,6 +543,26 @@ function writeFileAtomic(destPath, data, done) {
   });
 }
 
+function writeFileAtomicSync(destPath, data) {
+  const dir = path.dirname(destPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = getAtomicTempPath(destPath);
+  try {
+    fs.writeFileSync(tmpPath, data);
+    try {
+      fs.renameSync(tmpPath, destPath);
+    } catch (renameErr) {
+      if (!fs.existsSync(tmpPath)) throw renameErr;
+      fs.copyFileSync(tmpPath, destPath);
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+    }
+  } finally {
+    try {
+      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+    } catch (_) {}
+  }
+}
+
 function saveDb() {
   if (!db) return;
   if (_saveDbInProgress) {
@@ -548,6 +644,20 @@ function markDbDirtyForSave() {
 function flushDb() {
   if (_dbSaveTimer) { clearTimeout(_dbSaveTimer); _dbSaveTimer = null; }
   if (_dbDirty) { _dbDirty = false; saveDb(); }
+}
+
+function flushDbSync() {
+  if (!db) return;
+  if (_dbSaveTimer) { clearTimeout(_dbSaveTimer); _dbSaveTimer = null; }
+  _dbDirty = false;
+  _dbSaveRequestedWhileBusy = false;
+  try {
+    const encrypted = getEncryptedDbExport();
+    if (encrypted) writeFileAtomicSync(getDbPath(), encrypted);
+  } catch (err) {
+    console.error('[flushDbSync] Failed to persist database:', err.message);
+  }
+  _saveDbInProgress = false;
 }
 
 function dbRun(sql, params = []) {
@@ -856,12 +966,24 @@ async function initDb() {
   const dbPath = getDbPath();
   if (fs.existsSync(dbPath)) {
     const rawBuf = fs.readFileSync(dbPath);
-    const buf = await decryptBufferWithRecovery(rawBuf);
-    if (!buf) {
-      dialog.showErrorBox('Database Error', 'Could not decrypt the database. The app will start with a fresh database.');
-      db = new SQL.Database();
-    } else {
+    if (!rawBuf || !rawBuf.length) {
+      throw new PersistenceStartupError(
+        'The attendance database file exists but is empty. To protect your records, Custody Note will not start with a blank database.',
+        buildDbPersistenceDetails({ dbSizeBytes: 0 })
+      );
+    }
+    try {
+      const buf = await decryptBufferWithRecovery(rawBuf);
+      if (!buf) throw new Error('No database bytes were returned during decryption');
       db = new SQL.Database(buf);
+    } catch (err) {
+      throw new PersistenceStartupError(
+        'Custody Note could not load the existing attendance database. To protect your records, the app has stopped instead of opening a blank database.',
+        buildDbPersistenceDetails({
+          dbSizeBytes: rawBuf.length,
+          cause: err && err.message ? err.message : String(err),
+        })
+      );
     }
   } else {
     db = new SQL.Database();
@@ -3080,7 +3202,11 @@ ipcMain.handle('get-app-version', () => {
 });
 
 ipcMain.handle('app-update-install', () => {
+  if (IS_PORTABLE_BUILD) {
+    return { ok: false, error: 'Portable builds do not auto-install updates.' };
+  }
   autoUpdater.quitAndInstall(true, true);
+  return { ok: true };
 });
 
 ipcMain.handle('get-bank-holidays', () => {
@@ -3126,6 +3252,17 @@ function readLicenceData() {
     console.warn('[Licence] Failed to read licence data:', e.message);
     return null;
   }
+}
+
+function assertReadableStoredLicence() {
+  const lpath = getLicencePath();
+  if (!fs.existsSync(lpath)) return;
+  const data = readLicenceData();
+  if (data && data.key) return;
+  throw new PersistenceStartupError(
+    'Custody Note found an existing licence file but could not read it. To protect your subscription state, the app has stopped instead of replacing it with a fresh trial.',
+    Object.assign(buildDbPersistenceDetails(), { licencePath: lpath })
+  );
 }
 
 function writeLicenceData(data) {
@@ -3345,7 +3482,16 @@ function computeLicenceStatus(data) {
 
 ipcMain.handle('licence:status', () => {
   const enforced = !!getLicenceValidationUrl();
+  const licencePath = getLicencePath();
   let data = readLicenceData();
+  if ((!data || !data.key) && fs.existsSync(licencePath)) {
+    return {
+      status: 'error',
+      message: 'Stored licence could not be read. Custody Note will not replace it automatically.',
+      addons: { quickfile: false, emailAddon: false },
+      enforced,
+    };
+  }
   if (!data || !data.key) {
     const now = new Date();
     const expires = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
@@ -3482,18 +3628,14 @@ app.whenReady().then(async () => {
   const cliDumpIdRaw = getCliArgValue('--dump-record');
   const cliDumpId = cliDumpIdRaw ? (parseInt(cliDumpIdRaw, 10) || null) : null;
 
-  // Normal app mode: create the window. CLI modes: no UI. Trial init: no window.
   const trialInitOnly = process.env.TRIAL_INIT_ONLY === '1';
-  if (!trialInitOnly && !cliImportPath && !cliListRecords && !cliDumpId) {
-    createWindow();
-  }
 
   if (!safeStorage.isEncryptionAvailable()) {
     console.warn('[Encryption] safeStorage not available on this system. Database will not be encrypted automatically. Set a recovery password in Settings for protection.');
   }
 
   /* ─── Silent auto-update from GitHub Releases ─── */
-  if (app.isPackaged) {
+  if (app.isPackaged && !IS_PORTABLE_BUILD) {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.logger = { info: console.log, warn: console.warn, error: console.error, debug: () => {} };
@@ -3539,11 +3681,29 @@ app.whenReady().then(async () => {
 
     autoUpdater.checkForUpdates().catch(() => {});
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 45 * 60 * 1000);
+  } else if (IS_PORTABLE_BUILD) {
+    ipcMain.handle('app-check-updates', async () => ({
+      status: 'manual',
+      message: 'Portable builds do not auto-update to avoid switching to a different data location. Download a new portable build and keep the existing userData folder.',
+    }));
   } else {
     ipcMain.handle('app-check-updates', async () => ({ status: 'dev', message: 'Updates only apply to the installed app' }));
   }
 
-  await initDb();
+  const isCliMode = !!(trialInitOnly || cliImportPath || cliListRecords || cliDumpId);
+  try {
+    await initDb();
+    assertReadableStoredLicence();
+  } catch (err) {
+    const formatted = formatPersistenceStartupError(err);
+    console.error('[Startup] Fatal persistence error\n' + formatted);
+    if (isCliMode) writeCliError(formatted);
+    if (!isCliMode) {
+      dialog.showErrorBox('Custody Note could not load your saved data', formatted);
+    }
+    app.exit(1);
+    return;
+  }
 
   /* ─── Licence store (admin DB) init ─── */
   try {
@@ -3557,6 +3717,11 @@ app.whenReady().then(async () => {
   if (trialInitOnly) {
     app.quit();
     return;
+  }
+
+  // Normal app mode: create the window only after persistent data is available.
+  if (!cliImportPath && !cliListRecords && !cliDumpId) {
+    createWindow();
   }
 
   // Auto-import watcher: periodically scan configured folder for new PDF/JSON files.
@@ -3636,11 +3801,15 @@ app.whenReady().then(async () => {
       const rows = dbAll(
         "SELECT id, updated_at, client_name, station_name, dscc_ref, attendance_date, status FROM attendances WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT 50"
       );
-      console.log(JSON.stringify({ total: rows.length, rows }, null, 2));
+      const payload = { total: rows.length, rows };
+      writeCliJson(payload);
+      console.log(JSON.stringify(payload, null, 2));
       app.exit(0);
       return;
     } catch (e) {
-      console.error('Failed to list records:', e && e.message ? e.message : e);
+      const message = 'Failed to list records: ' + (e && e.message ? e.message : e);
+      writeCliError(message);
+      console.error(message);
       app.exit(1);
       return;
     }
@@ -3651,17 +3820,23 @@ app.whenReady().then(async () => {
     try {
       const row = dbGet('SELECT id, status, data, updated_at, created_at FROM attendances WHERE id=?', [cliDumpId]);
       if (!row) {
-        console.error('Record not found:', cliDumpId);
+        const notFound = 'Record not found: ' + cliDumpId;
+        writeCliError(notFound);
+        console.error(notFound);
         app.exit(1);
         return;
       }
       let parsed = null;
       try { parsed = JSON.parse(row.data); } catch (_) { parsed = row.data; }
-      console.log(JSON.stringify({ id: row.id, status: row.status, created_at: row.created_at, updated_at: row.updated_at, data: parsed }, null, 2));
+      const payload = { id: row.id, status: row.status, created_at: row.created_at, updated_at: row.updated_at, data: parsed };
+      writeCliJson(payload);
+      console.log(JSON.stringify(payload, null, 2));
       app.exit(0);
       return;
     } catch (e) {
-      console.error('Failed to dump record:', e && e.message ? e.message : e);
+      const message = 'Failed to dump record: ' + (e && e.message ? e.message : e);
+      writeCliError(message);
+      console.error(message);
       app.exit(1);
       return;
     }
@@ -3678,11 +3853,15 @@ app.whenReady().then(async () => {
         delete data.updated_at;
       }
       const savedId = insertImportedDraftAttendance(data);
-      console.log(JSON.stringify({ ok: true, id: savedId }, null, 2));
+      const payload = { ok: true, id: savedId };
+      writeCliJson(payload);
+      console.log(JSON.stringify(payload, null, 2));
       app.exit(0);
       return;
     } catch (e) {
-      console.error('Import failed:', e && e.message ? e.message : e);
+      const message = 'Import failed: ' + (e && e.message ? e.message : e);
+      writeCliError(message);
+      console.error(message);
       app.exit(1);
       return;
     }
@@ -3712,8 +3891,12 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => {
   stopSyncTimer();
-  if (db) { flushDb(); db.close(); }
+  if (db) { flushDbSync(); db.close(); }
   app.quit();
+});
+
+app.on('before-quit', () => {
+  if (db) flushDbSync();
 });
 
 ipcMain.handle('get-settings', () => {
@@ -3770,9 +3953,8 @@ ipcMain.handle('attendance-home-stats', () => {
 
 ipcMain.handle('attendance-search', (_, params) => {
   const { query, status, page, pageSize, sortField, sortDir, archived, workType } = params || {};
-  const p = Math.max(1, page || 1);
+  const requestedPage = Math.max(1, page || 1);
   const ps = Math.max(1, pageSize || 50);
-  const offset = (p - 1) * ps;
   const orderCol = ['updated_at', 'attendance_date', 'client_name', 'station_name'].includes(sortField)
     ? sortField : 'updated_at';
   const orderDir = sortDir === 'ASC' ? 'ASC' : 'DESC';
@@ -3787,20 +3969,44 @@ ipcMain.handle('attendance-search', (_, params) => {
   }
   if (query && query.trim()) {
     const like = '%' + query.trim() + '%';
-    where += ' AND (client_name LIKE ? OR dscc_ref LIKE ? OR attendance_date LIKE ? OR station_name LIKE ?)';
-    params2.push(like, like, like, like);
+    where += ` AND (
+      client_name LIKE ?
+      OR dscc_ref LIKE ?
+      OR attendance_date LIKE ?
+      OR station_name LIKE ?
+      OR COALESCE(json_extract(data, '$.surname'), '') LIKE ?
+      OR COALESCE(json_extract(data, '$.forename'), '') LIKE ?
+      OR COALESCE(json_extract(data, '$.custodyNumber'), '') LIKE ?
+      OR COALESCE(json_extract(data, '$.ufn'), '') LIKE ?
+      OR COALESCE(json_extract(data, '$.fileReference'), '') LIKE ?
+      OR COALESCE(json_extract(data, '$.ourFileNumber'), '') LIKE ?
+    )`;
+    params2.push(like, like, like, like, like, like, like, like, like, like);
   }
   if (status && status !== 'all') {
     where += ' AND status = ?';
     params2.push(status);
   }
   if (workType && workType !== 'all') {
-    where += ' AND work_type = ?';
-    params2.push(workType);
+    if (workType === 'telephone') {
+      where += ` AND COALESCE(json_extract(data, '$._formType'), '') = 'telephone'`;
+    } else if (workType === 'voluntary') {
+      where += ` AND COALESCE(json_extract(data, '$._formType'), 'attendance') != 'telephone'
+                 AND COALESCE(json_extract(data, '$.attendanceMode'), 'custody') = 'voluntary'`;
+    } else if (workType === 'custody') {
+      where += ` AND COALESCE(json_extract(data, '$._formType'), 'attendance') != 'telephone'
+                 AND COALESCE(json_extract(data, '$.attendanceMode'), 'custody') != 'voluntary'`;
+    } else {
+      where += ' AND work_type = ?';
+      params2.push(workType);
+    }
   }
 
   const countRow = dbGet(`SELECT COUNT(*) as total FROM attendances ${where}`, params2);
   const total = (countRow && countRow.total) || 0;
+  const totalPages = Math.max(1, Math.ceil(total / ps));
+  const p = total > 0 ? Math.min(requestedPage, totalPages) : 1;
+  const offset = (p - 1) * ps;
   const rows = dbAll(
     `SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, supervisor_approved_at, archived_at, data
      FROM attendances ${where} ORDER BY ${orderCol} ${orderDir} LIMIT ? OFFSET ?`,

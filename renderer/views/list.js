@@ -39,13 +39,20 @@ function refreshList() {
     sortField: sort.sortField,
     sortDir: sort.sortDir,
   };
+  var emailAddonEntitled = window._addons && window._addons.emailAddon && window._emailTemplatesAddonEnabled;
 
   window.api.attendanceSearch(searchParams).then(function(result) {
     var rows = (result && result.rows) || [];
     var total = (result && result.total) || 0;
+    if (result && result.page) listPage = result.page;
 
     ul.innerHTML = '';
     if (!rows.length) {
+      if (total > 0 && listPage > 1) {
+        listPage = 1;
+        refreshList();
+        return;
+      }
       ul.innerHTML = '<li class="empty-state"><p>No attendances found. Click \u201cNew Attendance\u201d to start.</p></li>';
       renderListPagination(0);
       return;
@@ -83,7 +90,6 @@ function refreshList() {
       /* Officer Email Templates add-on — Email OIC button + Sent badge (gated on licence entitlement + user setting) */
       var emailOicBtn  = '';
       var oicSentBadge = '';
-      var emailAddonEntitled = window._addons && window._addons.emailAddon && window._emailTemplatesAddonEnabled;
       if (emailAddonEntitled) {
         emailOicBtn = '<button type="button" class="btn-list-action email-oic-btn" title="Email Officer in Charge" data-id="' + r.id + '">Email OIC</button>';
         if (d.officerEmailStatus === 'sent') {
