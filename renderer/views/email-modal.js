@@ -439,14 +439,14 @@ function _valuesToPlaceholders(text, map) {
   for (var key in map) {
     if (Object.prototype.hasOwnProperty.call(map, key)) {
       var val = map[key];
-      if (val != null && String(val).trim() !== '') entries.push({ key: key, value: String(val).trim() });
+      if (val != null && String(val).trim().length >= 2) entries.push({ key: key, value: String(val).trim() });
     }
   }
   entries.sort(function(a, b) { return b.value.length - a.value.length; });
   var out = text;
   for (var i = 0; i < entries.length; i++) {
     var escaped = _escapeRegex(entries[i].value);
-    var re = new RegExp(escaped, 'g');
+    var re = new RegExp(escaped, 'gi');
     out = out.replace(re, '{{' + entries[i].key + '}}');
   }
   return out;
@@ -604,21 +604,43 @@ function openQuickEmailModal() {
     });
   }
 
-  function _applyCustomTemplate(templateId) {
-    if (!templateId || String(templateId).indexOf('custom:') !== 0) return;
+  var _activeRawTemplate = null;
+  var _bodyManuallyEdited = false;
+  var _subjectManuallyEdited = false;
+
+  function _getCustomTemplateByIdQuick(templateId) {
+    if (!templateId || String(templateId).indexOf('custom:') !== 0) return null;
     var idx = parseInt(String(templateId).slice(7), 10);
-    if (!Number.isFinite(idx) || idx < 0) return;
+    if (!Number.isFinite(idx) || idx < 0) return null;
     var list = typeof window._getCustomEmailTemplates === 'function'
       ? (window._getCustomEmailTemplates() || [])
       : [];
     var tpl = list[idx];
-    if (!tpl) return;
+    if (!tpl) return null;
     var scope = tpl.scope || 'all';
-    if (scope !== 'all' && scope !== 'officer') return;
+    return (scope === 'all' || scope === 'officer') ? tpl : null;
+  }
+
+  function _applyCustomTemplate(templateId) {
+    var tpl = _getCustomTemplateByIdQuick(templateId);
+    if (!tpl) return;
+    _activeRawTemplate = tpl;
+    _bodyManuallyEdited = false;
+    _subjectManuallyEdited = false;
+    _refreshTemplateFields();
+  }
+
+  function _refreshTemplateFields() {
+    if (!_activeRawTemplate) return;
     var subjectEl = document.getElementById('quick-email-subject');
     var bodyEl = document.getElementById('quick-email-body');
-    if (subjectEl) subjectEl.value = _applyPlaceholders(tpl.subject || '');
-    if (bodyEl) bodyEl.value = _applyPlaceholders(tpl.body || '');
+    if (subjectEl && !_subjectManuallyEdited) {
+      subjectEl.value = _applyPlaceholders(_activeRawTemplate.subject || '');
+      subjectEl.dataset.userEdited = '1';
+    }
+    if (bodyEl && !_bodyManuallyEdited) {
+      bodyEl.value = _applyPlaceholders(_activeRawTemplate.body || '');
+    }
   }
 
   function _autoSubject() {
@@ -759,29 +781,64 @@ function openQuickEmailModal() {
     modal.querySelector('#quick-email-cancel').addEventListener('click', _close);
     modal.addEventListener('click', function(e) { if (e.target === modal) _close(); });
 
-    var autoFields = ['quick-email-client-name', 'quick-email-station', 'quick-email-date'];
-    autoFields.forEach(function(fieldId) {
+    var templateFields = [
+      'quick-email-officer-name', 'quick-email-client-name',
+      'quick-email-station', 'quick-email-offence',
+      'quick-email-attendance-type', 'quick-email-date', 'quick-email-time'
+    ];
+    templateFields.forEach(function(fieldId) {
       var el = modal.querySelector('#' + fieldId);
       if (el) {
-        el.addEventListener('blur', function() {
-          var subjectEl = document.getElementById('quick-email-subject');
-          if (subjectEl && !subjectEl.dataset.userEdited) {
-            subjectEl.value = _autoSubject();
+        var evName = (el.tagName === 'SELECT') ? 'change' : 'input';
+        el.addEventListener(evName, function() {
+          if (_activeRawTemplate) {
+            _refreshTemplateFields();
           }
         });
+        if (['quick-email-client-name', 'quick-email-station', 'quick-email-date'].indexOf(fieldId) !== -1) {
+          el.addEventListener('blur', function() {
+            var subjectEl = document.getElementById('quick-email-subject');
+            if (subjectEl && !subjectEl.dataset.userEdited && !_activeRawTemplate) {
+              subjectEl.value = _autoSubject();
+            }
+          });
+        }
       }
     });
 
     var subjectField = document.getElementById('quick-email-subject');
     if (subjectField) {
-      subjectField.addEventListener('input', function() { subjectField.dataset.userEdited = '1'; });
+      subjectField.addEventListener('input', function() {
+        subjectField.dataset.userEdited = '1';
+        _subjectManuallyEdited = true;
+      });
+    }
+
+    var bodyField = document.getElementById('quick-email-body');
+    if (bodyField) {
+      bodyField.addEventListener('input', function() {
+        _bodyManuallyEdited = true;
+      });
     }
 
     var customSelect = modal.querySelector('#quick-email-custom-template');
     if (customSelect) {
       customSelect.addEventListener('change', function(e) {
         currentCustomTpl = e.target.value || '';
-        if (currentCustomTpl) _applyCustomTemplate(currentCustomTpl);
+        if (currentCustomTpl) {
+          _applyCustomTemplate(currentCustomTpl);
+        } else {
+          _activeRawTemplate = null;
+          _bodyManuallyEdited = false;
+          _subjectManuallyEdited = false;
+          var subjectEl = document.getElementById('quick-email-subject');
+          if (subjectEl) {
+            delete subjectEl.dataset.userEdited;
+            subjectEl.value = _autoSubject();
+          }
+          var bodyEl = document.getElementById('quick-email-body');
+          if (bodyEl) bodyEl.value = '';
+        }
       });
     }
 

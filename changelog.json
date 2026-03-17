@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.4.90",
+      "date": "2026-03-17",
+      "latest": true,
+      "changes": [
+        "Fix Quick Email templates not filling in officer name, client name, station and other details when a template is selected",
+        "Live-update template body and subject as form fields are typed, so placeholders reflect the latest values",
+        "Fix Save as Template not detecting typed values and converting them to reusable placeholders",
+        "Prevent auto-subject from overwriting template-set subject line"
+      ]
+    },
+    {
       "version": "1.4.89",
       "date": "2026-03-16",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Protect attendance data on startup: stop instead of opening a blank database when encrypted records or licence files cannot be read",
         "Prevent portable builds from auto-updating into a different data location and force a synchronous database flush on shutdown",
