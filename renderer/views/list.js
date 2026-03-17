@@ -29,10 +29,12 @@ function refreshList() {
   var q = ((document.getElementById('list-search') || {}).value || '').trim();
   var sort = _listSortParams();
 
+  var isDeletedView = listStatusFilter === 'deleted';
   var searchParams = {
     query: q || '',
-    status: listStatusFilter === 'archived' ? '' : (listStatusFilter === 'all' ? '' : listStatusFilter),
+    status: (listStatusFilter === 'archived' || isDeletedView) ? '' : (listStatusFilter === 'all' ? '' : listStatusFilter),
     archived: listStatusFilter === 'archived',
+    deleted: isDeletedView,
     workType: listTypeFilter === 'all' ? '' : listTypeFilter,
     page: listPage,
     pageSize: LIST_PER_PAGE,
@@ -83,6 +85,8 @@ function refreshList() {
         ? ' <span class="badge supervisor-approved" title="Supervisor approved">&#10003; Approved</span>' : '';
       var archivedBadge = r.archived_at
         ? ' <span class="badge archived" title="Archived">Archived</span>' : '';
+      var deletedBadge = r.deleted_at
+        ? ' <span class="badge deleted" title="Deleted">Deleted</span>' : '';
       var archiveBtn = r.archived_at
         ? '<button type="button" class="btn-list-action unarchive-btn" title="Restore from archive" data-id="' + r.id + '">Unarchive</button>'
         : '<button type="button" class="btn-list-action archive-btn" title="Archive this record" data-id="' + r.id + '">Archive</button>';
@@ -98,44 +102,67 @@ function refreshList() {
       }
 
       var li = document.createElement('li');
-      li.innerHTML =
-        '<div class="list-item-text">' +
-          '<span class="title">' + esc(title) + '</span>' +
-          '<div class="meta">' + esc(meta) + '</div>' +
-        '</div>' +
-        '<div class="list-item-actions">' +
-          '<div class="list-item-badges">' +
-            '<span class="badge ' + esc(r.status || 'draft') + '">' + esc(r.status || 'draft') + '</span>' +
-            approved +
-            archivedBadge +
-            oicSentBadge +
+      if (isDeletedView) {
+        li.innerHTML =
+          '<div class="list-item-text">' +
+            '<span class="title">' + esc(title) + '</span>' +
+            '<div class="meta">' + esc(meta) + (r.deletion_reason ? ' \u00B7 ' + esc(r.deletion_reason) : '') + '</div>' +
           '</div>' +
-          '<div class="list-item-btns" role="group" aria-label="Record actions">' +
-            archiveBtn +
-            '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + r.id + '">Edit</button>' +
-            '<button type="button" class="btn-list-action dup-btn" title="Duplicate for further visit" data-id="' + r.id + '">Duplicate</button>' +
-            '<button type="button" class="btn-list-action pdf-btn" title="Export PDF to Desktop" data-id="' + r.id + '">PDF</button>' +
-            '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + r.id + '">Delete</button>' +
-            emailOicBtn +
+          '<div class="list-item-actions">' +
+            '<div class="list-item-badges">' +
+              '<span class="badge deleted">Deleted</span>' +
+            '</div>' +
+            '<div class="list-item-btns" role="group" aria-label="Record actions">' +
+              '<button type="button" class="btn-list-action restore-btn" title="Restore this record" data-id="' + r.id + '">Restore</button>' +
+            '</div>' +
+          '</div>';
+      } else {
+        li.innerHTML =
+          '<div class="list-item-text">' +
+            '<span class="title">' + esc(title) + '</span>' +
+            '<div class="meta">' + esc(meta) + '</div>' +
           '</div>' +
-        '</div>';
+          '<div class="list-item-actions">' +
+            '<div class="list-item-badges">' +
+              '<span class="badge ' + esc(r.status || 'draft') + '">' + esc(r.status || 'draft') + '</span>' +
+              approved +
+              archivedBadge +
+              oicSentBadge +
+            '</div>' +
+            '<div class="list-item-btns" role="group" aria-label="Record actions">' +
+              archiveBtn +
+              '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + r.id + '">Edit</button>' +
+              '<button type="button" class="btn-list-action dup-btn" title="Duplicate for further visit" data-id="' + r.id + '">Duplicate</button>' +
+              '<button type="button" class="btn-list-action pdf-btn" title="Export PDF to Desktop" data-id="' + r.id + '">PDF</button>' +
+              '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + r.id + '">Delete</button>' +
+              emailOicBtn +
+            '</div>' +
+          '</div>';
+      }
 
-      li.querySelector('.list-item-text').addEventListener('click', function() { openAttendance(r.id); });
-      li.querySelector('.amend-btn').addEventListener('click', function(e) { e.stopPropagation(); amendAttendance(r.id, r.status, title); });
-      li.querySelector('.dup-btn').addEventListener('click', function(e) { e.stopPropagation(); duplicateAttendance(r.id); });
-      li.querySelector('.pdf-btn').addEventListener('click', function(e) {
-        e.stopPropagation();
-        if (typeof window.exportPdfById === 'function') {
-          window.exportPdfById(r.id);
-        } else {
-          openAttendance(r.id);
+      if (isDeletedView) {
+        var restoreBtn = li.querySelector('.restore-btn');
+        if (restoreBtn) {
+          restoreBtn.addEventListener('click', function(e) { e.stopPropagation(); restoreDeletedAttendance(r.id, title); });
         }
-      });
-      li.querySelector('.delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteAttendance(r.id, title); });
-      if (r.archived_at && li.querySelector('.unarchive-btn')) {
-        li.querySelector('.unarchive-btn').addEventListener('click', function(e) { e.stopPropagation(); unarchiveAttendance(r.id); });
-      } else if (!r.archived_at && li.querySelector('.archive-btn')) {
-        li.querySelector('.archive-btn').addEventListener('click', function(e) { e.stopPropagation(); archiveAttendance(r.id, title); });
+      } else {
+        li.querySelector('.list-item-text').addEventListener('click', function() { openAttendance(r.id); });
+        li.querySelector('.amend-btn').addEventListener('click', function(e) { e.stopPropagation(); amendAttendance(r.id, r.status, title); });
+        li.querySelector('.dup-btn').addEventListener('click', function(e) { e.stopPropagation(); duplicateAttendance(r.id); });
+        li.querySelector('.pdf-btn').addEventListener('click', function(e) {
+          e.stopPropagation();
+          if (typeof window.exportPdfById === 'function') {
+            window.exportPdfById(r.id);
+          } else {
+            openAttendance(r.id);
+          }
+        });
+        li.querySelector('.delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteAttendance(r.id, title); });
+        if (r.archived_at && li.querySelector('.unarchive-btn')) {
+          li.querySelector('.unarchive-btn').addEventListener('click', function(e) { e.stopPropagation(); unarchiveAttendance(r.id); });
+        } else if (!r.archived_at && li.querySelector('.archive-btn')) {
+          li.querySelector('.archive-btn').addEventListener('click', function(e) { e.stopPropagation(); archiveAttendance(r.id, title); });
+        }
       }
       if (emailAddonEntitled && li.querySelector('.email-oic-btn')) {
         li.querySelector('.email-oic-btn').addEventListener('click', (function(rowData, rowStatus) {
@@ -201,15 +228,32 @@ function unarchiveAttendance(id) {
 }
 
 function deleteAttendance(id, title) {
-  showConfirm('Delete "' + title + '"?\n\nFinalised records are archived (not permanently removed) to maintain the audit trail. Draft records are permanently deleted.', 'Confirm Delete').then(function(ok) {
+  showConfirm('Delete "' + title + '"?\n\nThe record will be moved to the Deleted list. You can restore it from there.', 'Confirm Delete').then(function(ok) {
     if (!ok) return;
     window.api.attendanceDelete({ id: id, reason: 'User deleted from list' }).then(function(result) {
-      if (result && result.soft) showToast('Record archived (finalised \u2014 kept in audit trail)', 'info');
-      else showToast('Draft deleted', 'info');
+      if (result && result.soft) showToast('Record moved to Deleted list', 'info');
+      else showToast('Record deleted', 'info');
       refreshList();
     }).catch(function() {
       showToast('Failed to delete record', 'error');
     });
+  });
+}
+
+function restoreDeletedAttendance(id, title) {
+  if (!window.api || !window.api.attendanceUndelete) {
+    showToast('Restore not available in this version', 'error');
+    return;
+  }
+  window.api.attendanceUndelete(id).then(function(ok) {
+    if (ok) {
+      showToast('"' + title + '" restored', 'success');
+      refreshList();
+    } else {
+      showToast('Failed to restore record', 'error');
+    }
+  }).catch(function() {
+    showToast('Failed to restore record', 'error');
   });
 }
 

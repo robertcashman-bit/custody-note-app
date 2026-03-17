@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('api', {
   attendanceDelete: (params) => ipcRenderer.invoke('attendance-delete', params),
   attendanceArchive: (id) => ipcRenderer.invoke('attendance-archive', id),
   attendanceUnarchive: (id) => ipcRenderer.invoke('attendance-unarchive', id),
+  attendanceUndelete: (id) => ipcRenderer.invoke('attendance-undelete', id),
   attendanceCheckDuplicate: (params) => ipcRenderer.invoke('attendance-check-duplicate', params),
   stationsList: () => ipcRenderer.invoke('stations-list'),
   stationsReplace: (stations) => ipcRenderer.invoke('stations-replace', stations),

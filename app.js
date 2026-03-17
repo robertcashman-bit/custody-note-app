@@ -601,12 +601,22 @@ var LAA = {
         { key: 'thirdReviewDue', label: '3rd Review due (24 hrs)', type: 'time', readonly: true, showIf: { field: 'showMoreReviews', value: 'Yes' } },
         { key: 'thirdReviewActual', label: '3rd Review \u2013 Actual Time', type: 'time', showIf: { field: 'showMoreReviews', value: 'Yes' } },
         { key: 'thirdReviewNotes', label: '3rd Review Notes', type: 'textarea', placeholder: 'Notes from 3rd review', cols: 2, showIf: { field: 'showMoreReviews', value: 'Yes' } },
+        { key: 'showEvenMoreReviews', label: 'Further reviews beyond 24 hrs?', type: 'select', options: ['No','Yes'], showIf: { field: 'showMoreReviews', value: 'Yes' } },
+        { key: 'fourthReviewTime', label: '4th Review \u2013 Time', type: 'time', showIf: { field: 'showEvenMoreReviews', value: 'Yes' } },
+        { key: 'fourthReviewNotes', label: '4th Review Notes', type: 'textarea', placeholder: 'Notes from 4th review (e.g. warrant of further detention)', cols: 2, showIf: { field: 'showEvenMoreReviews', value: 'Yes' } },
+        { key: 'fifthReviewTime', label: '5th Review \u2013 Time', type: 'time', showIf: { field: 'showEvenMoreReviews', value: 'Yes' } },
+        { key: 'fifthReviewNotes', label: '5th Review Notes', type: 'textarea', placeholder: 'Notes from 5th review', cols: 2, showIf: { field: 'showEvenMoreReviews', value: 'Yes' } },
+        { key: 'additionalReviewNotes', label: 'Further review notes (6th+)', type: 'textarea', placeholder: 'Record any additional reviews here', cols: 2, showIf: { field: 'showEvenMoreReviews', value: 'Yes' } },
 
         { key: '_h_welfare', label: 'Welfare & Vulnerability', type: 'sectionHeading' },
         { key: '_note_foreign_national', label: 'If client is a foreign national, they have the right to have their consulate notified (PACE s.56A). Consider interpreter requirements.', type: 'sectionNote' },
         { key: 'languageIssues', label: 'Language issues?', type: 'select', options: ['Yes','No'] },
         { key: 'interpreterName', label: 'Interpreter name', type: 'text', showIf: { field: 'languageIssues', value: 'Yes' } },
         { key: 'interpreterLanguage', label: 'Language required', type: 'text', showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterMode', label: 'Interpretation mode', type: 'select', options: ['In person','Telephone','Video link'], showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterAgency', label: 'Interpreter agency', type: 'text', placeholder: 'e.g. Language Line, Capita TI', showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterPhone', label: 'Interpreter phone', type: 'tel', showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterArrivalTime', label: 'Interpreter arrival time', type: 'time', showIf: { field: 'languageIssues', value: 'Yes' } },
         { key: 'juvenileVulnerable', label: 'Juvenile / Vulnerable?', type: 'select', options: ['Not Applicable','Juvenile','Vulnerable Adult'] },
         { key: 'appropriateAdultName', label: 'Appropriate Adult name', type: 'text', showIf: { field: 'juvenileVulnerable', values: ['Juvenile','Vulnerable Adult'] } },
         { key: 'appropriateAdultRelation', label: 'AA relationship to client', type: 'text', showIf: { field: 'juvenileVulnerable', values: ['Juvenile','Vulnerable Adult'] } },
@@ -626,6 +636,23 @@ var LAA = {
         { key: 'medicalExaminationOutcome', label: 'Outcome of medical examination', type: 'textarea', placeholder: 'e.g. Fit to detain; injuries noted; referred to hospital; medication given', cols: 2, showIf: { field: 'fmeNurse', value: 'Yes' } },
         { key: 'fitToBeDetained', label: 'Fit to be detained?', type: 'select', options: ['Yes','No'] },
         { key: 'fitToBeInterviewed', label: 'Fit to be interviewed?', type: 'select', options: ['Yes','No'] },
+
+        { key: '_h_strip_search', label: 'Strip Search / Intimate Search', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'stripSearchConducted', label: 'Strip search conducted?', type: 'select', options: ['No','Yes'], showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'stripSearchType', label: 'Search type', type: 'select', options: ['Strip search (PACE s.54)','Intimate search (PACE s.55)'], showIf: { field: 'stripSearchConducted', value: 'Yes' } },
+        { key: 'stripSearchGrounds', label: 'Grounds given', type: 'textarea', placeholder: 'Grounds for the search as given by police', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
+        { key: 'stripSearchAuthorisedBy', label: 'Authorised by (rank & name)', type: 'text', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
+        { key: 'stripSearchOfficers', label: 'Officers conducting search', type: 'text', placeholder: 'Rank, name, collar numbers', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
+        { key: 'stripSearchAAPresent', label: 'Appropriate adult present?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'stripSearchConducted', value: 'Yes' } },
+        { key: 'stripSearchClientResponse', label: 'Client\u2019s response / complaints', type: 'textarea', placeholder: 'Any complaints, objections, or observations', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
+        { key: 'stripSearchResult', label: 'Result / items found', type: 'text', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
+        { key: 'stripSearchRepresentations', label: 'Representations made by rep', type: 'textarea', placeholder: 'Any representations made about the search', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
+
+        { key: '_h_property', label: 'Property & Belongings', type: 'sectionHeading' },
+        { key: 'propertyTaken', label: 'Property taken on arrival?', type: 'select', options: ['Yes','No','Unknown'] },
+        { key: 'propertyList', label: 'Property list', type: 'textarea', placeholder: 'e.g. Cash \u00a345, iPhone, house keys, wallet, documents', cols: 2, showIf: { field: 'propertyTaken', values: ['Yes','Unknown'] } },
+        { key: 'propertyReturned', label: 'Property returned on release?', type: 'select', options: ['Yes','No','Partial','N/A'], showIf: { field: 'propertyTaken', value: 'Yes' } },
+        { key: 'propertyNotes', label: 'Property notes', type: 'textarea', placeholder: 'Missing items, disputes, items retained as exhibits', cols: 2, showIf: { field: 'propertyTaken', values: ['Yes','Unknown'] } },
       ],
     },
 
@@ -707,6 +734,19 @@ var LAA = {
         { key: 'clothingShoesSeized', label: 'Clothing / shoes / phone seized?', type: 'select', options: ['Yes','No'] },
         { key: 'clothingShoesSeizedWhat', label: 'What was seized?', type: 'text', placeholder: 'e.g. Trainers, jacket, iPhone', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
         { key: 'clothingShoesSeizedNotes', label: 'Seizure notes', type: 'textarea', placeholder: 'Condition, replacement clothing given, etc.', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
+        { key: '_h_device_seizure', label: 'Device seizure', type: 'sectionHeading' },
+        { key: 'deviceSeized', label: 'Electronic device(s) seized?', type: 'select', options: ['No','Yes'] },
+        { key: 'deviceType', label: 'Device type(s)', type: 'text', placeholder: 'e.g. iPhone 15, Samsung Galaxy, laptop, tablet', cols: 2, showIf: { field: 'deviceSeized', value: 'Yes' } },
+        { key: 'devicePinRequested', label: 'PIN / passcode requested?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'deviceSeized', value: 'Yes' } },
+        { key: 'devicePinProvided', label: 'PIN / passcode provided?', type: 'select', options: ['Yes','No','Client declined'], showIf: { field: 'devicePinRequested', value: 'Yes' } },
+        { key: 'deviceExtractionConsent', label: 'Data extraction consent given?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'deviceSeized', value: 'Yes' } },
+        { key: 'deviceRIPAAuthority', label: 'RIPA authority / s.49 notice?', type: 'select', options: ['Yes','No','Unknown','N/A'], showIf: { field: 'deviceSeized', value: 'Yes' } },
+        { key: 'deviceNotes', label: 'Device seizure notes', type: 'textarea', placeholder: 'Advice given, representations made, return timeline', cols: 2, showIf: { field: 'deviceSeized', value: 'Yes' } },
+        { key: '_h_special_warnings', label: 'Special Warnings', type: 'sectionHeading' },
+        { key: 'specialWarningGiven', label: 'Special warning given?', type: 'select', options: ['No','Yes'] },
+        { key: 'specialWarningType', label: 'Warning type', type: 'checkboxGroup', options: ['s.36 CJPOA 1994 \u2013 failure to account for objects/substances/marks','s.37 CJPOA 1994 \u2013 failure to account for presence at a place'], cols: 2, showIf: { field: 'specialWarningGiven', value: 'Yes' } },
+        { key: 'specialWarningDetails', label: 'Warning details', type: 'textarea', placeholder: 'What was the warning about? What objects/marks/location?', cols: 2, showIf: { field: 'specialWarningGiven', value: 'Yes' } },
+        { key: 'specialWarningAdvice', label: 'Advice given to client re warning', type: 'textarea', placeholder: 'What advice did you give about the adverse inference risk?', cols: 2, showIf: { field: 'specialWarningGiven', value: 'Yes' } },
         { key: '_h_other_disclosure', label: 'Other', type: 'sectionHeading' },
         { key: 'cautionAvailable', label: 'Caution / out-of-court disposal offered?', type: 'select', options: ['Yes','No'] },
         { key: 'disclosureReInjuries', label: 'Disclosure re injuries to victim', type: 'select', options: ['Not Applicable','Yes','No'] },
@@ -1395,6 +1435,10 @@ var LAA = {
         { key: 'languageIssues', label: 'Language issues?', type: 'select', options: ['Yes','No'] },
         { key: 'interpreterName', label: 'Interpreter name', type: 'text', showIf: { field: 'languageIssues', value: 'Yes' } },
         { key: 'interpreterLanguage', label: 'Language required', type: 'text', showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterMode', label: 'Interpretation mode', type: 'select', options: ['In person','Telephone','Video link'], showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterAgency', label: 'Interpreter agency', type: 'text', placeholder: 'e.g. Language Line, Capita TI', showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterPhone', label: 'Interpreter phone', type: 'tel', showIf: { field: 'languageIssues', value: 'Yes' } },
+        { key: 'interpreterArrivalTime', label: 'Interpreter arrival time', type: 'time', showIf: { field: 'languageIssues', value: 'Yes' } },
         { key: 'juvenileVulnerable', label: 'Juvenile / Vulnerable?', type: 'select', options: ['Not Applicable','Juvenile','Vulnerable Adult'] },
         { key: 'appropriateAdultName', label: 'Appropriate Adult name', type: 'text', showIf: { field: 'juvenileVulnerable', values: ['Juvenile','Vulnerable Adult'] } },
         { key: 'appropriateAdultRelation', label: 'AA relationship to client', type: 'text', showIf: { field: 'juvenileVulnerable', values: ['Juvenile','Vulnerable Adult'] } },
@@ -3097,6 +3141,7 @@ var REQUIRED_FIELD_KEYS = [
       _formType: row._formType || '',
       attendanceMode: row.attendanceMode || '',
       custodyNumber: row.custodyNumber || '',
+      offenceSummary: row.offenceSummary || '',
     };
   }
 
@@ -3989,6 +4034,8 @@ var REQUIRED_FIELD_KEYS = [
       }
       if (typeof result === 'number' || typeof result === 'string') currentAttendanceId = result;
       showAutoSaveIndicator();
+      var savedEl = document.getElementById('form-last-saved');
+      if (savedEl) savedEl.textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }).finally(() => {
       _draftSaveInFlight = false;
       if (_draftSaveQueued && !_finalising && currentRecordStatus !== 'finalised') {
@@ -4236,6 +4283,12 @@ var REQUIRED_FIELD_KEYS = [
       if (cloudUrlEl) cloudUrlEl.value = s.cloudBackupUrl || '';
       const cloudTokenEl = document.getElementById('setting-cloud-backup-token');
       if (cloudTokenEl) cloudTokenEl.value = s.cloudBackupToken || '';
+      const baf = document.getElementById('setting-billing-attendance-fee');
+      if (baf) baf.value = s.billingAttendanceFee || '160.00';
+      const bmr = document.getElementById('setting-billing-mileage-rate');
+      if (bmr) bmr.value = s.billingMileageRate || '0.45';
+      const bvr = document.getElementById('setting-billing-vat-rate');
+      if (bvr) bvr.value = s.billingVatRate || '20';
       const qfAcc = document.getElementById('setting-quickfile-account');
       if (qfAcc) qfAcc.value = s.quickfileAccountNumber || '';
       const qfKey = document.getElementById('setting-quickfile-apikey');
@@ -4462,6 +4515,9 @@ var REQUIRED_FIELD_KEYS = [
       quickfileAccountNumber: qfAccount,
       quickfileApiKey: qfApiKey,
       quickfileAppId: qfAppId,
+      billingAttendanceFee: document.getElementById('setting-billing-attendance-fee')?.value?.trim() || '160.00',
+      billingMileageRate: document.getElementById('setting-billing-mileage-rate')?.value?.trim() || '0.45',
+      billingVatRate: document.getElementById('setting-billing-vat-rate')?.value?.trim() || '20',
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
       darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
       fontSize: document.getElementById('setting-font-size')?.value || '16',
@@ -4483,6 +4539,11 @@ var REQUIRED_FIELD_KEYS = [
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
     }).then(() => window.api.getSettings()).then(function(s) {
       applyLayoutPreferences(s || {});
+      window._billingDefaults = {
+        attendanceFee: parseFloat(s.billingAttendanceFee) || 160.00,
+        mileageRate: parseFloat(s.billingMileageRate) || 0.45,
+        vatRate: parseFloat(s.billingVatRate) || 0.20,
+      };
       showToast('Settings saved', 'success');
     });
   }
@@ -5187,7 +5248,7 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── DELETE ATTENDANCE (#13) ─── */
   function deleteAttendance(id, title) {
-    showConfirm('Delete "' + title + '"?\n\nThis record will be moved out of the active list instead of being permanently removed. You can restore it later if needed.', 'Confirm Delete').then(function(ok) {
+    showConfirm('Delete "' + title + '"?\n\nThis record will be removed from the active list. It can only be recovered from a database backup.', 'Confirm Delete').then(function(ok) {
       if (!ok) return;
       window.api.attendanceDelete({ id: id, reason: 'User deleted from list' }).then(function(result) {
         if (result && result.soft) showToast('Record moved out of the active list', 'info');
@@ -8793,6 +8854,19 @@ var REQUIRED_FIELD_KEYS = [
       if (!(formData.appropriateAdultRelation || '').trim()) m.push({ key: 'appropriateAdultRelation', label: 'AA relationship', section: 2 });
     }
     if (formData.languageIssues === 'Yes' && !(formData.interpreterLanguage || '').trim()) m.push({ key: 'interpreterLanguage', label: 'Language required', section: 2 });
+
+    var niVol = (formData.niNumber || '').trim().replace(/\s/g, '').toUpperCase();
+    if (niVol && !/^[A-Z]{2}\d{6}[A-Z]$/.test(niVol)) {
+      m.push({ key: 'niNumber', label: 'NI Number format invalid (expected AB123456C)', section: 3 });
+    }
+    var dobVol = (formData.dob || '').trim();
+    if (dobVol) {
+      var dobDateVol = new Date(dobVol);
+      var todayVol = new Date();
+      if (dobDateVol > todayVol) m.push({ key: 'dob', label: 'Date of Birth is in the future', section: 2 });
+      else if ((todayVol - dobDateVol) / (365.25 * 24 * 60 * 60 * 1000) > 120) m.push({ key: 'dob', label: 'Date of Birth implies age over 120', section: 2 });
+    }
+
     return m;
   }
 
@@ -8863,6 +8937,38 @@ var REQUIRED_FIELD_KEYS = [
       if (!(formData.appropriateAdultRelation || '').trim()) m.push({ key: 'appropriateAdultRelation', label: 'AA relationship to client', section: 2 });
       if (!(formData.appropriateAdultPhone || '').trim()) m.push({ key: 'appropriateAdultPhone', label: 'AA contact number', section: 2 });
     }
+
+    var ni = (formData.niNumber || '').trim().replace(/\s/g, '').toUpperCase();
+    if (ni && !/^[A-Z]{2}\d{6}[A-Z]$/.test(ni)) {
+      m.push({ key: 'niNumber', label: 'NI Number format invalid (expected AB123456C)', section: 5 });
+    }
+
+    var dob = (formData.dob || '').trim();
+    if (dob) {
+      var dobDate = new Date(dob);
+      var today = new Date();
+      if (dobDate > today) {
+        m.push({ key: 'dob', label: 'Date of Birth is in the future', section: 2 });
+      } else {
+        var ageYrs = (today - dobDate) / (365.25 * 24 * 60 * 60 * 1000);
+        if (ageYrs > 120) m.push({ key: 'dob', label: 'Date of Birth implies age over 120', section: 2 });
+      }
+    }
+
+    var arrTime = (formData.timeArrival || '').trim();
+    var attDate = (formData.date || '').trim();
+    (formData.interviews || []).forEach(function(iv, idx) {
+      if (iv.startTime && arrTime && iv.startTime < arrTime) {
+        m.push({ key: 'iv' + idx + '_startTime', label: 'Interview ' + (idx + 1) + ' start time is before station arrival', section: 6 });
+      }
+    });
+
+    var bailOutcome = (formData.outcomeDecision || '');
+    var bailDate = (formData.bailDate || '').trim();
+    if (bailOutcome === 'Bail without charge' && bailDate && attDate && bailDate < attDate) {
+      m.push({ key: 'bailDate', label: 'Bail return date is before attendance date', section: 7 });
+    }
+
     return m;
   }
 
@@ -11649,6 +11755,14 @@ PDF_CASENOTE_ADVERT +
       if (window.api && window.api.syncScheduleOnReconnect) window.api.syncScheduleOnReconnect();
     });
     window.addEventListener('offline', function () { setNetStatus(false); });
+
+    window.addEventListener('beforeunload', function (e) {
+      if (!currentAttendanceId || currentRecordStatus === 'finalised') return;
+      try {
+        var data = collectCurrentData();
+        if (hasMeaningfulData(data)) { e.preventDefault(); e.returnValue = ''; }
+      } catch (_) {}
+    });
     document.addEventListener('visibilitychange', function () {
       if (document.visibilityState === 'visible' && window.api && window.api.syncScheduleOnReconnect) {
         window.api.syncScheduleOnReconnect();
@@ -11812,8 +11926,14 @@ PDF_CASENOTE_ADVERT +
 
     /* First-launch setup check: hide splash immediately so user can complete setup */
     window._emailTemplatesAddonEnabled = false;
+    window._billingDefaults = {};
     window.api.getSettings().then(function(s) {
       window._appSettingsCache = s || {};
+      window._billingDefaults = {
+        attendanceFee: parseFloat(s.billingAttendanceFee) || 160.00,
+        mileageRate: parseFloat(s.billingMileageRate) || 0.45,
+        vatRate: parseFloat(s.billingVatRate) || 0.20,
+      };
       window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
       if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
       if (!s.dsccPin || !s.feeEarnerNameDefault) {
@@ -11947,15 +12067,32 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('header-laa-forms')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('header-kb-help')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
 
+    function _guardedNav(targetView, cb) {
+      if (currentAttendanceId && currentRecordStatus !== 'finalised') {
+        try {
+          var data = collectCurrentData();
+          if (hasMeaningfulData(data)) {
+            showConfirm('You have unsaved changes. Save as draft before leaving?').then(function(ok) {
+              if (ok) {
+                window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(function() {
+                  currentAttendanceId = null; stopAutoSave(); if (cb) cb(); else showView(targetView);
+                }).catch(function() { showToast('Save failed — staying on form', 'error'); });
+              } else {
+                currentAttendanceId = null; stopAutoSave(); if (cb) cb(); else showView(targetView);
+              }
+            });
+            return;
+          }
+        } catch (_) {}
+      }
+      if (cb) cb(); else showView(targetView);
+    }
+
     // Bottom navigation bar
     document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var nav = btn.dataset.nav;
-        if (nav === 'home') { showView('home'); }
-        else if (nav === 'list') { showView('list'); }
-        else if (nav === 'firms') { showView('firms'); }
-        else if (nav === 'settings') { showView('settings'); }
-        else if (nav === 'new-attendance') {
+        if (nav === 'new-attendance') {
           if (currentAttendanceId || Object.keys(formData).length > 0) {
             showConfirm('Start a new record? Any unsaved changes will be lost.').then(function(ok) {
               if (ok) { currentAttendanceId = null; formData = {}; showView('new'); }
@@ -11963,6 +12100,8 @@ PDF_CASENOTE_ADVERT +
           } else {
             showView('new');
           }
+        } else if (nav === 'home' || nav === 'list' || nav === 'firms' || nav === 'settings') {
+          _guardedNav(nav);
         }
       });
     });

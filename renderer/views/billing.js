@@ -24,9 +24,10 @@ function openBillingPanel() {
   if (attendanceDate && attendanceDate.length > 10) attendanceDate = attendanceDate.slice(0, 10);
   var offenceSummary = data.offenceSummary || data.offence1Details || '';
 
-  var defaultAttendanceFee = 160.00;
-  var defaultMileageRate = 0.45;
-  var defaultVatRate = 0.20;
+  var billingSettings = (window._billingDefaults || {});
+  var defaultAttendanceFee = billingSettings.attendanceFee || 160.00;
+  var defaultMileageRate = billingSettings.mileageRate || 0.45;
+  var defaultVatRate = billingSettings.vatRate || 0.20;
   var parkingFromRecord = parseFloat(data.parkingCost) || 0;
   var milesFromRecord = parseFloat(data.milesClaimable) || 0;
 
@@ -304,9 +305,10 @@ function _bindBillingEvents(recordId, opts) {
   overlay.addEventListener('click', function (e) { if (e.target === overlay) closeBillingPanel(); });
 
   function onKeyDown(e) {
-    if (e.key === 'Escape') { closeBillingPanel(); document.removeEventListener('keydown', onKeyDown); }
+    if (e.key === 'Escape') closeBillingPanel();
   }
   document.addEventListener('keydown', onKeyDown);
+  overlay._billingEscHandler = onKeyDown;
 
   overlay.querySelectorAll('.billing-calc-input').forEach(function (inp) {
     inp.addEventListener('input', _recalcBillingTotals);
@@ -580,5 +582,8 @@ function _openEmailPackModal(recordId, opts) {
 function closeBillingPanel() {
   _billingPanelOpen = false;
   var overlay = document.getElementById('billing-panel-overlay');
-  if (overlay) overlay.remove();
+  if (overlay) {
+    if (overlay._billingEscHandler) document.removeEventListener('keydown', overlay._billingEscHandler);
+    overlay.remove();
+  }
 }

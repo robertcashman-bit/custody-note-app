@@ -19,9 +19,9 @@ function loadBillableAttendances() {
         stationName: d.policeStationName || r.station_name || '',
         date: d.date || r.attendance_date || '',
         offenceSummary: d.offenceSummary || d.offence1Details || '',
-        attendanceFee: 160.00,
+        attendanceFee: (window._billingDefaults || {}).attendanceFee || 160.00,
         mileageMiles: parseFloat(d.milesClaimable) || 0,
-        mileageRate: 0.45,
+        mileageRate: (window._billingDefaults || {}).mileageRate || 0.45,
         parkingAmount: parseFloat(d.parkingCost) || 0,
         raw: d,
       };

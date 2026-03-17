@@ -4559,6 +4559,7 @@ html.hide-home-status #home-status-section {
 .badge.draft { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
 .badge.finalised { background: #ecfdf5; color: #166534; border: 1px solid #86efac; }
 .badge.archived { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+.badge.deleted { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
 .badge.badge-health-warning { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
 .badge.badge-health-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; }
 .badge.badge-health-ok { background: #dcfce7; color: #166534; border: 1px solid #86efac; }

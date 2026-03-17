@@ -754,16 +754,20 @@ function buildDraftDedupeKey(row, parsed) {
     (parsed.instructionDateTime ? String(parsed.instructionDateTime).slice(0, 10) : '')
   );
   const station = normalizeKeyPart(row.station_name || parsed.policeStationName).toLowerCase();
-  const client = normalizeKeyPart(
-    row.client_name || [parsed.surname || '', parsed.forename || ''].filter(Boolean).join(', ')
-  ).toLowerCase();
+  const surname = normalizeKeyPart(parsed.surname || '').toLowerCase();
+  const forename = normalizeKeyPart(parsed.forename || '').toLowerCase();
+  const clientFromRow = normalizeKeyPart(row.client_name || '').toLowerCase();
+  const client = clientFromRow || [surname, forename].filter(Boolean).join(', ');
   const custody = normalizeKeyPart(parsed.custodyNumber).toLowerCase();
 
   if (dscc) return `dscc:${dscc}|date:${date}|station:${station}`;
 
-  const hasClientTriplet = !!(client && date && station);
+  // Require both surname AND forename (or full client_name with a comma) to prevent
+  // matching two different "Smith"s at the same station/date
+  const clientHasBothNames = (surname && forename) || (clientFromRow && clientFromRow.includes(','));
+  const hasClientQuad = !!(clientHasBothNames && client && date && station);
   const hasCustodyTriplet = !!(custody && date && station);
-  if (hasClientTriplet) return `client:${client}|date:${date}|station:${station}`;
+  if (hasClientQuad) return `client:${client}|date:${date}|station:${station}`;
   if (hasCustodyTriplet) return `custody:${custody}|date:${date}|station:${station}`;
 
   return null;
@@ -3915,7 +3919,9 @@ ipcMain.handle('set-settings', (_, settings) => {
 ipcMain.handle('attendance-list', () => {
   /* Lightweight index-only rows for the list view — no data blob. */
   return dbAll(
-    'SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, supervisor_approved_at FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC'
+    `SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, supervisor_approved_at,
+       COALESCE(json_extract(data, '$.offenceSummary'), '') AS offenceSummary
+     FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC`
   );
 });
 
@@ -3943,7 +3949,8 @@ ipcMain.handle('attendance-home-stats', () => {
        COALESCE(json_extract(data, '$.totalTimeClaimed'), '') AS totalTimeClaimed,
        COALESCE(json_extract(data, '$.totalHoursWorked'), '') AS totalHoursWorked,
        COALESCE(json_extract(data, '$.forename'), '') AS forename,
-       COALESCE(json_extract(data, '$.surname'), '') AS surname
+       COALESCE(json_extract(data, '$.surname'), '') AS surname,
+       COALESCE(json_extract(data, '$.offenceSummary'), '') AS offenceSummary
      FROM attendances
      WHERE deleted_at IS NULL
        AND archived_at IS NULL
@@ -3959,13 +3966,16 @@ ipcMain.handle('attendance-search', (_, params) => {
     ? sortField : 'updated_at';
   const orderDir = sortDir === 'ASC' ? 'ASC' : 'DESC';
 
-  let where = 'WHERE deleted_at IS NULL';
+  const { deleted } = params || {};
+  let where = deleted === true ? 'WHERE deleted_at IS NOT NULL' : 'WHERE deleted_at IS NULL';
   const params2 = [];
 
-  if (archived === true) {
-    where += ' AND archived_at IS NOT NULL';
-  } else {
-    where += ' AND archived_at IS NULL';
+  if (!deleted) {
+    if (archived === true) {
+      where += ' AND archived_at IS NOT NULL';
+    } else {
+      where += ' AND archived_at IS NULL';
+    }
   }
   if (query && query.trim()) {
     const like = '%' + query.trim() + '%';
@@ -4008,7 +4018,7 @@ ipcMain.handle('attendance-search', (_, params) => {
   const p = total > 0 ? Math.min(requestedPage, totalPages) : 1;
   const offset = (p - 1) * ps;
   const rows = dbAll(
-    `SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, supervisor_approved_at, archived_at, data
+    `SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, supervisor_approved_at, archived_at, deleted_at, deletion_reason, data
      FROM attendances ${where} ORDER BY ${orderCol} ${orderDir} LIMIT ? OFFSET ?`,
     [...params2, ps, offset]
   );
@@ -4263,6 +4273,18 @@ ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
     return { soft: true };
   }
   return false;
+});
+
+ipcMain.handle('attendance-undelete', (_, id) => {
+  if (!id) return false;
+  const now = new Date().toISOString();
+  const ev = dbGet('SELECT sync_version FROM attendances WHERE id=?', [id]);
+  const nv = (ev && ev.sync_version || 1) + 1;
+  dbRun('UPDATE attendances SET deleted_at=NULL, deletion_reason=NULL, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, nv, id]);
+  db.run('INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)', [id, 'restored', now, 'Restored from deleted']);
+  markDbDirty();
+  enqueueSyncForRecord(id);
+  return true;
 });
 
 ipcMain.handle('audit-log-get', (_, attendanceId) => {

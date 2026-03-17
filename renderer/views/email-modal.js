@@ -286,8 +286,12 @@ function openEmailModal(recordId, recordData, recordStatus) {
       var to      = document.getElementById('email-oic-to').value.trim();
       var subject = document.getElementById('email-oic-subject').value.trim();
       var body    = document.getElementById('email-oic-body').value;
+      if (!to) {
+        showToast('Please enter an officer email address first', 'warning');
+        document.getElementById('email-oic-to').focus();
+        return;
+      }
       if (_currentClient() === 'default' && !((window._appSettingsCache || {}).preferredEmailClient)) {
-        /* No preference set yet — show picker first */
         _togglePicker(true);
       } else {
         _openUrl(to, subject, body);
