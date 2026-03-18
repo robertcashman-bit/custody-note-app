@@ -1,9 +1,50 @@
 {
   "releases": [
     {
+      "version": "1.4.96",
+      "date": "2026-03-18",
+      "latest": true,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
+      "version": "1.4.95",
+      "date": "2026-03-18",
+      "latest": false,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
+      "version": "1.4.94",
+      "date": "2026-03-18",
+      "latest": false,
+      "changes": [
+        "Calendar date picker for Date of Birth",
+        "Medication field now starts with Yes/No/N/A dropdown"
+      ]
+    },
+    {
+      "version": "1.4.93",
+      "date": "2026-03-18",
+      "latest": false,
+      "changes": [
+        "Fix preferred email app being reset when saving other settings"
+      ]
+    },
+    {
+      "version": "1.4.92",
+      "date": "2026-03-18",
+      "latest": false,
+      "changes": [
+        "Add built-in Disclosure Request and Bail Confirmation templates to Quick Email"
+      ]
+    },
+    {
       "version": "1.4.91",
       "date": "2026-03-17",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Audit fixes",
         "New custody fields (strip search, device seizure, special warnings, property, interpreter details)",

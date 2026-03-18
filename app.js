@@ -7733,16 +7733,29 @@ var REQUIRED_FIELD_KEYS = [
       input.inputMode = 'numeric';
       input.autocomplete = 'off';
       if (data[f.key]) input.value = isoToDobDisplay(data[f.key]);
+      var _dobDaySel, _dobMonthSel, _dobYearSel;
+      function syncRollerFromIso(iso) {
+        if (!_dobDaySel) return;
+        var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) {
+          _dobYearSel.value = String(parseInt(m[1], 10));
+          _dobMonthSel.value = String(parseInt(m[2], 10));
+          _dobDaySel.value = String(parseInt(m[3], 10));
+        } else {
+          _dobYearSel.value = ''; _dobMonthSel.value = ''; _dobDaySel.value = '';
+        }
+      }
       input.addEventListener('blur', function () {
         var raw = (input.value || '').trim();
         var errEl = _getOrCreateFieldError(input);
-        if (!raw) { errEl.style.display = 'none'; input.classList.remove('input-error'); formData[f.key] = ''; return; }
+        if (!raw) { errEl.style.display = 'none'; input.classList.remove('input-error'); formData[f.key] = ''; syncRollerFromIso(''); return; }
         var parsed = parseDobInput(raw);
         if (parsed) {
           input.value = parsed.display;
           formData[f.key] = parsed.iso;
           errEl.style.display = 'none';
           input.classList.remove('input-error');
+          syncRollerFromIso(parsed.iso);
         } else {
           errEl.textContent = 'Enter date as DD/MM/YYYY, DD-MM-YY, DD Mon YYYY, or DDMMYYYY';
           errEl.style.display = 'block';
@@ -7757,29 +7770,49 @@ var REQUIRED_FIELD_KEYS = [
       });
 
       var dobInputRow = document.createElement('div');
-      dobInputRow.style.cssText = 'display:flex;align-items:center;gap:0.4rem;';
+      dobInputRow.className = 'dob-input-row';
       input.parentNode.insertBefore(dobInputRow, input);
       dobInputRow.appendChild(input);
-      var hiddenDatePicker = document.createElement('input');
-      hiddenDatePicker.type = 'date';
-      hiddenDatePicker.className = 'dob-hidden-picker';
-      hiddenDatePicker.tabIndex = -1;
-      hiddenDatePicker.setAttribute('aria-hidden', 'true');
-      hiddenDatePicker.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;overflow:hidden;';
-      if (data[f.key]) hiddenDatePicker.value = data[f.key];
-      var calBtn = document.createElement('button');
-      calBtn.type = 'button';
-      calBtn.className = 'btn-icon dob-cal-btn';
-      calBtn.title = 'Pick date from calendar';
-      calBtn.setAttribute('aria-label', 'Open date picker');
-      calBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
-      calBtn.addEventListener('click', function () {
-        hiddenDatePicker.showPicker ? hiddenDatePicker.showPicker() : hiddenDatePicker.click();
-      });
-      hiddenDatePicker.addEventListener('change', function () {
-        var val = hiddenDatePicker.value;
-        if (!val) return;
-        var parsed = parseDobInput(val);
+
+      var rollerWrap = document.createElement('div');
+      rollerWrap.className = 'dob-roller';
+
+      var daySel = _dobDaySel = document.createElement('select');
+      daySel.className = 'dob-roller-col';
+      daySel.title = 'Day';
+      daySel.innerHTML = '<option value="">DD</option>';
+      for (var dd = 1; dd <= 31; dd++) { daySel.innerHTML += '<option value="' + dd + '">' + (dd < 10 ? '0' + dd : dd) + '</option>'; }
+
+      var monthSel = _dobMonthSel = document.createElement('select');
+      monthSel.className = 'dob-roller-col';
+      monthSel.title = 'Month';
+      var monthNames = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      monthSel.innerHTML = '<option value="">MM</option>';
+      for (var mm = 1; mm <= 12; mm++) { monthSel.innerHTML += '<option value="' + mm + '">' + (mm < 10 ? '0' + mm : mm) + ' ' + monthNames[mm] + '</option>'; }
+
+      var yearSel = _dobYearSel = document.createElement('select');
+      yearSel.className = 'dob-roller-col dob-roller-year';
+      yearSel.title = 'Year';
+      var thisYear = new Date().getFullYear();
+      yearSel.innerHTML = '<option value="">YYYY</option>';
+      for (var yy = thisYear; yy >= thisYear - 110; yy--) { yearSel.innerHTML += '<option value="' + yy + '">' + yy + '</option>'; }
+
+      if (data[f.key]) {
+        var isoMatch = String(data[f.key]).match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (isoMatch) {
+          yearSel.value = String(parseInt(isoMatch[1], 10));
+          monthSel.value = String(parseInt(isoMatch[2], 10));
+          daySel.value = String(parseInt(isoMatch[3], 10));
+        }
+      }
+
+      function applyRollerDate() {
+        var d = parseInt(daySel.value, 10);
+        var m = parseInt(monthSel.value, 10);
+        var y = parseInt(yearSel.value, 10);
+        if (!d || !m || !y) return;
+        var iso = y + '-' + (m < 10 ? '0' + m : m) + '-' + (d < 10 ? '0' + d : d);
+        var parsed = parseDobInput(iso);
         if (parsed) {
           input.value = parsed.display;
           formData[f.key] = parsed.iso;
@@ -7787,10 +7820,17 @@ var REQUIRED_FIELD_KEYS = [
           errEl.style.display = 'none';
           input.classList.remove('input-error');
           if (f.key === 'dob') updateDobAgeDisplay(input, wrap);
+          scheduleQuietSave();
         }
-      });
-      dobInputRow.appendChild(calBtn);
-      dobInputRow.appendChild(hiddenDatePicker);
+      }
+      daySel.addEventListener('change', applyRollerDate);
+      monthSel.addEventListener('change', applyRollerDate);
+      yearSel.addEventListener('change', applyRollerDate);
+
+      rollerWrap.appendChild(daySel);
+      rollerWrap.appendChild(monthSel);
+      rollerWrap.appendChild(yearSel);
+      wrap.appendChild(rollerWrap);
     }
 
     if (f.key === 'dob') {

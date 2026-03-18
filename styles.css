@@ -41,7 +41,7 @@
 }
 
 /* ═══ APP SCROLLBARS (adjustable via --scrollbar-w) ═══ */
-:root { --scrollbar-w: 20px; }
+:root { --scrollbar-w: 80px; }
 ::-webkit-scrollbar { width: var(--scrollbar-w); height: var(--scrollbar-w); }
 ::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.12); border-radius: 99px; }
 ::-webkit-scrollbar-thumb {
@@ -458,6 +458,7 @@ body.form-active .header-form-title { display: inline; }
 body.form-active #header-app-title { display: none; }
 body.form-active .header-form-actions { display: flex; }
 body.form-active #view-form > .form-page-header { display: none; }
+body.form-active .app-footer { display: none; }
 .header-center { flex: 1; max-width: 420px; transition: max-width 0.3s ease; }
 .header-center:focus-within { max-width: 480px; }
 .global-search {
@@ -1584,6 +1585,7 @@ html.dark .home-attention-item:hover {
 .attendance-form {
   flex: 1; overflow-y: auto; overflow-x: hidden;
   padding: 1rem 1.25rem;
+  padding-bottom: 60px;
   background: var(--surface); width: 100%; min-width: 0;
   color: var(--on-surface);
   overscroll-behavior: contain;
@@ -1670,35 +1672,31 @@ html.dark .form-group.firm-field select {
 html.dark .dob-age-display.dob-age-minor {
   color: #fca5a5;
 }
-.dob-cal-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid var(--border, #cbd5e1);
-  border-radius: 6px;
-  background: var(--bg-card, #fff);
-  color: var(--text-secondary, #64748b);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s;
+/* ═══ DOB ROLLER PICKER ═══ */
+.dob-input-row {
+  display: flex; align-items: center; gap: 0.4rem;
 }
-.dob-cal-btn:hover {
-  background: var(--bg-hover, #f1f5f9);
-  border-color: var(--accent, #3b82f6);
-  color: var(--accent, #3b82f6);
+.dob-roller {
+  display: flex; gap: 0.3rem; margin-top: 0.35rem;
 }
-html.dark .dob-cal-btn {
-  background: var(--bg-card, #1e293b);
+.dob-roller-col {
+  padding: 0.4rem 0.25rem; font-size: 0.88rem; font-weight: 600;
+  border: 2px solid var(--border, #cbd5e1); border-radius: 6px;
+  background: var(--input-bg, #fff); color: var(--on-surface, #1e293b);
+  cursor: pointer; min-width: 0;
+  transition: border-color 0.15s;
+}
+.dob-roller-col:focus {
+  outline: none; border-color: var(--primary, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+.dob-roller-year { min-width: 75px; }
+html.dark .dob-roller-col {
+  background: var(--input-bg, #1e293b); color: var(--on-surface, #e2e8f0);
   border-color: var(--border, #334155);
-  color: var(--text-secondary, #94a3b8);
 }
-html.dark .dob-cal-btn:hover {
-  background: var(--bg-hover, #334155);
-  border-color: var(--accent, #60a5fa);
-  color: var(--accent, #60a5fa);
+html.dark .dob-roller-col:focus {
+  border-color: var(--primary, #60a5fa);
 }
 
 /* ═══ POSTCODE LOOKUP ═══ */
@@ -2181,12 +2179,15 @@ html.dark .interview-notes-warning {
 
 /* ═══ BOTTOM BAR ═══ */
 .form-bottom-bar {
-  display: flex; flex-shrink: 0; width: 100%;
+  display: none; width: 100%;
   border-top: 1px solid var(--border);
   align-items: stretch; gap: 0;
   padding: 0;
   background: var(--surface-alt);
+  position: fixed; bottom: 58px; left: 0; right: 0;
+  z-index: 899;
 }
+body.form-active .form-bottom-bar { display: flex; }
 .bottom-btn {
   flex: 1 1 0; padding: 0.65rem 0.5rem;
   border: none; border-right: 1px solid var(--border);
