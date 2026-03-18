@@ -4341,6 +4341,8 @@ var REQUIRED_FIELD_KEYS = [
       if (largeControls) largeControls.checked = s.largeControls === 'true';
       var reducedMotion = document.getElementById('setting-reduced-motion');
       if (reducedMotion) reducedMotion.checked = s.reducedMotion === 'true';
+      var prefEmail = document.getElementById('setting-preferred-email-client');
+      if (prefEmail) prefEmail.value = s.preferredEmailClient || 'default';
       applyLayoutPreferences(s || {});
       updateBackupDestSummary(s);
     });
@@ -4537,6 +4539,7 @@ var REQUIRED_FIELD_KEYS = [
       highContrast: document.getElementById('setting-high-contrast')?.checked ? 'true' : 'false',
       largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
+      preferredEmailClient: document.getElementById('setting-preferred-email-client')?.value || 'default',
     }).then(() => window.api.getSettings()).then(function(s) {
       applyLayoutPreferences(s || {});
       window._billingDefaults = {
