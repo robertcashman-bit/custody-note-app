@@ -7830,7 +7830,7 @@ var REQUIRED_FIELD_KEYS = [
       rollerWrap.appendChild(daySel);
       rollerWrap.appendChild(monthSel);
       rollerWrap.appendChild(yearSel);
-      wrap.appendChild(rollerWrap);
+      dobInputRow.appendChild(rollerWrap);
     }
 
     if (f.key === 'dob') {

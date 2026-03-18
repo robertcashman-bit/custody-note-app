@@ -41,7 +41,7 @@
 }
 
 /* ═══ APP SCROLLBARS (adjustable via --scrollbar-w) ═══ */
-:root { --scrollbar-w: 80px; }
+:root { --scrollbar-w: 28px; --bottom-nav-h: 58px; }
 ::-webkit-scrollbar { width: var(--scrollbar-w); height: var(--scrollbar-w); }
 ::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.12); border-radius: 99px; }
 ::-webkit-scrollbar-thumb {
@@ -538,7 +538,7 @@ html.dark .gear-section-label { color: var(--text-muted); }
   background: var(--header-bg, #0f172a);
   line-height: 1.4;
   /* leave room for fixed bottom nav */
-  padding-bottom: calc(0.6rem + 58px);
+  padding-bottom: calc(0.6rem + var(--bottom-nav-h));
 }
 
 /* ── Bottom Navigation Bar ─────────────────────────────── */
@@ -547,7 +547,7 @@ html.dark .gear-section-label { color: var(--text-muted); }
   display: flex; align-items: stretch;
   background: var(--header-bg, #0f172a);
   border-top: 1px solid rgba(255,255,255,0.1);
-  height: 58px;
+  height: var(--bottom-nav-h);
   box-shadow: 0 -2px 12px rgba(0,0,0,0.4);
 }
 .bottom-nav-btn {
@@ -1674,10 +1674,11 @@ html.dark .dob-age-display.dob-age-minor {
 }
 /* ═══ DOB ROLLER PICKER ═══ */
 .dob-input-row {
-  display: flex; align-items: center; gap: 0.4rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
 }
+.dob-input-row > input { flex: 1; min-width: 140px; }
 .dob-roller {
-  display: flex; gap: 0.3rem; margin-top: 0.35rem;
+  display: flex; gap: 0.3rem;
 }
 .dob-roller-col {
   padding: 0.4rem 0.25rem; font-size: 0.88rem; font-weight: 600;
@@ -2184,7 +2185,7 @@ html.dark .interview-notes-warning {
   align-items: stretch; gap: 0;
   padding: 0;
   background: var(--surface-alt);
-  position: fixed; bottom: 58px; left: 0; right: 0;
+  position: fixed; bottom: var(--bottom-nav-h); left: 0; right: 0;
   z-index: 899;
 }
 body.form-active .form-bottom-bar { display: flex; }
