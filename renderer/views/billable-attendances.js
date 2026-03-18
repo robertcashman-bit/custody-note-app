@@ -6,6 +6,12 @@
 
 var _billableData = [];
 
+function _billableFmtDate(val) {
+  if (!val) return '';
+  var m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : val;
+}
+
 function loadBillableAttendances() {
   if (!window.api || !window.api.billableAttendances) return;
 
@@ -106,7 +112,7 @@ function _renderBillableTable() {
       '<td>' + _billableEsc(r.clientName) + '</td>' +
       '<td>' + _billableEsc(r.firmName) + '</td>' +
       '<td>' + _billableEsc(r.stationName) + '</td>' +
-      '<td>' + _billableEsc(r.date) + '</td>' +
+      '<td>' + _billableEsc(_billableFmtDate(r.date)) + '</td>' +
       '<td class="billable-offence">' + _billableEsc(r.offenceSummary) + '</td>' +
       '<td>\u00A3' + r.attendanceFee.toFixed(2) + '</td>' +
       '<td>\u00A3' + mileageCost.toFixed(2) + '</td>' +

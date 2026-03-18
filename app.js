@@ -2664,7 +2664,7 @@ var REQUIRED_FIELD_KEYS = [
       if (diff < 60) return 'just now';
       if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
       if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-      return d.toLocaleDateString();
+      return d.toLocaleDateString('en-GB');
     } catch (_) { return iso; }
   }
 
@@ -9736,7 +9736,7 @@ PDF_CASENOTE_ADVERT +
       '',
       'Client: ' + clientName,
       'Station: ' + (d.policeStationName || 'N/A'),
-      'Date: ' + (d.date || 'N/A'),
+      'Date: ' + (d.date ? formatDateGB(d.date) : 'N/A'),
       'DSCC: ' + (d.dsccRef || 'N/A'),
       'Offence: ' + (d.offenceSummary || d.offence1Details || 'N/A'),
       'Custody No: ' + (d.custodyNumber || 'N/A'),
@@ -9762,7 +9762,7 @@ PDF_CASENOTE_ADVERT +
       '---',
       'Sent from Custody Note | © Defence Legal Services Ltd',
     ];
-    const subject = 'Attendance Report: ' + clientName + ' (' + (d.date || '') + ')';
+    const subject = 'Attendance Report: ' + clientName + ' (' + (d.date ? formatDateGB(d.date) : '') + ')';
     const body = encodeURIComponent(lines.join('\n'));
     const mailto = 'mailto:' + encodeURIComponent(firmEmail) + '?subject=' + encodeURIComponent(subject) + '&body=' + body;
     if (window.api && window.api.openExternal) {
@@ -10740,7 +10740,7 @@ PDF_CASENOTE_ADVERT +
     const d = getFormData();
     const client = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || 'Client not yet named';
     const fee = d.feeEarnerName || d.laaFeeEarnerFullName || '';
-    const date = d.date || new Date().toISOString().slice(0, 10);
+    const date = formatDateGB(d.date || new Date().toISOString().slice(0, 10));
     const result = d.conflictCheckResult || '(not yet recorded)';
     const notes = d.conflictCheckNotes || 'None';
     const offence = d.offenceSummary || d.offence1Details || '(not yet recorded)';
@@ -10749,7 +10749,7 @@ PDF_CASENOTE_ADVERT +
     const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Conflict Check Certificate</title>' + docStyles() + '</head><body>' +
       '<h1>Conflict of Interest Check – Certificate</h1>' +
       '<table><tr><th>Field</th><th>Detail</th></tr>' +
-      '<tr><td>Date of check</td><td>' + date + '</td></tr>' +
+      '<tr><td>Date of check</td><td>' + esc(date) + '</td></tr>' +
       '<tr><td>Fee earner</td><td>' + esc(fee) + '</td></tr>' +
       '<tr><td>Client</td><td>' + esc(client) + '</td></tr>' +
       '<tr><td>Offence</td><td>' + esc(offence) + '</td></tr>' +
@@ -10771,7 +10771,7 @@ PDF_CASENOTE_ADVERT +
     const d = getFormData();
     const client = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || 'Client not yet named';
     const fee = d.feeEarnerName || d.laaFeeEarnerFullName || '';
-    const date = d.instructionsSignatureDate || d.date || new Date().toISOString().slice(0, 10);
+    const date = formatDateGB(d.instructionsSignatureDate || d.date || new Date().toISOString().slice(0, 10));
     const time = d.instructionsSignatureTime || '';
     const instructions = d.clientInstructions || '(no instructions recorded)';
     const adviceRe = d.adviceReInterview || '';
@@ -10810,7 +10810,7 @@ PDF_CASENOTE_ADVERT +
     const d = getFormData();
     const client = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || 'Client not yet named';
     const fee = d.feeEarnerName || d.laaFeeEarnerFullName || '';
-    const date = d.date || new Date().toISOString().slice(0, 10);
+    const date = formatDateGB(d.date || new Date().toISOString().slice(0, 10));
     const offence = d.offenceSummary || d.offence1Details || '';
     const custodyNo = d.custodyNumber || '';
     const station = d.policeStationName || '';
@@ -10820,7 +10820,7 @@ PDF_CASENOTE_ADVERT +
       '<h1>Prepared Statement</h1>' +
       '<table><tr><th>Field</th><th>Detail</th></tr>' +
       '<tr><td>Name</td><td>' + esc(client) + '</td></tr>' +
-      '<tr><td>Date of birth</td><td>' + esc(d.dob || '') + '</td></tr>' +
+      '<tr><td>Date of birth</td><td>' + esc(d.dob ? formatDateGB(d.dob) : '') + '</td></tr>' +
       '<tr><td>Date</td><td>' + esc(date) + '</td></tr>' +
       '<tr><td>Custody No.</td><td>' + esc(custodyNo) + '</td></tr>' +
       '<tr><td>Police station</td><td>' + esc(station) + '</td></tr>' +
@@ -10910,7 +10910,7 @@ PDF_CASENOTE_ADVERT +
           queueEl.textContent = items.map(function(qi) {
             return '[' + qi.status + '] record=' + qi.record_id + ' retries=' + (qi.retry_count || 0) +
               (qi.error ? ' err=' + qi.error : '') +
-              ' last=' + (qi.last_attempt ? new Date(qi.last_attempt).toLocaleString() : '?');
+              ' last=' + (qi.last_attempt ? new Date(qi.last_attempt).toLocaleString('en-GB') : '?');
           }).join('\n');
         }
       }
@@ -13526,7 +13526,7 @@ PDF_CASENOTE_ADVERT +
           if (!r || !r.items) { resultsEl.innerHTML = '<p>No results</p>'; return; }
           var html = '<table style="width:100%;border-collapse:collapse;"><tr><th style="text-align:left;padding:0.35rem;">Email</th><th style="text-align:left;">Key</th><th>Status</th><th>Created</th><th></th></tr>';
           r.items.forEach(function(it) {
-            var date = it.createdAt ? new Date(it.createdAt).toLocaleDateString() : '-';
+            var date = it.createdAt ? new Date(it.createdAt).toLocaleDateString('en-GB') : '-';
             html += '<tr><td style="padding:0.35rem;">' + escapeHtml(it.email || '') + '</td><td><code>' + escapeHtml(it.licenceKeyMasked || '') + '</code></td><td>' + escapeHtml(it.status || '') + '</td><td>' + date + '</td><td><button type="button" class="btn btn-small admin-reveal-btn" data-id="' + escapeHtml(it.id) + '">Reveal</button> <button type="button" class="btn btn-small admin-resend-btn" data-id="' + escapeHtml(it.id) + '">Resend</button></td></tr>';
           });
           html += '</table>';

@@ -7,6 +7,12 @@
 
 var _billingPanelOpen = false;
 
+function _billingFmtDate(val) {
+  if (!val) return '';
+  var m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : val;
+}
+
 function openBillingPanel() {
   if (_billingPanelOpen) return;
   _billingPanelOpen = true;
@@ -216,7 +222,7 @@ function _renderBillingPanel(data, recordId, opts) {
               '<div><span class="billing-label">Firm</span><span class="billing-value">' + _escHtml(opts.firmName) + '</span></div>' +
               '<div><span class="billing-label">Client</span><span class="billing-value">' + _escHtml(opts.clientName) + '</span></div>' +
               '<div><span class="billing-label">Police Station</span><span class="billing-value">' + _escHtml(opts.stationName) + '</span></div>' +
-              '<div><span class="billing-label">Attendance Date</span><span class="billing-value">' + _escHtml(opts.attendanceDate) + '</span></div>' +
+              '<div><span class="billing-label">Attendance Date</span><span class="billing-value">' + _escHtml(_billingFmtDate(opts.attendanceDate)) + '</span></div>' +
               '<div style="grid-column:1/-1;"><span class="billing-label">Offence Summary</span><span class="billing-value">' + _escHtml(opts.offenceSummary) + '</span></div>' +
             '</div>' +
           '</div>' +
@@ -511,7 +517,7 @@ function _openEmailPackModal(recordId, opts) {
 
   var subject = 'Police Station Attendance Invoice \u2013 ' +
     [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' +
-    (opts.stationName || '') + ' \u2013 ' + (opts.attendanceDate || '');
+    (opts.stationName || '') + ' \u2013 ' + _billingFmtDate(opts.attendanceDate);
 
   var body = 'Dear Sir/Madam,\n\nPlease find attached our invoice for the above police station attendance.\n\n' +
     'Invoice Number: ' + (opts.invoiceStatus.quickfile_invoice_number || '') + '\n' +

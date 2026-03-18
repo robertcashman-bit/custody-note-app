@@ -13,6 +13,12 @@ function csvSafe(val) {
   return s;
 }
 
+function _csvFmtDate(val) {
+  if (!val) return '';
+  var m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : val;
+}
+
 function exportCsv() {
   (window.api.attendanceListFull || window.api.attendanceList)().then(function(rows) {
     if (!rows.length) { showToast('No attendances to export', 'warning'); return; }
@@ -26,7 +32,7 @@ function exportCsv() {
       var d = safeJson(r.data);
       var calc = calculateProfitCostsFromData(d);
       var row = [
-        csvSafe(d.ufn), csvSafe(d.date),
+        csvSafe(d.ufn), csvSafe(_csvFmtDate(d.date)),
         csvSafe(d.surname), csvSafe((d.forename || '').charAt(0)),
         csvSafe(d.policeStationName), csvSafe(d.policeStationCode || ''),
         csvSafe(d.schemeId), csvSafe(d.custodyNumber),
