@@ -627,7 +627,8 @@ var LAA = {
         { key: 'injuriesToClient', label: 'Injuries to client?', type: 'select', options: ['Yes','No'] },
         { key: 'injuryDetails', label: 'Injury details', type: 'text', cols: 2, showIf: { field: 'injuriesToClient', value: 'Yes' } },
         { key: 'photosOfInjuriesRequested', label: 'Photos of injuries requested?', type: 'select', options: ['Yes','No'], showIf: { field: 'injuriesToClient', value: 'Yes' } },
-        { key: 'medication', label: 'Medication', type: 'text', placeholder: 'Not applicable or list', cols: 2 },
+        { key: 'medicationRequired', label: 'Is the client on medication?', type: 'select', options: ['No','Yes','N/A'] },
+        { key: 'medication', label: 'Medication details', type: 'text', placeholder: 'List medication names and dosages', cols: 2, showIf: { field: 'medicationRequired', value: 'Yes' } },
         { key: 'psychiatricIssues', label: 'Psychiatric / mental health issues?', type: 'select', options: ['Yes','No'] },
         { key: 'psychiatricNotes', label: 'Psychiatric / mental health notes', type: 'text', cols: 2, showIf: { field: 'psychiatricIssues', value: 'Yes' } },
         { key: 'literate', label: 'Literate / can read?', type: 'select', options: ['Yes','No'] },
@@ -1448,7 +1449,8 @@ var LAA = {
         { key: 'appropriateAdultAddress', label: 'AA address (if needed)', type: 'textarea', cols: 2, showIf: { field: 'juvenileVulnerable', values: ['Juvenile','Vulnerable Adult'] } },
         { key: 'injuriesToClient', label: 'Injuries to client?', type: 'select', options: ['Yes','No'] },
         { key: 'injuryDetails', label: 'Injury details', type: 'text', cols: 2, showIf: { field: 'injuriesToClient', value: 'Yes' } },
-        { key: 'medication', label: 'Medication', type: 'text', placeholder: 'Not applicable or list', cols: 2 },
+        { key: 'medicationRequired', label: 'Is the client on medication?', type: 'select', options: ['No','Yes','N/A'] },
+        { key: 'medication', label: 'Medication details', type: 'text', placeholder: 'List medication names and dosages', cols: 2, showIf: { field: 'medicationRequired', value: 'Yes' } },
         { key: 'psychiatricIssues', label: 'Psychiatric / mental health issues?', type: 'select', options: ['Yes','No'] },
         { key: 'psychiatricNotes', label: 'Psychiatric / mental health notes', type: 'text', cols: 2, showIf: { field: 'psychiatricIssues', value: 'Yes' } },
         { key: 'fitToBeInterviewed', label: 'Fit to be interviewed?', type: 'select', options: ['Yes','No'] },
@@ -1767,7 +1769,7 @@ var clientLookupKeys = [
     'accommodationStatus','accommodationDetails',
     'benefits','benefitType','benefitOther','benefitNotes',
     'passportedBenefit','grossIncome','partnerIncome','partnerName','incomeNotes',
-    'medication','psychiatricIssues','psychiatricNotes'
+    'medicationRequired','medication','psychiatricIssues','psychiatricNotes'
   ];
 
 var REQUIRED_FIELD_KEYS = [
@@ -5272,7 +5274,7 @@ var REQUIRED_FIELD_KEYS = [
         'benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','incomeNotes',
         'nationality','nationalityOther','ethnicOriginCode','disabilityCode','riskAssessment',
         'groundsForArrest','groundsForDetention','dateOfArrest','custodyRecordRead','custodyRecordIssues',
-        'medication','psychiatricIssues','psychiatricNotes','literate','drugsTest','medicalExaminationOutcome',
+        'medicationRequired','medication','psychiatricIssues','psychiatricNotes','literate','drugsTest','medicalExaminationOutcome',
         'juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress',
         'oicName','oicEmail','oicPhone','oicUnit',
         'firmContactName','firmContactPhone','firmContactEmail','offenceSummary',
@@ -5864,6 +5866,17 @@ var REQUIRED_FIELD_KEYS = [
     // Backward-compat: older builds stored OIC email in the old force/collar field.
     if (!formData.oicEmail && formData.oicForceNo && String(formData.oicForceNo).indexOf('@') >= 0) {
       formData.oicEmail = formData.oicForceNo;
+    }
+
+    // Backward-compat: older records have medication text but no medicationRequired selector.
+    if (!formData.medicationRequired && formData.medication) {
+      var medVal = String(formData.medication).trim().toLowerCase();
+      if (medVal === 'not applicable' || medVal === 'n/a' || medVal === 'na' || medVal === 'none') {
+        formData.medicationRequired = 'No';
+        formData.medication = '';
+      } else {
+        formData.medicationRequired = 'Yes';
+      }
     }
 
     /* Stand-alone section mode (Admin, Consents, Third Party, Authorities, Comms, Supervisor, LAA Declaration) */
@@ -7720,6 +7733,42 @@ var REQUIRED_FIELD_KEYS = [
         errEl.style.display = 'none';
         input.classList.remove('input-error');
       });
+
+      var dobInputRow = document.createElement('div');
+      dobInputRow.style.cssText = 'display:flex;align-items:center;gap:0.4rem;';
+      input.parentNode.insertBefore(dobInputRow, input);
+      dobInputRow.appendChild(input);
+      var hiddenDatePicker = document.createElement('input');
+      hiddenDatePicker.type = 'date';
+      hiddenDatePicker.className = 'dob-hidden-picker';
+      hiddenDatePicker.tabIndex = -1;
+      hiddenDatePicker.setAttribute('aria-hidden', 'true');
+      hiddenDatePicker.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;overflow:hidden;';
+      if (data[f.key]) hiddenDatePicker.value = data[f.key];
+      var calBtn = document.createElement('button');
+      calBtn.type = 'button';
+      calBtn.className = 'btn-icon dob-cal-btn';
+      calBtn.title = 'Pick date from calendar';
+      calBtn.setAttribute('aria-label', 'Open date picker');
+      calBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+      calBtn.addEventListener('click', function () {
+        hiddenDatePicker.showPicker ? hiddenDatePicker.showPicker() : hiddenDatePicker.click();
+      });
+      hiddenDatePicker.addEventListener('change', function () {
+        var val = hiddenDatePicker.value;
+        if (!val) return;
+        var parsed = parseDobInput(val);
+        if (parsed) {
+          input.value = parsed.display;
+          formData[f.key] = parsed.iso;
+          var errEl = _getOrCreateFieldError(input);
+          errEl.style.display = 'none';
+          input.classList.remove('input-error');
+          if (f.key === 'dob') updateDobAgeDisplay(input, wrap);
+        }
+      });
+      dobInputRow.appendChild(calBtn);
+      dobInputRow.appendChild(hiddenDatePicker);
     }
 
     if (f.key === 'dob') {
@@ -9386,7 +9435,7 @@ row('Juvenile / Vulnerable', d.juvenileVulnerable) + row('Appropriate adult', d.
 row('Appropriate adult telephone', d.appropriateAdultPhone) + row('Appropriate adult email', d.appropriateAdultEmail) +
 row('Appropriate adult organisation', d.appropriateAdultOrganisation) + (d.appropriateAdultAddress ? row('Appropriate adult address', d.appropriateAdultAddress) : '') +
 row('Injuries', d.injuriesToClient) + row('Injury Details', d.injuryDetails) + row('Photos of injuries requested?', d.photosOfInjuriesRequested) +
-row('Medication', d.medication) + row('Psychiatric/mental health issues?', d.psychiatricIssues) + row('Psychiatric notes', d.psychiatricNotes) +
+row('Medication', d.medicationRequired === 'Yes' ? (d.medication || 'Yes') : (d.medicationRequired || d.medication || '')) + row('Psychiatric/mental health issues?', d.psychiatricIssues) + row('Psychiatric notes', d.psychiatricNotes) +
 row('Literate/can read?', d.literate) + row('Drugs test', d.drugsTest) + row('FME / Nurse / Doctor', d.fmeNurse) + (d.medicalExaminationOutcome ? row('Medical examination outcome', d.medicalExaminationOutcome) : '') +
 row('Fit to be detained?', d.fitToBeDetained) + row('Fit to be interviewed?', d.fitToBeInterviewed) +
 '</table>' +
@@ -9973,7 +10022,7 @@ PDF_CASENOTE_ADVERT +
       row('Youth / Vulnerable?', d.juvenileVulnerable) +
       (d.juvenileVulnerable && d.juvenileVulnerable !== 'No' ? row('Appropriate Adult', d.appropriateAdultName) + row('AA relationship', d.appropriateAdultRelation) + row('AA phone', d.appropriateAdultPhone) + row('AA email', d.appropriateAdultEmail) + row('AA organisation', d.appropriateAdultOrganisation) + (d.appropriateAdultAddress ? row('AA address', d.appropriateAdultAddress) : '') : '') +
       row('Injuries to client?', d.injuriesToClient) + (d.injuriesToClient === 'Yes' ? row('Injury details', d.injuryDetails) : '') +
-      row('Medication', d.medication) +
+      row('Medication', d.medicationRequired === 'Yes' ? (d.medication || 'Yes') : (d.medicationRequired || d.medication || '')) +
       row('Psychiatric / mental health issues?', d.psychiatricIssues) + (d.psychiatricNotes ? row('Details', d.psychiatricNotes) : '') +
       row('Fit to be interviewed?', d.fitToBeInterviewed) +
       '</table>' +

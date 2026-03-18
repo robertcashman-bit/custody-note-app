@@ -1669,6 +1669,36 @@ html.dark .form-group.firm-field select {
 html.dark .dob-age-display.dob-age-minor {
   color: #fca5a5;
 }
+.dob-cal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 6px;
+  background: var(--bg-card, #fff);
+  color: var(--text-secondary, #64748b);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, border-color 0.15s;
+}
+.dob-cal-btn:hover {
+  background: var(--bg-hover, #f1f5f9);
+  border-color: var(--accent, #3b82f6);
+  color: var(--accent, #3b82f6);
+}
+html.dark .dob-cal-btn {
+  background: var(--bg-card, #1e293b);
+  border-color: var(--border, #334155);
+  color: var(--text-secondary, #94a3b8);
+}
+html.dark .dob-cal-btn:hover {
+  background: var(--bg-hover, #334155);
+  border-color: var(--accent, #60a5fa);
+  color: var(--accent, #60a5fa);
+}
 
 .sbt-quick-row {
   display: flex;
