@@ -1,9 +1,23 @@
 {
   "releases": [
     {
-      "version": "1.4.90",
+      "version": "1.4.91",
       "date": "2026-03-17",
       "latest": true,
+      "changes": [
+        "Audit fixes",
+        "New custody fields (strip search, device seizure, special warnings, property, interpreter details)",
+        "Extended detention reviews",
+        "Deleted records restore",
+        "Configurable billing rates",
+        "NI/DOB/date validation",
+        "Unsaved work guards"
+      ]
+    },
+    {
+      "version": "1.4.90",
+      "date": "2026-03-17",
+      "latest": false,
       "changes": [
         "Fix Quick Email templates not filling in officer name, client name, station and other details when a template is selected",
         "Live-update template body and subject as form fields are typed, so placeholders reflect the latest values",

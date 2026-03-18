@@ -608,6 +608,21 @@ function openQuickEmailModal() {
     });
   }
 
+  var _QUICK_BUILTIN_TEMPLATES = [
+    {
+      id: 'builtin:disclosure',
+      name: 'Disclosure Request',
+      subject: '{{clientName}} - {{station}} - Disclosure Request',
+      body: 'Dear DC {{oicName}},\n\nI am writing in relation to {{clientName}}, who was detained at {{station}} on {{date}}.\n\nPlease could you provide disclosure in this matter.\n\nKind regards,\n{{feeEarnerName}}'
+    },
+    {
+      id: 'builtin:bail',
+      name: 'Bail Confirmation',
+      subject: '{{clientName}} - {{station}} - Bail Enquiry',
+      body: 'Dear DC {{oicName}},\n\nI am writing in relation to {{clientName}}, who was detained at {{station}} on {{date}}.\n\nWe understand they were released on police bail. Please confirm the bail return date, time, and any conditions.\n\nKind regards,\n{{feeEarnerName}}'
+    }
+  ];
+
   var _activeRawTemplate = null;
   var _bodyManuallyEdited = false;
   var _subjectManuallyEdited = false;
@@ -625,8 +640,16 @@ function openQuickEmailModal() {
     return (scope === 'all' || scope === 'officer') ? tpl : null;
   }
 
+  function _getBuiltinTemplateById(templateId) {
+    if (!templateId || String(templateId).indexOf('builtin:') !== 0) return null;
+    for (var i = 0; i < _QUICK_BUILTIN_TEMPLATES.length; i++) {
+      if (_QUICK_BUILTIN_TEMPLATES[i].id === templateId) return _QUICK_BUILTIN_TEMPLATES[i];
+    }
+    return null;
+  }
+
   function _applyCustomTemplate(templateId) {
-    var tpl = _getCustomTemplateByIdQuick(templateId);
+    var tpl = _getBuiltinTemplateById(templateId) || _getCustomTemplateByIdQuick(templateId);
     if (!tpl) return;
     _activeRawTemplate = tpl;
     _bodyManuallyEdited = false;
@@ -664,17 +687,25 @@ function openQuickEmailModal() {
 
     var customTemplates = _getCustomTemplatesForQuick();
 
-    var customTemplateHtml = customTemplates.length
-      ? '<label class="email-oic-label" for="quick-email-custom-template">Use saved template</label>' +
-        '<select id="quick-email-custom-template" class="email-oic-input">' +
-          '<option value="">— None (compose freely) —</option>' +
-          customTemplates.map(function(entry) {
-            var tpl = entry.template || {};
-            return '<option value="' + _escAttr(entry.id) + '">' +
-              _escAttr(tpl.name || 'Custom template') + '</option>';
-          }).join('') +
-        '</select>'
-      : '';
+    var builtinOptionsHtml = _QUICK_BUILTIN_TEMPLATES.map(function(tpl) {
+      return '<option value="' + _escAttr(tpl.id) + '">' + _escAttr(tpl.name) + '</option>';
+    }).join('');
+
+    var customOptionsHtml = customTemplates.map(function(entry) {
+      var tpl = entry.template || {};
+      return '<option value="' + _escAttr(entry.id) + '">' +
+        _escAttr(tpl.name || 'Custom template') + '</option>';
+    }).join('');
+
+    var customTemplateHtml =
+      '<label class="email-oic-label" for="quick-email-custom-template">Template</label>' +
+      '<select id="quick-email-custom-template" class="email-oic-input">' +
+        '<option value="">— None (compose freely) —</option>' +
+        '<optgroup label="Built-in">' + builtinOptionsHtml + '</optgroup>' +
+        (customTemplates.length
+          ? '<optgroup label="Saved templates">' + customOptionsHtml + '</optgroup>'
+          : '') +
+      '</select>';
 
     var html =
       '<div id="quick-email-modal" class="email-oic-overlay" role="dialog" aria-modal="true" aria-label="Quick Email">' +
