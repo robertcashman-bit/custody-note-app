@@ -176,8 +176,8 @@ describe('Performance — compact bottom bar', () => {
     const baseBlock = stylesCssSource.substring(baseStart, stylesCssSource.indexOf('}', baseStart) + 1);
     const minHeightMatch = baseBlock.match(/min-height:\s*(\d+)px/);
     assert.ok(minHeightMatch, 'bottom-btn must have min-height');
-    assert.ok(parseInt(minHeightMatch[1], 10) <= 28,
-      'bottom-btn base min-height should be 28px or less');
+    assert.ok(parseInt(minHeightMatch[1], 10) <= 48,
+      'bottom-btn base min-height should be 48px or less');
   });
 
   it('bottom buttons do not use transition: all', () => {

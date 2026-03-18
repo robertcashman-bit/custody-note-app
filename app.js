@@ -4345,6 +4345,8 @@ var REQUIRED_FIELD_KEYS = [
       if (reducedMotion) reducedMotion.checked = s.reducedMotion === 'true';
       var prefEmail = document.getElementById('setting-preferred-email-client');
       if (prefEmail) prefEmail.value = s.preferredEmailClient || 'default';
+      var ipKey = document.getElementById('setting-ideal-postcodes-key');
+      if (ipKey) ipKey.value = s.idealPostcodesApiKey || '';
       applyLayoutPreferences(s || {});
       updateBackupDestSummary(s);
     });
@@ -4542,6 +4544,7 @@ var REQUIRED_FIELD_KEYS = [
       largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
       preferredEmailClient: document.getElementById('setting-preferred-email-client')?.value || 'default',
+      idealPostcodesApiKey: document.getElementById('setting-ideal-postcodes-key')?.value?.trim() || '',
     }).then(() => window.api.getSettings()).then(function(s) {
       applyLayoutPreferences(s || {});
       window._billingDefaults = {
@@ -7779,6 +7782,79 @@ var REQUIRED_FIELD_KEYS = [
       updateDobAgeDisplay(input, wrap);
     }
 
+    if (f.key === 'postCode') {
+      var pcRow = document.createElement('div');
+      pcRow.style.cssText = 'display:flex;align-items:center;gap:0.4rem;';
+      input.parentNode.insertBefore(pcRow, input);
+      pcRow.appendChild(input);
+      var pcBtn = document.createElement('button');
+      pcBtn.type = 'button';
+      pcBtn.className = 'btn-postcode-lookup';
+      pcBtn.textContent = 'Find Address';
+      pcBtn.title = 'Look up address from this postcode';
+      pcRow.appendChild(pcBtn);
+      var pcDropWrap = document.createElement('div');
+      pcDropWrap.className = 'postcode-results-wrap';
+      pcDropWrap.style.display = 'none';
+      var pcSelect = document.createElement('select');
+      pcSelect.className = 'postcode-results-select';
+      pcDropWrap.appendChild(pcSelect);
+      wrap.appendChild(pcDropWrap);
+
+      pcBtn.addEventListener('click', function() {
+        var pc = input.value.trim();
+        if (!pc) { showToast('Enter a postcode first', 'warning'); return; }
+        pcBtn.disabled = true;
+        pcBtn.textContent = 'Looking up…';
+        window.api.postcodeLookup(pc).then(function(r) {
+          pcBtn.disabled = false;
+          pcBtn.textContent = 'Find Address';
+          if (!r.ok) { showToast(r.error || 'Lookup failed', 'error'); return; }
+          if (!r.addresses || !r.addresses.length) { showToast('No addresses found for this postcode', 'warning'); return; }
+          pcSelect.innerHTML = '<option value="">Select an address (' + r.addresses.length + ' found)…</option>';
+          r.addresses.forEach(function(addr, idx) {
+            var opt = document.createElement('option');
+            opt.value = idx;
+            opt.textContent = addr.summary;
+            pcSelect.appendChild(opt);
+          });
+          pcDropWrap.style.display = 'block';
+          pcDropWrap._addresses = r.addresses;
+          pcSelect.focus();
+          window.api.postcodeCheckKey().then(function(kr) {
+            if (kr.ok && kr.lookups_remaining != null && kr.lookups_remaining <= 5) {
+              showToast('Low postcode credits! Only ' + kr.lookups_remaining + ' remaining. Buy more in Settings > Integrations.', 'warning');
+            }
+          });
+        }).catch(function() {
+          pcBtn.disabled = false;
+          pcBtn.textContent = 'Find Address';
+          showToast('Postcode lookup failed — check your connection', 'error');
+        });
+      });
+
+      pcSelect.addEventListener('change', function() {
+        var idx = parseInt(pcSelect.value, 10);
+        if (isNaN(idx) || !pcDropWrap._addresses) return;
+        var addr = pcDropWrap._addresses[idx];
+        if (!addr) return;
+        var form = document.getElementById('attendance-form') || document;
+        var setField = function(key, val) {
+          formData[key] = val;
+          var el = form.querySelector('[data-field="' + key + '"]');
+          if (el) { el.value = val; el.dispatchEvent(new Event('input', { bubbles: true })); }
+        };
+        setField('address1', addr.line1);
+        setField('address2', addr.line2);
+        setField('address3', addr.line3);
+        setField('city', addr.city);
+        setField('county', addr.county);
+        if (addr.postcode) { input.value = addr.postcode; formData.postCode = addr.postcode; }
+        pcDropWrap.style.display = 'none';
+        showToast('Address filled', 'success');
+      });
+    }
+
     if (f.type === 'textarea') {
       const wc = document.createElement('div');
       wc.className = 'word-counter';
@@ -8233,28 +8309,57 @@ var REQUIRED_FIELD_KEYS = [
     section.insertBefore(wrap, section.firstChild);
   }
 
-  /* ─── NO COMMENT INTERVIEW TEMPLATE ─── */
+  /* ─── QUICK INTERVIEW TEMPLATE DROPDOWN ─── */
+  var _QUICK_IV_TEMPLATES = [
+    { value: '', label: 'Quick fill interview\u2026' },
+    { value: 'no-comment', label: 'No Comment Interview',
+      notes: 'No comment to all questions put. Client remained silent throughout as advised.' },
+    { value: 'commented', label: 'Commented Interview (answered questions)',
+      notes: 'Client answered all questions put to them openly and cooperated fully with the interview.' },
+    { value: 'prepared-statement', label: 'Prepared Statement \u2013 then No Comment',
+      notes: 'Client read out a prepared statement at the start of the interview. No comment to all further questions put thereafter.' },
+    { value: 'mixed', label: 'Mixed Interview (partial answers)',
+      notes: 'Client answered some questions but exercised the right to no comment on others.' },
+    { value: 'prepared-then-answered', label: 'Prepared Statement \u2013 then Answered',
+      notes: 'Client read out a prepared statement at the start of the interview and then answered questions put by officers.' },
+    { value: 'declined', label: 'Interview Declined / Not Proceeded With',
+      notes: 'Interview did not proceed. Client was not interviewed at this time.' },
+  ];
+
   function renderNoCommentButton(section) {
-    const btn = document.createElement('button');
-    btn.type = 'button'; btn.className = 'btn-no-comment';
-    btn.textContent = 'Quick: No Comment Interview';
-    btn.addEventListener('click', () => {
+    var wrap = document.createElement('div');
+    wrap.className = 'quick-iv-wrap';
+
+    var sel = document.createElement('select');
+    sel.className = 'quick-iv-select';
+    _QUICK_IV_TEMPLATES.forEach(function(t) {
+      var opt = document.createElement('option');
+      opt.value = t.value; opt.textContent = t.label;
+      sel.appendChild(opt);
+    });
+
+    sel.addEventListener('change', function() {
+      var chosen = _QUICK_IV_TEMPLATES.find(function(t) { return t.value === sel.value; });
+      if (!chosen || !chosen.value) return;
       if (!formData.interviews) formData.interviews = [{}];
-      const iv = formData.interviews[0];
-      const now = new Date();
+      var iv = formData.interviews[0];
+      var now = new Date();
       if (!iv.startTime) iv.startTime = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
       iv.cautioned = 'Yes';
-      iv.notes = 'No comment to all questions put. Client remained silent throughout as advised.';
-      const container = document.getElementById('multi-interview-container');
+      iv.notes = chosen.notes;
+      var container = document.getElementById('multi-interview-container');
       if (container) {
-        const sec = activeFormSections.find(s => s.multiInterview);
+        var sec = activeFormSections.find(function(s) { return s.multiInterview; });
         if (sec) {
           container.remove();
           renderMultiInterview(section, formData, sec);
         }
       }
+      sel.value = '';
     });
-    section.insertBefore(btn, section.firstChild);
+
+    wrap.appendChild(sel);
+    section.insertBefore(wrap, section.firstChild);
   }
 
   /* ─── CONDITIONAL VISIBILITY ─── */
@@ -13436,6 +13541,30 @@ PDF_CASENOTE_ADVERT +
     });
     document.getElementById('btn-save-import-qf')?.addEventListener('click', function() {
       saveAndImportQuickFile();
+    });
+    document.getElementById('btn-check-postcode-key')?.addEventListener('click', function() {
+      var statusEl = document.getElementById('postcode-credits-status');
+      if (statusEl) statusEl.textContent = 'Checking…';
+      saveSettings();
+      setTimeout(function() {
+        window.api.postcodeCheckKey().then(function(r) {
+          if (!statusEl) return;
+          if (!r.configured) {
+            statusEl.textContent = 'No API key entered.';
+            statusEl.style.color = '#dc2626';
+          } else if (r.ok) {
+            var rem = r.lookups_remaining;
+            statusEl.textContent = rem + ' lookups remaining';
+            statusEl.style.color = rem <= 5 ? '#dc2626' : '#16a34a';
+            if (rem <= 5) {
+              showToast('Low postcode credits! Only ' + rem + ' lookups remaining.', 'warning');
+            }
+          } else {
+            statusEl.textContent = r.error || 'Could not verify key.';
+            statusEl.style.color = '#dc2626';
+          }
+        });
+      }, 500);
     });
     ['crm1', 'crm2', 'crm3', 'declaration'].forEach(function(ft) {
       var btn = document.getElementById('settings-laa-' + ft);
