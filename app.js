@@ -5962,12 +5962,21 @@ var REQUIRED_FIELD_KEYS = [
         const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
         var _standaloneUiDebounce = null;
         form.querySelectorAll('select, input, textarea').forEach(el => {
+          var isTextLike = (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox','radio','hidden','date','time','file'].includes(el.type)));
+          if (isTextLike) {
+            el.addEventListener('input', () => {
+              if (_suppressChangeHandlers) return;
+              var field = el.dataset.field || el.name;
+              if (field) formData[field] = el.value;
+              scheduleQuietSave();
+            });
+          }
           el.addEventListener('change', () => {
             if (_suppressChangeHandlers) return;
             var field = el.dataset.field || el.name;
             if (field) { if (el.type === 'checkbox') formData[field] = el.checked; else formData[field] = el.value; }
             clearTimeout(_standaloneUiDebounce);
-            _standaloneUiDebounce = setTimeout(function() { collectCurrentData(); applyConditionalVisibility(); updateContextBar(); }, 200);
+            _standaloneUiDebounce = setTimeout(function() { applyConditionalVisibility(); updateContextBar(); }, 250);
             scheduleQuietSave();
           });
           el.addEventListener('blur', () => {
@@ -6013,6 +6022,15 @@ var REQUIRED_FIELD_KEYS = [
 
     function attachSectionListeners(sectionEl) {
       sectionEl.querySelectorAll('select, input, textarea').forEach(el => {
+        var isTextLike = (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox','radio','hidden','date','time','file'].includes(el.type)));
+        if (isTextLike) {
+          el.addEventListener('input', () => {
+            if (_suppressChangeHandlers) return;
+            var field = el.dataset.field || el.name;
+            if (field) formData[field] = el.value;
+            scheduleQuietSave();
+          });
+        }
         el.addEventListener('change', () => {
           if (_suppressChangeHandlers) return;
           var field = el.dataset.field || el.name;
@@ -6060,6 +6078,7 @@ var REQUIRED_FIELD_KEYS = [
             formData.workType = isVol ? 'Voluntary Police Station Attendance' : (formData.workType || 'First Police Station Attendance');
             currentSectionIdx = 0;
             _renderedSections = {};
+            _progressBarBuilt = false;
             renderForm(formData);
             showView('new');
             return;
@@ -9369,24 +9388,36 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
+  var _progressBarBuilt = false;
   function updateProgressBar() {
     var bars = [document.getElementById('section-progress-bar'), document.getElementById('section-progress-bar-2')];
+    var needsRebuild = !_progressBarBuilt || !bars[0] || bars[0].children.length === 0;
     bars.forEach(function(bar) {
       if (!bar) return;
-      bar.innerHTML = '';
+      if (needsRebuild) {
+        bar.innerHTML = '';
+        forEachVisibleSection(function(sec, i) {
+          var dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'prog-dot';
+          dot.title = sec.title;
+          dot.dataset.secIdx = i;
+          dot.addEventListener('click', function() { showSection(i); });
+          bar.appendChild(dot);
+        });
+      }
+      var dots = bar.querySelectorAll('.prog-dot');
+      var visIdx = 0;
       forEachVisibleSection(function(sec, i) {
-        var dot = document.createElement('button');
-        dot.type = 'button';
-        dot.className = 'prog-dot';
-        dot.title = sec.title;
+        var dot = dots[visIdx++];
+        if (!dot) return;
         var state = computeSectionVisualState(i);
-        dot.classList.add('state-' + state);
+        dot.className = 'prog-dot state-' + state;
         if (state === 'complete') dot.classList.add('filled');
         if (i === currentSectionIdx) dot.classList.add('current');
-        dot.addEventListener('click', function() { showSection(i); });
-        bar.appendChild(dot);
       });
     });
+    _progressBarBuilt = true;
   }
 
   /* ═══════════════════════════════════════════════

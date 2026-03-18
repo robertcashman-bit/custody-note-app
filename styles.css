@@ -1582,7 +1582,7 @@ html.dark .home-attention-item:hover {
 
 /* Form area */
 .attendance-form {
-  flex: 1; overflow-y: auto;
+  flex: 1; overflow-y: auto; overflow-x: hidden;
   padding: 1rem 1.25rem;
   background: var(--surface); width: 100%; min-width: 0;
   color: var(--on-surface);
@@ -1590,6 +1590,7 @@ html.dark .home-attention-item:hover {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
   contain: layout style;
+  transform: translateZ(0);
 }
 
 .form-section { display: none; width: 100%; min-width: 0; contain: content; }
