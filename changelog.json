@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.105",
+      "version": "1.4.106",
       "date": "2026-03-18",
       "latest": true,
+      "changes": [
+        "Fixed scroll cut-off — Reports, Authorities, Help, Station Mileage and Quick Capture screens now scroll fully to the bottom",
+        "Fixed attendance form content being clipped in compact and comfortable density modes",
+        "Slimmed the right-side scrollbar from 44px to 10px — cleaner, more space for content",
+        "Native scrollbars across the app are now thin (8px default) and scale via Settings",
+        "App layout now adapts to viewport height — smaller windows reduce nav bar size and hide text labels to save space"
+      ]
+    },
+    {
+      "version": "1.4.105",
+      "date": "2026-03-18",
+      "latest": false,
       "changes": [
         "Fixed postcode URL encoding — postcodes with spaces (e.g. SW1A 2AA) were being sent as SW1A%2B2AA instead of SW1A2AA, causing lookups to fail even with a valid API key"
       ]
