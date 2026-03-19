@@ -5776,7 +5776,10 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
   const settings = Object.fromEntries(dbAll('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
   const apiKey = (settings.idealPostcodesApiKey || '').trim();
   if (!apiKey) return { ok: false, error: 'No API key configured. Add your Ideal Postcodes API key in Settings > Integrations.' };
-  const pc = (postcode || '').trim().replace(/\s+/g, '+');
+  /* Strip spaces entirely — Ideal Postcodes expects the path segment with no
+     spaces (e.g. SW1A2AA).  Using + then encodeURIComponent would produce
+     %2B which the API treats as a literal plus, not a space. */
+  const pc = (postcode || '').trim().replace(/\s+/g, '');
   if (!pc) return { ok: false, error: 'No postcode entered.' };
   const url = `https://api.ideal-postcodes.co.uk/v1/postcodes/${encodeURIComponent(pc)}?api_key=${encodeURIComponent(apiKey)}`;
   const res = await httpsGetWithTimeout(url, 10000);
