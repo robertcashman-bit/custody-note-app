@@ -244,6 +244,8 @@ function saveSettings() {
     /* Explicit save ensures the DB always reflects the current dropdown value even if the
        live-save change-event was missed (e.g. programmatic value changes). */
     preferredEmailClient: document.getElementById('setting-preferred-email-client')?.value || 'default',
+    idealPostcodesApiKey: (document.getElementById('setting-ideal-postcodes-key') || { value: '' }).value.trim() || '',
+    idealPostcodesUserToken: (document.getElementById('setting-ideal-postcodes-user-token') || { value: '' }).value.trim() || '',
   }).then(function() {
     /* Sync global flag so list refreshes immediately reflect the toggle */
     window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;

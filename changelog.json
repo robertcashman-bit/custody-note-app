@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.107",
+      "version": "1.4.108",
       "date": "2026-03-18",
       "latest": true,
+      "changes": [
+        "Fixed postcode 'Check credits' showing undefined — uses Ideal Postcodes /keys/.../details for balance when available, otherwise /keys/... availability (API key validity)",
+        "Optional User Token field (from ideal-postcodes.co.uk/account) for exact remaining lookups when the API requires it",
+        "Postcode API key and user token now included when you click Save settings (Integrations tab)",
+        "Cloud backup home banner: dismiss is permanent (stored in settings + localStorage) — no more re-prompt every 7 days after updates",
+        "Cloud restore prompt: snooze extended from 7 days to 180 days if you choose Continue without restoring"
+      ]
+    },
+    {
+      "version": "1.4.107",
+      "date": "2026-03-18",
+      "latest": false,
       "changes": [
         "Full UI overhaul — bigger buttons, cleaner layouts, easier to use on all screen sizes",
         "All buttons and form inputs now meet 48px minimum touch target (Material Design guidelines)",

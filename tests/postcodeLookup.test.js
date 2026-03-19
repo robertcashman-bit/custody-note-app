@@ -92,14 +92,22 @@ describe('Postcode IPC handlers – source code', () => {
  * Re-implement the handler logic in isolation (no Electron / SQLite needed)
  * so we can unit-test every branch with a mock HTTP response.
  */
-function buildHandlerWithMocks({ dbSettings = {}, httpResponse = null, httpError = null } = {}) {
+function buildHandlerWithMocks({ dbSettings = {}, httpResponse = null, httpSequence = null, httpError = null } = {}) {
   /* Fake dbAll */
   const dbAll = () => Object.entries(dbSettings).map(([key, value]) => ({ key, value }));
 
-  /* Fake httpsGetWithTimeout */
+  const seq = httpSequence != null
+    ? httpSequence.map((x) => (x && typeof x === 'object' && 'body' in x ? x : { statusCode: 200, body: x }))
+    : (httpResponse != null ? [{ statusCode: 200, body: httpResponse }] : []);
+  let httpIdx = 0;
+  /* Fake httpsGetWithTimeout — supports multiple sequential responses (details + availability) */
   async function httpsGetWithTimeout() {
     if (httpError) return { ok: false, error: httpError };
-    return { ok: true, statusCode: 200, body: JSON.stringify(httpResponse) };
+    const item = seq[httpIdx++];
+    if (!item) return { ok: false, error: 'no mock HTTP response' };
+    const statusCode = item.statusCode != null ? item.statusCode : 200;
+    const bodyStr = typeof item.body === 'string' ? item.body : JSON.stringify(item.body);
+    return { ok: true, statusCode, body: bodyStr };
   }
 
   async function postcodeLookupHandler(postcode) {
@@ -136,12 +144,39 @@ function buildHandlerWithMocks({ dbSettings = {}, httpResponse = null, httpError
   async function postcodeCheckKeyHandler() {
     const settings = Object.fromEntries(dbAll('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
     const apiKey = (settings.idealPostcodesApiKey || '').trim();
+    const userToken = (settings.idealPostcodesUserToken || '').trim();
     if (!apiKey) return { ok: false, configured: false };
+
+    const detailsRes = await httpsGetWithTimeout();
+    if (detailsRes.ok && detailsRes.statusCode === 200) {
+      try {
+        const dj = JSON.parse(detailsRes.body);
+        if (dj.code === 2000 && dj.result && typeof dj.result.lookups_remaining === 'number') {
+          return { ok: true, configured: true, lookups_remaining: dj.result.lookups_remaining };
+        }
+      } catch (_) { /* fall through */ }
+    }
+
     const res = await httpsGetWithTimeout();
     if (!res.ok) return { ok: false, configured: true, error: res.error };
     try {
       const json = JSON.parse(res.body);
-      if (json.result) return { ok: true, configured: true, lookups_remaining: json.result.lookups_remaining };
+      if (json.code === 2000 && json.result && typeof json.result.available === 'boolean') {
+        const hint = userToken
+          ? ''
+          : 'Exact balance: add your User Token from ideal-postcodes.co.uk/account (below), or check your dashboard there.';
+        return {
+          ok: true,
+          configured: true,
+          availability_only: true,
+          key_available: json.result.available,
+          lookups_remaining: null,
+          message: json.result.available
+            ? 'API key is valid and can be used for lookups.'
+            : 'This key is not currently available (no credits, limits, or restrictions). Check your Ideal Postcodes account.',
+          hint,
+        };
+      }
       if (res.statusCode === 404) return { ok: false, configured: true, error: 'API key not recognised. Check the key in Settings.' };
       return { ok: false, configured: true, error: json.message || 'Could not verify key.' };
     } catch (_) { return { ok: false, configured: true, error: 'Bad response from Ideal Postcodes.' }; }
@@ -273,14 +308,29 @@ describe('Postcode IPC handlers – unit tests', () => {
     assert.strictEqual(result.configured, false);
   });
 
-  it('postcode-check-key returns lookups_remaining on success', async () => {
+  it('postcode-check-key returns lookups_remaining when /details returns 2000', async () => {
     const { postcodeCheckKeyHandler } = buildHandlerWithMocks({
       dbSettings: { idealPostcodesApiKey: 'ak_test' },
-      httpResponse: { result: { lookups_remaining: 42 } },
+      httpSequence: [{ statusCode: 200, body: { code: 2000, result: { lookups_remaining: 42 } } }],
     });
     const result = await postcodeCheckKeyHandler();
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.lookups_remaining, 42);
+  });
+
+  it('postcode-check-key falls back to availability when details not 200', async () => {
+    const { postcodeCheckKeyHandler } = buildHandlerWithMocks({
+      dbSettings: { idealPostcodesApiKey: 'ak_test' },
+      httpSequence: [
+        { statusCode: 401, body: { code: 4010, message: 'Unauthorised' } },
+        { statusCode: 200, body: { code: 2000, result: { available: true, context: '', contexts: [] } } },
+      ],
+    });
+    const result = await postcodeCheckKeyHandler();
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.availability_only, true);
+    assert.strictEqual(result.key_available, true);
+    assert.strictEqual(result.lookups_remaining, null);
   });
 });
 

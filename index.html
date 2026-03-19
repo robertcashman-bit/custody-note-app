@@ -932,6 +932,9 @@
           <p class="settings-hint">Look up a UK address by postcode when filling in client details. Powered by <a href="https://ideal-postcodes.co.uk" target="_blank" rel="noopener noreferrer">Ideal Postcodes</a> (pay-as-you-go, no subscription).</p>
           <label>API key</label>
           <input type="text" id="setting-ideal-postcodes-key" placeholder="ak_xxxxxxxxxxxxxxxxx" autocomplete="off">
+          <label style="margin-top:0.75rem;">User token (optional — for &ldquo;Check credits&rdquo; exact balance)</label>
+          <input type="password" id="setting-ideal-postcodes-user-token" placeholder="uk_… from ideal-postcodes.co.uk/account" autocomplete="off">
+          <p class="settings-hint" style="margin-top:0.25rem;">Ideal Postcodes only exposes remaining lookups on the private <strong>/details</strong> API, which needs this token. Without it, <strong>Check credits</strong> still confirms your API key is valid; buy top-ups at ideal-postcodes.co.uk as usual.</p>
           <div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:0.75rem;align-items:center;">
             <button type="button" id="btn-check-postcode-key" class="btn btn-secondary">Check credits</button>
             <span id="postcode-credits-status" class="settings-hint" style="margin:0;"></span>

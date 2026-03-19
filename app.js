@@ -4350,6 +4350,8 @@ var REQUIRED_FIELD_KEYS = [
       if (prefEmail) prefEmail.value = s.preferredEmailClient || 'default';
       var ipKey = document.getElementById('setting-ideal-postcodes-key');
       if (ipKey) ipKey.value = s.idealPostcodesApiKey || '';
+      var ipUt = document.getElementById('setting-ideal-postcodes-user-token');
+      if (ipUt) ipUt.value = s.idealPostcodesUserToken || '';
       applyLayoutPreferences(s || {});
       updateBackupDestSummary(s);
     });
@@ -4548,6 +4550,7 @@ var REQUIRED_FIELD_KEYS = [
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
       preferredEmailClient: document.getElementById('setting-preferred-email-client')?.value || 'default',
       idealPostcodesApiKey: document.getElementById('setting-ideal-postcodes-key')?.value?.trim() || '',
+      idealPostcodesUserToken: document.getElementById('setting-ideal-postcodes-user-token')?.value?.trim() || '',
     }).then(() => window.api.getSettings()).then(function(s) {
       window._appSettingsCache = s || {};
       applyLayoutPreferences(s || {});
@@ -13126,7 +13129,10 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('home-cloud-backup-dismiss')?.addEventListener('click', function() {
       var el = document.getElementById('home-cloud-backup-warning');
       if (el) el.style.display = 'none';
-      try { localStorage.setItem('cloud-backup-warning-dismissed', Date.now()); } catch (_) {}
+      try { localStorage.setItem('cloud-backup-warning-dismissed', 'permanent'); } catch (_) {}
+      if (window.api && window.api.setSettings) {
+        window.api.setSettings({ cloudBackupHomeBannerDismissed: 'true' }).catch(function() {});
+      }
     });
     document.getElementById('btn-cloud-backup-restore')?.addEventListener('click', function() {
       var panel = document.getElementById('cloud-restore-panel');
@@ -13417,19 +13423,29 @@ PDF_CASENOTE_ADVERT +
           if (typeof checkCloudBackupAndPromptRestore === 'function') checkCloudBackupAndPromptRestore();
         } else {
           if (footerEl) { setFooterIndicator(footerEl, 'Local only', 'warning'); footerEl.style.cursor = 'pointer'; }
-          // Show warning unless recently dismissed (within 7 days)
-          try {
-            var dismissed = localStorage.getItem('cloud-backup-warning-dismissed');
-            var showWarning = !dismissed || (Date.now() - parseInt(dismissed, 10)) > 7 * 24 * 60 * 60 * 1000;
-            if (homeWarning && showWarning) homeWarning.style.display = '';
-          } catch (_) {
-            if (homeWarning) homeWarning.style.display = '';
+          /* Show warning only if user has not permanently dismissed it (DB + legacy localStorage). */
+          function applyHomeCloudBannerVisibility(s) {
+            try {
+              var ls = localStorage.getItem('cloud-backup-warning-dismissed');
+              var dbDismissed = s && s.cloudBackupHomeBannerDismissed === 'true';
+              /* Permanent string, DB flag, or any legacy numeric dismiss (old builds re-showed after 7 days) */
+              var legacyNum = ls && ls !== 'permanent' ? parseInt(ls, 10) : NaN;
+              var dismissed = ls === 'permanent' || dbDismissed || (!Number.isNaN(legacyNum) && legacyNum > 0);
+              if (homeWarning) homeWarning.style.display = dismissed ? 'none' : '';
+            } catch (_) {
+              if (homeWarning) homeWarning.style.display = '';
+            }
+          }
+          if (window.api.getSettings) {
+            window.api.getSettings().then(function(s) { applyHomeCloudBannerVisibility(s); }).catch(function() { applyHomeCloudBannerVisibility(null); });
+          } else {
+            applyHomeCloudBannerVisibility(null);
           }
         }
       });
     }
 
-    /* Cloud backup: check for backups and prompt to restore or continue (remembers dismissal for 7 days) */
+    /* Cloud backup: check for backups and prompt to restore or continue (remembers dismissal 180 days) */
     var _cloudBackupRestorePromptChecked = false;
     function checkCloudBackupAndPromptRestore() {
       if (_cloudBackupRestorePromptChecked || !window.api || !window.api.cloudBackupList || !window.api.cloudBackupStatus) return;
@@ -13441,8 +13457,8 @@ PDF_CASENOTE_ADVERT +
           if (!resp || !resp.backups || resp.backups.length === 0) return;
           try {
             var dismissedAt = localStorage.getItem('cloudBackupRestorePromptDismissedAt');
-            var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
-            if (dismissedAt && (Date.now() - parseInt(dismissedAt, 10)) < sevenDaysMs) return;
+            var snoozeMs = 180 * 24 * 60 * 60 * 1000;
+            if (dismissedAt && (Date.now() - parseInt(dismissedAt, 10)) < snoozeMs) return;
           } catch (_) {}
           showCloudBackupRestorePromptModal(resp.backups);
         });
@@ -13822,8 +13838,10 @@ PDF_CASENOTE_ADVERT +
         return;
       }
       if (statusEl) { statusEl.textContent = 'Checking\u2026'; statusEl.style.color = ''; }
-      /* Save the key to DB first, then immediately check — no arbitrary timeout */
-      window.api.setSettings({ idealPostcodesApiKey: apiKey })
+      var utEl = document.getElementById('setting-ideal-postcodes-user-token');
+      var userTok = utEl ? utEl.value.trim() : '';
+      /* Save key + optional user token to DB first, then check */
+      window.api.setSettings({ idealPostcodesApiKey: apiKey, idealPostcodesUserToken: userTok })
         .then(function() { return window.api.postcodeCheckKey(); })
         .then(function(r) {
           if (!statusEl) return;
@@ -13831,10 +13849,20 @@ PDF_CASENOTE_ADVERT +
             statusEl.textContent = 'No API key saved.';
             statusEl.style.color = '#dc2626';
           } else if (r.ok) {
-            var rem = r.lookups_remaining;
-            statusEl.textContent = rem + ' lookups remaining';
-            statusEl.style.color = rem <= 5 ? '#ef4444' : '#16a34a';
-            if (rem <= 5) showToast('Low postcode credits! Only ' + rem + ' lookups remaining.', 'warning');
+            if (r.availability_only) {
+              statusEl.textContent = (r.message || 'Key verified.') + (r.hint ? ' ' + r.hint : '');
+              statusEl.style.color = r.key_available ? '#16a34a' : '#d97706';
+            } else {
+              var rem = r.lookups_remaining;
+              if (rem == null || rem === '') {
+                statusEl.textContent = r.message || 'Could not read credit balance.';
+                statusEl.style.color = '#d97706';
+              } else {
+                statusEl.textContent = rem + ' lookups remaining';
+                statusEl.style.color = rem <= 5 ? '#ef4444' : '#16a34a';
+                if (rem <= 5) showToast('Low postcode credits! Only ' + rem + ' lookups remaining.', 'warning');
+              }
+            }
           } else {
             statusEl.textContent = r.error || 'Could not verify key.';
             statusEl.style.color = '#dc2626';
