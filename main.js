@@ -5773,7 +5773,7 @@ function httpsGetWithTimeout(url, timeoutMs) {
 }
 
 ipcMain.handle('postcode-lookup', async (_, postcode) => {
-  const settings = readSettings();
+  const settings = Object.fromEntries(dbAll('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
   const apiKey = (settings.idealPostcodesApiKey || '').trim();
   if (!apiKey) return { ok: false, error: 'No API key configured. Add your Ideal Postcodes API key in Settings > Integrations.' };
   const pc = (postcode || '').trim().replace(/\s+/g, '+');
@@ -5805,7 +5805,7 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
 });
 
 ipcMain.handle('postcode-check-key', async () => {
-  const settings = readSettings();
+  const settings = Object.fromEntries(dbAll('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
   const apiKey = (settings.idealPostcodesApiKey || '').trim();
   if (!apiKey) return { ok: false, configured: false };
   const url = `https://api.ideal-postcodes.co.uk/v1/keys/${encodeURIComponent(apiKey)}`;
