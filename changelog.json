@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.103",
+      "version": "1.4.104",
       "date": "2026-03-18",
       "latest": true,
+      "changes": [
+        "Fixed postcode lookup — 'Find Address' button now correctly reads the API key from settings and fills all address fields"
+      ]
+    },
+    {
+      "version": "1.4.103",
+      "date": "2026-03-18",
+      "latest": false,
       "changes": [
         "Fixed email client switching: billing emails now respect the preferred email client setting",
         "Fixed settings save not persisting the preferred email client choice",
