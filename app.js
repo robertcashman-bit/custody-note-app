@@ -5946,8 +5946,8 @@ var REQUIRED_FIELD_KEYS = [
       state.rail.style.top = top + 'px';
       state.rail.style.height = height + 'px';
       state.trackH = height;
-      state.thumbH = Math.max(56, Math.round((state.form.clientHeight / state.form.scrollHeight) * state.trackH));
-      state.thumbH = Math.min(state.thumbH, Math.max(56, state.trackH - 8));
+      state.thumbH = Math.max(30, Math.round((state.form.clientHeight / state.form.scrollHeight) * state.trackH));
+      state.thumbH = Math.min(state.thumbH, Math.max(30, state.trackH - 8));
       updateThumbOnly();
       state.rail.classList.add('visible');
     }
@@ -11473,7 +11473,8 @@ PDF_CASENOTE_ADVERT +
      SCROLLBAR SIZE
      ═══════════════════════════════════════════════ */
   function applyScrollbarSize(scale) {
-    var w = 20 * Number(scale || 1);
+    /* Base 8px × scale — at scale=1 gives a standard thin scrollbar; scale=4 gives 32px */
+    var w = Math.round(8 * Number(scale || 1));
     document.documentElement.style.setProperty('--scrollbar-w', w + 'px');
   }
 
