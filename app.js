@@ -7810,7 +7810,14 @@ var REQUIRED_FIELD_KEYS = [
         var d = parseInt(daySel.value, 10);
         var m = parseInt(monthSel.value, 10);
         var y = parseInt(yearSel.value, 10);
-        if (!d || !m || !y) return;
+        if (!d || !m || !y) {
+          var parts = [];
+          parts.push(d ? (d < 10 ? '0' + d : '' + d) : 'DD');
+          parts.push(m ? (m < 10 ? '0' + m : '' + m) : 'MM');
+          parts.push(y ? '' + y : 'YYYY');
+          input.value = parts.join('/');
+          return;
+        }
         var iso = y + '-' + (m < 10 ? '0' + m : m) + '-' + (d < 10 ? '0' + d : d);
         var parsed = parseDobInput(iso);
         if (parsed) {
