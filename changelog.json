@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.104",
+      "version": "1.4.105",
       "date": "2026-03-18",
       "latest": true,
+      "changes": [
+        "Fixed postcode URL encoding — postcodes with spaces (e.g. SW1A 2AA) were being sent as SW1A%2B2AA instead of SW1A2AA, causing lookups to fail even with a valid API key"
+      ]
+    },
+    {
+      "version": "1.4.104",
+      "date": "2026-03-18",
+      "latest": false,
       "changes": [
         "Fixed postcode lookup — 'Find Address' button now correctly reads the API key from settings and fills all address fields"
       ]
