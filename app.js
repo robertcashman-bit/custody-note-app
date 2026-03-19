@@ -2078,6 +2078,17 @@ var REQUIRED_FIELD_KEYS = [
   }
   /* ─── INPUT VALIDATION HELPERS ─── */
   var PHONE_REGEX = /^[\d\s+\-()]*$/;
+
+  /** True if empty, a normal phone-shaped string, or an explicit None/N/A style sentinel. */
+  function isValidPhoneOrSentinel(v) {
+    var s = String(v || '').trim();
+    if (!s) return true;
+    if (PHONE_REGEX.test(s)) return true;
+    var lower = s.toLowerCase().replace(/\s+/g, ' ').trim();
+    return lower === 'none' || lower === 'n/a' || lower === 'na' ||
+      lower === 'not applicable' || lower === 'not known' || lower === 'unknown' ||
+      lower === 'n/k' || lower === 'n.k.';
+  }
   var EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   var NI_REGEX = /^[A-Za-z]{2}\d{6}[A-Za-z]$/;
 
@@ -2093,11 +2104,12 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function attachPhoneValidation(inputEl) {
+    var phoneHint = 'Digits, spaces, +, -, brackets — or None / N/A / Not applicable';
     inputEl.addEventListener('input', function () {
       var v = inputEl.value;
       var errEl = _getOrCreateFieldError(inputEl);
-      if (v && !PHONE_REGEX.test(v)) {
-        errEl.textContent = 'Numbers only (digits, spaces, + and - allowed)';
+      if (v && !isValidPhoneOrSentinel(v)) {
+        errEl.textContent = phoneHint;
         errEl.style.display = 'block';
         inputEl.classList.add('input-error');
       } else {
@@ -2108,8 +2120,8 @@ var REQUIRED_FIELD_KEYS = [
     inputEl.addEventListener('blur', function () {
       var v = inputEl.value;
       var errEl = _getOrCreateFieldError(inputEl);
-      if (v && !PHONE_REGEX.test(v)) {
-        errEl.textContent = 'Numbers only (digits, spaces, + and - allowed)';
+      if (v && !isValidPhoneOrSentinel(v)) {
+        errEl.textContent = phoneHint;
         errEl.style.display = 'block';
         inputEl.classList.add('input-error');
       } else {
@@ -2668,7 +2680,14 @@ var REQUIRED_FIELD_KEYS = [
     } catch (_) { return iso; }
   }
 
+  var _currentView = null;
+  var _showViewCooldown = 0;
+
   function showView(name) {
+    var now = Date.now();
+    if (name === _currentView && now - _showViewCooldown < 100) return;
+    _showViewCooldown = now;
+    _currentView = name;
     if (_homeGreetingTimer) { clearInterval(_homeGreetingTimer); _homeGreetingTimer = null; }
     Object.keys(views).forEach(k => {
       document.getElementById(views[k])?.classList.toggle('active', k === name);
@@ -4548,7 +4567,7 @@ var REQUIRED_FIELD_KEYS = [
       highContrast: document.getElementById('setting-high-contrast')?.checked ? 'true' : 'false',
       largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
-      preferredEmailClient: document.getElementById('setting-preferred-email-client')?.value || 'default',
+      preferredEmailClient: (window._appSettingsCache || {}).preferredEmailClient || document.getElementById('setting-preferred-email-client')?.value || 'default',
       idealPostcodesApiKey: document.getElementById('setting-ideal-postcodes-key')?.value?.trim() || '',
       idealPostcodesUserToken: document.getElementById('setting-ideal-postcodes-user-token')?.value?.trim() || '',
     }).then(() => window.api.getSettings()).then(function(s) {
@@ -4693,7 +4712,7 @@ var REQUIRED_FIELD_KEYS = [
           '<label>Name <input class="fe-name" value="' + esc(firm.name) + '" placeholder="Firm name"></label>' +
           '<label>LAA Account <input class="fe-laa" value="' + esc(firm.laa_account || '') + '" placeholder="LAA account no."></label>' +
           '<label>Contact <input class="fe-contact" value="' + esc(firm.contact_name || '') + '" placeholder="Contact name"></label>' +
-          '<label>Phone <input class="fe-phone" value="' + esc(firm.contact_phone || '') + '" placeholder="Phone"></label>' +
+          '<label>Phone <input type="tel" class="fe-phone" value="' + esc(firm.contact_phone || '') + '" placeholder="Phone"></label>' +
           '<label>Email <input class="fe-email" value="' + esc(firm.contact_email || '') + '" placeholder="Email"></label>' +
           '<div class="firm-edit-actions"><button type="button" class="btn btn-primary btn-small fe-save">Save</button><button type="button" class="btn btn-secondary btn-small fe-cancel">Cancel</button></div>' +
           '</div></td>';
@@ -4710,15 +4729,22 @@ var REQUIRED_FIELD_KEYS = [
         });
         editRow.querySelector('.fe-cancel').addEventListener('click', () => { editRow.style.display = 'none'; });
         editRow.querySelector('.fe-save').addEventListener('click', () => {
+          const phoneVal = editRow.querySelector('.fe-phone').value.trim();
+          if (phoneVal && !isValidPhoneOrSentinel(phoneVal)) {
+            showToast('Phone: digits / + / - / brackets, or None / N/A / Not applicable', 'error');
+            return;
+          }
           const updated = Object.assign({}, firm, {
             name: editRow.querySelector('.fe-name').value.trim() || firm.name,
             laa_account: editRow.querySelector('.fe-laa').value.trim(),
             contact_name: editRow.querySelector('.fe-contact').value.trim(),
-            contact_phone: editRow.querySelector('.fe-phone').value.trim(),
+            contact_phone: phoneVal,
             contact_email: editRow.querySelector('.fe-email').value.trim(),
           });
           window.api.firmSave(updated).then(() => { showToast('Firm updated', 'success'); loadFirmsList(); });
         });
+        var _fePhone = editRow.querySelector('.fe-phone');
+        if (_fePhone) attachPhoneValidation(_fePhone);
         container.appendChild(tr);
         container.appendChild(editRow);
       });
@@ -4735,7 +4761,7 @@ var REQUIRED_FIELD_KEYS = [
     const phone = document.getElementById('new-firm-phone')?.value?.trim();
     const email = document.getElementById('new-firm-email')?.value?.trim();
     if (!name) { showToast('Enter a firm name', 'error'); document.getElementById('new-firm-name')?.classList.add('input-error'); return; }
-    if (phone && !PHONE_REGEX.test(phone)) { showToast('Phone: numbers only (digits, spaces, + and - allowed)', 'error'); return; }
+    if (phone && !isValidPhoneOrSentinel(phone)) { showToast('Phone: digits / + / - / brackets, or None / N/A / Not applicable', 'error'); return; }
     if (email && !EMAIL_REGEX.test(email)) { showToast('Please enter a valid email address', 'error'); return; }
     document.getElementById('new-firm-name')?.classList.remove('input-error');
     window.api.firmSave({ name: name, contact_name: contact || '', contact_phone: phone || '', contact_email: email || '' }).then(() => {
@@ -5900,7 +5926,9 @@ var REQUIRED_FIELD_KEYS = [
       dragStartTop: 0,
       thumbTop: 0,
       thumbH: 0,
-      trackH: 0
+      trackH: 0,
+      _scrollRaf: null,
+      _layoutRaf: null
     };
 
     function setScrollFromThumb(topPx) {
@@ -5956,9 +5984,22 @@ var REQUIRED_FIELD_KEYS = [
       state.rail.classList.add('visible');
     }
 
+    function scheduleLayout() {
+      if (state._layoutRaf != null) return;
+      state._layoutRaf = requestAnimationFrame(function() {
+        state._layoutRaf = null;
+        layout();
+      });
+    }
+
     state._layout = layout;
     state._onFormScroll = function() {
-      if (!state.dragging) updateThumbOnly();
+      if (state.dragging) return;
+      if (state._scrollRaf != null) return;
+      state._scrollRaf = requestAnimationFrame(function() {
+        state._scrollRaf = null;
+        updateThumbOnly();
+      });
     };
     state._onTrackMouseDown = function(e) {
       if (e.target === state.thumb) return;
@@ -5988,7 +6029,7 @@ var REQUIRED_FIELD_KEYS = [
       document.body.classList.remove('form-scrollbar-dragging');
     };
     state._onWindowResize = function() {
-      layout();
+      scheduleLayout();
     };
 
     state.form.addEventListener('scroll', state._onFormScroll, { passive: true });
@@ -5999,18 +6040,18 @@ var REQUIRED_FIELD_KEYS = [
     window.addEventListener('resize', state._onWindowResize);
 
     if (typeof ResizeObserver !== 'undefined') {
-      state._ro = new ResizeObserver(function() { layout(); });
+      state._ro = new ResizeObserver(function() { scheduleLayout(); });
       state._ro.observe(state.form);
       state._ro.observe(state.viewForm);
     }
 
     if (typeof MutationObserver !== 'undefined') {
-      state._mo = new MutationObserver(function() { layout(); });
+      state._mo = new MutationObserver(function() { scheduleLayout(); });
       state._mo.observe(state.form, { childList: true, subtree: true });
     }
 
     _customFormScrollbarState = state;
-    requestAnimationFrame(layout);
+    scheduleLayout();
     return state;
   }
 
@@ -6024,6 +6065,12 @@ var REQUIRED_FIELD_KEYS = [
     const form = document.getElementById('attendance-form');
     if (!form) return;
     ensureCustomFormScrollbar();
+    if (_customFormScrollbarState && _customFormScrollbarState._mo) {
+      _customFormScrollbarState._mo.disconnect();
+    }
+    if (_customFormScrollbarState && _customFormScrollbarState.rail) {
+      _customFormScrollbarState.rail.classList.remove('visible');
+    }
     form.innerHTML = '';
 
     // Backward-compat: older builds stored OIC email in the old force/collar field.
@@ -6150,6 +6197,9 @@ var REQUIRED_FIELD_KEYS = [
           });
         });
         startAutoSave();
+        if (_customFormScrollbarState && _customFormScrollbarState._mo) {
+          _customFormScrollbarState._mo.observe(form, { childList: true, subtree: true });
+        }
         requestAnimationFrame(function() { refreshCustomFormScrollbar(); });
         return;
       }
@@ -6615,6 +6665,10 @@ var REQUIRED_FIELD_KEYS = [
     updateProgressBar();
     buildSectionIndexBar();
     buildSectionSidebar();
+    if (_customFormScrollbarState && _customFormScrollbarState._mo) {
+      _customFormScrollbarState._mo.observe(form, { childList: true, subtree: true });
+    }
+    requestAnimationFrame(function() { refreshCustomFormScrollbar(); });
   }
 
   function renderField(f, data, grid) {
@@ -7430,7 +7484,27 @@ var REQUIRED_FIELD_KEYS = [
           if (ff.type === 'email') attachEmailValidation(inp);
         }
         firmInps[ff.id] = inp;
-        addRowInputs.appendChild(inp);
+        if (ff.type === 'tel') {
+          var _telRow = document.createElement('div');
+          _telRow.className = 'tel-field-wrap tel-field-wrap--inline';
+          _telRow.style.flex = '1';
+          _telRow.style.minWidth = '120px';
+          _telRow.appendChild(inp);
+          ['None', 'N/A', 'Not applicable'].forEach(function (opt) {
+            var _tb = document.createElement('button');
+            _tb.type = 'button';
+            _tb.className = 'btn-small btn-email-option';
+            _tb.textContent = opt;
+            _tb.addEventListener('click', function () {
+              inp.value = opt;
+              inp.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+            _telRow.appendChild(_tb);
+          });
+          addRowInputs.appendChild(_telRow);
+        } else {
+          addRowInputs.appendChild(inp);
+        }
       });
       var addBtnRow = document.createElement('div');
       addBtnRow.className = 'add-firm-inline';
@@ -7815,11 +7889,28 @@ var REQUIRED_FIELD_KEYS = [
         btn.addEventListener('click', function () {
           input.value = opt;
           setFieldValue(f.key, opt);
-          input.dispatchEvent(new Event('input', { bubbles: true }));
         });
         emailWrap.appendChild(btn);
       });
       wrap.appendChild(emailWrap);
+    } else if (f.type === 'tel') {
+      const telWrap = document.createElement('div');
+      telWrap.className = 'tel-field-wrap';
+      var telPresetOptions = ['None', 'N/A', 'Not applicable'];
+      telWrap.appendChild(input);
+      telPresetOptions.forEach(function (opt) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-small btn-email-option';
+        btn.textContent = opt;
+        btn.title = 'Set field to: ' + opt;
+        btn.addEventListener('click', function () {
+          input.value = opt;
+          setFieldValue(f.key, opt);
+        });
+        telWrap.appendChild(btn);
+      });
+      wrap.appendChild(telWrap);
     } else {
       wrap.appendChild(input);
     }
@@ -12354,6 +12445,8 @@ PDF_CASENOTE_ADVERT +
         vatRate: parseFloat(s.billingVatRate) || 0.20,
       };
       window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
+      var prefSel = document.getElementById('setting-preferred-email-client');
+      if (prefSel && s.preferredEmailClient) prefSel.value = s.preferredEmailClient;
       if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
       if (!s.dsccPin || !s.feeEarnerNameDefault) {
         hideSplash();
@@ -12545,6 +12638,7 @@ PDF_CASENOTE_ADVERT +
       });
     }
     document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
+    document.getElementById('form-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
     document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
     document.getElementById('list-quick-email-btn')?.addEventListener('click', function() {
       if (typeof openQuickEmailModal === 'function') openQuickEmailModal();
@@ -12587,16 +12681,30 @@ PDF_CASENOTE_ADVERT +
       if (!form) return;
       var lastScrollTop = 0;
       var scrollThreshold = 40;
+      var hysteresis = 12;
+      var cooldownMs = 150;
       var _chromeTicking = false;
+      var _lastToggleTime = 0;
+      var _accumulatedDelta = 0;
       form.addEventListener('scroll', function() {
         if (_chromeTicking) return;
         _chromeTicking = true;
         requestAnimationFrame(function() {
           var st = form.scrollTop;
-          if (st > lastScrollTop && st > scrollThreshold) {
-            document.body.classList.add('chrome-collapsed');
-          } else if (st < lastScrollTop) {
-            document.body.classList.remove('chrome-collapsed');
+          var delta = st - lastScrollTop;
+          var now = Date.now();
+          if (Math.sign(delta) !== Math.sign(_accumulatedDelta)) _accumulatedDelta = 0;
+          _accumulatedDelta += delta;
+          if (now - _lastToggleTime >= cooldownMs) {
+            if (_accumulatedDelta > hysteresis && st > scrollThreshold) {
+              document.body.classList.add('chrome-collapsed');
+              _accumulatedDelta = 0;
+              _lastToggleTime = now;
+            } else if (_accumulatedDelta < -hysteresis || st <= 2) {
+              document.body.classList.remove('chrome-collapsed');
+              _accumulatedDelta = 0;
+              _lastToggleTime = now;
+            }
           }
           lastScrollTop = Math.max(0, st);
           _chromeTicking = false;
@@ -12609,9 +12717,6 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('attendance-picker-cancel')?.addEventListener('click', closeAttendancePickerModal);
     document.getElementById('attendance-picker-modal')?.addEventListener('click', function(e) {
       if (e.target.id === 'attendance-picker-modal') closeAttendancePickerModal();
-    });
-    document.getElementById('backup-now-btn')?.addEventListener('click', () => {
-      window.api.backupNow().then(p => showToast('Backup saved: ' + p, 'success')).catch(e => showToast('Failed: ' + (e && e.message), 'error'));
     });
     var homeBackupEl = document.getElementById('home-backup-status');
     if (homeBackupEl) {
@@ -13383,6 +13488,19 @@ PDF_CASENOTE_ADVERT +
           if (cloudSt) { cloudSt.textContent = 'Active — backing up automatically'; cloudSt.style.color = '#059669'; }
         } else {
           if (footerEl) { setFooterIndicator(footerEl, 'Local only', 'warning'); footerEl.style.cursor = 'pointer'; }
+          if (homeWarning) {
+            (function() {
+              try {
+                var ls = localStorage.getItem('cloud-backup-warning-dismissed');
+                if (ls === 'permanent') { homeWarning.style.display = 'none'; return; }
+              } catch (_) {}
+              if (window.api.getSettings) {
+                window.api.getSettings().then(function(s) {
+                  if (s && s.cloudBackupHomeBannerDismissed === 'true') homeWarning.style.display = 'none';
+                }).catch(function() {});
+              }
+            })();
+          }
           var checking = document.getElementById('cloud-backup-checking');
           var notSub = document.getElementById('cloud-backup-not-subscribed');
           var isSub = document.getElementById('cloud-backup-subscribed');
@@ -13828,6 +13946,21 @@ PDF_CASENOTE_ADVERT +
     });
     document.getElementById('btn-save-import-qf')?.addEventListener('click', function() {
       saveAndImportQuickFile();
+    });
+    ['setting-ideal-postcodes-key', 'setting-ideal-postcodes-user-token'].forEach(function(elId) {
+      var pcEl = document.getElementById(elId);
+      if (!pcEl) return;
+      pcEl.addEventListener('blur', function() {
+        var key = (document.getElementById('setting-ideal-postcodes-key') || {}).value || '';
+        var tok = (document.getElementById('setting-ideal-postcodes-user-token') || {}).value || '';
+        window.api.setSettings({
+          idealPostcodesApiKey: key.trim(),
+          idealPostcodesUserToken: tok.trim()
+        }).then(function() {
+          window.api.getSettings().then(function(s) { window._appSettingsCache = s || {}; });
+          showSettingsSavedToast();
+        });
+      });
     });
     document.getElementById('btn-check-postcode-key')?.addEventListener('click', function() {
       var statusEl = document.getElementById('postcode-credits-status');

@@ -1,7 +1,7 @@
 {
   "name": "custody-note",
-  "version": "1.4.108",
-  "lastUpdated": "2026-03-18",
+  "version": "1.4.110",
+  "lastUpdated": "2026-03-19",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
   "scripts": {
@@ -28,6 +28,7 @@
   "devDependencies": {
     "electron": "^28.0.0",
     "electron-builder": "^26.8.1",
+    "jsdom": "^29.0.0",
     "pdf-parse": "^1.1.4",
     "png-to-ico": "^3.0.1",
     "sharp": "^0.34.5",

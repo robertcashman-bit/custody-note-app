@@ -241,9 +241,7 @@ function saveSettings() {
     autoImportFolder: (document.getElementById('setting-auto-import-folder') || {value:''}).value.trim() || '',
     officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
     idleTimeoutMinutes: (document.getElementById('setting-idle-timeout') || {value:'0'}).value || '0',
-    /* Explicit save ensures the DB always reflects the current dropdown value even if the
-       live-save change-event was missed (e.g. programmatic value changes). */
-    preferredEmailClient: document.getElementById('setting-preferred-email-client')?.value || 'default',
+    preferredEmailClient: (window._appSettingsCache || {}).preferredEmailClient || document.getElementById('setting-preferred-email-client')?.value || 'default',
     idealPostcodesApiKey: (document.getElementById('setting-ideal-postcodes-key') || { value: '' }).value.trim() || '',
     idealPostcodesUserToken: (document.getElementById('setting-ideal-postcodes-user-token') || { value: '' }).value.trim() || '',
   }).then(function() {

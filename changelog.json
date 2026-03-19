@@ -1,9 +1,37 @@
 {
   "releases": [
     {
+      "version": "1.4.110",
+      "date": "2026-03-19",
+      "latest": true,
+      "changes": [
+        "Fix email client switching: Settings Save no longer overwrites preferred email app with default",
+        "Sync email app dropdown to DB value at startup (prevents stale default overwriting user choice)",
+        "saveSettings now reads preferredEmailClient from cache first, falling back to dropdown",
+        "Add comprehensive Quick Email template integration tests (jsdom)"
+      ]
+    },
+    {
+      "version": "1.4.109",
+      "date": "2026-03-19",
+      "latest": false,
+      "changes": [
+        "Fix scroll flickering: add hysteresis and cooldown to chrome-collapse auto-hide",
+        "Fix cloud backup banner reappearing after updates (respects permanent dismiss in DB)",
+        "Auto-save postcode API key and user token on blur (no longer requires Save Settings click)",
+        "Telephone fields: add None / N/A / Not applicable preset buttons",
+        "Phone validation: accept sentinel values (None, N/A, Not applicable, Not known, Unknown)",
+        "Fix duplicate backup-now-btn IDs causing form-view backup button to be unresponsive",
+        "Remove redundant event dispatches from email and tel preset buttons",
+        "Add showView rapid-fire guard to prevent view flashing",
+        "Disconnect MutationObserver during form rebuild to prevent scrollbar flicker",
+        "rAF-throttle custom scrollbar updates for smoother fast-scroll performance"
+      ]
+    },
+    {
       "version": "1.4.108",
       "date": "2026-03-18",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fixed postcode 'Check credits' showing undefined — uses Ideal Postcodes /keys/.../details for balance when available, otherwise /keys/... availability (API key validity)",
         "Optional User Token field (from ideal-postcodes.co.uk/account) for exact remaining lookups when the API requires it",

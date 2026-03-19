@@ -1617,6 +1617,7 @@ html.dark .home-attention-item:hover {
   background: var(--surface); width: 100%; min-width: 0;
   color: var(--on-surface);
   overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: auto;
   contain: layout style;
@@ -1877,6 +1878,18 @@ html.dark .station-code { color: var(--primary); }
 }
 .email-field-wrap input[type="email"] {
   flex: 1; min-width: 160px;
+}
+
+/* Telephone: same preset pattern as email (None / N/A / Not applicable) */
+.tel-field-wrap {
+  display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  width: 100%;
+}
+.tel-field-wrap input[type="tel"] {
+  flex: 1; min-width: 160px;
+}
+.tel-field-wrap--inline {
+  width: auto;
 }
 .btn-email-none {
   padding: 0.35rem 0.65rem; border-radius: 6px;
@@ -4811,6 +4824,7 @@ html.hide-home-status #home-status-section {
   font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--primary);
+  backface-visibility: hidden;
 }
 .form-group {
   padding: 0.1rem 0;
