@@ -13,6 +13,16 @@ var _EMAIL_TEMPLATES = [
   { id: 'no_reply',         label: 'No Reply Follow-Up' }
 ];
 
+function _openEmailExternalOnce(url) {
+  if (!url) return;
+  if (!window._emailOpenGuard) window._emailOpenGuard = { ts: 0, url: '' };
+  var now = Date.now();
+  if (now - window._emailOpenGuard.ts < 1200) return;
+  window._emailOpenGuard = { ts: now, url: url };
+  if (window.api && window.api.openExternal) window.api.openExternal(url);
+  else window.open(url, '_blank');
+}
+
 function openEmailModal(recordId, recordData, recordStatus) {
   var stale = document.getElementById('email-oic-modal');
   if (stale) stale.remove();
@@ -61,11 +71,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
 
   function _openUrl(to, subject, body) {
     var url = buildEmailClientUrl(_currentClient(), to, subject, body);
-    if (window.api && window.api.openExternal) {
-      window.api.openExternal(url);
-    } else {
-      window.open(url, '_blank');
-    }
+    _openEmailExternalOnce(url);
   }
 
   function _attendanceTypeLabel() {
@@ -540,11 +546,7 @@ function openQuickEmailModal() {
 
   function _openUrl(to, subject, body) {
     var url = buildEmailClientUrl(_currentClient(), to, subject, body);
-    if (window.api && window.api.openExternal) {
-      window.api.openExternal(url);
-    } else {
-      window.open(url, '_blank');
-    }
+    _openEmailExternalOnce(url);
   }
 
   function _getCustomTemplatesForQuick() {

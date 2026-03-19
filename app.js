@@ -2700,6 +2700,9 @@ var REQUIRED_FIELD_KEYS = [
     document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
       btn.classList.toggle('active', btn.dataset.nav === (navMap[name] || name));
     });
+    if (typeof refreshCustomFormScrollbar === 'function') {
+      requestAnimationFrame(function() { refreshCustomFormScrollbar(); });
+    }
   }
 
   /* ─── HOME / COMMAND CENTER ─── */
@@ -5861,9 +5864,161 @@ var REQUIRED_FIELD_KEYS = [
     if (paceTimer) { clearInterval(paceTimer); paceTimer = null; }
   }
 
+  var _customFormScrollbarState = null;
+
+  function ensureCustomFormScrollbar() {
+    if (_customFormScrollbarState) return _customFormScrollbarState;
+    var viewForm = document.getElementById('view-form');
+    var form = document.getElementById('attendance-form');
+    if (!viewForm || !form) return null;
+
+    var rail = document.getElementById('form-custom-scrollbar');
+    if (!rail) {
+      rail = document.createElement('div');
+      rail.id = 'form-custom-scrollbar';
+      rail.className = 'form-custom-scrollbar';
+      rail.innerHTML = '<div class="form-custom-scrollbar-track"><div class="form-custom-scrollbar-thumb"></div></div>';
+      viewForm.appendChild(rail);
+    }
+    var track = rail.querySelector('.form-custom-scrollbar-track');
+    var thumb = rail.querySelector('.form-custom-scrollbar-thumb');
+    if (!track || !thumb) return null;
+
+    var state = {
+      rail: rail,
+      track: track,
+      thumb: thumb,
+      form: form,
+      viewForm: viewForm,
+      dragging: false,
+      dragStartY: 0,
+      dragStartTop: 0,
+      thumbTop: 0,
+      thumbH: 0,
+      trackH: 0
+    };
+
+    function setScrollFromThumb(topPx) {
+      var maxThumbTop = Math.max(1, state.trackH - state.thumbH);
+      var clampedTop = Math.max(0, Math.min(topPx, maxThumbTop));
+      var ratio = clampedTop / maxThumbTop;
+      var maxScroll = Math.max(0, state.form.scrollHeight - state.form.clientHeight);
+      state.form.scrollTop = Math.round(ratio * maxScroll);
+    }
+
+    function updateThumbOnly() {
+      var maxScroll = Math.max(0, state.form.scrollHeight - state.form.clientHeight);
+      var maxThumbTop = Math.max(0, state.trackH - state.thumbH);
+      var ratio = maxScroll > 0 ? (state.form.scrollTop / maxScroll) : 0;
+      state.thumbTop = Math.round(maxThumbTop * ratio);
+      state.thumb.style.height = state.thumbH + 'px';
+      state.thumb.style.transform = 'translateY(' + state.thumbTop + 'px)';
+    }
+
+    function layout() {
+      if (!document.body.classList.contains('form-active')) {
+        state.rail.classList.remove('visible');
+        return;
+      }
+      var style = window.getComputedStyle(state.form);
+      if (style.display === 'none' || style.visibility === 'hidden') {
+        state.rail.classList.remove('visible');
+        return;
+      }
+      var overflow = state.form.scrollHeight - state.form.clientHeight;
+      if (overflow <= 2) {
+        state.rail.classList.remove('visible');
+        return;
+      }
+
+      var formRect = state.form.getBoundingClientRect();
+      var vfRect = state.viewForm.getBoundingClientRect();
+      var fixedBar = document.querySelector('body.form-active .form-bottom-bar');
+      var fixedBarH = (fixedBar && getComputedStyle(fixedBar).display !== 'none')
+        ? fixedBar.getBoundingClientRect().height
+        : 0;
+
+      var top = Math.max(6, formRect.top - vfRect.top + 6);
+      var bottom = (formRect.bottom - vfRect.top) - fixedBarH - 6;
+      var height = Math.max(90, bottom - top);
+
+      state.rail.style.top = top + 'px';
+      state.rail.style.height = height + 'px';
+      state.trackH = height;
+      state.thumbH = Math.max(56, Math.round((state.form.clientHeight / state.form.scrollHeight) * state.trackH));
+      state.thumbH = Math.min(state.thumbH, Math.max(56, state.trackH - 8));
+      updateThumbOnly();
+      state.rail.classList.add('visible');
+    }
+
+    state._layout = layout;
+    state._onFormScroll = function() {
+      if (!state.dragging) updateThumbOnly();
+    };
+    state._onTrackMouseDown = function(e) {
+      if (e.target === state.thumb) return;
+      e.preventDefault();
+      var r = state.track.getBoundingClientRect();
+      var y = e.clientY - r.top;
+      setScrollFromThumb(y - (state.thumbH / 2));
+      updateThumbOnly();
+    };
+    state._onThumbMouseDown = function(e) {
+      e.preventDefault();
+      state.dragging = true;
+      state.dragStartY = e.clientY;
+      state.dragStartTop = state.thumbTop;
+      document.body.classList.add('form-scrollbar-dragging');
+    };
+    state._onMouseMove = function(e) {
+      if (!state.dragging) return;
+      e.preventDefault();
+      var dy = e.clientY - state.dragStartY;
+      setScrollFromThumb(state.dragStartTop + dy);
+      updateThumbOnly();
+    };
+    state._onMouseUp = function() {
+      if (!state.dragging) return;
+      state.dragging = false;
+      document.body.classList.remove('form-scrollbar-dragging');
+    };
+    state._onWindowResize = function() {
+      layout();
+    };
+
+    state.form.addEventListener('scroll', state._onFormScroll, { passive: true });
+    state.track.addEventListener('mousedown', state._onTrackMouseDown);
+    state.thumb.addEventListener('mousedown', state._onThumbMouseDown);
+    window.addEventListener('mousemove', state._onMouseMove);
+    window.addEventListener('mouseup', state._onMouseUp);
+    window.addEventListener('resize', state._onWindowResize);
+
+    if (typeof ResizeObserver !== 'undefined') {
+      state._ro = new ResizeObserver(function() { layout(); });
+      state._ro.observe(state.form);
+      state._ro.observe(state.viewForm);
+    }
+
+    if (typeof MutationObserver !== 'undefined') {
+      state._mo = new MutationObserver(function() { layout(); });
+      state._mo.observe(state.form, { childList: true, subtree: true });
+    }
+
+    _customFormScrollbarState = state;
+    requestAnimationFrame(layout);
+    return state;
+  }
+
+  function refreshCustomFormScrollbar() {
+    var state = ensureCustomFormScrollbar();
+    if (!state || !state._layout) return;
+    state._layout();
+  }
+
   function renderForm(data) {
     const form = document.getElementById('attendance-form');
     if (!form) return;
+    ensureCustomFormScrollbar();
     form.innerHTML = '';
 
     // Backward-compat: older builds stored OIC email in the old force/collar field.
@@ -5990,6 +6145,7 @@ var REQUIRED_FIELD_KEYS = [
           });
         });
         startAutoSave();
+        requestAnimationFrame(function() { refreshCustomFormScrollbar(); });
         return;
       }
     }
@@ -9946,13 +10102,8 @@ PDF_CASENOTE_ADVERT +
       'Sent from Custody Note | © Defence Legal Services Ltd',
     ];
     const subject = 'Attendance Report: ' + clientName + ' (' + (d.date ? formatDateGB(d.date) : '') + ')';
-    const body = encodeURIComponent(lines.join('\n'));
-    const mailto = 'mailto:' + encodeURIComponent(firmEmail) + '?subject=' + encodeURIComponent(subject) + '&body=' + body;
-    if (window.api && window.api.openExternal) {
-      window.api.openExternal(mailto);
-    } else {
-      window.open(mailto, '_blank');
-    }
+    const body = lines.join('\n');
+    openPreferredEmailClient(firmEmail, subject, body);
   }
 
   /* ─── TELEPHONE ADVICE PDF (INVB) ─── */
@@ -10455,8 +10606,9 @@ PDF_CASENOTE_ADVERT +
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(p => {
-        const subj = encodeURIComponent((data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || ''));
-        window.api.openExternal('mailto:' + email + '?subject=' + subj + '&body=' + encodeURIComponent('PDF attached: ' + fn));
+        var subjRaw = (data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || '');
+        var bodyRaw = 'PDF attached: ' + fn;
+        openPreferredEmailClient(email, subjRaw, bodyRaw);
         showToast('PDF saved to Desktop \u2014 attach: ' + fn, 'success');
       }).catch(e => showToast('Failed: ' + (e && e.message), 'error'));
     });
@@ -10606,10 +10758,14 @@ PDF_CASENOTE_ADVERT +
   }
 
   function openPreferredEmailClient(toEmail, subject, body) {
+    if (!window._emailOpenGuard) window._emailOpenGuard = { ts: 0, url: '' };
     var clientId = (((window._appSettingsCache || {}).preferredEmailClient) || 'default').trim() || 'default';
     var url = typeof buildEmailClientUrl === 'function'
       ? buildEmailClientUrl(clientId, toEmail, subject, body)
       : ('mailto:' + encodeURIComponent(toEmail) + '?subject=' + encodeURIComponent(subject || '') + '&body=' + encodeURIComponent(body || ''));
+    var now = Date.now();
+    if (now - window._emailOpenGuard.ts < 1200) return;
+    window._emailOpenGuard = { ts: now, url: url };
     if (window.api && window.api.openExternal) window.api.openExternal(url);
     else window.open(url, '_blank');
   }
@@ -10663,9 +10819,9 @@ PDF_CASENOTE_ADVERT +
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
       window.api.printToPdf({ html: html, filename: fn }).then(p => {
-        const subj = encodeURIComponent((data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance note')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || ''));
-        const body = encodeURIComponent('Please find the attendance note PDF attached.\n\nFilename: ' + fn + '\n\nSent from Custody Note.');
-        window.api.openExternal('mailto:' + encodeURIComponent(firmEmail) + '?subject=' + subj + '&body=' + body);
+        var subjRaw = (data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance note')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || '');
+        var bodyRaw = 'Please find the attendance note PDF attached.\n\nFilename: ' + fn + '\n\nSent from Custody Note.';
+        openPreferredEmailClient(firmEmail, subjRaw, bodyRaw);
         showToast('PDF saved to Desktop. Attach "' + fn + '" and send to ' + firmEmail, 'success');
       }).catch(e => showToast('Failed: ' + (e && e.message), 'error'));
     });
@@ -13855,16 +14011,10 @@ PDF_CASENOTE_ADVERT +
       copy();
     });
     document.getElementById('share-app-email-btn')?.addEventListener('click', function() {
-      var subject = encodeURIComponent('Custody Note – custody notes app for police station reps');
-      var body = encodeURIComponent(
-        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload: ' + shareAppUrl + '\n\n30-day free trial, no credit card.'
-      );
-      var mailto = 'mailto:?subject=' + subject + '&body=' + body;
-      if (window.api && window.api.openExternal) {
-        window.api.openExternal(mailto);
-      } else {
-        window.location.href = mailto;
-      }
+      var subject = 'Custody Note – custody notes app for police station reps';
+      var body =
+        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload: ' + shareAppUrl + '\n\n30-day free trial, no credit card.';
+      openPreferredEmailClient('', subject, body);
     });
 
     const settingsFields = [
@@ -14227,15 +14377,15 @@ PDF_CASENOTE_ADVERT +
         var recipientLabel = solicitorEmail ? (data.firmContactName || 'instructing solicitor') : 'your email';
         var clientName = [data.forename, data.surname].filter(Boolean).join(' ');
         var fileName = pdfPath.replace(/\\/g, '/').split('/').pop();
-        var subj = encodeURIComponent(title + ' \u2013 ' + clientName);
-        var body = encodeURIComponent(
+        var subjRaw = title + ' \u2013 ' + clientName;
+        var bodyRaw = (
           'Dear ' + (data.firmContactName || 'Sir/Madam') +
           ',\n\nPlease find the ' + title + ' form attached for ' +
           (clientName || 'the above client') +
           '.\n\nFile: ' + fileName +
           '\n\nKind regards'
         );
-        window.api.openExternal('mailto:' + email + '?subject=' + subj + '&body=' + body);
+        openPreferredEmailClient(email, subjRaw, bodyRaw);
         showToast('Emailing to ' + recipientLabel + ' (' + email + '). Attach: ' + fileName, 'success', 5000);
       });
     });
@@ -14470,14 +14620,7 @@ PDF_CASENOTE_ADVERT +
         if (!emailVal) return;
         var subject = 'Custody Note — test email';
         var body    = 'Hi ' + nameVal + ',\n\nThis is a test email from Custody Note to confirm your email address is set up correctly.\n\nYou\'re all set!\n\nCustody Note';
-        var href    = 'mailto:' + encodeURIComponent(emailVal) +
-          '?subject=' + encodeURIComponent(subject) +
-          '&body='    + encodeURIComponent(body);
-        if (window.api && window.api.openExternal) {
-          window.api.openExternal(href);
-        } else {
-          window.open(href);
-        }
+        openPreferredEmailClient(emailVal, subject, body);
         var sentBadge = document.getElementById('fl-test-email-sent');
         if (sentBadge) sentBadge.style.display = '';
       });
