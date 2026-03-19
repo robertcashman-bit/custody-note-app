@@ -6,6 +6,8 @@ const path = require('path');
 const appJs = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 const stylesCss = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
 const emailModalJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'views', 'email-modal.js'), 'utf8');
+const billingJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'views', 'billing.js'), 'utf8');
+const settingsJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'views', 'settings.js'), 'utf8');
 
 /* ── Custom scrollbar ──────────────────────────────────────── */
 
@@ -74,13 +76,14 @@ describe('Email app routing guard', () => {
 /* ── Settings cache refresh ────────────────────────────────── */
 
 describe('Email client preference — settings cache', () => {
-  it('saveSettings refreshes window._appSettingsCache after writing to DB', () => {
-    // The function is ~4100 chars — search with a generous window
+  it('app.js saveSettings (inside IIFE) refreshes window._appSettingsCache after writing to DB', () => {
+    // app.js defines a local saveSettings() that refreshes the cache.
+    // settings.js overrides it at global scope but must do the same (tested in settings.js suite).
     const saveSettingsIdx = appJs.indexOf('function saveSettings()');
-    assert.ok(saveSettingsIdx > -1, 'saveSettings must exist');
+    assert.ok(saveSettingsIdx > -1, 'saveSettings must exist in app.js');
     const afterSave = appJs.slice(saveSettingsIdx, saveSettingsIdx + 5000);
     assert.ok(afterSave.includes('window._appSettingsCache = s || {}'),
-      'saveSettings must set window._appSettingsCache = s || {} after the DB write so the in-memory preference stays fresh');
+      'app.js saveSettings must set window._appSettingsCache = s || {} after the DB write');
   });
 });
 
@@ -228,5 +231,148 @@ describe('buildEmailClientUrl routes each client correctly', () => {
       'to address must be URL-encoded in the query string');
     assert.ok(url.includes(encodeURIComponent('Test Subject')),
       'subject must be URL-encoded');
+  });
+});
+
+/* ── Billing email respects preferredEmailClient ───────────── */
+
+describe('Billing email uses preferred email client', () => {
+  it('billing-email-open handler no longer constructs a raw mailto: URL itself', () => {
+    // The old code built its own mailto: and sent it directly to openExternal.
+    // The fix delegates to openPreferredEmailClient so the user's chosen app is used.
+    const handlerIdx = billingJs.indexOf("'billing-email-open'");
+    assert.ok(handlerIdx > -1, 'billing-email-open handler must exist in billing.js');
+    const handlerSlice = billingJs.slice(handlerIdx, handlerIdx + 600);
+    // The handler must call openPreferredEmailClient
+    assert.ok(
+      handlerSlice.includes('openPreferredEmailClient'),
+      'billing-email-open must delegate to openPreferredEmailClient (not build its own mailto:)'
+    );
+  });
+
+  it('billing-email-open handler keeps the mailto: fallback for environments without openPreferredEmailClient', () => {
+    const handlerIdx = billingJs.indexOf("'billing-email-open'");
+    const handlerSlice = billingJs.slice(handlerIdx, handlerIdx + 600);
+    // A defensive else-branch with mailto: is acceptable as a last-resort fallback
+    assert.ok(
+      handlerSlice.includes("typeof openPreferredEmailClient === 'function'"),
+      'billing handler must guard openPreferredEmailClient with a typeof check'
+    );
+    assert.ok(
+      handlerSlice.includes('mailto:'),
+      'a mailto: fallback must still exist for safety in environments without openPreferredEmailClient'
+    );
+  });
+
+  it('billing.js does NOT call window.api.openExternal with a raw mailto: outside an else-fallback', () => {
+    // The primary path must call openPreferredEmailClient, not build its own mailto: URL.
+    // A defensive else-branch that constructs mailto: is acceptable.
+    // Verify there is NO openExternal(mailto) call that appears BEFORE the if-guard
+    // (i.e., the openExternal must only be reachable via the else-branch, not the primary path).
+    const handlerIdx = billingJs.indexOf("'billing-email-open'");
+    const handlerSlice = billingJs.slice(handlerIdx, handlerIdx + 800);
+    // openPreferredEmailClient must appear BEFORE any openExternal in the handler
+    const pcIdx = handlerSlice.indexOf('openPreferredEmailClient');
+    const oeIdx = handlerSlice.indexOf('window.api.openExternal');
+    assert.ok(pcIdx > -1, 'openPreferredEmailClient must appear in the handler');
+    assert.ok(pcIdx < oeIdx,
+      'openPreferredEmailClient must appear BEFORE the fallback openExternal call, ' +
+      'confirming the primary path delegates to the preferred client function');
+  });
+});
+
+/* ── settings.js saveSettings completeness ─────────────────── */
+
+describe('settings.js saveSettings includes preferredEmailClient and refreshes cache', () => {
+  it('saveSettings in settings.js saves preferredEmailClient', () => {
+    const saveIdx = settingsJs.indexOf('function saveSettings()');
+    assert.ok(saveIdx > -1, 'saveSettings must be defined in settings.js');
+    const body = settingsJs.slice(saveIdx, saveIdx + 2000);
+    assert.ok(
+      body.includes('preferredEmailClient'),
+      'settings.js saveSettings() must include preferredEmailClient in the setSettings call'
+    );
+  });
+
+  it('saveSettings in settings.js refreshes _appSettingsCache after save', () => {
+    const saveIdx = settingsJs.indexOf('function saveSettings()');
+    /* Use a generous window — the function now chains getSettings() and the cache update */
+    const body = settingsJs.slice(saveIdx, saveIdx + 4000);
+    assert.ok(
+      body.includes('window._appSettingsCache'),
+      'settings.js saveSettings() must update window._appSettingsCache after the DB write'
+    );
+    assert.ok(
+      body.includes('getSettings()'),
+      'settings.js saveSettings() must call getSettings() to get the fresh values for the cache'
+    );
+  });
+
+  it('settings.js has a live-save change listener for preferredEmailClient', () => {
+    assert.ok(
+      settingsJs.includes("preferredEmailClient: val"),
+      'settings.js must have a live-save that writes preferredEmailClient on dropdown change'
+    );
+    assert.ok(
+      settingsJs.includes("setSettings({ preferredEmailClient: val })"),
+      'live-save in settings.js must call setSettings immediately when the dropdown changes'
+    );
+  });
+});
+
+/* ── Officer Email _currentClient() has no async fallback ───── */
+
+describe('Officer Email _currentClient() is synchronous only', () => {
+  it('Officer Email _currentClient does not contain a background getSettings() IPC call', () => {
+    // The function now mirrors the Quick Email version: read cache, return cached or default.
+    // It must NOT fire an async getSettings() call that could race with the button handler's
+    // own getSettings() call and overwrite the cache mid-flight.
+    const oicSection = emailModalJs.slice(
+      0,
+      emailModalJs.indexOf('function openQuickEmailModal')
+    );
+    // Find _currentClient in the Officer Email section
+    const fnIdx = oicSection.indexOf('function _currentClient()');
+    assert.ok(fnIdx > -1, '_currentClient must exist in the Officer Email section');
+    const fnBody = oicSection.slice(fnIdx, oicSection.indexOf('\n  }', fnIdx) + 4);
+    assert.ok(
+      !fnBody.includes('window.api.getSettings'),
+      'Officer Email _currentClient() must NOT call window.api.getSettings() — the async ' +
+      'fallback was removed to prevent a competing IPC call racing with the button handler'
+    );
+    assert.ok(
+      !fnBody.includes('_currentClient._pending'),
+      'Officer Email _currentClient() must not use the _pending flag (no async path remains)'
+    );
+  });
+
+  it('Officer Email _currentClient still returns the cached value or "default"', () => {
+    const oicSection = emailModalJs.slice(
+      0,
+      emailModalJs.indexOf('function openQuickEmailModal')
+    );
+    const fnIdx = oicSection.indexOf('function _currentClient()');
+    const fnBody = oicSection.slice(fnIdx, oicSection.indexOf('\n  }', fnIdx) + 4);
+    assert.ok(
+      fnBody.includes("return cached || 'default'"),
+      '_currentClient must return cached value or fall back to "default"'
+    );
+  });
+
+  it('Quick Email _currentClient remains synchronous (unchanged)', () => {
+    const quickSection = emailModalJs.slice(
+      emailModalJs.indexOf('function openQuickEmailModal')
+    );
+    const fnIdx = quickSection.indexOf('function _currentClient()');
+    assert.ok(fnIdx > -1, 'Quick Email _currentClient must exist');
+    const fnBody = quickSection.slice(fnIdx, quickSection.indexOf('\n  }', fnIdx) + 4);
+    assert.ok(
+      !fnBody.includes('window.api.getSettings'),
+      'Quick Email _currentClient must remain synchronous'
+    );
+    assert.ok(
+      fnBody.includes("return cached || 'default'"),
+      'Quick Email _currentClient must return cached or default'
+    );
   });
 });

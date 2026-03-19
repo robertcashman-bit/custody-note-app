@@ -44,23 +44,12 @@ function openEmailModal(recordId, recordData, recordStatus) {
   }
 
   function _currentClient() {
+    /* Read the in-memory cache only — the "Open Email App" button handler always fetches
+       fresh settings from the DB before calling _doOpen(), so the cache is up-to-date by
+       the time this is called from _openUrl().  The previous async getSettings() fallback
+       here was a second competing IPC path that could overwrite the cache mid-flight. */
     var cached = _oicClean((window._appSettingsCache || {}).preferredEmailClient);
-    if (cached) return cached;
-    if (window.api && window.api.getSettings && !_currentClient._pending) {
-      _currentClient._pending = true;
-      window.api.getSettings().then(function(s) {
-        _currentClient._pending = false;
-        if (s) {
-          window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
-          var fresh = _oicClean(s.preferredEmailClient);
-          if (fresh) {
-            var btn = document.getElementById('email-oic-open-app') || document.getElementById('quick-email-open-app');
-            if (btn) btn.textContent = _openBtnLabel();
-          }
-        }
-      }).catch(function() { _currentClient._pending = false; });
-    }
-    return 'default';
+    return cached || 'default';
   }
 
   function _openBtnLabel() {

@@ -562,8 +562,13 @@ function _openEmailPackModal(recordId, opts) {
     var to = document.getElementById('billing-email-to').value.trim();
     var subj = document.getElementById('billing-email-subject').value.trim();
     var b = document.getElementById('billing-email-body').value;
-    var mailto = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(b);
-    if (window.api && window.api.openExternal) window.api.openExternal(mailto);
+    /* Respect the user's preferred email client (same guard used by all email flows). */
+    if (typeof openPreferredEmailClient === 'function') {
+      openPreferredEmailClient(to, subj, b);
+    } else {
+      var mailto = 'mailto:' + encodeURIComponent(to) + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(b);
+      if (window.api && window.api.openExternal) window.api.openExternal(mailto);
+    }
 
     if (window.api && window.api.billingAuditLogAdd && recordId) {
       window.api.billingAuditLogAdd({

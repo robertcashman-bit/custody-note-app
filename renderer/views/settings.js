@@ -241,11 +241,18 @@ function saveSettings() {
     autoImportFolder: (document.getElementById('setting-auto-import-folder') || {value:''}).value.trim() || '',
     officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
     idleTimeoutMinutes: (document.getElementById('setting-idle-timeout') || {value:'0'}).value || '0',
+    /* Explicit save ensures the DB always reflects the current dropdown value even if the
+       live-save change-event was missed (e.g. programmatic value changes). */
+    preferredEmailClient: document.getElementById('setting-preferred-email-client')?.value || 'default',
   }).then(function() {
     /* Sync global flag so list refreshes immediately reflect the toggle */
     window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;
     _updateAddonStatusLabel();
     showToast('Settings saved', 'success');
+    /* Refresh the in-memory cache so all email-launch code sees the freshly-saved values. */
+    return window.api.getSettings();
+  }).then(function(fresh) {
+    if (fresh) window._appSettingsCache = fresh;
   }).catch(function(err) {
     console.error('[Settings] Failed to save settings:', err);
     showToast('Failed to save settings — please try again', 'error');
