@@ -652,9 +652,75 @@ function openQuickEmailModal() {
     return null;
   }
 
+  function _autoConvertLegacyTemplate(tpl, templateId) {
+    if (!tpl || (!tpl.body && !tpl.subject)) return tpl;
+    var hasPH = /\{\{\s*[a-zA-Z_]+\s*\}\}/.test(tpl.subject || '') ||
+                /\{\{\s*[a-zA-Z_]+\s*\}\}/.test(tpl.body || '');
+    if (hasPH) return tpl;
+
+    var detected = {};
+    var subj = String(tpl.subject || '');
+    var parts = subj.split(/\s+-\s+/);
+    if (parts.length >= 2) {
+      var last = parts[parts.length - 1].trim();
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(last)) {
+        detected.date = last;
+        parts.pop();
+      }
+      if (parts.length >= 2) {
+        detected.clientName = parts[0].trim();
+        detected.station = parts.slice(1).join(' - ').trim();
+      } else if (parts.length === 1) {
+        detected.clientName = parts[0].trim();
+      }
+    }
+
+    var ranks = 'DC|DS|PC|DI|DCI|Sgt|Det\\.?\\s*Sgt|Inspector|Sergeant|Constable|Officer';
+    var bodyRe = new RegExp('Dear\\s+(?:' + ranks + ')\\s+([A-Z][a-zA-Z\\x27\\-]+(?:\\s+[A-Z][a-zA-Z\\x27\\-]+)*)');
+    var bm = String(tpl.body || '').match(bodyRe);
+    if (bm) detected.oicName = bm[1].trim();
+
+    var entries = [];
+    for (var key in detected) {
+      var val = detected[key];
+      if (val && val.length >= 2) entries.push({ key: key, value: val });
+    }
+    if (entries.length === 0) return tpl;
+
+    entries.sort(function(a, b) { return b.value.length - a.value.length; });
+    var newSubject = tpl.subject || '';
+    var newBody = tpl.body || '';
+    for (var i = 0; i < entries.length; i++) {
+      var escaped = entries[i].value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      var re = new RegExp(escaped, 'gi');
+      var ph = '{{' + entries[i].key + '}}';
+      newSubject = newSubject.replace(re, ph);
+      newBody = newBody.replace(re, ph);
+    }
+    if (newSubject === (tpl.subject || '') && newBody === (tpl.body || '')) return tpl;
+
+    var converted = { name: tpl.name, subject: newSubject, body: newBody, scope: tpl.scope };
+
+    if (String(templateId).indexOf('custom:') === 0) {
+      var idx = parseInt(String(templateId).slice(7), 10);
+      try {
+        var list = JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]');
+        if (list[idx]) {
+          list[idx].subject = newSubject;
+          list[idx].body = newBody;
+          localStorage.setItem('cn-custom-email-templates', JSON.stringify(list));
+        }
+      } catch (_) {}
+    }
+    return converted;
+  }
+
   function _applyCustomTemplate(templateId) {
     var tpl = _getBuiltinTemplateById(templateId) || _getCustomTemplateByIdQuick(templateId);
     if (!tpl) return;
+    if (String(templateId).indexOf('custom:') === 0) {
+      tpl = _autoConvertLegacyTemplate(tpl, templateId);
+    }
     _activeRawTemplate = tpl;
     _bodyManuallyEdited = false;
     _subjectManuallyEdited = false;

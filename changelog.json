@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.110",
+      "version": "1.4.111",
       "date": "2026-03-19",
       "latest": true,
+      "changes": [
+        "Auto-migrate legacy saved templates: old templates with hardcoded names are automatically converted to {{placeholders}} on first use",
+        "Saved templates now correctly fill in current officer name, client name, station and date instead of showing stale values from when they were saved"
+      ]
+    },
+    {
+      "version": "1.4.110",
+      "date": "2026-03-19",
+      "latest": false,
       "changes": [
         "Fix email client switching: Settings Save no longer overwrites preferred email app with default",
         "Sync email app dropdown to DB value at startup (prevents stale default overwriting user choice)",
