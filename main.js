@@ -5752,69 +5752,74 @@ ipcMain.handle('quickfile-test-connection', async () => {
 /* ═══════════════════════════════════════════════════════
    POSTCODE LOOKUP  (Ideal Postcodes API)
    ═══════════════════════════════════════════════════════ */
+/* Helper: HTTPS GET with a hard timeout so the promise never hangs indefinitely */
+function httpsGetWithTimeout(url, timeoutMs) {
+  return new Promise((resolve) => {
+    let settled = false;
+    function settle(val) { if (!settled) { settled = true; resolve(val); } }
+
+    const req = require('https').get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => settle({ ok: true, statusCode: res.statusCode, body: data }));
+      res.on('error', (e) => settle({ ok: false, error: 'Response error: ' + e.message }));
+    });
+    req.on('error', (e) => settle({ ok: false, error: 'Connection error: ' + e.message }));
+    req.setTimeout(timeoutMs, () => {
+      req.destroy();
+      settle({ ok: false, error: 'Request timed out after ' + (timeoutMs / 1000) + 's.' });
+    });
+  });
+}
+
 ipcMain.handle('postcode-lookup', async (_, postcode) => {
   const settings = readSettings();
   const apiKey = (settings.idealPostcodesApiKey || '').trim();
   if (!apiKey) return { ok: false, error: 'No API key configured. Add your Ideal Postcodes API key in Settings > Integrations.' };
   const pc = (postcode || '').trim().replace(/\s+/g, '+');
   if (!pc) return { ok: false, error: 'No postcode entered.' };
-  const https = require('https');
   const url = `https://api.ideal-postcodes.co.uk/v1/postcodes/${encodeURIComponent(pc)}?api_key=${encodeURIComponent(apiKey)}`;
-  return new Promise((resolve) => {
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.code === 2000 && json.result && json.result.length) {
-            const addresses = json.result.map(a => ({
-              line1: a.line_1 || '',
-              line2: a.line_2 || '',
-              line3: a.line_3 || '',
-              city: a.post_town || '',
-              county: a.county || '',
-              postcode: a.postcode || pc,
-              summary: [a.line_1, a.line_2, a.line_3, a.post_town].filter(Boolean).join(', '),
-            }));
-            resolve({ ok: true, addresses, remaining: json.result.length });
-          } else if (json.code === 4040) {
-            resolve({ ok: false, error: 'Postcode not found.' });
-          } else if (json.code === 4010 || json.code === 4020) {
-            resolve({ ok: false, error: 'Invalid API key or no credits remaining. Check Settings > Integrations.' });
-          } else {
-            resolve({ ok: false, error: json.message || 'Lookup failed.' });
-          }
-        } catch (e) { resolve({ ok: false, error: 'Failed to parse response.' }); }
-      });
-      res.on('error', () => { resolve({ ok: false, error: 'Network error during lookup.' }); });
-    }).on('error', () => { resolve({ ok: false, error: 'Could not connect to Ideal Postcodes.' }); });
-  });
+  const res = await httpsGetWithTimeout(url, 10000);
+  if (!res.ok) return { ok: false, error: res.error };
+  try {
+    const json = JSON.parse(res.body);
+    if (json.code === 2000 && json.result && json.result.length) {
+      const addresses = json.result.map(a => ({
+        line1: a.line_1 || '',
+        line2: a.line_2 || '',
+        line3: a.line_3 || '',
+        city: a.post_town || '',
+        county: a.county || '',
+        postcode: a.postcode || pc,
+        summary: [a.line_1, a.line_2, a.line_3, a.post_town].filter(Boolean).join(', '),
+      }));
+      return { ok: true, addresses, remaining: json.result.length };
+    } else if (json.code === 4040) {
+      return { ok: false, error: 'Postcode not found.' };
+    } else if (json.code === 4010 || json.code === 4020) {
+      return { ok: false, error: 'Invalid API key or no credits remaining. Check Settings > Integrations.' };
+    } else {
+      return { ok: false, error: json.message || 'Lookup failed.' };
+    }
+  } catch (_) { return { ok: false, error: 'Failed to parse response from Ideal Postcodes.' }; }
 });
 
 ipcMain.handle('postcode-check-key', async () => {
   const settings = readSettings();
   const apiKey = (settings.idealPostcodesApiKey || '').trim();
   if (!apiKey) return { ok: false, configured: false };
-  const https = require('https');
   const url = `https://api.ideal-postcodes.co.uk/v1/keys/${encodeURIComponent(apiKey)}`;
-  return new Promise((resolve) => {
-    https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          if (json.result) {
-            resolve({ ok: true, configured: true, lookups_remaining: json.result.lookups_remaining });
-          } else {
-            resolve({ ok: false, configured: true, error: 'Could not verify key.' });
-          }
-        } catch (_) { resolve({ ok: false, configured: true, error: 'Bad response.' }); }
-      });
-      res.on('error', () => { resolve({ ok: false, configured: true, error: 'Network error.' }); });
-    }).on('error', () => { resolve({ ok: false, configured: true, error: 'Could not connect.' }); });
-  });
+  const res = await httpsGetWithTimeout(url, 10000);
+  if (!res.ok) return { ok: false, configured: true, error: res.error };
+  try {
+    const json = JSON.parse(res.body);
+    if (json.result) {
+      return { ok: true, configured: true, lookups_remaining: json.result.lookups_remaining };
+    }
+    /* A non-2xx status (e.g. 404 for invalid key) means key not found */
+    if (res.statusCode === 404) return { ok: false, configured: true, error: 'API key not recognised. Check the key in Settings.' };
+    return { ok: false, configured: true, error: json.message || 'Could not verify key.' };
+  } catch (_) { return { ok: false, configured: true, error: 'Bad response from Ideal Postcodes.' }; }
 });
 
 /* ═══════════════════════════════════════════════════════

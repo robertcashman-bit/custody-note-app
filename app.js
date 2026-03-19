@@ -13779,27 +13779,37 @@ PDF_CASENOTE_ADVERT +
     });
     document.getElementById('btn-check-postcode-key')?.addEventListener('click', function() {
       var statusEl = document.getElementById('postcode-credits-status');
-      if (statusEl) statusEl.textContent = 'Checking…';
-      saveSettings();
-      setTimeout(function() {
-        window.api.postcodeCheckKey().then(function(r) {
+      var keyEl = document.getElementById('setting-ideal-postcodes-key');
+      var apiKey = (keyEl ? keyEl.value.trim() : '');
+      if (!apiKey) {
+        if (statusEl) { statusEl.textContent = 'Enter your API key first.'; statusEl.style.color = '#dc2626'; }
+        return;
+      }
+      if (statusEl) { statusEl.textContent = 'Checking\u2026'; statusEl.style.color = ''; }
+      /* Save the key to DB first, then immediately check — no arbitrary timeout */
+      window.api.setSettings({ idealPostcodesApiKey: apiKey })
+        .then(function() { return window.api.postcodeCheckKey(); })
+        .then(function(r) {
           if (!statusEl) return;
-          if (!r.configured) {
-            statusEl.textContent = 'No API key entered.';
+          if (!r || !r.configured) {
+            statusEl.textContent = 'No API key saved.';
             statusEl.style.color = '#dc2626';
           } else if (r.ok) {
             var rem = r.lookups_remaining;
             statusEl.textContent = rem + ' lookups remaining';
-            statusEl.style.color = rem <= 5 ? '#dc2626' : '#16a34a';
-            if (rem <= 5) {
-              showToast('Low postcode credits! Only ' + rem + ' lookups remaining.', 'warning');
-            }
+            statusEl.style.color = rem <= 5 ? '#ef4444' : '#16a34a';
+            if (rem <= 5) showToast('Low postcode credits! Only ' + rem + ' lookups remaining.', 'warning');
           } else {
             statusEl.textContent = r.error || 'Could not verify key.';
             statusEl.style.color = '#dc2626';
           }
+        })
+        .catch(function(e) {
+          if (statusEl) {
+            statusEl.textContent = 'Error: ' + (e && e.message ? e.message : 'check failed — try again.');
+            statusEl.style.color = '#dc2626';
+          }
         });
-      }, 500);
     });
     ['crm1', 'crm2', 'crm3', 'declaration'].forEach(function(ft) {
       var btn = document.getElementById('settings-laa-' + ft);
