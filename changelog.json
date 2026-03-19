@@ -1,9 +1,28 @@
 {
   "releases": [
     {
+      "version": "1.4.103",
+      "date": "2026-03-18",
+      "latest": true,
+      "changes": [
+        "Fixed email client switching: billing emails now respect the preferred email client setting",
+        "Fixed settings save not persisting the preferred email client choice",
+        "Fixed race condition in Officer Email modal that could overwrite email client preference mid-flight",
+        "Added settings note clarifying Outlook Web requires a work/school Microsoft 365 account"
+      ]
+    },
+    {
+      "version": "1.4.102",
+      "date": "2026-03-19",
+      "latest": false,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
       "version": "1.4.101",
       "date": "2026-03-19",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Bug fixes and improvements"
       ]
