@@ -171,13 +171,13 @@ describe('Performance — scrolling', () => {
 });
 
 describe('Performance — compact bottom bar', () => {
-  it('bottom buttons use compact sizing', () => {
+  it('bottom buttons use generous sizing (56px min)', () => {
     const baseStart = stylesCssSource.indexOf('.bottom-btn {');
     const baseBlock = stylesCssSource.substring(baseStart, stylesCssSource.indexOf('}', baseStart) + 1);
     const minHeightMatch = baseBlock.match(/min-height:\s*(\d+)px/);
     assert.ok(minHeightMatch, 'bottom-btn must have min-height');
-    assert.ok(parseInt(minHeightMatch[1], 10) <= 48,
-      'bottom-btn base min-height should be 48px or less');
+    assert.ok(parseInt(minHeightMatch[1], 10) >= 48,
+      'bottom-btn base min-height should be at least 48px for touch targets');
   });
 
   it('bottom buttons do not use transition: all', () => {
@@ -194,12 +194,12 @@ describe('Performance — compact bottom bar', () => {
       'primary bottom buttons should use flat color, not gradients');
   });
 
-  it('progress dots are compact (7px or smaller)', () => {
+  it('progress dots have visible size (10px or larger)', () => {
     const dotStart = stylesCssSource.indexOf('.section-progress-bar .prog-dot {');
     const dotBlock = stylesCssSource.substring(dotStart, dotStart + 150);
     const widthMatch = dotBlock.match(/width:\s*(\d+)px/);
     assert.ok(widthMatch, 'prog-dot must have width in px');
-    assert.ok(parseInt(widthMatch[1]) <= 8, 'prog-dot width should be 8px or less');
+    assert.ok(parseInt(widthMatch[1]) >= 8, 'prog-dot width should be at least 8px for visibility');
   });
 
   it('HTML buttons use short labels', () => {

@@ -1,9 +1,26 @@
 {
   "releases": [
     {
-      "version": "1.4.106",
+      "version": "1.4.107",
       "date": "2026-03-18",
       "latest": true,
+      "changes": [
+        "Full UI overhaul — bigger buttons, cleaner layouts, easier to use on all screen sizes",
+        "All buttons and form inputs now meet 48px minimum touch target (Material Design guidelines)",
+        "Home screen decluttered — only essential actions visible, shortcuts and stats hidden for a calmer experience",
+        "Form editing simplified — header shows only title + autosave indicator, page turner reduced to 3 large buttons",
+        "Section picker now slides up from bottom with large 56px tap targets for each section",
+        "Gear menu reorganised — top 5 quick actions shown first, 'More...' toggle for everything else",
+        "Settings reorganised into 6 tabbed sections (Account, Appearance, Integrations, Backup, Advanced, Support)",
+        "Responsive font scaling with clamp() — text scales fluidly across all screen sizes",
+        "Form layout switches to single column under 900px width; max-width capped at 1100px on wide displays",
+        "Bottom navigation enlarged — bigger icons (1.8rem), larger labels, 'New' button stands out"
+      ]
+    },
+    {
+      "version": "1.4.106",
+      "date": "2026-03-18",
+      "latest": false,
       "changes": [
         "Fixed scroll cut-off — Reports, Authorities, Help, Station Mileage and Quick Capture screens now scroll fully to the bottom",
         "Fixed attendance form content being clipped in compact and comfortable density modes",

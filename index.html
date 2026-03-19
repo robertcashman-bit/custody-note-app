@@ -105,24 +105,28 @@
           <div id="gear-dropdown" class="gear-dropdown hidden">
             <button type="button" class="gear-item gear-item-licence" data-action="enter-licence-key">Enter licence key</button>
             <div class="gear-divider gear-divider-licence"></div>
-            <div class="gear-section-label">Navigate</div>
-            <button type="button" class="gear-item" data-action="home">&#8962; Home</button>
-            <button type="button" class="gear-item" data-action="records">&#128196; Records</button>
-            <button type="button" class="gear-item" data-action="new-attendance">&#10133; New attendance</button>
-            <div class="gear-section-label">Documents</div>
-            <button type="button" class="gear-item" data-action="laa-forms">&#128203; LAA Forms</button>
-            <button type="button" class="gear-item" data-action="authorities">&#128220; Authorities</button>
             <button type="button" class="gear-item" data-action="shortcut-print-pdf">&#128424; Print PDF</button>
             <button type="button" class="gear-item" data-action="shortcut-email-solicitor">&#9993; Email to solicitor</button>
-            <div class="gear-section-label">Data</div>
-            <button type="button" class="gear-item" data-action="firms">&#127970; Firms</button>
-            <button type="button" class="gear-item" data-action="reports">&#128202; Reports</button>
-            <button type="button" class="gear-item" data-action="station-mileage">&#128663; Station Mileage</button>
-            <div class="gear-section-label">App</div>
             <button type="button" class="gear-item" data-action="shortcut-backup-now">&#128190; Backup now</button>
-            <button type="button" class="gear-item" data-action="check-updates" id="gear-check-updates">&#8635; Check for updates</button>
+            <button type="button" class="gear-item" data-action="new-attendance">&#10133; New attendance</button>
             <button type="button" class="gear-item" data-action="settings">&#9881; Settings</button>
-            <button type="button" class="gear-item" data-action="help">&#10067; Help</button>
+            <div class="gear-divider"></div>
+            <button type="button" class="gear-item gear-more-toggle" id="gear-more-toggle">&#8943; More&hellip;</button>
+            <div id="gear-more-section" class="gear-more-section" style="display:none;">
+              <div class="gear-section-label">Navigate</div>
+              <button type="button" class="gear-item" data-action="home">&#8962; Home</button>
+              <button type="button" class="gear-item" data-action="records">&#128196; Records</button>
+              <div class="gear-section-label">Documents</div>
+              <button type="button" class="gear-item" data-action="laa-forms">&#128203; LAA Forms</button>
+              <button type="button" class="gear-item" data-action="authorities">&#128220; Authorities</button>
+              <div class="gear-section-label">Data</div>
+              <button type="button" class="gear-item" data-action="firms">&#127970; Firms</button>
+              <button type="button" class="gear-item" data-action="reports">&#128202; Reports</button>
+              <button type="button" class="gear-item" data-action="station-mileage">&#128663; Station Mileage</button>
+              <div class="gear-section-label">App</div>
+              <button type="button" class="gear-item" data-action="check-updates" id="gear-check-updates">&#8635; Check for updates</button>
+              <button type="button" class="gear-item" data-action="help">&#10067; Help</button>
+            </div>
           </div>
         </div>
         <button type="button" id="dark-mode-toggle" class="header-icon-btn" title="Toggle dark mode">&#9790;</button>
@@ -675,12 +679,12 @@
         </div>
 
         <div class="form-bottom-bar">
-          <button type="button" id="form-prev" class="bottom-btn prev-btn" title="Previous section (Ctrl+←)">&#9664; Prev</button>
-          <div id="section-progress-bar" class="section-progress-bar"></div>
-          <button type="button" id="form-sections-btn" class="bottom-btn sections-btn" title="Jump to section">&#9783;</button>
-          <button type="button" id="form-save-exit" class="bottom-btn save-btn" title="Save and exit (Ctrl+S)">Save</button>
-          <div id="section-progress-bar-2" class="section-progress-bar"></div>
-          <button type="button" id="form-next" class="bottom-btn next-btn" title="Next section (Ctrl+→)">Next &#9654;</button>
+          <button type="button" id="form-prev" class="bottom-btn prev-btn" title="Previous section (Ctrl+&#8592;)">&#9664; Prev</button>
+          <div id="section-progress-bar" class="section-progress-bar" style="display:none;"></div>
+          <button type="button" id="form-sections-btn" class="bottom-btn sections-btn" title="Jump to section"><span id="form-section-indicator">Section 1/9</span></button>
+          <button type="button" id="form-save-exit" class="bottom-btn save-btn" title="Save and exit (Ctrl+S)" style="display:none;">Save</button>
+          <div id="section-progress-bar-2" class="section-progress-bar" style="display:none;"></div>
+          <button type="button" id="form-next" class="bottom-btn next-btn" title="Next section (Ctrl+&#8594;)">Next &#9654;</button>
         </div>
       </div>
 
@@ -805,16 +809,17 @@
           <button type="button" id="settings-save-btn" class="btn btn-primary">Save settings</button>
         </div>
 
-        <div class="settings-quick-actions">
-          <button type="button" id="settings-quick-backup" class="btn btn-secondary">Backup now</button>
-          <button type="button" id="settings-quick-cloud" class="btn btn-secondary">Check cloud backup</button>
-          <button type="button" id="settings-quick-diagnostics" class="btn btn-secondary">Refresh diagnostics</button>
-          <button type="button" id="settings-quick-firms" class="btn btn-secondary">Open firms</button>
-          <button type="button" id="settings-quick-quickfile" class="btn btn-secondary">QuickFile</button>
-          <button type="button" id="settings-quick-support" class="btn btn-secondary">Open support forum</button>
+        <div class="settings-tab-bar" id="settings-tab-bar">
+          <button type="button" class="settings-tab active" data-stab="account">Account</button>
+          <button type="button" class="settings-tab" data-stab="appearance">Appearance</button>
+          <button type="button" class="settings-tab" data-stab="integrations">Integrations</button>
+          <button type="button" class="settings-tab" data-stab="backup">Backup</button>
+          <button type="button" class="settings-tab" data-stab="advanced">Advanced</button>
+          <button type="button" class="settings-tab" data-stab="support">Support</button>
         </div>
 
-        <div class="settings-section-label">Setup &amp; personalisation</div>
+        <div class="settings-tab-panel active" data-stab-panel="account">
+        <div class="settings-section-label">Account &amp; Billing</div>
 
         <div class="settings-card" id="licence-settings-card">
           <h2>Licence</h2>
@@ -895,6 +900,9 @@
           </div>
         </div>
 
+        </div><!-- end account tab panel -->
+
+        <div class="settings-tab-panel" data-stab-panel="integrations">
         <div class="settings-section-label">Integrations</div>
         <div class="settings-card" id="quickfile-settings-card">
           <h2>QuickFile Directory Import</h2>
@@ -934,6 +942,10 @@
           </div>
         </div>
 
+        </div><!-- end integrations tab panel -->
+
+        <div class="settings-tab-panel" data-stab-panel="appearance">
+        <div class="settings-section-label">Appearance &amp; Layout</div>
         <div class="settings-card settings-display-studio">
           <h2>Display &amp; Layout Studio</h2>
           <p class="settings-hint">Control readability, panel layout, home screen emphasis, and accessibility without changing your legal workflow.</p>
@@ -1079,7 +1091,10 @@
           </div>
         </div>
 
-        <div class="settings-section-label">Protection, backup &amp; security</div>
+        </div><!-- end appearance tab panel -->
+
+        <div class="settings-tab-panel" data-stab-panel="backup">
+        <div class="settings-section-label">Backup &amp; Security</div>
         <div class="settings-card">
           <h2>Backup &amp; Data Protection</h2>
           <div id="backup-destination-summary" style="background:var(--input-bg,#f8fafc);border:1px solid var(--border,#e2e8f0);border-radius:10px;padding:0.85rem 1rem;margin-bottom:1.25rem;">
@@ -1194,7 +1209,10 @@
           <p id="cloud-recover-status" class="settings-hint" style="margin-top:0.35rem;"></p>
         </div>
 
-        <div class="settings-section-label">Import, workflows &amp; add-ons</div>
+        </div><!-- end backup tab panel -->
+
+        <div class="settings-tab-panel" data-stab-panel="advanced">
+        <div class="settings-section-label">Import, Workflows &amp; Add-ons</div>
         <div class="settings-card">
           <h2>Import record (Admin)</h2>
           <p class="settings-hint">Load a previous record from a PDF exported by this app, or from a JSON backup. The record will be added as a new draft and opened for editing.</p>
@@ -1284,7 +1302,10 @@
           </div>
         </div>
 
-        <div class="settings-section-label">Support, diagnostics &amp; reference</div>
+        </div><!-- end advanced tab panel -->
+
+        <div class="settings-tab-panel" data-stab-panel="support">
+        <div class="settings-section-label">Support, Diagnostics &amp; Reference</div>
         <div class="settings-card">
           <h2>Storage &amp; Connectivity</h2>
           <label>Database location</label>
@@ -1464,6 +1485,7 @@
             <a href="https://www.appropriateadult.org.uk/" class="useful-link-btn" data-ext-url="https://www.appropriateadult.org.uk/">Appropriate Adult</a>
           </div>
         </div>
+        </div><!-- end support tab panel -->
 
       </div>
 

@@ -5562,6 +5562,7 @@ var REQUIRED_FIELD_KEYS = [
     updateProgressBar();
     buildSectionIndexBar();
     buildSectionSidebar();
+    updateSectionIndicator();
     const form = document.getElementById('attendance-form');
     if (form) form.scrollTop = 0;
   }
@@ -9624,6 +9625,14 @@ var REQUIRED_FIELD_KEYS = [
     _progressBarBuilt = true;
   }
 
+  function updateSectionIndicator() {
+    var el = document.getElementById('form-section-indicator');
+    if (!el) return;
+    var total = activeFormSections ? activeFormSections.length : 0;
+    var current = currentSectionIdx + 1;
+    el.textContent = 'Section ' + current + '/' + total;
+  }
+
   /* ═══════════════════════════════════════════════
      PDF GENERATION – comprehensive LAA-compliant
      ═══════════════════════════════════════════════ */
@@ -12126,9 +12135,23 @@ PDF_CASENOTE_ADVERT +
       var dd = document.getElementById('gear-dropdown');
       if (dd && !dd.classList.contains('hidden')) {
         var gearWrap = e.target.closest('.gear-wrap');
-        if (!gearWrap) dd.classList.add('hidden');
+        if (!gearWrap) {
+          dd.classList.add('hidden');
+          var moreSection = document.getElementById('gear-more-section');
+          if (moreSection) moreSection.style.display = 'none';
+        }
       }
     });
+
+    /* Gear "More..." toggle */
+    var gearMoreToggle = document.getElementById('gear-more-toggle');
+    if (gearMoreToggle) {
+      gearMoreToggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var sec = document.getElementById('gear-more-section');
+        if (sec) sec.style.display = sec.style.display === 'none' ? '' : 'none';
+      });
+    }
 
     /* Internet connectivity indicator – footer + home */
     var netStatusEl = document.getElementById('net-status-text');
@@ -12907,6 +12930,18 @@ PDF_CASENOTE_ADVERT +
         setTimeout(function() { btn.disabled = false; btn.textContent = 'Detect cloud folders'; }, 2000);
       }).catch(function() { btn.disabled = false; btn.textContent = 'Detect cloud folders'; });
     });
+    /* Settings tab switching */
+    var settingsTabBar = document.getElementById('settings-tab-bar');
+    if (settingsTabBar) {
+      settingsTabBar.addEventListener('click', function(e) {
+        var tab = e.target.closest('.settings-tab');
+        if (!tab) return;
+        var tabId = tab.dataset.stab;
+        settingsTabBar.querySelectorAll('.settings-tab').forEach(function(t) { t.classList.toggle('active', t.dataset.stab === tabId); });
+        document.querySelectorAll('.settings-tab-panel').forEach(function(p) { p.classList.toggle('active', p.dataset.stabPanel === tabId); });
+      });
+    }
+
     document.getElementById('settings-save-btn')?.addEventListener('click', function() {
       if (typeof saveSettings === 'function') saveSettings();
     });
