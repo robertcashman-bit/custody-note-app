@@ -287,7 +287,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
       document.getElementById('email-oic-body').value    = tplContent.body;
     });
 
-    /* Open Email App — uses current preference */
+    /* Open Email App — always fetches fresh settings to avoid stale-cache misrouting */
     document.getElementById('email-oic-open-app').addEventListener('click', function() {
       var to      = document.getElementById('email-oic-to').value.trim();
       var subject = document.getElementById('email-oic-subject').value.trim();
@@ -297,10 +297,23 @@ function openEmailModal(recordId, recordData, recordStatus) {
         document.getElementById('email-oic-to').focus();
         return;
       }
-      if (_currentClient() === 'default' && !((window._appSettingsCache || {}).preferredEmailClient)) {
-        _togglePicker(true);
+      function _doOpen() {
+        var client = _currentClient();
+        if (client === 'default') {
+          _togglePicker(true);
+        } else {
+          _openUrl(to, subject, body);
+        }
+      }
+      if (window.api && window.api.getSettings) {
+        window.api.getSettings().then(function(s) {
+          if (s) window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
+          var btn = document.getElementById('email-oic-open-app');
+          if (btn) btn.textContent = _openBtnLabel();
+          _doOpen();
+        }).catch(function() { _doOpen(); });
       } else {
-        _openUrl(to, subject, body);
+        _doOpen();
       }
     });
 
@@ -884,10 +897,23 @@ function openQuickEmailModal() {
       if (!to) { showToast('Please enter an officer email address', 'error'); return; }
       var subject = ((modal.querySelector('#quick-email-subject') || {}).value || '').trim() || _autoSubject();
       var body = (modal.querySelector('#quick-email-body') || {}).value || '';
-      if (_currentClient() === 'default' && !((window._appSettingsCache || {}).preferredEmailClient)) {
-        _toggleQuickPicker(true);
+      function _doOpen() {
+        var client = _currentClient();
+        if (client === 'default') {
+          _toggleQuickPicker(true);
+        } else {
+          _openUrl(to, subject, body);
+        }
+      }
+      if (window.api && window.api.getSettings) {
+        window.api.getSettings().then(function(s) {
+          if (s) window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
+          var openBtn = document.getElementById('quick-email-open-app');
+          if (openBtn) openBtn.textContent = _openBtnLabel();
+          _doOpen();
+        }).catch(function() { _doOpen(); });
       } else {
-        _openUrl(to, subject, body);
+        _doOpen();
       }
     });
 

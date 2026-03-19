@@ -4549,6 +4549,7 @@ var REQUIRED_FIELD_KEYS = [
       preferredEmailClient: document.getElementById('setting-preferred-email-client')?.value || 'default',
       idealPostcodesApiKey: document.getElementById('setting-ideal-postcodes-key')?.value?.trim() || '',
     }).then(() => window.api.getSettings()).then(function(s) {
+      window._appSettingsCache = s || {};
       applyLayoutPreferences(s || {});
       window._billingDefaults = {
         attendanceFee: parseFloat(s.billingAttendanceFee) || 160.00,
