@@ -1,9 +1,22 @@
 {
   "releases": [
     {
+      "version": "1.4.112",
+      "date": "2026-03-20",
+      "latest": true,
+      "changes": [
+        "Billing: LAA forms checklist with preview and attach confirmation for CRM1-3, Declaration, CRM14, CRM15",
+        "Applicant Declaration added to generated documents",
+        "LAA PDF Desktop filenames use client - station - date - form - firm",
+        "Billing readiness panel: clearer finalise, invoice, archive workflow steps",
+        "Progress bar rebuilds correctly when switching between form types (e.g. custody to telephone)",
+        "Smoke test updated to handle attachments-before-billing confirm dialog"
+      ]
+    },
+    {
       "version": "1.4.111",
       "date": "2026-03-19",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Auto-migrate legacy saved templates: old templates with hardcoded names are automatically converted to {{placeholders}} on first use",
         "Saved templates now correctly fill in current officer name, client name, station and date instead of showing stale values from when they were saved",
