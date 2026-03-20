@@ -3078,8 +3078,9 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function loadHomeRecent() {
-    if (!window.api || !window.api.attendanceList) return;
-    window.api.attendanceList().then(function(rows) {
+    var apiFn = (window.api && window.api.attendanceHomeStats) || (window.api && window.api.attendanceList);
+    if (!apiFn) return;
+    apiFn().then(function(rows) {
       var list = document.getElementById('home-recent-list');
       var statsEl = document.getElementById('home-stats');
       if (!list) return;
@@ -5661,10 +5662,16 @@ var REQUIRED_FIELD_KEYS = [
       statusText = 'Sent';
       statusClass = 'state-sent';
       summary = 'Invoice sent is already marked on this record' + (formData.invoiceNotes ? ' - ' + formData.invoiceNotes : '') + '.';
+      if (typeof currentRecordStatus !== 'undefined' && currentRecordStatus === 'finalised' && !currentRecordArchived) {
+        summary += ' When the file is complete, use Archive record on the form toolbar to tidy your list.';
+      }
     } else if (hasInvoice) {
       statusText = 'Invoiced';
       statusClass = 'state-invoiced';
       summary = 'QuickFile invoice ' + (formData.quickfileInvoiceNumber || 'created') + ' is linked to this record. Mark "Invoice sent?" as Yes after dispatching it.';
+      if (typeof currentRecordStatus !== 'undefined' && currentRecordStatus === 'finalised' && !currentRecordArchived) {
+        summary += ' File billed — archive when you have finished all follow-up.';
+      }
     } else if (!quickFileReady) {
       statusText = 'Setup needed';
       statusClass = 'state-setup';
@@ -5699,14 +5706,14 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     showConfirm(
-      'Do you want to add the attendance record or forms as attachments before opening Billing?\n\n' +
-      'Select OK to stay on this record and go to Attachments now.\n' +
-      'Select Cancel to continue straight to Billing.',
+      'Add official LAA PDFs or other documents to Attachments before you open Billing?\n\n' +
+      'OK — stay here and scroll to Attachments.\n' +
+      'Cancel — open Billing now (you can still use Preview there and attach files later).',
       'Attachments Before Billing'
     ).then(function(addAttachmentsFirst) {
       if (addAttachmentsFirst) {
         scrollToAttachmentsForBilling();
-        showToast('Export the record or forms if needed, then add them in Attachments before opening Billing.', 'info', 5000);
+        showToast('Attach your signed LAA forms here, then open Billing to tick them off the checklist.', 'info', 5000);
         return;
       }
       if (typeof openBillingPanel === 'function') openBillingPanel();
@@ -6574,7 +6581,7 @@ var REQUIRED_FIELD_KEYS = [
           '<div class="billing-readiness-head">' +
             '<div>' +
               '<h4 class="billing-readiness-title">Billing &amp; Invoice</h4>' +
-              '<p class="billing-readiness-copy">Review charges, create the QuickFile invoice, then mark the invoice as sent once it has gone to the firm or portal.</p>' +
+              '<p class="billing-readiness-copy">Finalise the matter, attach official LAA PDFs, bill via QuickFile, then archive the record when the file is complete.</p>' +
             '</div>' +
             '<span id="billing-readiness-status" class="billing-readiness-status state-review">Needs review</span>' +
           '</div>' +
@@ -6583,9 +6590,9 @@ var REQUIRED_FIELD_KEYS = [
             '<p id="billing-readiness-summary" class="billing-readiness-summary"></p>' +
           '</div>' +
           '<ol class="billing-readiness-steps">' +
-            '<li>Review fee, mileage, parking, VAT, and invoice narrative.</li>' +
-            '<li>Create the QuickFile invoice from the billing panel.</li>' +
-            '<li>After sending it, set Invoice sent? to Yes and add any note if needed.</li>' +
+            '<li>When the police-station work is finished, <strong>finalise</strong> the attendance (toolbar).</li>' +
+            '<li>Open Billing: preview the attendance note and declaration, tick off LAA forms you have attached, then create the QuickFile invoice.</li>' +
+            '<li>After sending the invoice, set <strong>Invoice sent?</strong> to Yes; when the file is closed, <strong>Archive</strong> the record from the toolbar.</li>' +
           '</ol>' +
           '<div id="billing-readiness-warnings-wrap" class="billing-readiness-warnings">' +
             '<p class="billing-readiness-warning-title">Still to check before invoicing:</p>' +
@@ -9690,7 +9697,10 @@ var REQUIRED_FIELD_KEYS = [
   var _progressBarBuilt = false;
   function updateProgressBar() {
     var bars = [document.getElementById('section-progress-bar'), document.getElementById('section-progress-bar-2')];
-    var needsRebuild = !_progressBarBuilt || !bars[0] || bars[0].children.length === 0;
+    var visCount = 0;
+    forEachVisibleSection(function() { visCount++; });
+    var needsRebuild = !_progressBarBuilt || !bars[0] || bars[0].children.length === 0 ||
+      bars[0].querySelectorAll('.prog-dot').length !== visCount;
     bars.forEach(function(bar) {
       if (!bar) return;
       if (needsRebuild) {
@@ -11167,6 +11177,19 @@ PDF_CASENOTE_ADVERT +
     w.focus();
     setTimeout(() => { w.print(); }, 400);
   }
+
+  /** Billing / LAA: open HTML in a window without forcing the print dialog. */
+  function openHtmlPreviewWindow(html) {
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) {
+      showToast('Please allow pop-ups to preview documents', 'error');
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+  }
+  window.openHtmlPreviewWindow = openHtmlPreviewWindow;
 
   function docStyles() {
     return '<style>body{font-family:Arial,sans-serif;font-size:11pt;color:#111;margin:2cm}' +
@@ -14427,6 +14450,7 @@ PDF_CASENOTE_ADVERT +
       generateLaaFormPdf(formType, title, data);
     }
   }
+  window.openLaaForm = openLaaForm;
 
   function collectSignaturesThenGenerate(sigQueue, idx, data, formType, title) {
     if (idx >= sigQueue.length) {

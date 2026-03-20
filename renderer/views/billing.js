@@ -138,14 +138,22 @@ function _fmtCurrency(val) {
 function _getGeneratedDocuments(data) {
   var docs = [];
   docs.push({ name: 'Attendance Note PDF', type: 'attendance', available: true });
-  if (data.conflictCheckResult) docs.push({ name: 'Conflict Check Certificate', type: 'conflict', available: true });
-  if (data.clientInstructions) docs.push({ name: 'Client Instructions Document', type: 'instructions', available: true });
-  if (data.preparedStatement) docs.push({ name: 'Prepared Statement', type: 'statement', available: true });
+  docs.push({ name: 'Applicant Declaration (pre-filled PDF)', type: 'declaration', available: true });
   if (data.officerEmailStatus === 'sent') docs.push({ name: 'Officer Email Copy', type: 'email', available: true });
   if (data.disclosure || data.disclosureSummary) docs.push({ name: 'Disclosure Summary', type: 'disclosure', available: true });
-  if (data.interviews && data.interviews.length) docs.push({ name: 'Interview Notes', type: 'interview', available: true });
-  if (data.bailConditions || data.bailDate) docs.push({ name: 'Bail Advice Letter', type: 'bail', available: true });
   return docs;
+}
+
+/** Official LAA / portal documents the firm must hold on file — user confirms they have attached. */
+function _getLaaAttachFormsList() {
+  return [
+    { name: 'CRM1 — Client Details (signed official PDF on file)', type: 'crm1' },
+    { name: 'CRM2 — Advice & Assistance (signed official PDF on file)', type: 'crm2' },
+    { name: 'CRM3 — Advocacy Assistance (signed official PDF on file)', type: 'crm3' },
+    { name: 'Applicant Declaration (signed official PDF on file)', type: 'declaration_attach' },
+    { name: 'Signed Apply application / CRM14 from portal (or paper pack)', type: 'crm14' },
+    { name: 'CRM15 — Financial statement (attach if required)', type: 'crm15' },
+  ];
 }
 
 function _renderBillingPanel(data, recordId, opts) {
@@ -153,11 +161,12 @@ function _renderBillingPanel(data, recordId, opts) {
   if (stale) stale.remove();
 
   var docs = _getGeneratedDocuments(data);
+  var attachForms = _getLaaAttachFormsList();
 
   var docsHtml = '';
   if (docs.length) {
     docsHtml = '<table class="billing-docs-table"><thead><tr>' +
-      '<th>Document</th><th>Preview</th><th>Include</th>' +
+      '<th>Document</th><th>Preview</th><th>Include in pack</th>' +
       '</tr></thead><tbody>';
     docs.forEach(function (doc, idx) {
       docsHtml += '<tr>' +
@@ -168,8 +177,21 @@ function _renderBillingPanel(data, recordId, opts) {
     });
     docsHtml += '</tbody></table>';
   } else {
-    docsHtml = '<p class="settings-hint">No generated documents found for this record.</p>';
+    docsHtml = '<p class="settings-hint">No generated documents for this record.</p>';
   }
+
+  var attachHtml = '<p class="settings-hint" style="margin-bottom:0.5rem;">Tick each row when the <strong>signed official</strong> PDF is on this file (use Attachments below on the form, or your practice case system). Preview opens a draft or summary from this record; save to Desktop uses the naming: client — station — date — form — firm.</p>' +
+    '<table class="billing-docs-table"><thead><tr>' +
+    '<th>LAA / portal item</th><th>Preview</th><th>Attached</th>' +
+    '</tr></thead><tbody>';
+  attachForms.forEach(function (row, aidx) {
+    attachHtml += '<tr>' +
+      '<td>' + _escHtml(row.name) + '</td>' +
+      '<td><button type="button" class="btn btn-small billing-attach-preview" data-attach-type="' + row.type + '">Preview</button></td>' +
+      '<td><input type="checkbox" class="billing-attach-check" data-attach-idx="' + aidx + '"></td>' +
+      '</tr>';
+  });
+  attachHtml += '</tbody></table>';
 
   var invoiceStatusHtml = '';
   if (opts.hasExistingInvoice) {
@@ -228,8 +250,13 @@ function _renderBillingPanel(data, recordId, opts) {
           '</div>' +
 
           '<div class="billing-section">' +
-            '<h3>Generated Documents</h3>' +
+            '<h3>Generated documents</h3>' +
             docsHtml +
+          '</div>' +
+
+          '<div class="billing-section">' +
+            '<h3>LAA forms on file</h3>' +
+            attachHtml +
           '</div>' +
 
           '<div class="billing-section">' +
@@ -336,6 +363,13 @@ function _bindBillingEvents(recordId, opts) {
   overlay.querySelectorAll('.billing-doc-preview').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var docType = btn.getAttribute('data-doc-type');
+      _previewDocument(docType);
+    });
+  });
+
+  overlay.querySelectorAll('.billing-attach-preview').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var docType = btn.getAttribute('data-attach-type');
       _previewDocument(docType);
     });
   });
@@ -476,28 +510,57 @@ function _previewDocument(docType) {
     });
   }
 
+  if (docType === 'crm1' || docType === 'crm2' || docType === 'crm3' ||
+      docType === 'declaration' || docType === 'declaration_attach') {
+    if (typeof closeBillingPanel === 'function') closeBillingPanel();
+    var ft = docType === 'declaration_attach' ? 'declaration' : docType;
+    if (typeof window.openLaaForm === 'function') {
+      window.openLaaForm(ft, data);
+    } else {
+      if (typeof showToast === 'function') showToast('LAA form preview is not available', 'error');
+    }
+    return;
+  }
+
+  if (docType === 'crm14') {
+    window.api.getSettings().then(function (settings) {
+      var lf = window.laaForms;
+      if (lf && typeof lf.buildCRM14Summary === 'function') {
+        var html = lf.buildCRM14Summary(data, settings || {});
+        if (typeof window.openHtmlPreviewWindow === 'function') window.openHtmlPreviewWindow(html);
+        else if (html && typeof printGeneratedDoc === 'function') printGeneratedDoc(html);
+      } else if (typeof showToast === 'function') {
+        showToast('CRM14 preview is not available', 'error');
+      }
+    });
+    return;
+  }
+
+  if (docType === 'crm15') {
+    var crm15Html = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>CRM15</title>' +
+      '<style>body{font-family:Segoe UI,Arial,sans-serif;padding:1.5rem;max-width:40rem;line-height:1.45;color:#0f172a}' +
+      'h1{font-size:1.1rem;border-bottom:2px solid #1d70b8;padding-bottom:0.35rem}' +
+      '</style></head><body>' +
+      '<h1>CRM15 — Means / financial statement</h1>' +
+      '<p>If means assessment requires it, attach the official <strong>CRM15</strong> or the financial section produced by the <strong>Apply for criminal legal aid</strong> service.</p>' +
+      '<p>This app does not generate CRM15. Obtain the client-signed form from the portal or use the LAA paper pack, then attach it to this record.</p>' +
+      '</body></html>';
+    if (typeof window.openHtmlPreviewWindow === 'function') window.openHtmlPreviewWindow(crm15Html);
+    return;
+  }
+
   window.api.getSettings().then(function (settings) {
     var html = '';
     if (docType === 'attendance') {
       var builder = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : (typeof buildPdfHtml === 'function' ? buildPdfHtml : null);
       if (builder) html = builder(data, settings);
-    } else if (docType === 'conflict' && typeof generateConflictCert === 'function') {
-      generateConflictCert();
-      return;
-    } else if (docType === 'instructions' && typeof generateClientInstructionsDoc === 'function') {
-      generateClientInstructionsDoc();
-      return;
-    } else if (docType === 'statement' && typeof generatePreparedStatement === 'function') {
-      generatePreparedStatement();
-      return;
-    } else if (docType === 'interview') {
-      var builder2 = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : null;
-      if (builder2) html = builder2(data, settings);
-    } else {
-      var builder3 = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : null;
-      if (builder3) html = builder3(data, settings);
+    } else if (docType === 'email' || docType === 'disclosure') {
+      var builderFallback = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : null;
+      if (builderFallback) html = builderFallback(data, settings);
     }
-    if (html && typeof printGeneratedDoc === 'function') {
+    if (html && typeof window.openHtmlPreviewWindow === 'function') {
+      window.openHtmlPreviewWindow(html);
+    } else if (html && typeof printGeneratedDoc === 'function') {
       printGeneratedDoc(html);
     }
   });

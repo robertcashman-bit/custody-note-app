@@ -6,7 +6,10 @@
       "latest": true,
       "changes": [
         "Auto-migrate legacy saved templates: old templates with hardcoded names are automatically converted to {{placeholders}} on first use",
-        "Saved templates now correctly fill in current officer name, client name, station and date instead of showing stale values from when they were saved"
+        "Saved templates now correctly fill in current officer name, client name, station and date instead of showing stale values from when they were saved",
+        "Billing: LAA forms checklist (attach official PDFs), Applicant Declaration in generated docs; previews without forced print; Desktop LAA PDF filename client — station — date — form — firm",
+        "Billing readiness: clearer finalise → invoice → archive steps; rebuild section progress dots when switching form type (e.g. telephone)",
+        "Smoke test: dismiss attachments prompt before asserting billing overlay"
       ]
     },
     {

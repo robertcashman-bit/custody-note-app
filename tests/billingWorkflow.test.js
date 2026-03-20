@@ -191,6 +191,12 @@ describe('index.html — billing UI elements', () => {
     assert.ok(indexHtml.includes('renderer/views/billing.js'));
   });
 
+  it('loads laa-forms.js before billing.js for CRM14 previews', () => {
+    const iLaa = indexHtml.indexOf('renderer/laa-forms.js');
+    const iBill = indexHtml.indexOf('renderer/views/billing.js');
+    assert.ok(iLaa > 0 && iBill > iLaa, 'laa-forms must load before billing.js');
+  });
+
   it('includes billable-attendances.js script', () => {
     assert.ok(indexHtml.includes('renderer/views/billable-attendances.js'));
   });
@@ -299,6 +305,13 @@ describe('billing.js — core functions', () => {
   it('shows generated documents list', () => {
     assert.ok(billingJs.includes('function _getGeneratedDocuments'));
     assert.ok(billingJs.includes('Attendance Note PDF'));
+    assert.ok(billingJs.includes('Applicant Declaration'));
+  });
+
+  it('shows LAA attach checklist for official forms', () => {
+    assert.ok(billingJs.includes('function _getLaaAttachFormsList'));
+    assert.ok(billingJs.includes('LAA forms on file'));
+    assert.ok(billingJs.includes('CRM15'));
   });
 });
 

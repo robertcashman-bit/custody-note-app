@@ -2888,7 +2888,13 @@ function createWindow() {
                 if (billingBtn) {
                   log('28a. Billing panel button present in form header');
                   billingBtn.click();
-                  await sleep(500);
+                  await sleep(350);
+                  /* promptBeforeOpeningBilling: OK = attach first; Cancel = open billing */
+                  var attachCancel = document.querySelector('.cn-confirm-overlay .cn-confirm-btns .btn-secondary');
+                  if (attachCancel && attachCancel.textContent === 'Cancel') {
+                    attachCancel.click();
+                    await sleep(450);
+                  }
                   var billingOverlay = document.getElementById('billing-panel-overlay');
                   if (billingOverlay) {
                     log('28b. Billing panel overlay opens');
@@ -3939,6 +3945,7 @@ ipcMain.handle('attendance-home-stats', () => {
        created_at,
        updated_at,
        client_name,
+       station_name,
        attendance_date,
        status,
        COALESCE(json_extract(data, '$.clientSig'), '') AS clientSig,
@@ -3950,7 +3957,10 @@ ipcMain.handle('attendance-home-stats', () => {
        COALESCE(json_extract(data, '$.totalHoursWorked'), '') AS totalHoursWorked,
        COALESCE(json_extract(data, '$.forename'), '') AS forename,
        COALESCE(json_extract(data, '$.surname'), '') AS surname,
-       COALESCE(json_extract(data, '$.offenceSummary'), '') AS offenceSummary
+       COALESCE(json_extract(data, '$.offenceSummary'), '') AS offenceSummary,
+       COALESCE(json_extract(data, '$._formType'), '') AS _formType,
+       COALESCE(json_extract(data, '$.attendanceMode'), '') AS attendanceMode,
+       COALESCE(json_extract(data, '$.custodyNumber'), '') AS custodyNumber
      FROM attendances
      WHERE deleted_at IS NULL
        AND archived_at IS NULL
@@ -5282,6 +5292,33 @@ const LAA_FORM_FILES = {
   declaration: 'applicant-declaration-v7-feb-2025.pdf',
 };
 
+/** Human-readable label for Desktop naming: Client - Station - Date - Form - Firm.pdf */
+function laaSanitizeFilePart(s, maxLen) {
+  const t = String(s || '')
+    .replace(/[\u0000-\u001f<>:"/\\|?*]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const m = maxLen || 80;
+  return t.length > m ? t.slice(0, m) : t;
+}
+
+function laaDesktopPdfFilename(d, formType) {
+  const dd = d || {};
+  const labels = {
+    crm1: 'CRM1 Client Details',
+    crm2: 'CRM2 Advice and Assistance',
+    crm3: 'CRM3 Advocacy Assistance',
+    declaration: 'Applicant Declaration',
+  };
+  const client = laaSanitizeFilePart([dd.forename, dd.surname].filter(Boolean).join(' '), 72) || 'Client';
+  const station = laaSanitizeFilePart(dd.policeStationName || dd.otherLocation, 72) || 'Police station';
+  const m = String(dd.date || dd.laaSignatureDate || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const dateIso = m ? `${m[1]}-${m[2]}-${m[3]}` : new Date().toISOString().slice(0, 10);
+  const what = labels[formType] || String(formType || 'LAA form').replace(/-/g, ' ');
+  const firm = laaSanitizeFilePart(dd.firmName, 72) || 'Firm';
+  return `${client} - ${station} - ${dateIso} - ${what} - ${firm}.pdf`;
+}
+
 function getLaaFormDir() {
   const packed = path.join(process.resourcesPath, 'app', 'data', 'laa-official-forms');
   if (fs.existsSync(packed)) return packed;
@@ -5525,9 +5562,7 @@ ipcMain.handle('laa-generate-official-pdf', async (_, { formType, data }) => {
 
     const pdfBytes = await pdfDoc.save();
     const desktop = app.getPath('desktop');
-    const clientName = [d.forename, d.surname].filter(Boolean).join('_') || 'form';
-    const dateStr = (d.date || '').replace(/-/g, '') || String(Date.now());
-    const safeName = `${formType.toUpperCase()}-${clientName}-${dateStr}.pdf`.replace(/[<>:"/\\|?*]/g, '_');
+    const safeName = laaDesktopPdfFilename(d, formType).replace(/[<>:"/\\|?*]/g, '_');
     const outPath = path.join(desktop, safeName);
     fs.writeFileSync(outPath, pdfBytes);
     return { path: outPath };
