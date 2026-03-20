@@ -4572,7 +4572,7 @@ var REQUIRED_FIELD_KEYS = [
       idealPostcodesApiKey: document.getElementById('setting-ideal-postcodes-key')?.value?.trim() || '',
       idealPostcodesUserToken: document.getElementById('setting-ideal-postcodes-user-token')?.value?.trim() || '',
     }).then(() => window.api.getSettings()).then(function(s) {
-      window._appSettingsCache = s || {};
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
       applyLayoutPreferences(s || {});
       window._billingDefaults = {
         attendanceFee: parseFloat(s.billingAttendanceFee) || 160.00,
@@ -10873,15 +10873,26 @@ PDF_CASENOTE_ADVERT +
 
   function openPreferredEmailClient(toEmail, subject, body) {
     if (!window._emailOpenGuard) window._emailOpenGuard = { ts: 0, url: '' };
-    var clientId = (((window._appSettingsCache || {}).preferredEmailClient) || 'default').trim() || 'default';
-    var url = typeof buildEmailClientUrl === 'function'
-      ? buildEmailClientUrl(clientId, toEmail, subject, body)
-      : ('mailto:' + encodeURIComponent(toEmail) + '?subject=' + encodeURIComponent(subject || '') + '&body=' + encodeURIComponent(body || ''));
-    var now = Date.now();
-    if (now - window._emailOpenGuard.ts < 1200) return;
-    window._emailOpenGuard = { ts: now, url: url };
-    if (window.api && window.api.openExternal) window.api.openExternal(url);
-    else window.open(url, '_blank');
+    function _fire(clientId) {
+      var url = typeof buildEmailClientUrl === 'function'
+        ? buildEmailClientUrl(clientId, toEmail, subject, body)
+        : ('mailto:' + encodeURIComponent(toEmail) + '?subject=' + encodeURIComponent(subject || '') + '&body=' + encodeURIComponent(body || ''));
+      var now = Date.now();
+      if (now - window._emailOpenGuard.ts < 1200) return;
+      window._emailOpenGuard = { ts: now, url: url };
+      if (window.api && window.api.openExternal) window.api.openExternal(url);
+      else window.open(url, '_blank');
+    }
+    if (window.api && window.api.getSettings) {
+      window.api.getSettings().then(function(s) {
+        if (s) window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
+        _fire(((window._appSettingsCache || {}).preferredEmailClient || 'default').trim() || 'default');
+      }).catch(function() {
+        _fire(((window._appSettingsCache || {}).preferredEmailClient || 'default').trim() || 'default');
+      });
+    } else {
+      _fire(((window._appSettingsCache || {}).preferredEmailClient || 'default').trim() || 'default');
+    }
   }
 
   function openSolicitorEmail() {

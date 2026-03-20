@@ -77,13 +77,12 @@ describe('Email app routing guard', () => {
 
 describe('Email client preference — settings cache', () => {
   it('app.js saveSettings (inside IIFE) refreshes window._appSettingsCache after writing to DB', () => {
-    // app.js defines a local saveSettings() that refreshes the cache.
-    // settings.js overrides it at global scope but must do the same (tested in settings.js suite).
     const saveSettingsIdx = appJs.indexOf('function saveSettings()');
     assert.ok(saveSettingsIdx > -1, 'saveSettings must exist in app.js');
     const afterSave = appJs.slice(saveSettingsIdx, saveSettingsIdx + 5000);
-    assert.ok(afterSave.includes('window._appSettingsCache = s || {}'),
-      'app.js saveSettings must set window._appSettingsCache = s || {} after the DB write');
+    assert.ok(
+      afterSave.includes('Object.assign({}, window._appSettingsCache') && afterSave.includes('getSettings'),
+      'app.js saveSettings must merge fresh DB values into window._appSettingsCache after the DB write');
   });
 });
 
@@ -146,12 +145,21 @@ describe('No unguarded openExternal calls in email flows', () => {
   it('app.js openPreferredEmailClient uses the 1.2 s guard', () => {
     const fnIdx = appJs.indexOf('function openPreferredEmailClient(');
     assert.ok(fnIdx > -1, 'openPreferredEmailClient must exist in app.js');
-    // The function body is ~300 chars; use a 600-char slice to be safe
-    const fnBody = appJs.slice(fnIdx, fnIdx + 600);
+    const fnBody = appJs.slice(fnIdx, fnIdx + 900);
     assert.ok(fnBody.includes('window._emailOpenGuard'),
       'openPreferredEmailClient must check window._emailOpenGuard');
     assert.ok(fnBody.includes('window._emailOpenGuard.ts < 1200'),
       'openPreferredEmailClient must block opens within 1.2 s guard window');
+  });
+
+  it('app.js openPreferredEmailClient refreshes settings from DB before opening', () => {
+    const fnIdx = appJs.indexOf('function openPreferredEmailClient(');
+    assert.ok(fnIdx > -1);
+    const fnBody = appJs.slice(fnIdx, fnIdx + 900);
+    assert.ok(fnBody.includes('getSettings'),
+      'openPreferredEmailClient must call getSettings() to refresh the cache before opening');
+    assert.ok(fnBody.includes('Object.assign'),
+      'openPreferredEmailClient must merge fresh DB values into the cache');
   });
 });
 

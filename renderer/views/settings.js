@@ -11,7 +11,7 @@ function loadSettings() {
   document.dispatchEvent(new CustomEvent('view-settings-shown'));
   window.api.getSettings().then(function(s) {
     s = s || {};
-    window._appSettingsCache = s;
+    window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
     document.getElementById('setting-email').value = s.email || '';
     document.getElementById('setting-dscc-pin').value = s.dsccPin || '';
     document.getElementById('setting-backup-folder').value = s.backupFolder || '';
@@ -63,8 +63,6 @@ function loadSettings() {
         });
       }
     }
-    window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { preferredEmailClient: s.preferredEmailClient || 'default' });
-
     var oetToggle = document.getElementById('setting-officer-email-templates');
     if (oetToggle) {
       oetToggle.checked = s.officerEmailTemplatesEnabled === 'true';
@@ -252,7 +250,7 @@ function saveSettings() {
     /* Refresh the in-memory cache so all email-launch code sees the freshly-saved values. */
     return window.api.getSettings();
   }).then(function(fresh) {
-    if (fresh) window._appSettingsCache = fresh;
+    if (fresh) window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, fresh);
   }).catch(function(err) {
     console.error('[Settings] Failed to save settings:', err);
     showToast('Failed to save settings — please try again', 'error');
