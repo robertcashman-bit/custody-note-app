@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.112",
+      "version": "1.4.113",
       "date": "2026-03-20",
       "latest": true,
+      "changes": [
+        "Fix email client switching: openPreferredEmailClient now refreshes settings from DB before every email open (was using stale cache)",
+        "loadSettings uses merge instead of full cache replacement to prevent losing in-flight preference changes",
+        "removed redundant preferredEmailClient fallback that could reset to default"
+      ]
+    },
+    {
+      "version": "1.4.112",
+      "date": "2026-03-20",
+      "latest": false,
       "changes": [
         "Billing: LAA forms checklist with preview and attach confirmation for CRM1-3, Declaration, CRM14, CRM15",
         "Applicant Declaration added to generated documents",
