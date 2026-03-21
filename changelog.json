@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.114",
+      "version": "1.4.122",
       "date": "2026-03-21",
       "latest": true,
+      "changes": [
+        "Zero-friction redesign: paste licence key to activate — no email codes or passwords",
+        "Welcome email sent on purchase with licence key and download link",
+        "Postcode lookup works out of the box via server-side proxy",
+        "Simplified first-launch: just name and DSCC PIN",
+        "Settings decluttered: advanced options hidden behind toggle",
+        "Expired licence shows a non-blocking banner instead of blocking the app"
+      ]
+    },
+    {
+      "version": "1.4.114",
+      "date": "2026-03-21",
       "changes": [
         "Account-based sign-in (email + password) on licence overlay",
         "Bearer token auth for licence validation and cloud backup API calls",

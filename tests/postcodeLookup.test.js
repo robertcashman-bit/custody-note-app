@@ -51,12 +51,13 @@ describe('Postcode IPC handlers – source code', () => {
     const lookupIdx = mainJs.indexOf("ipcMain.handle('postcode-lookup'");
     const checkIdx  = mainJs.indexOf("ipcMain.handle('postcode-check-key'");
 
-    const lookupBody = mainJs.slice(lookupIdx, lookupIdx + 600);
-    const checkBody  = mainJs.slice(checkIdx,  checkIdx  + 400);
+    const nextHandler = mainJs.indexOf("ipcMain.handle(", lookupIdx + 1);
+    const lookupBody = mainJs.slice(lookupIdx, nextHandler !== -1 ? nextHandler : lookupIdx + 2000);
+    const checkBody  = mainJs.slice(checkIdx,  checkIdx  + 600);
 
     assert.ok(
       lookupBody.includes("dbAll('SELECT key, value FROM settings')"),
-      'postcode-lookup must query settings via dbAll'
+      'postcode-lookup must query settings via dbAll (fallback path)'
     );
     assert.ok(
       checkBody.includes("dbAll('SELECT key, value FROM settings')"),
@@ -78,10 +79,11 @@ describe('Postcode IPC handlers – source code', () => {
 
   it('handler returns { ok: false } when no API key is configured', () => {
     const lookupIdx = mainJs.indexOf("ipcMain.handle('postcode-lookup'");
-    const body = mainJs.slice(lookupIdx, lookupIdx + 800);
+    const nextHandler = mainJs.indexOf("ipcMain.handle(", lookupIdx + 1);
+    const body = mainJs.slice(lookupIdx, nextHandler !== -1 ? nextHandler : lookupIdx + 2000);
     assert.ok(
-      body.includes('No API key configured'),
-      'must return a helpful error when API key is missing'
+      body.includes('Postcode lookup is not available') || body.includes('No API key configured'),
+      'must return a helpful error when neither proxy nor API key is available'
     );
   });
 });
