@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.4.127",
+      "version": "1.4.128",
       "date": "2026-03-21",
       "latest": true,
+      "changes": [
+        "Fix toast queue draining — toasts after the first now display reliably",
+        "Add error handling to PDF and Word export when settings fail to load",
+        "Fix competing database writes during first-launch wizard setup",
+        "Add 5-minute timeout to magic-link session unlock polling",
+        "Persistent auto-save indicator in form header and footer bar"
+      ]
+    },
+    {
+      "version": "1.4.127",
+      "date": "2026-03-21",
       "changes": [
         "Word/DOCX export alongside PDF — export attendance notes as editable Word documents",
         "Light theme fix — theme-light now uses genuinely light backgrounds",

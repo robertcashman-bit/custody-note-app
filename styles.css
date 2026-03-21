@@ -1529,9 +1529,10 @@ html.dark .home-attention-item:hover {
 /* ═══ AUTOSAVE INDICATOR ═══ */
 .autosave-indicator {
   font-size: 0.78rem; color: var(--accent-green); font-weight: 600;
-  opacity: 0; transition: opacity 0.5s;
+  opacity: 0; transition: opacity 0.4s;
 }
 .autosave-indicator.visible { opacity: 1; }
+#footer-autosave { color: var(--accent-green); font-weight: 600; }
 
 .settings-saved-toast {
   font-size: 0.78rem; color: var(--accent-green); font-weight: 600;

@@ -32,18 +32,17 @@
     el.className = 'cn-toast cn-toast-visible cn-toast-' + (item.type || 'info');
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(function () {
+      _toastBusy = false;
       el.className = 'cn-toast';
-      setTimeout(_showNextToast, 300);
+      setTimeout(function () {
+        if (_toastQueue.length && !_toastBusy) _showNextToast();
+      }, 300);
     }, item.duration || 3500);
   }
 
   function showToast(message, type, duration) {
-    if (_toastBusy) {
-      _toastQueue.push({ message: message, type: type, duration: duration });
-      return;
-    }
     _toastQueue.push({ message: message, type: type, duration: duration });
-    _showNextToast();
+    if (!_toastBusy) _showNextToast();
   }
 
   /* ── Confirm modal ── */

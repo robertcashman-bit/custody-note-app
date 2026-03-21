@@ -4008,6 +4008,8 @@ var REQUIRED_FIELD_KEYS = [
 
   function stopAutoSave() {
     if (autoSaveTimer) { clearInterval(autoSaveTimer); autoSaveTimer = null; }
+    var footerWrap = document.getElementById('footer-autosave-wrap');
+    if (footerWrap) footerWrap.style.display = 'none';
   }
 
   function hasMeaningfulData(d) {
@@ -4047,6 +4049,7 @@ var REQUIRED_FIELD_KEYS = [
     if (_draftSaveInFlight) { _draftSaveQueued = true; return; }
     _draftSaveInFlight = true;
     _lastQuietSaveStart = Date.now();
+    showSavingIndicator();
     window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
       /* Invalidate cache on save */
       if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
@@ -4073,18 +4076,38 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  function showSavingIndicator() {
+    ['autosave-indicator', 'header-autosave'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = 'Saving\u2026';
+      el.classList.add('visible');
+    });
+    var footerEl = document.getElementById('footer-autosave');
+    var footerWrap = document.getElementById('footer-autosave-wrap');
+    if (footerWrap && footerEl) {
+      footerWrap.style.display = '';
+      footerEl.textContent = 'Saving\u2026';
+    }
+  }
+
   function showAutoSaveIndicator() {
     var now = new Date();
     _lastQuietSaveDurationMs = _lastQuietSaveStart ? (now.getTime() - _lastQuietSaveStart) : null;
     _lastDbWrite = now.toISOString();
-    var txt = 'Saved ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    var txt = '\u2713 Saved ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.textContent = txt;
       el.classList.add('visible');
-      setTimeout(function() { el.classList.remove('visible'); }, 3000);
     });
+    var footerWrap = document.getElementById('footer-autosave-wrap');
+    var footerEl = document.getElementById('footer-autosave');
+    if (footerWrap && footerEl) {
+      footerWrap.style.display = '';
+      footerEl.textContent = txt;
+    }
   }
 
   function showSettingsSavedToast() {
@@ -10680,7 +10703,7 @@ PDF_CASENOTE_ADVERT +
       window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
         showToast('PDF saved: ' + p, 'success');
       }).catch(e => showToast('PDF failed: ' + (e && e.message), 'error'));
-    });
+    }).catch(function(e) { showToast('Export failed: could not load settings', 'error'); console.error('[exportPdf]', e); });
   }
 
   function exportDocx() {
@@ -10693,7 +10716,7 @@ PDF_CASENOTE_ADVERT +
       window.api.exportDocx({ data: data, settings: settings, filename: fn }).then(function(p) {
         showToast('Word document saved: ' + (p || '').replace(/\\/g, '/').split('/').pop(), 'success');
       }).catch(function(e) { showToast('Word export failed: ' + (e && e.message), 'error'); });
-    });
+    }).catch(function(e) { showToast('Export failed: could not load settings', 'error'); console.error('[exportDocx]', e); });
   }
 
   window.exportDocxById = function(recordId) {
@@ -14830,22 +14853,22 @@ PDF_CASENOTE_ADVERT +
       var email = (document.getElementById('fl-email').value || '').trim();
       _flSettings = { feeEarnerNameDefault: name, dsccPin: pin };
       if (email) _flSettings.email = email;
-      window.api.setSettings(_flSettings);
-      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, _flSettings);
+      window.api.setSettings(_flSettings).then(function() {
+        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, _flSettings);
+        showStep(2);
 
-      showStep(2);
-
-      if (window.api.detectCloudFolders) {
-        window.api.detectCloudFolders().then(function(folders) {
-          if (folders && folders.length) {
-            var best = folders[0];
-            document.getElementById('fl-backup-auto').style.display = '';
-            document.getElementById('fl-backup-manual').style.display = 'none';
-            document.getElementById('fl-backup-path').textContent = best.name || best.path;
-            window.api.setSettings({ offsiteBackupFolder: best.path });
-          }
-        }).catch(function(e) { console.error('[detect-cloud-folders]', e); });
-      }
+        if (window.api.detectCloudFolders) {
+          window.api.detectCloudFolders().then(function(folders) {
+            if (folders && folders.length) {
+              var best = folders[0];
+              document.getElementById('fl-backup-auto').style.display = '';
+              document.getElementById('fl-backup-manual').style.display = 'none';
+              document.getElementById('fl-backup-path').textContent = best.name || best.path;
+              window.api.setSettings({ offsiteBackupFolder: best.path });
+            }
+          }).catch(function(e) { console.error('[detect-cloud-folders]', e); });
+        }
+      }).catch(function(e) { showToast('Failed to save settings', 'error'); console.error('[fl-settings]', e); });
     });
 
     /* Step 2: Choose backup folder manually */
@@ -15038,7 +15061,16 @@ PDF_CASENOTE_ADVERT +
         }
         if (magicStatus) magicStatus.textContent = 'Check your email and click the link to unlock.';
         var pollId = resp.pollId;
+        var _pollAttempts = 0;
+        var _pollMaxAttempts = 100;
         _magicPollTimer = setInterval(function() {
+          _pollAttempts++;
+          if (_pollAttempts > _pollMaxAttempts) {
+            clearInterval(_magicPollTimer);
+            _magicPollTimer = null;
+            if (magicStatus) magicStatus.textContent = 'Unlock timed out. Try again.';
+            return;
+          }
           window.api.authPoll({ pollId: pollId }).then(function(pr) {
             if (pr && pr.ok) {
               clearInterval(_magicPollTimer);
@@ -15055,7 +15087,7 @@ PDF_CASENOTE_ADVERT +
               _magicPollTimer = null;
               if (magicStatus) magicStatus.textContent = 'Link expired. Try again.';
             }
-          }).catch(function() {});
+          }).catch(function(e) { console.error('[magic-poll-unlock]', e); });
         }, 3000);
       }).catch(function() {
         if (magicStatus) magicStatus.textContent = 'Failed to send unlock link. Try again later.';
