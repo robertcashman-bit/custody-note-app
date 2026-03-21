@@ -199,39 +199,32 @@
     window.api.licenceStatus().then(function (status) {
       if (!status) { markReady(); return; }
 
+      // TODO: restore proper auth later — open mode for testing
+      hideOverlay();
+      markReady();
+      window.__licenceExpired = false;
+
       if (status.status === 'revoked') {
-        showOverlay({
-          title: 'Licence Revoked',
-          message: status.message || 'Your licence has been revoked.',
-          showRenew: true,
-        });
-        initLicenceUI();
+        showExpiryBanner(status.message || 'Licence revoked — running in open mode for testing.');
         return;
       }
 
       if (status.status === 'expired' || status.status === 'grace_expired') {
-        hideOverlay();
-        markReady();
         startRevalidation();
         var isTrial = status.isTrial;
         var msg = isTrial
-          ? 'Your ' + (status.trialDays || 30) + '-day free trial has ended. Activate with your licence key to continue.'
-          : (status.message || 'Your subscription has expired. Renew to keep creating new records.');
+          ? 'Trial ended — running in open mode for testing.'
+          : (status.message || 'Subscription expired — running in open mode for testing.');
         showExpiryBanner(msg);
-        window.__licenceExpired = true;
         return;
       }
 
       if (status.status === 'expiring_soon') {
-        hideOverlay();
-        markReady();
         startRevalidation();
         showWarningBanner(status.message, status.daysRemaining || 7);
         return;
       }
 
-      hideOverlay();
-      markReady();
       if (status.status === 'active') {
         startRevalidation();
         if (status.isTrial && status.daysRemaining != null) {
