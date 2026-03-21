@@ -1935,7 +1935,7 @@
       </div>
     </div>
 
-    <!-- Licence activation overlay -->
+    <!-- Login overlay (magic link) -->
     <div id="licence-overlay" class="licence-overlay" style="display:none;">
       <div class="licence-box">
         <div class="licence-logo">
@@ -1945,31 +1945,45 @@
             <path d="M47 46l2.5 2.5L53 44" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
           </svg>
         </div>
-        <h2 id="licence-title">Activate Custody Note</h2>
-        <p id="licence-message" class="licence-message">Paste the licence key from your purchase email.</p>
+        <h2 id="licence-title">Sign in to Custody Note</h2>
+        <p id="licence-message" class="licence-message">Enter the email address you used to purchase.</p>
 
-        <!-- Single licence key form -->
-        <div id="licence-form">
-          <label for="licence-key-input">Licence Key</label>
-          <input type="text" id="licence-key-input" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+        <!-- State 1: Email input -->
+        <div id="magic-link-form">
+          <label for="magic-link-email">Email address</label>
+          <input type="email" id="magic-link-email" placeholder="your@email.com" autocomplete="email" spellcheck="false">
           <p id="licence-error" class="licence-error" style="display:none;"></p>
           <div class="licence-actions" style="margin-top:0.5rem;">
-            <button type="button" id="licence-activate-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Activate</button>
+            <button type="button" id="magic-link-send-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Send login link</button>
           </div>
         </div>
 
-        <!-- Email my key fallback -->
-        <div id="licence-email-key-section" style="margin-top:1rem;text-align:center;">
-          <p class="licence-hint" style="font-size:0.82rem;margin:0 0 0.5rem;">Lost your key?</p>
-          <div id="email-key-form" style="display:flex;gap:0.4rem;align-items:center;">
-            <input type="email" id="email-key-email" placeholder="your@email.com" autocomplete="email" style="flex:1;">
-            <button type="button" id="email-key-btn" class="btn btn-secondary" style="padding:0.45rem 0.8rem;font-size:0.82rem;white-space:nowrap;">Email my key</button>
+        <!-- State 2: Check your email -->
+        <div id="magic-link-waiting" style="display:none;text-align:center;">
+          <div style="font-size:2.5rem;margin:0.5rem 0;">&#9993;</div>
+          <p style="font-size:1rem;line-height:1.5;margin:0.5rem 0 1rem;">Check your email and click the login link.<br><span id="magic-link-sent-email" style="font-weight:600;"></span></p>
+          <p id="magic-link-poll-status" style="font-size:0.85rem;color:#94a3b8;margin-bottom:1rem;">Waiting for you to click the link&hellip;</p>
+          <div style="display:flex;gap:0.5rem;justify-content:center;">
+            <button type="button" id="magic-link-resend-btn" class="btn btn-secondary" style="padding:0.4rem 1rem;font-size:0.85rem;">Resend link</button>
+            <button type="button" id="magic-link-change-btn" class="btn btn-secondary" style="padding:0.4rem 1rem;font-size:0.85rem;">Change email</button>
           </div>
-          <p id="email-key-status" style="display:none;font-size:0.8rem;margin-top:0.4rem;color:#4ade80;"></p>
+        </div>
+
+        <!-- Licence key fallback -->
+        <div id="licence-key-fallback" style="margin-top:1.2rem;text-align:center;border-top:1px solid rgba(255,255,255,0.1);padding-top:1rem;">
+          <p class="licence-hint" style="font-size:0.82rem;margin:0 0 0.5rem;">
+            <a href="#" id="licence-key-toggle" style="color:#60a5fa;text-decoration:underline;cursor:pointer;">Have a licence key instead?</a>
+          </p>
+          <div id="licence-key-form" style="display:none;">
+            <input type="text" id="licence-key-input" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
+            <div class="licence-actions" style="margin-top:0.5rem;">
+              <button type="button" id="licence-activate-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Activate</button>
+            </div>
+          </div>
         </div>
 
         <div id="licence-renew-section" style="display:none;">
-          <p class="licence-hint">Need a licence? Visit <a href="https://www.custodynote.com/pricing" id="licence-renew-link" class="licence-link">custodynote.com/pricing</a></p>
+          <p class="licence-hint">Need an account? Visit <a href="https://www.custodynote.com/pricing" id="licence-renew-link" class="licence-link">custodynote.com/pricing</a></p>
         </div>
         <p class="licence-footer-text">&copy; Defence Legal Services Ltd 2026</p>
       </div>

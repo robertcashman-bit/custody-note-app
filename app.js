@@ -12069,7 +12069,7 @@ PDF_CASENOTE_ADVERT +
           document.getElementById('gear-dropdown')?.classList.add('hidden');
           switch (t.dataset.action) {
             case 'enter-licence-key':
-              if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Enter your licence key', message: 'Paste the key from your email (trial or purchase at custodynote.com).' });
+              if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Sign in to Custody Note', message: 'Enter your email or paste a licence key.' });
               break;
             case 'home': showView('home'); break;
             case 'records': showView('list'); break;

@@ -1,18 +1,25 @@
 /* ═══════════════════════════════════════════════
-   LICENCE / SUBSCRIPTION GATE
-   Single licence-key activation with persistent
-   device token. Non-blocking banner for expiry.
+   MAGIC LINK LOGIN + LICENCE GATE
+   Passwordless email login with polling.
+   Falls back to licence key activation.
    ═══════════════════════════════════════════════ */
 (function () {
   'use strict';
 
   var REVALIDATE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  var POLL_INTERVAL_MS = 3000;
+  var POLL_MAX_MS = 15 * 60 * 1000; // stop polling after 15 min
+
   var _licenceChecked = false;
   var _revalidateTimer = null;
+  var _pollTimer = null;
+  var _pollStartTime = 0;
+  var _currentPollId = null;
   var _warningBanner = null;
 
   window.__licenceReady = false;
   window.__licenceCallbacks = [];
+  window.__licenceExpired = false;
 
   function onLicenceReady(cb) {
     if (window.__licenceReady) cb();
@@ -26,6 +33,8 @@
     window.__licenceCallbacks = [];
   }
 
+  /* ── Overlay management ── */
+
   function showOverlay(opts) {
     var overlay = document.getElementById('licence-overlay');
     if (!overlay) return;
@@ -34,23 +43,58 @@
     var msg = document.getElementById('licence-message');
     var err = document.getElementById('licence-error');
     var renewSec = document.getElementById('licence-renew-section');
-    if (title) title.textContent = opts.title || 'Activate Custody Note';
-    if (msg) msg.textContent = opts.message || 'Paste the licence key from your purchase email.';
+    if (title) title.textContent = opts.title || 'Sign in to Custody Note';
+    if (msg) msg.textContent = opts.message || 'Enter the email address you used to purchase.';
     if (err) { err.style.display = 'none'; err.textContent = ''; }
     if (renewSec) renewSec.style.display = opts.showRenew ? '' : 'none';
-    var keyInput = document.getElementById('licence-key-input');
-    if (keyInput) keyInput.focus();
+
+    showEmailForm();
+
+    var emailInput = document.getElementById('magic-link-email');
+    if (emailInput) emailInput.focus();
   }
 
   function hideOverlay() {
     var overlay = document.getElementById('licence-overlay');
     if (overlay) overlay.style.display = 'none';
+    stopPolling();
   }
 
   function showError(text) {
     var err = document.getElementById('licence-error');
     if (err) { err.textContent = text; err.style.display = ''; }
   }
+
+  function clearError() {
+    var err = document.getElementById('licence-error');
+    if (err) { err.textContent = ''; err.style.display = 'none'; }
+  }
+
+  /* ── UI state switching ── */
+
+  function showEmailForm() {
+    var form = document.getElementById('magic-link-form');
+    var waiting = document.getElementById('magic-link-waiting');
+    var fallback = document.getElementById('licence-key-fallback');
+    if (form) form.style.display = '';
+    if (waiting) waiting.style.display = 'none';
+    if (fallback) fallback.style.display = '';
+  }
+
+  function showWaitingState(email) {
+    var form = document.getElementById('magic-link-form');
+    var waiting = document.getElementById('magic-link-waiting');
+    var fallback = document.getElementById('licence-key-fallback');
+    var sentEmail = document.getElementById('magic-link-sent-email');
+    var statusEl = document.getElementById('magic-link-poll-status');
+    if (form) form.style.display = 'none';
+    if (waiting) waiting.style.display = '';
+    if (fallback) fallback.style.display = 'none';
+    if (sentEmail) sentEmail.textContent = email;
+    if (statusEl) statusEl.textContent = 'Waiting for you to click the link\u2026';
+  }
+
+  /* ── Banners ── */
 
   function esc(s) {
     var d = document.createElement('div');
@@ -86,13 +130,143 @@
     if (header) header.insertAdjacentElement('afterend', _warningBanner);
   }
 
-  var _licenceUIInited = false;
+  /* ── Polling ── */
+
+  function startPolling(pollId, email) {
+    stopPolling();
+    _currentPollId = pollId;
+    _pollStartTime = Date.now();
+
+    _pollTimer = setInterval(function () {
+      if (Date.now() - _pollStartTime > POLL_MAX_MS) {
+        stopPolling();
+        showEmailForm();
+        showError('Login link expired. Please send a new one.');
+        return;
+      }
+      if (!window.api || !window.api.authPoll) return;
+      window.api.authPoll({ pollId: _currentPollId }).then(function (resp) {
+        if (resp.ok) {
+          stopPolling();
+          hideOverlay();
+          markReady();
+          window.__licenceExpired = false;
+          startRevalidation();
+          document.dispatchEvent(new CustomEvent('licence-activated'));
+        } else if (resp.expired) {
+          stopPolling();
+          showEmailForm();
+          showError('Login link expired. Please send a new one.');
+        }
+      }).catch(function () {});
+    }, POLL_INTERVAL_MS);
+  }
+
+  function stopPolling() {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+    _currentPollId = null;
+  }
+
+  /* ── Send magic link ── */
+
+  function sendMagicLink(email, btn) {
+    if (!window.api || !window.api.authMagicLink) {
+      showError('Login is not available. Please restart the app.');
+      return;
+    }
+    clearError();
+    btn.disabled = true;
+    btn.textContent = 'Sending\u2026';
+
+    window.api.authMagicLink({ email: email }).then(function (resp) {
+      btn.disabled = false;
+      btn.textContent = 'Send login link';
+      if (resp && resp.ok && resp.pollId) {
+        showWaitingState(email);
+        startPolling(resp.pollId, email);
+      } else {
+        showError(resp && resp.error ? resp.error : 'Could not send login link. Please try again.');
+      }
+    }).catch(function (e) {
+      btn.disabled = false;
+      btn.textContent = 'Send login link';
+      showError('Connection error. Check your internet and try again.');
+    });
+  }
+
+  /* ── UI event binding ── */
+
+  var _uiInited = false;
 
   function initLicenceUI() {
-    if (_licenceUIInited) return;
-    _licenceUIInited = true;
+    if (_uiInited) return;
+    _uiInited = true;
 
-    /* ── Licence key activation ── */
+    var sendBtn = document.getElementById('magic-link-send-btn');
+    var emailInput = document.getElementById('magic-link-email');
+
+    if (sendBtn && emailInput) {
+      sendBtn.addEventListener('click', function () {
+        var email = (emailInput.value || '').trim();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showError('Please enter a valid email address.');
+          return;
+        }
+        sendMagicLink(email, sendBtn);
+      });
+      emailInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); sendBtn.click(); }
+      });
+    }
+
+    var resendBtn = document.getElementById('magic-link-resend-btn');
+    if (resendBtn) {
+      resendBtn.addEventListener('click', function () {
+        var sentEmailEl = document.getElementById('magic-link-sent-email');
+        var email = sentEmailEl ? sentEmailEl.textContent : '';
+        if (!email) { showEmailForm(); return; }
+        stopPolling();
+        resendBtn.disabled = true;
+        resendBtn.textContent = 'Sending\u2026';
+        window.api.authMagicLink({ email: email }).then(function (resp) {
+          resendBtn.disabled = false;
+          resendBtn.textContent = 'Resend link';
+          if (resp && resp.ok && resp.pollId) {
+            startPolling(resp.pollId, email);
+            var statusEl = document.getElementById('magic-link-poll-status');
+            if (statusEl) statusEl.textContent = 'New link sent! Waiting\u2026';
+          } else {
+            var statusEl = document.getElementById('magic-link-poll-status');
+            if (statusEl) statusEl.textContent = resp && resp.error ? resp.error : 'Could not resend. Try again.';
+          }
+        }).catch(function () {
+          resendBtn.disabled = false;
+          resendBtn.textContent = 'Resend link';
+        });
+      });
+    }
+
+    var changeBtn = document.getElementById('magic-link-change-btn');
+    if (changeBtn) {
+      changeBtn.addEventListener('click', function () {
+        stopPolling();
+        showEmailForm();
+        var emailInput = document.getElementById('magic-link-email');
+        if (emailInput) emailInput.focus();
+      });
+    }
+
+    /* Licence key fallback toggle */
+    var toggle = document.getElementById('licence-key-toggle');
+    var keyForm = document.getElementById('licence-key-form');
+    if (toggle && keyForm) {
+      toggle.addEventListener('click', function (e) {
+        e.preventDefault();
+        keyForm.style.display = keyForm.style.display === 'none' ? '' : 'none';
+      });
+    }
+
+    /* Licence key activation (fallback) */
     var activateBtn = document.getElementById('licence-activate-btn');
     if (activateBtn) {
       activateBtn.addEventListener('click', function () {
@@ -109,6 +283,7 @@
             hideOverlay();
             if (_warningBanner) _warningBanner.remove();
             markReady();
+            window.__licenceExpired = false;
             startRevalidation();
             document.dispatchEvent(new CustomEvent('licence-activated'));
           } else {
@@ -127,46 +302,20 @@
         });
       }
     }
-
-    /* ── Email my key fallback ── */
-    var emailKeyBtn = document.getElementById('email-key-btn');
-    if (emailKeyBtn) {
-      emailKeyBtn.addEventListener('click', function () {
-        var emailInput = document.getElementById('email-key-email');
-        var email = (emailInput ? emailInput.value : '').trim();
-        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          var statusEl = document.getElementById('email-key-status');
-          if (statusEl) { statusEl.textContent = 'Enter a valid email address.'; statusEl.style.color = '#f87171'; statusEl.style.display = ''; }
-          return;
-        }
-        emailKeyBtn.disabled = true;
-        emailKeyBtn.textContent = 'Sending\u2026';
-        window.api.licenceEmailKey({ email: email }).then(function (r) {
-          emailKeyBtn.disabled = false;
-          emailKeyBtn.textContent = 'Email my key';
-          var statusEl = document.getElementById('email-key-status');
-          if (statusEl) {
-            statusEl.textContent = r && r.message ? r.message : 'If an account exists, we\'ve sent your key.';
-            statusEl.style.color = '#4ade80';
-            statusEl.style.display = '';
-          }
-        }).catch(function () {
-          emailKeyBtn.disabled = false;
-          emailKeyBtn.textContent = 'Email my key';
-        });
-      });
-    }
   }
+
   window.initLicenceUI = initLicenceUI;
   window.showLicenceOverlay = showOverlay;
 
   window.openLicenceOverlaySignIn = function () {
     showOverlay({
-      title: 'Activate Custody Note',
-      message: 'Paste the licence key from your purchase email.',
+      title: 'Sign in to Custody Note',
+      message: 'Enter the email address you used to purchase.',
     });
     initLicenceUI();
   };
+
+  /* ── Revalidation ── */
 
   function startRevalidation() {
     if (_revalidateTimer) clearInterval(_revalidateTimer);
@@ -176,12 +325,10 @@
         if (result && result.valid === false) {
           var st = result.status || {};
           if (st.status === 'revoked') {
-            showOverlay({
-              title: 'Licence Revoked',
-              message: st.message || 'Your licence has been revoked. Contact support.',
-              showRenew: true,
-            });
-          } else {
+            window.__licenceExpired = true;
+            showExpiryBanner(st.message || 'Your licence has been revoked. Contact support.');
+          } else if (st.status === 'expired' || st.status === 'grace_expired') {
+            window.__licenceExpired = true;
             showExpiryBanner(st.message || 'Your subscription has expired. Renew to continue creating new records.');
           }
         }
@@ -189,35 +336,61 @@
     }, REVALIDATE_INTERVAL_MS);
   }
 
+  /* ── Initial check ── */
+
   function checkLicence() {
     if (_licenceChecked) return;
     _licenceChecked = true;
+
     if (!window.api || !window.api.licenceStatus) {
       markReady();
       return;
     }
-    window.api.licenceStatus().then(function (status) {
-      if (!status) { markReady(); return; }
 
-      // TODO: restore proper auth later — open mode for testing
-      hideOverlay();
-      markReady();
-      window.__licenceExpired = false;
+    var authPromise = (window.api.authStatus) ? window.api.authStatus() : Promise.resolve({});
+
+    Promise.all([window.api.licenceStatus(), authPromise]).then(function (results) {
+      var status = results[0];
+      var auth = results[1] || {};
+
+      if (!status) {
+        showLoginOverlay();
+        return;
+      }
+
+      var hasAuthToken = !!auth.loggedIn;
+      var hasRealKey = !!(status.key || (status.licenceKey && !String(status.licenceKey || '').startsWith('TRIAL-')));
+      var isTrialOnly = !!status.isTrial && !hasAuthToken && !status.signInWithAccount;
+
+      if (isTrialOnly && !hasRealKey) {
+        showLoginOverlay();
+        return;
+      }
 
       if (status.status === 'revoked') {
-        showExpiryBanner(status.message || 'Licence revoked — running in open mode for testing.');
+        window.__licenceExpired = true;
+        hideOverlay();
+        markReady();
+        showExpiryBanner(status.message || 'Your licence has been revoked.');
         return;
       }
 
       if (status.status === 'expired' || status.status === 'grace_expired') {
+        window.__licenceExpired = true;
+        hideOverlay();
+        markReady();
         startRevalidation();
         var isTrial = status.isTrial;
         var msg = isTrial
-          ? 'Trial ended — running in open mode for testing.'
-          : (status.message || 'Subscription expired — running in open mode for testing.');
+          ? 'Your free trial has ended. Subscribe to continue.'
+          : (status.message || 'Your subscription has expired.');
         showExpiryBanner(msg);
         return;
       }
+
+      hideOverlay();
+      markReady();
+      window.__licenceExpired = false;
 
       if (status.status === 'expiring_soon') {
         startRevalidation();
@@ -228,14 +401,19 @@
       if (status.status === 'active') {
         startRevalidation();
         if (status.isTrial && status.daysRemaining != null) {
-          var msg = 'Free trial: ' + status.daysRemaining + ' day' + (status.daysRemaining !== 1 ? 's' : '') + ' remaining';
-          showWarningBanner(msg, status.daysRemaining);
+          var trialMsg = 'Free trial: ' + status.daysRemaining + ' day' + (status.daysRemaining !== 1 ? 's' : '') + ' remaining';
+          showWarningBanner(trialMsg, status.daysRemaining);
         }
         if (window.api.licenceValidate) window.api.licenceValidate().catch(function () {});
       }
     }).catch(function () {
-      markReady();
+      showLoginOverlay();
     });
+  }
+
+  function showLoginOverlay() {
+    showOverlay({ title: 'Sign in to Custody Note', message: 'Enter the email address you used to purchase.', showRenew: true });
+    initLicenceUI();
   }
 
   if (document.readyState === 'loading') {

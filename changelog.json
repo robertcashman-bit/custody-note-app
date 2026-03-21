@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.125",
+      "version": "1.4.126",
       "date": "2026-03-21",
       "latest": true,
+      "changes": [
+        "Magic link login: sign in with just your email address — no password needed",
+        "Polling-based auth flow for reliable desktop login",
+        "Licence key activation kept as fallback",
+        "Session persists across restarts — stay signed in until you log out"
+      ]
+    },
+    {
+      "version": "1.4.125",
+      "date": "2026-03-21",
       "changes": [
         "Fix invisible text in licence overlay inputs (white-on-white)",
         "Remove dead account sign-in code",

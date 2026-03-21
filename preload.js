@@ -84,6 +84,9 @@ contextBridge.exposeInMainWorld('api', {
   laaOpenOfficialTemplate: (formType) => ipcRenderer.invoke('laa-open-official-template', formType),
   /* Auth */
   authStatus: () => ipcRenderer.invoke('auth:status'),
+  authMagicLink: (params) => ipcRenderer.invoke('auth:magic-link', params),
+  authPoll: (params) => ipcRenderer.invoke('auth:poll', params),
+  authLogout: () => ipcRenderer.invoke('auth:logout'),
   /* Licence */
   licenceStatus: () => ipcRenderer.invoke('licence:status'),
   licenceActivate: (params) => ipcRenderer.invoke('licence:activate', params),

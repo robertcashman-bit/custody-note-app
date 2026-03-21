@@ -3622,7 +3622,7 @@ ipcMain.handle('licence:deactivate-machine', async () => {
 });
 
 /* ═══════════════════════════════════════════════
-   ACCOUNT-BASED AUTH (email + password sign-in)
+   MAGIC LINK AUTH
    ═══════════════════════════════════════════════ */
 
 ipcMain.handle('auth:status', () => {
@@ -3632,6 +3632,53 @@ ipcMain.handle('auth:status', () => {
     email: data?.email || null,
     accountId: data?.accountId || null,
   };
+});
+
+ipcMain.handle('auth:magic-link', async (_, { email }) => {
+  const apiUrl = getManagedCloudApiUrl();
+  try {
+    const resp = await httpPost(`${apiUrl}/api/auth/magic-link`, { email });
+    return resp;
+  } catch (e) {
+    const msg = e && e.message ? e.message : 'Failed to send login link';
+    if (e && e.statusCode === 429) return { ok: false, error: msg };
+    return { ok: false, error: msg };
+  }
+});
+
+ipcMain.handle('auth:poll', async (_, { pollId }) => {
+  const apiUrl = getManagedCloudApiUrl();
+  try {
+    const resp = await httpPost(`${apiUrl}/api/auth/poll`, { pollId });
+    if (resp.ok && resp.accessToken) {
+      let data = readLicenceData() || {};
+      data.authToken = resp.accessToken;
+      data.refreshToken = resp.refreshToken || '';
+      data.email = resp.user?.email || '';
+      data.accountId = resp.user?.id || '';
+      if (resp.subscription && resp.subscription.licenceKey) {
+        data.key = resp.subscription.licenceKey;
+        data.status = resp.subscription.status || 'active';
+        data.expiresAt = resp.subscription.expiresAt || '';
+      }
+      data.lastValidated = new Date().toISOString();
+      writeLicenceData(data);
+    }
+    return resp;
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Connection error' };
+  }
+});
+
+ipcMain.handle('auth:logout', () => {
+  const data = readLicenceData();
+  if (data) {
+    delete data.authToken;
+    delete data.refreshToken;
+    delete data.accountId;
+    writeLicenceData(data);
+  }
+  return { ok: true };
 });
 
 /* ═══════════════════════════════════════════════
