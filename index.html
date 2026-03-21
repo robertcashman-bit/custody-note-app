@@ -1978,44 +1978,41 @@
             <path d="M47 46l2.5 2.5L53 44" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
           </svg>
         </div>
-        <h2 id="licence-title">Activate Custody Note</h2>
-        <p id="licence-message" class="licence-message">Sign in with your account or enter a licence key.</p>
+        <h2 id="licence-title">Sign in to Custody Note</h2>
+        <p id="licence-message" class="licence-message">Enter your email to get started.</p>
 
         <!-- Tab switcher -->
         <div class="licence-tabs" style="display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid rgba(255,255,255,0.15);">
-          <button type="button" id="licence-tab-signin" class="licence-tab licence-tab-active" style="flex:1;padding:0.6rem 0.5rem;background:none;border:none;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;border-bottom:2px solid #3b82f6;margin-bottom:-2px;">Sign In</button>
+          <button type="button" id="licence-tab-signin" class="licence-tab licence-tab-active" style="flex:1;padding:0.6rem 0.5rem;background:none;border:none;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;border-bottom:2px solid #3b82f6;margin-bottom:-2px;">Email</button>
           <button type="button" id="licence-tab-key" class="licence-tab" style="flex:1;padding:0.6rem 0.5rem;background:none;border:none;color:rgba(255,255,255,0.5);font-size:0.9rem;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;">Licence Key</button>
         </div>
 
-        <!-- Sign-in form (primary) -->
+        <!-- Step 1: Email entry -->
         <div id="licence-signin-form">
-          <label for="signin-email" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Email</label>
+          <label for="signin-email" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Email address</label>
           <input type="email" id="signin-email" placeholder="you@example.com" autocomplete="email" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.35);border-radius:6px;background:rgba(255,255,255,0.15);color:#fff;margin-bottom:0.6rem;">
-          <label for="signin-password" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Password</label>
-          <input type="password" id="signin-password" placeholder="Your password" autocomplete="current-password" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.35);border-radius:6px;background:rgba(255,255,255,0.15);color:#fff;margin-bottom:0.5rem;">
           <p id="signin-error" class="licence-error" style="display:none;"></p>
           <div class="licence-actions" style="margin-top:0.5rem;">
-            <button type="button" id="signin-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Sign In</button>
+            <button type="button" id="send-code-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Send Code</button>
           </div>
           <p style="text-align:center;margin-top:0.75rem;font-size:0.82rem;color:rgba(255,255,255,0.5);">
-            Don&apos;t have an account? <button type="button" id="signin-toggle-register" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;">Create one</button>
+            We&apos;ll email you a 6-digit verification code.
           </p>
         </div>
 
-        <!-- Registration form (hidden by default) -->
-        <div id="licence-register-form" style="display:none;">
-          <label for="register-name" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Name</label>
-          <input type="text" id="register-name" placeholder="Your name" autocomplete="name" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.35);border-radius:6px;background:rgba(255,255,255,0.15);color:#fff;margin-bottom:0.6rem;">
-          <label for="register-email" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Email</label>
-          <input type="email" id="register-email" placeholder="you@example.com" autocomplete="email" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.35);border-radius:6px;background:rgba(255,255,255,0.15);color:#fff;margin-bottom:0.6rem;">
-          <label for="register-password" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Password</label>
-          <input type="password" id="register-password" placeholder="Min 10 chars, uppercase, lowercase, number" autocomplete="new-password" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.35);border-radius:6px;background:rgba(255,255,255,0.15);color:#fff;margin-bottom:0.5rem;">
-          <p id="register-error" class="licence-error" style="display:none;"></p>
+        <!-- Step 2: Code verification (hidden by default) -->
+        <div id="licence-code-form" style="display:none;">
+          <p id="code-sent-message" style="color:rgba(255,255,255,0.8);font-size:0.9rem;margin-bottom:1rem;line-height:1.5;">We sent a code to <strong id="code-sent-email" style="color:#fff;"></strong></p>
+          <label for="verify-code-input" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Verification code</label>
+          <input type="text" id="verify-code-input" placeholder="000000" autocomplete="one-time-code" inputmode="numeric" maxlength="6" style="width:100%;padding:0.55rem 0.75rem;font-size:1.3rem;letter-spacing:0.4em;text-align:center;border:1px solid rgba(255,255,255,0.35);border-radius:6px;background:rgba(255,255,255,0.15);color:#fff;margin-bottom:0.6rem;font-family:'Consolas','Menlo',monospace;">
+          <p id="verify-code-error" class="licence-error" style="display:none;"></p>
           <div class="licence-actions" style="margin-top:0.5rem;">
-            <button type="button" id="register-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Create Account</button>
+            <button type="button" id="verify-code-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Verify</button>
           </div>
           <p style="text-align:center;margin-top:0.75rem;font-size:0.82rem;color:rgba(255,255,255,0.5);">
-            Already have an account? <button type="button" id="register-toggle-signin" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;">Sign in</button>
+            <button type="button" id="resend-code-btn" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;">Send again</button>
+            &nbsp;&middot;&nbsp;
+            <button type="button" id="change-email-btn" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;">Use a different email</button>
           </p>
         </div>
 
@@ -2032,14 +2029,6 @@
         </div>
         <div id="licence-renew-section" style="display:none;">
           <p class="licence-hint">Need a licence? Visit <a href="https://www.custodynote.com/pricing" id="licence-renew-link" class="licence-link">custodynote.com/pricing</a></p>
-        </div>
-        <div class="licence-forgot-section" id="licence-forgot-section">
-          <p class="licence-hint" style="margin-bottom:0.4rem;">Forgotten your licence key? Enter your email and we&apos;ll send it to you.</p>
-          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-            <input type="email" id="licence-overlay-forgot-email" placeholder="you@example.com" style="padding:0.35rem 0.5rem;font-size:0.85rem;border:1px solid rgba(255,255,255,0.35);border-radius:4px;min-width:180px;background:rgba(255,255,255,0.15);color:#fff;">
-            <button type="button" id="licence-overlay-forgot-btn" class="btn btn-small">Email my key</button>
-          </div>
-          <p id="licence-overlay-forgot-msg" style="font-size:0.8rem;margin-top:0.35rem;min-height:1.2em;color:rgba(255,255,255,0.6);"></p>
         </div>
         <p class="licence-footer-text">&copy; Defence Legal Services Ltd 2026</p>
       </div>

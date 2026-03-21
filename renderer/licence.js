@@ -35,13 +35,18 @@
     var title = document.getElementById('licence-title');
     var msg = document.getElementById('licence-message');
     var err = document.getElementById('licence-error');
-    var form = document.getElementById('licence-form');
     var renewSec = document.getElementById('licence-renew-section');
-    if (title) title.textContent = opts.title || 'Activate Custody Note';
-    if (msg) msg.textContent = opts.message || 'Enter your licence key to activate the application.';
+    if (title) title.textContent = opts.title || 'Sign in to Custody Note';
+    if (msg) msg.textContent = opts.message || 'Enter your email to get started.';
     if (err) { err.style.display = 'none'; err.textContent = ''; }
-    if (form) form.style.display = '';
     if (renewSec) renewSec.style.display = opts.showRenew ? '' : 'none';
+    var emailForm = document.getElementById('licence-signin-form');
+    var codeForm = document.getElementById('licence-code-form');
+    var keyForm = document.getElementById('licence-form');
+    if (emailForm) emailForm.style.display = '';
+    if (codeForm) codeForm.style.display = 'none';
+    if (keyForm) keyForm.style.display = 'none';
+    _pendingEmail = '';
   }
 
   function hideOverlay() {
@@ -75,65 +80,128 @@
   }
 
   var _licenceUIInited = false;
+  var _pendingEmail = '';
+  var _resendCooldown = null;
+
   function initLicenceUI() {
     if (_licenceUIInited) return;
     _licenceUIInited = true;
 
-    // ── Tab switching ──
     var tabSignin = document.getElementById('licence-tab-signin');
     var tabKey = document.getElementById('licence-tab-key');
-    var signinForm = document.getElementById('licence-signin-form');
-    var registerForm = document.getElementById('licence-register-form');
+    var emailForm = document.getElementById('licence-signin-form');
+    var codeForm = document.getElementById('licence-code-form');
     var keyForm = document.getElementById('licence-form');
-    var forgotSection = document.getElementById('licence-forgot-section');
 
     function switchTab(tab) {
       if (tab === 'signin') {
         if (tabSignin) { tabSignin.style.color = '#fff'; tabSignin.style.borderBottomColor = '#3b82f6'; }
         if (tabKey) { tabKey.style.color = 'rgba(255,255,255,0.5)'; tabKey.style.borderBottomColor = 'transparent'; }
-        if (signinForm) signinForm.style.display = '';
-        if (registerForm) registerForm.style.display = 'none';
+        if (emailForm && !_pendingEmail) emailForm.style.display = '';
+        if (codeForm) codeForm.style.display = _pendingEmail ? '' : 'none';
         if (keyForm) keyForm.style.display = 'none';
-        if (forgotSection) forgotSection.style.display = 'none';
       } else {
         if (tabKey) { tabKey.style.color = '#fff'; tabKey.style.borderBottomColor = '#3b82f6'; }
         if (tabSignin) { tabSignin.style.color = 'rgba(255,255,255,0.5)'; tabSignin.style.borderBottomColor = 'transparent'; }
-        if (signinForm) signinForm.style.display = 'none';
-        if (registerForm) registerForm.style.display = 'none';
+        if (emailForm) emailForm.style.display = 'none';
+        if (codeForm) codeForm.style.display = 'none';
         if (keyForm) keyForm.style.display = '';
-        if (forgotSection) forgotSection.style.display = '';
       }
     }
 
     if (tabSignin) tabSignin.addEventListener('click', function () { switchTab('signin'); });
     if (tabKey) tabKey.addEventListener('click', function () { switchTab('key'); });
 
-    // ── Sign-in / register toggle ──
-    var toggleRegister = document.getElementById('signin-toggle-register');
-    var toggleSignin = document.getElementById('register-toggle-signin');
-    if (toggleRegister) toggleRegister.addEventListener('click', function () {
-      if (signinForm) signinForm.style.display = 'none';
-      if (registerForm) registerForm.style.display = '';
-    });
-    if (toggleSignin) toggleSignin.addEventListener('click', function () {
-      if (registerForm) registerForm.style.display = 'none';
-      if (signinForm) signinForm.style.display = '';
-    });
+    function showStep2(email) {
+      _pendingEmail = email;
+      if (emailForm) emailForm.style.display = 'none';
+      if (codeForm) codeForm.style.display = '';
+      var sentEl = document.getElementById('code-sent-email');
+      if (sentEl) sentEl.textContent = email;
+      var codeInput = document.getElementById('verify-code-input');
+      if (codeInput) { codeInput.value = ''; codeInput.focus(); }
+      var codeErr = document.getElementById('verify-code-error');
+      if (codeErr) codeErr.style.display = 'none';
+      startResendCooldown();
+    }
 
-    // ── Sign-in handler ──
-    var signinBtn = document.getElementById('signin-btn');
+    function showStep1() {
+      _pendingEmail = '';
+      if (codeForm) codeForm.style.display = 'none';
+      if (emailForm) emailForm.style.display = '';
+      var emailInput = document.getElementById('signin-email');
+      if (emailInput) emailInput.focus();
+    }
+
+    function startResendCooldown() {
+      var resendBtn = document.getElementById('resend-code-btn');
+      if (!resendBtn) return;
+      resendBtn.disabled = true;
+      var remaining = 60;
+      resendBtn.textContent = 'Send again (' + remaining + 's)';
+      if (_resendCooldown) clearInterval(_resendCooldown);
+      _resendCooldown = setInterval(function () {
+        remaining--;
+        if (remaining <= 0) {
+          clearInterval(_resendCooldown);
+          _resendCooldown = null;
+          resendBtn.disabled = false;
+          resendBtn.textContent = 'Send again';
+        } else {
+          resendBtn.textContent = 'Send again (' + remaining + 's)';
+        }
+      }, 1000);
+    }
+
+    // ── Send code handler ──
+    var sendCodeBtn = document.getElementById('send-code-btn');
     var signinErr = document.getElementById('signin-error');
-    if (signinBtn) {
-      signinBtn.addEventListener('click', function () {
+
+    if (sendCodeBtn) {
+      sendCodeBtn.addEventListener('click', function () {
         var email = (document.getElementById('signin-email')?.value || '').trim();
-        var password = document.getElementById('signin-password')?.value || '';
-        if (!email || !password) { if (signinErr) { signinErr.textContent = 'Enter email and password.'; signinErr.style.display = ''; } return; }
-        signinBtn.disabled = true;
-        signinBtn.textContent = 'Signing in\u2026';
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          if (signinErr) { signinErr.textContent = 'Enter a valid email address.'; signinErr.style.display = ''; }
+          return;
+        }
+        sendCodeBtn.disabled = true;
+        sendCodeBtn.textContent = 'Sending\u2026';
         if (signinErr) signinErr.style.display = 'none';
-        window.api.authLogin({ email: email, password: password }).then(function (r) {
-          signinBtn.disabled = false;
-          signinBtn.textContent = 'Sign In';
+        window.api.authSendCode({ email: email }).then(function (r) {
+          sendCodeBtn.disabled = false;
+          sendCodeBtn.textContent = 'Send Code';
+          if (r && r.ok) {
+            showStep2(email);
+          } else {
+            if (signinErr) { signinErr.textContent = r?.error || 'Failed to send code.'; signinErr.style.display = ''; }
+          }
+        }).catch(function (e) {
+          sendCodeBtn.disabled = false;
+          sendCodeBtn.textContent = 'Send Code';
+          if (signinErr) { signinErr.textContent = e?.message || 'Failed to send code.'; signinErr.style.display = ''; }
+        });
+      });
+      var emailInput = document.getElementById('signin-email');
+      if (emailInput) emailInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); sendCodeBtn.click(); } });
+    }
+
+    // ── Verify code handler ──
+    var verifyBtn = document.getElementById('verify-code-btn');
+    var codeErr = document.getElementById('verify-code-error');
+
+    if (verifyBtn) {
+      verifyBtn.addEventListener('click', function () {
+        var code = (document.getElementById('verify-code-input')?.value || '').trim();
+        if (!code || !/^\d{6}$/.test(code)) {
+          if (codeErr) { codeErr.textContent = 'Enter the 6-digit code from your email.'; codeErr.style.display = ''; }
+          return;
+        }
+        verifyBtn.disabled = true;
+        verifyBtn.textContent = 'Verifying\u2026';
+        if (codeErr) codeErr.style.display = 'none';
+        window.api.authVerifyCode({ email: _pendingEmail, code: code }).then(function (r) {
+          verifyBtn.disabled = false;
+          verifyBtn.textContent = 'Verify';
           if (r && r.success) {
             hideOverlay();
             if (_warningBanner) _warningBanner.remove();
@@ -141,61 +209,54 @@
             startRevalidation();
             document.dispatchEvent(new CustomEvent('licence-activated'));
           } else {
-            if (signinErr) { signinErr.textContent = r?.error || 'Login failed.'; signinErr.style.display = ''; }
+            if (codeErr) { codeErr.textContent = r?.error || 'Verification failed.'; codeErr.style.display = ''; }
           }
         }).catch(function (e) {
-          signinBtn.disabled = false;
-          signinBtn.textContent = 'Sign In';
-          if (signinErr) { signinErr.textContent = e?.message || 'Login error.'; signinErr.style.display = ''; }
+          verifyBtn.disabled = false;
+          verifyBtn.textContent = 'Verify';
+          if (codeErr) { codeErr.textContent = e?.message || 'Verification error.'; codeErr.style.display = ''; }
         });
       });
-      var signinPw = document.getElementById('signin-password');
-      if (signinPw) signinPw.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); signinBtn.click(); } });
+      var codeInput = document.getElementById('verify-code-input');
+      if (codeInput) codeInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); verifyBtn.click(); } });
     }
 
-    // ── Register handler ──
-    var registerBtn = document.getElementById('register-btn');
-    var registerErr = document.getElementById('register-error');
-    if (registerBtn) {
-      registerBtn.addEventListener('click', function () {
-        var name = (document.getElementById('register-name')?.value || '').trim();
-        var email = (document.getElementById('register-email')?.value || '').trim();
-        var password = document.getElementById('register-password')?.value || '';
-        if (!email || !password) { if (registerErr) { registerErr.textContent = 'Enter email and password.'; registerErr.style.display = ''; } return; }
-        registerBtn.disabled = true;
-        registerBtn.textContent = 'Creating account\u2026';
-        if (registerErr) registerErr.style.display = 'none';
-        window.api.authRegister({ email: email, password: password, name: name }).then(function (r) {
-          registerBtn.disabled = false;
-          registerBtn.textContent = 'Create Account';
-          if (r && r.success) {
-            hideOverlay();
-            if (_warningBanner) _warningBanner.remove();
-            markReady();
-            startRevalidation();
-            document.dispatchEvent(new CustomEvent('licence-activated'));
+    // ── Resend code ──
+    var resendBtn = document.getElementById('resend-code-btn');
+    if (resendBtn) {
+      resendBtn.addEventListener('click', function () {
+        if (!_pendingEmail) return;
+        resendBtn.disabled = true;
+        window.api.authSendCode({ email: _pendingEmail }).then(function (r) {
+          if (r && r.ok) {
+            startResendCooldown();
+            if (codeErr) { codeErr.textContent = 'New code sent.'; codeErr.style.display = ''; codeErr.style.color = '#4ade80'; }
+            setTimeout(function () { if (codeErr) { codeErr.style.display = 'none'; codeErr.style.color = ''; } }, 3000);
           } else {
-            if (registerErr) { registerErr.textContent = r?.error || 'Registration failed.'; registerErr.style.display = ''; }
+            resendBtn.disabled = false;
+            if (codeErr) { codeErr.textContent = r?.error || 'Failed to resend.'; codeErr.style.display = ''; }
           }
-        }).catch(function (e) {
-          registerBtn.disabled = false;
-          registerBtn.textContent = 'Create Account';
-          if (registerErr) { registerErr.textContent = e?.message || 'Registration error.'; registerErr.style.display = ''; }
+        }).catch(function () {
+          resendBtn.disabled = false;
         });
       });
-      var registerPw = document.getElementById('register-password');
-      if (registerPw) registerPw.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); registerBtn.click(); } });
     }
 
-    // ── Legacy licence key handler ──
+    // ── Change email ──
+    var changeEmailBtn = document.getElementById('change-email-btn');
+    if (changeEmailBtn) {
+      changeEmailBtn.addEventListener('click', function () { showStep1(); });
+    }
+
+    // ── Licence key handler ──
     var activateBtn = document.getElementById('licence-activate-btn');
     if (activateBtn) {
       activateBtn.addEventListener('click', function () {
-        var keyInput = document.getElementById('licence-key-input');
-        var emailInput = document.getElementById('licence-email-input');
-        var rawKey = keyInput ? keyInput.value : '';
+        var keyEl = document.getElementById('licence-key-input');
+        var emailEl = document.getElementById('licence-email-input');
+        var rawKey = keyEl ? keyEl.value : '';
         var key = (typeof rawKey === 'string' ? rawKey : '').replace(/\s/g, '').trim().toUpperCase();
-        var email = (emailInput ? emailInput.value : '').trim();
+        var email = (emailEl ? emailEl.value : '').trim();
         if (!key) { showError('Please enter a licence key.'); return; }
         activateBtn.disabled = true;
         activateBtn.textContent = 'Activating...';
@@ -217,9 +278,9 @@
           showError('Error: ' + (e && e.message ? e.message : 'Unknown error'));
         });
       });
-      var keyInput = document.getElementById('licence-key-input');
-      if (keyInput) {
-        keyInput.addEventListener('keydown', function (e) {
+      var licKeyInput = document.getElementById('licence-key-input');
+      if (licKeyInput) {
+        licKeyInput.addEventListener('keydown', function (e) {
           if (e.key === 'Enter') { e.preventDefault(); activateBtn.click(); }
         });
       }
@@ -230,45 +291,13 @@
 
   window.openLicenceOverlaySignIn = function () {
     showOverlay({
-      title: 'Activate Custody Note',
-      message: 'Sign in with your custodynote.com account, or open the Licence Key tab.',
+      title: 'Sign in to Custody Note',
+      message: 'Enter your email to get started, or use the Licence Key tab.',
     });
     var tab = document.getElementById('licence-tab-signin');
     if (tab) tab.click();
     initLicenceUI();
   };
-
-  (function initForgotKeyOverlay() {
-    var btn = document.getElementById('licence-overlay-forgot-btn');
-    var emailInput = document.getElementById('licence-overlay-forgot-email');
-    var msgEl = document.getElementById('licence-overlay-forgot-msg');
-    if (!btn || !emailInput) return;
-    btn.addEventListener('click', function () {
-      var email = (emailInput.value || '').trim();
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        if (msgEl) { msgEl.textContent = 'Please enter a valid email address.'; msgEl.style.color = '#f87171'; }
-        return;
-      }
-      btn.disabled = true;
-      if (msgEl) { msgEl.textContent = 'Sending\u2026'; msgEl.style.color = 'rgba(255,255,255,0.6)'; }
-      var api = window.custodyNote || {};
-      if (!api.requestLicenceEmail) {
-        if (msgEl) { msgEl.textContent = 'Not available in this version.'; msgEl.style.color = '#f87171'; }
-        btn.disabled = false;
-        return;
-      }
-      api.requestLicenceEmail(email).then(function (res) {
-        btn.disabled = false;
-        if (msgEl) {
-          msgEl.textContent = (res && res.message) ? res.message : 'If that email is on file, your key has been sent.';
-          msgEl.style.color = '#4ade80';
-        }
-      }).catch(function () {
-        btn.disabled = false;
-        if (msgEl) { msgEl.textContent = 'Something went wrong. Try again later.'; msgEl.style.color = '#f87171'; }
-      });
-    });
-  })();
 
   function startRevalidation() {
     if (_revalidateTimer) clearInterval(_revalidateTimer);
@@ -302,8 +331,8 @@
         showOverlay({
           title: isTrial ? 'Free Trial Ended' : (status.status === 'revoked' ? 'Licence Revoked' : 'Subscription Expired'),
           message: isTrial
-            ? 'Your ' + (status.trialDays || 30) + '-day free trial has ended. Enter a licence key to continue using Custody Note.'
-            : (status.message || 'Your subscription has expired. Please renew or enter a new key.'),
+            ? 'Your ' + (status.trialDays || 30) + '-day free trial has ended. Sign in with your email to continue.'
+            : (status.message || 'Your subscription has expired. Sign in or renew to continue.'),
           showRenew: true,
         });
         initLicenceUI();

@@ -3725,6 +3725,60 @@ ipcMain.handle('auth:refresh', async () => {
   }
 });
 
+ipcMain.handle('auth:send-code', async (_, { email }) => {
+  if (!email) return { ok: false, error: 'Email is required' };
+  const apiUrl = getManagedCloudApiUrl();
+  try {
+    const resp = await httpPost(`${apiUrl}/api/auth/send-code`, { email: email.trim() });
+    if (resp.ok) return { ok: true };
+    return { ok: false, error: resp.error || 'Failed to send code' };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Failed to send code' };
+  }
+});
+
+ipcMain.handle('auth:verify-code', async (_, { email, code }) => {
+  if (!email || !code) return { success: false, error: 'Email and code are required' };
+  const apiUrl = getManagedCloudApiUrl();
+  try {
+    const resp = await httpPost(`${apiUrl}/api/auth/verify-code`, { email: email.trim(), code: code.trim() });
+    if (!resp.ok) return { success: false, error: resp.error || 'Verification failed' };
+    if (!resp.accessToken) return { success: false, error: 'Verification failed — no token returned' };
+
+    const machineId = getMachineId();
+    const now = new Date().toISOString();
+    let data = readLicenceData() || {};
+    data.authToken = resp.accessToken;
+    data.refreshToken = resp.refreshToken || null;
+    data.email = resp.user?.email || email.trim();
+    data.accountId = resp.user?.id || null;
+    data.lastValidated = now;
+    data.activatedAt = data.activatedAt || now;
+    data.machineId = machineId;
+    data.status = 'active';
+    data.isTrial = false;
+
+    if (resp.subscription) {
+      data.expiresAt = resp.subscription.expiresAt || data.expiresAt || null;
+      data.cloudBackupEntitled = !!resp.subscription.cloudBackup;
+    }
+
+    if (!data.key) data.key = 'ACCOUNT-' + (resp.user?.id || '').slice(0, 16).toUpperCase();
+    writeLicenceData(data);
+
+    checkCloudBackupEntitlement().catch(() => {});
+
+    return {
+      success: true,
+      user: resp.user,
+      subscription: resp.subscription,
+      status: computeLicenceStatus(data),
+    };
+  } catch (e) {
+    return { success: false, error: e && e.message ? e.message : 'Verification failed' };
+  }
+});
+
 ipcMain.handle('auth:status', () => {
   const data = readLicenceData();
   return {

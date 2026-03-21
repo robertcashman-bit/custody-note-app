@@ -87,6 +87,8 @@ contextBridge.exposeInMainWorld('api', {
   authRegister: (params) => ipcRenderer.invoke('auth:register', params),
   authRefresh: () => ipcRenderer.invoke('auth:refresh'),
   authStatus: () => ipcRenderer.invoke('auth:status'),
+  authSendCode: (params) => ipcRenderer.invoke('auth:send-code', params),
+  authVerifyCode: (params) => ipcRenderer.invoke('auth:verify-code', params),
   /* Licence */
   licenceStatus: () => ipcRenderer.invoke('licence:status'),
   licenceActivate: (params) => ipcRenderer.invoke('licence:activate', params),
