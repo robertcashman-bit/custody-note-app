@@ -377,3 +377,20 @@ function addFirm() {
     showToast('Failed to save firm: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
   });
 }
+
+/* ── Advanced settings toggle ── */
+(function() {
+  var toggle = document.getElementById('settings-advanced-toggle');
+  if (!toggle) return;
+  var shown = false;
+  toggle.addEventListener('click', function() {
+    shown = !shown;
+    toggle.textContent = shown ? 'Hide advanced settings' : 'Show advanced settings';
+    document.querySelectorAll('[data-advanced-tab]').forEach(function(el) {
+      el.style.display = shown ? '' : 'none';
+    });
+    document.querySelectorAll('.settings-advanced-section').forEach(function(el) {
+      el.style.display = shown ? '' : 'none';
+    });
+  });
+})();

@@ -94,7 +94,7 @@ contextBridge.exposeInMainWorld('api', {
   licenceActivate: (params) => ipcRenderer.invoke('licence:activate', params),
   licenceValidate: () => ipcRenderer.invoke('licence:validate'),
   licenceDeactivate: () => ipcRenderer.invoke('licence:deactivate'),
-  licenceEmailKey: () => ipcRenderer.invoke('licence:email-key'),
+  licenceEmailKey: (params) => ipcRenderer.invoke('licence:email-key', params),
   licenceDeactivateMachine: () => ipcRenderer.invoke('licence:deactivate-machine'),
   prepareTrial: () => ipcRenderer.invoke('prepare-trial'),
   getS3BackupStatus: () => ipcRenderer.invoke('get-s3-backup-status'),

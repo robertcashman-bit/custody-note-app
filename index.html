@@ -811,11 +811,14 @@
 
         <div class="settings-tab-bar" id="settings-tab-bar">
           <button type="button" class="settings-tab active" data-stab="account">Account</button>
-          <button type="button" class="settings-tab" data-stab="appearance">Appearance</button>
-          <button type="button" class="settings-tab" data-stab="integrations">Integrations</button>
           <button type="button" class="settings-tab" data-stab="backup">Backup</button>
-          <button type="button" class="settings-tab" data-stab="advanced">Advanced</button>
+          <button type="button" class="settings-tab" data-stab="appearance" data-advanced-tab="true" style="display:none;">Appearance</button>
+          <button type="button" class="settings-tab" data-stab="integrations" data-advanced-tab="true" style="display:none;">Integrations</button>
+          <button type="button" class="settings-tab" data-stab="advanced" data-advanced-tab="true" style="display:none;">Advanced</button>
           <button type="button" class="settings-tab" data-stab="support">Support</button>
+        </div>
+        <div style="text-align:right;margin:-0.25rem 0 0.5rem;">
+          <button type="button" id="settings-advanced-toggle" class="btn btn-small" style="font-size:0.78rem;padding:0.25rem 0.6rem;opacity:0.7;">Show advanced settings</button>
         </div>
 
         <div class="settings-tab-panel active" data-stab-panel="account">
@@ -1169,12 +1172,14 @@
           </div>
           <button type="button" id="setting-detect-cloud-folders" class="btn btn-secondary" style="margin-top:0.5rem;">Detect cloud folders</button>
           <input type="text" id="setting-offsite-backup-folder" readonly style="display:none;" aria-hidden="true">
-          <label>Custom cloud backup URL (optional)</label>
-          <input type="url" id="setting-cloud-backup-url" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
-          <p class="settings-hint" style="margin-top:0.25rem;">For your own backup API only. Leave blank to use Custody Note&rsquo;s managed AWS backup (included with your licence).</p>
-          <label style="margin-top:0.5rem;">Custom cloud backup token (optional)</label>
-          <input type="password" id="setting-cloud-backup-token" placeholder="Secret token for your API" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
-          <p class="settings-hint" style="margin-top:0.25rem;">Sent as <code>Authorization: Bearer &lt;token&gt;</code> when using a custom backup URL above.</p>
+          <div class="settings-advanced-section" style="display:none;">
+            <label>Custom cloud backup URL (optional)</label>
+            <input type="url" id="setting-cloud-backup-url" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
+            <p class="settings-hint" style="margin-top:0.25rem;">For your own backup API only. Leave blank to use Custody Note&rsquo;s managed AWS backup (included with your licence).</p>
+            <label style="margin-top:0.5rem;">Custom cloud backup token (optional)</label>
+            <input type="password" id="setting-cloud-backup-token" placeholder="Secret token for your API" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
+            <p class="settings-hint" style="margin-top:0.25rem;">Sent as <code>Authorization: Bearer &lt;token&gt;</code> when using a custom backup URL above.</p>
+          </div>
         </div>
 
         <div class="settings-card">
@@ -1884,56 +1889,19 @@
         <span class="bottom-nav-label">Settings</span>
       </button>
     </nav>
-    <!-- First-launch setup modal (2-step wizard) -->
+    <!-- First-launch setup (single step) -->
     <div id="first-launch-modal" class="first-launch-overlay" style="display:none;">
       <div class="first-launch-box">
-        <!-- Step indicator -->
-        <div class="fl-steps">
-          <span class="fl-step active" data-step="1">1. Your details</span>
-          <span class="fl-step" data-step="2">2. Backup</span>
-        </div>
-        <!-- Step 1: User details -->
         <div id="fl-step-1">
           <h2>Welcome to Custody Note</h2>
-          <p>Please enter your details to get started. These are used in PDF headers, billing and LAA declarations.</p>
+          <p>These details appear on your attendance notes and LAA declarations. You can change them later in Settings.</p>
           <label>Fee Earner Name <span style="color:#dc2626;">*</span></label>
           <input type="text" id="fl-fee-earner-name" placeholder="e.g. Robert Smith" style="margin-bottom:0.75rem;">
           <label>DSCC PIN/Number <span style="color:#dc2626;">*</span></label>
           <input type="text" id="fl-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10" style="margin-bottom:0.75rem;">
-          <label>Your Email Address</label>
-          <input type="email" id="fl-email" placeholder="e.g. robert@lawfirm.com" style="margin-bottom:0.5rem;">
-          <p style="font-size:0.78rem;color:#64748b;margin:0 0 0.75rem;">Used to send emails and pre-fill the From address. Optional but recommended.</p>
-          <div id="fl-send-test-wrap" style="display:none;margin-bottom:0.5rem;">
-            <button type="button" id="fl-send-test-email" class="btn btn-secondary btn-small">&#9993; Send a test email to myself</button>
-            <span id="fl-test-email-sent" style="display:none;font-size:0.8rem;color:#059669;margin-left:0.5rem;">&#10003; Opened in your email app</span>
-          </div>
           <div class="first-launch-footer">
             <button type="button" id="fl-skip" class="btn btn-secondary">Skip for now</button>
-            <button type="button" id="fl-next" class="btn btn-primary">Next &rarr;</button>
-          </div>
-        </div>
-        <!-- Step 2: Backup destination -->
-        <div id="fl-step-2" style="display:none;">
-          <h2>Where should we back up?</h2>
-          <p>Your data is encrypted and backed up automatically. Choose an off-site folder so a copy is kept safely in the cloud.</p>
-          <div id="fl-backup-options" class="fl-backup-options">
-            <div class="fl-backup-scanning">Scanning for cloud folders&hellip;</div>
-          </div>
-
-          <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:0.75rem 1rem;margin-top:1rem;">
-            <strong style="color:#92400e;">&#9888; Set a Recovery Password — important</strong>
-            <p style="font-size:0.85rem;color:#92400e;margin:0.35rem 0 0.5rem;">Your database is encrypted using a key tied to this specific machine. If you move to a new computer, replace hardware, or your laptop is lost, <strong>you will not be able to access your records without a recovery password</strong>.</p>
-            <p style="font-size:0.85rem;color:#92400e;margin:0 0 0.5rem;">Set one now in the field below and write it somewhere safe.</p>
-            <div style="display:flex;gap:0.5rem;align-items:center;">
-              <input type="password" id="fl-recovery-pw" placeholder="Choose a recovery password" style="flex:1;">
-              <button type="button" id="fl-recovery-pw-toggle" class="btn btn-small">Show</button>
-            </div>
-            <p id="fl-recovery-pw-note" style="font-size:0.78rem;color:#92400e;margin:0.3rem 0 0;"></p>
-          </div>
-
-          <div class="first-launch-footer" style="margin-top:1rem;">
-            <button type="button" id="fl-back" class="btn btn-secondary">&larr; Back</button>
-            <button type="button" id="fl-save" class="btn btn-primary">Save &amp; Finish</button>
+            <button type="button" id="fl-save" class="btn btn-primary">Done</button>
           </div>
         </div>
       </div>
@@ -1978,55 +1946,29 @@
             <path d="M47 46l2.5 2.5L53 44" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
           </svg>
         </div>
-        <h2 id="licence-title">Sign in to Custody Note</h2>
-        <p id="licence-message" class="licence-message">Enter your email to get started.</p>
+        <h2 id="licence-title">Activate Custody Note</h2>
+        <p id="licence-message" class="licence-message">Paste the licence key from your purchase email.</p>
 
-        <!-- Tab switcher -->
-        <div class="licence-tabs" style="display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid rgba(255,255,255,0.15);">
-          <button type="button" id="licence-tab-signin" class="licence-tab licence-tab-active" style="flex:1;padding:0.6rem 0.5rem;background:none;border:none;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;border-bottom:2px solid #3b82f6;margin-bottom:-2px;">Email</button>
-          <button type="button" id="licence-tab-key" class="licence-tab" style="flex:1;padding:0.6rem 0.5rem;background:none;border:none;color:rgba(255,255,255,0.5);font-size:0.9rem;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;">Licence Key</button>
-        </div>
-
-        <!-- Step 1: Email entry -->
-        <div id="licence-signin-form">
-          <label for="signin-email" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Email address</label>
-          <input type="email" id="signin-email" placeholder="you@example.com" autocomplete="email" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1.5px solid rgba(255,255,255,0.45);border-radius:6px;background:rgba(255,255,255,0.22);color:#fff;margin-bottom:0.6rem;">
-          <p id="signin-error" class="licence-error" style="display:none;"></p>
-          <div class="licence-actions" style="margin-top:0.5rem;">
-            <button type="button" id="send-code-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Send Code</button>
-          </div>
-          <p style="text-align:center;margin-top:0.75rem;font-size:0.82rem;color:rgba(255,255,255,0.5);">
-            We&apos;ll email you a 6-digit verification code.
-          </p>
-        </div>
-
-        <!-- Step 2: Code verification (hidden by default) -->
-        <div id="licence-code-form" style="display:none;">
-          <p id="code-sent-message" style="color:rgba(255,255,255,0.8);font-size:0.9rem;margin-bottom:1rem;line-height:1.5;">We sent a code to <strong id="code-sent-email" style="color:#fff;"></strong></p>
-          <label for="verify-code-input" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Verification code</label>
-          <input type="text" id="verify-code-input" placeholder="000000" autocomplete="one-time-code" inputmode="numeric" maxlength="6" style="width:100%;padding:0.55rem 0.75rem;font-size:1.3rem;letter-spacing:0.4em;text-align:center;border:1.5px solid rgba(255,255,255,0.45);border-radius:6px;background:rgba(255,255,255,0.22);color:#fff;margin-bottom:0.6rem;font-family:'Consolas','Menlo',monospace;">
-          <p id="verify-code-error" class="licence-error" style="display:none;"></p>
-          <div class="licence-actions" style="margin-top:0.5rem;">
-            <button type="button" id="verify-code-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Verify</button>
-          </div>
-          <p style="text-align:center;margin-top:0.75rem;font-size:0.82rem;color:rgba(255,255,255,0.5);">
-            <button type="button" id="resend-code-btn" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;">Send again</button>
-            &nbsp;&middot;&nbsp;
-            <button type="button" id="change-email-btn" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;">Use a different email</button>
-          </p>
-        </div>
-
-        <!-- Licence key form (secondary tab) -->
-        <div id="licence-form" style="display:none;">
-          <label for="licence-key-input">Licence Key</label>
-          <input type="text" id="licence-key-input" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
-          <label for="licence-email-input" style="margin-top:0.75rem;">Email (optional)</label>
-          <input type="email" id="licence-email-input" placeholder="you@example.com" autocomplete="off">
+        <!-- Single licence key form -->
+        <div id="licence-form">
+          <label for="licence-key-input" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Licence Key</label>
+          <input type="text" id="licence-key-input" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="width:100%;padding:0.6rem 0.75rem;font-size:1.05rem;letter-spacing:0.05em;border:1.5px solid rgba(255,255,255,0.45);border-radius:6px;background:rgba(255,255,255,0.22);color:#fff;margin-bottom:0.6rem;">
           <p id="licence-error" class="licence-error" style="display:none;"></p>
-          <div class="licence-actions">
-            <button type="button" id="licence-activate-btn" class="btn btn-primary">Activate</button>
+          <div class="licence-actions" style="margin-top:0.5rem;">
+            <button type="button" id="licence-activate-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Activate</button>
           </div>
         </div>
+
+        <!-- Email my key fallback -->
+        <div id="licence-email-key-section" style="margin-top:1rem;text-align:center;">
+          <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin:0 0 0.5rem;">Lost your key?</p>
+          <div id="email-key-form" style="display:flex;gap:0.4rem;align-items:center;">
+            <input type="email" id="email-key-email" placeholder="your@email.com" autocomplete="email" style="flex:1;padding:0.45rem 0.65rem;font-size:0.85rem;border:1px solid rgba(255,255,255,0.3);border-radius:5px;background:rgba(255,255,255,0.12);color:#fff;">
+            <button type="button" id="email-key-btn" class="btn btn-secondary" style="padding:0.45rem 0.8rem;font-size:0.82rem;white-space:nowrap;">Email my key</button>
+          </div>
+          <p id="email-key-status" style="display:none;font-size:0.8rem;margin-top:0.4rem;color:#4ade80;"></p>
+        </div>
+
         <div id="licence-renew-section" style="display:none;">
           <p class="licence-hint">Need a licence? Visit <a href="https://www.custodynote.com/pricing" id="licence-renew-link" class="licence-link">custodynote.com/pricing</a></p>
         </div>

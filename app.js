@@ -12074,6 +12074,7 @@ PDF_CASENOTE_ADVERT +
             case 'home': showView('home'); break;
             case 'records': showView('list'); break;
             case 'new-attendance':
+              if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); break; }
               currentStandaloneSectionId = null;
               formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
               activeFormSections = formSections;
@@ -12178,6 +12179,7 @@ PDF_CASENOTE_ADVERT +
             return;
           case 'home-card-attendance':
             e.preventDefault();
+            if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
             currentStandaloneSectionId = null;
             formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
             activeFormSections = formSections;
@@ -12190,6 +12192,7 @@ PDF_CASENOTE_ADVERT +
             return;
           case 'home-card-voluntary':
             e.preventDefault();
+            if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
             currentStandaloneSectionId = null;
             formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
             activeFormSections = voluntaryFormSections;
@@ -12210,6 +12213,7 @@ PDF_CASENOTE_ADVERT +
             return;
           case 'home-card-telephone':
             e.preventDefault();
+            if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
             formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
             activeFormSections = telFormSections;
             formData.workType = 'Police Station Telephone Attendance';
@@ -12220,6 +12224,7 @@ PDF_CASENOTE_ADVERT +
             return;
           case 'home-card-quick':
             e.preventDefault();
+            if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
             openQuickCapture();
             return;
           case 'home-card-quick-email':
@@ -12645,6 +12650,7 @@ PDF_CASENOTE_ADVERT +
       btn.addEventListener('click', function() {
         var nav = btn.dataset.nav;
         if (nav === 'new-attendance') {
+          if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
           if (currentAttendanceId || Object.keys(formData).length > 0) {
             showConfirm('Start a new record? Any unsaved changes will be lost.').then(function(ok) {
               if (ok) { currentAttendanceId = null; formData = {}; showView('new'); }
@@ -14774,183 +14780,31 @@ PDF_CASENOTE_ADVERT +
     overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
   }
 
-  /* ─── First-launch setup modal (2-step wizard) ─── */
+  /* ─── First-launch setup (single step) ─── */
   function initFirstLaunchModal() {
     var modal = document.getElementById('first-launch-modal');
     if (!modal) return;
     modal.style.display = 'flex';
 
-    var step1 = document.getElementById('fl-step-1');
-    var step2 = document.getElementById('fl-step-2');
-    var stepEls = modal.querySelectorAll('.fl-step');
-    var selectedBackupPath = '';
-
-    function showStep(n) {
-      step1.style.display = n === 1 ? '' : 'none';
-      step2.style.display = n === 2 ? '' : 'none';
-      stepEls.forEach(function(el) {
-        var s = parseInt(el.dataset.step, 10);
-        el.classList.toggle('active', s === n);
-        el.classList.toggle('done', s < n);
-      });
-    }
-
-    var iconMap = { 'OneDrive': '\u2601', 'Dropbox': '\uD83D\uDCE6', 'Google Drive': '\uD83D\uDCC1', 'iCloud Drive': '\u2601' };
-
-    function buildBackupOptions(folders) {
-      var container = document.getElementById('fl-backup-options');
-      container.innerHTML = '';
-      var allOptions = [];
-
-      (folders || []).forEach(function(f) {
-        var icon = '\u2601';
-        for (var k in iconMap) { if (f.name.indexOf(k.split(' ')[0]) !== -1) { icon = iconMap[k]; break; } }
-        allOptions.push({ name: f.name, path: f.path, icon: icon, hint: f.path });
-      });
-      allOptions.push({ name: 'Desktop (local only)', path: '__desktop__', icon: '\uD83D\uDDA5', hint: 'No cloud sync — backups stay on this computer' });
-      allOptions.push({ name: 'Choose a folder\u2026', path: '__browse__', icon: '\uD83D\uDCC2', hint: 'Browse for a specific folder' });
-
-      if (allOptions.length > 2) selectedBackupPath = allOptions[0].path;
-
-      allOptions.forEach(function(opt) {
-        var div = document.createElement('div');
-        div.className = 'fl-backup-option' + (opt.path === selectedBackupPath ? ' selected' : '');
-        var radio = document.createElement('input');
-        radio.type = 'radio';
-        radio.name = 'fl-backup';
-        radio.value = opt.path;
-        radio.checked = opt.path === selectedBackupPath;
-        var iconSpan = document.createElement('span');
-        iconSpan.className = 'fl-backup-icon';
-        iconSpan.textContent = opt.icon;
-        var label = document.createElement('span');
-        label.className = 'fl-backup-label';
-        var strong = document.createElement('strong');
-        strong.textContent = opt.name;
-        label.appendChild(strong);
-        if (opt.hint) {
-          var small = document.createElement('small');
-          small.textContent = opt.hint;
-          label.appendChild(small);
-        }
-        div.appendChild(radio);
-        div.appendChild(iconSpan);
-        div.appendChild(label);
-        div.addEventListener('click', function() {
-          if (opt.path === '__browse__') {
-            window.api.chooseFolder({ forOffsite: true }).then(function(p) {
-              if (p) {
-                selectedBackupPath = p;
-                label.querySelector('small').textContent = p;
-                container.querySelectorAll('.fl-backup-option').forEach(function(el) { el.classList.remove('selected'); el.querySelector('input').checked = false; });
-                div.classList.add('selected');
-                radio.checked = true;
-              }
-            });
-            return;
-          }
-          selectedBackupPath = opt.path;
-          container.querySelectorAll('.fl-backup-option').forEach(function(el) { el.classList.remove('selected'); el.querySelector('input').checked = false; });
-          div.classList.add('selected');
-          radio.checked = true;
-        });
-        container.appendChild(div);
-      });
-    }
-
-    /* Show/hide test email button as user types their email */
-    var flEmailInput = document.getElementById('fl-email');
-    var flTestWrap   = document.getElementById('fl-send-test-wrap');
-    if (flEmailInput && flTestWrap) {
-      flEmailInput.addEventListener('input', function() {
-        flTestWrap.style.display = flEmailInput.value.trim() ? '' : 'none';
-        var sentBadge = document.getElementById('fl-test-email-sent');
-        if (sentBadge) sentBadge.style.display = 'none';
-      });
-    }
-
-    /* Test email button */
-    var flTestBtn = document.getElementById('fl-send-test-email');
-    if (flTestBtn) {
-      flTestBtn.addEventListener('click', function() {
-        var emailVal = (document.getElementById('fl-email').value || '').trim();
-        var nameVal  = (document.getElementById('fl-fee-earner-name').value || '').trim() || 'there';
-        if (!emailVal) return;
-        var subject = 'Custody Note — test email';
-        var body    = 'Hi ' + nameVal + ',\n\nThis is a test email from Custody Note to confirm your email address is set up correctly.\n\nYou\'re all set!\n\nCustody Note';
-        openPreferredEmailClient(emailVal, subject, body);
-        var sentBadge = document.getElementById('fl-test-email-sent');
-        if (sentBadge) sentBadge.style.display = '';
-      });
-    }
-
-    /* Step 1 -> Step 2 */
-    document.getElementById('fl-next').addEventListener('click', function() {
+    /* Done button */
+    document.getElementById('fl-save').addEventListener('click', function() {
       var name = (document.getElementById('fl-fee-earner-name').value || '').trim();
       var pin = (document.getElementById('fl-dscc-pin').value || '').trim();
       if (!name) { showToast('Please enter your fee earner name', 'error'); return; }
       if (!pin) { showToast('Please enter your DSCC PIN/number', 'error'); return; }
-      showStep(2);
-      window.api.detectCloudFolders().then(buildBackupOptions).catch(function() { buildBackupOptions([]); });
-    });
 
-    /* Step 2 -> Step 1 */
-    document.getElementById('fl-back').addEventListener('click', function() { showStep(1); });
-
-    /* Recovery password show/hide toggle in first-launch wizard */
-    document.getElementById('fl-recovery-pw-toggle')?.addEventListener('click', function() {
-      var inp = document.getElementById('fl-recovery-pw');
-      if (!inp) return;
-      inp.type = inp.type === 'password' ? 'text' : 'password';
-      this.textContent = inp.type === 'password' ? 'Show' : 'Hide';
-    });
-
-    /* Save & Finish */
-    document.getElementById('fl-save').addEventListener('click', function() {
-      var name = (document.getElementById('fl-fee-earner-name').value || '').trim();
-      var pin = (document.getElementById('fl-dscc-pin').value || '').trim();
-      if (!name || !pin) { showStep(1); showToast('Please fill in your details first', 'error'); return; }
-
-      var emailVal = (document.getElementById('fl-email').value || '').trim();
       var settings = { dsccPin: pin, feeEarnerNameDefault: name };
-      if (emailVal) settings.email = emailVal;
-      if (selectedBackupPath && selectedBackupPath !== '__desktop__' && selectedBackupPath !== '__browse__') {
-        settings.offsiteBackupFolder = selectedBackupPath;
-      }
-
-      var recoveryPw = (document.getElementById('fl-recovery-pw')?.value || '').trim();
-      var noteEl = document.getElementById('fl-recovery-pw-note');
-
-      function finishSetup() {
-        window.api.setSettings(settings).then(function() {
-          modal.style.display = 'none';
-          window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
-          var offsiteEl = document.getElementById('setting-offsite-backup-folder');
-          if (offsiteEl && settings.offsiteBackupFolder) offsiteEl.value = settings.offsiteBackupFolder;
-          var emailSettingEl = document.getElementById('setting-email');
-          if (emailSettingEl && settings.email) emailSettingEl.value = settings.email;
-          var msg = 'Setup saved — welcome to Custody Note, ' + name + '!';
-          if (settings.offsiteBackupFolder) msg += ' Backups will sync to ' + selectedBackupPath.split('\\').pop().split('/').pop() + '.';
-          showToast(msg, 'success', 5000);
-        });
-      }
-
-      if (recoveryPw) {
-        if (recoveryPw.length < 8) {
-          if (noteEl) noteEl.textContent = 'Password must be at least 8 characters.';
-          return;
-        }
-        if (noteEl) noteEl.textContent = 'Saving recovery password…';
-        window.api.setRecoveryPassword(recoveryPw).then(function(ok) {
-          if (noteEl) noteEl.textContent = ok ? '✓ Recovery password set.' : 'Could not set recovery password — you can set one in Settings.';
-          finishSetup();
-        }).catch(function() {
-          if (noteEl) noteEl.textContent = 'Could not set recovery password — you can set one in Settings.';
-          finishSetup();
-        });
-      } else {
-        finishSetup();
-      }
+      window.api.setSettings(settings).then(function() {
+        modal.style.display = 'none';
+        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
+        showToast('Welcome to Custody Note, ' + name + '!', 'success', 4000);
+        window.api.detectCloudFolders().then(function(folders) {
+          if (folders && folders.length) {
+            var best = folders[0];
+            window.api.setSettings({ offsiteBackupFolder: best.path });
+          }
+        }).catch(function() {});
+      });
     });
 
     /* Skip */

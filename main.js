@@ -3588,15 +3588,18 @@ ipcMain.handle('licence:deactivate', () => {
   return { success: true };
 });
 
-ipcMain.handle('licence:email-key', async () => {
-  const data = readLicenceData();
-  if (!data || !data.key) return { ok: false, error: 'No licence key' };
+ipcMain.handle('licence:email-key', async (_, params) => {
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return { ok: false, error: 'Cannot reach licence server' };
+  const data = readLicenceData();
+  const payload = {};
+  if (params && params.email) payload.email = params.email.trim();
+  else if (data && data.key) payload.key = data.key;
+  else return { ok: false, error: 'No licence key or email' };
   try {
-    const resp = await httpPost(`${apiUrl}/api/licence/email-key`, { key: data.key }, { headers: _getAuthHeaders() });
+    const resp = await httpPost(`${apiUrl}/api/licence/email-key`, payload, { headers: _getAuthHeaders() });
     if (resp.error) return { ok: false, error: resp.error };
-    return { ok: true };
+    return { ok: true, message: resp.message || "If an account exists, we've sent your key." };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Failed to send email' };
   }
@@ -5993,14 +5996,26 @@ function httpsGetWithTimeout(url, timeoutMs) {
 }
 
 ipcMain.handle('postcode-lookup', async (_, postcode) => {
-  const settings = Object.fromEntries(dbAll('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
-  const apiKey = (settings.idealPostcodesApiKey || '').trim();
-  if (!apiKey) return { ok: false, error: 'No API key configured. Add your Ideal Postcodes API key in Settings > Integrations.' };
-  /* Strip spaces entirely — Ideal Postcodes expects the path segment with no
-     spaces (e.g. SW1A2AA).  Using + then encodeURIComponent would produce
-     %2B which the API treats as a literal plus, not a space. */
   const pc = (postcode || '').trim().replace(/\s+/g, '');
   if (!pc) return { ok: false, error: 'No postcode entered.' };
+
+  const data = readLicenceData();
+  const licenceKey = (data && data.key) || '';
+  const apiUrl = getManagedCloudApiUrl();
+
+  /* Strategy 1: Use the server-side proxy (no API key needed from user) */
+  if (licenceKey && apiUrl) {
+    try {
+      const resp = await httpPost(`${apiUrl}/api/postcodes/lookup`, { postcode: pc, licenceKey });
+      if (resp.ok && resp.addresses) return { ok: true, addresses: resp.addresses };
+      if (resp.error === 'Postcode not found') return { ok: false, error: 'Postcode not found.' };
+    } catch (_) { /* fall through to local API key */ }
+  }
+
+  /* Strategy 2: Fall back to user's own Ideal Postcodes API key */
+  const settings = Object.fromEntries(dbAll('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
+  const apiKey = (settings.idealPostcodesApiKey || '').trim();
+  if (!apiKey) return { ok: false, error: 'Postcode lookup is not available. Check your internet connection or contact support.' };
   const url = `https://api.ideal-postcodes.co.uk/v1/postcodes/${encodeURIComponent(pc)}?api_key=${encodeURIComponent(apiKey)}`;
   const res = await httpsGetWithTimeout(url, 10000);
   if (!res.ok) return { ok: false, error: res.error };
@@ -6020,11 +6035,11 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
     } else if (json.code === 4040) {
       return { ok: false, error: 'Postcode not found.' };
     } else if (json.code === 4010 || json.code === 4020) {
-      return { ok: false, error: 'Invalid API key or no credits remaining. Check Settings > Integrations.' };
+      return { ok: false, error: 'Invalid API key or no credits remaining.' };
     } else {
       return { ok: false, error: json.message || 'Lookup failed.' };
     }
-  } catch (_) { return { ok: false, error: 'Failed to parse response from Ideal Postcodes.' }; }
+  } catch (_) { return { ok: false, error: 'Failed to parse response.' }; }
 });
 
 ipcMain.handle('postcode-check-key', async () => {
