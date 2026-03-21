@@ -1978,8 +1978,48 @@
           </svg>
         </div>
         <h2 id="licence-title">Activate Custody Note</h2>
-        <p id="licence-message" class="licence-message">Enter your licence key to activate the application.</p>
-        <div id="licence-form">
+        <p id="licence-message" class="licence-message">Sign in with your account or enter a licence key.</p>
+
+        <!-- Tab switcher -->
+        <div class="licence-tabs" style="display:flex;gap:0;margin-bottom:1rem;border-bottom:2px solid rgba(255,255,255,0.15);">
+          <button type="button" id="licence-tab-signin" class="licence-tab licence-tab-active" style="flex:1;padding:0.6rem 0.5rem;background:none;border:none;color:#fff;font-size:0.9rem;font-weight:600;cursor:pointer;border-bottom:2px solid #3b82f6;margin-bottom:-2px;">Sign In</button>
+          <button type="button" id="licence-tab-key" class="licence-tab" style="flex:1;padding:0.6rem 0.5rem;background:none;border:none;color:rgba(255,255,255,0.5);font-size:0.9rem;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;">Licence Key</button>
+        </div>
+
+        <!-- Sign-in form (primary) -->
+        <div id="licence-signin-form">
+          <label for="signin-email" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Email</label>
+          <input type="email" id="signin-email" placeholder="you@example.com" autocomplete="email" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.2);border-radius:6px;background:rgba(255,255,255,0.08);color:#fff;margin-bottom:0.6rem;">
+          <label for="signin-password" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Password</label>
+          <input type="password" id="signin-password" placeholder="Your password" autocomplete="current-password" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.2);border-radius:6px;background:rgba(255,255,255,0.08);color:#fff;margin-bottom:0.5rem;">
+          <p id="signin-error" class="licence-error" style="display:none;"></p>
+          <div class="licence-actions" style="margin-top:0.5rem;">
+            <button type="button" id="signin-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Sign In</button>
+          </div>
+          <p style="text-align:center;margin-top:0.75rem;font-size:0.82rem;color:rgba(255,255,255,0.5);">
+            Don&apos;t have an account? <button type="button" id="signin-toggle-register" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;">Create one</button>
+          </p>
+        </div>
+
+        <!-- Registration form (hidden by default) -->
+        <div id="licence-register-form" style="display:none;">
+          <label for="register-name" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Name</label>
+          <input type="text" id="register-name" placeholder="Your name" autocomplete="name" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.2);border-radius:6px;background:rgba(255,255,255,0.08);color:#fff;margin-bottom:0.6rem;">
+          <label for="register-email" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Email</label>
+          <input type="email" id="register-email" placeholder="you@example.com" autocomplete="email" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.2);border-radius:6px;background:rgba(255,255,255,0.08);color:#fff;margin-bottom:0.6rem;">
+          <label for="register-password" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Password</label>
+          <input type="password" id="register-password" placeholder="Min 10 chars, uppercase, lowercase, number" autocomplete="new-password" style="width:100%;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid rgba(255,255,255,0.2);border-radius:6px;background:rgba(255,255,255,0.08);color:#fff;margin-bottom:0.5rem;">
+          <p id="register-error" class="licence-error" style="display:none;"></p>
+          <div class="licence-actions" style="margin-top:0.5rem;">
+            <button type="button" id="register-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Create Account</button>
+          </div>
+          <p style="text-align:center;margin-top:0.75rem;font-size:0.82rem;color:rgba(255,255,255,0.5);">
+            Already have an account? <button type="button" id="register-toggle-signin" style="background:none;border:none;color:#60a5fa;cursor:pointer;font-size:0.82rem;text-decoration:underline;padding:0;">Sign in</button>
+          </p>
+        </div>
+
+        <!-- Licence key form (secondary tab) -->
+        <div id="licence-form" style="display:none;">
           <label for="licence-key-input">Licence Key</label>
           <input type="text" id="licence-key-input" placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
           <label for="licence-email-input" style="margin-top:0.75rem;">Email (optional)</label>
@@ -1990,9 +2030,9 @@
           </div>
         </div>
         <div id="licence-renew-section" style="display:none;">
-          <p class="licence-hint">Need a new licence? Visit <a href="https://www.custodynote.com" id="licence-renew-link" class="licence-link">www.custodynote.com</a> or contact <a href="mailto:robertcashman@defencelegalservices.com" class="licence-link">robertcashman@defencelegalservices.com</a></p>
+          <p class="licence-hint">Need a licence? Visit <a href="https://www.custodynote.com/pricing" id="licence-renew-link" class="licence-link">custodynote.com/pricing</a></p>
         </div>
-        <div class="licence-forgot-section">
+        <div class="licence-forgot-section" id="licence-forgot-section">
           <p class="licence-hint" style="margin-bottom:0.4rem;">Forgotten your licence key? Enter your email and we&apos;ll send it to you.</p>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
             <input type="email" id="licence-overlay-forgot-email" placeholder="you@example.com" style="padding:0.35rem 0.5rem;font-size:0.85rem;border:1px solid rgba(255,255,255,0.2);border-radius:4px;min-width:180px;background:rgba(255,255,255,0.08);color:#fff;">

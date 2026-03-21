@@ -1465,10 +1465,11 @@ async function fetchManagedCloudCredentials() {
     return _managedCloudCreds;
   }
   const data = readLicenceData();
-  if (!data || !data.key) return null;
+  if (!data || (!data.key && !data.authToken)) return null;
   const apiUrl = getManagedCloudApiUrl();
   try {
-    const resp = await httpPost(`${apiUrl}/api/backup/credentials`, { key: data.key });
+    const authHeaders = _getAuthHeaders();
+    const resp = await httpPost(`${apiUrl}/api/backup/credentials`, { key: data.key }, { headers: authHeaders });
     if (resp.error) {
       _lastManagedCloudError = resp.error;
       return null;
@@ -1487,15 +1488,15 @@ async function fetchManagedCloudCredentials() {
 async function checkCloudBackupEntitlement() {
   const data = readLicenceData();
   const isTrial = !!(data && data.isTrial);
-  if (!data || !data.key) {
+  const hasAuth = !!(data && data.authToken);
+  if (!data || (!data.key && !hasAuth)) {
     _cloudBackupEnabled = false;
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, isTrial: false });
     }
     return;
   }
-  if (isTrial) {
-    // Trial keys never have cloud backup; skip network call
+  if (isTrial && !hasAuth) {
     _cloudBackupEnabled = false;
     console.info('[CloudBackup] Skipping entitlement check — trial licence active. Cloud backup not included.');
     if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1513,11 +1514,12 @@ async function checkCloudBackupEntitlement() {
     return;
   }
   try {
+    const authHeaders = _getAuthHeaders();
     const resp = await httpPost(`${apiUrl}/api/licence/validate`, {
       key: data.key,
       machineId: getMachineId(),
       appVersion: app.getVersion() || '0.0.0',
-    });
+    }, { headers: authHeaders });
     _cloudBackupEnabled = !!(resp && resp.cloudBackup);
     console.info('[CloudBackup] Entitlement result: cloudBackup=' + _cloudBackupEnabled + ' valid=' + !!(resp && resp.valid));
     if (resp && resp.expiresAt) data.expiresAt = resp.expiresAt;
@@ -3431,11 +3433,20 @@ function httpPost(url, body, opts) {
   });
 }
 
+function _getAuthHeaders() {
+  const data = readLicenceData();
+  if (data && data.authToken) {
+    return { Authorization: 'Bearer ' + data.authToken };
+  }
+  return {};
+}
+
 async function validateLicenceOnline(key, machineId) {
   const url = getLicenceValidationUrl();
   if (!url) return { valid: true, offline: true };
   try {
-    const resp = await httpPost(url, { key, machineId, appVersion: app.getVersion() || '0.0.0' });
+    const authHeaders = _getAuthHeaders();
+    const resp = await httpPost(url, { key, machineId, appVersion: app.getVersion() || '0.0.0' }, { headers: authHeaders });
     return {
       valid: !!resp.valid,
       expiresAt: resp.expiresAt || null,
@@ -3445,6 +3456,7 @@ async function validateLicenceOnline(key, machineId) {
       offline: false,
       serverStatus: resp.status || null,
       entitlements: resp.entitlements || null,
+      cloudBackup: !!resp.cloudBackup,
     };
   } catch (e) {
     return { valid: null, offline: true, message: 'Could not reach validation server: ' + e.message, serverStatus: null };
@@ -3602,6 +3614,113 @@ ipcMain.handle('licence:deactivate-machine', async () => {
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Failed to deactivate' };
   }
+});
+
+/* ═══════════════════════════════════════════════
+   ACCOUNT-BASED AUTH (email + password sign-in)
+   ═══════════════════════════════════════════════ */
+
+ipcMain.handle('auth:login', async (_, { email, password }) => {
+  if (!email || !password) return { success: false, error: 'Email and password are required' };
+  const apiUrl = getManagedCloudApiUrl();
+  try {
+    const resp = await httpPost(`${apiUrl}/api/auth/login`, { email: email.trim(), password });
+    if (resp.error) return { success: false, error: resp.error };
+    if (!resp.accessToken) return { success: false, error: 'Login failed — no token returned' };
+
+    const machineId = getMachineId();
+    const now = new Date().toISOString();
+    let data = readLicenceData() || {};
+    data.authToken = resp.accessToken;
+    data.refreshToken = resp.refreshToken || null;
+    data.email = resp.user?.email || email.trim();
+    data.accountId = resp.user?.id || null;
+    data.lastValidated = now;
+    data.activatedAt = data.activatedAt || now;
+    data.machineId = machineId;
+    data.status = 'active';
+    data.isTrial = false;
+
+    if (resp.subscription) {
+      data.expiresAt = resp.subscription.expiresAt || data.expiresAt || null;
+      data.cloudBackupEntitled = !!resp.subscription.cloudBackup;
+    }
+
+    if (!data.key) data.key = 'ACCOUNT-' + (resp.user?.id || '').slice(0, 16).toUpperCase();
+    writeLicenceData(data);
+
+    checkCloudBackupEntitlement().catch(() => {});
+
+    return {
+      success: true,
+      user: resp.user,
+      subscription: resp.subscription,
+      status: computeLicenceStatus(data),
+    };
+  } catch (e) {
+    return { success: false, error: e && e.message ? e.message : 'Login failed' };
+  }
+});
+
+ipcMain.handle('auth:register', async (_, { email, password, name }) => {
+  if (!email || !password) return { success: false, error: 'Email and password are required' };
+  const apiUrl = getManagedCloudApiUrl();
+  try {
+    const resp = await httpPost(`${apiUrl}/api/auth/register`, { email: email.trim(), password, name: name || '' });
+    if (resp.error) return { success: false, error: resp.error };
+    if (!resp.accessToken) return { success: false, error: 'Registration failed — no token returned' };
+
+    const machineId = getMachineId();
+    const now = new Date().toISOString();
+    let data = readLicenceData() || {};
+    data.authToken = resp.accessToken;
+    data.refreshToken = resp.refreshToken || null;
+    data.email = resp.user?.email || email.trim();
+    data.accountId = resp.user?.id || null;
+    data.lastValidated = now;
+    data.activatedAt = now;
+    data.machineId = machineId;
+    data.status = 'active';
+    data.isTrial = false;
+    if (!data.key) data.key = 'ACCOUNT-' + (resp.user?.id || '').slice(0, 16).toUpperCase();
+    writeLicenceData(data);
+
+    return {
+      success: true,
+      user: resp.user,
+      status: computeLicenceStatus(data),
+    };
+  } catch (e) {
+    return { success: false, error: e && e.message ? e.message : 'Registration failed' };
+  }
+});
+
+ipcMain.handle('auth:refresh', async () => {
+  const data = readLicenceData();
+  if (!data || !data.refreshToken) return { success: false, error: 'No refresh token' };
+  const apiUrl = getManagedCloudApiUrl();
+  try {
+    const resp = await httpPost(`${apiUrl}/api/auth/refresh`, { refreshToken: data.refreshToken });
+    if (resp.error) return { success: false, error: resp.error };
+    if (resp.accessToken) {
+      data.authToken = resp.accessToken;
+      if (resp.refreshToken) data.refreshToken = resp.refreshToken;
+      writeLicenceData(data);
+      return { success: true };
+    }
+    return { success: false, error: 'Refresh failed' };
+  } catch (e) {
+    return { success: false, error: e && e.message ? e.message : 'Token refresh failed' };
+  }
+});
+
+ipcMain.handle('auth:status', () => {
+  const data = readLicenceData();
+  return {
+    loggedIn: !!(data && data.authToken),
+    email: data?.email || null,
+    accountId: data?.accountId || null,
+  };
 });
 
 /* ═══════════════════════════════════════════════
@@ -4594,10 +4713,11 @@ ipcMain.handle('cloud-backup-subscribe', async () => {
 
 ipcMain.handle('cloud-backup-list', async () => {
   const data = readLicenceData();
-  if (!data || !data.key) return { backups: [], error: 'No licence key' };
+  if (!data || (!data.key && !data.authToken)) return { backups: [], error: 'No licence key' };
   const apiUrl = getManagedCloudApiUrl();
   try {
-    const resp = await httpPost(`${apiUrl}/api/backup/list`, { key: data.key });
+    const authHeaders = _getAuthHeaders();
+    const resp = await httpPost(`${apiUrl}/api/backup/list`, { key: data.key }, { headers: authHeaders });
     return resp;
   } catch (e) {
     return { backups: [], error: e && e.message ? e.message : 'Failed to list backups' };

@@ -82,6 +82,11 @@ contextBridge.exposeInMainWorld('api', {
   /* LAA Official PDF forms */
   laaGenerateOfficialPdf: (params) => ipcRenderer.invoke('laa-generate-official-pdf', params),
   laaOpenOfficialTemplate: (formType) => ipcRenderer.invoke('laa-open-official-template', formType),
+  /* Auth (account-based sign-in) */
+  authLogin: (params) => ipcRenderer.invoke('auth:login', params),
+  authRegister: (params) => ipcRenderer.invoke('auth:register', params),
+  authRefresh: () => ipcRenderer.invoke('auth:refresh'),
+  authStatus: () => ipcRenderer.invoke('auth:status'),
   /* Licence */
   licenceStatus: () => ipcRenderer.invoke('licence:status'),
   licenceActivate: (params) => ipcRenderer.invoke('licence:activate', params),

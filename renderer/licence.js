@@ -76,45 +76,153 @@
 
   var _licenceUIInited = false;
   function initLicenceUI() {
-    var activateBtn = document.getElementById('licence-activate-btn');
-    if (!activateBtn) return;
     if (_licenceUIInited) return;
     _licenceUIInited = true;
-    activateBtn.addEventListener('click', function () {
-      var keyInput = document.getElementById('licence-key-input');
-      var emailInput = document.getElementById('licence-email-input');
-      var rawKey = keyInput ? keyInput.value : '';
-      var key = (typeof rawKey === 'string' ? rawKey : '').replace(/\s/g, '').trim().toUpperCase();
-      var email = (emailInput ? emailInput.value : '').trim();
-      if (!key) { showError('Please enter a licence key.'); return; }
-      activateBtn.disabled = true;
-      activateBtn.textContent = 'Activating...';
-      window.api.licenceActivate({ key: key, email: email }).then(function (result) {
-        activateBtn.disabled = false;
-        activateBtn.textContent = 'Activate';
-        if (result && result.success) {
-          hideOverlay();
-          if (_warningBanner) _warningBanner.remove();
-          markReady();
-          startRevalidation();
-          document.dispatchEvent(new CustomEvent('licence-activated'));
-        } else {
-          showError(result && result.message ? result.message : 'Activation failed. Check your key and try again.');
-        }
-      }).catch(function (e) {
-        activateBtn.disabled = false;
-        activateBtn.textContent = 'Activate';
-        showError('Error: ' + (e && e.message ? e.message : 'Unknown error'));
-      });
+
+    // ── Tab switching ──
+    var tabSignin = document.getElementById('licence-tab-signin');
+    var tabKey = document.getElementById('licence-tab-key');
+    var signinForm = document.getElementById('licence-signin-form');
+    var registerForm = document.getElementById('licence-register-form');
+    var keyForm = document.getElementById('licence-form');
+    var forgotSection = document.getElementById('licence-forgot-section');
+
+    function switchTab(tab) {
+      if (tab === 'signin') {
+        if (tabSignin) { tabSignin.style.color = '#fff'; tabSignin.style.borderBottomColor = '#3b82f6'; }
+        if (tabKey) { tabKey.style.color = 'rgba(255,255,255,0.5)'; tabKey.style.borderBottomColor = 'transparent'; }
+        if (signinForm) signinForm.style.display = '';
+        if (registerForm) registerForm.style.display = 'none';
+        if (keyForm) keyForm.style.display = 'none';
+        if (forgotSection) forgotSection.style.display = 'none';
+      } else {
+        if (tabKey) { tabKey.style.color = '#fff'; tabKey.style.borderBottomColor = '#3b82f6'; }
+        if (tabSignin) { tabSignin.style.color = 'rgba(255,255,255,0.5)'; tabSignin.style.borderBottomColor = 'transparent'; }
+        if (signinForm) signinForm.style.display = 'none';
+        if (registerForm) registerForm.style.display = 'none';
+        if (keyForm) keyForm.style.display = '';
+        if (forgotSection) forgotSection.style.display = '';
+      }
+    }
+
+    if (tabSignin) tabSignin.addEventListener('click', function () { switchTab('signin'); });
+    if (tabKey) tabKey.addEventListener('click', function () { switchTab('key'); });
+
+    // ── Sign-in / register toggle ──
+    var toggleRegister = document.getElementById('signin-toggle-register');
+    var toggleSignin = document.getElementById('register-toggle-signin');
+    if (toggleRegister) toggleRegister.addEventListener('click', function () {
+      if (signinForm) signinForm.style.display = 'none';
+      if (registerForm) registerForm.style.display = '';
     });
-    var keyInput = document.getElementById('licence-key-input');
-    if (keyInput) {
-      keyInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          activateBtn.click();
-        }
+    if (toggleSignin) toggleSignin.addEventListener('click', function () {
+      if (registerForm) registerForm.style.display = 'none';
+      if (signinForm) signinForm.style.display = '';
+    });
+
+    // ── Sign-in handler ──
+    var signinBtn = document.getElementById('signin-btn');
+    var signinErr = document.getElementById('signin-error');
+    if (signinBtn) {
+      signinBtn.addEventListener('click', function () {
+        var email = (document.getElementById('signin-email')?.value || '').trim();
+        var password = document.getElementById('signin-password')?.value || '';
+        if (!email || !password) { if (signinErr) { signinErr.textContent = 'Enter email and password.'; signinErr.style.display = ''; } return; }
+        signinBtn.disabled = true;
+        signinBtn.textContent = 'Signing in\u2026';
+        if (signinErr) signinErr.style.display = 'none';
+        window.api.authLogin({ email: email, password: password }).then(function (r) {
+          signinBtn.disabled = false;
+          signinBtn.textContent = 'Sign In';
+          if (r && r.success) {
+            hideOverlay();
+            if (_warningBanner) _warningBanner.remove();
+            markReady();
+            startRevalidation();
+            document.dispatchEvent(new CustomEvent('licence-activated'));
+          } else {
+            if (signinErr) { signinErr.textContent = r?.error || 'Login failed.'; signinErr.style.display = ''; }
+          }
+        }).catch(function (e) {
+          signinBtn.disabled = false;
+          signinBtn.textContent = 'Sign In';
+          if (signinErr) { signinErr.textContent = e?.message || 'Login error.'; signinErr.style.display = ''; }
+        });
       });
+      var signinPw = document.getElementById('signin-password');
+      if (signinPw) signinPw.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); signinBtn.click(); } });
+    }
+
+    // ── Register handler ──
+    var registerBtn = document.getElementById('register-btn');
+    var registerErr = document.getElementById('register-error');
+    if (registerBtn) {
+      registerBtn.addEventListener('click', function () {
+        var name = (document.getElementById('register-name')?.value || '').trim();
+        var email = (document.getElementById('register-email')?.value || '').trim();
+        var password = document.getElementById('register-password')?.value || '';
+        if (!email || !password) { if (registerErr) { registerErr.textContent = 'Enter email and password.'; registerErr.style.display = ''; } return; }
+        registerBtn.disabled = true;
+        registerBtn.textContent = 'Creating account\u2026';
+        if (registerErr) registerErr.style.display = 'none';
+        window.api.authRegister({ email: email, password: password, name: name }).then(function (r) {
+          registerBtn.disabled = false;
+          registerBtn.textContent = 'Create Account';
+          if (r && r.success) {
+            hideOverlay();
+            if (_warningBanner) _warningBanner.remove();
+            markReady();
+            startRevalidation();
+            document.dispatchEvent(new CustomEvent('licence-activated'));
+          } else {
+            if (registerErr) { registerErr.textContent = r?.error || 'Registration failed.'; registerErr.style.display = ''; }
+          }
+        }).catch(function (e) {
+          registerBtn.disabled = false;
+          registerBtn.textContent = 'Create Account';
+          if (registerErr) { registerErr.textContent = e?.message || 'Registration error.'; registerErr.style.display = ''; }
+        });
+      });
+      var registerPw = document.getElementById('register-password');
+      if (registerPw) registerPw.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); registerBtn.click(); } });
+    }
+
+    // ── Legacy licence key handler ──
+    var activateBtn = document.getElementById('licence-activate-btn');
+    if (activateBtn) {
+      activateBtn.addEventListener('click', function () {
+        var keyInput = document.getElementById('licence-key-input');
+        var emailInput = document.getElementById('licence-email-input');
+        var rawKey = keyInput ? keyInput.value : '';
+        var key = (typeof rawKey === 'string' ? rawKey : '').replace(/\s/g, '').trim().toUpperCase();
+        var email = (emailInput ? emailInput.value : '').trim();
+        if (!key) { showError('Please enter a licence key.'); return; }
+        activateBtn.disabled = true;
+        activateBtn.textContent = 'Activating...';
+        window.api.licenceActivate({ key: key, email: email }).then(function (result) {
+          activateBtn.disabled = false;
+          activateBtn.textContent = 'Activate';
+          if (result && result.success) {
+            hideOverlay();
+            if (_warningBanner) _warningBanner.remove();
+            markReady();
+            startRevalidation();
+            document.dispatchEvent(new CustomEvent('licence-activated'));
+          } else {
+            showError(result && result.message ? result.message : 'Activation failed. Check your key and try again.');
+          }
+        }).catch(function (e) {
+          activateBtn.disabled = false;
+          activateBtn.textContent = 'Activate';
+          showError('Error: ' + (e && e.message ? e.message : 'Unknown error'));
+        });
+      });
+      var keyInput = document.getElementById('licence-key-input');
+      if (keyInput) {
+        keyInput.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') { e.preventDefault(); activateBtn.click(); }
+        });
+      }
     }
   }
   window.initLicenceUI = initLicenceUI;
