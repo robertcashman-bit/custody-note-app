@@ -228,6 +228,16 @@
   window.initLicenceUI = initLicenceUI;
   window.showLicenceOverlay = showOverlay;
 
+  window.openLicenceOverlaySignIn = function () {
+    showOverlay({
+      title: 'Activate Custody Note',
+      message: 'Sign in with your custodynote.com account, or open the Licence Key tab.',
+    });
+    var tab = document.getElementById('licence-tab-signin');
+    if (tab) tab.click();
+    initLicenceUI();
+  };
+
   (function initForgotKeyOverlay() {
     var btn = document.getElementById('licence-overlay-forgot-btn');
     var emailInput = document.getElementById('licence-overlay-forgot-email');

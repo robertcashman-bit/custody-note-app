@@ -4249,7 +4249,13 @@ var REQUIRED_FIELD_KEYS = [
       if (st && st.key && (st.status === 'active' || st.status === 'expiring_soon')) {
         noneEl.style.display = 'none';
         activeEl.style.display = '';
-        if (obscuredEl) obscuredEl.textContent = maskLicenceKey(st.key);
+        if (obscuredEl) {
+          if (st.signInWithAccount && st.accountEmail && st.syntheticLicenceKey) {
+            obscuredEl.textContent = 'Signed in — ' + st.accountEmail;
+          } else {
+            obscuredEl.textContent = maskLicenceKey(st.key);
+          }
+        }
         if (typeBadge) {
           if (st.isTrial) {
             typeBadge.textContent = 'TRIAL';
@@ -13168,6 +13174,15 @@ PDF_CASENOTE_ADVERT +
         resultEl.style.color = '#dc2626';
       });
     });
+    document.getElementById('btn-settings-open-signin')?.addEventListener('click', function() {
+      if (typeof window.openLicenceOverlaySignIn === 'function') {
+        window.openLicenceOverlaySignIn();
+      } else if (window.showLicenceOverlay) {
+        window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Sign in with your account or use the Licence Key tab.' });
+        document.getElementById('licence-tab-signin')?.click();
+        if (window.initLicenceUI) window.initLicenceUI();
+      }
+    });
     document.getElementById('btn-licence-activate-settings')?.addEventListener('click', function() {
       var keyInput = document.getElementById('setting-licence-key');
       var errEl = document.getElementById('licence-activate-error');
@@ -13551,7 +13566,7 @@ PDF_CASENOTE_ADVERT +
             } else if (data && data.lastError) {
               reasonEl.textContent = 'Cloud backup verification failed: ' + data.lastError + '. Check your internet connection and try again.';
             } else {
-              reasonEl.innerHTML = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> then enter your licence key in Settings \u203a Licence.';
+              reasonEl.innerHTML = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com</a>, then sign in or enter your licence key in Settings \u203a Licence.';
             }
           }
           var cloudSt2 = document.getElementById('backup-dest-cloud-status');

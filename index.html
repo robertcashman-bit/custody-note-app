@@ -854,7 +854,8 @@
           </div>
 
           <div id="licence-status-none" style="display:none;margin-top:1rem;">
-            <p class="settings-hint" style="margin:0 0 0.75rem 0;">Enter your licence key to activate.</p>
+            <p class="settings-hint" style="margin:0 0 0.75rem 0;">Sign in with your custodynote.com account, or enter your Custody Note licence key (CN-…).</p>
+            <button type="button" id="btn-settings-open-signin" class="btn btn-secondary" style="margin-bottom:0.75rem;">Sign in with email</button>
             <label for="setting-licence-key">Licence key</label>
             <input type="text" id="setting-licence-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="max-width:320px;">
             <p class="settings-hint" style="margin:0.25rem 0 0 0;font-size:0.8rem;">Hyphens and spaces are optional; key is normalised to uppercase.</p>
@@ -1121,7 +1122,7 @@
             <div id="cloud-backup-not-subscribed" style="display:none;">
               <div style="background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #f59e0b;border-radius:8px;padding:1rem;margin-bottom:0.5rem;">
                 <p style="margin:0 0 0.5rem 0;font-weight:600;color:#92400e;">&#9888; Cloud backup not active</p>
-                <p id="cloud-backup-unavailable-reason" style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#78350f;">Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> then enter your licence key in Settings &rsaquo; Licence.</p>
+                <p id="cloud-backup-unavailable-reason" style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#78350f;">Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com</a>, then sign in or enter your licence key under Settings &rsaquo; Licence.</p>
                 <button type="button" id="btn-cloud-backup-subscribe" class="btn btn-primary" style="margin-top:0.25rem;">Verify subscription</button>
               </div>
             </div>

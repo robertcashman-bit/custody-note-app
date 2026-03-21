@@ -33,10 +33,7 @@ const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
 
-// Antivirus HTTPS scanning (e.g. Avast, AVG, Kaspersky) injects its own CA into the
-// certificate chain, causing "self signed certificate in certificate chain" errors in
-// Node.js (which bundles its own CA list). Use a permissive agent for our own API only.
-const _trustedApiAgent = new https.Agent({ rejectUnauthorized: false });
+const _trustedApiAgent = new https.Agent();
 
 const { URL } = require('url');
 const initSqlJs = require('sql.js');
@@ -324,7 +321,7 @@ async function uploadKeyEscrow() {
       key: data.key,
       machineId: getMachineId(),
       blob,
-    });
+    }, { headers: _getAuthHeaders() });
     if (resp && resp.ok) {
       console.info('[Recovery] Key escrow uploaded to cloud.');
       return true;
@@ -3531,6 +3528,11 @@ ipcMain.handle('licence:status', () => {
   }
   const result = computeLicenceStatus(data);
   result.enforced = enforced;
+  if (data && data.authToken) {
+    result.signInWithAccount = true;
+    result.accountEmail = data.email || '';
+    result.syntheticLicenceKey = !!(data.key && String(data.key).toUpperCase().startsWith('ACCOUNT-'));
+  }
   return result;
 });
 
@@ -3558,9 +3560,9 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
 
 ipcMain.handle('licence:validate', async () => {
   const data = readLicenceData();
-  if (!data || !data.key) return { valid: false, status: { status: 'none' } };
+  if (!data || (!data.key && !data.authToken)) return { valid: false, status: { status: 'none' } };
   const machineId = getMachineId();
-  const result = await validateLicenceOnline(data.key, machineId);
+  const result = await validateLicenceOnline(String(data.key || ''), machineId);
   if (result.valid === true) {
     data.lastValidated = new Date().toISOString();
     if (result.expiresAt) data.expiresAt = result.expiresAt;
@@ -3592,7 +3594,7 @@ ipcMain.handle('licence:email-key', async () => {
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return { ok: false, error: 'Cannot reach licence server' };
   try {
-    const resp = await httpPost(`${apiUrl}/api/licence/email-key`, { key: data.key });
+    const resp = await httpPost(`${apiUrl}/api/licence/email-key`, { key: data.key }, { headers: _getAuthHeaders() });
     if (resp.error) return { ok: false, error: resp.error };
     return { ok: true };
   } catch (e) {
@@ -3607,7 +3609,7 @@ ipcMain.handle('licence:deactivate-machine', async () => {
   if (!apiUrl) return { ok: false, error: 'Cannot reach licence server' };
   const machineId = getMachineId();
   try {
-    const resp = await httpPost(`${apiUrl}/api/licence/deactivate-machine`, { key: data.key, machineId });
+    const resp = await httpPost(`${apiUrl}/api/licence/deactivate-machine`, { key: data.key, machineId }, { headers: _getAuthHeaders() });
     if (resp.error) return { ok: false, error: resp.error };
     deleteLicenceData();
     return { ok: true, message: resp.message };
@@ -5048,7 +5050,7 @@ ipcMain.handle('recover-key-from-cloud', async () => {
     const resp = await httpPost(`${apiUrl}/api/recovery`, {
       key: data.key,
       machineId: getMachineId(),
-    });
+    }, { headers: _getAuthHeaders() });
     if (!resp || !resp.ok) return { ok: false, error: resp && resp.error ? resp.error : 'Failed' };
     if (!resp.blob) return { ok: false, error: 'No cloud recovery data found. Set a recovery password on a device that has your data.' };
     const masterKeyHex = decryptMasterKeyFromEscrow(resp.blob, data.key);
