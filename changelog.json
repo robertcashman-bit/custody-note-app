@@ -15,6 +15,65 @@
       ]
     },
     {
+      "version": "1.4.122",
+      "date": "2026-03-21",
+      "changes": [
+        "Fix postcode source-code tests for proxy-first lookup"
+      ]
+    },
+    {
+      "version": "1.4.121",
+      "date": "2026-03-21",
+      "changes": [
+        "Zero-friction UX redesign: licence key activation, simplified wizard, settings collapse, non-blocking expiry"
+      ]
+    },
+    {
+      "version": "1.4.120",
+      "date": "2026-03-21",
+      "changes": [
+        "Fix input visibility on email and code fields"
+      ]
+    },
+    {
+      "version": "1.4.119",
+      "date": "2026-03-21",
+      "changes": [
+        "Simpler sign-in: just enter your email and verify with a 6-digit code — no password or registration needed"
+      ]
+    },
+    {
+      "version": "1.4.118",
+      "date": "2026-03-21",
+      "changes": [
+        "Fix auto-update: releases now publish immediately instead of as drafts"
+      ]
+    },
+    {
+      "version": "1.4.117",
+      "date": "2026-03-21",
+      "changes": [
+        "Licence overlay visibility: brighter text, visible box border, password input styling, improved contrast across all overlay elements"
+      ]
+    },
+    {
+      "version": "1.4.116",
+      "date": "2026-03-21",
+      "changes": [
+        "Improve sign-in form input visibility (higher contrast background and border)"
+      ]
+    },
+    {
+      "version": "1.4.115",
+      "date": "2026-03-21",
+      "changes": [
+        "Security: re-enable TLS certificate validation for API connections",
+        "Security: send Bearer auth headers on recovery, licence, and deactivation API calls",
+        "Account sign-in UI: settings licence section shows signed-in email instead of synthetic key",
+        "Cloud backup links updated to custodynote.com/pricing"
+      ]
+    },
+    {
       "version": "1.4.114",
       "date": "2026-03-21",
       "changes": [
