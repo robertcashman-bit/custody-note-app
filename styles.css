@@ -3936,6 +3936,7 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
   background: var(--card-bg, #1e293b); border-radius: 1rem;
   padding: 2.5rem 2.5rem 2rem; max-width: 440px; width: 90%;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.12);
   text-align: center;
 }
 .licence-logo { margin-bottom: 1.25rem; }
@@ -3944,23 +3945,25 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
   margin: 0 0 0.5rem; font-weight: 700;
 }
 .licence-message {
-  color: var(--text-secondary, #94a3b8); font-size: 0.92rem;
+  color: var(--text-secondary, #cbd5e1); font-size: 0.92rem;
   margin: 0 0 1.5rem; line-height: 1.5;
 }
 .licence-box label {
   display: block; text-align: left; font-size: 0.85rem;
-  font-weight: 600; color: var(--text-secondary, #94a3b8);
+  font-weight: 600; color: var(--text-secondary, #cbd5e1);
   margin-bottom: 0.3rem;
 }
 .licence-box input[type="text"],
-.licence-box input[type="email"] {
+.licence-box input[type="email"],
+.licence-box input[type="password"] {
   width: 100%; padding: 0.65rem 0.8rem; border-radius: 0.5rem;
   border: 1.5px solid var(--border, #334155); background: var(--bg, #0f172a);
   color: var(--text-primary, #e2e8f0); font-size: 1rem;
   font-family: 'Consolas', 'Menlo', monospace; letter-spacing: 0.05em;
   box-sizing: border-box;
 }
-.licence-box input[type="email"] {
+.licence-box input[type="email"],
+.licence-box input[type="password"] {
   font-family: inherit; letter-spacing: normal;
 }
 .licence-box input:focus {
@@ -3978,12 +3981,12 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
   width: 100%; padding: 0.75rem; font-size: 1rem; font-weight: 600;
 }
 .licence-hint {
-  color: var(--text-secondary, #94a3b8); font-size: 0.82rem;
+  color: var(--text-secondary, #cbd5e1); font-size: 0.82rem;
   margin: 1.25rem 0 0; line-height: 1.5;
 }
 .licence-forgot-section {
   margin-top: 1.25rem; padding-top: 1rem;
-  border-top: 1px solid rgba(255,255,255,0.08);
+  border-top: 1px solid rgba(255,255,255,0.15);
   text-align: left;
 }
 .licence-link {
@@ -3991,8 +3994,8 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
 }
 .licence-link:hover { color: #60a5fa; }
 .licence-footer-text {
-  color: var(--text-secondary, #475569); font-size: 0.75rem;
-  margin: 1.5rem 0 0; opacity: 0.7;
+  color: var(--text-secondary, #94a3b8); font-size: 0.75rem;
+  margin: 1.5rem 0 0;
 }
 
 /* ═══ EMAIL OIC MODAL ═══ */
