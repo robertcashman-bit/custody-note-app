@@ -4065,7 +4065,7 @@ var REQUIRED_FIELD_KEYS = [
       showAutoSaveIndicator();
       var savedEl = document.getElementById('form-last-saved');
       if (savedEl) savedEl.textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }).finally(() => {
+    }).catch(function(e) { console.error('[quietSave]', e); }).finally(() => {
       _draftSaveInFlight = false;
       if (_draftSaveQueued && !_finalising && currentRecordStatus !== 'finalised') {
         _draftSaveQueued = false;
@@ -4610,7 +4610,7 @@ var REQUIRED_FIELD_KEYS = [
         vatRate: parseFloat(s.billingVatRate) || 0.20,
       };
       showToast('Settings saved', 'success');
-    });
+    }).catch(function(e) { showToast('Failed to save settings', 'error'); console.error('[saveSettings]', e); });
   }
 
   function loadFirmsList() {
@@ -4801,8 +4801,7 @@ var REQUIRED_FIELD_KEYS = [
       document.getElementById('new-firm-phone').value = '';
       document.getElementById('new-firm-email').value = '';
       loadFirmsList();
-      window.api.firmsList().then(f => { firms = f; });
-    });
+    }).catch(function(e) { showToast('Failed to add firm', 'error'); console.error('[addFirm]', e); });
   }
 
   function formatQuickFileImportTimestamp(value) {
@@ -5131,7 +5130,7 @@ var REQUIRED_FIELD_KEYS = [
     const ul = document.getElementById('attendance-list');
     if (!ul || !window.api) return;
     setupListDelegation();
-    window.api.attendanceListFull().then(rows => {
+    window.api.attendanceListFull().then(function(rows) {
       var parsedCache = {};
       function getParsed(r) {
         if (!parsedCache[r.id]) parsedCache[r.id] = safeJson(r.data);
@@ -5228,7 +5227,7 @@ var REQUIRED_FIELD_KEYS = [
       });
       ul.appendChild(frag);
       renderListPagination(filtered.length);
-    });
+    }).catch(function(e) { showToast('Failed to refresh list', 'error'); console.error('[refreshList]', e); });
   }
 
   function renderListPagination(total) {
@@ -5249,7 +5248,7 @@ var REQUIRED_FIELD_KEYS = [
         if (!ok) return;
         window.api.attendanceSave({ id: id, data: null, status: 'draft', unlock: true }).then(function() {
           openAttendance(id);
-        });
+        }).catch(function(e) { showToast('Failed to re-open record', 'error'); console.error('[amendAttendance]', e); });
       });
     } else {
       openAttendance(id);
@@ -5325,10 +5324,11 @@ var REQUIRED_FIELD_KEYS = [
     showConfirm('Delete "' + title + '"?\n\nThis record will be removed from the active list. It can only be recovered from a database backup.', 'Confirm Delete').then(function(ok) {
       if (!ok) return;
       window.api.attendanceDelete({ id: id, reason: 'User deleted from list' }).then(function(result) {
-        if (result && result.soft) showToast('Record moved out of the active list', 'info');
-        else showToast('Delete failed', 'error');
+        if (result && result.error) showToast('Delete failed: ' + result.error, 'error');
+        else if (result && result.soft) showToast('Record moved out of the active list', 'info');
+        else showToast('Record deleted', 'info');
         refreshList();
-      });
+      }).catch(function(e) { showToast('Delete failed', 'error'); console.error('[deleteAttendance]', e); });
     });
   }
 
@@ -5378,7 +5378,7 @@ var REQUIRED_FIELD_KEYS = [
         renderForm(formData);
         showView('new');
       }, 200);
-    });
+    }).catch(function(e) { showToast('Failed to load record', 'error'); console.error('[duplicateAttendance]', e); });
   }
 
   /* ─── NEW MATTER (SAME CLIENT) ─── Copy only client personal details; new file number on save */
@@ -5405,7 +5405,7 @@ var REQUIRED_FIELD_KEYS = [
         renderForm(formData);
         showView('new');
       }, 200);
-    });
+    }).catch(function(e) { showToast('Failed to load record', 'error'); console.error('[newMatter]', e); });
   }
 
   function openAttendance(id) {
@@ -5513,23 +5513,24 @@ var REQUIRED_FIELD_KEYS = [
       if (!ok) return;
       src._convertedToAttendance = true;
       src.outcomeDecision = 'Attendance now required';
-      formData = src;
-      quietSave();
-      var newData = {};
-      sharedKeys.forEach(function(k) { if (src[k]) newData[k] = src[k]; });
-      newData._formType = 'attendance';
-      newData.attendanceMode = 'custody';
-      newData.workType = 'First Police Station Attendance';
-      newData._convertedFromTelephone = true;
-      newData._sourceUfn = src.ufn || '';
-      formData = newData;
-      currentAttendanceId = null;
-      currentSectionIdx = 0;
-      activeFormSections = formSections;
-      prefillDefaults();
-      renderForm(formData);
-      showView('new');
-      showToast('Converted to attendance \u2013 telephone record saved', 'success');
+      var saveId = currentAttendanceId;
+      window.api.attendanceSave({ id: saveId, data: src, status: 'draft' }).then(function() {
+        var newData = {};
+        sharedKeys.forEach(function(k) { if (src[k]) newData[k] = src[k]; });
+        newData._formType = 'attendance';
+        newData.attendanceMode = 'custody';
+        newData.workType = 'First Police Station Attendance';
+        newData._convertedFromTelephone = true;
+        newData._sourceUfn = src.ufn || '';
+        formData = newData;
+        currentAttendanceId = null;
+        currentSectionIdx = 0;
+        activeFormSections = formSections;
+        prefillDefaults();
+        renderForm(formData);
+        showView('new');
+        showToast('Converted to attendance \u2013 telephone record saved', 'success');
+      }).catch(function(e) { showToast('Failed to save telephone record before converting', 'error'); console.error('[convertTel]', e); });
     });
   }
 
@@ -9555,7 +9556,7 @@ var REQUIRED_FIELD_KEYS = [
           showConfirm('ESCAPE CASE – Total costs exceed £' + (LAA.escapeThreshold || 650) + '. Submit CRM18 to claim at hourly rates.\n\nContinue to finalise?').then(function(ok) {
             if (ok) saveForm('finalised');
             else { _finalising = false; startAutoSave(); }
-          }).catch(function() { _finalising = false; startAutoSave(); });
+          }).catch(function() { _finalising = false; startAutoSave(); showToast('Finalise interrupted — please try again', 'warning'); });
         } else {
           saveForm('finalised');
         }
@@ -9580,7 +9581,7 @@ var REQUIRED_FIELD_KEYS = [
               '\n\nFinalise anyway?', 'Duplicate Warning').then(function(ok) {
               if (ok) waitForDraftThenFinalise();
               else { _finalising = false; startAutoSave(); }
-            }).catch(function() { _finalising = false; startAutoSave(); });
+            }).catch(function() { _finalising = false; startAutoSave(); showToast('Finalise interrupted — please try again', 'warning'); });
           } else {
             waitForDraftThenFinalise();
           }
@@ -13124,13 +13125,13 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('setting-show-supervisor-review')?.addEventListener('change', (e) => {
       const val = e.target && e.target.checked ? 'true' : 'false';
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { showSupervisorReview: val });
-      if (window.api) window.api.setSettings({ showSupervisorReview: val }).then(showSettingsSavedToast);
+      if (window.api) window.api.setSettings({ showSupervisorReview: val }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     });
     document.getElementById('setting-backup-browse')?.addEventListener('click', () => {
       window.api.chooseFolder().then(p => {
         if (p) {
           const el = document.getElementById('setting-backup-folder');
-          if (el) { el.value = p; window.api.setSettings({ backupFolder: p }).then(showSettingsSavedToast); }
+          if (el) { el.value = p; window.api.setSettings({ backupFolder: p }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); }); }
         }
       });
     });
@@ -13163,10 +13164,11 @@ PDF_CASENOTE_ADVERT +
       if (!window.api.licenceEmailKey) return;
       var btn = this;
       btn.disabled = true;
-      window.api.licenceEmailKey().then(function(r) {
+      var email = window._appSettingsCache && window._appSettingsCache.email ? window._appSettingsCache.email : undefined;
+      window.api.licenceEmailKey({ email: email }).then(function(r) {
         btn.disabled = false;
         showToast(r.ok ? 'Licence key sent to your email' : (r.error || 'Failed'), r.ok ? 'info' : 'error');
-      });
+      }).catch(function(e) { btn.disabled = false; showToast('Failed to send', 'error'); console.error('[email-key]', e); });
     });
     document.getElementById('btn-licence-deactivate-device')?.addEventListener('click', function() {
       if (!window.api.licenceDeactivateMachine) return;
@@ -14010,7 +14012,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('setting-auto-import-enabled')?.addEventListener('change', function(e) {
       var val = e && e.target && e.target.checked ? 'true' : 'false';
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { autoImportEnabled: val });
-      if (window.api) window.api.setSettings({ autoImportEnabled: val }).then(showSettingsSavedToast);
+      if (window.api) window.api.setSettings({ autoImportEnabled: val }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     });
     document.getElementById('setting-auto-import-browse')?.addEventListener('click', function() {
       window.api.chooseFolder({ title: 'Choose auto-import folder' }).then(function(p) {
@@ -14018,7 +14020,7 @@ PDF_CASENOTE_ADVERT +
           var el = document.getElementById('setting-auto-import-folder');
           if (el) el.value = p;
           window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { autoImportFolder: p });
-          if (window.api) window.api.setSettings({ autoImportFolder: p }).then(showSettingsSavedToast);
+          if (window.api) window.api.setSettings({ autoImportFolder: p }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
         }
       });
     });
@@ -14157,10 +14159,11 @@ PDF_CASENOTE_ADVERT +
           msg.textContent = res && res.message ? res.message : 'If that email exists in our system, your licence code has been sent.';
           msg.style.color = 'var(--success-color,#16a34a)';
           btn.disabled = false;
-        }).catch(function() {
-          msg.textContent = 'If that email exists in our system, your licence code has been sent.';
-          msg.style.color = 'var(--success-color,#16a34a)';
+        }).catch(function(e) {
+          msg.textContent = 'Could not connect. Please try again later.';
+          msg.style.color = '';
           btn.disabled = false;
+          console.error('[requestLicenceEmail]', e);
         });
       });
     })();
@@ -14348,19 +14351,19 @@ PDF_CASENOTE_ADVERT +
       if (el) {
         el.addEventListener('input', debounce((e) => {
           const val = e.target.value.trim();
-          window.api.setSettings({ [key]: val }).then(showSettingsSavedToast);
+          window.api.setSettings({ [key]: val }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
         }, 800));
       }
     });
 
     // Fee earner name — was missing auto-save, so changes were lost on restart
     document.getElementById('setting-fee-earner-name')?.addEventListener('input', debounce((e) => {
-      window.api.setSettings({ feeEarnerNameDefault: e.target.value.trim() }).then(showSettingsSavedToast);
+      window.api.setSettings({ feeEarnerNameDefault: e.target.value.trim() }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     }, 800));
 
     document.getElementById('setting-dark-mode')?.addEventListener('change', (e) => {
       applyDarkMode(e.target.checked);
-      window.api.setSettings({ darkMode: e.target.checked ? 'true' : 'false' }).then(showSettingsSavedToast);
+      window.api.setSettings({ darkMode: e.target.checked ? 'true' : 'false' }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     });
 
     document.getElementById('theme-picker')?.addEventListener('click', (e) => {
@@ -14368,28 +14371,28 @@ PDF_CASENOTE_ADVERT +
       if (!btn) return;
       var theme = btn.getAttribute('data-theme') || 'default';
       applyTheme(theme);
-      window.api.setSettings({ colourTheme: theme }).then(showSettingsSavedToast);
+      window.api.setSettings({ colourTheme: theme }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     });
 
     document.getElementById('setting-font-size')?.addEventListener('input', (e) => {
       const sz = e.target.value;
       applyFontSize(sz);
       document.getElementById('font-size-val').textContent = sz + 'px';
-      window.api.setSettings({ fontSize: sz }).then(showSettingsSavedToast);
+      window.api.setSettings({ fontSize: sz }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     });
 
     document.getElementById('setting-scrollbar-size')?.addEventListener('input', (e) => {
       var sc = e.target.value;
       applyScrollbarSize(sc);
       document.getElementById('scrollbar-size-val').textContent = sc + 'x';
-      window.api.setSettings({ scrollbarScale: sc }).then(showSettingsSavedToast);
+      window.api.setSettings({ scrollbarScale: sc }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     });
 
     document.querySelectorAll('.density-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var density = btn.getAttribute('data-density') || 'default';
         applyDensity(density);
-        window.api.setSettings({ displayDensity: density }).then(showSettingsSavedToast);
+        window.api.setSettings({ displayDensity: density }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
       });
     });
 

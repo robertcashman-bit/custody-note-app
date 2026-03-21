@@ -92,15 +92,7 @@ html.theme-light {
   --card-bg: #ffffff;
   --list-hover: #eff6ff;
   --header-bg: #1e3a8a;
-  --corporate-accent: #2563eb;
-  --drum-bg: linear-gradient(145deg, #e2e8f0, #f1f5f9);
-  --declaration-bg: #fffbeb;
-  --declaration-border: #d97706;
-  --declaration-text: #92400e;
-  --declaration-heading: #b45309;
   --shadow: 0 1px 3px rgba(0,0,0,0.06);
-  --card-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  --card-hover-shadow: 0 4px 16px rgba(0,0,0,0.08);
   --card-shadow: 0 2px 8px rgba(0,0,0,0.06);
   --card-hover-shadow: 0 4px 16px rgba(0,0,0,0.1);
   --drum-bg: linear-gradient(145deg, #f0f4f8, #e2e8f0);
@@ -4631,7 +4623,7 @@ html.hide-home-status #home-status-section {
 /* Video cards hidden until feature is enabled */
 #home-card-video-capture,
 #home-card-video-id {
-  display: none !important;
+  display: none;
 }
 
 /* Collapse stats into a single summary line below Recent Cases */

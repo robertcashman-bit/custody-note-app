@@ -34,7 +34,7 @@ function getServerBaseUrl() {
 function httpPostForgot(baseUrl, email) {
   return new Promise((resolve, reject) => {
     const https = require('https');
-    const url = new URL('/api/licence/forgot-key', baseUrl);
+    const url = new URL('/api/licence/email-key', baseUrl);
     const payload = JSON.stringify({ email: email.trim().toLowerCase() });
     const req = https.request({
       hostname: url.hostname,
@@ -130,9 +130,8 @@ function registerLicenceIpc(app) {
       await httpPostForgot(baseUrl, r.email);
       licenceStore.markSent(id);
     } catch (e) {
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('[Licence] Resend failed:', e.message);
-      }
+      console.warn('[Licence] Resend failed:', e.message);
+      return { success: false, message: 'Failed to send: ' + (e.message || 'network error') };
     }
     return { success: true, message: 'Request sent.' };
   });

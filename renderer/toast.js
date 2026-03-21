@@ -32,16 +32,18 @@
     el.className = 'cn-toast cn-toast-visible cn-toast-' + (item.type || 'info');
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(function () {
-      _toastBusy = false;
       el.className = 'cn-toast';
       setTimeout(function () {
-        if (_toastQueue.length && !_toastBusy) _showNextToast();
+        _toastBusy = false;
+        if (_toastQueue.length) _showNextToast();
       }, 300);
     }, item.duration || 3500);
   }
 
   function showToast(message, type, duration) {
-    _toastQueue.push({ message: message, type: type, duration: duration });
+    if (message == null || message === '') return;
+    if (_toastQueue.length >= 10) _toastQueue.shift();
+    _toastQueue.push({ message: String(message), type: type, duration: duration });
     if (!_toastBusy) _showNextToast();
   }
 
@@ -86,7 +88,10 @@
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
+      function esc(e) { if (e.key === 'Escape') done(false); }
+
       function done(result) {
+        document.removeEventListener('keydown', esc);
         document.body.removeChild(overlay);
         resolve(result);
       }
@@ -94,9 +99,7 @@
       okBtn.addEventListener('click', function () { done(true); });
       cancelBtn.addEventListener('click', function () { done(false); });
       overlay.addEventListener('click', function (e) { if (e.target === overlay) done(false); });
-      document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape') { document.removeEventListener('keydown', esc); done(false); }
-      });
+      document.addEventListener('keydown', esc);
       okBtn.focus();
     });
   }
@@ -153,7 +156,10 @@
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
+      function esc(e) { if (e.key === 'Escape') done(null); }
+
       function done(result) {
+        document.removeEventListener('keydown', esc);
         document.body.removeChild(overlay);
         resolve(result);
       }
@@ -161,9 +167,7 @@
       okBtn.addEventListener('click', function () { done(input.value ? input.value.trim() : ''); });
       cancelBtn.addEventListener('click', function () { done(null); });
       overlay.addEventListener('click', function (e) { if (e.target === overlay) done(null); });
-      document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape') { document.removeEventListener('keydown', esc); done(null); }
-      });
+      document.addEventListener('keydown', esc);
       input.focus();
     });
   }
@@ -198,16 +202,17 @@
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
+      function esc(e) { if (e.key === 'Escape') done(); }
+
       function done() {
+        document.removeEventListener('keydown', esc);
         document.body.removeChild(overlay);
         resolve();
       }
 
       closeBtn.addEventListener('click', done);
       overlay.addEventListener('click', function (e) { if (e.target === overlay) done(); });
-      document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape') { document.removeEventListener('keydown', esc); done(); }
-      });
+      document.addEventListener('keydown', esc);
     });
   }
 

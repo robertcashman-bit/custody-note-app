@@ -176,19 +176,17 @@ function loadSettings() {
     window.api.getDbPath().then(function(p) {
       var el = document.getElementById('settings-db-path');
       if (el) el.textContent = p || 'Unknown';
-    });
+    }).catch(function(e) { console.error('[settings:dbPath]', e); });
   }
   var bfEl = document.getElementById('settings-backup-path-display');
   if (bfEl) {
-    window.api.getSettings().then(function(s) {
-      bfEl.textContent = s.backupFolder || 'Desktop (default)';
-    });
+    var cachedS = window._appSettingsCache || {};
+    bfEl.textContent = cachedS.backupFolder || 'Desktop (default)';
   }
   var obfEl = document.getElementById('settings-offsite-backup-path-display');
   if (obfEl) {
-    window.api.getSettings().then(function(s) {
-      obfEl.textContent = (s.offsiteBackupFolder && s.offsiteBackupFolder.trim()) ? s.offsiteBackupFolder : 'None';
-    });
+    var cachedS2 = window._appSettingsCache || {};
+    obfEl.textContent = (cachedS2.offsiteBackupFolder && cachedS2.offsiteBackupFolder.trim()) ? cachedS2.offsiteBackupFolder : 'None';
   }
   var connEl = document.getElementById('settings-connectivity');
   if (connEl) {
@@ -202,22 +200,22 @@ function loadSettings() {
       if (!el) return;
       if (enc && osProt) {
         el.textContent = 'Database is encrypted (AES-256-GCM) — key protected by Windows Credential Store';
-        el.style.color = 'green';
+        el.style.color = 'var(--accent-green, #059669)';
       } else if (enc && !osProt) {
         el.textContent = 'Database is encrypted (AES-256-GCM) — key stored in plaintext fallback (OS protection unavailable). Setting a recovery password is strongly recommended.';
-        el.style.color = '#c55';
+        el.style.color = 'var(--accent-red, #dc2626)';
       } else {
         el.textContent = 'Database is not yet encrypted (will encrypt on next save)';
         el.style.color = '';
       }
-    });
+    }).catch(function(e) { console.error('[settings:encryption]', e); });
   }
   if (window.api.hasRecoveryPassword) {
     window.api.hasRecoveryPassword().then(function(has) {
       var el = document.getElementById('recovery-status');
       if (el) el.textContent = has ? 'Recovery password is SET' : 'No recovery password set — you should set one now';
-      if (el) el.style.color = has ? 'green' : '#c00';
-    });
+      if (el) el.style.color = has ? 'var(--accent-green, #059669)' : 'var(--accent-red, #dc2626)';
+    }).catch(function(e) { console.error('[settings:recovery]', e); });
   }
   loadFirmsList();
 }
@@ -262,7 +260,7 @@ function loadFirmsList() {
   window.api.firmsList().then(function(f) {
     firms = f;
     renderFirmsPage();
-  });
+  }).catch(function(e) { console.error('[settings:firmsList]', e); });
 }
 
 function renderFirmsPage() {
@@ -366,12 +364,11 @@ function addFirm() {
   var email = ((document.getElementById('new-firm-email') || {}).value || '').trim();
   if (!name) { showToast('Enter a firm name', 'error'); return; }
   window.api.firmSave({ name: name, contact_name: contact, contact_phone: phone, contact_email: email }).then(function() {
-    document.getElementById('new-firm-name').value = '';
-    document.getElementById('new-firm-contact').value = '';
-    document.getElementById('new-firm-phone').value = '';
-    document.getElementById('new-firm-email').value = '';
+    var nfn = document.getElementById('new-firm-name'); if (nfn) nfn.value = '';
+    var nfc = document.getElementById('new-firm-contact'); if (nfc) nfc.value = '';
+    var nfp = document.getElementById('new-firm-phone'); if (nfp) nfp.value = '';
+    var nfe = document.getElementById('new-firm-email'); if (nfe) nfe.value = '';
     loadFirmsList();
-    window.api.firmsList().then(function(f) { firms = f; });
     showToast('Firm saved', 'success');
   }).catch(function(err) {
     showToast('Failed to save firm: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);

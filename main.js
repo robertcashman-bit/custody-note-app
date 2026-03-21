@@ -3636,6 +3636,7 @@ ipcMain.handle('auth:status', () => {
 
 ipcMain.handle('auth:magic-link', async (_, { email }) => {
   const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return { ok: false, error: 'Cannot reach server' };
   try {
     const resp = await httpPost(`${apiUrl}/api/auth/magic-link`, { email });
     return resp;
@@ -3648,6 +3649,7 @@ ipcMain.handle('auth:magic-link', async (_, { email }) => {
 
 ipcMain.handle('auth:poll', async (_, { pollId }) => {
   const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return { ok: false, error: 'Cannot reach server' };
   try {
     const resp = await httpPost(`${apiUrl}/api/auth/poll`, { pollId });
     if (resp.ok && resp.accessToken) {
@@ -4497,7 +4499,7 @@ ipcMain.handle('firm-delete', (_, id) => {
 });
 
 ipcMain.handle('firm-set-default', (_, id) => {
-  db.run('UPDATE firms SET is_default = 0');
+  dbRun('UPDATE firms SET is_default = 0', []);
   dbRun('UPDATE firms SET is_default = 1 WHERE id = ?', [id]);
   markDbDirty();
   return true;
@@ -4601,11 +4603,15 @@ ipcMain.handle('db-repair', () => {
 });
 
 ipcMain.handle('save-csv', (_, { csv, filename }) => {
-  const desktop = app.getPath('desktop');
-  const safeName = path.basename(filename || 'attendances-export.csv').replace(/[<>:"/\\|?*]/g, '_');
-  const filePath = path.join(desktop, safeName);
-  fs.writeFileSync(filePath, csv, 'utf8');
-  return filePath;
+  try {
+    const desktop = app.getPath('desktop');
+    const safeName = path.basename(filename || 'attendances-export.csv').replace(/[<>:"/\\|?*]/g, '_');
+    const filePath = path.join(desktop, safeName);
+    fs.writeFileSync(filePath, csv, 'utf8');
+    return filePath;
+  } catch (e) {
+    return { error: e.message || 'Failed to save CSV' };
+  }
 });
 
 ipcMain.handle('get-desktop-path', () => app.getPath('desktop'));
@@ -4662,10 +4668,11 @@ ipcMain.handle('cloud-backup-check-entitlement', async () => {
 
 ipcMain.handle('cloud-backup-subscribe', async () => {
   const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return { ok: false, error: 'Cannot reach server' };
   const data = readLicenceData();
   const email = data && data.email ? data.email : '';
   const url = `${apiUrl}/buy?plan=cloud${email ? '&email=' + encodeURIComponent(email) : ''}`;
-  shell.openExternal(url);
+  await shell.openExternal(url);
   return { ok: true };
 });
 
@@ -5293,11 +5300,11 @@ ipcMain.handle('photo-delete', (_, { attendanceId, photoId }) => {
   }
 });
 
-ipcMain.handle('open-external', (_, url) => {
+ipcMain.handle('open-external', async (_, url) => {
   if (typeof url !== 'string') return;
   const u = url.trim();
   if (u.startsWith('https://') || u.startsWith('mailto:')) {
-    shell.openExternal(u);
+    await shell.openExternal(u);
   }
 });
 

@@ -1,9 +1,27 @@
 {
   "releases": [
     {
-      "version": "1.4.128",
+      "version": "1.4.129",
       "date": "2026-03-21",
       "latest": true,
+      "changes": [
+        "Fix magic link login not appearing for trial users",
+        "Fix delete showing 'failed' on successful deletes",
+        "Fix data corruption when converting telephone to attendance",
+        "Fix 'Email my key' hitting wrong API endpoint",
+        "Add error handling to auto-save, amend, delete, finalise, and settings",
+        "Fix toast queue race condition and escape key listener leak in dialogs",
+        "Fix case-sensitive licence key lookups on backend",
+        "Fix magic link double-click race condition",
+        "Fix recovery route blocking licence key fallback on expired token",
+        "Fix CSS theme-light duplicate variables and undefined --border-color",
+        "Add accessibility labels to search inputs and modal overlays",
+        "Add past_due subscription grace period support"
+      ]
+    },
+    {
+      "version": "1.4.128",
+      "date": "2026-03-21",
       "changes": [
         "Fix toast queue draining — toasts after the first now display reliably",
         "Add error handling to PDF and Word export when settings fail to load",

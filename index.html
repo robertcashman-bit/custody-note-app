@@ -87,7 +87,7 @@
         <span id="header-form-title" class="header-form-title"></span>
       </div>
       <div class="header-center">
-        <input type="search" id="global-search" class="global-search" placeholder="Search records..." autocomplete="off">
+        <input type="search" id="global-search" class="global-search" placeholder="Search records..." autocomplete="off" aria-label="Search records">
       </div>
       <div class="header-right">
         <span id="header-form-actions" class="header-form-actions">
@@ -380,7 +380,7 @@
           <span class="list-top-title">All Records</span>
         </div>
         <div class="list-toolbar">
-          <input type="search" id="list-search" placeholder="Search by name, UFN, station, custody number, date..." class="search-input">
+          <input type="search" id="list-search" placeholder="Search by name, UFN, station, custody number, date..." class="search-input" aria-label="Search attendance records">
           <button type="button" id="list-quick-email-btn" class="btn btn-secondary btn-small" title="Email an officer without a record" style="display:none;">&#9993; Quick Email</button>
           <button type="button" id="backup-now-btn" class="btn btn-secondary btn-small" title="Create a backup now">Backup now</button>
         </div>
@@ -1120,7 +1120,7 @@
               <span><strong>AWS Cloud:</strong> <span id="backup-dest-cloud-status">Checking&hellip;</span></span>
             </div>
           </div>
-          <div id="cloud-backup-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border-color, #ccc);">
+          <div id="cloud-backup-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border, #ccc);">
             <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Cloud Backup (AWS)</h3>
             <p id="cloud-backup-checking" class="settings-hint" style="margin:0;color:#64748b;">Checking cloud backup status&hellip;</p>
             <div id="cloud-backup-not-subscribed" style="display:none;">
@@ -1350,14 +1350,14 @@
 
         <div class="settings-card">
           <h2>Support &amp; Suggestions</h2>
-          <details id="support-faq-details" class="support-faq-details" open style="margin-top:0.75rem;border:1px solid var(--border-color,#ddd);border-radius:8px;padding:0;">
+          <details id="support-faq-details" class="support-faq-details" open style="margin-top:0.75rem;border:1px solid var(--border,#ddd);border-radius:8px;padding:0;">
             <summary style="padding:0.75rem 1rem;cursor:pointer;font-weight:600;user-select:none;">What do you do if you need support?</summary>
-            <div style="padding:0 1rem 1rem;border-top:1px solid var(--border-color,#eee);">
+            <div style="padding:0 1rem 1rem;border-top:1px solid var(--border,#eee);">
               <ul style="margin:0.5rem 0 0 0;padding-left:1.25rem;line-height:1.7;">
                 <li><strong>Support forum</strong> — Post questions, get help from the team and other users. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/support">Open forum</button></li>
                 <li><strong>Forgot licence key?</strong> — Enter your email and we&apos;ll send it if we have it on file.
                   <div class="forgot-licence-row" style="margin-top:0.35rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-                    <input type="email" id="forgot-licence-email" placeholder="you@example.com" class="forgot-licence-input" style="padding:0.35rem 0.5rem;font-size:0.85rem;border:1px solid var(--border-color,#ccc);border-radius:4px;min-width:180px;" />
+                    <input type="email" id="forgot-licence-email" placeholder="you@example.com" class="forgot-licence-input" style="padding:0.35rem 0.5rem;font-size:0.85rem;border:1px solid var(--border,#ccc);border-radius:4px;min-width:180px;" />
                     <button type="button" id="forgot-licence-btn" class="btn btn-small btn-primary">Email my key</button>
                     <span id="forgot-licence-msg" class="forgot-licence-msg" style="font-size:0.8rem;color:var(--text-muted,#666);"></span>
                   </div>
@@ -1388,7 +1388,7 @@
           <h2>System Status</h2>
           <p class="settings-hint" style="margin-top:0;">Real-time diagnostics for licence, cloud backup, and auto-updates.</p>
 
-          <div id="sysstat-licence" style="margin-bottom:1rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);">
+          <div id="sysstat-licence" style="margin-bottom:1rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border,#e2e8f0);">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
               <span id="sysstat-licence-icon" style="font-size:1.1rem;">⏳</span>
               <strong>Licence</strong>
@@ -1398,7 +1398,7 @@
             <p id="sysstat-licence-line3" class="settings-hint" style="margin:0.1rem 0 0 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
           </div>
 
-          <div id="sysstat-backup" style="margin-bottom:1rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);">
+          <div id="sysstat-backup" style="margin-bottom:1rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border,#e2e8f0);">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
               <span id="sysstat-backup-icon" style="font-size:1.1rem;">⏳</span>
               <strong>Cloud Backup</strong>
@@ -1407,7 +1407,7 @@
             <p id="sysstat-backup-line2" class="settings-hint" style="margin:0.1rem 0 0 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
           </div>
 
-          <div id="sysstat-update" style="margin-bottom:0.5rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border-color,#e2e8f0);">
+          <div id="sysstat-update" style="margin-bottom:0.5rem;padding:0.75rem;border-radius:8px;background:var(--input-bg,#f8fafc);border:1px solid var(--border,#e2e8f0);">
             <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
               <span id="sysstat-update-icon" style="font-size:1.1rem;">⏳</span>
               <strong>Auto-Update</strong>
@@ -1892,17 +1892,17 @@
       </button>
     </nav>
     <!-- First-launch setup (multi-step wizard) -->
-    <div id="first-launch-modal" class="first-launch-overlay" style="display:none;">
+    <div id="first-launch-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Welcome setup">
       <div class="first-launch-box">
         <!-- Step 1: Your details -->
         <div id="fl-step-1" class="fl-step">
           <h2>Welcome to Custody Note</h2>
           <p>Let's get you set up in under a minute. These details appear on your attendance notes and LAA declarations.</p>
-          <label>Fee Earner Name <span style="color:#dc2626;">*</span></label>
+          <label for="fl-fee-earner-name">Fee Earner Name <span style="color:#dc2626;">*</span></label>
           <input type="text" id="fl-fee-earner-name" placeholder="e.g. Robert Smith" style="margin-bottom:0.75rem;">
-          <label>DSCC PIN/Number <span style="color:#dc2626;">*</span></label>
+          <label for="fl-dscc-pin">DSCC PIN/Number <span style="color:#dc2626;">*</span></label>
           <input type="text" id="fl-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10" style="margin-bottom:0.75rem;">
-          <label>Email address</label>
+          <label for="fl-email">Email address</label>
           <input type="email" id="fl-email" placeholder="your@email.com" style="margin-bottom:0.75rem;">
           <p style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin:0 0 0.5rem;">Used for login, licence delivery, and exporting notes by email.</p>
           <div class="first-launch-footer">
@@ -1970,7 +1970,7 @@
     </div>
 
     <!-- Login overlay (magic link) -->
-    <div id="licence-overlay" class="licence-overlay" style="display:none;">
+    <div id="licence-overlay" class="licence-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Sign in to Custody Note">
       <div class="licence-box">
         <div class="licence-logo">
           <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48">

@@ -145,7 +145,10 @@
         return;
       }
       if (!window.api || !window.api.authPoll) return;
-      window.api.authPoll({ pollId: _currentPollId }).then(function (resp) {
+      var activePollId = _currentPollId;
+      if (!activePollId) return;
+      window.api.authPoll({ pollId: activePollId }).then(function (resp) {
+        if (activePollId !== _currentPollId) return;
         if (resp.ok) {
           stopPolling();
           hideOverlay();
@@ -242,6 +245,8 @@
         }).catch(function () {
           resendBtn.disabled = false;
           resendBtn.textContent = 'Resend link';
+          var statusEl = document.getElementById('magic-link-poll-status');
+          if (statusEl) statusEl.textContent = 'Connection error. Check your internet and try again.';
         });
       });
     }
@@ -359,7 +364,8 @@
       }
 
       var hasAuthToken = !!auth.loggedIn;
-      var hasRealKey = !!(status.key || (status.licenceKey && !String(status.licenceKey || '').startsWith('TRIAL-')));
+      var keyStr = String(status.key || '');
+      var hasRealKey = !!status.key && !keyStr.startsWith('TRIAL-') && !keyStr.startsWith('ACCOUNT-');
       var isTrialOnly = !!status.isTrial && !hasAuthToken && !status.signInWithAccount;
 
       if (isTrialOnly && !hasRealKey) {
