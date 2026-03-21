@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.4.114",
+      "date": "2026-03-21",
+      "latest": true,
+      "changes": [
+        "Account-based sign-in (email + password) on licence overlay",
+        "Bearer token auth for licence validation and cloud backup API calls",
+        "auth:register now runs cloud backup entitlement check and returns subscription like login",
+        "cloud-backup-restore accepts account auth (authToken) as well as licence key"
+      ]
+    },
+    {
       "version": "1.4.113",
       "date": "2026-03-20",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix email client switching: openPreferredEmailClient now refreshes settings from DB before every email open (was using stale cache)",
         "loadSettings uses merge instead of full cache replacement to prevent losing in-flight preference changes",

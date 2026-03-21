@@ -3682,12 +3682,21 @@ ipcMain.handle('auth:register', async (_, { email, password, name }) => {
     data.machineId = machineId;
     data.status = 'active';
     data.isTrial = false;
+
+    if (resp.subscription) {
+      data.expiresAt = resp.subscription.expiresAt || data.expiresAt || null;
+      data.cloudBackupEntitled = !!resp.subscription.cloudBackup;
+    }
+
     if (!data.key) data.key = 'ACCOUNT-' + (resp.user?.id || '').slice(0, 16).toUpperCase();
     writeLicenceData(data);
+
+    checkCloudBackupEntitlement().catch(() => {});
 
     return {
       success: true,
       user: resp.user,
+      subscription: resp.subscription || null,
       status: computeLicenceStatus(data),
     };
   } catch (e) {
@@ -4726,7 +4735,7 @@ ipcMain.handle('cloud-backup-list', async () => {
 
 ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
   const data = readLicenceData();
-  if (!data || !data.key) return { ok: false, error: 'No licence key' };
+  if (!data || (!data.key && !data.authToken)) return { ok: false, error: 'No licence key' };
   if (typeof backupKey !== 'string' || !backupKey.trim()) return { ok: false, error: 'Invalid backup key' };
   const sanitizedKey = backupKey.replace(/[^a-zA-Z0-9._\-]/g, '');
   if (sanitizedKey !== backupKey || sanitizedKey.includes('..')) return { ok: false, error: 'Invalid backup key' };
