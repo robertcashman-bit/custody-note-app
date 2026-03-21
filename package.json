@@ -1,6 +1,6 @@
 {
   "name": "custody-note",
-  "version": "1.4.117",
+  "version": "1.4.118",
   "lastUpdated": "2026-03-21",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
@@ -69,7 +69,8 @@
     "publish": {
       "provider": "github",
       "owner": "robertcashman-bit",
-      "repo": "custody-note-app"
+      "repo": "custody-note-app",
+      "releaseType": "release"
     }
   }
 }
