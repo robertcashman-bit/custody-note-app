@@ -1,9 +1,24 @@
 {
   "releases": [
     {
-      "version": "1.4.126",
+      "version": "1.4.127",
       "date": "2026-03-21",
       "latest": true,
+      "changes": [
+        "Word/DOCX export alongside PDF — export attendance notes as editable Word documents",
+        "Light theme fix — theme-light now uses genuinely light backgrounds",
+        "Home dashboard restored — shortcuts, LAA forms, and status strip visible by default",
+        "Custody outcome codes CN09-CN11 added (released no bail, bail varied/extended)",
+        "Expanded first-launch wizard with email, backup folder, and quick start guide",
+        "Self-service session unlock via magic link email (forgot password recovery)",
+        "Station Mileage shortcut added to home screen",
+        "Toast notifications now queue instead of overwriting, with screen reader support",
+        "Silent error handlers replaced with visible feedback across the app"
+      ]
+    },
+    {
+      "version": "1.4.126",
+      "date": "2026-03-21",
       "changes": [
         "Magic link login: sign in with just your email address — no password needed",
         "Polling-based auth flow for reliable desktop login",

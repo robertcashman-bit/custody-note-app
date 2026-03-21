@@ -5343,6 +5343,197 @@ ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
   return filePath;
 });
 
+/* ─── Export attendance note as DOCX ─── */
+ipcMain.handle('export-docx', async (_, { data, settings, filename }) => {
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+    WidthType, AlignmentType, HeadingLevel, BorderStyle, ShadingType } = require('docx');
+
+  const d = data || {};
+  const s = settings || {};
+  const brand = (s.brandName || 'Defence Legal Services Ltd') + (s.tradingAs ? ' t/a ' + s.tradingAs : '');
+  const clientName = [d.forename, d.surname].filter(Boolean).join(' ') || '\u2014';
+  const isVol = d.attendanceMode === 'voluntary';
+  const isTel = d._formType === 'telephone';
+  const docTitle = isTel ? 'Telephone Advice Note' : (isVol ? 'Voluntary Attendance Note' : 'Custody Note');
+
+  function val(v) { return v ? String(v).trim() : ''; }
+  function fmtD(v) {
+    if (!v) return '';
+    const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : v;
+  }
+
+  function fieldRow(label, value) {
+    if (!value) return null;
+    return new TableRow({
+      children: [
+        new TableCell({ width: { size: 35, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: label, bold: true, size: 20, font: 'Segoe UI' })] })] }),
+        new TableCell({ width: { size: 65, type: WidthType.PERCENTAGE }, children: [new Paragraph({ children: [new TextRun({ text: String(value), size: 20, font: 'Segoe UI' })] })] }),
+      ],
+    });
+  }
+
+  function sectionHeading(text) {
+    return new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 280, after: 80 },
+      children: [new TextRun({ text, bold: true, size: 22, font: 'Segoe UI', color: '1e40af' })] });
+  }
+
+  function narrativePara(text) {
+    if (!text) return null;
+    return new Paragraph({ spacing: { before: 60, after: 60 },
+      children: [new TextRun({ text: String(text), size: 20, font: 'Segoe UI' })] });
+  }
+
+  const children = [];
+
+  children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 },
+    children: [new TextRun({ text: brand, bold: true, size: 18, font: 'Segoe UI', color: '475569' })] }));
+  children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 },
+    children: [new TextRun({ text: docTitle, bold: true, size: 28, font: 'Segoe UI', color: '1e40af' })] }));
+
+  const coverRows = [
+    fieldRow('Client', clientName),
+    fieldRow('Date', fmtD(d.date)),
+    fieldRow('Station', val(d.policeStationName) || val(d.otherLocation)),
+    !isVol ? fieldRow('Custody No.', val(d.custodyNumber)) : null,
+    fieldRow('DSCC Ref', val(d.dsccRef)),
+    fieldRow('Offence', val(d.offenceSummary)),
+    fieldRow('Firm', val(d.firmName)),
+    fieldRow('Fee Earner', val(d.feeEarnerName)),
+    fieldRow('Our Ref', val(d.ourFileNumber) || val(d.fileReference)),
+    fieldRow('UFN', val(d.ufn)),
+  ].filter(Boolean);
+
+  if (coverRows.length) {
+    children.push(new Table({ rows: coverRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+  }
+
+  children.push(sectionHeading('1. Instruction'));
+  const instrRows = [
+    fieldRow('Source', val(d.instructionSource)),
+    fieldRow('Date', fmtD(d.date)),
+    fieldRow('Time of instruction', val(d.instructionTime)),
+    fieldRow('Arrival time', val(d.arrivalTime)),
+    fieldRow('DSCC Reference', val(d.dsccRef)),
+    fieldRow('Reason for request', val(d.requestReason)),
+  ].filter(Boolean);
+  if (instrRows.length) children.push(new Table({ rows: instrRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  children.push(sectionHeading('2. Client Details'));
+  const clientRows = [
+    fieldRow('Forename', val(d.forename)),
+    fieldRow('Surname', val(d.surname)),
+    fieldRow('Date of Birth', fmtD(d.dob)),
+    fieldRow('Address', val(d.address)),
+    fieldRow('Occupation', val(d.occupation)),
+    fieldRow('Nationality', val(d.nationality)),
+    fieldRow('Appropriate Adult', val(d.appropriateAdult)),
+    fieldRow('Interpreter', val(d.interpreter)),
+    fieldRow('Vulnerable', val(d.vulnerable)),
+    fieldRow('Youth', val(d.youth)),
+  ].filter(Boolean);
+  if (clientRows.length) children.push(new Table({ rows: clientRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  children.push(sectionHeading('3. Offence Details'));
+  const offRows = [
+    fieldRow('Offence Summary', val(d.offenceSummary)),
+    fieldRow('Offence 1', val(d.offence1Details)),
+    fieldRow('Offence 2', val(d.offence2Details)),
+    fieldRow('Offence 3', val(d.offence3Details)),
+    fieldRow('MG5 / Evidence Summary', val(d.evidenceSummary)),
+  ].filter(Boolean);
+  if (offRows.length) children.push(new Table({ rows: offRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  children.push(sectionHeading('4. Detention & PACE'));
+  const paceRows = [
+    fieldRow('Detention authorised', val(d.detentionAuthorised)),
+    fieldRow('Grounds for detention', val(d.detentionGrounds)),
+    fieldRow('PACE clock started', val(d.paceClockStart)),
+    fieldRow('PACE clock expires', val(d.paceClockExpiry)),
+  ].filter(Boolean);
+  if (paceRows.length) children.push(new Table({ rows: paceRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  children.push(sectionHeading('5. Welfare & Conditions'));
+  const welRows = [
+    fieldRow('Fitness to be interviewed', val(d.fitnessToInterview)),
+    fieldRow('Meal breaks', val(d.mealBreaks)),
+    fieldRow('Rest', val(d.rest)),
+    fieldRow('Medical attention', val(d.medicalAttention)),
+  ].filter(Boolean);
+  if (welRows.length) children.push(new Table({ rows: welRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  children.push(sectionHeading('6. Disclosure'));
+  if (val(d.disclosureNotes)) children.push(narrativePara(d.disclosureNotes));
+
+  children.push(sectionHeading('7. Consultation'));
+  if (val(d.consultationNotes)) children.push(narrativePara(d.consultationNotes));
+  const consRows = [
+    fieldRow('Advice given', val(d.adviceGiven)),
+    fieldRow('Client instructions', val(d.clientInstructions)),
+  ].filter(Boolean);
+  if (consRows.length) children.push(new Table({ rows: consRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  children.push(sectionHeading('8. Interview'));
+  const interviews = d.interviews || [];
+  if (interviews.length) {
+    children.push(new Paragraph({ spacing: { after: 40 }, children: [
+      new TextRun({ text: 'These notes are not verbatim and should not be relied upon as if a transcript.', italics: true, size: 18, font: 'Segoe UI', color: 'b91c1c' })
+    ] }));
+  }
+  interviews.forEach(function(iv, idx) {
+    children.push(new Paragraph({ spacing: { before: 120 }, children: [
+      new TextRun({ text: 'Interview ' + (idx + 1), bold: true, size: 20, font: 'Segoe UI' })
+    ] }));
+    const ivRows = [
+      fieldRow('Start', val(iv.startTime)),
+      fieldRow('End', val(iv.endTime)),
+      fieldRow('Present', val(iv.present)),
+      fieldRow('Cautioned', val(iv.cautioned)),
+    ].filter(Boolean);
+    if (ivRows.length) children.push(new Table({ rows: ivRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+    if (val(iv.notes)) children.push(narrativePara(iv.notes));
+  });
+
+  children.push(sectionHeading('9. Outcome'));
+  const outRows = [
+    fieldRow('Interview completed', val(d.interviewCompleted)),
+    fieldRow('Outcome', val(d.outcomeDecision)),
+    fieldRow('Outcome Code (LAA)', val(d.outcomeCode)),
+    fieldRow('Stage / Fee code', val(d.stageReachedOrFeeCode)),
+    fieldRow('Next location', val(d.nextLocationName)),
+    fieldRow('Next date', fmtD(d.nextDate)),
+    fieldRow('Further attendance', val(d.furtherAttendance)),
+  ].filter(Boolean);
+  if (outRows.length) children.push(new Table({ rows: outRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  children.push(sectionHeading('Time Recording'));
+  const timeRows = [
+    fieldRow('Travel time', val(d.travelTimeTotal || d.travelTime)),
+    fieldRow('Waiting time', val(d.waitingTime)),
+    fieldRow('Attendance time', val(d.attendanceTime)),
+    fieldRow('Departure time', val(d.departureTime)),
+  ].filter(Boolean);
+  if (timeRows.length) children.push(new Table({ rows: timeRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
+
+  children.push(new Paragraph({ spacing: { before: 300 }, children: [
+    new TextRun({ text: 'Created with Custody Note \u2014 www.custodynote.com', size: 16, font: 'Segoe UI', color: '94a3b8', italics: true })
+  ] }));
+
+  const doc = new Document({
+    creator: 'Custody Note',
+    title: docTitle + ' \u2013 ' + clientName,
+    description: docTitle,
+    sections: [{ children }],
+  });
+
+  const buffer = await Packer.toBuffer(doc);
+  const desktop = app.getPath('desktop');
+  const safeName = path.basename(filename || ('attendance-' + Date.now() + '.docx')).replace(/[<>:"/\\|?*]/g, '_');
+  const outPath = path.join(desktop, safeName);
+  fs.writeFileSync(outPath, buffer);
+  return outPath;
+});
+
 /* ─── Print an existing PDF file ─── */
 ipcMain.handle('print-pdf-file', async (_, filePath) => {
   if (!filePath || !fs.existsSync(filePath)) return { error: 'File not found' };

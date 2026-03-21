@@ -7,25 +7,43 @@
   /* ── Toast ── */
   var _toastEl = null;
   var _toastTimer = null;
+  var _toastQueue = [];
+  var _toastBusy = false;
 
   function getToastEl() {
     if (!_toastEl) {
       _toastEl = document.createElement('div');
       _toastEl.id = 'cn-toast';
       _toastEl.className = 'cn-toast';
+      _toastEl.setAttribute('role', 'status');
+      _toastEl.setAttribute('aria-live', 'polite');
+      _toastEl.setAttribute('aria-atomic', 'true');
       document.body.appendChild(_toastEl);
     }
     return _toastEl;
   }
 
-  function showToast(message, type, duration) {
+  function _showNextToast() {
+    if (!_toastQueue.length) { _toastBusy = false; return; }
+    _toastBusy = true;
+    var item = _toastQueue.shift();
     var el = getToastEl();
-    el.textContent = message;
-    el.className = 'cn-toast cn-toast-visible cn-toast-' + (type || 'info');
+    el.textContent = item.message;
+    el.className = 'cn-toast cn-toast-visible cn-toast-' + (item.type || 'info');
     clearTimeout(_toastTimer);
     _toastTimer = setTimeout(function () {
       el.className = 'cn-toast';
-    }, duration || 3500);
+      setTimeout(_showNextToast, 300);
+    }, item.duration || 3500);
+  }
+
+  function showToast(message, type, duration) {
+    if (_toastBusy) {
+      _toastQueue.push({ message: message, type: type, duration: duration });
+      return;
+    }
+    _toastQueue.push({ message: message, type: type, duration: duration });
+    _showNextToast();
   }
 
   /* ── Confirm modal ── */

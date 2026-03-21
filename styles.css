@@ -66,10 +66,11 @@
 
 /* ═══ COLOUR THEMES ═══ */
 html.theme-light {
-  --bg: #0f172a;
-  --text: #e2e8f0;
-  --text-muted: #94a3b8;
-  --on-surface: #1e293b;
+  --bg: #f8fafc;
+  --text: #1e293b;
+  --text-light: #0f172a;
+  --text-muted: #64748b;
+  --on-surface: #334155;
   --on-surface-muted: #64748b;
   --primary: #1e40af;
   --primary-hover: #1d4ed8;
@@ -81,11 +82,25 @@ html.theme-light {
   --accent-red-hover: #b91c1c;
   --accent-orange: #b45309;
   --accent-brand: #2563eb;
-  --border: #334155;
-  --section-bg: #1e3a8a;
-  --section-text: #93c5fd;
+  --border: #cbd5e1;
+  --section-bg: #dbeafe;
+  --section-text: #1e40af;
+  --surface: #ffffff;
+  --surface-alt: #f1f5f9;
+  --input-bg: #ffffff;
+  --input-focus-bg: #ffffff;
+  --card-bg: #ffffff;
   --list-hover: #eff6ff;
+  --header-bg: #1e3a8a;
+  --corporate-accent: #2563eb;
+  --drum-bg: linear-gradient(145deg, #e2e8f0, #f1f5f9);
+  --declaration-bg: #fffbeb;
+  --declaration-border: #d97706;
+  --declaration-text: #92400e;
+  --declaration-heading: #b45309;
   --shadow: 0 1px 3px rgba(0,0,0,0.06);
+  --card-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  --card-hover-shadow: 0 4px 16px rgba(0,0,0,0.08);
   --card-shadow: 0 2px 8px rgba(0,0,0,0.06);
   --card-hover-shadow: 0 4px 16px rgba(0,0,0,0.1);
   --drum-bg: linear-gradient(145deg, #f0f4f8, #e2e8f0);
@@ -303,10 +318,16 @@ html.theme-copper.dark {
   --border: #7c2d12; --list-hover: #7c2d12; --bg: #451a03;
 }
 html.theme-light.dark {
-  /* theme-light is a light palette; with dark mode use slate-like base but theme accents */
+  --bg: #0f172a; --text: #e2e8f0; --text-light: #ffffff; --text-muted: #94a3b8;
+  --on-surface: #1e293b; --on-surface-muted: #64748b;
   --primary: #2563eb; --primary-hover: #1d4ed8; --accent-brand: #93c5fd;
   --corporate-accent: #2563eb; --section-bg: #1e3a8a; --section-text: #93c5fd;
-  --border: #334155; --list-hover: #0f1f40; --bg: #0f172a;
+  --border: #334155; --list-hover: #0f1f40; --surface: #1e293b; --surface-alt: #0f172a;
+  --input-bg: #1e293b; --input-focus-bg: #1e293b; --card-bg: #1e293b;
+  --header-bg: #0f172a;
+  --drum-bg: linear-gradient(145deg, #1e293b, #0f172a);
+  --declaration-bg: #1c1917; --declaration-border: #92400e;
+  --declaration-text: #fde68a; --declaration-heading: #fbbf24;
 }
 
 /* ═══ SPLASH SCREEN ═══ */
@@ -677,15 +698,15 @@ html.dark .gear-section-label { color: var(--text-muted); }
   padding-bottom: 72px;
 }
 html.theme-light #view-home {
-  background-color: #0f172a;
+  background-color: var(--bg);
   background-image: none;
 }
 html.theme-light .app-header {
-  background: #0f172a;
+  background: var(--header-bg);
   border-bottom-color: var(--corporate-accent);
 }
 html.theme-light .app-footer {
-  background: #0f172a;
+  background: var(--header-bg);
 }
 .home-container {
   max-width: 100%; margin: 0; padding: 0;
@@ -4606,16 +4627,7 @@ html.hide-home-status #home-status-section {
   display: none !important;
 }
 
-/* Phase 2: Declutter home — hide secondary items by default */
-#home-shortcuts-section,
-#home-laa-section,
-#home-status-section {
-  display: none !important;
-}
-.home-card-widget-metric,
-.home-card-widget-attention {
-  display: none !important;
-}
+/* Video cards hidden until feature is enabled */
 #home-card-video-capture,
 #home-card-video-id {
   display: none !important;

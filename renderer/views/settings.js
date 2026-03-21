@@ -115,7 +115,7 @@ function loadSettings() {
       window.api.getSafeStorageStatus().then(function(ok) {
         var el = document.getElementById('safeStorage-warning');
         if (el) el.style.display = ok ? 'none' : '';
-      }).catch(function() {});
+      }).catch(function(e) { console.error('[safe-storage]', e); });
     }
 
     // Cloud backup status – trigger fresh check when Settings opens

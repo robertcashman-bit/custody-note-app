@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('api', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),
+  exportDocx: (options) => ipcRenderer.invoke('export-docx', options),
   printPdfFile: (filePath) => ipcRenderer.invoke('print-pdf-file', filePath),
   quickfileFetchClients: () => ipcRenderer.invoke('quickfile-fetch-clients'),
   quickfileTestConnection: () => ipcRenderer.invoke('quickfile-test-connection'),

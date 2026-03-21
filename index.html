@@ -309,6 +309,7 @@
                 <button type="button" class="home-tool-btn" data-action="firms" title="Firms you work for">Firms</button>
                 <button type="button" class="home-tool-btn" data-action="reports" title="Attendance and fee reports">Reports</button>
                 <button type="button" class="home-tool-btn" data-action="authorities" title="Authority forms for criminal defence">Authorities</button>
+                <button type="button" class="home-tool-btn" data-action="station-mileage" title="Station mileage records">Station Mileage</button>
                 <button type="button" class="home-tool-btn" data-action="shortcut-print-pdf" title="Print attendance note PDF">Print PDF</button>
                 <button type="button" class="home-tool-btn" data-action="shortcut-email-solicitor" title="Email attendance note to instructing solicitor">Email to solicitor</button>
                 <button type="button" class="home-tool-btn" data-action="shortcut-backup-now" title="Create a backup now">Backup now</button>
@@ -577,7 +578,8 @@
           <div class="header-right-group">
             <span id="autosave-indicator" class="autosave-indicator"></span>
             <button type="button" id="form-header-history-btn" class="btn btn-small" title="View change history for this record">&#128203; History</button>
-            <button type="button" id="form-header-export-pdf" class="btn btn-small btn-accent" title="Export PDF to Desktop">&#128196; Export PDF</button>
+            <button type="button" id="form-header-export-pdf" class="btn btn-small btn-accent" title="Export PDF to Desktop">&#128196; PDF</button>
+            <button type="button" id="form-header-export-docx" class="btn btn-small btn-accent" title="Export Word document to Desktop">&#128196; Word</button>
             <button type="button" id="form-backup-now-btn" class="btn btn-small btn-backup-now" title="Save &amp; backup now">&#128190; Backup</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
@@ -1888,19 +1890,50 @@
         <span class="bottom-nav-label">Settings</span>
       </button>
     </nav>
-    <!-- First-launch setup (single step) -->
+    <!-- First-launch setup (multi-step wizard) -->
     <div id="first-launch-modal" class="first-launch-overlay" style="display:none;">
       <div class="first-launch-box">
-        <div id="fl-step-1">
+        <!-- Step 1: Your details -->
+        <div id="fl-step-1" class="fl-step">
           <h2>Welcome to Custody Note</h2>
-          <p>These details appear on your attendance notes and LAA declarations. You can change them later in Settings.</p>
+          <p>Let's get you set up in under a minute. These details appear on your attendance notes and LAA declarations.</p>
           <label>Fee Earner Name <span style="color:#dc2626;">*</span></label>
           <input type="text" id="fl-fee-earner-name" placeholder="e.g. Robert Smith" style="margin-bottom:0.75rem;">
           <label>DSCC PIN/Number <span style="color:#dc2626;">*</span></label>
           <input type="text" id="fl-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10" style="margin-bottom:0.75rem;">
+          <label>Email address</label>
+          <input type="email" id="fl-email" placeholder="your@email.com" style="margin-bottom:0.75rem;">
+          <p style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin:0 0 0.5rem;">Used for login, licence delivery, and exporting notes by email.</p>
           <div class="first-launch-footer">
             <button type="button" id="fl-skip" class="btn btn-secondary">Skip for now</button>
-            <button type="button" id="fl-save" class="btn btn-primary">Done</button>
+            <button type="button" id="fl-next-1" class="btn btn-primary">Next</button>
+          </div>
+        </div>
+        <!-- Step 2: Backup folder -->
+        <div id="fl-step-2" class="fl-step" style="display:none;">
+          <h2>Backup your notes</h2>
+          <p>Choose a backup folder so your attendance notes are safe. A cloud folder (OneDrive, Dropbox, Google Drive) is recommended.</p>
+          <div id="fl-backup-status" style="margin-bottom:0.75rem;">
+            <p id="fl-backup-auto" style="display:none;font-size:0.9rem;"><span style="color:#059669;font-weight:600;">&#10003;</span> Cloud folder detected: <strong id="fl-backup-path"></strong></p>
+            <p id="fl-backup-manual" style="font-size:0.9rem;">No cloud folder detected &mdash; choose a folder manually, or skip and set it up later in Settings.</p>
+          </div>
+          <div class="first-launch-footer">
+            <button type="button" id="fl-backup-choose" class="btn btn-secondary">Choose folder</button>
+            <button type="button" id="fl-next-2" class="btn btn-primary">Next</button>
+          </div>
+        </div>
+        <!-- Step 3: Quick overview -->
+        <div id="fl-step-3" class="fl-step" style="display:none;">
+          <h2>You're ready to go</h2>
+          <div style="font-size:0.88rem;line-height:1.6;margin-bottom:1rem;">
+            <p style="margin:0 0 0.6rem;"><strong>1.</strong> Tap <strong>New Custody</strong> or <strong>New Voluntary</strong> on the home screen to start a note.</p>
+            <p style="margin:0 0 0.6rem;"><strong>2.</strong> Fill in each section &mdash; your work is saved automatically every few seconds.</p>
+            <p style="margin:0 0 0.6rem;"><strong>3.</strong> When you're done, tap <strong>Finalise</strong> to lock the record, then export as PDF or Word.</p>
+            <p style="margin:0 0 0.6rem;"><strong>4.</strong> Find all your records in the <strong>Records</strong> tab at the bottom.</p>
+          </div>
+          <p style="font-size:0.8rem;color:var(--text-muted,#94a3b8);margin:0 0 0.75rem;">You can change any setting later via the Settings tab.</p>
+          <div class="first-launch-footer">
+            <button type="button" id="fl-save" class="btn btn-primary" style="width:100%;">Start using Custody Note</button>
           </div>
         </div>
       </div>
@@ -2126,6 +2159,14 @@
       </div>
       <div id="session-lock-error" class="session-lock-error" aria-live="polite"></div>
       <button type="button" id="session-lock-unlock-btn" class="btn btn-primary" style="width:100%;margin-top:0.5rem;">Unlock</button>
+      <div id="session-lock-magic" style="margin-top:0.75rem;text-align:center;">
+        <a href="#" id="session-lock-forgot" style="font-size:0.82rem;color:#60a5fa;text-decoration:underline;cursor:pointer;">Forgot password? Unlock via email</a>
+      </div>
+      <!-- Magic link unlock state -->
+      <div id="session-lock-magic-flow" style="display:none;text-align:center;margin-top:0.5rem;">
+        <p id="session-lock-magic-status" style="font-size:0.88rem;color:var(--text-muted,#94a3b8);margin:0 0 0.5rem;">Sending unlock link to your email&hellip;</p>
+        <button type="button" id="session-lock-magic-cancel" class="btn btn-secondary" style="font-size:0.82rem;">Cancel</button>
+      </div>
     </div>
   </div>
 </body>

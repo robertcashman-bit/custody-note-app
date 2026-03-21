@@ -1693,6 +1693,7 @@ var LAA = {
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
           'CN04 \u2013 No further action','CN05 \u2013 Simple caution / reprimand / warning','CN06 \u2013 Charge / Summons','CN07 \u2013 Conditional caution','CN08 \u2013 Fixed penalty notice',
+          'CN09 \u2013 Released no bail','CN10 \u2013 Bail varied / extended','CN11 \u2013 Bail not varied / extended',
           'Draft'
         ], cols: 2 },
         { key: 'stageReachedOrFeeCode', label: 'Stage reached / Fee code', type: 'text', placeholder: 'e.g. INVC', cols: 2 },
@@ -2664,7 +2665,7 @@ var REQUIRED_FIELD_KEYS = [
     if (!window.api || !window.api.syncStatus) return;
     window.api.syncStatus().then(function(st) {
       applySyncSnapshot(st || {});
-    }).catch(function() {});
+    }).catch(function(e) { console.error('[sync-status]', e); });
   }
 
   function formatSyncTime(iso) {
@@ -2700,18 +2701,18 @@ var REQUIRED_FIELD_KEYS = [
       document.body.classList.remove('chrome-collapsed');
     }
     if (name === 'home') { stopAutoSave(); stopPaceClock(); _finalising = false; loadHomeView(); }
-    if (name === 'list') { stopAutoSave(); stopPaceClock(); _finalising = false; refreshList(); if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {}); }
+    if (name === 'list') { stopAutoSave(); stopPaceClock(); _finalising = false; refreshList(); if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); }); }
     if (name === 'firms') {
       loadFirmsList();
       refreshQuickFileImportMeta();
-      if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {});
+      if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     }
     if (name === 'reports') { loadReports(); if (typeof loadBillableAttendances === 'function') loadBillableAttendances(); }
     if (name === 'station-mileage') { if (typeof loadStationMileage === 'function') loadStationMileage(); }
     if (name === 'authorities') { if (typeof loadAuthorities === 'function') loadAuthorities(); }
     if (name === 'settings') {
       loadSettings();
-      if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {});
+      if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     }
     if (name === 'new' && !currentAttendanceId && !Object.keys(formData).length) { activeFormSections = formSections; formData = {}; currentSectionIdx = 0; prefillDefaults(); renderForm(formData); }
     // sync bottom nav active state
@@ -2894,7 +2895,7 @@ var REQUIRED_FIELD_KEYS = [
       var div = document.querySelector('.gear-divider-licence');
       if (btn) btn.style.display = hasLicence ? 'none' : '';
       if (div) div.style.display = hasLicence ? 'none' : '';
-    }).catch(function() {});
+    }).catch(function(e) { console.error('[gear-licence]', e); });
   }
 
   function updateHomeGreeting() {
@@ -4802,7 +4803,7 @@ var REQUIRED_FIELD_KEYS = [
     if (!window.api || !window.api.getSettings) return;
     window.api.getSettings().then(function(settings) {
       updateQuickFileImportStatusLabel(settings && settings.quickfileLastImportAt);
-    }).catch(function() {});
+    }).catch(function(e) { console.error('[quickfile-meta]', e); });
   }
 
   function prefillOffence1FromSummary() {
@@ -5092,6 +5093,7 @@ var REQUIRED_FIELD_KEYS = [
               printAttendanceNoteWithData(safeJson(row.data));
             });
           }); break;
+          case 'export-docx': confirmConfidentialityThen(function() { window.exportDocxById(id); }); break;
           case 'dup': duplicateAttendance(id); break;
           case 'newMatter': newMatterFromAttendance(id); break;
           case 'delete': deleteAttendance(id, title); break;
@@ -5193,6 +5195,7 @@ var REQUIRED_FIELD_KEYS = [
               '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
               '<button type="button" class="btn-list-action" data-action="print-preview" title="Print preview the full attendance note">Print PDF</button>' +
               '<button type="button" class="btn-list-action" data-action="print" title="Export attendance note PDF to Desktop">Export PDF</button>' +
+              '<button type="button" class="btn-list-action" data-action="export-docx" title="Export as Word document to Desktop">Export Word</button>' +
               '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
               '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
               '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>' +
@@ -5248,7 +5251,7 @@ var REQUIRED_FIELD_KEYS = [
             window.api.laaGenerateOfficialPdf({ formType: 'declaration', data: data }).then(function(res) {
               if (res.error) return;
               showToast('Declaration PDF saved: ' + (res.path || '').replace(/\\/g, '/').split('/').pop(), 'success');
-            }).catch(function() {});
+            }).catch(function(e) { console.error('[declaration-pdf]', e); });
           }
         }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
       }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
@@ -5264,7 +5267,7 @@ var REQUIRED_FIELD_KEYS = [
         data.declarationUnsignedReason = reason || 'Not signed';
         if (reason && currentAttendanceId) {
           var merged = Object.assign({}, data);
-          window.api.attendanceSave({ id: currentAttendanceId, data: merged }).catch(function() {});
+          window.api.attendanceSave({ id: currentAttendanceId, data: merged }).catch(function(e) { showToast('Failed to save record', 'error'); console.error('[save]', e); });
         }
         generateLaaFormPdf('declaration', 'Applicant Declaration', data);
       });
@@ -5284,7 +5287,7 @@ var REQUIRED_FIELD_KEYS = [
           data.declarationUnsignedReason = reason || 'Not signed';
           if (reason && id) {
             var merged = Object.assign({}, data);
-            window.api.attendanceSave({ id: id, data: merged }).catch(function() {});
+            window.api.attendanceSave({ id: id, data: merged }).catch(function(e) { showToast('Failed to save record', 'error'); console.error('[save]', e); });
           }
           generateLaaFormPdf('declaration', 'Applicant Declaration', data);
         });
@@ -6157,7 +6160,7 @@ var REQUIRED_FIELD_KEYS = [
         if (sec.extraActions) {
           const actions = document.createElement('div');
           actions.className = 'form-actions';
-          actions.innerHTML = '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button><button type="button" class="btn btn-accent" id="form-pdf">Export PDF to Desktop</button><button type="button" class="btn btn-accent" id="form-print">Print Attendance Note</button><button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button><button type="button" class="btn btn-accent" id="form-email-solicitor">Email to solicitor</button><button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button><button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
+          actions.innerHTML = '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button><button type="button" class="btn btn-accent" id="form-pdf">Export PDF to Desktop</button><button type="button" class="btn btn-accent" id="form-docx">Export Word to Desktop</button><button type="button" class="btn btn-accent" id="form-print">Print Attendance Note</button><button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button><button type="button" class="btn btn-accent" id="form-email-solicitor">Email to solicitor</button><button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button><button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
           section.appendChild(actions);
         }
         if (sec.id === 'supervisorReview') {
@@ -6521,6 +6524,7 @@ var REQUIRED_FIELD_KEYS = [
         actions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button>' +
           '<button type="button" class="btn btn-accent" id="form-pdf">Export PDF to Desktop</button>' +
+          '<button type="button" class="btn btn-accent" id="form-docx">Export Word to Desktop</button>' +
           '<button type="button" class="btn btn-accent" id="form-print">Print Attendance Note</button>' +
           '<button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button>' +
           '<button type="button" class="btn btn-accent" id="form-email-solicitor">Email to solicitor</button>' +
@@ -6546,6 +6550,7 @@ var REQUIRED_FIELD_KEYS = [
         endActions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
           '<button type="button" class="btn btn-accent" id="form-pdf-end" title="Save full attendance note (including declaration) to Desktop">Export PDF</button>' +
+          '<button type="button" class="btn btn-accent" id="form-docx-end" title="Export Word document to Desktop">Export Word</button>' +
           '<button type="button" class="btn btn-accent" id="form-print-end" title="Print preview the full attendance note">Print Preview</button>' +
           '<button type="button" class="btn btn-accent" id="form-declaration" title="Export Applicant Declaration only">Declaration</button>' +
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
@@ -10678,6 +10683,35 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
+  function exportDocx() {
+    ensureAllSectionsRendered();
+    var data = getFormData();
+    window.api.getSettings().then(function(settings) {
+      var label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
+      var n = [data.surname, data.forename].filter(Boolean).join('_') || label;
+      var fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.docx';
+      window.api.exportDocx({ data: data, settings: settings, filename: fn }).then(function(p) {
+        showToast('Word document saved: ' + (p || '').replace(/\\/g, '/').split('/').pop(), 'success');
+      }).catch(function(e) { showToast('Word export failed: ' + (e && e.message), 'error'); });
+    });
+  }
+
+  window.exportDocxById = function(recordId) {
+    window.api.attendanceGet(recordId).then(function(row) {
+      if (!row) { showToast('Record not found', 'error'); return; }
+      var data = {};
+      try { data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {}); } catch (_) {}
+      window.api.getSettings().then(function(settings) {
+        var label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
+        var n = [data.surname, data.forename].filter(Boolean).join('_') || label;
+        var fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.docx';
+        window.api.exportDocx({ data: data, settings: settings, filename: fn }).then(function(p) {
+          showToast('Word document saved: ' + (p || '').replace(/\\/g, '/').split('/').pop(), 'success');
+        }).catch(function(e) { showToast('Word export failed: ' + (e && e.message), 'error'); });
+      });
+    }).catch(function() { showToast('Could not load record', 'error'); });
+  };
+
   /* Export PDF directly from a record ID — used by the list view PDF button.
      Opens the OS print/preview dialog so the user can print or save as PDF. */
   window.exportPdfById = function(recordId) {
@@ -11382,7 +11416,7 @@ PDF_CASENOTE_ADVERT +
           window.api.attendanceGet(currentAttendanceId).then(function(row) {
             if (row) lines.push('DB status:     ' + row.status);
             summaryEl.textContent = lines.join('\n');
-          }).catch(function() {});
+          }).catch(function(e) { console.error('[attendance-get]', e); });
         }
         summaryEl.textContent = lines.join('\n');
       }
@@ -11998,7 +12032,7 @@ PDF_CASENOTE_ADVERT +
     document.addEventListener('licence-activated', function () {
       updateHomeLicenceCard();
       updateGearLicenceItem();
-      if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {});
+      if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     });
     updateGearLicenceItem();
 
@@ -12435,7 +12469,7 @@ PDF_CASENOTE_ADVERT +
     }
     // Populate licence footer badge + addon visibility on startup
     if (window.api && window.api.licenceStatus) {
-      window.api.licenceStatus().then(function(st) { updateLicenceFooterBadge(st); if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function() {});
+      window.api.licenceStatus().then(function(st) { updateLicenceFooterBadge(st); if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     }
 
     /* Load bank holidays from cache / server */
@@ -12445,7 +12479,7 @@ PDF_CASENOTE_ADVERT +
           UK_BANK_HOLIDAYS.length = 0;
           dates.forEach(function(d) { UK_BANK_HOLIDAYS.push(d); });
         }
-      }).catch(function(){});
+      }).catch(function(e) { console.error('[bank-holidays]', e); });
     }
 
     /* Splash: hide when data ready + min 1.5s elapsed, or immediately if first-launch */
@@ -12517,6 +12551,7 @@ PDF_CASENOTE_ADVERT +
       switch (btn.id) {
         case 'form-finalise': validateBeforeFinalise(); break;
         case 'form-pdf': case 'form-pdf-end': confirmConfidentialityThen(exportPdf); break;
+        case 'form-docx': case 'form-docx-end': confirmConfidentialityThen(exportDocx); break;
         case 'form-declaration': confirmConfidentialityThen(printDeclarationFromForm); break;
         case 'form-print': case 'form-print-end': confirmConfidentialityThen(printAttendanceNote); break;
         case 'form-email': confirmConfidentialityThen(emailPdf); break;
@@ -12593,6 +12628,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('billing-panel-btn')?.addEventListener('click', () => { promptBeforeOpeningBilling(); });
     document.getElementById('kb-help-btn')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
     document.getElementById('form-header-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
+    document.getElementById('form-header-export-docx')?.addEventListener('click', () => { confirmConfidentialityThen(exportDocx); });
 
     document.getElementById('form-header-history-btn')?.addEventListener('click', function() {
       if (!currentAttendanceId) { showToast('Save the record first to view history', 'info'); return; }
@@ -13130,7 +13166,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('btn-licence-change')?.addEventListener('click', function() {
       if (!window.api.licenceDeactivate) return;
       if (!confirm('Change licence? Your current licence will be removed. Enter a new key in the overlay.')) return;
-      if (window.api.licenceDeactivateMachine) window.api.licenceDeactivateMachine().catch(function() {});
+      if (window.api.licenceDeactivateMachine) window.api.licenceDeactivateMachine().catch(function(e) { console.error('[deactivate-machine]', e); });
       window.api.licenceDeactivate();
       if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Enter your new licence key.' });
       if (window.initLicenceUI) window.initLicenceUI();
@@ -13139,7 +13175,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('btn-licence-remove')?.addEventListener('click', function() {
       if (!window.api.licenceDeactivate) return;
       if (!confirm('Remove licence? You will need to enter a key again to use the app. Paid features will be locked until you activate again.')) return;
-      if (window.api.licenceDeactivateMachine) window.api.licenceDeactivateMachine().catch(function() {});
+      if (window.api.licenceDeactivateMachine) window.api.licenceDeactivateMachine().catch(function(e) { console.error('[deactivate-machine]', e); });
       window.api.licenceDeactivate();
       if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Enter your licence key to activate.' });
       if (window.initLicenceUI) window.initLicenceUI();
@@ -13234,7 +13270,7 @@ PDF_CASENOTE_ADVERT +
           if (result.status && result.status.addons) { window._addons = result.status.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(result.status); }
           showToast('Licence activated \u2014 cloud backup enabled', 'info');
           // Refresh cloud backup entitlement now
-          if (window.api.cloudBackupCheckEntitlement) window.api.cloudBackupCheckEntitlement().catch(function(){});
+          if (window.api.cloudBackupCheckEntitlement) window.api.cloudBackupCheckEntitlement().catch(function(e) { console.error('[cloud-entitlement]', e); });
         } else {
           if (errEl) { errEl.textContent = result.message || 'Activation failed \u2014 check the key and try again'; errEl.style.display = ''; }
         }
@@ -13282,7 +13318,7 @@ PDF_CASENOTE_ADVERT +
       if (el) el.style.display = 'none';
       try { localStorage.setItem('cloud-backup-warning-dismissed', 'permanent'); } catch (_) {}
       if (window.api && window.api.setSettings) {
-        window.api.setSettings({ cloudBackupHomeBannerDismissed: 'true' }).catch(function() {});
+        window.api.setSettings({ cloudBackupHomeBannerDismissed: 'true' }).catch(function(e) { console.error('[settings]', e); });
       }
     });
     document.getElementById('btn-cloud-backup-restore')?.addEventListener('click', function() {
@@ -13543,7 +13579,7 @@ PDF_CASENOTE_ADVERT +
               if (window.api.getSettings) {
                 window.api.getSettings().then(function(s) {
                   if (s && s.cloudBackupHomeBannerDismissed === 'true') homeWarning.style.display = 'none';
-                }).catch(function() {});
+                }).catch(function(e) { console.error('[settings]', e); });
               }
             })();
           }
@@ -13859,7 +13895,7 @@ PDF_CASENOTE_ADVERT +
             var el = document.getElementById(id); if (el) el.textContent = '';
           });
           if (window.api && window.api.cloudBackupCheckEntitlement) {
-            window.api.cloudBackupCheckEntitlement().catch(function() {});
+            window.api.cloudBackupCheckEntitlement().catch(function(e) { console.error('[cloud-entitlement]', e); });
           }
           runDiagnostics();
           setTimeout(function() {
@@ -14777,33 +14813,71 @@ PDF_CASENOTE_ADVERT +
     if (!modal) return;
     modal.style.display = 'flex';
 
-    /* Done button */
-    document.getElementById('fl-save').addEventListener('click', function() {
+    var _flSettings = {};
+
+    function showStep(n) {
+      modal.querySelectorAll('.fl-step').forEach(function(s) { s.style.display = 'none'; });
+      var step = document.getElementById('fl-step-' + n);
+      if (step) step.style.display = '';
+    }
+
+    /* Step 1 -> Step 2 */
+    document.getElementById('fl-next-1')?.addEventListener('click', function() {
       var name = (document.getElementById('fl-fee-earner-name').value || '').trim();
       var pin = (document.getElementById('fl-dscc-pin').value || '').trim();
       if (!name) { showToast('Please enter your fee earner name', 'error'); return; }
       if (!pin) { showToast('Please enter your DSCC PIN/number', 'error'); return; }
+      var email = (document.getElementById('fl-email').value || '').trim();
+      _flSettings = { feeEarnerNameDefault: name, dsccPin: pin };
+      if (email) _flSettings.email = email;
+      window.api.setSettings(_flSettings);
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, _flSettings);
 
-      var settings = { dsccPin: pin, feeEarnerNameDefault: name };
-      window.api.setSettings(settings).then(function() {
-        modal.style.display = 'none';
-        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
-        showToast('Welcome to Custody Note, ' + name + '!', 'success', 4000);
+      showStep(2);
+
+      if (window.api.detectCloudFolders) {
         window.api.detectCloudFolders().then(function(folders) {
           if (folders && folders.length) {
             var best = folders[0];
+            document.getElementById('fl-backup-auto').style.display = '';
+            document.getElementById('fl-backup-manual').style.display = 'none';
+            document.getElementById('fl-backup-path').textContent = best.name || best.path;
             window.api.setSettings({ offsiteBackupFolder: best.path });
           }
-        }).catch(function() {});
-      });
+        }).catch(function(e) { console.error('[detect-cloud-folders]', e); });
+      }
     });
 
-    /* Skip */
-    document.getElementById('fl-skip').addEventListener('click', function() {
+    /* Step 2: Choose backup folder manually */
+    document.getElementById('fl-backup-choose')?.addEventListener('click', function() {
+      if (window.api.chooseFolder) {
+        window.api.chooseFolder().then(function(folder) {
+          if (folder) {
+            window.api.setSettings({ offsiteBackupFolder: folder });
+            document.getElementById('fl-backup-auto').style.display = '';
+            document.getElementById('fl-backup-manual').style.display = 'none';
+            document.getElementById('fl-backup-path').textContent = folder.split(/[\\/]/).pop();
+          }
+        }).catch(function(e) { console.error('[choose-folder]', e); });
+      }
+    });
+
+    /* Step 2 -> Step 3 */
+    document.getElementById('fl-next-2')?.addEventListener('click', function() { showStep(3); });
+
+    /* Step 3: Done */
+    document.getElementById('fl-save')?.addEventListener('click', function() {
+      modal.style.display = 'none';
+      var name = _flSettings.feeEarnerNameDefault || '';
+      showToast('Welcome to Custody Note' + (name ? ', ' + name : '') + '!', 'success', 4000);
+    });
+
+    /* Skip (from step 1) */
+    document.getElementById('fl-skip')?.addEventListener('click', function() {
       modal.style.display = 'none';
       var banner = document.createElement('div');
       banner.className = 'setup-warning-banner';
-      banner.textContent = 'Setup incomplete — click here to add your name and DSCC PIN (required for billing)';
+      banner.textContent = 'Setup incomplete \u2014 click here to add your name and DSCC PIN (required for billing)';
       banner.addEventListener('click', function() {
         showView('settings');
         banner.remove();
@@ -14917,6 +14991,84 @@ PDF_CASENOTE_ADVERT +
     document.addEventListener('keydown', function(e) {
       if (_locked && e.key === 'Enter') _unlock();
     });
+
+    /* Magic-link session unlock */
+    var _magicPollTimer = null;
+    var forgotLink = document.getElementById('session-lock-forgot');
+    var magicFlow = document.getElementById('session-lock-magic-flow');
+    var magicStatus = document.getElementById('session-lock-magic-status');
+    var magicCancel = document.getElementById('session-lock-magic-cancel');
+
+    if (forgotLink) {
+      forgotLink.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (!window.api || !window.api.authMagicLink) {
+          _setLockError('Email unlock is not available. Contact support.');
+          return;
+        }
+        var email = (window._appSettingsCache && window._appSettingsCache.email) || '';
+        if (!email && window.api.authStatus) {
+          window.api.authStatus().then(function(st) {
+            if (st && st.email) {
+              _startMagicUnlock(st.email);
+            } else {
+              _setLockError('No email on file. Contact support or restart the app.');
+            }
+          }).catch(function() {
+            _setLockError('Could not retrieve email. Contact support.');
+          });
+        } else if (email) {
+          _startMagicUnlock(email);
+        } else {
+          _setLockError('No email on file. Contact support or restart the app.');
+        }
+      });
+    }
+
+    function _startMagicUnlock(email) {
+      _setLockError('');
+      if (magicFlow) magicFlow.style.display = '';
+      if (magicStatus) magicStatus.textContent = 'Sending unlock link to ' + email + '\u2026';
+      document.getElementById('session-lock-magic')?.style && (document.getElementById('session-lock-magic').style.display = 'none');
+
+      window.api.authMagicLink({ email: email }).then(function(resp) {
+        if (!resp || !resp.ok) {
+          if (magicStatus) magicStatus.textContent = resp && resp.error ? resp.error : 'Failed to send unlock link.';
+          return;
+        }
+        if (magicStatus) magicStatus.textContent = 'Check your email and click the link to unlock.';
+        var pollId = resp.pollId;
+        _magicPollTimer = setInterval(function() {
+          window.api.authPoll({ pollId: pollId }).then(function(pr) {
+            if (pr && pr.ok) {
+              clearInterval(_magicPollTimer);
+              _magicPollTimer = null;
+              _locked = false;
+              var overlay = document.getElementById('session-lock-overlay');
+              if (overlay) overlay.style.display = 'none';
+              if (magicFlow) magicFlow.style.display = 'none';
+              document.getElementById('session-lock-magic')?.style && (document.getElementById('session-lock-magic').style.display = '');
+              _resetIdleTimer();
+              showToast('Session unlocked via email', 'success');
+            } else if (pr && pr.expired) {
+              clearInterval(_magicPollTimer);
+              _magicPollTimer = null;
+              if (magicStatus) magicStatus.textContent = 'Link expired. Try again.';
+            }
+          }).catch(function() {});
+        }, 3000);
+      }).catch(function() {
+        if (magicStatus) magicStatus.textContent = 'Failed to send unlock link. Try again later.';
+      });
+    }
+
+    if (magicCancel) {
+      magicCancel.addEventListener('click', function() {
+        if (_magicPollTimer) { clearInterval(_magicPollTimer); _magicPollTimer = null; }
+        if (magicFlow) magicFlow.style.display = 'none';
+        document.getElementById('session-lock-magic')?.style && (document.getElementById('session-lock-magic').style.display = '');
+      });
+    }
   });
 })();
 

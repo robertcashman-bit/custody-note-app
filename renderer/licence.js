@@ -158,7 +158,7 @@
           showEmailForm();
           showError('Login link expired. Please send a new one.');
         }
-      }).catch(function () {});
+      }).catch(function (e) { console.error('[auth-poll]', e); });
     }, POLL_INTERVAL_MS);
   }
 
@@ -332,7 +332,7 @@
             showExpiryBanner(st.message || 'Your subscription has expired. Renew to continue creating new records.');
           }
         }
-      }).catch(function () {});
+      }).catch(function (e) { console.error('[licence-revalidate]', e); });
     }, REVALIDATE_INTERVAL_MS);
   }
 
@@ -404,7 +404,7 @@
           var trialMsg = 'Free trial: ' + status.daysRemaining + ' day' + (status.daysRemaining !== 1 ? 's' : '') + ' remaining';
           showWarningBanner(trialMsg, status.daysRemaining);
         }
-        if (window.api.licenceValidate) window.api.licenceValidate().catch(function () {});
+        if (window.api.licenceValidate) window.api.licenceValidate().catch(function (e) { console.error('[licence-validate]', e); });
       }
     }).catch(function () {
       showLoginOverlay();
