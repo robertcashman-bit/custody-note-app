@@ -264,18 +264,26 @@ async function main() {
   }
   console.log('Build complete.');
 
-  // Deploy website (fetch-latest-release + Vercel)
-  if (existsSync(join(WEBSITE_ROOT, 'package.json'))) {
-    console.log('Deploying website...');
-    await new Promise((resolve, reject) => {
-      const proc = spawn('npm', ['run', 'deploy'], {
-        cwd: WEBSITE_ROOT,
-        stdio: 'inherit',
-        shell: true,
+  // Deploy website (Vercel) — only if a deploy script exists and VERCEL_TOKEN is set
+  const websitePkgPath = join(WEBSITE_ROOT, 'package.json');
+  if (existsSync(websitePkgPath)) {
+    const websitePkg = readJson(websitePkgPath);
+    const hasDeployScript = websitePkg.scripts && websitePkg.scripts.deploy;
+    const hasVercelToken = (process.env.VERCEL_TOKEN || '').trim();
+    if (hasDeployScript && hasVercelToken) {
+      console.log('Deploying website...');
+      await new Promise((resolve, reject) => {
+        const proc = spawn('npm', ['run', 'deploy'], {
+          cwd: WEBSITE_ROOT,
+          stdio: 'inherit',
+          shell: true,
+        });
+        proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Website deploy exited ${code}`))));
       });
-      proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Website deploy exited ${code}`))));
-    });
-    console.log('Website deployed.');
+      console.log('Website deployed.');
+    } else {
+      console.log('Website deploy skipped (no deploy script or VERCEL_TOKEN not set). Push to website repo to trigger Vercel.');
+    }
   } else {
     console.log('Website not found, skipping deploy.');
   }
