@@ -174,12 +174,15 @@ async function main() {
   const { spawn } = await import('child_process');
   const hasToken = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
   const skipPublish = argv.includes('--no-publish');
-  if (!hasToken && !skipPublish) {
-    fail('GH_TOKEN or GITHUB_TOKEN is required for release publish. Set a token or pass --no-publish explicitly.');
+  const skipBuild = argv.includes('--skip-build');
+  if (!hasToken && !skipPublish && !skipBuild) {
+    fail('GH_TOKEN or GITHUB_TOKEN is required for release publish. Set a token or pass --no-publish/--skip-build explicitly.');
   }
-  const doPublish = hasToken && !skipPublish;
+  const doPublish = hasToken && !skipPublish && !skipBuild;
 
-  if (doPublish) {
+  if (skipBuild) {
+    console.log('--skip-build set — skipping app build entirely.');
+  } else if (doPublish) {
     console.log('Building and publishing to GitHub...');
     await new Promise((resolve, reject) => {
       const proc = spawn(
