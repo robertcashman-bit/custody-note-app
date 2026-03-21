@@ -857,8 +857,7 @@
           </div>
 
           <div id="licence-status-none" style="display:none;margin-top:1rem;">
-            <p class="settings-hint" style="margin:0 0 0.75rem 0;">Sign in with your custodynote.com account, or enter your Custody Note licence key (CN-…).</p>
-            <button type="button" id="btn-settings-open-signin" class="btn btn-secondary" style="margin-bottom:0.75rem;">Sign in with email</button>
+            <p class="settings-hint" style="margin:0 0 0.75rem 0;">Enter your Custody Note licence key to activate.</p>
             <label for="setting-licence-key">Licence key</label>
             <input type="text" id="setting-licence-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="max-width:320px;">
             <p class="settings-hint" style="margin:0.25rem 0 0 0;font-size:0.8rem;">Hyphens and spaces are optional; key is normalised to uppercase.</p>
@@ -1951,8 +1950,8 @@
 
         <!-- Single licence key form -->
         <div id="licence-form">
-          <label for="licence-key-input" style="color:rgba(255,255,255,0.8);font-size:0.85rem;">Licence Key</label>
-          <input type="text" id="licence-key-input" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="width:100%;padding:0.6rem 0.75rem;font-size:1.05rem;letter-spacing:0.05em;border:1.5px solid rgba(255,255,255,0.45);border-radius:6px;background:rgba(255,255,255,0.22);color:#fff;margin-bottom:0.6rem;">
+          <label for="licence-key-input">Licence Key</label>
+          <input type="text" id="licence-key-input" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false">
           <p id="licence-error" class="licence-error" style="display:none;"></p>
           <div class="licence-actions" style="margin-top:0.5rem;">
             <button type="button" id="licence-activate-btn" class="btn btn-primary" style="width:100%;padding:0.6rem;">Activate</button>
@@ -1961,9 +1960,9 @@
 
         <!-- Email my key fallback -->
         <div id="licence-email-key-section" style="margin-top:1rem;text-align:center;">
-          <p style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin:0 0 0.5rem;">Lost your key?</p>
+          <p class="licence-hint" style="font-size:0.82rem;margin:0 0 0.5rem;">Lost your key?</p>
           <div id="email-key-form" style="display:flex;gap:0.4rem;align-items:center;">
-            <input type="email" id="email-key-email" placeholder="your@email.com" autocomplete="email" style="flex:1;padding:0.45rem 0.65rem;font-size:0.85rem;border:1px solid rgba(255,255,255,0.3);border-radius:5px;background:rgba(255,255,255,0.12);color:#fff;">
+            <input type="email" id="email-key-email" placeholder="your@email.com" autocomplete="email" style="flex:1;">
             <button type="button" id="email-key-btn" class="btn btn-secondary" style="padding:0.45rem 0.8rem;font-size:0.82rem;white-space:nowrap;">Email my key</button>
           </div>
           <p id="email-key-status" style="display:none;font-size:0.8rem;margin-top:0.4rem;color:#4ade80;"></p>

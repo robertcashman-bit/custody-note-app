@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.123",
+      "version": "1.4.124",
       "date": "2026-03-21",
       "latest": true,
+      "changes": [
+        "Fix invisible text in licence overlay inputs (white-on-white)",
+        "Remove dead account sign-in code (5 unused auth IPC handlers, 5 server endpoints)",
+        "Remove hardcoded admin email from source code",
+        "Licence overlay always uses dark styling for reliable contrast"
+      ]
+    },
+    {
+      "version": "1.4.123",
+      "date": "2026-03-21",
       "changes": [
         "Zero-friction redesign: paste licence key to activate — no email codes or passwords",
         "Welcome email sent on purchase with licence key and download link",

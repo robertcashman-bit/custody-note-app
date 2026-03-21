@@ -13180,15 +13180,6 @@ PDF_CASENOTE_ADVERT +
         resultEl.style.color = '#dc2626';
       });
     });
-    document.getElementById('btn-settings-open-signin')?.addEventListener('click', function() {
-      if (typeof window.openLicenceOverlaySignIn === 'function') {
-        window.openLicenceOverlaySignIn();
-      } else if (window.showLicenceOverlay) {
-        window.showLicenceOverlay({ title: 'Activate Custody Note', message: 'Sign in with your account or use the Licence Key tab.' });
-        document.getElementById('licence-tab-signin')?.click();
-        if (window.initLicenceUI) window.initLicenceUI();
-      }
-    });
     document.getElementById('btn-licence-activate-settings')?.addEventListener('click', function() {
       var keyInput = document.getElementById('setting-licence-key');
       var errEl = document.getElementById('licence-activate-error');
@@ -14855,7 +14846,7 @@ PDF_CASENOTE_ADVERT +
     if (!window.api || !window.api.sessionLockStatus) return;
     window.api.sessionLockStatus().then(function(status) {
       if (!status || !status.canLock) {
-        showToast('Session lock skipped: set a recovery password or admin password in Settings first.', 'warning', 5000);
+        showToast('Session lock requires a password. Set one in Settings > Security.', 'warning', 5000);
         _resetIdleTimer();
         return;
       }
