@@ -1,0 +1,208 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e5]
+      - generic [ref=e9]: Custody Note
+    - generic [ref=e10]: Fast, compliant police-station attendance notes
+    - generic [ref=e11]: Defence Legal Services Ltd t/a Police Station Agent
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - generic [ref=e14]: ⚖
+        - strong [ref=e15]: LAA-ready structure
+        - generic [ref=e16]: Guided sections, declarations and signatures
+      - generic [ref=e17]:
+        - generic [ref=e18]: ⏱
+        - strong [ref=e19]: PACE clock & time recording
+        - generic [ref=e20]: Automatic reviews, social/unsocial split
+      - generic [ref=e21]:
+        - generic [ref=e22]: 📄
+        - strong [ref=e23]: Professional PDFs
+        - generic [ref=e24]: Print, email, consistent formatting
+      - generic [ref=e25]:
+        - generic [ref=e26]: ⚡
+        - strong [ref=e27]: Quick capture
+        - generic [ref=e28]: Start in seconds, fill details as you go
+      - generic [ref=e29]:
+        - generic [ref=e30]: 🔒
+        - strong [ref=e31]: Encrypted backups
+        - generic [ref=e32]: Automatic AES-256 with recovery support
+      - generic [ref=e33]:
+        - generic [ref=e34]: 🔌
+        - strong [ref=e35]: Offline-first
+        - generic [ref=e36]: Works without internet, syncs when available
+    - generic [ref=e42]:
+      - link "Contact Us" [ref=e43] [cursor=pointer]:
+        - /url: mailto:robertcashman@defencelegalservices.com?subject=Custody Note Enquiry
+      - link "www.custodynote.com" [ref=e44] [cursor=pointer]:
+        - /url: https://www.custodynote.com
+  - banner [ref=e45]:
+    - generic [ref=e46]:
+      - img [ref=e47]
+      - heading "Custody Note" [level=1] [ref=e51]
+    - searchbox "Search records" [ref=e53]
+    - generic [ref=e54]:
+      - generic:
+        - generic "Time of arrival at station"
+      - button "☰" [ref=e56] [cursor=pointer]
+      - button "☾" [ref=e57] [cursor=pointer]
+  - main [ref=e58]:
+    - generic [ref=e60]:
+      - generic [ref=e62]: Good evening.
+      - generic [ref=e64]:
+        - button "Custody Attendance Client is in custody at the police station" [ref=e65] [cursor=pointer]:
+          - img [ref=e67]
+          - generic [ref=e69]: Custody Attendance
+          - generic [ref=e70]: Client is in custody at the police station
+        - button "Voluntary Attendance Client attending voluntarily — not under arrest" [ref=e71] [cursor=pointer]:
+          - img [ref=e73]
+          - generic [ref=e78]: Voluntary Attendance
+          - generic [ref=e79]: Client attending voluntarily — not under arrest
+      - generic [ref=e80]:
+        - button "New Tel Advice Record a telephone advice session (INVB)" [ref=e81] [cursor=pointer]:
+          - img [ref=e83]
+          - generic [ref=e85]: New Tel Advice
+          - generic [ref=e86]: Record a telephone advice session (INVB)
+        - button "Quick Capture Quickly capture initial case details" [ref=e87] [cursor=pointer]:
+          - img [ref=e89]
+          - generic [ref=e91]: Quick Capture
+          - generic [ref=e92]: Quickly capture initial case details
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - generic [ref=e96]:
+            - heading "Active Matters" [level=3] [ref=e97]
+            - text: Resume live work immediately
+          - button "Check updates" [ref=e99] [cursor=pointer]
+        - generic [ref=e101]: Checking active drafts and recent matters…
+      - generic [ref=e102]:
+        - generic [ref=e103]:
+          - generic [ref=e104]:
+            - heading "Continue Working" [level=3] [ref=e105]
+            - generic [ref=e106]: Pick up where you left off fastest
+          - generic [ref=e107]:
+            - generic [ref=e108]:
+              - generic [ref=e109]: Loading latest draft…
+              - generic [ref=e110]: Checking your most recent record.
+              - paragraph [ref=e111]: We will highlight the most recent draft and any missing items here.
+            - button "Open draft" [ref=e112] [cursor=pointer]
+        - generic [ref=e113]:
+          - generic [ref=e114]:
+            - heading "Recent Cases" [level=3] [ref=e115]
+            - button "View all →" [ref=e116] [cursor=pointer]
+          - list [ref=e117]:
+            - listitem [ref=e118]: No records yet. Create your first attendance above.
+        - generic [ref=e120]:
+          - generic [ref=e121]:
+            - heading "This Week" [level=3] [ref=e122]
+            - generic [ref=e123]: Live totals
+          - generic [ref=e124]:
+            - generic [ref=e125]:
+              - generic [ref=e126]: Cases
+              - strong [ref=e127]: "0"
+            - generic [ref=e128]:
+              - generic [ref=e129]: Hours
+              - strong [ref=e130]: "0"
+            - generic [ref=e131]:
+              - generic [ref=e132]: Drafts
+              - strong [ref=e133]: "0"
+            - generic [ref=e134]:
+              - generic [ref=e135]: Finalised
+              - strong [ref=e136]: "0"
+        - generic [ref=e137]:
+          - generic [ref=e138]:
+            - heading "Needs Attention" [level=3] [ref=e139]
+            - generic [ref=e140]: Actionable items only
+          - list [ref=e141]:
+            - listitem [ref=e142]: Checking recent drafts…
+      - generic [ref=e143]:
+        - heading "Shortcuts" [level=2] [ref=e144]
+        - generic [ref=e145]:
+          - heading "Tools & options" [level=3] [ref=e146]
+          - generic [ref=e147]:
+            - button "Records" [ref=e148] [cursor=pointer]
+            - button "Firms" [ref=e149] [cursor=pointer]
+            - button "Reports" [ref=e150] [cursor=pointer]
+            - button "Authorities" [ref=e151] [cursor=pointer]
+            - button "Station Mileage" [ref=e152] [cursor=pointer]
+            - button "Print PDF" [ref=e153] [cursor=pointer]
+            - button "Email to solicitor" [ref=e154] [cursor=pointer]
+            - button "Backup now" [ref=e155] [cursor=pointer]
+            - button "Settings" [ref=e156] [cursor=pointer]
+            - button "Help" [ref=e157] [cursor=pointer]
+      - generic [ref=e158]:
+        - heading "LAA Forms" [level=2] [ref=e159]
+        - generic [ref=e160]:
+          - button "CRM1 — Client Details Client’s personal details, capital, income. Auto-filled from your record." [ref=e161] [cursor=pointer]:
+            - generic [ref=e162]: 📋
+            - generic [ref=e163]:
+              - generic [ref=e164]: CRM1 — Client Details
+              - generic [ref=e165]: Client’s personal details, capital, income. Auto-filled from your record.
+          - button "CRM2 — Advice & Assistance Application for A&A at the police station. Auto-filled from your record." [ref=e166] [cursor=pointer]:
+            - generic [ref=e167]: 📝
+            - generic [ref=e168]:
+              - generic [ref=e169]: CRM2 — Advice & Assistance
+              - generic [ref=e170]: Application for A&A at the police station. Auto-filled from your record.
+          - button "CRM3 — Advocacy Assistance Application for Advocacy Assistance (bail, WFD). Auto-filled from your record." [ref=e171] [cursor=pointer]:
+            - generic [ref=e172]: ⚖
+            - generic [ref=e173]:
+              - generic [ref=e174]: CRM3 — Advocacy Assistance
+              - generic [ref=e175]: Application for Advocacy Assistance (bail, WFD). Auto-filled from your record.
+          - button "Applicant Declaration Criminal legal aid applicant’s declaration for online submissions. Auto-filled from your record." [ref=e176] [cursor=pointer]:
+            - generic [ref=e177]: 📄
+            - generic [ref=e178]:
+              - generic [ref=e179]: Applicant Declaration
+              - generic [ref=e180]: Criminal legal aid applicant’s declaration for online submissions. Auto-filled from your record.
+      - generic [ref=e181]:
+        - generic [ref=e182]: Checking connection…
+        - generic [ref=e183]: ·
+        - generic [ref=e184]: "Auto backup: checking…"
+    - text: ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶ ▶
+  - contentinfo [ref=e185]:
+    - generic [ref=e186]:
+      - generic [ref=e187]:
+        - generic [ref=e188]:
+          - text: v
+          - generic [ref=e189]: ...
+        - generic "Click to open Licence settings" [ref=e190] [cursor=pointer]
+        - generic [ref=e191]: Checking…
+        - generic [ref=e192]: Backup checking…
+        - generic "Open Settings to check Cloud Backup" [ref=e194] [cursor=pointer]: Local only
+      - generic [ref=e195]: © Defence Legal Services Ltd 2026
+  - navigation "Main navigation" [ref=e196]:
+    - button "⌂ Home" [ref=e197] [cursor=pointer]:
+      - generic [ref=e198]: ⌂
+      - generic [ref=e199]: Home
+    - button "📄 Records" [ref=e200] [cursor=pointer]:
+      - generic [ref=e201]: 📄
+      - generic [ref=e202]: Records
+    - button "+ New" [ref=e203] [cursor=pointer]:
+      - generic [ref=e204]: +
+      - generic [ref=e205]: New
+    - button "🏢 Firms" [ref=e206] [cursor=pointer]:
+      - generic [ref=e207]: 🏢
+      - generic [ref=e208]: Firms
+    - button "⚙ Settings" [ref=e209] [cursor=pointer]:
+      - generic [ref=e210]: ⚙
+      - generic [ref=e211]: Settings
+  - dialog "Sign in to Custody Note" [ref=e212]:
+    - generic [ref=e213]:
+      - img [ref=e215]
+      - heading "Sign in to Custody Note" [level=2] [ref=e219]
+      - paragraph [ref=e220]: Enter the email address you used to purchase.
+      - generic [ref=e221]:
+        - generic [ref=e222]: Email address
+        - textbox "Email address" [active] [ref=e223]:
+          - /placeholder: your@email.com
+        - button "Send login link" [ref=e225] [cursor=pointer]
+      - paragraph [ref=e227]:
+        - link "Have a licence key instead?" [ref=e228] [cursor=pointer]:
+          - /url: "#"
+      - paragraph [ref=e230]:
+        - text: Need an account? Visit
+        - link "custodynote.com/pricing" [ref=e231] [cursor=pointer]:
+          - /url: https://www.custodynote.com/pricing
+      - paragraph [ref=e232]: © Defence Legal Services Ltd 2026
+  - button "📝" [ref=e233] [cursor=pointer]
+```
