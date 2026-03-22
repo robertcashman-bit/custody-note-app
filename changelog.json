@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.134",
+      "version": "1.4.135",
       "date": "2026-03-22",
       "latest": true,
+      "changes": [
+        "Licence store: support full subscription statuses (cancelled, expired, past_due, trialing) instead of collapsing to active/revoked",
+        "Auto-migrate existing encrypted licence databases to new schema on startup"
+      ]
+    },
+    {
+      "version": "1.4.134",
+      "date": "2026-03-22",
+      "latest": false,
       "changes": [
         "Admin licence dashboard: view all users, stats, filter, export CSV, resend keys from server",
         "Fix gear menu overflow (bottom items hidden)",

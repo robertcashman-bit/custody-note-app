@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS licences (
   licence_key TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   last_sent_at INTEGER,
-  status TEXT NOT NULL CHECK(status IN ('active','revoked'))
+  status TEXT NOT NULL CHECK(status IN ('active','revoked','cancelled','expired','past_due','trialing'))
 );
 CREATE INDEX IF NOT EXISTS idx_licences_email ON licences(email);
 `;
@@ -99,11 +99,27 @@ function initStore(userDataPath, keyBuffer) {
     return db;
   };
 
+  const migrateSchema = (db) => {
+    try {
+      const info = db.exec("PRAGMA table_info(licences)");
+      if (!info.length) return;
+      const checkSql = db.exec("SELECT sql FROM sqlite_master WHERE type='table' AND name='licences'");
+      if (!checkSql.length) return;
+      const ddl = checkSql[0].values[0][0];
+      if (ddl && ddl.includes("'cancelled'")) return;
+      db.run("ALTER TABLE licences RENAME TO licences_old");
+      db.run(SCHEMA);
+      db.run("INSERT INTO licences SELECT * FROM licences_old");
+      db.run("DROP TABLE licences_old");
+    } catch (_) {}
+  };
+
   return new Promise((resolve, reject) => {
     const initSqlJs = require('sql.js');
     initSqlJs().then((SQL) => {
       try {
         _db = loadDb(SQL, dbPath) || initNewDb(SQL);
+        if (_db) { migrateSchema(_db); persist(); }
         resolve(_db !== null);
       } catch (e) {
         reject(e);
@@ -154,7 +170,8 @@ function upsertLicence(record) {
   const id = record.id || crypto.randomUUID();
   const created_at = record.created_at != null ? record.created_at : Date.now();
   const last_sent_at = record.last_sent_at != null ? record.last_sent_at : null;
-  const status = record.status === 'revoked' ? 'revoked' : 'active';
+  const VALID_STATUSES = ['active', 'revoked', 'cancelled', 'expired', 'past_due', 'trialing'];
+  const status = VALID_STATUSES.includes(record.status) ? record.status : 'active';
 
   run(
     `INSERT INTO licences (id, email, licence_key, created_at, last_sent_at, status) VALUES (?, ?, ?, ?, ?, ?)
@@ -182,7 +199,8 @@ function listRecent(limit = 100) {
 }
 
 function setStatus(id, status) {
-  if (status !== 'active' && status !== 'revoked') return;
+  const VALID_STATUSES = ['active', 'revoked', 'cancelled', 'expired', 'past_due', 'trialing'];
+  if (!VALID_STATUSES.includes(status)) return;
   run('UPDATE licences SET status = ? WHERE id = ?', [status, id]);
   persist();
 }
