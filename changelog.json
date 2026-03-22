@@ -1,9 +1,34 @@
 {
   "releases": [
     {
-      "version": "1.4.132",
+      "version": "1.4.134",
       "date": "2026-03-22",
       "latest": true,
+      "changes": [
+        "Admin licence dashboard: view all users, stats, filter, export CSV, resend keys from server",
+        "Fix gear menu overflow (bottom items hidden)",
+        "Add admin email fallback (robertdavidcashman@gmail.com)",
+        "Add Discord community link in support and useful links",
+        "Add SES health-check API route to website",
+        "Rename appId to com.custodynote.app"
+      ]
+    },
+    {
+      "version": "1.4.133",
+      "date": "2026-03-22",
+      "latest": false,
+      "changes": [
+        "Fix gear menu overflow (bottom items hidden)",
+        "Add admin email fallback (robertdavidcashman@gmail.com)",
+        "Add Discord community link in support and useful links",
+        "Add SES health-check API route to website",
+        "Rename appId to com.custodynote.app"
+      ]
+    },
+    {
+      "version": "1.4.132",
+      "date": "2026-03-22",
+      "latest": false,
       "changes": [
         "Sync: blocked items now auto-retry on app start and every 30 min",
         "close guard debounce fix"

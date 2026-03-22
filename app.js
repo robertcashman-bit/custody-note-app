@@ -14309,6 +14309,172 @@ PDF_CASENOTE_ADVERT +
         });
       });
 
+      // ── Tab switching ──
+      var tabs = document.querySelectorAll('#admin-tabs .admin-tab');
+      var tabSearch = document.getElementById('admin-tab-search');
+      var tabDashboard = document.getElementById('admin-tab-dashboard');
+      tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          tabs.forEach(function(t) {
+            t.classList.remove('active');
+            t.style.borderBottom = 'none';
+            t.style.color = '#64748b';
+            t.style.fontWeight = '500';
+          });
+          tab.classList.add('active');
+          tab.style.borderBottom = '2px solid #3b82f6';
+          tab.style.color = '#3b82f6';
+          tab.style.fontWeight = '600';
+          var target = tab.dataset.tab;
+          if (tabSearch) tabSearch.style.display = target === 'search' ? 'block' : 'none';
+          if (tabDashboard) tabDashboard.style.display = target === 'dashboard' ? 'block' : 'none';
+          if (target === 'dashboard') loadDashboard();
+        });
+      });
+
+      // ── Dashboard ──
+      var _dashData = null;
+      var dashStats = document.getElementById('admin-dash-stats');
+      var dashTable = document.getElementById('admin-dash-table');
+      var dashStatus = document.getElementById('admin-dash-status');
+      var dashFilter = document.getElementById('admin-dash-filter');
+      var dashRefresh = document.getElementById('admin-dash-refresh');
+      var dashExport = document.getElementById('admin-dash-export');
+
+      function statCard(label, value, color) {
+        return '<div style="background:' + (color || '#f8fafc') + ';border:1px solid #e2e8f0;border-radius:8px;padding:0.75rem;text-align:center;">' +
+          '<div style="font-size:1.5rem;font-weight:700;color:#1e293b;">' + value + '</div>' +
+          '<div style="font-size:0.75rem;color:#64748b;margin-top:0.15rem;">' + escapeHtml(label) + '</div></div>';
+      }
+
+      function renderDashStats(stats) {
+        if (!dashStats) return;
+        dashStats.innerHTML =
+          statCard('Total Users', stats.total || 0, '#f0f9ff') +
+          statCard('Active', stats.active || 0, '#ecfdf5') +
+          statCard('Trialing', stats.trialing || 0, '#fffbeb') +
+          statCard('Cancelled', stats.cancelled || 0, '#fff1f2') +
+          statCard('Expired', stats.expired || 0, '#fef2f2') +
+          statCard('No Sub', stats.noSubscription || 0, '#f8fafc');
+      }
+
+      function renderDashTable(licences) {
+        if (!dashTable) return;
+        var filter = dashFilter ? dashFilter.value.trim().toLowerCase() : '';
+        var filtered = filter ? licences.filter(function(l) {
+          return (l.email || '').toLowerCase().indexOf(filter) !== -1 ||
+                 (l.licenceKey || '').toLowerCase().indexOf(filter) !== -1 ||
+                 (l.name || '').toLowerCase().indexOf(filter) !== -1;
+        }) : licences;
+
+        if (filtered.length === 0) {
+          dashTable.innerHTML = '<p style="color:#94a3b8;">No licences found' + (filter ? ' matching filter' : '') + '.</p>';
+          return;
+        }
+
+        var html = '<table style="width:100%;border-collapse:collapse;"><thead><tr>' +
+          '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Email</th>' +
+          '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Name</th>' +
+          '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Key</th>' +
+          '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Status</th>' +
+          '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Plan</th>' +
+          '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Created</th>' +
+          '<th style="padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;"></th>' +
+          '</tr></thead><tbody>';
+
+        filtered.forEach(function(l, i) {
+          var bg = i % 2 === 0 ? '#fff' : '#f8fafc';
+          var statusColor = l.subscriptionStatus === 'active' ? '#16a34a' : l.subscriptionStatus === 'trialing' ? '#d97706' : l.subscriptionStatus === 'cancelled' ? '#dc2626' : '#94a3b8';
+          var date = l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-GB') : '-';
+          var maskedKey = l.licenceKey ? l.licenceKey.slice(0, 7) + '****' + l.licenceKey.slice(-4) : '-';
+          html += '<tr style="background:' + bg + ';">' +
+            '<td style="padding:0.35rem 0.5rem;">' + escapeHtml(l.email || '') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;">' + escapeHtml(l.name || '') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;"><code style="font-size:0.78rem;" class="dash-key" data-full="' + escapeHtml(l.licenceKey || '') + '">' + escapeHtml(maskedKey) + '</code></td>' +
+            '<td style="padding:0.35rem 0.5rem;"><span style="color:' + statusColor + ';font-weight:600;">' + escapeHtml(l.subscriptionStatus || 'none') + '</span></td>' +
+            '<td style="padding:0.35rem 0.5rem;">' + escapeHtml(l.plan || '-') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;">' + date + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;white-space:nowrap;">' +
+            '<button type="button" class="btn btn-small dash-reveal" data-key="' + escapeHtml(l.licenceKey || '') + '" style="font-size:0.75rem;">Reveal</button> ' +
+            '<button type="button" class="btn btn-small dash-resend" data-email="' + escapeHtml(l.email || '') + '" data-key="' + escapeHtml(l.licenceKey || '') + '" style="font-size:0.75rem;">Send</button>' +
+            '</td></tr>';
+        });
+        html += '</tbody></table>';
+        dashTable.innerHTML = html;
+
+        dashTable.querySelectorAll('.dash-reveal').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var keyEl = btn.closest('tr').querySelector('.dash-key');
+            if (keyEl) {
+              var full = keyEl.dataset.full;
+              if (keyEl.textContent === full) {
+                keyEl.textContent = full.slice(0, 7) + '****' + full.slice(-4);
+              } else {
+                keyEl.textContent = full;
+              }
+            }
+          });
+        });
+
+        dashTable.querySelectorAll('.dash-resend').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var email = btn.dataset.email;
+            var key = btn.dataset.key;
+            if (!email || !key) return;
+            btn.disabled = true;
+            btn.textContent = 'Sending…';
+            custodyNote.adminResendToEmail({ email: email, licenceKey: key }).then(function(r) {
+              btn.disabled = false;
+              btn.textContent = 'Send';
+              if (r && r.ok) showToast('Key sent to ' + email, 'success');
+              else showToast((r && r.error) || 'Failed to send', 'error');
+            }).catch(function() {
+              btn.disabled = false;
+              btn.textContent = 'Send';
+              showToast('Failed to send', 'error');
+            });
+          });
+        });
+      }
+
+      function loadDashboard() {
+        if (dashStatus) dashStatus.textContent = 'Loading licence data from server…';
+        if (dashTable) dashTable.innerHTML = '';
+        if (dashStats) dashStats.innerHTML = '';
+        custodyNote.adminDashboard().then(function(r) {
+          if (!r || !r.ok) {
+            if (dashStatus) dashStatus.textContent = (r && r.error) || 'Failed to load dashboard';
+            return;
+          }
+          _dashData = r.licences || [];
+          if (dashStatus) dashStatus.textContent = r.licences.length + ' users loaded.';
+          renderDashStats(r.stats || {});
+          renderDashTable(_dashData);
+        }).catch(function(e) {
+          if (dashStatus) dashStatus.textContent = 'Error: ' + (e.message || 'unknown');
+        });
+      }
+
+      if (dashFilter) dashFilter.addEventListener('input', function() {
+        if (_dashData) renderDashTable(_dashData);
+      });
+      if (dashRefresh) dashRefresh.addEventListener('click', loadDashboard);
+      if (dashExport) dashExport.addEventListener('click', function() {
+        if (!_dashData || !_dashData.length) { showToast('No data to export', 'warning'); return; }
+        var csv = 'Email,Name,Licence Key,Status,Plan,Cloud Backup,Created,Expires\n';
+        _dashData.forEach(function(l) {
+          csv += [l.email, l.name, l.licenceKey, l.subscriptionStatus || 'none', l.plan || '', l.cloudBackup ? 'Yes' : 'No', l.createdAt || '', l.expiresAt || ''].map(function(v) {
+            return '"' + String(v || '').replace(/"/g, '""') + '"';
+          }).join(',') + '\n';
+        });
+        var blob = new Blob([csv], { type: 'text/csv' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'custody-note-licences-' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+
       if (closeBtn) closeBtn.addEventListener('click', function() {
         panel.style.display = 'none';
       });

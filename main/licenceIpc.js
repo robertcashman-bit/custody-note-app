@@ -180,6 +180,74 @@ function registerLicenceIpc(app) {
     });
   });
 
+  ipcMain.handle('custody:adminDashboard', async () => {
+    adminAuth.requireAdmin();
+    const baseUrl = getServerBaseUrl();
+    const token = process.env.ADMIN_API_TOKEN || process.env.ADMIN_SECRET;
+    if (!token) return { ok: false, error: 'ADMIN_SECRET not configured' };
+
+    return new Promise((resolve) => {
+      const https = require('https');
+      const url = new URL('/api/admin/licences', baseUrl);
+      https.get({
+        hostname: url.hostname,
+        path: url.pathname,
+        headers: { 'x-admin-secret': token },
+        timeout: 20000,
+      }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            resolve({ ok: true, stats: json.stats, licences: json.licences || [] });
+          } catch (_) {
+            resolve({ ok: false, error: 'Invalid response from server' });
+          }
+        });
+      }).on('error', (e) => {
+        resolve({ ok: false, error: e.message || 'Network error' });
+      }).on('timeout', function () {
+        this.destroy();
+        resolve({ ok: false, error: 'Request timed out' });
+      });
+    });
+  });
+
+  ipcMain.handle('custody:adminResendToEmail', async (_, { email, licenceKey }) => {
+    adminAuth.requireAdmin();
+    const baseUrl = getServerBaseUrl();
+    const token = process.env.ADMIN_API_TOKEN || process.env.ADMIN_SECRET;
+    if (!token) return { ok: false, error: 'ADMIN_SECRET not configured' };
+
+    return new Promise((resolve) => {
+      const https = require('https');
+      const url = new URL('/api/admin/licences', baseUrl);
+      const payload = JSON.stringify({ action: 'resend', email, licenceKey });
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname,
+        method: 'POST',
+        headers: { 'x-admin-secret': token, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+        timeout: 15000,
+      }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data));
+          } catch (_) {
+            resolve({ ok: false, error: 'Invalid response' });
+          }
+        });
+      });
+      req.on('error', (e) => resolve({ ok: false, error: e.message || 'Network error' }));
+      req.on('timeout', function () { this.destroy(); resolve({ ok: false, error: 'Timeout' }); });
+      req.write(payload);
+      req.end();
+    });
+  });
+
   ipcMain.handle('custody:serverConfigured', () => {
     const base = getServerBaseUrl();
     return !!base && base.startsWith('https://');

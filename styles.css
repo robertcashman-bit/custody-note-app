@@ -537,6 +537,7 @@ body.form-active .autosave-indicator {
   background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
   min-width: 220px; z-index: 500; padding: 0.35rem 0;
+  max-height: min(70vh, 480px); overflow-y: auto;
   animation: gear-fade-in 0.15s ease-out;
 }
 .gear-dropdown.hidden { display: none; }
@@ -3737,6 +3738,14 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
 html.dark #session-lock-box { background: #1e293b; color: #f1f5f9; }
 html.dark #session-lock-box p { color: #94a3b8; }
 html.dark .session-lock-error { color: #fca5a5; }
+html.dark .admin-panel-inner { background: #1e293b !important; color: #f1f5f9; }
+html.dark .admin-panel-inner input { background: #0f172a; color: #f1f5f9; border-color: #334155 !important; }
+html.dark .admin-panel-inner table { color: #e2e8f0; }
+html.dark .admin-panel-inner th { color: #94a3b8 !important; border-color: #334155 !important; }
+html.dark .admin-panel-inner tr:nth-child(even) { background: #0f172a !important; }
+html.dark .admin-panel-inner tr:nth-child(odd) { background: #1e293b !important; }
+html.dark #admin-dash-stats > div { background: #0f172a !important; border-color: #334155 !important; }
+html.dark #admin-dash-stats > div > div:first-child { color: #f1f5f9 !important; }
 .settings-warning-banner {
   background: #fef3c7;
   border: 1px solid #fbbf24;

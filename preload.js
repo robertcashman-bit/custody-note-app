@@ -137,5 +137,7 @@ contextBridge.exposeInMainWorld('custodyNote', {
   adminRevealLicence: (id) => ipcRenderer.invoke('custody:adminRevealLicence', id),
   adminResend: (id) => ipcRenderer.invoke('custody:adminResend', id),
   adminSync: () => ipcRenderer.invoke('custody:adminSync'),
+  adminDashboard: () => ipcRenderer.invoke('custody:adminDashboard'),
+  adminResendToEmail: (opts) => ipcRenderer.invoke('custody:adminResendToEmail', opts),
   serverConfigured: () => ipcRenderer.invoke('custody:serverConfigured'),
 });
