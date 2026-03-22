@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.135",
+      "version": "1.4.136",
       "date": "2026-03-22",
       "latest": true,
+      "changes": [
+        "Remove placeholder Discord links, use custodynote.com/support as community hub"
+      ]
+    },
+    {
+      "version": "1.4.135",
+      "date": "2026-03-22",
+      "latest": false,
       "changes": [
         "Licence store: support full subscription statuses (cancelled, expired, past_due, trialing) instead of collapsing to active/revoked",
         "Auto-migrate existing encrypted licence databases to new schema on startup"
