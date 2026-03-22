@@ -10,7 +10,20 @@
         "User token field uses text input to avoid browser password quirks",
         "Auto-retry blocked/failed sync queue after successful licence activate/validate",
         "Click sync footer when it shows blocked/retrying to force retry",
-        "getAppVersion includes platform for UI (desktop shortcut visibility)"
+        "getAppVersion includes platform for UI (desktop shortcut visibility)",
+        "Tip: pin to taskbar banner shown on first launch (Windows)",
+        "Fix: voluntary PDF now renders instruction signatures correctly",
+        "Fix: autosave failure now shows a warning toast instead of failing silently",
+        "Fix: CSV export Net Travel and Net Waiting columns now use calculated values",
+        "Fix: billing duplicate invoice dialog uses in-app modal instead of native confirm",
+        "Fix: custody PDF no longer duplicates Sufficient Benefit Test",
+        "Fix: telephone PDF title uses file number fallback",
+        "Fix: voluntary PDF section numbering no longer collides",
+        "Fix: CRM3 'Has action started?' reads from record data instead of hardcoded Yes",
+        "Fix: session lock screen respects dark mode theme",
+        "Security: PDF exports no longer embed hidden base64 copy of full record data",
+        "Fix: warn before closing app with unsaved changes",
+        "Fix: voluntary PDF now includes Consents & Retainer section"
       ]
     },
     {

@@ -4071,7 +4071,7 @@ var REQUIRED_FIELD_KEYS = [
       showAutoSaveIndicator();
       var savedEl = document.getElementById('form-last-saved');
       if (savedEl) savedEl.textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }).catch(function(e) { console.error('[quietSave]', e); }).finally(() => {
+    }).catch(function(e) { console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000); }).finally(() => {
       _draftSaveInFlight = false;
       if (_draftSaveQueued && !_finalising && currentRecordStatus !== 'finalised') {
         _draftSaveQueued = false;
@@ -9906,7 +9906,6 @@ row('Fee Earner', d.feeEarnerName) +
 row('Client Status', d.clientStatus) + row('Case Status', d.caseStatus) +
 row('Previous advice on this matter?', d.previousAdvice) + (d.previousAdvice === 'Yes' ? row('Previous advice details', d.previousAdviceDetails) : '') +
 row('Time first contact (LAA 9.25)', d.timeFirstContactWithClient) + row('Within 45 mins of duty call?', d.firstContactWithin45Mins) + (d.firstContactOver45MinsReason ? row('Reason first contact >45 mins', d.firstContactOver45MinsReason) : '') +
-row('Sufficient Benefit Test', (d.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ')) + (d.sufficientBenefitNotes ? row('Sufficient Benefit Test notes', d.sufficientBenefitNotes) : '') +
 (d.telephoneAdviceSummary ? row('Summary of advice given (telephone)', d.telephoneAdviceSummary) : '') +
 '</table>' +
 (d.arrivalNotes ? '<div class="nar">' + h(d.arrivalNotes) + '</div>' : '') +
@@ -10209,13 +10208,6 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
 })() +
 
 PDF_CASENOTE_ADVERT +
-(function() {
-    try {
-      var payload = JSON.stringify(d);
-      var encoded = typeof btoa !== 'undefined' ? btoa(unescape(encodeURIComponent(payload))) : '';
-      if (encoded) return '<div style="font-size:1px;line-height:0;height:0;overflow:hidden;position:absolute;left:-9999px;color:transparent;">CUSTODY_NOTE_IMPORT:' + encoded + '</div>';
-    } catch (e) { return ''; }
-  })() +
 '</body></html>';
   }
 
@@ -10277,7 +10269,7 @@ PDF_CASENOTE_ADVERT +
     var brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
 
     var clientNameForTitle = [d.forename, d.surname].filter(Boolean).join(' ') || '—';
-    var myRefForTitle = d.fileReference || '—';
+    var myRefForTitle = d.ourFileNumber || d.fileReference || '—';
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | ' + h(myRefForTitle) + '</title>' +
       '<style>' +
@@ -10374,13 +10366,6 @@ PDF_CASENOTE_ADVERT +
       (d.solicitorEmailSubject || d.solicitorEmailBody ? '<h2>5. Instructing Solicitor Email</h2><table>' + row('Email subject', d.solicitorEmailSubject) + row('Recipient', d.firmContactEmail) + '</table>' + (d.solicitorEmailBody ? '<div class="nar">' + h(d.solicitorEmailBody) + '</div>' : '') : '') +
       '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
       PDF_CASENOTE_ADVERT +
-      (function() {
-        try {
-          var payload = JSON.stringify(d);
-          var encoded = typeof btoa !== 'undefined' ? btoa(unescape(encodeURIComponent(payload))) : '';
-          if (encoded) return '<div style="font-size:1px;line-height:0;height:0;overflow:hidden;position:absolute;left:-9999px;color:transparent;">CUSTODY_NOTE_IMPORT:' + encoded + '</div>';
-        } catch (e) { return ''; }
-      })() +
       '</body></html>';
   }
 
@@ -10593,7 +10578,7 @@ PDF_CASENOTE_ADVERT +
       row('Representations made?', d.representationsMade) +
       (d.representationsMade === 'Yes' ? row('Representations / challenge', d.representationsChallenge) + row('Police response', d.representationsResponse) : '') +
       '</table>' +
-      (d.repInstructionsSignature || d.clientInstructionsSignature ? '<div class="sig-block"><p class="sig-label">Rep confirmation of instructions</p>' + sig('repInstructionsSignature') + '</div><div class="sig-block"><p class="sig-label">Client confirmation of instructions</p>' + sig('clientInstructionsSignature') + '</div>' : '') +
+      (d.repInstructionsSig || d.clientInstructionsSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation of instructions</p>' + sig('repInstructionsSig') + '</div><div class="sig-block"><p class="sig-label">Client confirmation of instructions</p>' + sig('clientInstructionsSig') + '</div>' : '') +
 
       (function() {
         var interviews = d.interviews || [];
@@ -10652,7 +10637,7 @@ PDF_CASENOTE_ADVERT +
           row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
         var hasSig = d.clientSig || d.feeEarnerSig || d.laaPartnerSig;
         if (!laaRows && !hasSig) return '';
-        return '<h2 class="pdf-break-before">10. LAA Declaration</h2>' +
+        return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
           '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
           '<table>' + laaRows + '</table>' +
           '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' +
@@ -10663,18 +10648,25 @@ PDF_CASENOTE_ADVERT +
       (function() {
         var adminRows = row('File number (ours) / Invoice no.', myRefForTitle) + row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
         if (!adminRows) return '';
-        return '<h2>11. Admin &amp; Billing</h2><table>' + adminRows + '</table>';
+        return '<h2>12. Admin &amp; Billing</h2><table>' + adminRows + '</table>';
+      })() +
+
+      (function() {
+        var consentRows = row('Authority to act confirmed?', d.clientAuthorityConfirmed) +
+          row('Method of authority', d.authorityMethod) + row('Date authority given', fmtDate(d.authorityDateGiven)) + row('Time authority given', d.authorityTimeGiven) +
+          row('Authority confirmed by (name/role)', d.authorityConfirmedBy) + (d.authorityLimitations ? row('Limitations or conditions', d.authorityLimitations) : '') +
+          row('Client capacity confirmed?', d.clientCapacityConfirmed) + row('Interpreter used for authority?', d.interpreterUsedForAuthority) +
+          row('Retainer type', d.retainerType) + (d.retainerType === 'Legal Aid' ? row('Legal Aid application date', fmtDate(d.legalAidApplicationDate)) : '') + row('UFN / MAAT (when available)', d.retainerUfnMaat) +
+          row('Client name', d.retainerClientName) + row('Date of birth', fmtDate(d.retainerDob)) + row('Client address', d.retainerAddress) +
+          row('Appointed solicitor / firm', d.retainerSolicitorName) + row('Solicitor address', d.retainerSolicitorAddress) +
+          row('Date', fmtDate(d.retainerDate)) + row('Retainer signed?', d.retainerSigned) + row('Copy on file?', d.retainerCopyOnFile);
+        if (!consentRows) return '';
+        return '<h2>13. Consents &amp; Retainer</h2>' +
+          '<p style="font-size:10px;margin-bottom:8px;"><em>I consent to the appointed firm acting for me in this matter; to communicate with the police, court, and other parties as necessary on my behalf; to instruct experts and obtain evidence where needed; and to accept and comply with Legal Aid funding (where applicable). I confirm that the information I have provided is accurate and that I have read and understood the terms of the retainer.</em></p>' +
+          '<table>' + consentRows + '</table>';
       })() +
 
       PDF_CASENOTE_ADVERT +
-
-      (function() {
-        try {
-          var payload = JSON.stringify(d);
-          var encoded = typeof btoa !== 'undefined' ? btoa(unescape(encodeURIComponent(payload))) : '';
-          if (encoded) return '<div style="font-size:1px;line-height:0;height:0;overflow:hidden;position:absolute;left:-9999px;color:transparent;">CUSTODY_NOTE_IMPORT:' + encoded + '</div>';
-        } catch (e) { return ''; }
-      })() +
       '</body></html>';
   }
 
@@ -10773,16 +10765,7 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
-  /** Generate PDF and open in-app print preview window. */
-  function previewPdf() {
-    ensureAllSectionsRendered();
-    const data = getFormData();
-    window.api.getSettings().then(settings => {
-      const builder = getActivePdfBuilder();
-      const html = builder(data, settings);
-      printGeneratedDoc(html);
-    });
-  }
+  var previewPdf = printAttendanceNote;
 
   function emailPdf() {
     ensureAllSectionsRendered();
@@ -15173,10 +15156,26 @@ function _showPinTipIfNeeded() {
   }, 2000);
 }
 
+function _initCloseGuard() {
+  if (!window.api || !window.api.onCheckUnsavedChanges) return;
+  window.api.onCheckUnsavedChanges(function() {
+    var formActive = document.getElementById('view-form')?.classList.contains('active');
+    var isDirty = formActive && currentRecordStatus === 'draft' && (_draftSaveInFlight || _draftSaveQueued);
+    if (isDirty) {
+      showConfirm('You have unsaved changes. Close anyway?', 'Unsaved Changes').then(function(ok) {
+        if (ok) window.api.confirmClose();
+      });
+    } else {
+      window.api.confirmClose();
+    }
+  });
+}
+
 function safeInit() {
   try {
     init();
     _showPinTipIfNeeded();
+    _initCloseGuard();
   } catch (err) {
     console.error('[init] FATAL ERROR in init():', err);
   }

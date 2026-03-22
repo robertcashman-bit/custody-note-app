@@ -411,7 +411,7 @@ function _recalcBillingTotals() {
   if (totEl) totEl.textContent = _fmtCurrency(total);
 }
 
-function _handleCreateInvoice(recordId, opts) {
+async function _handleCreateInvoice(recordId, opts) {
   if (!recordId) {
     showToast('Save the record first before creating an invoice', 'error');
     return;
@@ -426,9 +426,8 @@ function _handleCreateInvoice(recordId, opts) {
   var narrative = document.getElementById('billing-narrative').value.trim();
 
   if (opts.hasExistingInvoice) {
-    if (!confirm('This record already has an invoice (' + (opts.invoiceStatus.quickfile_invoice_number || 'unknown') + ').\n\nAre you sure you want to create another invoice?')) {
-      return;
-    }
+    var confirmed = await showConfirm('This record already has an invoice (' + (opts.invoiceStatus.quickfile_invoice_number || 'unknown') + ').\n\nAre you sure you want to create another invoice?');
+    if (!confirmed) return;
   }
 
   if (!opts.firmName) {

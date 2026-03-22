@@ -693,7 +693,7 @@
       '<tr><td class="crm3-lbl">Name of court or venue</td><td class="crm3-box">' + esc(d.courtName || d.policeStationName || '') + '</td></tr>' +
       '<tr><td class="crm3-lbl">Date of next hearing</td><td class="crm3-box">' + esc(fmtDate(d.courtDate || d.bailDate) || '') + '</td></tr>' +
       '<tr><td class="crm3-lbl">Date action started</td><td class="crm3-box">' + esc(fmtDate(d.date) || '') + '</td></tr>' +
-      '<tr><td class="crm3-lbl">Has any action started or is any about to start?</td><td class="crm3-box">' + cb(true, 'Yes') + ' ' + cb(false, 'No') + '</td></tr>' +
+      '<tr><td class="crm3-lbl">Has any action started or is any about to start?</td><td class="crm3-box">' + cb(d.date, 'Yes') + ' ' + cb(!d.date, 'No') + '</td></tr>' +
       '<tr><td class="crm3-lbl">Has counsel been instructed?</td><td class="crm3-box">' + cb(d.counselInstructed === 'Yes', 'Yes') + ' ' + cb(d.counselInstructed !== 'Yes', 'No') + '</td></tr>' +
     '</table>';
     html += footer(1);
@@ -783,7 +783,7 @@
   }
 
   /* ═══════════════════════════════════════════════
-     CRM14: ONLINE APPLICATION DATA (v18)
+     CRM14: ONLINE APPLICATION DATA (Version 7 February 2025)
      Structured summary matching the LAA "Apply for
      Criminal Legal Aid" portal sections
      ═══════════════════════════════════════════════ */

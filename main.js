@@ -2014,6 +2014,18 @@ function createWindow() {
   const ses = mainWindow.webContents.session;
   ses.clearCache().catch(() => {});
   ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
+  mainWindow.on('close', (e) => {
+    if (mainWindow && !mainWindow._forceClose) {
+      e.preventDefault();
+      mainWindow.webContents.send('check-unsaved-changes');
+    }
+  });
+  ipcMain.once('close-confirmed', () => {
+    if (mainWindow) {
+      mainWindow._forceClose = true;
+      mainWindow.close();
+    }
+  });
   mainWindow.on('closed', () => { mainWindow = null; });
   if (app.isPackaged) {
     mainWindow.on('focus', () => { autoUpdater.checkForUpdates().catch(() => {}); });

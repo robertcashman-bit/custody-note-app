@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld('api', {
   backupStatus: () => ipcRenderer.invoke('backup-status'),
   onBackupStatusChanged: (cb) => ipcRenderer.on('backup-status-changed', (_, data) => cb(data)),
   reportEditorActivity: () => ipcRenderer.send('editor-activity'),
+  confirmClose: () => ipcRenderer.send('close-confirmed'),
+  onCheckUnsavedChanges: (cb) => ipcRenderer.on('check-unsaved-changes', () => cb()),
   dbRepair: () => ipcRenderer.invoke('db-repair'),
   getDesktopPath: () => ipcRenderer.invoke('get-desktop-path'),
   getDbPath: () => ipcRenderer.invoke('get-db-path'),

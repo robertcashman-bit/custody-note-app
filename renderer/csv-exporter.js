@@ -44,7 +44,7 @@ function exportCsv() {
         d.milesClaimable || 0,
         (d.disbursements || []).reduce(function(sum, dis) { return sum + (parseFloat(dis.amount) || 0); }, 0).toFixed(2),
         d.numAttendances || 1,
-        calc.totalWithMiles.toFixed(2), '0', '0',
+        calc.totalWithMiles.toFixed(2), calc.travelCost ? calc.travelCost.toFixed(2) : '0', calc.waitingCost ? calc.waitingCost.toFixed(2) : '0',
         calc.isEscape ? 'Yes' : 'No',
         csvSafe(d.firmName), csvSafe(d.firmLaaAccount),
         r.status || 'draft',

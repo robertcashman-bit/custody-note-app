@@ -3734,9 +3734,9 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
   color: #b91c1c;
   font-size: 0.84rem;
 }
-.dark-mode #session-lock-box { background: #1e293b; color: #f1f5f9; }
-.dark-mode #session-lock-box p { color: #94a3b8; }
-.dark-mode .session-lock-error { color: #fca5a5; }
+html.dark #session-lock-box { background: #1e293b; color: #f1f5f9; }
+html.dark #session-lock-box p { color: #94a3b8; }
+html.dark .session-lock-error { color: #fca5a5; }
 .settings-warning-banner {
   background: #fef3c7;
   border: 1px solid #fbbf24;
