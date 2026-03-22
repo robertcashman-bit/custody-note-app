@@ -15160,7 +15160,7 @@ function _initCloseGuard() {
   if (!window.api || !window.api.onCheckUnsavedChanges) return;
   window.api.onCheckUnsavedChanges(function() {
     var formActive = document.getElementById('view-form')?.classList.contains('active');
-    var isDirty = formActive && currentRecordStatus === 'draft' && (_draftSaveInFlight || _draftSaveQueued);
+    var isDirty = formActive && currentRecordStatus === 'draft' && (_draftSaveInFlight || _draftSaveQueued || _quietSaveDebounceTimer);
     if (isDirty) {
       showConfirm('You have unsaved changes. Close anyway?', 'Unsaved Changes').then(function(ok) {
         if (ok) window.api.confirmClose();

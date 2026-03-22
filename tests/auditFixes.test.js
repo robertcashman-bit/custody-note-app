@@ -312,6 +312,18 @@ describe('H4 — Close warning for unsaved changes', () => {
     assert.ok(appJs.includes('_initCloseGuard'), 'app.js must define _initCloseGuard');
     assert.ok(appJs.includes('onCheckUnsavedChanges'), 'app.js must listen for check-unsaved-changes');
   });
+
+  it('close guard checks debounce timer for pending unsaved edits', () => {
+    assert.ok(
+      appJs.includes('_quietSaveDebounceTimer'),
+      'close guard isDirty check must include _quietSaveDebounceTimer to catch edits in the debounce window'
+    );
+    const guardFn = appJs.substring(appJs.indexOf('function _initCloseGuard'), appJs.indexOf('function safeInit'));
+    assert.ok(
+      guardFn.includes('_quietSaveDebounceTimer'),
+      '_initCloseGuard must check _quietSaveDebounceTimer, not just _draftSaveInFlight/_draftSaveQueued'
+    );
+  });
 });
 
 describe('M4 — Voluntary PDF includes Consents & Retainer', () => {
