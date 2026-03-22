@@ -25,8 +25,9 @@
  *
  * 4. recoverStuckItems reset 'blocked' items (permanent 4xx errors) to pending
  *    after 5 minutes, causing them to retry forever and burn cycles.
- *    FIX: Only 'failed' items (retryable errors that exhausted retries) are
- *    recovered. 'blocked' items stay blocked until the user re-saves the record.
+ *    FIX: 'failed' items recover after 5 min. 'blocked' items auto-recover
+ *    after 30 min with a cap of MAX_BLOCKED_AUTO_RECOVERIES (3). On app
+ *    start, all blocked items get one free retry (version update may fix it).
  *
  * Connectivity states: offline | internet_available_api_unreachable | api_available | auth_required
  * Retry schedule: 1=0s, 2=10s, 3=30s, 4=2m, 5=10m, 6=30m → then failed
@@ -40,6 +41,8 @@ const RETRY_DELAYS_MS = [0, 10_000, 30_000, 120_000, 600_000, 1_800_000]; // att
 const MAX_RETRY_ATTEMPTS = 6;
 const BATCH_SIZE = 5;
 const HEALTH_CHECK_SKIP_WINDOW_MS = 60_000;
+const BLOCKED_RECOVERY_COOLDOWN_MS = 30 * 60_000;
+const MAX_BLOCKED_AUTO_RECOVERIES = 3;
 
 /** Classify errors: retryable vs permanent */
 function isRetryableError(err) {
@@ -184,12 +187,12 @@ function createSyncWorker(ctx) {
     ctx.flushDb && ctx.flushDb();
   }
 
-  /** Mark item failed or blocked */
+  /** Mark item failed or blocked. Always increments retry_count to track attempts. */
   function markFailed(id, error, retryable) {
     const now = Date.now();
     const errMsg = error && (error.message || String(error)) ? (error.message || String(error)).slice(0, 500) : null;
     const row = ctx.dbGet('SELECT retry_count FROM sync_queue WHERE id=?', [id]);
-    const nextCount = (row ? row.retry_count || 0 : 0) + (retryable ? 1 : 0);
+    const nextCount = (row ? row.retry_count || 0 : 0) + 1;
     const status = !retryable ? 'blocked' : nextCount >= MAX_RETRY_ATTEMPTS ? 'failed' : 'pending';
     ctx.dbRun(
       'UPDATE sync_queue SET status=?, error=?, retry_count=?, last_attempt=? WHERE id=?',
@@ -276,25 +279,41 @@ function createSyncWorker(ctx) {
   }
 
   /**
-   * Recover only 'failed' items (retryable errors that exhausted their retry
-   * budget). 'blocked' items are permanent (4xx) and should stay blocked until
-   * the user re-saves the record, which creates a fresh queue entry.
+   * Recover stuck items:
+   * - 'failed' (retryable errors that exhausted retries): recover after 5 min cooldown.
+   * - 'blocked' (4xx errors): auto-recover after 30 min cooldown, up to
+   *   MAX_BLOCKED_AUTO_RECOVERIES times. After that, only manual retry or
+   *   re-saving the record will unblock them.
    */
   function recoverStuckItems() {
     if (!ctx.db) return 0;
     const RECOVERY_COOLDOWN_MS = 5 * 60_000;
     const now = Date.now();
+    let recovered = 0;
     try {
-      const stuck = ctx.dbAll(
-        `SELECT id, record_id, last_attempt FROM sync_queue
+      const failed = ctx.dbAll(
+        `SELECT id FROM sync_queue
          WHERE status = 'failed'
          AND (? - COALESCE(last_attempt, 0)) > ?`,
         [now, RECOVERY_COOLDOWN_MS]
-      );
-      let recovered = 0;
-      for (const row of stuck || []) {
+      ) || [];
+      for (const row of failed) {
         ctx.dbRun(
           'UPDATE sync_queue SET status=?, retry_count=0, last_attempt=?, error=NULL WHERE id=?',
+          ['pending', now, row.id]
+        );
+        recovered++;
+      }
+      const blocked = ctx.dbAll(
+        `SELECT id FROM sync_queue
+         WHERE status = 'blocked'
+         AND retry_count < ?
+         AND (? - COALESCE(last_attempt, 0)) > ?`,
+        [MAX_BLOCKED_AUTO_RECOVERIES, now, BLOCKED_RECOVERY_COOLDOWN_MS]
+      ) || [];
+      for (const row of blocked) {
+        ctx.dbRun(
+          'UPDATE sync_queue SET status=?, last_attempt=? WHERE id=?',
           ['pending', now, row.id]
         );
         recovered++;
@@ -340,8 +359,28 @@ function createSyncWorker(ctx) {
 
   function start() {
     if (_timer) return;
+    _recoverBlockedOnStartup();
     runCycle().catch(() => {});
     _timer = setInterval(() => runCycle().catch(() => {}), SYNC_POLL_INTERVAL_MS);
+  }
+
+  /** On app start, reset all blocked items to pending once. A new app version
+   *  or server-side fix may resolve the original error. */
+  function _recoverBlockedOnStartup() {
+    if (!ctx.db) return;
+    try {
+      const now = Date.now();
+      const stuck = ctx.dbAll("SELECT id FROM sync_queue WHERE status='blocked'") || [];
+      for (const row of stuck) {
+        ctx.dbRun(
+          'UPDATE sync_queue SET status=?, retry_count=0, last_attempt=?, error=NULL WHERE id=?',
+          ['pending', now, row.id]
+        );
+      }
+      if (stuck.length > 0) {
+        ctx.flushDb && ctx.flushDb();
+      }
+    } catch (_) {}
   }
 
   function stop() {
@@ -442,4 +481,6 @@ module.exports = {
   SYNC_REQUEST_TIMEOUT_MS,
   HEALTH_CHECK_TIMEOUT_MS,
   BATCH_SIZE,
+  BLOCKED_RECOVERY_COOLDOWN_MS,
+  MAX_BLOCKED_AUTO_RECOVERIES,
 };

@@ -2623,7 +2623,7 @@ var REQUIRED_FIELD_KEYS = [
       setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync), 'synced');
       el.style.cursor = '';
     } else if (blocked > 0) {
-      setFooterIndicator(el, blocked + ' blocked', 'offline', (st.lastError || '') + ' — click to retry sync.');
+      setFooterIndicator(el, blocked + ' auto-retrying', 'offline', (st.lastError || '') + ' — will auto-retry. Click to retry now.');
       el.style.cursor = 'pointer';
     } else if (failed > 0) {
       setFooterIndicator(el, failed + ' retrying', 'offline', (st.lastError || '') + ' — click to retry sync.');
@@ -2653,7 +2653,7 @@ var REQUIRED_FIELD_KEYS = [
       setFooterIndicator(el, 'Syncing\u2026', 'syncing');
     } else if (data.status === 'error') {
       if (!data.retryable) {
-        setFooterIndicator(el, 'Sync blocked', 'offline', data.lastError || '');
+        setFooterIndicator(el, 'Sync auto-retrying', 'offline', data.lastError || '');
       } else {
         _syncRetryableErrorCount++;
         if (_syncRetryableErrorCount >= 5) {

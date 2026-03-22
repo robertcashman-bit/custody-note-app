@@ -19,15 +19,20 @@ function createMockCtx(overrides = {}) {
     if (sql.includes('FROM sync_queue')) {
       let rows = [...tables.sync_queue];
       if (sql.includes("status IN ('pending','syncing')")) rows = rows.filter(r => r.status === 'pending' || r.status === 'syncing');
-      if (sql.includes("status = 'failed'")) rows = rows.filter(r => r.status === 'failed');
-      if (sql.includes("status IN ('failed','blocked')")) rows = rows.filter(r => r.status === 'failed' || r.status === 'blocked');
+      else if (sql.includes("status = 'blocked'")) rows = rows.filter(r => r.status === 'blocked');
+      else if (sql.includes("status = 'failed'")) rows = rows.filter(r => r.status === 'failed');
+      else if (sql.includes("status IN ('failed','blocked')")) rows = rows.filter(r => r.status === 'failed' || r.status === 'blocked');
       if (sql.includes("status != 'synced'")) rows = rows.filter(r => r.status !== 'synced');
       if (sql.includes('ORDER BY created_at ASC')) rows.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
       const limitMatch = sql.match(/LIMIT\s+(\d+)/);
       if (limitMatch) rows = rows.slice(0, parseInt(limitMatch[1]));
+      if (sql.includes('retry_count <')) {
+        const cap = params[0];
+        rows = rows.filter(r => (r.retry_count || 0) < cap);
+      }
       if (sql.includes('COALESCE(last_attempt, 0)')) {
-        const now = params[0];
-        const cooldown = params[1];
+        const now = sql.includes('retry_count <') ? params[1] : params[0];
+        const cooldown = sql.includes('retry_count <') ? params[2] : params[1];
         rows = rows.filter(r => (now - (r.last_attempt || 0)) > cooldown);
       }
       return rows;

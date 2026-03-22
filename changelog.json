@@ -6,6 +6,7 @@
       "latest": true,
       "changes": [
         "Fix: close guard now detects unsaved edits in debounce window",
+        "Sync: blocked items now auto-retry on app start and every 30 min (up to 3 times)",
         "QA audit fixes from v1.4.130"
       ]
     },
