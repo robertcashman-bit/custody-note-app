@@ -54,7 +54,6 @@ contextBridge.exposeInMainWorld('api', {
   quickfileCreateInvoice: (params) => ipcRenderer.invoke('quickfile-create-invoice', params),
   /* Postcode lookup */
   postcodeLookup: (postcode) => ipcRenderer.invoke('postcode-lookup', postcode),
-  postcodeCheckKey: () => ipcRenderer.invoke('postcode-check-key'),
   /* Station mileage */
   stationMileageGet: (stationId) => ipcRenderer.invoke('station-mileage-get', stationId),
   stationsMileageList: () => ipcRenderer.invoke('stations-mileage-list'),

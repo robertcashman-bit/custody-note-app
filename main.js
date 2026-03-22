@@ -6124,26 +6124,6 @@ ipcMain.handle('quickfile-test-connection', async () => {
 /* ═══════════════════════════════════════════════════════
    POSTCODE LOOKUP  (Ideal Postcodes API)
    ═══════════════════════════════════════════════════════ */
-/* Helper: HTTPS GET with a hard timeout so the promise never hangs indefinitely */
-function httpsGetWithTimeout(url, timeoutMs) {
-  return new Promise((resolve) => {
-    let settled = false;
-    function settle(val) { if (!settled) { settled = true; resolve(val); } }
-
-    const req = require('https').get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => settle({ ok: true, statusCode: res.statusCode, body: data }));
-      res.on('error', (e) => settle({ ok: false, error: 'Response error: ' + e.message }));
-    });
-    req.on('error', (e) => settle({ ok: false, error: 'Connection error: ' + e.message }));
-    req.setTimeout(timeoutMs, () => {
-      req.destroy();
-      settle({ ok: false, error: 'Request timed out after ' + (timeoutMs / 1000) + 's.' });
-    });
-  });
-}
-
 ipcMain.handle('postcode-lookup', async (_, postcode) => {
   const pc = (postcode || '').trim().replace(/\s+/g, '');
   if (!pc) return { ok: false, error: 'No postcode entered.' };
@@ -6152,90 +6132,18 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
   const licenceKey = (data && data.key) || '';
   const apiUrl = getManagedCloudApiUrl();
 
-  /* Strategy 1: Use the server-side proxy (no API key needed from user) */
-  if (licenceKey && apiUrl) {
-    try {
-      const resp = await httpPost(`${apiUrl}/api/postcodes/lookup`, { postcode: pc, licenceKey });
-      if (resp.ok && resp.addresses) return { ok: true, addresses: resp.addresses };
-      if (resp.error === 'Postcode not found') return { ok: false, error: 'Postcode not found.' };
-    } catch (_) { /* fall through to local API key */ }
+  if (!licenceKey || !apiUrl) {
+    return { ok: false, error: 'Postcode lookup requires a valid licence. Check your internet connection or contact support.' };
   }
 
-  /* Strategy 2: Fall back to user's own Ideal Postcodes API key */
-  const settings = Object.fromEntries(dbAll('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
-  const apiKey = (settings.idealPostcodesApiKey || '').trim();
-  if (!apiKey) return { ok: false, error: 'Postcode lookup is not available. Check your internet connection or contact support.' };
-  const url = `https://api.ideal-postcodes.co.uk/v1/postcodes/${encodeURIComponent(pc)}?api_key=${encodeURIComponent(apiKey)}`;
-  const res = await httpsGetWithTimeout(url, 10000);
-  if (!res.ok) return { ok: false, error: res.error };
   try {
-    const json = JSON.parse(res.body);
-    if (json.code === 2000 && json.result && json.result.length) {
-      const addresses = json.result.map(a => ({
-        line1: a.line_1 || '',
-        line2: a.line_2 || '',
-        line3: a.line_3 || '',
-        city: a.post_town || '',
-        county: a.county || '',
-        postcode: a.postcode || pc,
-        summary: [a.line_1, a.line_2, a.line_3, a.post_town].filter(Boolean).join(', '),
-      }));
-      return { ok: true, addresses, remaining: json.result.length };
-    } else if (json.code === 4040) {
-      return { ok: false, error: 'Postcode not found.' };
-    } else if (json.code === 4010 || json.code === 4020) {
-      return { ok: false, error: 'Invalid API key or no credits remaining.' };
-    } else {
-      return { ok: false, error: json.message || 'Lookup failed.' };
-    }
-  } catch (_) { return { ok: false, error: 'Failed to parse response.' }; }
-});
-
-ipcMain.handle('postcode-check-key', async () => {
-  const settings = Object.fromEntries(dbAll('SELECT key, value FROM settings').map((r) => [r.key, r.value]));
-  const apiKey = (settings.idealPostcodesApiKey || '').trim();
-  const userToken = (settings.idealPostcodesUserToken || '').trim();
-  if (!apiKey) return { ok: false, configured: false };
-
-  /* Remaining lookups are only returned by GET /keys/:key/details (private).
-     GET /keys/:key is "Availability" and returns { available, context, contexts } only —
-     not lookups_remaining (that caused "undefined lookups remaining" in the UI). */
-  let detailsUrl = `https://api.ideal-postcodes.co.uk/v1/keys/${encodeURIComponent(apiKey)}/details`;
-  if (userToken) detailsUrl += `?user_token=${encodeURIComponent(userToken)}`;
-  const detailsRes = await httpsGetWithTimeout(detailsUrl, 10000);
-  if (detailsRes.ok && detailsRes.statusCode === 200) {
-    try {
-      const dj = JSON.parse(detailsRes.body);
-      if (dj.code === 2000 && dj.result && typeof dj.result.lookups_remaining === 'number') {
-        return { ok: true, configured: true, lookups_remaining: dj.result.lookups_remaining };
-      }
-    } catch (_) { /* fall through to availability */ }
+    const resp = await httpPost(`${apiUrl}/api/postcodes/lookup`, { postcode: pc, licenceKey });
+    if (resp.ok && resp.addresses) return { ok: true, addresses: resp.addresses };
+    if (resp.error === 'Postcode not found') return { ok: false, error: 'Postcode not found.' };
+    return { ok: false, error: resp.error || 'Lookup failed.' };
+  } catch (_) {
+    return { ok: false, error: 'Postcode lookup failed. Check your internet connection.' };
   }
-
-  const availUrl = `https://api.ideal-postcodes.co.uk/v1/keys/${encodeURIComponent(apiKey)}`;
-  const res = await httpsGetWithTimeout(availUrl, 10000);
-  if (!res.ok) return { ok: false, configured: true, error: res.error };
-  try {
-    const json = JSON.parse(res.body);
-    if (json.code === 2000 && json.result && typeof json.result.available === 'boolean') {
-      const hint = userToken
-        ? ''
-        : 'Exact balance: add your User Token from ideal-postcodes.co.uk/account (below), or check your dashboard there.';
-      return {
-        ok: true,
-        configured: true,
-        availability_only: true,
-        key_available: json.result.available,
-        lookups_remaining: null,
-        message: json.result.available
-          ? 'API key is valid and can be used for lookups.'
-          : 'This key is not currently available (no credits, limits, or restrictions). Check your Ideal Postcodes account.',
-        hint,
-      };
-    }
-    if (res.statusCode === 404) return { ok: false, configured: true, error: 'API key not recognised. Check the key in Settings.' };
-    return { ok: false, configured: true, error: json.message || 'Could not verify key.' };
-  } catch (_) { return { ok: false, configured: true, error: 'Bad response from Ideal Postcodes.' }; }
 });
 
 /* ═══════════════════════════════════════════════════════

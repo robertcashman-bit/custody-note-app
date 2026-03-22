@@ -1,9 +1,9 @@
 # Third-party integrations
 
-## Ideal Postcodes (address lookup)
+## Postcode address lookup
 
-Ideal Postcodes API keys are **stored locally** in app settings (or environment). They are **not** tied to Custody Note account sign-in or Lemon Squeezy licence validation—each force can use its own postcode provider key.
+Postcode lookups are proxied through the CustodyNote server (`POST /api/postcodes/lookup`). The Ideal Postcodes API key is stored server-side only — no client configuration is needed. Any machine with a valid CustodyNote licence can use postcode lookup automatically.
 
 ## Custody Note licence & cloud
 
-Subscription validation, cloud backup, and account sign-in use **custodynote.com** APIs and your **custodynote.com** account / licence key, separate from postcode keys above.
+Subscription validation, cloud backup, sync, and account sign-in use **custodynote.com** APIs and your **custodynote.com** account / licence key.

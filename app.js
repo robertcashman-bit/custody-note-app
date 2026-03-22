@@ -4404,10 +4404,6 @@ var REQUIRED_FIELD_KEYS = [
       if (reducedMotion) reducedMotion.checked = s.reducedMotion === 'true';
       var prefEmail = document.getElementById('setting-preferred-email-client');
       if (prefEmail) prefEmail.value = s.preferredEmailClient || 'default';
-      var ipKey = document.getElementById('setting-ideal-postcodes-key');
-      if (ipKey) ipKey.value = s.idealPostcodesApiKey || '';
-      var ipUt = document.getElementById('setting-ideal-postcodes-user-token');
-      if (ipUt) ipUt.value = s.idealPostcodesUserToken || '';
       applyLayoutPreferences(s || {});
       updateBackupDestSummary(s);
     });
@@ -4605,14 +4601,6 @@ var REQUIRED_FIELD_KEYS = [
       largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
       preferredEmailClient: (window._appSettingsCache || {}).preferredEmailClient || document.getElementById('setting-preferred-email-client')?.value || 'default',
-      idealPostcodesApiKey: (function() {
-        var v = document.getElementById('setting-ideal-postcodes-key')?.value?.trim() || '';
-        return v || (cache.idealPostcodesApiKey || '');
-      })(),
-      idealPostcodesUserToken: (function() {
-        var v = document.getElementById('setting-ideal-postcodes-user-token')?.value?.trim() || '';
-        return v || (cache.idealPostcodesUserToken || '');
-      })(),
     }).then(() => window.api.getSettings()).then(function(s) {
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
       applyLayoutPreferences(s || {});
@@ -8193,11 +8181,6 @@ var REQUIRED_FIELD_KEYS = [
           pcDropWrap.style.display = 'block';
           pcDropWrap._addresses = r.addresses;
           pcSelect.focus();
-          window.api.postcodeCheckKey().then(function(kr) {
-            if (kr.ok && kr.lookups_remaining != null && kr.lookups_remaining <= 5) {
-              showToast('Low postcode credits! Only ' + kr.lookups_remaining + ' remaining. Buy more in Settings > Integrations.', 'warning');
-            }
-          });
         }).catch(function() {
           pcBtn.disabled = false;
           pcBtn.textContent = 'Find Address';
@@ -14083,67 +14066,6 @@ PDF_CASENOTE_ADVERT +
     });
     document.getElementById('btn-save-import-qf')?.addEventListener('click', function() {
       saveAndImportQuickFile();
-    });
-    ['setting-ideal-postcodes-key', 'setting-ideal-postcodes-user-token'].forEach(function(elId) {
-      var pcEl = document.getElementById(elId);
-      if (!pcEl) return;
-      pcEl.addEventListener('blur', function() {
-        var key = (document.getElementById('setting-ideal-postcodes-key') || {}).value || '';
-        var tok = (document.getElementById('setting-ideal-postcodes-user-token') || {}).value || '';
-        window.api.setSettings({
-          idealPostcodesApiKey: key.trim(),
-          idealPostcodesUserToken: tok.trim()
-        }).then(function() {
-          window.api.getSettings().then(function(s) { window._appSettingsCache = s || {}; });
-          showSettingsSavedToast();
-        }).catch(function(e) { console.error('[postcode-blur]', e); showToast('Failed to save postcode settings', 'error'); });
-      });
-    });
-    document.getElementById('btn-check-postcode-key')?.addEventListener('click', function() {
-      var statusEl = document.getElementById('postcode-credits-status');
-      var keyEl = document.getElementById('setting-ideal-postcodes-key');
-      var apiKey = (keyEl ? keyEl.value.trim() : '');
-      if (!apiKey) {
-        if (statusEl) { statusEl.textContent = 'Enter your API key first.'; statusEl.style.color = '#dc2626'; }
-        return;
-      }
-      if (statusEl) { statusEl.textContent = 'Checking\u2026'; statusEl.style.color = ''; }
-      var utEl = document.getElementById('setting-ideal-postcodes-user-token');
-      var userTok = utEl ? utEl.value.trim() : '';
-      /* Save key + optional user token to DB first, then check */
-      window.api.setSettings({ idealPostcodesApiKey: apiKey, idealPostcodesUserToken: userTok })
-        .then(function() { return window.api.postcodeCheckKey(); })
-        .then(function(r) {
-          if (!statusEl) return;
-          if (!r || !r.configured) {
-            statusEl.textContent = 'No API key saved.';
-            statusEl.style.color = '#dc2626';
-          } else if (r.ok) {
-            if (r.availability_only) {
-              statusEl.textContent = (r.message || 'Key verified.') + (r.hint ? ' ' + r.hint : '');
-              statusEl.style.color = r.key_available ? '#16a34a' : '#d97706';
-            } else {
-              var rem = r.lookups_remaining;
-              if (rem == null || rem === '') {
-                statusEl.textContent = r.message || 'Could not read credit balance.';
-                statusEl.style.color = '#d97706';
-              } else {
-                statusEl.textContent = rem + ' lookups remaining';
-                statusEl.style.color = rem <= 5 ? '#ef4444' : '#16a34a';
-                if (rem <= 5) showToast('Low postcode credits! Only ' + rem + ' lookups remaining.', 'warning');
-              }
-            }
-          } else {
-            statusEl.textContent = r.error || 'Could not verify key.';
-            statusEl.style.color = '#dc2626';
-          }
-        })
-        .catch(function(e) {
-          if (statusEl) {
-            statusEl.textContent = 'Error: ' + (e && e.message ? e.message : 'check failed — try again.');
-            statusEl.style.color = '#dc2626';
-          }
-        });
     });
     ['crm1', 'crm2', 'crm3', 'declaration'].forEach(function(ft) {
       var btn = document.getElementById('settings-laa-' + ft);
