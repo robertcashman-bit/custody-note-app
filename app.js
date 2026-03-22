@@ -2618,16 +2618,22 @@ var REQUIRED_FIELD_KEYS = [
     var conflicts = st.conflictCount || 0;
     if (conflicts > 0) {
       setFooterIndicator(el, conflicts + ' conflict' + (conflicts === 1 ? '' : 's'), 'offline', 'Sync found newer remote changes but kept your local edits safe.');
+      el.style.cursor = '';
     } else if (pending === 0 && st.lastSync) {
       setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync), 'synced');
+      el.style.cursor = '';
     } else if (blocked > 0) {
-      setFooterIndicator(el, blocked + ' blocked', 'offline', st.lastError || '');
+      setFooterIndicator(el, blocked + ' blocked', 'offline', (st.lastError || '') + ' — click to retry sync.');
+      el.style.cursor = 'pointer';
     } else if (failed > 0) {
-      setFooterIndicator(el, failed + ' retrying', 'offline', st.lastError || '');
+      setFooterIndicator(el, failed + ' retrying', 'offline', (st.lastError || '') + ' — click to retry sync.');
+      el.style.cursor = 'pointer';
     } else if (pending > 0) {
       setFooterIndicator(el, pending + ' pending', 'syncing');
+      el.style.cursor = '';
     } else {
       setFooterIndicator(el, 'Waiting to sync', 'backup-ok');
+      el.style.cursor = '';
     }
   }
 
@@ -4599,8 +4605,14 @@ var REQUIRED_FIELD_KEYS = [
       largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
       preferredEmailClient: (window._appSettingsCache || {}).preferredEmailClient || document.getElementById('setting-preferred-email-client')?.value || 'default',
-      idealPostcodesApiKey: document.getElementById('setting-ideal-postcodes-key')?.value?.trim() || '',
-      idealPostcodesUserToken: document.getElementById('setting-ideal-postcodes-user-token')?.value?.trim() || '',
+      idealPostcodesApiKey: (function() {
+        var v = document.getElementById('setting-ideal-postcodes-key')?.value?.trim() || '';
+        return v || (cache.idealPostcodesApiKey || '');
+      })(),
+      idealPostcodesUserToken: (function() {
+        var v = document.getElementById('setting-ideal-postcodes-user-token')?.value?.trim() || '';
+        return v || (cache.idealPostcodesUserToken || '');
+      })(),
     }).then(() => window.api.getSettings()).then(function(s) {
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
       applyLayoutPreferences(s || {});
@@ -12099,6 +12111,37 @@ PDF_CASENOTE_ADVERT +
       });
     }
 
+    var syncInd = document.getElementById('sync-status-indicator');
+    if (syncInd) {
+      syncInd.addEventListener('click', function() {
+        var txt = (syncInd.textContent || '');
+        if (txt.indexOf('blocked') === -1 && txt.indexOf('retrying') === -1) return;
+        if (!window.api || !window.api.syncForceRetry) return;
+        window.api.syncForceRetry().then(function(res) {
+          showToast('Retrying sync: ' + (res.recovered || 0) + ' item(s)', 'info');
+          refreshSyncCounts();
+        }).catch(function(e) { console.error('[syncForceRetry]', e); });
+      });
+    }
+
+    document.getElementById('btn-create-desktop-shortcut')?.addEventListener('click', function() {
+      var msg = document.getElementById('desktop-shortcut-msg');
+      if (!window.api.createDesktopShortcut) return;
+      window.api.createDesktopShortcut().then(function(r) {
+        if (msg) {
+          msg.style.display = '';
+          msg.textContent = r.ok ? ('Shortcut: ' + (r.path || 'Desktop')) : (r.error || 'Could not create shortcut');
+        }
+        showToast(r.ok ? 'Desktop shortcut created' : (r.error || 'Could not create shortcut'), r.ok ? 'success' : 'error');
+      }).catch(function(e) { showToast('Could not create shortcut', 'error'); console.error('[shortcut]', e); });
+    });
+    document.getElementById('btn-open-app-folder')?.addEventListener('click', function() {
+      if (!window.api.openAppFolder) return;
+      window.api.openAppFolder().then(function(r) {
+        if (r && !r.ok && r.error) showToast(r.error, 'error');
+      }).catch(function(e) { showToast('Could not open folder', 'error'); console.error('[openAppFolder]', e); });
+    });
+
     /* Delegated click on #app for home cards, gear menu, back buttons, etc. */
     var appEl = document.getElementById('app');
     if (appEl) {
@@ -12489,6 +12532,10 @@ PDF_CASENOTE_ADVERT +
         if (ssVer && info.version) ssVer.textContent = info.version;
         if (uEl && info.lastUpdated) uEl.textContent = info.lastUpdated;
         if (info.version) window.__appVersion = info.version;
+        if (info.platform && info.platform !== 'win32') {
+          var scBtn = document.getElementById('btn-create-desktop-shortcut');
+          if (scBtn) scBtn.style.display = 'none';
+        }
       });
     }
     // Populate licence footer badge + addon visibility on startup
@@ -14066,7 +14113,7 @@ PDF_CASENOTE_ADVERT +
         }).then(function() {
           window.api.getSettings().then(function(s) { window._appSettingsCache = s || {}; });
           showSettingsSavedToast();
-        });
+        }).catch(function(e) { console.error('[postcode-blur]', e); showToast('Failed to save postcode settings', 'error'); });
       });
     });
     document.getElementById('btn-check-postcode-key')?.addEventListener('click', function() {

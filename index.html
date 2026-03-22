@@ -885,6 +885,17 @@
           <input type="email" id="setting-email" placeholder="you@example.com">
         </div>
 
+        <div class="settings-card" id="desktop-shortcut-card">
+          <h2>Find this app on your PC</h2>
+          <p class="settings-hint">If the desktop shortcut goes missing, recreate it here. Open the app folder to pin <strong>Custody Note.exe</strong> to the taskbar.</p>
+          <p class="settings-hint" style="margin:0.35rem 0 0.75rem 0;">Or press the <strong>Windows</strong> key and type <strong>Custody Note</strong> to find it in the Start menu.</p>
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+            <button type="button" id="btn-create-desktop-shortcut" class="btn btn-secondary">Create desktop shortcut</button>
+            <button type="button" id="btn-open-app-folder" class="btn btn-secondary">Open app folder</button>
+          </div>
+          <p id="desktop-shortcut-msg" class="settings-hint" style="margin-top:0.75rem;display:none;" role="status"></p>
+        </div>
+
         <div class="settings-section-label">Billing Defaults</div>
         <div class="settings-card">
           <h2>Invoice &amp; Billing Defaults</h2>
@@ -938,7 +949,7 @@
           <label>API key</label>
           <input type="text" id="setting-ideal-postcodes-key" placeholder="ak_xxxxxxxxxxxxxxxxx" autocomplete="off">
           <label style="margin-top:0.75rem;">User token (optional — for &ldquo;Check credits&rdquo; exact balance)</label>
-          <input type="password" id="setting-ideal-postcodes-user-token" placeholder="uk_… from ideal-postcodes.co.uk/account" autocomplete="off">
+          <input type="text" id="setting-ideal-postcodes-user-token" placeholder="uk_… from ideal-postcodes.co.uk/account" autocomplete="off" spellcheck="false">
           <p class="settings-hint" style="margin-top:0.25rem;">Ideal Postcodes only exposes remaining lookups on the private <strong>/details</strong> API, which needs this token. Without it, <strong>Check credits</strong> still confirms your API key is valid; buy top-ups at ideal-postcodes.co.uk as usual.</p>
           <div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:0.75rem;align-items:center;">
             <button type="button" id="btn-check-postcode-key" class="btn btn-secondary">Check credits</button>

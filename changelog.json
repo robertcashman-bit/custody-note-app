@@ -1,9 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.4.130",
+      "date": "2026-03-22",
+      "latest": true,
+      "changes": [
+        "Windows: Create desktop shortcut and Open app folder from Settings",
+        "Preserve Ideal Postcodes API key and user token when saving other settings (empty field no longer wipes stored values)",
+        "User token field uses text input to avoid browser password quirks",
+        "Auto-retry blocked/failed sync queue after successful licence activate/validate",
+        "Click sync footer when it shows blocked/retrying to force retry",
+        "getAppVersion includes platform for UI (desktop shortcut visibility)"
+      ]
+    },
+    {
       "version": "1.4.129",
       "date": "2026-03-21",
-      "latest": true,
       "changes": [
         "Fix magic link login not appearing for trial users",
         "Fix delete showing 'failed' on successful deletes",

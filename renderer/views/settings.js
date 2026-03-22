@@ -221,6 +221,7 @@ function loadSettings() {
 }
 
 function saveSettings() {
+  var cache = window._appSettingsCache || {};
   window.api.setSettings({
     email: (document.getElementById('setting-email') || {value:''}).value.trim() || '',
     dsccPin: (document.getElementById('setting-dscc-pin') || {value:''}).value.trim() || '',
@@ -238,8 +239,14 @@ function saveSettings() {
     officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
     idleTimeoutMinutes: (document.getElementById('setting-idle-timeout') || {value:'0'}).value || '0',
     preferredEmailClient: (window._appSettingsCache || {}).preferredEmailClient || document.getElementById('setting-preferred-email-client')?.value || 'default',
-    idealPostcodesApiKey: (document.getElementById('setting-ideal-postcodes-key') || { value: '' }).value.trim() || '',
-    idealPostcodesUserToken: (document.getElementById('setting-ideal-postcodes-user-token') || { value: '' }).value.trim() || '',
+    idealPostcodesApiKey: (function() {
+      var v = (document.getElementById('setting-ideal-postcodes-key') || { value: '' }).value.trim() || '';
+      return v || (cache.idealPostcodesApiKey || '');
+    })(),
+    idealPostcodesUserToken: (function() {
+      var v = (document.getElementById('setting-ideal-postcodes-user-token') || { value: '' }).value.trim() || '';
+      return v || (cache.idealPostcodesUserToken || '');
+    })(),
   }).then(function() {
     /* Sync global flag so list refreshes immediately reflect the toggle */
     window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;

@@ -1960,6 +1960,18 @@ function scheduleSyncSoon() {
   if (w) w.scheduleSoon();
 }
 
+/** After licence is valid again, unblock sync queue items that failed with 401/403. */
+function retrySyncQueueAfterLicenceSuccess() {
+  try {
+    const apiUrl = getSyncApiUrl();
+    if (!apiUrl) return;
+    const w = getSyncWorker();
+    if (!w) return;
+    const n = w.forceRetryAll();
+    if (n > 0) w.scheduleSoon();
+  } catch (_) {}
+}
+
 function createWindow() {
   const iconPath = path.join(__dirname, 'custody-note.ico');
   mainWindow = new BrowserWindow({
@@ -3206,8 +3218,8 @@ ipcMain.handle('get-app-version', () => {
       const stat = fs.statSync(pkgPath);
       lastUpdated = new Date(stat.mtimeMs).toISOString().slice(0, 10);
     }
-    return { version: version || '0.0.0', lastUpdated };
-  } catch (_) { return { version: '0.0.0', lastUpdated: '' }; }
+    return { version: version || '0.0.0', lastUpdated, platform: process.platform };
+  } catch (_) { return { version: '0.0.0', lastUpdated: '', platform: process.platform }; }
 });
 
 ipcMain.handle('app-update-install', () => {
@@ -3555,6 +3567,7 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
   };
   writeLicenceData(data);
   checkCloudBackupEntitlement().catch(() => {});
+  retrySyncQueueAfterLicenceSuccess();
   return { success: true, status: computeLicenceStatus(data) };
 });
 
@@ -3571,6 +3584,7 @@ ipcMain.handle('licence:validate', async () => {
     if (result.serverStatus) data.status = result.serverStatus;
     if (result.entitlements !== undefined) data.entitlements = result.entitlements;
     writeLicenceData(data);
+    retrySyncQueueAfterLicenceSuccess();
   } else if (result.valid === false) {
     const serverStatus = result.serverStatus || 'revoked';
     if (serverStatus === 'expired') data.expiresAt = result.expiresAt || data.expiresAt;
@@ -5317,6 +5331,39 @@ ipcMain.handle('open-path', async (_, filePath) => {
     return true;
   } catch (_) {
     return false;
+  }
+});
+
+ipcMain.handle('create-desktop-shortcut', () => {
+  if (process.platform !== 'win32') {
+    return { ok: false, error: 'Only available on Windows' };
+  }
+  try {
+    const exe = app.getPath('exe');
+    const desktop = app.getPath('desktop');
+    const shortcutPath = path.join(desktop, 'Custody Note.lnk');
+    const op = fs.existsSync(shortcutPath) ? 'update' : 'create';
+    const ok = shell.writeShortcutLink(shortcutPath, op, {
+      target: exe,
+      cwd: path.dirname(exe),
+      icon: exe,
+      iconIndex: 0,
+      description: 'Custody Note',
+    });
+    return { ok: !!ok, path: shortcutPath };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+});
+
+ipcMain.handle('open-app-folder', async () => {
+  try {
+    const dir = path.dirname(app.getPath('exe'));
+    const err = await shell.openPath(dir);
+    if (err) return { ok: false, error: err };
+    return { ok: true, path: dir };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
   }
 });
 
