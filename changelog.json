@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.131",
+      "version": "1.4.132",
       "date": "2026-03-22",
       "latest": true,
+      "changes": [
+        "Sync: blocked items now auto-retry on app start and every 30 min",
+        "close guard debounce fix"
+      ]
+    },
+    {
+      "version": "1.4.131",
+      "date": "2026-03-22",
+      "latest": false,
       "changes": [
         "Fix: close guard now detects unsaved edits in debounce window",
         "Sync: blocked items now auto-retry on app start and every 30 min (up to 3 times)",
