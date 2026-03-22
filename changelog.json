@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.130",
+      "version": "1.4.131",
       "date": "2026-03-22",
       "latest": true,
+      "changes": [
+        "Fix: close guard now detects unsaved edits in debounce window",
+        "QA audit fixes from v1.4.130"
+      ]
+    },
+    {
+      "version": "1.4.130",
+      "date": "2026-03-22",
+      "latest": false,
       "changes": [
         "Windows: Create desktop shortcut and Open app folder from Settings",
         "Preserve Ideal Postcodes API key and user token when saving other settings (empty field no longer wipes stored values)",
@@ -42,7 +51,8 @@
         "Fix CSS theme-light duplicate variables and undefined --border-color",
         "Add accessibility labels to search inputs and modal overlays",
         "Add past_due subscription grace period support"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.128",
@@ -53,7 +63,8 @@
         "Fix competing database writes during first-launch wizard setup",
         "Add 5-minute timeout to magic-link session unlock polling",
         "Persistent auto-save indicator in form header and footer bar"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.127",
@@ -68,7 +79,8 @@
         "Station Mileage shortcut added to home screen",
         "Toast notifications now queue instead of overwriting, with screen reader support",
         "Silent error handlers replaced with visible feedback across the app"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.126",
@@ -78,7 +90,8 @@
         "Polling-based auth flow for reliable desktop login",
         "Licence key activation kept as fallback",
         "Session persists across restarts — stay signed in until you log out"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.125",
@@ -88,7 +101,8 @@
         "Remove dead account sign-in code",
         "Licence overlay always uses dark styling for reliable contrast",
         "Open mode: app fully usable without licence for testing"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.124",
@@ -98,7 +112,8 @@
         "Remove dead account sign-in code (5 unused auth IPC handlers, 5 server endpoints)",
         "Remove hardcoded admin email from source code",
         "Licence overlay always uses dark styling for reliable contrast"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.123",
@@ -111,56 +126,64 @@
         "Settings decluttered: advanced options hidden behind toggle",
         "Expired licence shows a non-blocking banner instead of blocking the app",
         "Fix CI: skip Linux build in deploy-website step"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.122",
       "date": "2026-03-21",
       "changes": [
         "Fix postcode source-code tests for proxy-first lookup"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.121",
       "date": "2026-03-21",
       "changes": [
         "Zero-friction UX redesign: licence key activation, simplified wizard, settings collapse, non-blocking expiry"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.120",
       "date": "2026-03-21",
       "changes": [
         "Fix input visibility on email and code fields"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.119",
       "date": "2026-03-21",
       "changes": [
         "Simpler sign-in: just enter your email and verify with a 6-digit code — no password or registration needed"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.118",
       "date": "2026-03-21",
       "changes": [
         "Fix auto-update: releases now publish immediately instead of as drafts"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.117",
       "date": "2026-03-21",
       "changes": [
         "Licence overlay visibility: brighter text, visible box border, password input styling, improved contrast across all overlay elements"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.116",
       "date": "2026-03-21",
       "changes": [
         "Improve sign-in form input visibility (higher contrast background and border)"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.115",
@@ -170,7 +193,8 @@
         "Security: send Bearer auth headers on recovery, licence, and deactivation API calls",
         "Account sign-in UI: settings licence section shows signed-in email instead of synthetic key",
         "Cloud backup links updated to custodynote.com/pricing"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.114",
@@ -180,7 +204,8 @@
         "Bearer token auth for licence validation and cloud backup API calls",
         "auth:register now runs cloud backup entitlement check and returns subscription like login",
         "cloud-backup-restore accepts account auth (authToken) as well as licence key"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.113",
