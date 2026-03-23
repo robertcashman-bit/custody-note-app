@@ -12,7 +12,8 @@ import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
-const WEBSITE_ROOT = join(APP_ROOT, '..', 'custody note - website production');
+// custody-note-website is the custodynote.com product site (separate repo)
+const WEBSITE_ROOT = join(APP_ROOT, '..', 'custody-note-website');
 
 // Run consistency check first
 try {
@@ -25,7 +26,7 @@ try {
 const pkg = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8'));
 const changelog = JSON.parse(readFileSync(join(APP_ROOT, 'changelog.json'), 'utf8'));
 
-const websiteDataDir = join(WEBSITE_ROOT, 'src', 'data');
+const websiteDataDir = join(WEBSITE_ROOT, 'data');
 const websiteDataPath = join(websiteDataDir, 'releases.json');
 
 if (!existsSync(websiteDataDir)) {
@@ -39,25 +40,16 @@ writeFileSync(
 );
 console.log(`[sync-website] Synced v${pkg.version} and ${changelog.releases.length} releases to website`);
 
-// Auto-commit, push, and deploy the website
+// Auto-commit and push — Vercel deploys automatically from GitHub
 try {
   execSync('git add -A', { cwd: WEBSITE_ROOT, stdio: 'inherit' });
   try {
-    execSync(`git commit -m "v${pkg.version}: sync releases"`, { cwd: WEBSITE_ROOT, stdio: 'inherit' });
+    execSync(`git commit -m "Changelog: sync releases.json to v${pkg.version}"`, { cwd: WEBSITE_ROOT, stdio: 'inherit' });
   } catch {
     console.log('[sync-website] Nothing to commit (already up to date)');
   }
   execSync('git push origin master', { cwd: WEBSITE_ROOT, stdio: 'inherit' });
-  console.log('[sync-website] Pushed to GitHub');
+  console.log('[sync-website] Pushed to GitHub → Vercel will auto-deploy custodynote.com');
 } catch (e) {
   console.error('[sync-website] Git push failed:', e.message);
-}
-
-try {
-  console.log('[sync-website] Deploying to Vercel...');
-  execSync('npx vercel --prod --yes', { cwd: WEBSITE_ROOT, stdio: 'inherit', timeout: 120000 });
-  console.log('[sync-website] Vercel production deploy complete');
-} catch (e) {
-  console.error('[sync-website] Vercel deploy failed:', e.message);
-  console.error('[sync-website] You can deploy manually with: cd "custody note - website production" && npx vercel --prod');
 }
