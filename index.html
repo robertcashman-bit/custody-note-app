@@ -67,7 +67,7 @@
       <div class="splash-loader"><span></span><span></span><span></span></div>
       <div class="splash-advert">
         <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
-          <a href="mailto:robertcashman@defencelegalservices.com?subject=Custody Note Enquiry" class="splash-advert-btn splash-advert-link">Contact Us</a>
+          <button type="button" id="splash-contact-outlook-btn" class="splash-advert-btn splash-advert-link">Contact Us</button>
           <a href="https://www.custodynote.com" class="splash-advert-btn splash-advert-link" target="_blank" rel="noopener">www.custodynote.com</a>
         </div>
       </div>
@@ -119,6 +119,7 @@
               <div class="gear-section-label">Documents</div>
               <button type="button" class="gear-item" data-action="laa-forms">&#128203; LAA Forms</button>
               <button type="button" class="gear-item" data-action="authorities">&#128220; Authorities</button>
+              <button type="button" class="gear-item" data-action="templates">&#128196; Templates</button>
               <div class="gear-section-label">Data</div>
               <button type="button" class="gear-item" data-action="firms">&#127970; Firms</button>
               <button type="button" class="gear-item" data-action="reports">&#128202; Reports</button>
@@ -698,9 +699,9 @@
         </div>
         <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
           <label style="font-size:0.9rem;font-weight:500;">Export range:</label>
-          <input type="date" id="report-export-from" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;">
+          <input type="date" id="report-export-from" class="settings-input settings-input--date">
           <span style="font-size:0.9rem;">to</span>
-          <input type="date" id="report-export-to" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;">
+          <input type="date" id="report-export-to" class="settings-input settings-input--date">
           <button type="button" id="btn-export-csv" class="btn btn-secondary">Export CSV</button>
           <span id="report-export-status" style="font-size:0.85rem;color:#64748b;"></span>
         </div>
@@ -741,9 +742,9 @@
             <p class="settings-hint" style="margin-bottom:0.75rem;">Completed attendances not yet invoiced.</p>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
               <input type="text" id="billable-search" class="form-input" placeholder="Search client, firm, station..." style="max-width:250px;">
-              <input type="date" id="billable-date-from" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;">
+              <input type="date" id="billable-date-from" class="settings-input settings-input--date">
               <span style="font-size:0.9rem;align-self:center;">to</span>
-              <input type="date" id="billable-date-to" style="padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;">
+              <input type="date" id="billable-date-to" class="settings-input settings-input--date">
               <select id="billable-firm-filter" class="form-input" style="max-width:200px;">
                 <option value="">All firms</option>
               </select>
@@ -851,7 +852,7 @@
             <p style="margin:0 0 0.4rem 0;font-weight:700;font-size:1rem;color:#1e40af;">&#128273; Enter your paid licence key</p>
             <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#1e3a8a;">Paste the licence key from your purchase confirmation email. This activates cloud backup and removes the trial notice.</p>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-              <input type="text" id="trial-upgrade-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px;max-width:340px;padding:0.55rem 0.75rem;font-size:0.95rem;border:1px solid #93c5fd;border-radius:6px;letter-spacing:1px;">
+              <input type="text" id="trial-upgrade-key" class="settings-input settings-input--trial" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px;max-width:340px;font-size:0.95rem;">
               <button type="button" id="btn-trial-upgrade-activate" class="btn btn-primary" style="padding:0.55rem 1.2rem;font-size:0.95rem;">Activate</button>
             </div>
             <p id="trial-upgrade-error" style="display:none;margin:0.5rem 0 0 0;font-size:0.85rem;color:#dc2626;"></p>
@@ -861,7 +862,7 @@
           <div id="licence-status-none" style="display:none;margin-top:1rem;">
             <p class="settings-hint" style="margin:0 0 0.75rem 0;">Enter your Custody Note licence key to activate.</p>
             <label for="setting-licence-key">Licence key</label>
-            <input type="text" id="setting-licence-key" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="max-width:320px;">
+            <input type="text" id="setting-licence-key" class="settings-input" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="max-width:320px;">
             <p class="settings-hint" style="margin:0.25rem 0 0 0;font-size:0.8rem;">Hyphens and spaces are optional; key is normalised to uppercase.</p>
             <button type="button" id="btn-licence-activate-settings" class="btn btn-primary" style="margin-top:0.5rem;">Activate</button>
             <p id="licence-activate-error" class="licence-error" style="display:none;margin-top:0.5rem;color:#dc2626;"></p>
@@ -871,7 +872,7 @@
         <div class="settings-card">
           <h2>Your Details</h2>
           <label>DSCC PIN/Number</label>
-          <input type="text" id="setting-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10" style="max-width:200px;">
+          <input type="text" id="setting-dscc-pin" class="settings-input" placeholder="Your DSCC PIN/number" maxlength="10" style="max-width:200px;">
           <label style="margin-top:0.75rem;">Supervisor review</label>
           <label class="toggle-row">
             <span>Show supervisor review section (only if a firm requires it)</span>
@@ -879,10 +880,10 @@
           </label>
           <p class="settings-hint" style="margin-top:4px;">Freelance reps can usually leave this off.</p>
           <label style="margin-top:0.75rem;">Fee Earner Name</label>
-          <input type="text" id="setting-fee-earner-name" placeholder="e.g. Robert Smith">
+          <input type="text" id="setting-fee-earner-name" class="settings-input" placeholder="e.g. Robert Smith">
           <p class="settings-hint" style="margin-top:4px;">Auto-fills fee earner name in conflict certificates and LAA declarations.</p>
           <label style="margin-top:0.75rem;">Your email (PDFs sent here to check)</label>
-          <input type="email" id="setting-email" placeholder="you@example.com">
+          <input type="email" id="setting-email" class="settings-input" placeholder="you@example.com">
         </div>
 
         <div class="settings-card" id="desktop-shortcut-card">
@@ -903,15 +904,15 @@
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;">
             <div>
               <label for="setting-billing-attendance-fee">Attendance fee (&pound;)</label>
-              <input type="number" id="setting-billing-attendance-fee" step="0.01" min="0" placeholder="160.00">
+              <input type="number" id="setting-billing-attendance-fee" class="settings-input" step="0.01" min="0" placeholder="160.00">
             </div>
             <div>
               <label for="setting-billing-mileage-rate">Mileage rate (&pound;/mile)</label>
-              <input type="number" id="setting-billing-mileage-rate" step="0.01" min="0" placeholder="0.45">
+              <input type="number" id="setting-billing-mileage-rate" class="settings-input" step="0.01" min="0" placeholder="0.45">
             </div>
             <div>
               <label for="setting-billing-vat-rate">VAT rate (%)</label>
-              <input type="number" id="setting-billing-vat-rate" step="1" min="0" max="100" placeholder="20">
+              <input type="number" id="setting-billing-vat-rate" class="settings-input" step="1" min="0" max="100" placeholder="20">
             </div>
           </div>
         </div>
@@ -929,11 +930,11 @@
           <div id="quickfile-settings-content">
             <p class="settings-hint">Connect your QuickFile account to import your client directory into <strong>Firms You Work For</strong>. Imported entries map to firm name, contact name, email and telephone, and can still be edited afterwards.</p>
             <label>Account number</label>
-            <input type="text" id="setting-quickfile-account" placeholder="Your QuickFile account number" autocomplete="off">
+            <input type="text" id="setting-quickfile-account" class="settings-input" placeholder="Your QuickFile account number" autocomplete="off">
             <label>API key</label>
-            <input type="password" id="setting-quickfile-apikey" placeholder="API key from QuickFile" autocomplete="off">
+            <input type="password" id="setting-quickfile-apikey" class="settings-input" placeholder="API key from QuickFile" autocomplete="off">
             <label>Application ID</label>
-            <input type="text" id="setting-quickfile-appid" placeholder="Application ID from QuickFile" autocomplete="off">
+            <input type="text" id="setting-quickfile-appid" class="settings-input" placeholder="Application ID from QuickFile" autocomplete="off">
             <div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:0.9rem;">
               <button type="button" id="btn-save-qf-settings" class="btn btn-secondary">Save QuickFile settings</button>
               <button type="button" id="btn-save-test-qf" class="btn btn-secondary">Save and test QuickFile</button>
@@ -1137,7 +1138,7 @@
               <button type="button" id="btn-cloud-backup-restore" class="btn btn-secondary" style="margin-bottom:0.5rem;">Restore from Cloud Backup</button>
               <div id="cloud-restore-panel" style="display:none;margin-top:0.75rem;">
                 <p class="settings-hint">Select a backup to restore. This will replace your current database. A safety copy is saved first.</p>
-                <select id="cloud-restore-select" style="width:100%;max-width:400px;padding:0.5rem;margin-bottom:0.5rem;"></select>
+                <select id="cloud-restore-select" class="settings-input" style="width:100%;max-width:400px;margin-bottom:0.5rem;"></select>
                 <button type="button" id="btn-cloud-restore-confirm" class="btn btn-primary">Restore selected backup</button>
                 <span id="cloud-restore-status" class="settings-hint" style="margin-left:0.5rem;"></span>
               </div>
@@ -1151,7 +1152,7 @@
           </div>
           <div id="local-restore-panel" style="display:none;margin-top:0.75rem;">
             <p class="settings-hint">Backups found in your local and off-site folders. Select one to restore. <strong>A safety copy of your current database is saved first.</strong></p>
-            <select id="local-restore-select" style="width:100%;max-width:480px;padding:0.5rem;margin-bottom:0.5rem;font-size:0.85rem;"></select>
+            <select id="local-restore-select" class="settings-input" style="width:100%;max-width:480px;margin-bottom:0.5rem;font-size:0.85rem;"></select>
             <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.25rem;">
               <button type="button" id="btn-local-restore-confirm" class="btn btn-primary">Restore selected backup</button>
               <button type="button" id="btn-local-restore-cancel" class="btn btn-secondary">Cancel</button>
@@ -1161,7 +1162,7 @@
           <p class="settings-hint" style="margin-top:0;">Your attendance data is backed up automatically as encrypted files. Syncing to a cloud folder keeps an off-site copy safe.</p>
           <label>Local backup folder</label>
           <div class="setting-row">
-            <input type="text" id="setting-backup-folder" readonly placeholder="Desktop">
+            <input type="text" id="setting-backup-folder" class="settings-input" readonly placeholder="Desktop">
             <button type="button" id="setting-backup-browse" class="btn btn-secondary">Browse</button>
           </div>
           <label style="margin-top:0.75rem;">Sync backups to the cloud <span style="color:#059669;font-weight:600;">(recommended)</span></label>
@@ -1173,10 +1174,10 @@
           <input type="text" id="setting-offsite-backup-folder" readonly style="display:none;" aria-hidden="true">
           <div class="settings-advanced-section" style="display:none;">
             <label>Custom cloud backup URL (optional)</label>
-            <input type="url" id="setting-cloud-backup-url" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
+            <input type="url" id="setting-cloud-backup-url" class="settings-input" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;" autocomplete="off">
             <p class="settings-hint" style="margin-top:0.25rem;">For your own backup API only. Leave blank to use Custody Note&rsquo;s managed AWS backup (included with your licence).</p>
             <label style="margin-top:0.5rem;">Custom cloud backup token (optional)</label>
-            <input type="password" id="setting-cloud-backup-token" placeholder="Secret token for your API" style="width:100%;max-width:400px;padding:0.5rem;" autocomplete="off">
+            <input type="password" id="setting-cloud-backup-token" class="settings-input" placeholder="Secret token for your API" style="width:100%;max-width:400px;" autocomplete="off">
             <p class="settings-hint" style="margin-top:0.25rem;">Sent as <code>Authorization: Bearer &lt;token&gt;</code> when using a custom backup URL above.</p>
           </div>
         </div>
@@ -1190,7 +1191,7 @@
           <div style="margin-top:0.75rem;">
             <label>Auto-lock after inactivity</label>
             <p class="settings-hint">Locks the screen after the selected period of no activity. Recommended for shared or unattended machines.</p>
-            <select id="setting-idle-timeout" style="width:200px;">
+            <select id="setting-idle-timeout" class="settings-input" style="width:200px;">
               <option value="0">Disabled</option>
               <option value="5">5 minutes</option>
               <option value="10">10 minutes</option>
@@ -1203,11 +1204,11 @@
           <p class="settings-hint">If you need to recover (e.g. new computer), start the app with your database and recovery.dat in place; a window will ask for this password.</p>
           <p id="recovery-status" class="settings-hint" style="font-weight:600;"></p>
           <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.4rem;">
-            <input type="password" id="setting-recovery-pw" placeholder="New recovery password" style="flex:1;">
+            <input type="password" id="setting-recovery-pw" class="settings-input" placeholder="New recovery password" style="flex:1;">
             <button type="button" id="btn-toggle-recovery-pw" class="btn btn-small" aria-label="Show password">Show</button>
           </div>
           <div style="display:flex;align-items:center;gap:0.4rem;">
-            <input type="password" id="setting-recovery-pw-confirm" placeholder="Confirm recovery password" style="flex:1;">
+            <input type="password" id="setting-recovery-pw-confirm" class="settings-input" placeholder="Confirm recovery password" style="flex:1;">
             <button type="button" id="btn-toggle-recovery-pw-confirm" class="btn btn-small" aria-label="Show password">Show</button>
           </div>
           <div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.5rem;flex-wrap:wrap;">
@@ -1228,7 +1229,7 @@
           <div style="margin-top:0.75rem;">
             <label style="display:block;margin-bottom:6px;">Import from file path (paste)</label>
             <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
-              <input type="text" id="settings-import-path" placeholder="C:\path\to\file.pdf or .json" style="flex:1;min-width:260px;">
+              <input type="text" id="settings-import-path" class="settings-input" placeholder="C:\path\to\file.pdf or .json" style="flex:1;min-width:260px;">
               <button type="button" id="settings-import-path-btn" class="btn btn-secondary">Import</button>
             </div>
             <p class="settings-hint" style="margin-top:6px;">Tip: you can also drag-and-drop a PDF/JSON onto the app window to import it.</p>
@@ -1244,7 +1245,7 @@
           </label>
           <label style="margin-top:0.75rem;">Auto-import folder</label>
           <div class="setting-row">
-            <input type="text" id="setting-auto-import-folder" readonly placeholder="Choose a folder">
+            <input type="text" id="setting-auto-import-folder" class="settings-input" readonly placeholder="Choose a folder">
             <button type="button" id="setting-auto-import-browse" class="btn btn-secondary">Browse</button>
           </div>
           <p class="settings-hint">The app checks the folder periodically and imports the newest files first.</p>
@@ -1273,35 +1274,24 @@
               </div>
             </div>
           </div>
-          <div class="addon-email-client-row" id="addon-email-client-row">
-            <label for="setting-preferred-email-client" class="addon-email-client-label">Preferred email app</label>
-            <select id="setting-preferred-email-client" class="addon-email-client-select">
-              <option value="default">Default Mail App</option>
-              <option value="gmail">Gmail</option>
-              <option value="owa">Outlook Web (work / school)</option>
-              <option value="outlook">Outlook.com (personal)</option>
-              <option value="yahoo">Yahoo Mail</option>
-              <option value="aol">AOL Mail</option>
-            </select>
-            <p class="settings-hint" style="margin:0.2rem 0 0;">You can also change this at any time inside the Email OIC modal. &mdash; <strong>Note:</strong> <em>Outlook Web (work&nbsp;/&nbsp;school)</em> requires a Microsoft 365 work or school account; if you use a personal Microsoft account, choose <em>Outlook.com (personal)</em> instead to avoid being redirected.</p>
-          </div>
+          <p class="settings-hint" style="margin-top:0.75rem;">Officer and solicitor email actions open <strong>Outlook Web</strong> (Microsoft 365) in your browser &mdash; sign in with your work or school account if prompted.</p>
 
           <div style="margin-top:1.25rem;">
             <strong>Custom Email Templates</strong>
             <p class="settings-hint">Add your own templates. Use <code>{{clientName}}</code>, <code>{{contactName}}</code>, <code>{{firmName}}</code>, <code>{{station}}</code>, <code>{{date}}</code>, <code>{{outcome}}</code>, <code>{{nextStep}}</code>, <code>{{followUp}}</code>, <code>{{attendanceType}}</code>, <code>{{feeEarnerName}}</code>, <code>{{ourFileNumber}}</code>, <code>{{ufn}}</code>, <code>{{oicName}}</code>, or <code>{{offenceType}}</code> as placeholders. Scope controls where the template appears.</p>
             <div id="custom-templates-list" style="margin-bottom:0.75rem;"></div>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
-              <input type="text" id="new-template-name" placeholder="Template name" style="flex:2;min-width:140px;">
+              <input type="text" id="new-template-name" class="settings-input" placeholder="Template name" style="flex:2;min-width:140px;">
               <button type="button" id="btn-add-custom-template" class="btn btn-secondary btn-small">+ Add template</button>
             </div>
             <div id="custom-template-editor" style="display:none;margin-top:0.5rem;">
-              <select id="new-template-scope" style="width:100%;margin-bottom:0.4rem;">
+              <select id="new-template-scope" class="settings-input" style="width:100%;margin-bottom:0.4rem;">
                 <option value="all">Use anywhere</option>
                 <option value="officer">Officer emails only</option>
                 <option value="solicitor">Instructing solicitor emails only</option>
               </select>
-              <input type="text" id="new-template-subject" placeholder="Subject (use {{placeholders}})" style="width:100%;margin-bottom:0.4rem;">
-              <textarea id="new-template-body" rows="5" placeholder="Body text (use {{placeholders}})" style="width:100%;font-size:0.88rem;font-family:inherit;"></textarea>
+              <input type="text" id="new-template-subject" class="settings-input" placeholder="Subject (use {{placeholders}})" style="width:100%;margin-bottom:0.4rem;">
+              <textarea id="new-template-body" class="settings-input" rows="5" placeholder="Body text (use {{placeholders}})" style="width:100%;font-size:0.88rem;font-family:inherit;"></textarea>
               <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
                 <button type="button" id="btn-save-custom-template" class="btn btn-primary btn-small">Save template</button>
                 <button type="button" id="btn-cancel-custom-template" class="btn btn-secondary btn-small">Cancel</button>
@@ -1355,7 +1345,7 @@
                 <li><strong>Support forum</strong> — Post questions, get help from the team and other users. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/support">Open forum</button> <button type="button" class="btn btn-small support-faq-link" data-url="https://discord.gg/XcEeUe6q" style="background:#5865F2;color:#fff;">Discord</button></li>
                 <li><strong>Forgot licence key?</strong> — Enter your email and we&apos;ll send it if we have it on file.
                   <div class="forgot-licence-row" style="margin-top:0.35rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-                    <input type="email" id="forgot-licence-email" placeholder="you@example.com" class="forgot-licence-input" style="padding:0.35rem 0.5rem;font-size:0.85rem;border:1px solid var(--border,#ccc);border-radius:4px;min-width:180px;" />
+                    <input type="email" id="forgot-licence-email" placeholder="you@example.com" class="forgot-licence-input settings-input" style="min-width:180px;font-size:0.85rem;" />
                     <button type="button" id="forgot-licence-btn" class="btn btn-small btn-primary">Email my key</button>
                     <span id="forgot-licence-msg" class="forgot-licence-msg" style="font-size:0.8rem;color:var(--text-muted,#666);"></span>
                   </div>
@@ -1898,11 +1888,11 @@
           <h2>Welcome to Custody Note</h2>
           <p>Let's get you set up in under a minute. These details appear on your attendance notes and LAA declarations.</p>
           <label for="fl-fee-earner-name">Fee Earner Name <span style="color:#dc2626;">*</span></label>
-          <input type="text" id="fl-fee-earner-name" placeholder="e.g. Robert Smith" style="margin-bottom:0.75rem;">
+          <input type="text" id="fl-fee-earner-name" class="settings-input" placeholder="e.g. Robert Smith" style="margin-bottom:0.75rem;">
           <label for="fl-dscc-pin">DSCC PIN/Number <span style="color:#dc2626;">*</span></label>
-          <input type="text" id="fl-dscc-pin" placeholder="Your DSCC PIN/number" maxlength="10" style="margin-bottom:0.75rem;">
+          <input type="text" id="fl-dscc-pin" class="settings-input" placeholder="Your DSCC PIN/number" maxlength="10" style="margin-bottom:0.75rem;">
           <label for="fl-email">Email address</label>
-          <input type="email" id="fl-email" placeholder="your@email.com" style="margin-bottom:0.75rem;">
+          <input type="email" id="fl-email" class="settings-input" placeholder="your@email.com" style="margin-bottom:0.75rem;">
           <p style="font-size:0.78rem;color:var(--text-muted,#94a3b8);margin:0 0 0.5rem;">Used for login, licence delivery, and exporting notes by email.</p>
           <div class="first-launch-footer">
             <button type="button" id="fl-skip" class="btn btn-secondary">Skip for now</button>
@@ -2044,6 +2034,7 @@
        4. csv-exporter — override CSV functions from app.js
   ──────────────────────────────────────────────────────────── -->
   <script src="renderer/toast.js"></script>
+  <script src="renderer/outlook-email-invoke.js"></script>
   <script src="renderer/licence.js"></script>
   <script src="app.js"></script>
   <script src="renderer/views/reports.js"></script>
@@ -2059,6 +2050,10 @@
   <script src="renderer/views/station-mileage-admin.js"></script>
   <!-- laa-forms.js: CRM14 HTML summary for billing previews; CRM1–3 & declaration use official PDFs via IPC -->
   <script src="renderer/audit-log.js"></script>
+  <script src="renderer/templateSystem/placeholders.js"></script>
+  <script src="renderer/templateSystem/templateEngine.js"></script>
+  <script src="renderer/templateSystem/templateStore.js"></script>
+  <script src="renderer/templateSystem/templateManager.js"></script>
   <!-- Unregister any stale service workers (not needed in Electron) -->
   <script>
     if ('serviceWorker' in navigator) {
@@ -2102,8 +2097,8 @@
       <div id="admin-setup-section" style="display:none;">
         <p class="admin-hint" style="font-size:0.85rem;color:#666;">Admin not configured. Set up admin with your setup token (from ADMIN_SETUP_TOKEN env):</p>
         <div style="margin-bottom:0.75rem;">
-          <input type="text" id="admin-setup-token-inp" placeholder="Setup token" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:0.5rem;" />
-          <input type="password" id="admin-setup-password-inp" placeholder="New admin password" style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;" />
+          <input type="text" id="admin-setup-token-inp" class="settings-input" placeholder="Setup token" style="width:100%;margin-bottom:0.5rem;" />
+          <input type="password" id="admin-setup-password-inp" class="settings-input" placeholder="New admin password" style="width:100%;" />
         </div>
         <button type="button" id="admin-setup-btn" class="btn btn-primary" style="margin-bottom:1rem;">Set password</button>
         <p id="admin-setup-msg" style="font-size:0.8rem;color:#c00;min-height:1.2em;"></p>
@@ -2111,7 +2106,7 @@
       <div id="admin-login-section">
         <p class="admin-hint" style="font-size:0.85rem;color:#666;">Enter admin password:</p>
         <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
-          <input type="password" id="admin-password-inp" placeholder="Password" style="flex:1;padding:0.5rem;border:1px solid #ccc;border-radius:6px;" />
+          <input type="password" id="admin-password-inp" class="settings-input" placeholder="Password" style="flex:1;" />
           <button type="button" id="admin-login-btn" class="btn btn-primary">Login</button>
         </div>
         <p id="admin-login-msg" style="font-size:0.8rem;color:#c00;min-height:1.2em;"></p>
@@ -2125,7 +2120,7 @@
         <!-- Local search tab -->
         <div id="admin-tab-search">
           <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
-            <input type="text" id="admin-search-inp" placeholder="Search by email" style="flex:1;padding:0.5rem;border:1px solid #ccc;border-radius:6px;" />
+            <input type="text" id="admin-search-inp" class="settings-input" placeholder="Search by email" style="flex:1;" />
             <button type="button" id="admin-search-btn" class="btn btn-secondary">Search</button>
             <button type="button" id="admin-sync-btn" class="btn btn-secondary">Sync</button>
           </div>
@@ -2136,7 +2131,7 @@
         <div id="admin-tab-dashboard" style="display:none;">
           <div id="admin-dash-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:0.75rem;margin-bottom:1rem;"></div>
           <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center;">
-            <input type="text" id="admin-dash-filter" placeholder="Filter by email or key…" style="flex:1;padding:0.5rem;border:1px solid #ccc;border-radius:6px;font-size:0.85rem;" />
+            <input type="text" id="admin-dash-filter" class="settings-input" placeholder="Filter by email or key…" style="flex:1;font-size:0.85rem;" />
             <button type="button" id="admin-dash-refresh" class="btn btn-secondary">Refresh</button>
             <button type="button" id="admin-dash-export" class="btn btn-secondary">Export CSV</button>
           </div>

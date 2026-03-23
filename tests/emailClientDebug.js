@@ -1,3 +1,7 @@
+/**
+ * DevTools helper: verify Outlook Web email path (no mailto / no preferred-client picker).
+ * Requires Electron with remote debugging on port 9222 and the app window open.
+ */
 const http = require('http');
 const WebSocket = require('ws');
 
@@ -48,39 +52,16 @@ async function run() {
   await connect(page.webSocketDebuggerUrl);
   await send('Runtime.enable', {});
 
-  console.log('=== Email Client Debug ===\n');
+  console.log('=== Outlook Web email debug ===\n');
 
-  const cachedClient = await evaluate('(window._appSettingsCache || {}).preferredEmailClient || "NOT SET"');
-  console.log('Cached preferredEmailClient:', cachedClient);
+  const emailOpen = await evaluate('typeof (window.emailAPI && window.emailAPI.open)');
+  console.log('window.emailAPI.open:', emailOpen);
 
-  const dbSettings = await evaluate(`
-    (async function() {
-      if (window.api && window.api.getSettings) {
-        var s = await window.api.getSettings();
-        return s ? (s.preferredEmailClient || "NOT SET in DB") : "getSettings returned null";
-      }
-      return "api.getSettings not available";
-    })()
-  `);
-  console.log('DB preferredEmailClient:', dbSettings);
+  const invokeOpen = await evaluate('typeof (window.invokeOutlookWebCompose)');
+  console.log('window.invokeOutlookWebCompose:', invokeOpen);
 
-  const emailClients = await evaluate('JSON.stringify(typeof EMAIL_CLIENTS !== "undefined" ? EMAIL_CLIENTS : "NOT DEFINED")');
-  console.log('EMAIL_CLIENTS:', emailClients);
-
-  const buildUrlFn = await evaluate('typeof buildEmailClientUrl');
-  console.log('buildEmailClientUrl type:', buildUrlFn);
-
-  const testUrl = await evaluate('typeof buildEmailClientUrl === "function" ? buildEmailClientUrl("outlook_web", "test@test.com", "Test Subject", "Test Body") : "N/A"');
-  console.log('Test URL for outlook_web:', testUrl ? testUrl.substring(0, 150) : 'null');
-
-  const testDefault = await evaluate('typeof buildEmailClientUrl === "function" ? buildEmailClientUrl("default", "test@test.com", "Test Subject", "Test Body") : "N/A"');
-  console.log('Test URL for default:', testDefault ? testDefault.substring(0, 150) : 'null');
-
-  const openExternalType = await evaluate('window.api && typeof window.api.openExternal');
-  console.log('api.openExternal type:', openExternalType);
-
-  const guardState = await evaluate('JSON.stringify(window._emailOpenGuard || "NOT SET")');
-  console.log('_emailOpenGuard state:', guardState);
+  const openExt = await evaluate('typeof (window.api && window.api.openExternal)');
+  console.log('window.api.openExternal (non-email links only):', openExt);
 
   ws.close();
 }

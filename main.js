@@ -41,6 +41,7 @@ const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-i
 const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
 const { createBackupScheduler } = require('./main/backupScheduler');
+const { openOutlookWebEmail } = require('./main/openOutlookWebEmail');
 
 let mainWindow;
 let db;
@@ -5328,10 +5329,27 @@ ipcMain.handle('photo-delete', (_, { attendanceId, photoId }) => {
   }
 });
 
+ipcMain.handle('open-outlook-email', async (event, payload) => {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Missing email payload');
+  }
+  return openOutlookWebEmail({
+    to: payload.to != null ? String(payload.to) : '',
+    cc: payload.cc != null ? String(payload.cc) : '',
+    bcc: payload.bcc != null ? String(payload.bcc) : '',
+    subject: payload.subject != null ? String(payload.subject) : '',
+    body: payload.body != null ? String(payload.body) : '',
+  });
+});
+
 ipcMain.handle('open-external', async (_, url) => {
   if (typeof url !== 'string') return;
   const u = url.trim();
-  if (u.startsWith('https://') || u.startsWith('mailto:')) {
+  if (u.toLowerCase().startsWith('mailto:')) {
+    console.warn('[open-external] Blocked mailto (use Outlook Web via open-outlook-email):', u.slice(0, 120));
+    return;
+  }
+  if (u.startsWith('https://') || u.startsWith('http://')) {
     await shell.openExternal(u);
   }
 });

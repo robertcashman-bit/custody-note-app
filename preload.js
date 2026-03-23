@@ -127,6 +127,10 @@ contextBridge.exposeInMainWorld('api', {
   appCheckUpdates: () => ipcRenderer.invoke('app-check-updates'),
 });
 
+contextBridge.exposeInMainWorld('emailAPI', {
+  open: (payload) => ipcRenderer.invoke('open-outlook-email', payload),
+});
+
 contextBridge.exposeInMainWorld('custodyNote', {
   requestLicenceEmail: (email) => ipcRenderer.invoke('custody:requestLicenceEmail', email),
   adminLogin: (password) => ipcRenderer.invoke('custody:adminLogin', password),

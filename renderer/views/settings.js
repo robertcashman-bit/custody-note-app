@@ -49,20 +49,6 @@ function loadSettings() {
     if (aif) aif.value = s.autoImportFolder || '';
 
     /* Officer Email Templates add-on */
-    var prefClientSel = document.getElementById('setting-preferred-email-client');
-    if (prefClientSel) {
-      prefClientSel.value = s.preferredEmailClient || 'default';
-      if (!prefClientSel._oetClientListenerAttached) {
-        prefClientSel._oetClientListenerAttached = true;
-        prefClientSel.addEventListener('change', function() {
-          var val = prefClientSel.value;
-          window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { preferredEmailClient: val });
-          window.api.setSettings({ preferredEmailClient: val }).then(function() {
-            showToast('Email app preference saved', 'success');
-          });
-        });
-      }
-    }
     var oetToggle = document.getElementById('setting-officer-email-templates');
     if (oetToggle) {
       oetToggle.checked = s.officerEmailTemplatesEnabled === 'true';
@@ -238,7 +224,6 @@ function saveSettings() {
     autoImportFolder: (document.getElementById('setting-auto-import-folder') || {value:''}).value.trim() || '',
     officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
     idleTimeoutMinutes: (document.getElementById('setting-idle-timeout') || {value:'0'}).value || '0',
-    preferredEmailClient: (window._appSettingsCache || {}).preferredEmailClient || document.getElementById('setting-preferred-email-client')?.value || 'default',
   }).then(function() {
     /* Sync global flag so list refreshes immediately reflect the toggle */
     window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;

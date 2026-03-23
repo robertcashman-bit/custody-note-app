@@ -463,8 +463,8 @@ describe('Email pack preparation', () => {
     assert.ok(billingJs.includes('Police Station Attendance Invoice'));
   });
 
-  it('opens email via mailto link', () => {
-    assert.ok(billingJs.includes('mailto:'));
+  it('opens email via openOutlookWebCompose (Outlook Web)', () => {
+    assert.ok(billingJs.includes('openOutlookWebCompose'));
   });
 
   it('has copy email functionality', () => {

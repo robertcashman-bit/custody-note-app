@@ -35,7 +35,7 @@
         - generic [ref=e36]: Works without internet, syncs when available
     - generic [ref=e42]:
       - link "Contact Us" [ref=e43] [cursor=pointer]:
-        - /url: mailto:robertcashman@defencelegalservices.com?subject=Custody Note Enquiry
+        - /url: https://outlook.office.com/mail/deeplink/compose?to=robertcashman%40defencelegalservices.com&subject=Custody%20Note%20Enquiry
       - link "www.custodynote.com" [ref=e44] [cursor=pointer]:
         - /url: https://www.custodynote.com
   - banner [ref=e45]:

@@ -36,6 +36,12 @@ function createEnv() {
     openExternal: function() {},
     attendanceSave: function() { return Promise.resolve({}); },
   };
+  window.emailAPI = {
+    open: function() { return Promise.resolve(); },
+  };
+  window.invokeOutlookWebCompose = function(payload) {
+    return window.emailAPI.open(payload);
+  };
   window._getCustomEmailTemplates = function() { return []; };
 
   const globals = `
@@ -44,16 +50,8 @@ function createEnv() {
     var esc = function(s){return s;};
     function _oicClean(v){return v==null?'':String(v).trim();}
     function _oicFmtDate(v){return v||'';}
-    var EMAIL_CLIENTS = [
-      {id:'default',label:'Default'},
-      {id:'gmail',label:'Gmail'},
-      {id:'outlook',label:'Outlook'}
-    ];
-    function getEmailClientLabel(id){return id;}
-    function buildEmailClientUrl(client,to,subject,body){return 'mailto:'+to;}
     function buildEmailSubject(tpl,data){return 'built-in subject';}
     function buildEmailBody(tpl,data,fe){return 'built-in body';}
-    function buildMailtoHref(to,s,b){return 'mailto:'+to;}
   `;
 
   const scriptEl = document.createElement('script');

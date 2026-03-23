@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════
    EMAIL TEMPLATES — Officer Email Templates Add-On
    Pure utility module: no DOM access, no globals written.
-   All functions are globally accessible (vanilla JS / shared scope).
+   Copy is loaded from data/email-templates.json (editable) with embedded fallback.
    ═══════════════════════════════════════════════════════ */
 
 /* Known UK police rank prefixes, longest first for greedy matching */
@@ -11,6 +11,113 @@ var _OIC_RANKS = [
   'DCI', 'DCS', 'DI', 'DS', 'DC', 'PC', 'PS', 'CI',
   'ACC', 'DCC', 'CC', 'PCSO', 'Cst'
 ];
+
+var _emailTemplateStringsCache = null;
+
+/** Sync load for use from buildEmailBody (callers expect sync). Electron file:// OK. */
+function _defaultEmailTemplateStrings() {
+  /* Minimal fallback if data/email-templates.json missing — keep in sync with JSON */
+  return JSON.parse(JSON.stringify(_emailTemplateStringsFallback));
+}
+
+var _emailTemplateStringsFallback = {
+  version: 1,
+  templates: [
+    { id: 'first_attendance', name: 'First Attendance Disclosure Request', scope: 'officer' },
+    { id: 'follow_up', name: 'Follow-Up / Outcome Request', scope: 'officer' },
+    { id: 'no_reply', name: 'No Reply Follow-Up', scope: 'officer' }
+  ],
+  first_attendance: {
+    disclosureRequest: 'Please would you confirm that the attendance will be effective and provide disclosure to this email address.',
+    manyThanks: 'Many thanks,'
+  },
+  follow_up: {
+    opening: 'I write following my attendance upon ',
+    openingSuffix: ' on behalf of ',
+    outcomePromptWhenUnknown: 'I would be grateful if you could confirm the outcome of this matter when convenient.'
+  },
+  no_reply: {
+    referParagraph: 'I refer to my previous email regarding ',
+    referMid: ', following my attendance upon them at ',
+    referMid2: ' on behalf of ',
+    referEnd: '. I have not yet received a reply and would be grateful if you could confirm the outcome at your earliest convenience.',
+    copyBelow: 'For ease of reference, I set out a copy of my previous email below.',
+    disregardIfReplied: 'If you have already replied to the firm, please disregard this email and accept my apologies.'
+  },
+  outcome_unknown: {
+    concise: [
+      'I should be grateful if you would please now confirm the outcome of this matter.',
+      '',
+      'If the client was bailed, please provide the bail return date and time, the police station to which they are bailed, and details of any bail conditions.',
+      '',
+      'If the client was charged, please provide details of the charges, the court date and time, the relevant Magistrates\u2019 Court, and whether the client was granted bail or remanded together with any bail conditions if applicable.'
+    ],
+    full: [
+      'I would be grateful if you could please confirm the outcome of this matter.',
+      '',
+      'If the client was bailed, could you please provide:',
+      '\u2022 bail return date and time',
+      '\u2022 the police station to which they are bailed',
+      '\u2022 details of any bail conditions',
+      '',
+      'If the client was charged, could you please provide:',
+      '\u2022 details of the charges',
+      '\u2022 the court date and time',
+      '\u2022 the relevant Magistrates\u2019 Court',
+      '\u2022 whether the client was granted bail or remanded',
+      '\u2022 any bail conditions if applicable'
+    ]
+  },
+  outcome_generic: {
+    bailChargeDetail: [
+      'If the client was bailed, please provide the bail return date and time, the police station to which they are bailed, and details of any bail conditions.',
+      '',
+      "If the client was charged, please provide details of the charges, the court date and time, the relevant Magistrates' Court, and whether the client was granted bail or remanded, together with any bail conditions if applicable."
+    ]
+  },
+  charged: {
+    chargesHeader: 'The client was charged with the following:',
+    confirmDetails: 'Could you please confirm the above details and provide any additional information?',
+    chargedWithoutBail: 'charged without bail',
+    remandedInCustody: 'remanded in custody'
+  },
+  bail_no_charge: {
+    confirmInvestigation: 'Could you please confirm these details and advise of the outcome of the investigation?'
+  },
+  other_outcome: {
+    outcomePrefix: 'The outcome recorded is: ',
+    confirmFurther: 'Could you please confirm this and provide any further information?'
+  },
+  bail_wording: {
+    unconditional: 'The client was released on unconditional bail',
+    conditional: 'The client was released on conditional bail',
+    returnDateWith: ', with a return date of ',
+    returnDateConditional: ' with a return date of ',
+    bailConditions: '. Bail conditions: ',
+    bailedToReturn: 'The client was bailed to return on '
+  },
+  court: {
+    courtDate: 'The court date is ',
+    at: ' at ',
+    courtIs: 'The relevant court is '
+  }
+};
+
+function _loadEmailTemplateStrings() {
+  if (_emailTemplateStringsCache !== null) return _emailTemplateStringsCache;
+  _emailTemplateStringsCache = _defaultEmailTemplateStrings();
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'data/email-templates.json', false);
+    xhr.send(null);
+    if (xhr.status === 200 && xhr.responseText) {
+      _emailTemplateStringsCache = JSON.parse(xhr.responseText);
+    }
+  } catch (e) {
+    console.warn('[email-templates] Could not load data/email-templates.json, using embedded fallback', e);
+  }
+  return _emailTemplateStringsCache;
+}
 
 function _oicClean(val) {
   if (val == null || val === 'null' || val === 'undefined') return '';
@@ -63,6 +170,7 @@ function buildEmailSubject(templateId, data) {
 }
 
 function buildEmailBody(templateId, data, feeEarnerName) {
+  var S = _loadEmailTemplateStrings();
   data = data || {};
   var parsed     = _oicParseOicName(_oicClean(data.oicName));
   var salutation = _oicSalutation(parsed.rank, parsed.surname);
@@ -78,6 +186,9 @@ function buildEmailBody(templateId, data, feeEarnerName) {
   var timeStr    = _oicFmtTime(_oicClean(data.timeArrival));
   var dateTime   = [dateStr, timeStr ? 'at ' + timeStr : ''].filter(Boolean).join(' ');
   var attendanceRef = ' at ' + station + (dateStr ? ' on ' + dateStr : '');
+
+  var bw = S.bail_wording || {};
+  var ct = S.court || {};
 
   /* ── Outcome-aware helpers ── */
   var od = _oicClean(data.outcomeDecision);
@@ -103,8 +214,8 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     var courtDate = _oicFmtDate(_oicClean(data.courtDate));
     var courtTime = _oicClean(data.courtTime) || '10:00';
     var parts = [];
-    if (courtDate) parts.push('The court date is ' + courtDate + ' at ' + courtTime + '.');
-    if (courtName) parts.push('The relevant court is ' + courtName + '.');
+    if (courtDate) parts.push((ct.courtDate || 'The court date is ') + courtDate + (ct.at || ' at ') + courtTime + '.');
+    if (courtName) parts.push((ct.courtIs || 'The relevant court is ') + courtName + '.');
     return parts.join(' ');
   }
 
@@ -114,17 +225,27 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     var bailDate = _oicFmtDate(_oicClean(data.bailDate));
     var includeReturnDate = od === 'Bail without charge';
     if (bailType === 'Unconditional') {
-      return 'The client was released on unconditional bail' + (includeReturnDate && bailDate ? ', with a return date of ' + bailDate : '') + '.';
+      return (bw.unconditional || 'The client was released on unconditional bail') +
+        (includeReturnDate && bailDate ? (bw.returnDateWith || ', with a return date of ') + bailDate : '') + '.';
     }
     if (bailType === 'Conditional') {
       var conds = _oicClean(data.bailConditions) || _oicClean(data.bailConditionsChecklist || '').replace(/\|/g, ', ');
-      return 'The client was released on conditional bail' +
-        (includeReturnDate && bailDate ? ' with a return date of ' + bailDate : '') +
-        (conds ? '. Bail conditions: ' + conds + '.' : '.');
+      return (bw.conditional || 'The client was released on conditional bail') +
+        (includeReturnDate && bailDate ? (bw.returnDateConditional || ' with a return date of ') + bailDate : '') +
+        (conds ? (bw.bailConditions || '. Bail conditions: ') + conds + '.' : '.');
     }
-    if (includeReturnDate && bailDate) return 'The client was bailed to return on ' + bailDate + '.';
+    if (includeReturnDate && bailDate) return (bw.bailedToReturn || 'The client was bailed to return on ') + bailDate + '.';
     return '';
   }
+
+  var fa = S.first_attendance || {};
+  var fu = S.follow_up || {};
+  var nr = S.no_reply || {};
+  var ou = S.outcome_unknown || {};
+  var og = S.outcome_generic || {};
+  var ch = S.charged || {};
+  var bnc = S.bail_no_charge || {};
+  var oo = S.other_outcome || {};
 
   /* ── Template 1: First Attendance Disclosure Request ── */
   if (templateId === 'first_attendance' || !templateId) {
@@ -135,9 +256,9 @@ function buildEmailBody(templateId, data, feeEarnerName) {
       '',
       intro,
       '',
-      'Please would you confirm that the attendance will be effective and provide disclosure to this email address.',
+      fa.disclosureRequest || 'Please would you confirm that the attendance will be effective and provide disclosure to this email address.',
       '',
-      'Many thanks,',
+      fa.manyThanks || 'Many thanks,',
       '',
       feeName
     ].join('\n');
@@ -146,34 +267,10 @@ function buildEmailBody(templateId, data, feeEarnerName) {
   /* ── Templates 2 & 3: build outcome-specific paragraphs ── */
   function _outcomeParas(concise) {
     if (!outcomeKnown) {
-      /* No outcome recorded — use generic "please confirm" language */
       if (concise) {
-        return [
-          'I should be grateful if you would please now confirm the outcome of this matter.',
-          '',
-          'If the client was bailed, please provide the bail return date and time, the police station ' +
-            'to which they are bailed, and details of any bail conditions.',
-          '',
-          'If the client was charged, please provide details of the charges, the court date and time, ' +
-            'the relevant Magistrates\u2019 Court, and whether the client was granted bail or remanded ' +
-            'together with any bail conditions if applicable.'
-        ];
+        return (ou.concise && ou.concise.length) ? ou.concise.slice() : _emailTemplateStringsFallback.outcome_unknown.concise.slice();
       }
-      return [
-        'I would be grateful if you could please confirm the outcome of this matter.',
-        '',
-        'If the client was bailed, could you please provide:',
-        '\u2022 bail return date and time',
-        '\u2022 the police station to which they are bailed',
-        '\u2022 details of any bail conditions',
-        '',
-        'If the client was charged, could you please provide:',
-        '\u2022 details of the charges',
-        '\u2022 the court date and time',
-        '\u2022 the relevant Magistrates\u2019 Court',
-        '\u2022 whether the client was granted bail or remanded',
-        '\u2022 any bail conditions if applicable'
-      ];
+      return (ou.full && ou.full.length) ? ou.full.slice() : _emailTemplateStringsFallback.outcome_unknown.full.slice();
     }
 
     var paras = [];
@@ -181,7 +278,7 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     if (isCharged) {
       var charges = _chargeLines();
       if (charges.length) {
-        paras.push('The client was charged with the following:');
+        paras.push(ch.chargesHeader || 'The client was charged with the following:');
         charges.forEach(function(c) { paras.push(c); });
         paras.push('');
       }
@@ -192,32 +289,31 @@ function buildEmailBody(templateId, data, feeEarnerName) {
         var bailP = _bailCondsPara();
         if (bailP) { paras.push(bailP); paras.push(''); }
       } else {
-        /* Charged without Bail / Remanded — do NOT ask about bail conditions */
-        paras.push('The client was ' + (od === 'Remanded in Custody' ? 'remanded in custody' : 'charged without bail') + '.');
+        paras.push('The client was ' + (od === 'Remanded in Custody'
+          ? (ch.remandedInCustody || 'remanded in custody')
+          : (ch.chargedWithoutBail || 'charged without bail')) + '.');
         paras.push('');
       }
 
-      paras.push('Could you please confirm the above details and provide any additional information?');
+      paras.push(ch.confirmDetails || 'Could you please confirm the above details and provide any additional information?');
     } else if (isBailNoCharge) {
       var bailP2 = _bailCondsPara();
       if (bailP2) { paras.push(bailP2); paras.push(''); }
-      paras.push('Could you please confirm these details and advise of the outcome of the investigation?');
+      paras.push(bnc.confirmInvestigation || 'Could you please confirm these details and advise of the outcome of the investigation?');
     } else {
-      /* Other known outcome — just confirm */
-      paras.push('The outcome recorded is: ' + od + '.');
+      paras.push((oo.outcomePrefix || 'The outcome recorded is: ') + od + '.');
       paras.push('');
-      paras.push('Could you please confirm this and provide any further information?');
+      paras.push(oo.confirmFurther || 'Could you please confirm this and provide any further information?');
     }
 
     return paras;
   }
 
   function _genericOutcomeRequestDetails() {
-    return [
-      'If the client was bailed, please provide the bail return date and time, the police station to which they are bailed, and details of any bail conditions.',
-      '',
-      'If the client was charged, please provide details of the charges, the court date and time, the relevant Magistrates\' Court, and whether the client was granted bail or remanded, together with any bail conditions if applicable.'
-    ];
+    var lines = (og.bailChargeDetail && og.bailChargeDetail.length)
+      ? og.bailChargeDetail.slice()
+      : _emailTemplateStringsFallback.outcome_generic.bailChargeDetail.slice();
+    return lines;
   }
 
   /* ── Template 2: Follow-Up / Outcome Request ── */
@@ -225,16 +321,16 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     var body2 = [
       salutation,
       '',
-      'I write following my attendance upon ' + clientName + attendanceRef + ' on behalf of ' + firmName + '.',
+      (fu.opening || 'I write following my attendance upon ') + clientName + attendanceRef + (fu.openingSuffix || ' on behalf of ') + firmName + '.',
       ''
     ];
     if (!outcomeKnown) {
-      body2.push('I would be grateful if you could confirm the outcome of this matter when convenient.', '');
+      body2.push(fu.outcomePromptWhenUnknown || 'I would be grateful if you could confirm the outcome of this matter when convenient.', '');
       _genericOutcomeRequestDetails().forEach(function(l) { body2.push(l); });
     } else {
       _outcomeParas(false).forEach(function(l) { body2.push(l); });
     }
-    body2.push('', 'Many thanks,', '', feeName);
+    body2.push('', fa.manyThanks || 'Many thanks,', '', feeName);
     return body2.join('\n');
   }
 
@@ -243,12 +339,14 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     var body3 = [
       salutation,
       '',
-      'I refer to my previous email regarding ' + clientName + ', following my attendance upon them at ' +
-        station + (dateStr ? ' on ' + dateStr : '') + ' on behalf of ' + firmName + '. I have not yet received a reply and would be grateful if you could confirm the outcome at your earliest convenience.',
+      (nr.referParagraph || 'I refer to my previous email regarding ') + clientName +
+        (nr.referMid || ', following my attendance upon them at ') +
+        station + (dateStr ? ' on ' + dateStr : '') +
+        (nr.referMid2 || ' on behalf of ') + firmName + (nr.referEnd || '. I have not yet received a reply and would be grateful if you could confirm the outcome at your earliest convenience.'),
       '',
-      'For ease of reference, I set out a copy of my previous email below.',
+      nr.copyBelow || 'For ease of reference, I set out a copy of my previous email below.',
       '',
-      'I write following my attendance upon ' + clientName + attendanceRef + ' on behalf of ' + firmName + '.',
+      (fu.opening || 'I write following my attendance upon ') + clientName + attendanceRef + (fu.openingSuffix || ' on behalf of ') + firmName + '.',
       ''
     ];
     if (!outcomeKnown) {
@@ -256,83 +354,11 @@ function buildEmailBody(templateId, data, feeEarnerName) {
     } else {
       _outcomeParas(false).forEach(function(l) { body3.push(l); });
     }
-    body3.push('', 'If you have already replied to the firm, please disregard this email and accept my apologies.', '', 'Many thanks,', '', feeName);
+    body3.push('', nr.disregardIfReplied || 'If you have already replied to the firm, please disregard this email and accept my apologies.', '', fa.manyThanks || 'Many thanks,', '', feeName);
     return body3.join('\n');
   }
 
   return '';
 }
 
-function buildMailtoHref(toEmail, subject, body) {
-  var to  = _oicClean(toEmail);
-  var bodyStr = String(body || '');
-  /* mailto: URIs break on some clients above ~2000 chars — truncate the href only */
-  var bodyForHref = bodyStr.length > 1800
-    ? bodyStr.slice(0, 1800) + '\n\n[Full text copied to clipboard]'
-    : bodyStr;
-  return 'mailto:' + encodeURIComponent(to) +
-    '?subject=' + encodeURIComponent(subject || '') +
-    '&body='    + encodeURIComponent(bodyForHref);
-}
-
-/* ── Email client definitions ─────────────────────────────── */
-
-var EMAIL_CLIENTS = [
-  { id: 'default',  label: 'Default Mail App' },
-  { id: 'gmail',    label: 'Gmail' },
-  { id: 'owa',      label: 'Outlook Web (work)' },
-  { id: 'outlook',  label: 'Outlook.com (personal)' },
-  { id: 'yahoo',    label: 'Yahoo Mail' },
-  { id: 'aol',      label: 'AOL Mail' }
-];
-
-function getEmailClientLabel(clientId) {
-  var found = EMAIL_CLIENTS.filter(function(c) { return c.id === clientId; })[0];
-  return found ? found.label : 'Default Mail App';
-}
-
-function buildEmailClientUrl(clientId, toEmail, subject, body) {
-  var to  = encodeURIComponent(_oicClean(toEmail));
-  var sub = encodeURIComponent(String(subject || ''));
-  /* Web clients have generous body limits; still cap at 4000 chars to be safe */
-  var bodyTrunc = String(body || '').length > 4000
-    ? String(body || '').slice(0, 4000) + '\n\n[continued]'
-    : String(body || '');
-  var bod = encodeURIComponent(bodyTrunc);
-
-  switch (clientId) {
-    case 'gmail':
-      return 'https://mail.google.com/mail/?view=cm' +
-        '&to='   + to +
-        '&su='   + sub +
-        '&body=' + bod;
-
-    case 'owa':
-      return 'https://outlook.office.com/mail/deeplink/compose' +
-        '?to='      + to +
-        '&subject=' + sub +
-        '&body='    + bod;
-
-    case 'outlook':
-      return 'https://outlook.live.com/mail/0/deeplink/compose' +
-        '?to='      + to +
-        '&subject=' + sub +
-        '&body='    + bod;
-
-    case 'yahoo':
-      return 'https://compose.mail.yahoo.com/' +
-        '?to='    + to +
-        '&subj='  + sub +
-        '&body='  + bod;
-
-    case 'aol':
-      return 'https://mail.aol.com/webmail-std/en-us/suite' +
-        '?compose=1' +
-        '&to='      + to +
-        '&subject=' + sub +
-        '&body='    + bod;
-
-    default:
-      return buildMailtoHref(toEmail, subject, body);
-  }
-}
+/* Email compose opens only via main-process IPC (Outlook Web). */

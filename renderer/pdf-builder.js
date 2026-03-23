@@ -7,7 +7,7 @@
    Key functions (all defined in global scope via app.js):
    - buildPdfHtml(d, settings)    — full LAA-compliant PDF HTML
    - exportPdf()                  — save PDF to Desktop
-   - emailPdf()                   — save + open mailto
+   - emailPdf()                   — save + open Outlook Web compose
    - sendReportToFirm()           — plaintext email to instructing firm
    - printGeneratedDoc(html)      — open print window
    - docStyles()                  — shared CSS for generated docs

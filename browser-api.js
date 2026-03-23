@@ -341,7 +341,7 @@
     openExternal: function (url) {
       if (typeof url !== 'string') return Promise.resolve();
       var u = url.trim();
-      if (u.startsWith('https://') || u.startsWith('mailto:')) {
+      if (u.startsWith('https://') || u.startsWith('http://')) {
         window.open(u, '_blank', 'noopener');
       }
       return Promise.resolve();
@@ -368,6 +368,23 @@
         try { win.print(); } catch (_) {}
       }, 1000);
       return Promise.resolve('Opened for printing as: ' + filename);
+    },
+  };
+
+  /* OWA URL must match lib/outlookWebComposeUrl.js + main/openOutlookWebEmail.js (browser has no IPC). */
+  window.emailAPI = {
+    open: function (payload) {
+      var p = payload && typeof payload === 'object' ? payload : {};
+      function enc(v) { return encodeURIComponent(v || ''); }
+      var url =
+        'https://outlook.office.com/mail/deeplink/compose' +
+        '?to=' + enc(p.to) +
+        '&cc=' + enc(p.cc) +
+        '&bcc=' + enc(p.bcc) +
+        '&subject=' + enc(p.subject) +
+        '&body=' + enc(p.body);
+      window.open(url, '_blank', 'noopener');
+      return Promise.resolve();
     },
   };
 

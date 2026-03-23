@@ -967,12 +967,12 @@ var LAA = {
         { key: 'repConfirmationSignature', label: 'Rep confirmation (signature)', type: 'signature', sigKey: 'repConfirmationSig' },
         { key: 'notesToOffice', label: 'Notes to Office / Firm', type: 'textarea', cols: 2 },
         { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
-        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in your chosen email app for the firm contact.', type: 'sectionNote' },
+        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in Outlook Web for the firm contact.', type: 'sectionNote' },
         { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
         { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
         { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
         { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
-        { key: '_btn_send_solicitor_email', label: 'Open email app for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
+        { key: '_btn_send_solicitor_email', label: 'Open Outlook Web for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
@@ -1308,12 +1308,12 @@ var LAA = {
         { key: 'ufn', label: 'UFN (Unique File Number)', type: 'text', placeholder: 'DDMMYY/NNN e.g. 220226/001', cols: 2, firmCompletes: true },
         { key: 'firmLaaAccount', label: 'Firm LAA Account No.', type: 'text', placeholder: 'Firm provides this', firmCompletes: true },
         { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
-        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in your chosen email app for the firm contact.', type: 'sectionNote' },
+        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in Outlook Web for the firm contact.', type: 'sectionNote' },
         { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
         { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
         { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
         { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
-        { key: '_btn_send_solicitor_email', label: 'Open email app for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
+        { key: '_btn_send_solicitor_email', label: 'Open Outlook Web for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_monitoring', label: 'Equal Opportunities', type: 'sectionHeading' },
         { key: 'ethnicOriginCode', label: 'Ethnic Origin', type: 'codedSelect', codeKey: 'ethnicCodes' },
         { key: 'disabilityCode', label: 'Disability', type: 'codedSelect', codeKey: 'disabilityCodes' },
@@ -1740,12 +1740,12 @@ var LAA = {
         { key: 'repConfirmationSignature', label: 'Rep confirmation (signature)', type: 'signature', sigKey: 'repConfirmationSig' },
         { key: 'notesToOffice', label: 'Notes to Office / Firm', type: 'textarea', cols: 2 },
         { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
-        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in your chosen email app for the firm contact.', type: 'sectionNote' },
+        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in Outlook Web for the firm contact.', type: 'sectionNote' },
         { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
         { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
         { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
         { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
-        { key: '_btn_send_solicitor_email', label: 'Open email app for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
+        { key: '_btn_send_solicitor_email', label: 'Open Outlook Web for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
@@ -2842,12 +2842,10 @@ var REQUIRED_FIELD_KEYS = [
     }
     var emailLocked = document.getElementById('addon-email-locked');
     var emailContent = document.getElementById('addon-email-content');
-    var emailClientRow = document.getElementById('addon-email-client-row');
     if (emailLocked && emailContent) {
       emailLocked.style.display = addons.emailAddon ? 'none' : '';
       emailContent.style.display = addons.emailAddon ? '' : 'none';
     }
-    if (emailClientRow) emailClientRow.style.display = addons.emailAddon ? '' : 'none';
 
     var quickEmailCard = document.getElementById('home-card-quick-email');
     var quickEmailListBtn = document.getElementById('list-quick-email-btn');
@@ -4402,8 +4400,6 @@ var REQUIRED_FIELD_KEYS = [
       if (largeControls) largeControls.checked = s.largeControls === 'true';
       var reducedMotion = document.getElementById('setting-reduced-motion');
       if (reducedMotion) reducedMotion.checked = s.reducedMotion === 'true';
-      var prefEmail = document.getElementById('setting-preferred-email-client');
-      if (prefEmail) prefEmail.value = s.preferredEmailClient || 'default';
       applyLayoutPreferences(s || {});
       updateBackupDestSummary(s);
     });
@@ -4600,7 +4596,6 @@ var REQUIRED_FIELD_KEYS = [
       highContrast: document.getElementById('setting-high-contrast')?.checked ? 'true' : 'false',
       largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
-      preferredEmailClient: (window._appSettingsCache || {}).preferredEmailClient || document.getElementById('setting-preferred-email-client')?.value || 'default',
     }).then(() => window.api.getSettings()).then(function(s) {
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
       applyLayoutPreferences(s || {});
@@ -5063,6 +5058,11 @@ var REQUIRED_FIELD_KEYS = [
     document.documentElement.classList.toggle('dark', enabled);
   }
 
+  function updateDarkModeToggleIcon(isDark) {
+    var btn = document.getElementById('dark-mode-toggle');
+    if (btn) btn.textContent = isDark ? '\u2600' : '\u263E';
+  }
+
   function applyTheme(theme) {
     var el = document.documentElement;
     ['theme-light', 'theme-slate', 'theme-midnight', 'theme-teal', 'theme-emerald', 'theme-rose', 'theme-purple', 'theme-charcoal', 'theme-copper'].forEach(function(cls) {
@@ -5078,10 +5078,40 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function initDarkMode() {
-    window.api.getSettings().then(s => {
-      applyDarkMode(s.darkMode === 'true');
+    window.api.getSettings().then(function(s) {
+      s = s || {};
+      var dm = s.darkMode;
+      var useDark;
+      if (dm === 'true') useDark = true;
+      else if (dm === 'false') useDark = false;
+      else {
+        /* No stored preference: default dark to match :root and activate html.dark overrides */
+        useDark = true;
+      }
+      applyDarkMode(useDark);
+      updateDarkModeToggleIcon(useDark);
       if (s.colourTheme) applyTheme(s.colourTheme);
+    }).catch(function() {
+      applyDarkMode(true);
+      updateDarkModeToggleIcon(true);
     });
+
+    /* When user has never saved dark/light, follow OS theme changes */
+    if (typeof window.matchMedia === 'function') {
+      var mqScheme = window.matchMedia('(prefers-color-scheme: dark)');
+      function onPrefersSchemeChange(e) {
+        if (!window.api || !window.api.getSettings) return;
+        window.api.getSettings().then(function(s2) {
+          s2 = s2 || {};
+          var d = s2.darkMode;
+          if (d === 'true' || d === 'false') return;
+          applyDarkMode(e.matches);
+          updateDarkModeToggleIcon(e.matches);
+        });
+      }
+      if (mqScheme.addEventListener) mqScheme.addEventListener('change', onPrefersSchemeChange);
+      else if (mqScheme.addListener) mqScheme.addListener(onPrefersSchemeChange);
+    }
   }
 
   /* ─── LIST VIEW ─── */
@@ -10239,7 +10269,7 @@ PDF_CASENOTE_ADVERT +
     ];
     const subject = 'Attendance Report: ' + clientName + ' (' + (d.date ? formatDateGB(d.date) : '') + ')';
     const body = lines.join('\n');
-    openPreferredEmailClient(firmEmail, subject, body);
+    openOutlookWebCompose(firmEmail, subject, body);
   }
 
   /* ─── TELEPHONE ADVICE PDF (INVB) ─── */
@@ -10764,7 +10794,7 @@ PDF_CASENOTE_ADVERT +
       window.api.printToPdf({ html: html, filename: fn }).then(p => {
         var subjRaw = (data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || '');
         var bodyRaw = 'PDF attached: ' + fn;
-        openPreferredEmailClient(email, subjRaw, bodyRaw);
+        openOutlookWebCompose(email, subjRaw, bodyRaw);
         showToast('PDF saved to Desktop \u2014 attach: ' + fn, 'success');
       }).catch(e => showToast('Failed: ' + (e && e.message), 'error'));
     });
@@ -10913,28 +10943,25 @@ PDF_CASENOTE_ADVERT +
     showToast(customTemplate ? 'Saved email template loaded' : 'Default email template loaded', 'success');
   }
 
-  function openPreferredEmailClient(toEmail, subject, body) {
-    if (!window._emailOpenGuard) window._emailOpenGuard = { ts: 0, url: '' };
-    function _fire(clientId) {
-      var url = typeof buildEmailClientUrl === 'function'
-        ? buildEmailClientUrl(clientId, toEmail, subject, body)
-        : ('mailto:' + encodeURIComponent(toEmail) + '?subject=' + encodeURIComponent(subject || '') + '&body=' + encodeURIComponent(body || ''));
-      var now = Date.now();
-      if (now - window._emailOpenGuard.ts < 1200) return;
-      window._emailOpenGuard = { ts: now, url: url };
-      if (window.api && window.api.openExternal) window.api.openExternal(url);
-      else window.open(url, '_blank');
+  function openOutlookWebCompose(toEmail, subject, body) {
+    var to = String(toEmail || '').trim();
+    if (!to) {
+      showToast('Add a recipient email address first.', 'error');
+      return;
     }
-    if (window.api && window.api.getSettings) {
-      window.api.getSettings().then(function(s) {
-        if (s) window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
-        _fire(((window._appSettingsCache || {}).preferredEmailClient || 'default').trim() || 'default');
-      }).catch(function() {
-        _fire(((window._appSettingsCache || {}).preferredEmailClient || 'default').trim() || 'default');
-      });
-    } else {
-      _fire(((window._appSettingsCache || {}).preferredEmailClient || 'default').trim() || 'default');
+    var bodyStr = String(body || '');
+    if (bodyStr.length > 4000) bodyStr = bodyStr.slice(0, 4000) + '\n\n[continued]';
+    var payload = { to: to, cc: '', bcc: '', subject: subject || '', body: bodyStr };
+    if (typeof window.invokeOutlookWebCompose !== 'function') {
+      showToast('Email unavailable', 'error');
+      return;
     }
+    window.invokeOutlookWebCompose(payload).then(function() {
+      showToast('Opening Outlook Web…', 'success');
+    }).catch(function(err) {
+      console.error('[email]', err);
+      showToast(err && err.message ? err.message : 'Could not open email', 'error');
+    });
   }
 
   function openSolicitorEmail() {
@@ -10956,8 +10983,7 @@ PDF_CASENOTE_ADVERT +
       setFieldValue('solicitorEmailBody', body);
       quietSave();
     }
-    openPreferredEmailClient(firmEmail, subject, body);
-    showToast('Opening email for ' + firmEmail, 'success');
+    openOutlookWebCompose(firmEmail, subject, body);
   }
 
   function emailToSolicitorWithData(data) {
@@ -10975,8 +11001,7 @@ PDF_CASENOTE_ADVERT +
         if (!savedSubject) savedSubject = tpl.subject;
         if (!savedBody) savedBody = tpl.body;
       }
-      openPreferredEmailClient(firmEmail, savedSubject, savedBody);
-      showToast('Opening email for ' + firmEmail, 'success');
+      openOutlookWebCompose(firmEmail, savedSubject, savedBody);
       return;
     }
     window.api.getSettings().then(settings => {
@@ -10988,7 +11013,7 @@ PDF_CASENOTE_ADVERT +
       window.api.printToPdf({ html: html, filename: fn }).then(p => {
         var subjRaw = (data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance note')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || '');
         var bodyRaw = 'Please find the attendance note PDF attached.\n\nFilename: ' + fn + '\n\nSent from Custody Note.';
-        openPreferredEmailClient(firmEmail, subjRaw, bodyRaw);
+        openOutlookWebCompose(firmEmail, subjRaw, bodyRaw);
         showToast('PDF saved to Desktop. Attach "' + fn + '" and send to ' + firmEmail, 'success');
       }).catch(e => showToast('Failed: ' + (e && e.message), 'error'));
     });
@@ -12031,6 +12056,8 @@ PDF_CASENOTE_ADVERT +
       return;
     }
 
+    var _customEmailTemplatesCache = null;
+
     document.addEventListener('licence-activated', function () {
       updateHomeLicenceCard();
       updateGearLicenceItem();
@@ -12165,6 +12192,14 @@ PDF_CASENOTE_ADVERT +
             case 'reports': showView('reports'); break;
             case 'station-mileage': showView('station-mileage'); break;
             case 'authorities': showView('authorities'); break;
+            case 'templates':
+              tplStoreInit().then(function() {
+                openTemplateManager({
+                  record:   formData || {},
+                  settings: window._appSettingsCache || {}
+                });
+              });
+              break;
             case 'shortcut-backup-now':
               window.api.backupNow().then(function(p) { showToast('Backup saved: ' + p, 'success'); }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); });
               break;
@@ -12561,12 +12596,36 @@ PDF_CASENOTE_ADVERT +
         vatRate: parseFloat(s.billingVatRate) || 0.20,
       };
       window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
-      var prefSel = document.getElementById('setting-preferred-email-client');
-      if (prefSel && s.preferredEmailClient) prefSel.value = s.preferredEmailClient;
       if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
+      /* Custom email templates: SQLite settings (JSON) + migrate from localStorage once */
+      var json = s.customEmailTemplatesJson;
+      if (json && String(json).trim()) {
+        try {
+          _customEmailTemplatesCache = JSON.parse(json);
+        } catch (e) {
+          _customEmailTemplatesCache = [];
+        }
+      } else {
+        try {
+          var leg = localStorage.getItem('cn-custom-email-templates');
+          if (leg && leg !== '[]') {
+            _customEmailTemplatesCache = JSON.parse(leg);
+            window.api.setSettings({ customEmailTemplatesJson: JSON.stringify(_customEmailTemplatesCache) }).catch(function() {});
+            localStorage.removeItem('cn-custom-email-templates');
+          } else {
+            _customEmailTemplatesCache = [];
+          }
+        } catch (e2) {
+          _customEmailTemplatesCache = [];
+        }
+      }
       if (!s.dsccPin || !s.feeEarnerNameDefault) {
         hideSplash();
         initFirstLaunchModal();
+      }
+      /* Warm the general template store cache after settings are ready */
+      if (typeof tplStoreInit === 'function') {
+        tplStoreInit().catch(function() {});
       }
     });
 
@@ -13040,14 +13099,26 @@ PDF_CASENOTE_ADVERT +
       };
     }
     function _getCustomTemplates() {
-      try {
-        return JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]').map(_normalizeCustomTemplate);
-      } catch (_) { return []; }
+      var raw = _customEmailTemplatesCache;
+      if (raw == null) {
+        try {
+          return JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]').map(_normalizeCustomTemplate);
+        } catch (_) { return []; }
+      }
+      return (raw || []).map(_normalizeCustomTemplate);
     }
     function _saveCustomTemplates(tpls) {
-      try { localStorage.setItem('cn-custom-email-templates', JSON.stringify((tpls || []).map(_normalizeCustomTemplate))); } catch (_) {}
+      tpls = (tpls || []).map(_normalizeCustomTemplate);
+      _customEmailTemplatesCache = tpls;
+      var json = JSON.stringify(tpls);
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { customEmailTemplatesJson: json });
+      if (window.api && window.api.setSettings) {
+        window.api.setSettings({ customEmailTemplatesJson: json }).catch(function(e) { console.error('[customEmailTemplates]', e); });
+      }
+      try { localStorage.removeItem('cn-custom-email-templates'); } catch (_) {}
     }
     window._getCustomEmailTemplates = _getCustomTemplates;
+    window._saveCustomEmailTemplates = _saveCustomTemplates;
 
     function _renderCustomTemplatesList() {
       var listEl = document.getElementById('custom-templates-list');
@@ -13131,7 +13202,7 @@ PDF_CASENOTE_ADVERT +
       const isDark = document.documentElement.classList.toggle('dark');
       const dm = document.getElementById('setting-dark-mode');
       if (dm) dm.checked = isDark;
-      document.getElementById('dark-mode-toggle').textContent = isDark ? '\u2600' : '\u263E';
+      updateDarkModeToggleIcon(isDark);
       if (window.api) window.api.setSettings({ darkMode: isDark ? 'true' : 'false' });
     });
     /* settings-back-btn already attached above */
@@ -14085,6 +14156,26 @@ PDF_CASENOTE_ADVERT +
       }
     });
     document.getElementById('splash')?.addEventListener('click', function(e) {
+      var contactBtn = e.target?.closest?.('#splash-contact-outlook-btn');
+      if (contactBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var payload = {
+          to: 'robertcashman@defencelegalservices.com',
+          cc: '',
+          bcc: '',
+          subject: 'Custody Note Enquiry',
+          body: '',
+        };
+        if (typeof window.invokeOutlookWebCompose !== 'function') {
+          showToast('Could not open email', 'error');
+          return;
+        }
+        window.invokeOutlookWebCompose(payload)
+          .then(function() { showToast('Opening Outlook Web…', 'success'); })
+          .catch(function() { showToast('Could not open email', 'error'); });
+        return;
+      }
       var link = e.target?.closest?.('.splash-advert-link');
       if (link && link.href && window.api?.openExternal) { e.preventDefault(); window.api.openExternal(link.href); }
     });
@@ -14448,7 +14539,14 @@ PDF_CASENOTE_ADVERT +
       var subject = 'Custody Note – custody notes app for police station reps';
       var body =
         'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload: ' + shareAppUrl + '\n\n30-day free trial, no credit card.';
-      openPreferredEmailClient('', subject, body);
+      var payload = { to: '', cc: '', bcc: '', subject: subject, body: body };
+      if (typeof window.invokeOutlookWebCompose !== 'function') {
+        showToast('Could not open email', 'error');
+        return;
+      }
+      window.invokeOutlookWebCompose(payload)
+        .then(function() { showToast('Opening Outlook Web…', 'success'); })
+        .catch(function(err) { showToast(err && err.message ? err.message : 'Could not open email', 'error'); });
     });
 
     const settingsFields = [
@@ -14481,6 +14579,7 @@ PDF_CASENOTE_ADVERT +
 
     document.getElementById('setting-dark-mode')?.addEventListener('change', (e) => {
       applyDarkMode(e.target.checked);
+      updateDarkModeToggleIcon(e.target.checked);
       window.api.setSettings({ darkMode: e.target.checked ? 'true' : 'false' }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     });
 
@@ -14820,7 +14919,7 @@ PDF_CASENOTE_ADVERT +
           '.\n\nFile: ' + fileName +
           '\n\nKind regards'
         );
-        openPreferredEmailClient(email, subjRaw, bodyRaw);
+        openOutlookWebCompose(email, subjRaw, bodyRaw);
         showToast('Emailing to ' + recipientLabel + ' (' + email + '). Attach: ' + fileName, 'success', 5000);
       });
     });

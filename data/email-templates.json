@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "meta": {
+    "description": "Built-in officer email copy — edit text here; logic stays in renderer/email-templates.js"
+  },
+  "templates": [
+    { "id": "first_attendance", "name": "First Attendance Disclosure Request", "scope": "officer" },
+    { "id": "follow_up", "name": "Follow-Up / Outcome Request", "scope": "officer" },
+    { "id": "no_reply", "name": "No Reply Follow-Up", "scope": "officer" }
+  ],
+  "first_attendance": {
+    "disclosureRequest": "Please would you confirm that the attendance will be effective and provide disclosure to this email address.",
+    "manyThanks": "Many thanks,"
+  },
+  "follow_up": {
+    "opening": "I write following my attendance upon ",
+    "openingSuffix": " on behalf of ",
+    "outcomePromptWhenUnknown": "I would be grateful if you could confirm the outcome of this matter when convenient."
+  },
+  "no_reply": {
+    "referParagraph": "I refer to my previous email regarding ",
+    "referMid": ", following my attendance upon them at ",
+    "referMid2": " on behalf of ",
+    "referEnd": ". I have not yet received a reply and would be grateful if you could confirm the outcome at your earliest convenience.",
+    "copyBelow": "For ease of reference, I set out a copy of my previous email below.",
+    "disregardIfReplied": "If you have already replied to the firm, please disregard this email and accept my apologies."
+  },
+  "outcome_unknown": {
+    "concise": [
+      "I should be grateful if you would please now confirm the outcome of this matter.",
+      "",
+      "If the client was bailed, please provide the bail return date and time, the police station to which they are bailed, and details of any bail conditions.",
+      "",
+      "If the client was charged, please provide details of the charges, the court date and time, the relevant Magistrates\u2019 Court, and whether the client was granted bail or remanded together with any bail conditions if applicable."
+    ],
+    "full": [
+      "I would be grateful if you could please confirm the outcome of this matter.",
+      "",
+      "If the client was bailed, could you please provide:",
+      "\u2022 bail return date and time",
+      "\u2022 the police station to which they are bailed",
+      "\u2022 details of any bail conditions",
+      "",
+      "If the client was charged, could you please provide:",
+      "\u2022 details of the charges",
+      "\u2022 the court date and time",
+      "\u2022 the relevant Magistrates\u2019 Court",
+      "\u2022 whether the client was granted bail or remanded",
+      "\u2022 any bail conditions if applicable"
+    ]
+  },
+  "outcome_generic": {
+    "bailChargeDetail": [
+      "If the client was bailed, please provide the bail return date and time, the police station to which they are bailed, and details of any bail conditions.",
+      "",
+      "If the client was charged, please provide details of the charges, the court date and time, the relevant Magistrates' Court, and whether the client was granted bail or remanded, together with any bail conditions if applicable."
+    ]
+  },
+  "charged": {
+    "chargesHeader": "The client was charged with the following:",
+    "confirmDetails": "Could you please confirm the above details and provide any additional information?",
+    "chargedWithoutBail": "charged without bail",
+    "remandedInCustody": "remanded in custody"
+  },
+  "bail_no_charge": {
+    "confirmInvestigation": "Could you please confirm these details and advise of the outcome of the investigation?"
+  },
+  "other_outcome": {
+    "outcomePrefix": "The outcome recorded is: ",
+    "confirmFurther": "Could you please confirm this and provide any further information?"
+  },
+  "bail_wording": {
+    "unconditional": "The client was released on unconditional bail",
+    "conditional": "The client was released on conditional bail",
+    "returnDateWith": ", with a return date of ",
+    "returnDateConditional": " with a return date of ",
+    "bailConditions": ". Bail conditions: ",
+    "bailedToReturn": "The client was bailed to return on "
+  },
+  "court": {
+    "courtDate": "The court date is ",
+    "at": " at ",
+    "courtIs": "The relevant court is "
+  }
+}

@@ -1,10 +1,7 @@
 /* ═══════════════════════════════════════════════════════
    EMAIL MODAL — Officer Email Templates Add-On
-   Depends on: buildEmailBody, buildEmailSubject, buildMailtoHref,
-               buildEmailClientUrl, getEmailClientLabel, EMAIL_CLIENTS
-               (email-templates.js)
-               showToast, refreshList, esc (app.js globals)
-               window._appSettingsCache, window.api
+   Depends on: buildEmailBody, buildEmailSubject (email-templates.js)
+   Compose opens only via window.invokeOutlookWebCompose → emailAPI.open (main IPC).
    ═══════════════════════════════════════════════════════ */
 
 var _EMAIL_TEMPLATES = [
@@ -13,14 +10,22 @@ var _EMAIL_TEMPLATES = [
   { id: 'no_reply',         label: 'No Reply Follow-Up' }
 ];
 
-function _openEmailExternalOnce(url) {
-  if (!url) return;
-  if (!window._emailOpenGuard) window._emailOpenGuard = { ts: 0, url: '' };
-  var now = Date.now();
-  if (now - window._emailOpenGuard.ts < 1200) return;
-  window._emailOpenGuard = { ts: now, url: url };
-  if (window.api && window.api.openExternal) window.api.openExternal(url);
-  else window.open(url, '_blank');
+function _truncateBodyForOutlook(body) {
+  var s = String(body || '');
+  if (s.length > 4000) return s.slice(0, 4000) + '\n\n[continued]';
+  return s;
+}
+
+function _invokeOutlookEmail(payload) {
+  if (typeof window.invokeOutlookWebCompose !== 'function') {
+    return Promise.reject(new Error('Email unavailable'));
+  }
+  return window.invokeOutlookWebCompose(payload).then(function() {
+    showToast('Opening Outlook Web…', 'success');
+  }).catch(function(err) {
+    console.error('[email-modal]', err);
+    showToast(err && err.message ? err.message : 'Could not open email', 'error');
+  });
 }
 
 function openEmailModal(recordId, recordData, recordStatus) {
@@ -33,7 +38,6 @@ function openEmailModal(recordId, recordData, recordStatus) {
   var lastTplUsed   = _oicClean(data.lastOfficerEmailTemplateUsed);
   var currentTpl    = _EMAIL_TEMPLATES.some(function(t) { return t.id === lastTplUsed; }) ? lastTplUsed : 'first_attendance';
   var currentCustomTpl = '';
-  var pickerVisible = false;
 
   /* ── Helpers ─────────────────────────────────────────── */
 
@@ -43,24 +47,14 @@ function openEmailModal(recordId, recordData, recordStatus) {
       .replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function _currentClient() {
-    /* Read the in-memory cache only — the "Open Email App" button handler always fetches
-       fresh settings from the DB before calling _doOpen(), so the cache is up-to-date by
-       the time this is called from _openUrl().  The previous async getSettings() fallback
-       here was a second competing IPC path that could overwrite the cache mid-flight. */
-    var cached = _oicClean((window._appSettingsCache || {}).preferredEmailClient);
-    return cached || 'default';
-  }
-
-  function _openBtnLabel() {
-    var c = _currentClient();
-    var label = getEmailClientLabel(c);
-    return c === 'default' ? 'Open Email App \u25be' : 'Open in ' + label + ' \u25be';
-  }
-
   function _openUrl(to, subject, body) {
-    var url = buildEmailClientUrl(_currentClient(), to, subject, body);
-    _openEmailExternalOnce(url);
+    return _invokeOutlookEmail({
+      to: String(to || '').trim(),
+      cc: '',
+      bcc: '',
+      subject: subject || '',
+      body: _truncateBodyForOutlook(body),
+    });
   }
 
   function _attendanceTypeLabel() {
@@ -124,6 +118,61 @@ function openEmailModal(recordId, recordData, recordStatus) {
     return String(text || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
       return map[key] != null ? String(map[key]) : '';
     });
+  }
+
+  /* ── Missing-field detection ─────────────────────────── */
+
+  function _tplFieldLabel(key) {
+    var L = {
+      clientName: 'Client name', station: 'Police station', date: 'Date',
+      oicName: 'Officer name', firmName: 'Firm', contactName: 'Firm contact',
+      feeEarnerName: 'Fee earner', outcome: 'Outcome', ourFileNumber: 'File number',
+      ufn: 'UFN', offenceType: 'Offence', nextStep: 'Next step'
+    };
+    return L[key] || key;
+  }
+
+  function _computeMissing() {
+    var map = _getOfficerPlaceholderMap();
+    var missing = [];
+    var toEl = document.getElementById('email-oic-to');
+    if (!toEl || !String(toEl.value || '').trim()) {
+      missing.push({ key: 'to', label: 'Officer email address' });
+    }
+    if (currentCustomTpl) {
+      var custom = _getOfficerCustomTemplateById(currentCustomTpl);
+      if (custom) {
+        var rawText = (custom.subject || '') + '\n' + (custom.body || '');
+        var re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+        var seen = {};
+        var m;
+        while ((m = re.exec(rawText)) !== null) {
+          var key = m[1];
+          if (seen[key]) continue;
+          seen[key] = true;
+          var val = map[key];
+          if (val == null || String(val).trim() === '') {
+            missing.push({ key: key, label: _tplFieldLabel(key) });
+          }
+        }
+      }
+    } else {
+      if (!map.clientName) missing.push({ key: 'clientName', label: 'Client name' });
+      if (!map.station)    missing.push({ key: 'station',    label: 'Police station' });
+    }
+    return missing;
+  }
+
+  function _updateMissingWarn() {
+    var warnEl = document.getElementById('email-oic-missing-warn');
+    if (!warnEl) return;
+    var missing = _computeMissing();
+    if (!missing.length) { warnEl.style.display = 'none'; return; }
+    warnEl.innerHTML = '&#9888;&nbsp;<strong>Missing:</strong> ' +
+      missing.map(function(f) {
+        return '<span class="email-oic-missing-tag">' + _escAttr(f.label) + '</span>';
+      }).join('');
+    warnEl.style.display = '';
   }
 
   function _currentTemplateKey() {
@@ -206,20 +255,9 @@ function openEmailModal(recordId, recordData, recordStatus) {
             '<label class="email-oic-label" for="email-oic-body">Message</label>' +
             '<textarea id="email-oic-body" class="email-oic-textarea" rows="14">' + _escAttr(body) + '</textarea>' +
           '</div>' +
-          /* Inline client picker — hidden by default */
-          '<div id="email-client-picker" class="email-client-picker" style="display:none;">' +
-            '<p class="email-client-picker-label">Choose your email app:</p>' +
-            '<div class="email-client-picker-grid">' +
-              EMAIL_CLIENTS.map(function(c) {
-                return '<button type="button" class="email-client-btn' +
-                  (_currentClient() === c.id ? ' active' : '') +
-                  '" data-client="' + c.id + '">' + _escAttr(c.label) + '</button>';
-              }).join('') +
-            '</div>' +
-          '</div>' +
+          '<div id="email-oic-missing-warn" class="email-oic-missing-warn" style="display:none"></div>' +
           '<div class="email-oic-actions">' +
-            '<button type="button" id="email-oic-open-app" class="btn btn-primary">' + _escAttr(_openBtnLabel()) + '</button>' +
-            '<button type="button" id="email-oic-change-client" class="btn-link-subtle" title="Change email app">Change app</button>' +
+            '<button type="button" id="email-oic-open-app" class="btn btn-primary">Open in Outlook Web</button>' +
             '<button type="button" id="email-oic-copy"      class="btn btn-secondary">Copy Email</button>' +
             '<button type="button" id="email-oic-save-tpl"  class="btn btn-secondary">Save as Template</button>' +
             '<button type="button" id="email-oic-mark-sent" class="btn btn-secondary">Mark Sent</button>' +
@@ -263,6 +301,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
         var tplContent = _currentTemplateContent();
         document.getElementById('email-oic-subject').value = tplContent.subject;
         document.getElementById('email-oic-body').value    = tplContent.body;
+        _updateMissingWarn();
       });
     });
 
@@ -274,9 +313,9 @@ function openEmailModal(recordId, recordData, recordStatus) {
       var tplContent = _currentTemplateContent();
       document.getElementById('email-oic-subject').value = tplContent.subject;
       document.getElementById('email-oic-body').value    = tplContent.body;
+      _updateMissingWarn();
     });
 
-    /* Open Email App — always fetches fresh settings to avoid stale-cache misrouting */
     document.getElementById('email-oic-open-app').addEventListener('click', function() {
       var to      = document.getElementById('email-oic-to').value.trim();
       var subject = document.getElementById('email-oic-subject').value.trim();
@@ -286,50 +325,17 @@ function openEmailModal(recordId, recordData, recordStatus) {
         document.getElementById('email-oic-to').focus();
         return;
       }
-      function _doOpen() {
-        var client = _currentClient();
-        if (client === 'default') {
-          _togglePicker(true);
-        } else {
-          _openUrl(to, subject, body);
-        }
+      /* Persist a newly-typed email address back to the record immediately */
+      if (recordId && to && to !== _oicClean(data.oicEmail) &&
+          window.api && window.api.attendanceSave) {
+        data.oicEmail = to;
+        window.api.attendanceSave({
+          id: recordId,
+          data: Object.assign({}, data),
+          status: recordStatus || 'draft'
+        }).catch(function() {});
       }
-      if (window.api && window.api.getSettings) {
-        window.api.getSettings().then(function(s) {
-          if (s) window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
-          var btn = document.getElementById('email-oic-open-app');
-          if (btn) btn.textContent = _openBtnLabel();
-          _doOpen();
-        }).catch(function() { _doOpen(); });
-      } else {
-        _doOpen();
-      }
-    });
-
-    /* Change app — always shows picker */
-    document.getElementById('email-oic-change-client').addEventListener('click', function() {
-      _togglePicker(!pickerVisible);
-    });
-
-    /* Client picker buttons */
-    modal.querySelectorAll('.email-client-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var clientId = btn.getAttribute('data-client');
-        _saveClientPreference(clientId, function() {
-          /* Update active state */
-          modal.querySelectorAll('.email-client-btn').forEach(function(b) {
-            b.classList.toggle('active', b.getAttribute('data-client') === clientId);
-          });
-          /* Update Open button label */
-          document.getElementById('email-oic-open-app').textContent = _openBtnLabel();
-          /* Open the email */
-          var to      = document.getElementById('email-oic-to').value.trim();
-          var subject = document.getElementById('email-oic-subject').value.trim();
-          var body    = document.getElementById('email-oic-body').value;
-          _openUrl(to, subject, body);
-          _togglePicker(false);
-        });
-      });
+      _openUrl(to, subject, body);
     });
 
     /* Copy */
@@ -354,29 +360,13 @@ function openEmailModal(recordId, recordData, recordStatus) {
       var recipient = document.getElementById('email-oic-to').value.trim();
       _markEmailSent(recordId, data, recordStatus, _currentTemplateKey(), recipient);
     });
-  }
 
-  /* ── Picker toggle ───────────────────────────────────── */
+    /* To-field changes refresh the missing warning */
+    var _toFieldEl = document.getElementById('email-oic-to');
+    if (_toFieldEl) _toFieldEl.addEventListener('input', _updateMissingWarn);
 
-  function _togglePicker(show) {
-    pickerVisible = show;
-    var picker = document.getElementById('email-client-picker');
-    if (picker) picker.style.display = show ? '' : 'none';
-  }
-
-  /* ── Save client preference ──────────────────────────── */
-
-  function _saveClientPreference(clientId, cb) {
-    window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { preferredEmailClient: clientId });
-    /* Also update the Settings dropdown if it exists */
-    var sel = document.getElementById('setting-preferred-email-client');
-    if (sel) sel.value = clientId;
-    window.api.setSettings({ preferredEmailClient: clientId }).then(function() {
-      if (typeof cb === 'function') cb();
-    }).catch(function() {
-      showToast('Could not save email app preference', 'error');
-      if (typeof cb === 'function') cb();
-    });
+    /* Initial check */
+    _updateMissingWarn();
   }
 
   /* ── Clipboard fallback ──────────────────────────────── */
@@ -415,7 +405,8 @@ function _markEmailSent(recordId, existingData, recordStatus, templateId, recipi
     officerEmailStatus:           'sent',
     lastOfficerEmailSentDate:     new Date().toISOString(),
     lastOfficerEmailTemplateUsed: templateId || 'first_attendance',
-    lastOfficerEmailRecipient:    recipientEmail || ''
+    lastOfficerEmailRecipient:    recipientEmail || '',
+    oicEmail:                     recipientEmail || existingData.oicEmail || ''
   });
 
   var status = recordStatus || 'draft';
@@ -497,10 +488,13 @@ function _saveAsTemplate(modalId) {
     var bodyRaw = bodyEl.value || '';
     var subjectTpl = _valuesToPlaceholders(subjectRaw, map);
     var bodyTpl = _valuesToPlaceholders(bodyRaw, map);
-    var tpls = [];
-    try { tpls = JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]'); } catch (_) {}
+    var tpls = typeof window._getCustomEmailTemplates === 'function'
+      ? (window._getCustomEmailTemplates() || []).slice()
+      : [];
     tpls.push({ name: name, subject: subjectTpl, body: bodyTpl, scope: 'officer' });
-    try { localStorage.setItem('cn-custom-email-templates', JSON.stringify(tpls)); } catch (_) {}
+    if (typeof window._saveCustomEmailTemplates === 'function') {
+      window._saveCustomEmailTemplates(tpls);
+    }
     showToast('Template saved — available in all officer email modals', 'success');
     wrap.style.display = 'none';
 
@@ -527,7 +521,6 @@ function openQuickEmailModal() {
   var settings = window._appSettingsCache || {};
   var feeEarnerName = _oicClean(settings.feeEarnerNameDefault) || '';
   var currentCustomTpl = '';
-  var pickerVisible = false;
 
   function _escAttr(str) {
     return String(str || '')
@@ -535,20 +528,14 @@ function openQuickEmailModal() {
       .replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function _currentClient() {
-    var cached = _oicClean((window._appSettingsCache || {}).preferredEmailClient);
-    return cached || 'default';
-  }
-
-  function _openBtnLabel() {
-    var c = _currentClient();
-    var label = getEmailClientLabel(c);
-    return c === 'default' ? 'Open Email App \u25be' : 'Open in ' + label + ' \u25be';
-  }
-
   function _openUrl(to, subject, body) {
-    var url = buildEmailClientUrl(_currentClient(), to, subject, body);
-    _openEmailExternalOnce(url);
+    return _invokeOutlookEmail({
+      to: String(to || '').trim(),
+      cc: '',
+      bcc: '',
+      subject: subject || '',
+      body: _truncateBodyForOutlook(body),
+    });
   }
 
   function _getCustomTemplatesForQuick() {
@@ -610,6 +597,57 @@ function openQuickEmailModal() {
     return String(text || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
       return map[key] != null ? String(map[key]) : '';
     });
+  }
+
+  /* ── Quick-email missing-field detection ─────────────── */
+
+  function _computeQuickMissing() {
+    var missing = [];
+    var modal = document.getElementById('quick-email-modal');
+    if (!modal) return missing;
+    var toEl = modal.querySelector('#quick-email-to');
+    if (!toEl || !String(toEl.value || '').trim()) {
+      missing.push({ key: 'to', label: 'Officer email address' });
+    }
+    if (_activeRawTemplate) {
+      var map = _getPlaceholderMap();
+      var rawText = (_activeRawTemplate.subject || '') + '\n' + (_activeRawTemplate.body || '');
+      var re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+      var seen = {};
+      var m;
+      var qLabels = {
+        clientName: 'Client name', oicName: 'Officer name', station: 'Police station',
+        offenceType: 'Offence', date: 'Date', feeEarnerName: 'Fee earner'
+      };
+      while ((m = re.exec(rawText)) !== null) {
+        var key = m[1];
+        if (seen[key]) continue;
+        seen[key] = true;
+        var val = map[key];
+        if (val == null || String(val).trim() === '') {
+          missing.push({ key: key, label: qLabels[key] || key });
+        }
+      }
+    }
+    return missing;
+  }
+
+  function _escAttrQ(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function _updateQuickMissingWarn() {
+    var warnEl = document.getElementById('quick-email-missing-warn');
+    if (!warnEl) return;
+    var missing = _computeQuickMissing();
+    if (!missing.length) { warnEl.style.display = 'none'; return; }
+    warnEl.innerHTML = '&#9888;&nbsp;<strong>Missing:</strong> ' +
+      missing.map(function(f) {
+        return '<span class="email-oic-missing-tag">' + _escAttrQ(f.label) + '</span>';
+      }).join('');
+    warnEl.style.display = '';
   }
 
   var _QUICK_BUILTIN_TEMPLATES = [
@@ -704,11 +742,15 @@ function openQuickEmailModal() {
     if (String(templateId).indexOf('custom:') === 0) {
       var idx = parseInt(String(templateId).slice(7), 10);
       try {
-        var list = JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]');
+        var list = typeof window._getCustomEmailTemplates === 'function'
+          ? (window._getCustomEmailTemplates() || []).slice()
+          : [];
         if (list[idx]) {
           list[idx].subject = newSubject;
           list[idx].body = newBody;
-          localStorage.setItem('cn-custom-email-templates', JSON.stringify(list));
+          if (typeof window._saveCustomEmailTemplates === 'function') {
+            window._saveCustomEmailTemplates(list);
+          }
         }
       } catch (_) {}
     }
@@ -833,19 +875,9 @@ function openQuickEmailModal() {
             '<label class="email-oic-label" for="quick-email-body">Message</label>' +
             '<textarea id="quick-email-body" class="email-oic-textarea" rows="10" placeholder="Type your message here..."></textarea>' +
           '</div>' +
-          '<div id="email-client-picker-quick" class="email-client-picker" style="display:none;">' +
-            '<p class="email-client-picker-label">Choose your email app:</p>' +
-            '<div class="email-client-picker-grid">' +
-              EMAIL_CLIENTS.map(function(c) {
-                return '<button type="button" class="email-client-btn' +
-                  (_currentClient() === c.id ? ' active' : '') +
-                  '" data-client="' + c.id + '">' + _escAttr(c.label) + '</button>';
-              }).join('') +
-            '</div>' +
-          '</div>' +
+          '<div id="quick-email-missing-warn" class="email-oic-missing-warn" style="display:none"></div>' +
           '<div class="email-oic-actions quick-email-actions">' +
-            '<button type="button" id="quick-email-open-app" class="btn btn-primary">' + _escAttr(_openBtnLabel()) + '</button>' +
-            '<button type="button" id="quick-email-change-client" class="btn-link-subtle" title="Change email app">Change app</button>' +
+            '<button type="button" id="quick-email-open-app" class="btn btn-primary">Open in Outlook Web</button>' +
             '<button type="button" id="quick-email-copy" class="btn btn-secondary">Copy Email</button>' +
             '<button type="button" id="quick-email-save-tpl" class="btn btn-secondary">Save as Template</button>' +
             '<button type="button" id="quick-email-cancel" class="btn btn-secondary">Cancel</button>' +
@@ -899,6 +931,7 @@ function openQuickEmailModal() {
           if (_activeRawTemplate) {
             _refreshTemplateFields();
           }
+          _updateQuickMissingWarn();
         });
         if (['quick-email-client-name', 'quick-email-station', 'quick-email-date'].indexOf(fieldId) !== -1) {
           el.addEventListener('blur', function() {
@@ -944,59 +977,21 @@ function openQuickEmailModal() {
           var bodyEl = document.getElementById('quick-email-body');
           if (bodyEl) bodyEl.value = '';
         }
+        _updateQuickMissingWarn();
       });
     }
+
+    /* To-field and initial missing-warn */
+    var _qToEl = modal.querySelector('#quick-email-to');
+    if (_qToEl) _qToEl.addEventListener('input', _updateQuickMissingWarn);
+    _updateQuickMissingWarn();
 
     modal.querySelector('#quick-email-open-app').addEventListener('click', function() {
       var to = ((modal.querySelector('#quick-email-to') || {}).value || '').trim();
       if (!to) { showToast('Please enter an officer email address', 'error'); return; }
       var subject = ((modal.querySelector('#quick-email-subject') || {}).value || '').trim() || _autoSubject();
       var body = (modal.querySelector('#quick-email-body') || {}).value || '';
-      function _doOpen() {
-        var client = _currentClient();
-        if (client === 'default') {
-          _toggleQuickPicker(true);
-        } else {
-          _openUrl(to, subject, body);
-        }
-      }
-      if (window.api && window.api.getSettings) {
-        window.api.getSettings().then(function(s) {
-          if (s) window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
-          var openBtn = document.getElementById('quick-email-open-app');
-          if (openBtn) openBtn.textContent = _openBtnLabel();
-          _doOpen();
-        }).catch(function() { _doOpen(); });
-      } else {
-        _doOpen();
-      }
-    });
-
-    modal.querySelector('#quick-email-change-client').addEventListener('click', function() {
-      _toggleQuickPicker(!pickerVisible);
-    });
-
-    modal.querySelectorAll('.email-client-btn').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var clientId = btn.getAttribute('data-client');
-        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { preferredEmailClient: clientId });
-        var sel = document.getElementById('setting-preferred-email-client');
-        if (sel) sel.value = clientId;
-        window.api.setSettings({ preferredEmailClient: clientId }).catch(function() {
-          showToast('Could not save email app preference', 'error');
-        });
-        modal.querySelectorAll('.email-client-btn').forEach(function(b) {
-          b.classList.toggle('active', b.getAttribute('data-client') === clientId);
-        });
-        var openBtn = document.getElementById('quick-email-open-app');
-        if (openBtn) openBtn.textContent = _openBtnLabel();
-        var to = ((modal.querySelector('#quick-email-to') || {}).value || '').trim();
-        if (!to) { showToast('Please enter an officer email address', 'error'); _toggleQuickPicker(false); return; }
-        var subject = ((modal.querySelector('#quick-email-subject') || {}).value || '').trim() || _autoSubject();
-        var body = (modal.querySelector('#quick-email-body') || {}).value || '';
-        _openUrl(to, subject, body);
-        _toggleQuickPicker(false);
-      });
+      _openUrl(to, subject, body);
     });
 
     modal.querySelector('#quick-email-copy').addEventListener('click', function() {
@@ -1013,12 +1008,6 @@ function openQuickEmailModal() {
     modal.querySelector('#quick-email-save-tpl').addEventListener('click', function() {
       _saveAsTemplate('quick-email-modal');
     });
-  }
-
-  function _toggleQuickPicker(show) {
-    pickerVisible = show;
-    var picker = document.getElementById('email-client-picker-quick');
-    if (picker) picker.style.display = show ? '' : 'none';
   }
 
   function _qFallbackCopy(text) {

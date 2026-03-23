@@ -1,9 +1,34 @@
 {
   "releases": [
     {
+      "version": "1.4.140",
+      "date": "2026-03-23",
+      "latest": true,
+      "changes": [
+        "Fix invisible input text on all themes (critical)",
+        "Fix dark mode default on fresh install with prefers-color-scheme detection",
+        "Extract email templates to data/email-templates.json",
+        "Migrate custom email templates from localStorage to SQLite",
+        "Add Template Manager with 26 placeholders and live preview",
+        "Add missing-field warnings to officer and quick email modals",
+        "Auto-save OIC email address back to record on first send"
+      ]
+    },
+    {
+      "version": "1.4.139",
+      "date": "2026-03-22",
+      "latest": false,
+      "changes": [
+        "Outlook Web only: single emailAPI path, invokeOutlookWebCompose guard, lib/outlookWebComposeUrl",
+        "remove api.openOutlookEmail",
+        "Windows Edge launch for OWA",
+        "automated tests"
+      ]
+    },
+    {
       "version": "1.4.138",
       "date": "2026-03-22",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Postcode lookup via custodynote.com only (no local API key)",
         "multi-device sync API",
@@ -282,9 +307,9 @@
       "date": "2026-03-20",
       "latest": false,
       "changes": [
-        "Fix email client switching: openPreferredEmailClient now refreshes settings from DB before every email open (was using stale cache)",
+        "Fix Outlook Web compose: refresh settings from the database before every email open (was using stale cache)",
         "loadSettings uses merge instead of full cache replacement to prevent losing in-flight preference changes",
-        "removed redundant preferredEmailClient fallback that could reset to default"
+        "removed redundant legacy email preference fallback that could reset to default"
       ]
     },
     {
@@ -317,9 +342,9 @@
       "date": "2026-03-19",
       "latest": false,
       "changes": [
-        "Fix email client switching: Settings Save no longer overwrites preferred email app with default",
-        "Sync email app dropdown to DB value at startup (prevents stale default overwriting user choice)",
-        "saveSettings now reads preferredEmailClient from cache first, falling back to dropdown",
+        "Fix: Settings Save no longer overwrites Outlook Web email defaults",
+        "Sync email settings to DB value at startup (prevents stale defaults)",
+        "saveSettings merges cached values with stored settings consistently",
         "Add comprehensive Quick Email template integration tests (jsdom)"
       ]
     },
@@ -402,9 +427,9 @@
       "date": "2026-03-18",
       "latest": false,
       "changes": [
-        "Fixed email client switching: billing emails now respect the preferred email client setting",
-        "Fixed settings save not persisting the preferred email client choice",
-        "Fixed race condition in Officer Email modal that could overwrite email client preference mid-flight",
+        "Fixed: billing emails open via Outlook Web compose consistently",
+        "Fixed settings save for email-related options",
+        "Fixed race condition in Officer Email modal that could overwrite compose routing mid-flight",
         "Added settings note clarifying Outlook Web requires a work/school Microsoft 365 account"
       ]
     },
@@ -486,7 +511,7 @@
       "date": "2026-03-18",
       "latest": false,
       "changes": [
-        "Fix preferred email app being reset when saving other settings"
+        "Fix: Outlook Web email defaults no longer reset when saving other settings"
       ]
     },
     {
@@ -556,7 +581,7 @@
       "changes": [
         "Quick Email: email an officer without creating a record first (Home screen + Records list)",
         "Save as Template: save any email you compose as a reusable template directly from the email modal",
-        "Fix preferred email app not applied to OIC emails when settings cache was empty"
+        "Fix: Outlook Web compose applied to OIC emails when settings cache was empty"
       ]
     },
     {
@@ -824,7 +849,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Add Email Client Picker to Officer Email Templates: the 'Open Email App' button now shows your chosen app (Gmail, Outlook Web, Outlook.com, Yahoo, AOL, or system default). Switch instantly from the modal via 'Change app', or set your preference in Settings → Add-Ons."
+        "Officer Email Templates: compose opens in Outlook Web (Microsoft 365). Copy Email, Mark Sent, and Cancel. Optional add-on in Settings → Add-Ons."
       ]
     },
     {
@@ -848,7 +873,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Add Officer Email Templates add-on module. When enabled in Settings → Add-Ons, an Email OIC button appears on each record in the Records list. Click it to open a modal with three pre-filled templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up. Templates auto-populate officer, client, station, firm, date and fee earner details from the record. Supports Open Email App (mailto), Copy Email, Mark Sent, and Cancel. A Sent badge appears on the list row after marking sent. Feature is fully optional and has no effect on the core app when disabled. Designed for future paid licensing."
+        "Add Officer Email Templates add-on module. When enabled in Settings → Add-Ons, an Email OIC button appears on each record in the Records list. Click it to open a modal with three pre-filled templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up. Templates auto-populate officer, client, station, firm, date and fee earner details from the record. Supports Open in Outlook Web, Copy Email, Mark Sent, and Cancel. A Sent badge appears on the list row after marking sent. Feature is fully optional and has no effect on the core app when disabled. Designed for future paid licensing."
       ]
     },
     {
