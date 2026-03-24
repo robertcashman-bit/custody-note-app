@@ -10943,6 +10943,119 @@ PDF_CASENOTE_ADVERT +
     showToast(customTemplate ? 'Saved email template loaded' : 'Default email template loaded', 'success');
   }
 
+  /**
+   * After Template Manager "Use template": put rendered subject/body into a form field or email draft.
+   */
+  function applyTemplateManagerOutput(subject, content, meta) {
+    var subj = String(subject || '').trim();
+    var body = String(content || '');
+    var overlay = document.createElement('div');
+    overlay.className = 'cn-confirm-overlay';
+    var box = document.createElement('div');
+    box.className = 'cn-confirm-box';
+    box.style.maxWidth = '440px';
+    var warn = (meta && meta.missing && meta.missing.length)
+      ? '<p style="margin:0 0 10px;font-size:12px;color:#b45309;background:#fffbeb;padding:8px 10px;border-radius:6px;border:1px solid #fde68a;">No data for placeholders: <code style="font-size:11px;">' +
+        meta.missing.map(function(k) { return '[' + String(k).replace(/</g, '') + ']'; }).join(', ') +
+        '</code> — those were left blank.</p>'
+      : '';
+    box.innerHTML =
+      '<h3 style="margin:0 0 8px;font-size:1.05rem;">Insert template</h3>' +
+      '<p style="margin:0 0 12px;font-size:13px;color:#64748b;">Choose where to place the rendered text. For email, subject and body are written to the instructing solicitor fields.</p>' +
+      warn +
+      '<label class="form-label" for="tpl-insert-target">Destination</label>' +
+      '<select id="tpl-insert-target" class="form-input" style="width:100%;margin-bottom:12px;">' +
+      '<option value="email">Instructing solicitor email (subject + body)</option>' +
+      '<option value="disclosureNarrative">Narrative / Disclosure Notes</option>' +
+      '<option value="clientInstructions">Summary of client instructions</option>' +
+      '<option value="notesToOffice">Notes to Office / Firm</option>' +
+      '<option value="arrivalNotes">General Notes</option>' +
+      '<option value="iv0_notes">Interview 1 notes</option>' +
+      '<option value="clipboard">Copy to clipboard only</option>' +
+      '</select>' +
+      '<div id="tpl-append-row" style="margin-bottom:12px;font-size:13px;">' +
+      '<label style="margin-right:12px;"><input type="radio" name="tpl-mode" value="append" checked> Append to existing</label>' +
+      '<label><input type="radio" name="tpl-mode" value="replace"> Replace field</label>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+      '<button type="button" class="btn btn-secondary" id="tpl-insert-cancel">Cancel</button>' +
+      '<button type="button" class="btn btn-primary" id="tpl-insert-go">Insert</button>' +
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    var sel = box.querySelector('#tpl-insert-target');
+    var appendRow = box.querySelector('#tpl-append-row');
+    function syncModeVisibility() {
+      var v = sel.value;
+      appendRow.style.display = (v === 'email' || v === 'clipboard') ? 'none' : '';
+    }
+    sel.addEventListener('change', syncModeVisibility);
+    syncModeVisibility();
+
+    function close() {
+      try { document.body.removeChild(overlay); } catch (_) {}
+    }
+    box.querySelector('#tpl-insert-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+
+    box.querySelector('#tpl-insert-go').addEventListener('click', function() {
+      var target = sel.value;
+      var modeEl = box.querySelector('input[name="tpl-mode"]:checked');
+      var append = modeEl && modeEl.value === 'append';
+
+      if (target === 'clipboard') {
+        var full = (subj ? 'Subject: ' + subj + '\n\n' : '') + body;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(full).then(function() {
+            showToast('Copied to clipboard', 'success');
+            close();
+          }).catch(function() {
+            showToast('Could not copy to clipboard', 'error');
+          });
+        } else {
+          showToast('Clipboard not available', 'error');
+        }
+        return;
+      }
+
+      if (target === 'email') {
+        setFieldValue('solicitorEmailSubject', subj);
+        setFieldValue('solicitorEmailBody', body);
+        if (typeof quietSave === 'function') quietSave();
+        showToast('Email subject and body updated — review in Instructing Solicitor section', 'success');
+        close();
+        return;
+      }
+
+      var block = body;
+      if (subj) {
+        block = subj + '\n\n' + body;
+      }
+
+      if (target === 'iv0_notes') {
+        if (!formData.interviews) formData.interviews = [{}];
+        if (!formData.interviews[0]) formData.interviews[0] = {};
+        var iv0 = formData.interviews[0];
+        var prevIv = String(iv0.notes || '').trim();
+        var mergedIv = append && prevIv ? prevIv + '\n\n' + block : block;
+        iv0.notes = mergedIv;
+        setFieldValue('iv0_notes', mergedIv);
+        if (typeof quietSave === 'function') quietSave();
+        showToast('Template inserted into interview notes', 'success');
+        close();
+        return;
+      }
+
+      var existing = String(formData[target] || '').trim();
+      var newVal = append && existing ? existing + '\n\n' + block : block;
+      setFieldValue(target, newVal);
+      if (typeof quietSave === 'function') quietSave();
+      showToast('Template inserted', 'success');
+      close();
+    });
+  }
+
   function openOutlookWebCompose(toEmail, subject, body) {
     var to = String(toEmail || '').trim();
     if (!to) {
@@ -12196,7 +12309,8 @@ PDF_CASENOTE_ADVERT +
               tplStoreInit().then(function() {
                 openTemplateManager({
                   record:   formData || {},
-                  settings: window._appSettingsCache || {}
+                  settings: window._appSettingsCache || {},
+                  onUse:    applyTemplateManagerOutput
                 });
               });
               break;

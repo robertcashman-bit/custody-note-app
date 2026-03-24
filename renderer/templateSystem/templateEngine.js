@@ -39,6 +39,33 @@ function _tplFmtTime(input) {
   return s;
 }
 
+/** Build a single-line address from split form fields (attendance record). */
+function _tplFormatAddress(r) {
+  r = r || {};
+  var parts = [
+    r.address1, r.address2, r.address3, r.city, r.county, r.postCode
+  ].map(function(x) { return _tplClean(x); }).filter(Boolean);
+  if (parts.length) return parts.join(', ');
+  return _tplClean(r.address || r.clientAddress || '');
+}
+
+/** Disclosure / advice text: map actual schema keys to template placeholders. */
+function _tplDisclosureSummary(r) {
+  r = r || {};
+  return _tplClean(r.disclosureNarrative || r.disclosureSummary || '');
+}
+
+function _tplAdviceGiven(r) {
+  r = r || {};
+  var parts = [
+    _tplClean(r.adviceGiven),
+    _tplClean(r.adviceReInterview),
+    _tplClean(r.reasonsForAdvice)
+  ].filter(Boolean);
+  if (parts.length) return parts.join(' — ');
+  return '';
+}
+
 /* ── Public API ───────────────────────────────────────── */
 
 /**
@@ -88,13 +115,13 @@ function tplBuildData(opts) {
     CLIENT_FIRST_NAME:  firstName,
     CLIENT_LAST_NAME:   lastName,
     DOB:                _tplFmtDate(_tplClean(r.dob || r.dateOfBirth || '')),
-    CLIENT_ADDRESS:     _tplClean(r.address || r.clientAddress || ''),
+    CLIENT_ADDRESS:     _tplFormatAddress(r),
     CLIENT_PHONE:       _tplClean(r.clientPhone || r.phone || ''),
     CLIENT_EMAIL:       _tplClean(r.clientEmail || r.email || ''),
 
     CASE_REFERENCE:     _tplClean(r.ourFileNumber || r.fileReference || r.caseReference || ''),
-    CUSTODY_REFERENCE:  _tplClean(r.custodyReference || r.dsccRef || r.crn || ''),
-    POLICE_STATION:     _tplClean(r.policeStationName || r.policeStation || ''),
+    CUSTODY_REFERENCE:  _tplClean(r.custodyReference || r.dsccRef || r.custodyNumber || r.crn || r.ufn || ''),
+    POLICE_STATION:     _tplClean(r.policeStationName || r.policeStation || r.otherLocation || ''),
     OFFICER_NAME:       oicRaw,
     OFFICER_RANK:       oicRank,
 
@@ -105,10 +132,10 @@ function tplBuildData(opts) {
     BAIL_RETURN_DATE:   _tplFmtDate(_tplClean(r.bailDate || r.bailReturnDate || '')),
     BAIL_CONDITIONS:    _tplClean(r.bailConditions || ''),
     ALLEGATION:         _tplClean(r.offenceSummary || r.allegation || ''),
-    DISCLOSURE_SUMMARY: _tplClean(r.disclosureSummary || ''),
-    ADVICE_GIVEN:       _tplClean(r.adviceGiven || ''),
+    DISCLOSURE_SUMMARY: _tplDisclosureSummary(r),
+    ADVICE_GIVEN:       _tplAdviceGiven(r),
 
-    SOLICITOR_NAME:     _tplClean(r.feeEarnerName || s.feeEarnerNameDefault || ''),
+    SOLICITOR_NAME:     _tplClean(r.feeEarnerName || r.laaFeeEarnerFullName || s.feeEarnerNameDefault || ''),
     SOLICITOR_EMAIL:    _tplClean(s.feeEarnerEmail || s.solicitorEmail || ''),
     SOLICITOR_PHONE:    _tplClean(s.feeEarnerPhone || s.solicitorPhone || ''),
     FIRM_NAME:          _tplClean(r.firmName || s.firmName || ''),

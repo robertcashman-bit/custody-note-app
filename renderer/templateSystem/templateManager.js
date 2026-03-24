@@ -10,7 +10,8 @@
  * @param {object} [opts]
  * @param {object} [opts.record]    Current attendance record data (for live preview)
  * @param {object} [opts.settings]  App settings cache (for solicitor/firm fields)
- * @param {Function} [opts.onUse]   Callback(subject, content) when user clicks "Use Template"
+ * @param {Function} [opts.onUse]   Callback(subject, content, meta) when user clicks "Use Template".
+ *                                  meta: { placeholders: string[], missing: string[] } — missing keys had no record data (replaced with blank).
  */
 function openTemplateManager(opts) {
   opts = opts || {};
@@ -237,17 +238,41 @@ function openTemplateManager(opts) {
   }
 
   function _handleUse() {
-    var finalSubject = tplRender(_subject, _dataMap, { missing: 'keep' });
-    var finalContent = tplRender(_content, _dataMap, { missing: 'keep' });
+    var nameEl    = $id('tpl-mgr-name');
+    var subjectEl = $id('tpl-mgr-subject');
+    var contentEl = $id('tpl-mgr-content');
+    if (nameEl)    _name    = nameEl.value.trim();
+    if (subjectEl) _subject = subjectEl.value;
+    if (contentEl) _content = contentEl.value;
+
+    _refreshDataMap();
+
+    var combined = (_subject || '') + '\n' + (_content || '');
+    var val      = tplValidate(combined, _dataMap);
+    var renderOpts = { missing: 'blank' };
+
+    var finalSubject = tplRender(_subject, _dataMap, renderOpts);
+    var finalContent = tplRender(_content, _dataMap, renderOpts);
+
+    if (window.__TPL_DEBUG) {
+      console.log('[template] use', { dataMap: _dataMap, placeholders: val.placeholders, missing: val.missing, subject: finalSubject, contentLen: finalContent.length });
+    }
+
+    if (val.missing.length && typeof showToast === 'function') {
+      showToast('No data in record for: ' + val.missing.join(', ') + ' — those gaps are left empty.', 'warning', 7000);
+    }
+
     if (typeof opts.onUse === 'function') {
-      opts.onUse(finalSubject, finalContent);
+      opts.onUse(finalSubject, finalContent, { missing: val.missing, placeholders: val.placeholders });
       _closeModal();
     } else {
       /* Fallback: copy to clipboard */
       var full = (finalSubject ? 'Subject: ' + finalSubject + '\n\n' : '') + finalContent;
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(full).then(function() {
-          if (typeof showToast === 'function') showToast('Copied to clipboard', 'success');
+          if (typeof showToast === 'function') {
+            showToast('Copied to clipboard — open Templates from a record and use “Insert” to put text into a note field.', 'info', 6000);
+          }
         });
       } else {
         alert(full);
