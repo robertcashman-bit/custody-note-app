@@ -5,9 +5,15 @@
    ═══════════════════════════════════════════════════════ */
 
 var _EMAIL_TEMPLATES = [
-  { id: 'first_attendance', label: 'First Attendance Disclosure Request' },
-  { id: 'follow_up',        label: 'Follow-Up / Outcome Request' },
-  { id: 'no_reply',         label: 'No Reply Follow-Up' }
+  { id: 'first_attendance',               label: 'First Attendance Disclosure Request' },
+  { id: 'follow_up',                      label: 'Follow-Up / Outcome Request' },
+  { id: 'no_reply',                       label: 'No Reply Follow-Up' },
+  { id: 'bail_details_after_interview',   label: 'Bail Details After Interview' },
+  { id: 'voluntary_interview_disclosure', label: 'Voluntary Interview Disclosure' },
+  { id: 'custody_disclosure_request',     label: 'Custody Disclosure Request' },
+  { id: 'pre_interview_chase',            label: 'Pre-Interview Chase for Disclosure' },
+  { id: 'rui_update_request',             label: 'RUI / Investigation Update Request' },
+  { id: 'file_reference_request',         label: 'Reference Confirmation Request' }
 ];
 
 function _truncateBodyForOutlook(body) {
@@ -57,16 +63,6 @@ function openEmailModal(recordId, recordData, recordStatus) {
     });
   }
 
-  function _attendanceTypeLabel() {
-    if (data._formType === 'telephone') return 'telephone advice';
-    if (data.attendanceMode === 'voluntary') return 'voluntary attendance';
-    return 'attendance';
-  }
-
-  function _fmtDateForPlaceholder(dateStr) {
-    return _oicFmtDate(_oicClean(dateStr || data.date || data.instructionDateTime));
-  }
-
   function _getOfficerCustomTemplates() {
     var list = typeof window._getCustomEmailTemplates === 'function'
       ? (window._getCustomEmailTemplates() || [])
@@ -94,40 +90,22 @@ function openEmailModal(recordId, recordData, recordStatus) {
   }
 
   function _getOfficerPlaceholderMap() {
-    var clientName = [_oicClean(data.forename), _oicClean(data.surname)].filter(Boolean).join(' ');
-    return {
-      clientName: clientName,
-      contactName: _oicClean(data.firmContactName),
-      firmName: _oicClean(data.firmName),
-      station: _oicClean(data.policeStationName),
-      date: _fmtDateForPlaceholder(),
-      outcome: _oicClean(data.outcomeDecision),
-      nextStep: [_oicClean(data.nextLocationName), _oicFmtDate(_oicClean(data.nextDate))].filter(Boolean).join(' - '),
-      followUp: _oicClean(data.followUpRequired),
-      attendanceType: _attendanceTypeLabel(),
-      feeEarnerName: feeEarnerName,
-      ourFileNumber: _oicClean(data.ourFileNumber || data.fileReference),
-      ufn: _oicClean(data.ufn),
-      oicName: _oicClean(data.oicName),
-      offenceType: _oicClean(data.offenceSummary)
-    };
+    return buildPlaceholderMap(data, feeEarnerName);
   }
 
   function _applyOfficerPlaceholders(text) {
-    var map = _getOfficerPlaceholderMap();
-    return String(text || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
-      return map[key] != null ? String(map[key]) : '';
-    });
+    return applyPlaceholders(text, data, feeEarnerName);
   }
 
   /* ── Missing-field detection ─────────────────────────── */
 
   function _tplFieldLabel(key) {
     var L = {
-      clientName: 'Client name', station: 'Police station', date: 'Date',
+      clientName: 'Client name', station: 'Police station', date: 'Date', time: 'Time',
       oicName: 'Officer name', firmName: 'Firm', contactName: 'Firm contact',
       feeEarnerName: 'Fee earner', outcome: 'Outcome', ourFileNumber: 'File number',
-      ufn: 'UFN', offenceType: 'Offence', nextStep: 'Next step'
+      ufn: 'UFN', offenceType: 'Offence', nextStep: 'Next step',
+      attendanceType: 'Attendance type', officerEmail: 'Officer email'
     };
     return L[key] || key;
   }
@@ -139,26 +117,27 @@ function openEmailModal(recordId, recordData, recordStatus) {
     if (!toEl || !String(toEl.value || '').trim()) {
       missing.push({ key: 'to', label: 'Officer email address' });
     }
+    var rawText = '';
     if (currentCustomTpl) {
       var custom = _getOfficerCustomTemplateById(currentCustomTpl);
-      if (custom) {
-        var rawText = (custom.subject || '') + '\n' + (custom.body || '');
-        var re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
-        var seen = {};
-        var m;
-        while ((m = re.exec(rawText)) !== null) {
-          var key = m[1];
-          if (seen[key]) continue;
-          seen[key] = true;
-          var val = map[key];
-          if (val == null || String(val).trim() === '') {
-            missing.push({ key: key, label: _tplFieldLabel(key) });
-          }
+      if (custom) rawText = (custom.subject || '') + '\n' + (custom.body || '');
+    } else {
+      var tplRaw = getEmailTemplateRaw(currentTpl);
+      if (tplRaw) rawText = (tplRaw.subject || '') + '\n' + (tplRaw.body || '');
+    }
+    if (rawText) {
+      var re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
+      var seen = {};
+      var m;
+      while ((m = re.exec(rawText)) !== null) {
+        var key = m[1];
+        if (seen[key]) continue;
+        seen[key] = true;
+        var val = map[key];
+        if (val == null || String(val).trim() === '') {
+          missing.push({ key: key, label: _tplFieldLabel(key) });
         }
       }
-    } else {
-      if (!map.clientName) missing.push({ key: 'clientName', label: 'Client name' });
-      if (!map.station)    missing.push({ key: 'station',    label: 'Police station' });
     }
     return missing;
   }

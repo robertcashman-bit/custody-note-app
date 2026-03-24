@@ -1,85 +1,95 @@
 {
-  "version": 1,
+  "version": 2,
   "meta": {
-    "description": "Built-in officer email copy — edit text here; logic stays in renderer/email-templates.js"
+    "description": "Officer email templates for criminal practice. All built-in wording is placeholder-driven. Logic should only load subject/body and apply placeholders.",
+    "notes": [
+      "Use with placeholder rendering only.",
+      "Do not hard-code sentence fragments in JS.",
+      "Expected placeholders include: {{clientName}}, {{oicName}}, {{station}}, {{date}}, {{time}}, {{attendanceType}}, {{offenceType}}, {{feeEarnerName}}, {{ourFileNumber}}, {{ufn}}, {{outcome}}, {{nextStep}}, {{followUp}}, {{firmName}}, {{contactName}}, {{officerEmail}}.",
+      "If a placeholder value is missing, render as empty string."
+    ]
   },
   "templates": [
-    { "id": "first_attendance", "name": "First Attendance Disclosure Request", "scope": "officer" },
-    { "id": "follow_up", "name": "Follow-Up / Outcome Request", "scope": "officer" },
-    { "id": "no_reply", "name": "No Reply Follow-Up", "scope": "officer" }
+    {
+      "id": "first_attendance",
+      "name": "First Attendance Disclosure Request",
+      "scope": "officer"
+    },
+    {
+      "id": "follow_up",
+      "name": "Follow-Up / Outcome Request",
+      "scope": "officer"
+    },
+    {
+      "id": "no_reply",
+      "name": "No Reply Follow-Up",
+      "scope": "officer"
+    },
+    {
+      "id": "bail_details_after_interview",
+      "name": "Bail Details After Interview",
+      "scope": "officer"
+    },
+    {
+      "id": "voluntary_interview_disclosure",
+      "name": "Voluntary Interview Disclosure Request",
+      "scope": "officer"
+    },
+    {
+      "id": "custody_disclosure_request",
+      "name": "Custody Disclosure Request",
+      "scope": "officer"
+    },
+    {
+      "id": "pre_interview_chase",
+      "name": "Pre-Interview Chase for Disclosure",
+      "scope": "officer"
+    },
+    {
+      "id": "rui_update_request",
+      "name": "RUI / Investigation Update Request",
+      "scope": "officer"
+    },
+    {
+      "id": "file_reference_request",
+      "name": "Request for Bail / Case Reference Confirmation",
+      "scope": "officer"
+    }
   ],
   "first_attendance": {
-    "disclosureRequest": "Please would you confirm that the attendance will be effective and provide disclosure to this email address.",
-    "manyThanks": "Many thanks,"
+    "subject": "{{clientName}} - {{station}} - Disclosure Request",
+    "body": "Dear DC {{oicName}},\n\nI am writing in relation to {{clientName}}, who is due to attend at {{station}} on {{date}} at {{time}} for a {{attendanceType}} interview in connection with {{offenceType}}.\n\nPlease would you provide disclosure in advance of the interview, including the nature of the allegation, the circumstances relied upon, and the key evidence said to support it.\n\nPlease also confirm that the attendance remains effective.\n\nKind regards,\n{{feeEarnerName}}"
   },
   "follow_up": {
-    "opening": "I write following my attendance upon ",
-    "openingSuffix": " on behalf of ",
-    "outcomePromptWhenUnknown": "I would be grateful if you could confirm the outcome of this matter when convenient."
+    "subject": "{{clientName}} - {{station}} - Outcome Request",
+    "body": "Dear DC {{oicName}},\n\nI write following my attendance on behalf of {{clientName}} at {{station}} on {{date}}.\n\nPlease would you confirm the outcome of the matter, including whether {{clientName}} was released under investigation, released on police bail, charged, or otherwise dealt with.\n\nIf bail was imposed, please confirm the bail return date, time, and any conditions.\n\nKind regards,\n{{feeEarnerName}}"
   },
   "no_reply": {
-    "referParagraph": "I refer to my previous email regarding ",
-    "referMid": ", following my attendance upon them at ",
-    "referMid2": " on behalf of ",
-    "referEnd": ". I have not yet received a reply and would be grateful if you could confirm the outcome at your earliest convenience.",
-    "copyBelow": "For ease of reference, I set out a copy of my previous email below.",
-    "disregardIfReplied": "If you have already replied to the firm, please disregard this email and accept my apologies."
+    "subject": "{{clientName}} - {{station}} - Further Chaser",
+    "body": "Dear DC {{oicName}},\n\nI refer to my previous email regarding {{clientName}} and should be grateful for your response.\n\nPlease would you confirm the present position in this matter, together with any bail date, bail conditions, or other next step.\n\nI look forward to hearing from you.\n\nKind regards,\n{{feeEarnerName}}"
   },
-  "outcome_unknown": {
-    "concise": [
-      "I should be grateful if you would please now confirm the outcome of this matter.",
-      "",
-      "If the client was bailed, please provide the bail return date and time, the police station to which they are bailed, and details of any bail conditions.",
-      "",
-      "If the client was charged, please provide details of the charges, the court date and time, the relevant Magistrates\u2019 Court, and whether the client was granted bail or remanded together with any bail conditions if applicable."
-    ],
-    "full": [
-      "I would be grateful if you could please confirm the outcome of this matter.",
-      "",
-      "If the client was bailed, could you please provide:",
-      "\u2022 bail return date and time",
-      "\u2022 the police station to which they are bailed",
-      "\u2022 details of any bail conditions",
-      "",
-      "If the client was charged, could you please provide:",
-      "\u2022 details of the charges",
-      "\u2022 the court date and time",
-      "\u2022 the relevant Magistrates\u2019 Court",
-      "\u2022 whether the client was granted bail or remanded",
-      "\u2022 any bail conditions if applicable"
-    ]
+  "bail_details_after_interview": {
+    "subject": "{{clientName}} - {{station}} - Bail Details Request",
+    "body": "Dear DC {{oicName}},\n\nI am writing in relation to {{clientName}}, a client who was detained at {{station}} on {{date}} under custody record number {{ourFileNumber}}. The DSCC reference is {{ufn}}.\n\nWe understand {{clientName}} was released on police bail. Please could you confirm the bail return date, time, and any bail conditions imposed.\n\nKind regards,\n{{feeEarnerName}}"
   },
-  "outcome_generic": {
-    "bailChargeDetail": [
-      "If the client was bailed, please provide the bail return date and time, the police station to which they are bailed, and details of any bail conditions.",
-      "",
-      "If the client was charged, please provide details of the charges, the court date and time, the relevant Magistrates' Court, and whether the client was granted bail or remanded, together with any bail conditions if applicable."
-    ]
+  "voluntary_interview_disclosure": {
+    "subject": "{{clientName}} - {{station}} - Voluntary Interview Disclosure",
+    "body": "Dear DC {{oicName}},\n\nI act for {{clientName}} in respect of the voluntary interview arranged for {{date}} at {{time}} at {{station}}.\n\nPlease would you provide disclosure in advance, including the allegation under investigation, a summary of the factual basis of the complaint, and the principal evidence relied upon.\n\nPlease also confirm that the interview remains listed for that date and time.\n\nKind regards,\n{{feeEarnerName}}"
   },
-  "charged": {
-    "chargesHeader": "The client was charged with the following:",
-    "confirmDetails": "Could you please confirm the above details and provide any additional information?",
-    "chargedWithoutBail": "charged without bail",
-    "remandedInCustody": "remanded in custody"
+  "custody_disclosure_request": {
+    "subject": "{{clientName}} - {{station}} - Custody Disclosure Request",
+    "body": "Dear DC {{oicName}},\n\nI act for {{clientName}}, who is presently at {{station}} in connection with {{offenceType}}.\n\nPlease would you provide disclosure as soon as possible, including the nature of the allegation, the material facts relied upon, and the key evidence said to support the suspicion.\n\nIf interview is proposed, please also indicate the likely timescale.\n\nKind regards,\n{{feeEarnerName}}"
   },
-  "bail_no_charge": {
-    "confirmInvestigation": "Could you please confirm these details and advise of the outcome of the investigation?"
+  "pre_interview_chase": {
+    "subject": "{{clientName}} - {{station}} - Urgent Disclosure Chase",
+    "body": "Dear DC {{oicName}},\n\nI refer to the interview of {{clientName}} listed for {{date}} at {{time}} at {{station}}.\n\nI should be grateful if you would now provide disclosure to this email address so that proper advice may be taken before interview.\n\nPlease also confirm that the interview is proceeding as planned.\n\nKind regards,\n{{feeEarnerName}}"
   },
-  "other_outcome": {
-    "outcomePrefix": "The outcome recorded is: ",
-    "confirmFurther": "Could you please confirm this and provide any further information?"
+  "rui_update_request": {
+    "subject": "{{clientName}} - Request for Update",
+    "body": "Dear DC {{oicName}},\n\nI write on behalf of {{clientName}} to request an update in relation to the above matter.\n\nPlease would you confirm the current status of the investigation, whether any further action is anticipated, and whether there is any proposed next step.\n\nIf there is to be a further attendance or interview, please provide the proposed date, time, and location.\n\nKind regards,\n{{feeEarnerName}}"
   },
-  "bail_wording": {
-    "unconditional": "The client was released on unconditional bail",
-    "conditional": "The client was released on conditional bail",
-    "returnDateWith": ", with a return date of ",
-    "returnDateConditional": " with a return date of ",
-    "bailConditions": ". Bail conditions: ",
-    "bailedToReturn": "The client was bailed to return on "
-  },
-  "court": {
-    "courtDate": "The court date is ",
-    "at": " at ",
-    "courtIs": "The relevant court is "
+  "file_reference_request": {
+    "subject": "{{clientName}} - Reference Confirmation Request",
+    "body": "Dear DC {{oicName}},\n\nI write in relation to {{clientName}} concerning the above matter.\n\nFor file administration purposes, please would you confirm the custody record number, crime reference number, and any bail reference applicable to this case.\n\nKind regards,\n{{feeEarnerName}}"
   }
 }
