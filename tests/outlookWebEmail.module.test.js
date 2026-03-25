@@ -98,6 +98,69 @@ describe('openOutlookWebEmail', () => {
   });
 });
 
+describe('buildOutlookWebComposeUrl — edge cases', () => {
+  it('handles empty/undefined fields without crashing', () => {
+    const u = buildOutlookWebComposeUrl({});
+    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.ok(u.includes('to=&'));
+    assert.ok(u.includes('subject=&'));
+  });
+
+  it('handles null/undefined values gracefully', () => {
+    const u = buildOutlookWebComposeUrl({ to: null, cc: undefined, bcc: null, subject: undefined, body: null });
+    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.ok(!u.toLowerCase().includes('mailto'));
+  });
+
+  it('preserves line breaks in body via encoding', () => {
+    const body = 'Line 1\nLine 2\r\nLine 3';
+    const u = buildOutlookWebComposeUrl({ to: 'a@b.com', body });
+    assert.ok(u.includes(encodeURIComponent(body)));
+  });
+
+  it('handles very long body (4000+ chars)', () => {
+    const body = 'x'.repeat(5000);
+    const u = buildOutlookWebComposeUrl({ to: 'a@b.com', body });
+    assert.ok(u.includes(encodeURIComponent(body)));
+    assert.ok(u.length > 5000);
+  });
+
+  it('encodes unicode and emoji in subject and body', () => {
+    const u = buildOutlookWebComposeUrl({
+      to: 'a@b.com',
+      subject: 'Café résumé — «test»',
+      body: 'Hello 🔒 world £100',
+    });
+    assert.ok(u.includes(encodeURIComponent('Café résumé — «test»')));
+    assert.ok(u.includes(encodeURIComponent('Hello 🔒 world £100')));
+  });
+
+  it('handles multiple recipients in to field (semicolon-separated)', () => {
+    const u = buildOutlookWebComposeUrl({
+      to: 'a@b.com;c@d.com;e@f.com',
+      cc: 'g@h.com;i@j.com',
+      bcc: 'k@l.com',
+      subject: 'Multi',
+      body: 'Test',
+    });
+    assert.ok(u.includes(encodeURIComponent('a@b.com;c@d.com;e@f.com')));
+    assert.ok(u.includes(encodeURIComponent('g@h.com;i@j.com')));
+  });
+
+  it('never produces a mailto: URL regardless of input', () => {
+    const inputs = [
+      { to: 'mailto:trick@evil.com', subject: 'mailto:', body: 'mailto:test' },
+      { to: '', subject: '', body: '' },
+      { to: 'x@y.com' },
+    ];
+    for (const opts of inputs) {
+      const u = buildOutlookWebComposeUrl(opts);
+      assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose'),
+        'must always start with OWA base URL');
+    }
+  });
+});
+
 describe('invokeOutlookWebCompose (renderer guard)', () => {
   it('second call while first is in-flight is ignored (single IPC)', async () => {
     const src = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'outlook-email-invoke.js'), 'utf8');
