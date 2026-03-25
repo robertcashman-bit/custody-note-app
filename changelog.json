@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.4.142",
+      "date": "2026-03-25",
+      "latest": true,
+      "changes": [
+        "Hardened Outlook Web email policy tests with full codebase compliance scan and edge-case coverage"
+      ]
+    },
+    {
       "version": "1.4.141",
       "date": "2026-03-24",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Refactored officer email templates to placeholder-driven rendering",
         "Fixed stale time/date bug in email body (timeArrival field missing)",
