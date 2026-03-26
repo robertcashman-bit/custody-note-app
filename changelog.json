@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.145",
+      "version": "1.4.146",
       "date": "2026-03-26",
       "latest": true,
+      "changes": [
+        "Harden QuickFile API: input validation, HTTP error handling, PDF size guards, double-submit protection",
+        "Invoice success modal with Escape key and single-instance guard"
+      ]
+    },
+    {
+      "version": "1.4.145",
+      "date": "2026-03-26",
+      "latest": false,
       "changes": [
         "Fix QuickFile SearchParameters error (missing OrderResultsBy/OrderDirection)",
         "Invoice success confirmation modal"
