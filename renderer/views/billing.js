@@ -400,9 +400,15 @@ function _recalcBillingTotals() {
   if (totEl) totEl.textContent = _fmtCurrency(total);
 }
 
+var _invoiceInFlight = false;
 async function _handleCreateInvoice(recordId, opts) {
+  if (_invoiceInFlight) return;
   if (!recordId) {
     showToast('Save the record first before creating an invoice', 'error');
+    return;
+  }
+  if (!window.api || !window.api.quickfileCreateInvoice || !window.api.getSettings) {
+    showToast('Invoice API is not available in this environment', 'error');
     return;
   }
 
@@ -424,9 +430,9 @@ async function _handleCreateInvoice(recordId, opts) {
     return;
   }
 
+  _invoiceInFlight = true;
   var createBtn = document.getElementById('billing-create-invoice');
-  createBtn.disabled = true;
-  createBtn.textContent = 'Creating invoice...';
+  if (createBtn) { createBtn.disabled = true; createBtn.textContent = 'Creating invoice...'; }
 
   var settings = window._appSettingsCache || {};
   var userName = settings.feeEarnerNameDefault || settings.feeEarnerName || '';
@@ -465,6 +471,7 @@ async function _handleCreateInvoice(recordId, opts) {
       attachPdfFileName: attachName,
     });
   }).then(function (result) {
+    _invoiceInFlight = false;
     if (result.ok) {
       if (typeof formData === 'object' && formData) {
         formData.quickfileInvoiceNumber = result.invoiceNumber || '';
@@ -476,13 +483,12 @@ async function _handleCreateInvoice(recordId, opts) {
       _showInvoiceSuccessModal(result, opts);
     } else {
       showToast('Invoice creation failed: ' + (result.error || 'Unknown error'), 'error');
-      createBtn.disabled = false;
-      createBtn.textContent = 'Create QuickFile Invoice';
+      if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Create QuickFile Invoice'; }
     }
   }).catch(function (err) {
+    _invoiceInFlight = false;
     showToast('Invoice creation failed: ' + (err.message || String(err)), 'error');
-    createBtn.disabled = false;
-    createBtn.textContent = 'Create QuickFile Invoice';
+    if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Create QuickFile Invoice'; }
   });
 }
 
@@ -556,15 +562,19 @@ function _previewDocument(docType) {
 }
 
 function _showInvoiceSuccessModal(result, opts) {
+  var existing = document.getElementById('billing-success-overlay');
+  if (existing) existing.remove();
+
   var hasAttachWarning = !result.attachmentOk && result.attachmentError;
   var icon = hasAttachWarning ? '&#9888;' : '&#10003;';
   var title = hasAttachWarning ? 'Invoice created, but attachment failed' : 'Invoice successfully created';
   var iconClass = hasAttachWarning ? 'billing-success-icon--warn' : 'billing-success-icon--ok';
+  var totalDisplay = (result.total != null && result.total !== '') ? _fmtCurrency(result.total) : '\u2014';
 
   var bodyRows =
     '<div class="billing-success-detail"><span class="billing-label">Invoice</span><span class="billing-value">' + _escHtml(result.invoiceNumber || result.invoiceId || '') + '</span></div>' +
-    '<div class="billing-success-detail"><span class="billing-label">Client</span><span class="billing-value">' + _escHtml(opts.firmName || '') + '</span></div>' +
-    '<div class="billing-success-detail"><span class="billing-label">Total</span><span class="billing-value">' + _fmtCurrency(result.total || 0) + '</span></div>' +
+    '<div class="billing-success-detail"><span class="billing-label">Firm</span><span class="billing-value">' + _escHtml(opts.firmName || '') + '</span></div>' +
+    '<div class="billing-success-detail"><span class="billing-label">Total</span><span class="billing-value">' + totalDisplay + '</span></div>' +
     '<div class="billing-success-detail"><span class="billing-label">Attachment</span><span class="billing-value">' +
       (result.attachmentOk ? 'PDF uploaded' : (result.attachmentError ? _escHtml(result.attachmentError) : 'No attachment sent')) +
     '</span></div>';
@@ -590,7 +600,12 @@ function _showInvoiceSuccessModal(result, opts) {
   var anotherBtn = document.getElementById('billing-success-another');
   var closeBtn = document.getElementById('billing-success-close');
 
-  function dismiss() { if (overlay) overlay.remove(); }
+  function dismiss() {
+    document.removeEventListener('keydown', onEsc);
+    if (overlay) overlay.remove();
+  }
+  function onEsc(e) { if (e.key === 'Escape') dismiss(); }
+  document.addEventListener('keydown', onEsc);
 
   if (viewBtn && result.invoiceUrl) {
     viewBtn.addEventListener('click', function () {
@@ -609,6 +624,8 @@ function _showInvoiceSuccessModal(result, opts) {
 
 function closeBillingPanel() {
   _billingPanelOpen = false;
+  var successOverlay = document.getElementById('billing-success-overlay');
+  if (successOverlay) successOverlay.remove();
   var overlay = document.getElementById('billing-panel-overlay');
   if (overlay) {
     if (overlay._billingEscHandler) document.removeEventListener('keydown', overlay._billingEscHandler);

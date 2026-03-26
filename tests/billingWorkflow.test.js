@@ -473,3 +473,68 @@ describe('Billing panel (no firm email pack)', () => {
     assert.ok(!billingJs.includes('email_prepared'));
   });
 });
+
+describe('QuickFile client search — required fields', () => {
+  it('all SearchParameters blocks include OrderResultsBy and OrderDirection', () => {
+    const searchBlocks = mainJs.split('SearchParameters');
+    for (let i = 1; i < searchBlocks.length; i++) {
+      const block = searchBlocks[i].slice(0, 300);
+      assert.ok(block.includes('OrderResultsBy'), 'SearchParameters block ' + i + ' missing OrderResultsBy');
+      assert.ok(block.includes('OrderDirection'), 'SearchParameters block ' + i + ' missing OrderDirection');
+    }
+  });
+});
+
+describe('Invoice success confirmation modal', () => {
+  it('has _showInvoiceSuccessModal function', () => {
+    assert.ok(billingJs.includes('function _showInvoiceSuccessModal'));
+  });
+
+  it('success modal has View Invoice, Create Another, and Close buttons', () => {
+    assert.ok(billingJs.includes('billing-success-view'));
+    assert.ok(billingJs.includes('billing-success-another'));
+    assert.ok(billingJs.includes('billing-success-close'));
+  });
+
+  it('success modal supports Escape to dismiss', () => {
+    assert.ok(billingJs.includes("e.key === 'Escape'") || billingJs.includes('e.key === "Escape"'));
+  });
+
+  it('removes existing success overlay before showing new one', () => {
+    assert.ok(billingJs.includes("getElementById('billing-success-overlay')"));
+  });
+
+  it('has double-submit guard on invoice creation', () => {
+    assert.ok(billingJs.includes('_invoiceInFlight'));
+  });
+});
+
+describe('QuickFile input validation', () => {
+  it('validates params object before processing', () => {
+    assert.ok(mainJs.includes("'Invalid invoice parameters'"));
+  });
+
+  it('validates firmName is required', () => {
+    assert.ok(mainJs.includes("'Firm name is required"));
+  });
+
+  it('uses Number.isFinite for VAT rate normalization', () => {
+    assert.ok(mainJs.includes('Number.isFinite(Number(vatRate))'));
+  });
+
+  it('guards empty PDF buffer in attachment upload', () => {
+    assert.ok(mainJs.includes('PDF buffer is empty'));
+  });
+
+  it('guards oversized PDF in attachment upload', () => {
+    assert.ok(mainJs.includes('Attachment too large'));
+  });
+
+  it('checks HTTP status in QuickFile response handler', () => {
+    assert.ok(mainJs.includes('QuickFile HTTP'));
+  });
+
+  it('handles empty QuickFile response', () => {
+    assert.ok(mainJs.includes('QuickFile returned empty response'));
+  });
+});

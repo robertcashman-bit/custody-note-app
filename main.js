@@ -6010,11 +6010,20 @@ function quickFileRequest(apiPath, bodyContent) {
         let data = '';
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
+          const raw = String(data || '');
+          if (!raw.trim()) {
+            return reject(new Error('QuickFile returned empty response (HTTP ' + res.statusCode + ')'));
+          }
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            return reject(new Error('QuickFile HTTP ' + res.statusCode + ': ' + raw.slice(0, 300)));
+          }
           try {
-            const json = JSON.parse(data);
+            const json = JSON.parse(raw);
             if (json?.Errors) {
               const errs = json.Errors.Error || json.Errors;
-              return reject(new Error(Array.isArray(errs) ? errs.join('; ') : String(errs)));
+              const errArr = Array.isArray(errs) ? errs : [errs];
+              const msgs = errArr.map(e => (typeof e === 'object' && e !== null) ? (e.Message || e.Detail || JSON.stringify(e)) : String(e));
+              return reject(new Error(msgs.join('; ')));
             }
             const rootKey = Object.keys(json).find((k) => typeof json[k] === 'object' && json[k]?.Header);
             const msg = rootKey ? json[rootKey] : (json?.payload?.Message || json?.Message || json);
@@ -6025,9 +6034,8 @@ function quickFileRequest(apiPath, bodyContent) {
             }
             resolve(msg?.Body || {});
           } catch (err) {
-            const raw = String(data || '');
-            console.error('[QuickFile] Response parse error:', err && err.message, '| length:', raw.length, '| head:', raw.slice(0, 800));
-            reject(err instanceof Error ? err : new Error(String(err)));
+            console.error('[QuickFile] Response parse error:', err && err.message, '| HTTP:', res.statusCode, '| length:', raw.length, '| head:', raw.slice(0, 800));
+            reject(new Error('QuickFile response parse error (HTTP ' + res.statusCode + '): ' + (err.message || err)));
           }
         });
       }
@@ -6227,8 +6235,10 @@ function sanitizeQuickFileInvoiceNumber(raw) {
 }
 
 function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) {
-  const vr = vatRate != null ? Number(vatRate) : 0.2;
-  const net = Number(unitCost);
+  const vr = Number.isFinite(Number(vatRate)) ? Number(vatRate) : 0.2;
+  const net = Number.isFinite(Number(unitCost)) ? Number(unitCost) : 0;
+  const q = Number.isFinite(Number(qty)) && Number(qty) > 0 ? Number(qty) : 1;
+  if (net <= 0) throw new Error('Line item unit cost must be > 0: ' + shortName);
   const taxAmt = net * vr;
   const name = String(shortName || 'Item').replace(/\s+/g, ' ').trim().slice(0, 25);
   return {
@@ -6236,7 +6246,7 @@ function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) 
     ItemName: name,
     ItemDescription: String(description || '').slice(0, 5000),
     ItemNominalCode: '4000',
-    Qty: String(qty != null ? qty : 1),
+    Qty: String(q),
     UnitCost: Number(net.toFixed(2)),
     Tax1: {
       TaxName: 'VAT',
@@ -6252,6 +6262,9 @@ function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) 
 async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, notes) {
   const invId = parseInt(String(invoiceId), 10);
   if (!Number.isFinite(invId)) throw new Error('Invalid InvoiceId for attachment');
+  if (!pdfBuffer || !pdfBuffer.length) throw new Error('PDF buffer is empty — cannot attach');
+  const MAX_ATTACH_BYTES = 10 * 1024 * 1024;
+  if (pdfBuffer.length > MAX_ATTACH_BYTES) throw new Error('Attachment too large (' + Math.round(pdfBuffer.length / 1024) + ' KB) — max 10 MB');
   const safeName = String(fileName || 'attendance-note.pdf').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
   const fn = safeName.length >= 5 ? safeName.slice(0, 150) : 'note.pdf';
   const b64 = Buffer.from(pdfBuffer).toString('base64');
@@ -6268,6 +6281,9 @@ async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, no
 }
 
 ipcMain.handle('quickfile-create-invoice', async (_, params) => {
+  if (!params || typeof params !== 'object') {
+    return { ok: false, error: 'Invalid invoice parameters' };
+  }
   const {
     attendanceId,
     firmName,
@@ -6285,6 +6301,10 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     attachPdfFileName,
   } = params;
 
+  if (!firmName || typeof firmName !== 'string' || !firmName.trim()) {
+    return { ok: false, error: 'Firm name is required to create an invoice' };
+  }
+
   try {
     const clientId = await quickFileFindOrCreateClient(firmName, contactEmail);
     if (!clientId) throw new Error('Could not find or create QuickFile client for ' + firmName);
@@ -6292,7 +6312,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     const clientIdNum = parseInt(String(clientId), 10);
     if (!Number.isFinite(clientIdNum)) throw new Error('Invalid QuickFile ClientID: ' + String(clientId));
 
-    const vr = vatRate != null ? Number(vatRate) : 0.2;
+    const vr = Number.isFinite(Number(vatRate)) ? Number(vatRate) : 0.2;
     const lineItems = [];
     if (attendanceFee > 0) {
       lineItems.push(buildQuickFileItemLine(
@@ -6353,7 +6373,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     const invoiceNumber = invoiceBody.InvoiceNumber || '';
 
     const subtotal = (attendanceFee || 0) + mileageCost + (parkingAmount || 0);
-    const vat = subtotal * (vatRate || 0.20);
+    const vat = subtotal * vr;
     const total = subtotal + vat;
 
     const invoiceUrl = invoiceId
