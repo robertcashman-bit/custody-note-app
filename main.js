@@ -6198,6 +6198,8 @@ async function quickFileFindOrCreateClient(firmName, contactEmail) {
       CompanyName: firmName,
       ReturnCount: 10,
       Offset: 0,
+      OrderResultsBy: 'CompanyName',
+      OrderDirection: 'ASC',
     },
   });
   const records = quickFileExtractRecords(searchBody);

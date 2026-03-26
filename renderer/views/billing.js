@@ -470,19 +470,10 @@ async function _handleCreateInvoice(recordId, opts) {
         formData.quickfileInvoiceNumber = result.invoiceNumber || '';
         formData.quickfileInvoiceUrl = result.invoiceUrl || '';
       }
-      var msg = 'Invoice created: ' + (result.invoiceNumber || result.invoiceId);
-      if (result.attachmentOk) msg += ' — attendance PDF attached in QuickFile';
-      else if (result.attachmentError) msg += ' — PDF not attached: ' + result.attachmentError;
-      showToast(msg, result.attachmentError ? 'warning' : 'success');
       if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
       if (typeof updateContextBar === 'function') updateContextBar();
       closeBillingPanel();
-      if (result.invoiceUrl && window.api && window.api.openExternal) {
-        setTimeout(function () {
-          window.api.openExternal(result.invoiceUrl);
-        }, 120);
-      }
-      setTimeout(function () { openBillingPanel(); }, 300);
+      _showInvoiceSuccessModal(result, opts);
     } else {
       showToast('Invoice creation failed: ' + (result.error || 'Unknown error'), 'error');
       createBtn.disabled = false;
@@ -562,6 +553,58 @@ function _previewDocument(docType) {
       printGeneratedDoc(html);
     }
   });
+}
+
+function _showInvoiceSuccessModal(result, opts) {
+  var hasAttachWarning = !result.attachmentOk && result.attachmentError;
+  var icon = hasAttachWarning ? '&#9888;' : '&#10003;';
+  var title = hasAttachWarning ? 'Invoice created, but attachment failed' : 'Invoice successfully created';
+  var iconClass = hasAttachWarning ? 'billing-success-icon--warn' : 'billing-success-icon--ok';
+
+  var bodyRows =
+    '<div class="billing-success-detail"><span class="billing-label">Invoice</span><span class="billing-value">' + _escHtml(result.invoiceNumber || result.invoiceId || '') + '</span></div>' +
+    '<div class="billing-success-detail"><span class="billing-label">Client</span><span class="billing-value">' + _escHtml(opts.firmName || '') + '</span></div>' +
+    '<div class="billing-success-detail"><span class="billing-label">Total</span><span class="billing-value">' + _fmtCurrency(result.total || 0) + '</span></div>' +
+    '<div class="billing-success-detail"><span class="billing-label">Attachment</span><span class="billing-value">' +
+      (result.attachmentOk ? 'PDF uploaded' : (result.attachmentError ? _escHtml(result.attachmentError) : 'No attachment sent')) +
+    '</span></div>';
+
+  var html =
+    '<div id="billing-success-overlay" class="billing-overlay" role="dialog" aria-modal="true" aria-label="Invoice result">' +
+      '<div class="billing-success-panel">' +
+        '<div class="billing-success-icon ' + iconClass + '">' + icon + '</div>' +
+        '<h2 class="billing-success-title">' + title + '</h2>' +
+        '<div class="billing-success-details">' + bodyRows + '</div>' +
+        '<div class="billing-success-actions">' +
+          (result.invoiceUrl ? '<button type="button" id="billing-success-view" class="btn btn-primary">View Invoice</button>' : '') +
+          '<button type="button" id="billing-success-another" class="btn btn-secondary">Create Another</button>' +
+          '<button type="button" id="billing-success-close" class="btn btn-secondary">Close</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  var overlay = document.getElementById('billing-success-overlay');
+  var viewBtn = document.getElementById('billing-success-view');
+  var anotherBtn = document.getElementById('billing-success-another');
+  var closeBtn = document.getElementById('billing-success-close');
+
+  function dismiss() { if (overlay) overlay.remove(); }
+
+  if (viewBtn && result.invoiceUrl) {
+    viewBtn.addEventListener('click', function () {
+      if (window.api && window.api.openExternal) window.api.openExternal(result.invoiceUrl);
+    });
+  }
+  if (anotherBtn) {
+    anotherBtn.addEventListener('click', function () {
+      dismiss();
+      setTimeout(function () { openBillingPanel(); }, 100);
+    });
+  }
+  if (closeBtn) closeBtn.addEventListener('click', dismiss);
+  if (overlay) overlay.addEventListener('click', function (e) { if (e.target === overlay) dismiss(); });
 }
 
 function closeBillingPanel() {

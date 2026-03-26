@@ -4458,6 +4458,41 @@ html.dark .addon-buy-link { color: #7dd3fc; }
 .billing-audit-user { color: var(--text-muted); }
 .billing-audit-detail { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; word-break: break-all; }
 
+.billing-success-panel {
+  background: var(--surface, #fff); border-radius: 14px; padding: 2rem 2.25rem;
+  max-width: 440px; width: 92vw; text-align: center;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.18);
+}
+.billing-success-icon {
+  font-size: 2.6rem; line-height: 1; margin-bottom: 0.6rem;
+}
+.billing-success-icon--ok { color: #16a34a; }
+.billing-success-icon--warn { color: #d97706; }
+.billing-success-title {
+  font-size: 1.15rem; font-weight: 700; margin: 0 0 1rem;
+  color: var(--text, #0f172a);
+}
+.billing-success-details {
+  text-align: left; margin-bottom: 1.25rem;
+  display: grid; grid-template-columns: 1fr; gap: 0.5rem;
+}
+.billing-success-detail {
+  display: flex; justify-content: space-between; gap: 0.75rem;
+  font-size: 0.9rem; padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.billing-success-detail:last-child { border-bottom: none; }
+.billing-success-actions {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
+  margin-top: 0.5rem;
+}
+html.dark .billing-success-panel {
+  background: #1e293b; color: #e5eefb;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.4);
+}
+html.dark .billing-success-title { color: #93c5fd; }
+html.dark .billing-success-detail { border-color: #334155; }
+
 html.dark .billing-overlay {
   background: rgba(2, 6, 23, 0.78);
 }
