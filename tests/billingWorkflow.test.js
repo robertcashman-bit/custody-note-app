@@ -475,12 +475,13 @@ describe('Billing panel (no firm email pack)', () => {
 });
 
 describe('QuickFile client search — required fields', () => {
-  it('all SearchParameters blocks include OrderResultsBy and OrderDirection', () => {
-    const searchBlocks = mainJs.split('SearchParameters');
-    for (let i = 1; i < searchBlocks.length; i++) {
-      const block = searchBlocks[i].slice(0, 300);
-      assert.ok(block.includes('OrderResultsBy'), 'SearchParameters block ' + i + ' missing OrderResultsBy');
-      assert.ok(block.includes('OrderDirection'), 'SearchParameters block ' + i + ' missing OrderDirection');
+  it('all quickFileRequest client/search calls include OrderResultsBy and OrderDirection', () => {
+    const re = /quickFileRequest\s*\(\s*'\/1_2\/client\/search'\s*,\s*\{[\s\S]*?\}\s*\)/g;
+    const matches = mainJs.match(re) || [];
+    assert.ok(matches.length >= 2, 'Expected at least 2 client/search calls, found ' + matches.length);
+    for (let i = 0; i < matches.length; i++) {
+      assert.ok(matches[i].includes('OrderResultsBy'), 'client/search call ' + i + ' missing OrderResultsBy');
+      assert.ok(matches[i].includes('OrderDirection'), 'client/search call ' + i + ' missing OrderDirection');
     }
   });
 });
@@ -536,5 +537,170 @@ describe('QuickFile input validation', () => {
 
   it('handles empty QuickFile response', () => {
     assert.ok(mainJs.includes('QuickFile returned empty response'));
+  });
+});
+
+describe('QuickFile invoice payload schema compliance', () => {
+  it('nests SingleInvoiceData inside InvoiceData.Scheduling (not as Body sibling)', () => {
+    assert.ok(mainJs.includes('Scheduling: {'));
+    assert.ok(mainJs.includes('SingleInvoiceData: singleInvoiceData'));
+    const bodyMatch = mainJs.match(/quickFileRequest\s*\(\s*'\/1_2\/invoice\/create'\s*,\s*(\w+)\)/);
+    assert.ok(bodyMatch, 'invoice/create call should use a named payload variable');
+  });
+
+  it('includes Language field inside InvoiceData', () => {
+    const createIdx = mainJs.indexOf("'/1_2/invoice/create'");
+    const block = mainJs.slice(Math.max(0, createIdx - 600), createIdx + 100);
+    assert.ok(block.includes("Language: 'en'"), 'InvoiceData should include Language');
+  });
+
+  it('calls validateQuickFileInvoicePayload before invoice/create request', () => {
+    const createIdx = mainJs.indexOf("quickFileRequest('/1_2/invoice/create'");
+    const validateIdx = mainJs.indexOf('validateQuickFileInvoicePayload(invoicePayload)');
+    assert.ok(validateIdx > 0, 'validateQuickFileInvoicePayload call should exist');
+    assert.ok(validateIdx < createIdx, 'validateQuickFileInvoicePayload must be called before quickFileRequest');
+  });
+
+  it('passes trimmed firmName to quickFileFindOrCreateClient', () => {
+    assert.ok(mainJs.includes('quickFileFindOrCreateClient(firmName.trim()'));
+  });
+});
+
+describe('buildQuickFileItemLine field types', () => {
+  it('returns Qty as a number, not a string', () => {
+    const fnMatch = mainJs.match(/function buildQuickFileItemLine[\s\S]*?^}/m);
+    assert.ok(fnMatch, 'buildQuickFileItemLine function should exist');
+    const fnBody = fnMatch[0];
+    assert.ok(!fnBody.includes('Qty: String('), 'Qty should not be wrapped in String()');
+    assert.ok(fnBody.includes('Qty: q'), 'Qty should be the raw numeric value');
+  });
+
+  it('uses ItemID: 0 for one-off items', () => {
+    assert.ok(mainJs.includes('ItemID: 0'));
+  });
+
+  it('uses ItemNominalCode 4000 as default', () => {
+    assert.ok(mainJs.includes("ItemNominalCode: '4000'"));
+  });
+
+  it('enforces max 25 chars on ItemName', () => {
+    assert.ok(mainJs.includes(".slice(0, 25)"));
+  });
+
+  it('enforces max 5000 chars on ItemDescription', () => {
+    assert.ok(mainJs.includes(".slice(0, 5000)"));
+  });
+
+  it('includes Tax1 with TaxName, TaxPercentage, and TaxAmount', () => {
+    const fnMatch = mainJs.match(/function buildQuickFileItemLine[\s\S]*?^}/m);
+    const fnBody = fnMatch[0];
+    assert.ok(fnBody.includes("TaxName: 'VAT'"));
+    assert.ok(fnBody.includes('TaxPercentage:'));
+    assert.ok(fnBody.includes('TaxAmount:'));
+  });
+});
+
+describe('validateQuickFileInvoicePayload — preflight checks', () => {
+  it('function exists in main.js', () => {
+    assert.ok(mainJs.includes('function validateQuickFileInvoicePayload'));
+  });
+
+  it('validates InvoiceData presence', () => {
+    assert.ok(mainJs.includes("Preflight: missing InvoiceData"));
+  });
+
+  it('validates InvoiceType enum', () => {
+    assert.ok(mainJs.includes("Preflight: InvoiceType must be"));
+  });
+
+  it('validates ClientID is a positive integer', () => {
+    assert.ok(mainJs.includes("Preflight: ClientID must be a positive integer"));
+  });
+
+  it('validates Currency is 3-char ISO', () => {
+    assert.ok(mainJs.includes("Preflight: Currency must be a 3-char ISO code"));
+  });
+
+  it('validates at least one ItemLine', () => {
+    assert.ok(mainJs.includes("Preflight: at least one ItemLine required"));
+  });
+
+  it('validates ItemNominalCode length 2-5', () => {
+    assert.ok(mainJs.includes("ItemNominalCode must be 2-5 chars"));
+  });
+
+  it('validates UnitCost > 0', () => {
+    assert.ok(mainJs.includes("UnitCost must be > 0"));
+  });
+
+  it('validates Qty > 0', () => {
+    assert.ok(mainJs.includes("Qty must be > 0"));
+  });
+
+  it('validates Scheduling presence', () => {
+    assert.ok(mainJs.includes("Preflight: missing Scheduling inside InvoiceData"));
+  });
+
+  it('validates IssueDate format YYYY-MM-DD', () => {
+    assert.ok(mainJs.includes("Preflight: IssueDate must be YYYY-MM-DD"));
+  });
+
+  it('validates ClientAddress.CountryISO when ClientAddress present', () => {
+    assert.ok(mainJs.includes("Preflight: ClientAddress requires a 2-char CountryISO"));
+  });
+
+  it('validates InvoiceDescription length 2-35 when present', () => {
+    assert.ok(mainJs.includes("Preflight: InvoiceDescription must be 2-35 chars"));
+  });
+
+  it('validates ItemName max 25 chars', () => {
+    assert.ok(mainJs.includes("ItemName max 25 chars"));
+  });
+});
+
+describe('QuickFile auth generation', () => {
+  it('generates unique SubmissionNumber per call', () => {
+    assert.ok(mainJs.includes("'cn-' + Date.now()"));
+    assert.ok(mainJs.includes("Math.random().toString(36)"));
+  });
+
+  it('constructs MD5 from accountNumber + apiKey + submissionNumber', () => {
+    assert.ok(mainJs.includes("accountNumber + apiKey + submissionNumber"));
+    assert.ok(mainJs.includes("createHash('md5')"));
+  });
+
+  it('includes ApplicationID in auth header', () => {
+    assert.ok(mainJs.includes("ApplicationID: auth.applicationId"));
+  });
+});
+
+describe('QuickFile error parsing — structured errors before HTTP status', () => {
+  it('parses JSON before checking HTTP status code', () => {
+    const fnStart = mainJs.indexOf('function quickFileRequest(');
+    const fnBlock = mainJs.slice(fnStart, fnStart + 2000);
+    const jsonParseIdx = fnBlock.indexOf('JSON.parse');
+    const httpCheckIdx = fnBlock.indexOf('res.statusCode < 200');
+    assert.ok(jsonParseIdx > 0, 'JSON.parse should exist in quickFileRequest');
+    assert.ok(httpCheckIdx > 0, 'HTTP status check should exist in quickFileRequest');
+    assert.ok(jsonParseIdx < httpCheckIdx, 'JSON parsing must happen before HTTP status rejection');
+  });
+
+  it('extracts Errors.Error array from QuickFile responses', () => {
+    assert.ok(mainJs.includes('json.Errors.Error || json.Errors'));
+  });
+
+  it('handles Header.Status === Error responses', () => {
+    assert.ok(mainJs.includes("header?.Status === 'Error'"));
+  });
+});
+
+describe('Scheduling nesting regression', () => {
+  it('invoice/create payload wraps SingleInvoiceData inside Scheduling', () => {
+    const idx = mainJs.indexOf("quickFileRequest('/1_2/invoice/create'");
+    assert.ok(idx > 0);
+    const before = mainJs.slice(Math.max(0, idx - 400), idx);
+    assert.ok(before.includes('Scheduling: {'), 'Scheduling wrapper must exist before invoice/create call');
+    assert.ok(before.includes('SingleInvoiceData:'), 'SingleInvoiceData must be inside Scheduling');
+    assert.ok(!before.match(/\}\s*,\s*SingleInvoiceData:/), 'SingleInvoiceData must not be a sibling of InvoiceData');
   });
 });

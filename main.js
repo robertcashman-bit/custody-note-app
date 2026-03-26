@@ -6014,29 +6014,29 @@ function quickFileRequest(apiPath, bodyContent) {
           if (!raw.trim()) {
             return reject(new Error('QuickFile returned empty response (HTTP ' + res.statusCode + ')'));
           }
+          let json;
+          try { json = JSON.parse(raw); } catch (_) { json = null; }
+          if (json?.Errors) {
+            const errs = json.Errors.Error || json.Errors;
+            const errArr = Array.isArray(errs) ? errs : [errs];
+            const msgs = errArr.map(e => (typeof e === 'object' && e !== null) ? (e.Message || e.Detail || JSON.stringify(e)) : String(e));
+            return reject(new Error(msgs.join('; ')));
+          }
           if (res.statusCode < 200 || res.statusCode >= 300) {
             return reject(new Error('QuickFile HTTP ' + res.statusCode + ': ' + raw.slice(0, 300)));
           }
-          try {
-            const json = JSON.parse(raw);
-            if (json?.Errors) {
-              const errs = json.Errors.Error || json.Errors;
-              const errArr = Array.isArray(errs) ? errs : [errs];
-              const msgs = errArr.map(e => (typeof e === 'object' && e !== null) ? (e.Message || e.Detail || JSON.stringify(e)) : String(e));
-              return reject(new Error(msgs.join('; ')));
-            }
-            const rootKey = Object.keys(json).find((k) => typeof json[k] === 'object' && json[k]?.Header);
-            const msg = rootKey ? json[rootKey] : (json?.payload?.Message || json?.Message || json);
-            const header = msg?.Header;
-            if (header?.Status === 'Error') {
-              const errMsg = header?.StatusMessage || header?.ErrorMessage || msg?.Body?.ErrorMessage || 'Unknown QuickFile error';
-              return reject(new Error(String(errMsg)));
-            }
-            resolve(msg?.Body || {});
-          } catch (err) {
-            console.error('[QuickFile] Response parse error:', err && err.message, '| HTTP:', res.statusCode, '| length:', raw.length, '| head:', raw.slice(0, 800));
-            reject(new Error('QuickFile response parse error (HTTP ' + res.statusCode + '): ' + (err.message || err)));
+          if (!json) {
+            console.error('[QuickFile] Response not valid JSON | HTTP:', res.statusCode, '| length:', raw.length, '| head:', raw.slice(0, 800));
+            return reject(new Error('QuickFile response parse error (HTTP ' + res.statusCode + ')'));
           }
+          const rootKey = Object.keys(json).find((k) => typeof json[k] === 'object' && json[k]?.Header);
+          const msg = rootKey ? json[rootKey] : (json?.payload?.Message || json?.Message || json);
+          const header = msg?.Header;
+          if (header?.Status === 'Error') {
+            const errMsg = header?.StatusMessage || header?.ErrorMessage || msg?.Body?.ErrorMessage || 'Unknown QuickFile error';
+            return reject(new Error(String(errMsg)));
+          }
+          resolve(msg?.Body || {});
         });
       }
     );
@@ -6246,7 +6246,7 @@ function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) 
     ItemName: name,
     ItemDescription: String(description || '').slice(0, 5000),
     ItemNominalCode: '4000',
-    Qty: String(q),
+    Qty: q,
     UnitCost: Number(net.toFixed(2)),
     Tax1: {
       TaxName: 'VAT',
@@ -6280,6 +6280,43 @@ async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, no
   });
 }
 
+function validateQuickFileInvoicePayload(body) {
+  const inv = body && body.InvoiceData;
+  if (!inv || typeof inv !== 'object') throw new Error('Preflight: missing InvoiceData');
+  const validTypes = ['INVOICE', 'ESTIMATE', 'RECURRING'];
+  if (!validTypes.includes(inv.InvoiceType)) throw new Error('Preflight: InvoiceType must be ' + validTypes.join('/'));
+  if (!Number.isFinite(inv.ClientID) || inv.ClientID <= 0) throw new Error('Preflight: ClientID must be a positive integer');
+  if (typeof inv.Currency !== 'string' || inv.Currency.length !== 3) throw new Error('Preflight: Currency must be a 3-char ISO code');
+  if (!Number.isFinite(inv.TermDays) || inv.TermDays < 0) throw new Error('Preflight: TermDays must be a non-negative integer');
+  if (inv.InvoiceDescription && (inv.InvoiceDescription.length < 2 || inv.InvoiceDescription.length > 35)) {
+    throw new Error('Preflight: InvoiceDescription must be 2-35 chars');
+  }
+  if (inv.ClientAddress) {
+    if (!inv.ClientAddress.CountryISO || inv.ClientAddress.CountryISO.length !== 2) {
+      throw new Error('Preflight: ClientAddress requires a 2-char CountryISO');
+    }
+  }
+  const lines = inv.InvoiceLines && inv.InvoiceLines.ItemLines && inv.InvoiceLines.ItemLines.ItemLine;
+  if (!Array.isArray(lines) || lines.length === 0) throw new Error('Preflight: at least one ItemLine required');
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    const pfx = 'Preflight: ItemLine[' + i + '] ';
+    if (typeof ln.ItemNominalCode !== 'string' || ln.ItemNominalCode.length < 2 || ln.ItemNominalCode.length > 5) {
+      throw new Error(pfx + 'ItemNominalCode must be 2-5 chars');
+    }
+    if (!Number.isFinite(ln.UnitCost) || ln.UnitCost <= 0) throw new Error(pfx + 'UnitCost must be > 0');
+    if (!Number.isFinite(ln.Qty) || ln.Qty <= 0) throw new Error(pfx + 'Qty must be > 0');
+    if (ln.ItemName && ln.ItemName.length > 25) throw new Error(pfx + 'ItemName max 25 chars');
+  }
+  const sched = inv.Scheduling;
+  if (!sched || typeof sched !== 'object') throw new Error('Preflight: missing Scheduling inside InvoiceData');
+  const single = sched.SingleInvoiceData;
+  if (inv.InvoiceType === 'INVOICE' || inv.InvoiceType === 'ESTIMATE') {
+    if (!single || !single.IssueDate) throw new Error('Preflight: SingleInvoiceData.IssueDate required');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(single.IssueDate)) throw new Error('Preflight: IssueDate must be YYYY-MM-DD');
+  }
+}
+
 ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   if (!params || typeof params !== 'object') {
     return { ok: false, error: 'Invalid invoice parameters' };
@@ -6306,7 +6343,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   }
 
   try {
-    const clientId = await quickFileFindOrCreateClient(firmName, contactEmail);
+    const clientId = await quickFileFindOrCreateClient(firmName.trim(), contactEmail);
     if (!clientId) throw new Error('Could not find or create QuickFile client for ' + firmName);
 
     const clientIdNum = parseInt(String(clientId), 10);
@@ -6353,21 +6390,26 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     const singleInvoiceData = { IssueDate: invDate };
     if (invNumSan) singleInvoiceData.InvoiceNumber = invNumSan;
 
-    const invoiceBody = await quickFileRequest('/1_2/invoice/create', {
+    const invoicePayload = {
       InvoiceData: {
         InvoiceType: 'INVOICE',
         ClientID: clientIdNum,
         Currency: 'GBP',
         TermDays: 30,
+        Language: 'en',
         Notes: (narrative || '').slice(0, 4000),
         InvoiceLines: {
           ItemLines: {
             ItemLine: lineItems,
           },
         },
+        Scheduling: {
+          SingleInvoiceData: singleInvoiceData,
+        },
       },
-      SingleInvoiceData: singleInvoiceData,
-    });
+    };
+    validateQuickFileInvoicePayload(invoicePayload);
+    const invoiceBody = await quickFileRequest('/1_2/invoice/create', invoicePayload);
 
     const invoiceId = invoiceBody.InvoiceID || invoiceBody.InvoiceId || invoiceBody.RecordID || '';
     const invoiceNumber = invoiceBody.InvoiceNumber || '';

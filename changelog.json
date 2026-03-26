@@ -1,9 +1,24 @@
 {
   "releases": [
     {
-      "version": "1.4.146",
+      "version": "1.4.147",
       "date": "2026-03-26",
       "latest": true,
+      "changes": [
+        "Fix QuickFile Invoice_Create: nest SingleInvoiceData inside Scheduling wrapper per API schema",
+        "Add Language field to invoice payload",
+        "Fix Qty type: send as number not string",
+        "Add preflight payload validator (validateQuickFileInvoicePayload)",
+        "Improve error parsing: extract structured QuickFile errors from HTTP 400 responses",
+        "Trim firmName before client search to prevent matching failures",
+        "Remove debug instrumentation",
+        "Add 32 new tests for schema compliance, preflight validation, auth, error parsing"
+      ]
+    },
+    {
+      "version": "1.4.146",
+      "date": "2026-03-26",
+      "latest": false,
       "changes": [
         "Harden QuickFile API: input validation, HTTP error handling, PDF size guards, double-submit protection",
         "Invoice success modal with Escape key and single-instance guard"
