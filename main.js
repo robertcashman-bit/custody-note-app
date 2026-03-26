@@ -5399,34 +5399,56 @@ ipcMain.handle('open-app-folder', async () => {
   }
 });
 
-ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
-  const desktop = app.getPath('desktop');
-  const safeName = path.basename(filename || `attendance-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
-  const filePath = path.join(desktop, safeName);
+async function renderHtmlToPdfBuffer(html) {
   const win = new BrowserWindow({
     width: 800, height: 600, show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
-  win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
-  await new Promise((resolve) => win.webContents.on('did-finish-load', resolve));
-  const buf = await win.webContents.printToPDF({
-    pageSize: 'A4',
-    margins: { marginType: 'default' },
-    printBackground: true,
-    preferCSSPageSize: false,
-    displayHeaderFooter: true,
-    headerTemplate: '<div></div>',
-    footerTemplate: `
+  try {
+    win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('PDF HTML load timeout')), 60000);
+      win.webContents.once('did-finish-load', () => { clearTimeout(t); resolve(); });
+    });
+    const buf = await win.webContents.printToPDF({
+      pageSize: 'A4',
+      margins: { marginType: 'default' },
+      printBackground: true,
+      preferCSSPageSize: false,
+      displayHeaderFooter: true,
+      headerTemplate: '<div></div>',
+      footerTemplate: `
       <div style="width:100%; padding:0 12px; font-family:Segoe UI, Arial, sans-serif; font-size:8px; color:#475569; border-top:1px solid #e2e8f0; padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
         <div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
         <div>Created with Custody Note</div>
         <div>Generated <span class="date"></span></div>
       </div>
     `,
-  });
-  win.close();
+    });
+    return buf;
+  } finally {
+    try { win.close(); } catch (_) {}
+  }
+}
+
+ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
+  const desktop = app.getPath('desktop');
+  const safeName = path.basename(filename || `attendance-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
+  const filePath = path.join(desktop, safeName);
+  const buf = await renderHtmlToPdfBuffer(html);
   fs.writeFileSync(filePath, buf);
   return filePath;
+});
+
+/** Returns PDF as base64 for in-app preview (renderer); work stays in main process. */
+ipcMain.handle('preview-pdf-from-html', async (_, { html }) => {
+  try {
+    const buf = await renderHtmlToPdfBuffer(html);
+    return { ok: true, base64: Buffer.from(buf).toString('base64') };
+  } catch (err) {
+    console.error('[preview-pdf-from-html]', err && err.message ? err.message : err);
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
 });
 
 /* ─── Export attendance note as DOCX ─── */
@@ -6003,6 +6025,8 @@ function quickFileRequest(apiPath, bodyContent) {
             }
             resolve(msg?.Body || {});
           } catch (err) {
+            const raw = String(data || '');
+            console.error('[QuickFile] Response parse error:', err && err.message, '| length:', raw.length, '| head:', raw.slice(0, 800));
             reject(err instanceof Error ? err : new Error(String(err)));
           }
         });
@@ -6193,6 +6217,33 @@ async function quickFileFindOrCreateClient(firmName, contactEmail) {
   return createBody.ClientID || createBody.ClientId || createBody.RecordID || null;
 }
 
+function sanitizeQuickFileInvoiceNumber(raw) {
+  let s = String(raw || '').trim().replace(/^\.+/, '');
+  s = s.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim();
+  if (s.length > 20) s = s.slice(0, 20);
+  return s;
+}
+
+function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) {
+  const vr = vatRate != null ? Number(vatRate) : 0.2;
+  const net = Number(unitCost);
+  const taxAmt = net * vr;
+  const name = String(shortName || 'Item').replace(/\s+/g, ' ').trim().slice(0, 25);
+  return {
+    ItemID: 0,
+    ItemName: name,
+    ItemDescription: String(description || '').slice(0, 5000),
+    ItemNominalCode: '4000',
+    Qty: String(qty != null ? qty : 1),
+    UnitCost: Number(net.toFixed(2)),
+    Tax1: {
+      TaxName: 'VAT',
+      TaxPercentage: Number((vr * 100).toFixed(2)),
+      TaxAmount: Number(taxAmt.toFixed(2)),
+    },
+  };
+}
+
 ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   const {
     attendanceId,
@@ -6206,67 +6257,71 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     narrative,
     invoiceDate,
     userName,
+    billingInvoiceNumber,
   } = params;
 
   try {
     const clientId = await quickFileFindOrCreateClient(firmName, contactEmail);
     if (!clientId) throw new Error('Could not find or create QuickFile client for ' + firmName);
 
+    const clientIdNum = parseInt(String(clientId), 10);
+    if (!Number.isFinite(clientIdNum)) throw new Error('Invalid QuickFile ClientID: ' + String(clientId));
+
+    const vr = vatRate != null ? Number(vatRate) : 0.2;
     const lineItems = [];
     if (attendanceFee > 0) {
-      lineItems.push({
-        ItemID: '',
-        ItemName: 'Police Station Attendance Fixed Fee',
-        ItemDescription: narrative || 'Police station attendance',
-        ItemNominalCode: '4000',
-        Qty: '1',
-        UnitCost: attendanceFee.toFixed(2),
-        VATAmount: (attendanceFee * (vatRate || 0.20)).toFixed(2),
-        VATRate: String(((vatRate || 0.20) * 100).toFixed(0)),
-      });
+      lineItems.push(buildQuickFileItemLine(
+        'PS attendance fee',
+        narrative || 'Police station attendance',
+        attendanceFee,
+        1,
+        vr
+      ));
     }
 
     const mileageCost = (mileageMiles || 0) * (mileageRate || 0.45);
     if (mileageCost > 0) {
-      lineItems.push({
-        ItemID: '',
-        ItemName: 'Mileage',
-        ItemDescription: (mileageMiles || 0) + ' miles @ £' + (mileageRate || 0.45).toFixed(2),
-        ItemNominalCode: '4000',
-        Qty: '1',
-        UnitCost: mileageCost.toFixed(2),
-        VATAmount: (mileageCost * (vatRate || 0.20)).toFixed(2),
-        VATRate: String(((vatRate || 0.20) * 100).toFixed(0)),
-      });
+      lineItems.push(buildQuickFileItemLine(
+        'Mileage',
+        (mileageMiles || 0) + ' miles @ £' + (mileageRate || 0.45).toFixed(2),
+        mileageCost,
+        1,
+        vr
+      ));
     }
 
     if (parkingAmount > 0) {
-      lineItems.push({
-        ItemID: '',
-        ItemName: 'Parking / Disbursements',
-        ItemDescription: 'Parking & disbursements',
-        ItemNominalCode: '4000',
-        Qty: '1',
-        UnitCost: parkingAmount.toFixed(2),
-        VATAmount: (parkingAmount * (vatRate || 0.20)).toFixed(2),
-        VATRate: String(((vatRate || 0.20) * 100).toFixed(0)),
-      });
+      lineItems.push(buildQuickFileItemLine(
+        'Parking/disburse',
+        'Parking and disbursements',
+        parkingAmount,
+        1,
+        vr
+      ));
     }
 
     if (!lineItems.length) throw new Error('No billable items to invoice');
 
     const invDate = invoiceDate || new Date().toISOString().slice(0, 10);
+    const invNumSan = sanitizeQuickFileInvoiceNumber(billingInvoiceNumber);
+
+    const singleInvoiceData = { IssueDate: invDate };
+    if (invNumSan) singleInvoiceData.InvoiceNumber = invNumSan;
 
     const invoiceBody = await quickFileRequest('/1_2/invoice/create', {
       InvoiceData: {
         InvoiceType: 'INVOICE',
-        ClientID: clientId,
+        ClientID: clientIdNum,
         Currency: 'GBP',
-        InvoiceDate: invDate,
-        InvoiceLines: { ItemLine: lineItems },
-        TermDays: '30',
-        Notes: narrative || '',
+        TermDays: 30,
+        Notes: (narrative || '').slice(0, 4000),
+        InvoiceLines: {
+          ItemLines: {
+            ItemLine: lineItems,
+          },
+        },
       },
+      SingleInvoiceData: singleInvoiceData,
     });
 
     const invoiceId = invoiceBody.InvoiceID || invoiceBody.InvoiceId || invoiceBody.RecordID || '';

@@ -471,7 +471,7 @@ var LAA = {
       keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'ourFileNumber', 'sufficientBenefitTest'],
       fields: [
         { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'custody', label: 'Custody' }, { value: 'voluntary', label: 'Voluntary' }], cols: 2, helpTitle: 'Custody = client under arrest. Voluntary = client attending voluntarily (free to leave).' },
-        { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Type invoice number (auto-assigned on create if left blank)' },
+        { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'e.g. internal file or matter ref' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
@@ -966,13 +966,6 @@ var LAA = {
         { key: 'policeStationFinalisedTime', label: 'Time police station finalised', type: 'time' },
         { key: 'repConfirmationSignature', label: 'Rep confirmation (signature)', type: 'signature', sigKey: 'repConfirmationSig' },
         { key: 'notesToOffice', label: 'Notes to Office / Firm', type: 'textarea', cols: 2 },
-        { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
-        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in Outlook Web for the firm contact.', type: 'sectionNote' },
-        { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
-        { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
-        { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
-        { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
-        { key: '_btn_send_solicitor_email', label: 'Open Outlook Web for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
@@ -1124,7 +1117,7 @@ var LAA = {
     ]},
     { id: 'adminBilling', title: 'Admin & Billing', keyFields: ['ourFileNumber', 'ufn'], fields: [
       { key: '_h_admin', label: 'Administration', type: 'sectionHeading' },
-      { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Type invoice number', cols: 2 },
+      { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'Internal reference', cols: 2 },
       { key: 'ufn', label: 'UFN (Unique File Number)', type: 'text', placeholder: 'Firm provides this', cols: 2, firmCompletes: true },
       { key: 'firmLaaAccount', label: 'Firm LAA Account No.', type: 'text', placeholder: 'Firm provides this', firmCompletes: true },
       { key: 'maatId', label: 'MAAT ID', type: 'text', placeholder: 'Firm provides after charge', firmCompletes: true },
@@ -1196,7 +1189,7 @@ var LAA = {
       id: 'telCallDetails', title: '1. Call Details',
       keyFields: ['date', 'policeStationId', 'dsccRef', 'matterTypeCode', 'feeCode'],
       fields: [
-        { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Type invoice number (auto-assigned on create if left blank)' },
+        { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'e.g. internal file or matter ref' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
         { key: 'date', label: 'Date of telephone advice', type: 'date' },
         { key: 'sourceOfReferral', label: 'Source of Referral', type: 'select', options: ['Duty Rota','Duty panel','Own Legal Aid','Own private','Agency'] },
@@ -1307,13 +1300,6 @@ var LAA = {
         { key: '_h_admin', label: 'Administration', type: 'sectionHeading' },
         { key: 'ufn', label: 'UFN (Unique File Number)', type: 'text', placeholder: 'DDMMYY/NNN e.g. 220226/001', cols: 2, firmCompletes: true },
         { key: 'firmLaaAccount', label: 'Firm LAA Account No.', type: 'text', placeholder: 'Firm provides this', firmCompletes: true },
-        { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
-        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in Outlook Web for the firm contact.', type: 'sectionNote' },
-        { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
-        { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
-        { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
-        { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
-        { key: '_btn_send_solicitor_email', label: 'Open Outlook Web for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_monitoring', label: 'Equal Opportunities', type: 'sectionHeading' },
         { key: 'ethnicOriginCode', label: 'Ethnic Origin', type: 'codedSelect', codeKey: 'ethnicCodes' },
         { key: 'disabilityCode', label: 'Disability', type: 'codedSelect', codeKey: 'disabilityCodes' },
@@ -1333,7 +1319,7 @@ var LAA = {
       fields: [
         { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'voluntary', label: 'Voluntary' }, { value: 'custody', label: 'Custody' }], cols: 2, helpTitle: 'Voluntary = client attending voluntarily (free to leave). Custody = client under arrest.' },
         { key: '_note_voluntary', label: 'This is a voluntary attendance. Client is free to leave unless arrested.', type: 'sectionNote' },
-        { key: 'ourFileNumber', label: 'File number (ours) / Invoice number', type: 'text', placeholder: 'Type invoice number (auto-assigned on create if left blank)' },
+        { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'e.g. internal file or matter ref' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
@@ -1739,13 +1725,6 @@ var LAA = {
         { key: 'policeStationFinalisedTime', label: 'Time police station finalised', type: 'time' },
         { key: 'repConfirmationSignature', label: 'Rep confirmation (signature)', type: 'signature', sigKey: 'repConfirmationSig' },
         { key: 'notesToOffice', label: 'Notes to Office / Firm', type: 'textarea', cols: 2 },
-        { key: '_h_solicitor_email', label: 'Email Instructing Solicitor', type: 'sectionHeading' },
-        { key: '_note_solicitor_email', label: 'Choose a saved template or use the default preset, load it from this record, edit it if needed, then open it in Outlook Web for the firm contact.', type: 'sectionNote' },
-        { key: 'solicitorEmailTemplateId', label: 'Email template', type: 'select', dynamicOptions: 'customEmailTemplates', cols: 2 },
-        { key: 'solicitorEmailSubject', label: 'Email subject', type: 'text', cols: 2 },
-        { key: 'solicitorEmailBody', label: 'Email body', type: 'textarea', cols: 2, rows: 8 },
-        { key: '_btn_load_solicitor_email_template', label: 'Load selected email template', type: 'actionButton', action: 'loadSolicitorEmailTemplate' },
-        { key: '_btn_send_solicitor_email', label: 'Open Outlook Web for instructing solicitor', type: 'actionButton', action: 'openSolicitorEmail' },
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
@@ -1871,8 +1850,41 @@ var REQUIRED_FIELD_KEYS = [
       searchClients(val).then(function (results) {
         if (inputEl === document.activeElement) showClientDropdown(inputEl, results);
       });
-    }, 300);
+    }, 400);
   }
+
+  function sanitizeBillingInvoiceNumber(raw) {
+    var s = String(raw || '').trim().replace(/^\.+/, '');
+    s = s.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim();
+    if (s.length > 20) s = s.slice(0, 20);
+    return s;
+  }
+
+  function ensureBillingDisplayInvoiceNumber(opts) {
+    opts = opts || {};
+    var d = opts.data != null ? opts.data : formData;
+    if (!d) return '';
+    var existing = sanitizeBillingInvoiceNumber(d.billingDisplayInvoiceNumber);
+    if (existing) return existing;
+    var id = typeof currentAttendanceId !== 'undefined' ? currentAttendanceId : null;
+    var rand = Math.floor(1000 + Math.random() * 9000);
+    var generated = id ? ('CN' + id + '-' + rand) : ('CN' + Date.now().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(-10) + String(rand).slice(-2));
+    generated = sanitizeBillingInvoiceNumber(generated);
+    if (!generated) generated = sanitizeBillingInvoiceNumber('CN' + String(Date.now()).slice(-14));
+    d.billingDisplayInvoiceNumber = generated;
+    if (!opts.skipSave && typeof quietSave === 'function' && d === formData) quietSave();
+    return d.billingDisplayInvoiceNumber;
+  }
+
+  function pdfBillingInvoiceLine(d) {
+    d = d || {};
+    var inv = sanitizeBillingInvoiceNumber(d.billingDisplayInvoiceNumber);
+    if (inv) return inv;
+    return '\u2014';
+  }
+
+  window.sanitizeBillingInvoiceNumber = sanitizeBillingInvoiceNumber;
+  window.ensureBillingDisplayInvoiceNumber = ensureBillingDisplayInvoiceNumber;
 
   /* ─── HELPERS ─── */
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
@@ -5139,12 +5151,6 @@ var REQUIRED_FIELD_KEYS = [
         switch (actionBtn.dataset.action) {
           case 'amend': amendAttendance(id, rec.status, title); break;
           case 'print': printFromList(id); break;
-          case 'print-preview': confirmConfidentialityThen(function() {
-            window.api.attendanceGet(id).then(function(row) {
-              if (!row || !row.data) { showToast('Could not load record', 'error'); return; }
-              printAttendanceNoteWithData(safeJson(row.data));
-            });
-          }); break;
           case 'export-docx': confirmConfidentialityThen(function() { window.exportDocxById(id); }); break;
           case 'dup': duplicateAttendance(id); break;
           case 'newMatter': newMatterFromAttendance(id); break;
@@ -5245,7 +5251,6 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
-              '<button type="button" class="btn-list-action" data-action="print-preview" title="Print preview the full attendance note">Print PDF</button>' +
               '<button type="button" class="btn-list-action" data-action="print" title="Export attendance note PDF to Desktop">Export PDF</button>' +
               '<button type="button" class="btn-list-action" data-action="export-docx" title="Export as Word document to Desktop">Export Word</button>' +
               '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
@@ -5285,11 +5290,12 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  /* ─── EXPORT PDF FROM LIST (attendance + declaration when applicable) ─── */
+  /* ─── EXPORT PDF FROM LIST ─── */
   function printFromList(id) {
     window.api.attendanceGet(id).then(function(row) {
       if (!row || !row.data) { showToast('Could not load record', 'error'); return; }
       var data = safeJson(row.data);
+      ensureBillingDisplayInvoiceNumber({ data: data, skipSave: true });
       window.api.getSettings().then(function(settings) {
         const builder = getPdfBuilderForData(data);
         const html = builder(data, settings);
@@ -5299,54 +5305,9 @@ var REQUIRED_FIELD_KEYS = [
         window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
           if (window.api.openPath) window.api.openPath(p);
           showToast('PDF saved: ' + p, 'success');
-          if (data._formType === 'attendance' && (data.laaClientFullName || data.clientSig || data.feeEarnerSig)) {
-            window.api.laaGenerateOfficialPdf({ formType: 'declaration', data: data }).then(function(res) {
-              if (res.error) return;
-              showToast('Declaration PDF saved: ' + (res.path || '').replace(/\\/g, '/').split('/').pop(), 'success');
-            }).catch(function(e) { console.error('[declaration-pdf]', e); });
-          }
         }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
       }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
     }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
-  }
-
-  function printDeclarationFromForm() {
-    ensureAllSectionsRendered();
-    var data = getFormData();
-    if (!data.clientSig) {
-      showPrompt('Why is the applicant declaration not signed? This reason will appear on the printed form.', 'Declaration not signed', 'e.g. Telephone advice – client to sign later; Client released before signing; etc.', data.declarationUnsignedReason).then(function(reason) {
-        if (reason === null) return;
-        data.declarationUnsignedReason = reason || 'Not signed';
-        if (reason && currentAttendanceId) {
-          var merged = Object.assign({}, data);
-          window.api.attendanceSave({ id: currentAttendanceId, data: merged }).catch(function(e) { showToast('Failed to save record', 'error'); console.error('[save]', e); });
-        }
-        generateLaaFormPdf('declaration', 'Applicant Declaration', data);
-      });
-    } else {
-      generateLaaFormPdf('declaration', 'Applicant Declaration', data);
-    }
-  }
-
-  /* ─── PRINT DECLARATION FROM LIST ─── */
-  function printDeclarationFromList(id) {
-    window.api.attendanceGet(id).then(function(row) {
-      if (!row || !row.data) { showToast('Could not load record', 'error'); return; }
-      var data = safeJson(row.data);
-      if (!data.clientSig) {
-        showPrompt('Why is the applicant declaration not signed? This reason will appear on the printed form.', 'Declaration not signed', 'e.g. Telephone advice – client to sign later; Client released before signing; etc.', data.declarationUnsignedReason).then(function(reason) {
-          if (reason === null) return; /* cancelled */
-          data.declarationUnsignedReason = reason || 'Not signed';
-          if (reason && id) {
-            var merged = Object.assign({}, data);
-            window.api.attendanceSave({ id: id, data: merged }).catch(function(e) { showToast('Failed to save record', 'error'); console.error('[save]', e); });
-          }
-          generateLaaFormPdf('declaration', 'Applicant Declaration', data);
-        });
-      } else {
-        generateLaaFormPdf('declaration', 'Applicant Declaration', data);
-      }
-    }).catch(function(e) { showToast('Declaration print failed: ' + (e && e.message), 'error'); });
   }
 
   /* ─── DELETE ATTENDANCE (#13) ─── */
@@ -5683,6 +5644,7 @@ var REQUIRED_FIELD_KEYS = [
     updateBillingReadinessPanel();
   }
 
+  /** Blocking checks only — used for “Ready to invoice” status (SBT is separate; see getBillingReadinessInformationalNotes). */
   function getBillingReadinessWarnings() {
     var d = formData;
     var w = [];
@@ -5696,14 +5658,31 @@ var REQUIRED_FIELD_KEYS = [
     if (d.attendanceMode === 'voluntary') {
       if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim()) w.push('DSCC reference or reason missing');
       if (d.attendanceSubType === 'voluntary_non_police_body' && !d.constablePresent) w.push('Constable present? required for non-police body');
-      if (!(d.sufficientBenefitNote || '').trim()) w.push('Sufficient benefit note missing');
     } else {
       if (!(d.dsccRef || '').trim() && (d.sourceOfReferral || '').toLowerCase().indexOf('duty') >= 0) w.push('DSCC number missing (duty route)');
-      if (!(d.sufficientBenefitTest || '').trim() && !(d.sufficientBenefitNotes || '').trim()) w.push('Sufficient benefit note missing');
     }
     var mins = parseInt((d.totalMinutes || '').toString(), 10);
     if (isNaN(mins) || mins <= 0) w.push('Time record incomplete');
     return w;
+  }
+
+  /** LAA sufficient-benefit reminder: shown in billing readiness but does not block invoicing. */
+  function getBillingReadinessInformationalNotes() {
+    var d = formData;
+    var n = [];
+    if (d._formType === 'telephone') return n;
+    if (d.attendanceMode === 'voluntary') {
+      var sbtVol = (d.sufficientBenefitTest || '').trim();
+      var hasSbtSelection = !!(sbtVol && sbtVol.split('|').filter(Boolean).length);
+      if (!hasSbtSelection && !(d.sufficientBenefitNotes || '').trim()) {
+        n.push('Sufficient benefit: add SBT selection or notes (does not block invoicing)');
+      }
+    } else {
+      if (!(d.sufficientBenefitTest || '').trim() && !(d.sufficientBenefitNotes || '').trim()) {
+        n.push('Sufficient benefit: add SBT selection or notes (does not block invoicing)');
+      }
+    }
+    return n;
   }
 
   function updateBillingReadinessPanel() {
@@ -5715,6 +5694,7 @@ var REQUIRED_FIELD_KEYS = [
     var openBtn = document.getElementById('billing-readiness-open');
     if (!list || !panel || !statusEl || !summaryEl || !warningsWrap || !openBtn) return;
     var w = getBillingReadinessWarnings();
+    var infoNotes = getBillingReadinessInformationalNotes();
     var hasInvoice = !!(formData.quickfileInvoiceNumber || formData.quickfileInvoiceUrl);
     var invoiceSent = formData.invoiceSent === 'Yes';
     var quickFileReady = hasQuickFileSettingsConfigured();
@@ -5750,8 +5730,10 @@ var REQUIRED_FIELD_KEYS = [
     statusEl.textContent = statusText;
     summaryEl.textContent = summary;
     openBtn.textContent = hasInvoice ? 'Review Billing & Invoice' : 'Open Billing & Invoice';
-    list.innerHTML = w.map(function(msg) { return '<li>' + esc(msg) + '</li>'; }).join('');
-    warningsWrap.style.display = w.length ? '' : 'none';
+    var listHtml = w.map(function(msg) { return '<li>' + esc(msg) + '</li>'; }).join('');
+    listHtml += infoNotes.map(function(msg) { return '<li class="billing-readiness-note">' + esc(msg) + '</li>'; }).join('');
+    list.innerHTML = listHtml;
+    warningsWrap.style.display = (w.length || infoNotes.length) ? '' : 'none';
     panel.style.display = '';
   }
 
@@ -6116,7 +6098,11 @@ var REQUIRED_FIELD_KEYS = [
     }
 
     if (typeof MutationObserver !== 'undefined') {
-      state._mo = new MutationObserver(function() { scheduleLayout(); });
+      state._moDebounceTimer = null;
+      state._mo = new MutationObserver(function() {
+        clearTimeout(state._moDebounceTimer);
+        state._moDebounceTimer = setTimeout(function() { scheduleLayout(); }, 80);
+      });
       state._mo.observe(state.form, { childList: true, subtree: true });
     }
 
@@ -6214,7 +6200,7 @@ var REQUIRED_FIELD_KEYS = [
         if (sec.extraActions) {
           const actions = document.createElement('div');
           actions.className = 'form-actions';
-          actions.innerHTML = '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button><button type="button" class="btn btn-accent" id="form-pdf">Export PDF to Desktop</button><button type="button" class="btn btn-accent" id="form-docx">Export Word to Desktop</button><button type="button" class="btn btn-accent" id="form-print">Print Attendance Note</button><button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button><button type="button" class="btn btn-accent" id="form-email-solicitor">Email to solicitor</button><button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button><button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
+          actions.innerHTML = '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button><button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button><button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button><button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
           section.appendChild(actions);
         }
         if (sec.id === 'supervisorReview') {
@@ -6290,7 +6276,7 @@ var REQUIRED_FIELD_KEYS = [
     const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
 
     var _uiRefreshDebounce = null;
-    var UI_REFRESH_DEBOUNCE_MS = 400;
+    var UI_REFRESH_DEBOUNCE_MS = 300;
     function scheduleUIRefresh() {
       clearTimeout(_uiRefreshDebounce);
       _uiRefreshDebounce = setTimeout(function() {
@@ -6310,6 +6296,7 @@ var REQUIRED_FIELD_KEYS = [
             var field = el.dataset.field || el.name;
             if (field) formData[field] = el.value;
             scheduleQuietSave();
+            scheduleUIRefresh();
           });
         }
         el.addEventListener('change', () => {
@@ -6577,11 +6564,7 @@ var REQUIRED_FIELD_KEYS = [
         actions.className = 'form-actions';
         actions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button>' +
-          '<button type="button" class="btn btn-accent" id="form-pdf">Export PDF to Desktop</button>' +
-          '<button type="button" class="btn btn-accent" id="form-docx">Export Word to Desktop</button>' +
-          '<button type="button" class="btn btn-accent" id="form-print">Print Attendance Note</button>' +
           '<button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button>' +
-          '<button type="button" class="btn btn-accent" id="form-email-solicitor">Email to solicitor</button>' +
           '<button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button>' +
           '<button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
         section.appendChild(actions);
@@ -6603,10 +6586,6 @@ var REQUIRED_FIELD_KEYS = [
         endActions.className = 'form-actions form-end-actions';
         endActions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
-          '<button type="button" class="btn btn-accent" id="form-pdf-end" title="Save full attendance note (including declaration) to Desktop">Export PDF</button>' +
-          '<button type="button" class="btn btn-accent" id="form-docx-end" title="Export Word document to Desktop">Export Word</button>' +
-          '<button type="button" class="btn btn-accent" id="form-print-end" title="Print preview the full attendance note">Print Preview</button>' +
-          '<button type="button" class="btn btn-accent" id="form-declaration" title="Export Applicant Declaration only">Declaration</button>' +
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
           '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>';
         section.appendChild(endActions);
@@ -6656,7 +6635,7 @@ var REQUIRED_FIELD_KEYS = [
           '</div>' +
           '<ol class="billing-readiness-steps">' +
             '<li>When the police-station work is finished, <strong>finalise</strong> the attendance (toolbar).</li>' +
-            '<li>Open Billing: preview the attendance note and declaration, tick off LAA forms you have attached, then create the QuickFile invoice.</li>' +
+            '<li>Open Billing: follow Review → Declaration → Preview → Export; on the last step tick LAA forms, confirm fees, then create the QuickFile invoice.</li>' +
             '<li>After sending the invoice, set <strong>Invoice sent?</strong> to Yes; when the file is closed, <strong>Archive</strong> the record from the toolbar.</li>' +
           '</ol>' +
           '<div id="billing-readiness-warnings-wrap" class="billing-readiness-warnings">' +
@@ -6783,8 +6762,6 @@ var REQUIRED_FIELD_KEYS = [
         else if (f.action === 'generatePreparedStatement') generatePreparedStatement();
         else if (f.action === 'convertToAttendance') convertTelephoneToAttendance();
         else if (f.action === 'convertVoluntaryToCustody') convertVoluntaryToCustody();
-        else if (f.action === 'loadSolicitorEmailTemplate') loadSolicitorEmailTemplate();
-        else if (f.action === 'openSolicitorEmail') openSolicitorEmail();
       });
       wrap.appendChild(btn);
       grid.appendChild(wrap);
@@ -7470,9 +7447,7 @@ var REQUIRED_FIELD_KEYS = [
     if (f.type === 'select') {
       input = document.createElement('select');
       input.innerHTML = '<option value="">-- Select --</option>';
-      var selectOptions = f.dynamicOptions === 'customEmailTemplates'
-        ? (typeof getSolicitorEmailTemplateOptions === 'function' ? getSolicitorEmailTemplateOptions() : [])
-        : (f.options || []);
+      var selectOptions = f.options || [];
       selectOptions.forEach(o => {
         const opt = document.createElement('option');
         const value = o && typeof o === 'object' ? o.value : o;
@@ -7935,7 +7910,6 @@ var REQUIRED_FIELD_KEYS = [
     input.name = f.key; input.dataset.field = f.key;
     let val = data[f.key];
     if (f.defaultValue != null) { val = f.defaultValue; input.readOnly = true; }
-    if (f.dynamicOptions === 'customEmailTemplates' && (val == null || val === '')) val = 'default_preset';
     if (val != null && val !== '') input.value = val;
     if (f.key === 'courtName') {
       const acWrap = document.createElement('div');
@@ -8244,7 +8218,11 @@ var REQUIRED_FIELD_KEYS = [
       const wc = document.createElement('div');
       wc.className = 'word-counter';
       wc.textContent = countWords(input.value);
-      input.addEventListener('input', () => { wc.textContent = countWords(input.value); });
+      var _wcT = null;
+      input.addEventListener('input', () => {
+        clearTimeout(_wcT);
+        _wcT = setTimeout(function() { wc.textContent = countWords(input.value); }, 120);
+      });
       wrap.appendChild(wc);
     }
 
@@ -8506,21 +8484,14 @@ var REQUIRED_FIELD_KEYS = [
       const query = (q || '').toLowerCase().trim();
       dropdown.innerHTML = '';
 
-      if (query.length < 1) {
-        OFFENCES_BY_GROUP.forEach(grp => {
-          const hdr = document.createElement('div');
-          hdr.className = 'offence-group-header';
-          hdr.textContent = grp.group;
-          dropdown.appendChild(hdr);
-          (grp.offences || []).forEach(off => {
-            const fullOff = { ...off, defaultMatterType: off.matterType || grp.defaultMatterType || '11' };
-            const opt = document.createElement('div');
-            opt.className = 'offence-autocomplete-option';
-            opt.innerHTML = esc(off.name) + '<span class="offence-statute">' + esc(off.statute || '') + '</span>';
-            opt.addEventListener('mousedown', (e) => { e.preventDefault(); selectOffence(fullOff); });
-            dropdown.appendChild(opt);
-          });
-        });
+      if (query.length < 2) {
+        var hintEl = document.createElement('div');
+        hintEl.className = 'offence-autocomplete-hint';
+        hintEl.style.padding = '10px 12px';
+        hintEl.style.fontSize = '0.88rem';
+        hintEl.style.color = '#64748b';
+        hintEl.textContent = 'Type at least 2 characters to search. Use the Offences button for the full browse list.';
+        dropdown.appendChild(hintEl);
         dropdown.classList.add('open');
         return;
       }
@@ -8540,7 +8511,7 @@ var REQUIRED_FIELD_KEYS = [
 
     input.addEventListener('input', () => {
       clearTimeout(_offDebounce);
-      _offDebounce = setTimeout(() => showSuggestions(input.value), 80);
+      _offDebounce = setTimeout(() => showSuggestions(input.value), 120);
     });
     input.addEventListener('focus', () => { showSuggestions(input.value); });
     input.addEventListener('blur', () => { setTimeout(() => dropdown.classList.remove('open'), 180); });
@@ -8558,25 +8529,14 @@ var REQUIRED_FIELD_KEYS = [
       const query = (q || '').toLowerCase().trim();
       dropdown.innerHTML = '';
 
-      if (query.length < 1) {
-        OFFENCES_BY_GROUP.forEach(grp => {
-          const hdr = document.createElement('div');
-          hdr.className = 'offence-group-header';
-          hdr.textContent = grp.group;
-          dropdown.appendChild(hdr);
-          (grp.offences || []).forEach(off => {
-            const opt = document.createElement('div');
-            opt.className = 'offence-autocomplete-option';
-            opt.innerHTML = esc(off.name) + '<span class="offence-statute">' + esc(off.statute || '') + '</span>';
-            opt.addEventListener('mousedown', (e) => {
-              e.preventDefault();
-              input.value = off.name;
-              setFieldValue('offenceSummary', off.name);
-              dropdown.classList.remove('open');
-            });
-            dropdown.appendChild(opt);
-          });
-        });
+      if (query.length < 2) {
+        var hintSum = document.createElement('div');
+        hintSum.className = 'offence-autocomplete-hint';
+        hintSum.style.padding = '10px 12px';
+        hintSum.style.fontSize = '0.88rem';
+        hintSum.style.color = '#64748b';
+        hintSum.textContent = 'Type at least 2 characters to search offences.';
+        dropdown.appendChild(hintSum);
         dropdown.classList.add('open');
         return;
       }
@@ -8614,7 +8574,7 @@ var REQUIRED_FIELD_KEYS = [
 
     input.addEventListener('input', () => {
       clearTimeout(_offSumDebounce);
-      _offSumDebounce = setTimeout(() => showSuggestions(input.value), 80);
+      _offSumDebounce = setTimeout(() => showSuggestions(input.value), 120);
     });
     input.addEventListener('focus', () => { showSuggestions(input.value); });
     input.addEventListener('blur', () => { setTimeout(() => dropdown.classList.remove('open'), 180); });
@@ -9889,7 +9849,7 @@ var REQUIRED_FIELD_KEYS = [
 '</div>' +
 '<h1>Custody Note</h1>' +
 '<p style="font-size:10px;color:#475569;">' +
-'  <strong>File number (ours) / Invoice no.:</strong> ' + h(d.ourFileNumber || d.fileReference || '') + ' &middot; <strong>Date:</strong> ' + h(fmtDate(d.date)||'') + ' &middot; <strong>DSCC PIN:</strong> ' + h(settings.dsccPin||'') +
+'  <strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '') + ' &middot; <strong>Billing invoice no.:</strong> ' + h(pdfBillingInvoiceLine(d)) + ' &middot; <strong>Date:</strong> ' + h(fmtDate(d.date)||'') + ' &middot; <strong>DSCC PIN:</strong> ' + h(settings.dsccPin||'') +
   (firmName ? ' &middot; <strong>Firm:</strong> ' + h(firmName) : '') +
   (d.firmLaaAccount ? ' &middot; <strong>LAA Acct:</strong> ' + h(d.firmLaaAccount) : '') +
 '</p>' +
@@ -9909,7 +9869,7 @@ var REQUIRED_FIELD_KEYS = [
 '<h2>1. Case Reference & Arrival</h2><table>' +
 row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) + row('Firm', firmName) +
 row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
-row('Client first name', d.forename) + row('Client surname', d.surname) + row('File number (ours) / Invoice no.', d.ourFileNumber || d.fileReference) + row('Offence (summary)', d.offenceSummary) +
+row('Client first name', d.forename) + row('Client surname', d.surname) + row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) + row('Offence (summary)', d.offenceSummary) +
 row('Station', sn) + row('DSCC number', d.dsccRef) +
 row('Officer in Charge', d.oicName) + row('Officer in Charge email', d.oicEmail) + row('Officer in Charge telephone', d.oicPhone) +
 row('Date', fmtDate(d.date)) + row('Weekend/Bank Holiday', d.weekendBankHoliday) + row('Other Location', d.otherLocation) +
@@ -10077,7 +10037,6 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
 '</table>' +
 (d.repConfirmationSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation</p>' + sig('repConfirmationSig') + '</div>' : '') +
 (d.notesToOffice ? '<div class="nar">' + h(d.notesToOffice) + '</div>' : '') +
-(d.solicitorEmailSubject || d.solicitorEmailBody ? '<h2>10. Instructing Solicitor Email</h2><table>' + row('Email subject', d.solicitorEmailSubject) + row('Recipient', d.firmContactEmail) + '</table>' + (d.solicitorEmailBody ? '<div class="nar">' + h(d.solicitorEmailBody) + '</div>' : '') : '') +
 
 (function() {
   function hasAny(keys) {
@@ -10166,7 +10125,8 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
 })() +
 
 (function() {
-  var adminRows = row('File number (ours) / Invoice no.', d.ourFileNumber || d.fileReference) +
+  var adminRows = row('File / matter reference', d.ourFileNumber || d.fileReference) +
+    row('Billing invoice no.', pdfBillingInvoiceLine(d)) +
     row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
   if (!adminRows) return '';
   return '<h2>12. Admin & Billing</h2><table>' + adminRows + '</table>';
@@ -10245,7 +10205,8 @@ PDF_CASENOTE_ADVERT +
       'DSCC: ' + (d.dsccRef || 'N/A'),
       'Offence: ' + (d.offenceSummary || d.offence1Details || 'N/A'),
       'Custody No: ' + (d.custodyNumber || 'N/A'),
-      'File number / Invoice no.: ' + (d.ourFileNumber || d.fileReference || 'N/A'),
+      'File / matter ref: ' + (d.ourFileNumber || d.fileReference || 'N/A'),
+      'Billing invoice no.: ' + (pdfBillingInvoiceLine(d) === '\u2014' ? 'N/A' : pdfBillingInvoiceLine(d)),
       'UFN: ' + (d.ufn || 'N/A'),
       '',
       'TIMES',
@@ -10318,14 +10279,15 @@ PDF_CASENOTE_ADVERT +
       '<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Station:</strong> ' + h(sn || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
-      '<div class="cover-item"><strong>File number (ours) / Invoice no.:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>Billing invoice no.:</strong> ' + h(pdfBillingInvoiceLine(d)) + '</div>' +
       '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>DSCC:</strong> ' + h(d.dsccRef || '\u2014') + '</div>' +
       '</div>' +
       (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">TELEPHONE ADVICE</div>' : '') +
 
       '<h2>1. Call Details</h2><table>' +
-      row('File number (ours) / Invoice no.', d.ourFileNumber || d.fileReference) + row('Date', fmtDate(d.date)) +
+      row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) + row('Date', fmtDate(d.date)) +
       row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) +
       row('Source of Referral', d.sourceOfReferral) +
       row('DSCC Number', d.dsccRef) +
@@ -10376,7 +10338,6 @@ PDF_CASENOTE_ADVERT +
       row('UFN', d.ufn) + row('Firm LAA Account', d.firmLaaAccount) +
       row('Ethnic Origin', d.ethnicOriginCode) + row('Disability', d.disabilityCode) +
       '</table>' +
-      (d.solicitorEmailSubject || d.solicitorEmailBody ? '<h2>5. Instructing Solicitor Email</h2><table>' + row('Email subject', d.solicitorEmailSubject) + row('Recipient', d.firmContactEmail) + '</table>' + (d.solicitorEmailBody ? '<div class="nar">' + h(d.solicitorEmailBody) + '</div>' : '') : '') +
       '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
       PDF_CASENOTE_ADVERT +
       '</body></html>';
@@ -10477,7 +10438,7 @@ PDF_CASENOTE_ADVERT +
       row('Firm', firmName) + row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
       row('Fee Earner / Rep', d.feeEarnerName) +
       row('Client', clientNameForTitle) +
-      row('File number (ours) / Invoice no.', myRefForTitle) +
+      row('File / matter reference', myRefForTitle) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) +
       row('Offence (summary)', d.offenceSummary) +
       row('Station / Location', sn || d.otherLocation) + row('Location type', d.locationType) +
       row('Scheme ID', d.schemeId) +
@@ -10639,7 +10600,6 @@ PDF_CASENOTE_ADVERT +
       '</table>' +
       (d.repConfirmationSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation</p>' + sig('repConfirmationSig') + '</div>' : '') +
       (d.notesToOffice ? '<div class="nar">' + h(d.notesToOffice) + '</div>' : '') +
-      (d.solicitorEmailSubject || d.solicitorEmailBody ? '<h2>10. Instructing Solicitor Email</h2><table>' + row('Email subject', d.solicitorEmailSubject) + row('Recipient', d.firmContactEmail) + '</table>' + (d.solicitorEmailBody ? '<div class="nar">' + h(d.solicitorEmailBody) + '</div>' : '') : '') +
 
       (function() {
         var laaRows = row('Previous advice?', d.previousAdvice) + row('Details', d.previousAdviceDetails) +
@@ -10659,7 +10619,7 @@ PDF_CASENOTE_ADVERT +
       })() +
 
       (function() {
-        var adminRows = row('File number (ours) / Invoice no.', myRefForTitle) + row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
+        var adminRows = row('File / matter reference', myRefForTitle) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) + row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
         if (!adminRows) return '';
         return '<h2>12. Admin &amp; Billing</h2><table>' + adminRows + '</table>';
       })() +
@@ -10711,6 +10671,7 @@ PDF_CASENOTE_ADVERT +
 
   function exportPdf() {
     ensureAllSectionsRendered();
+    ensureBillingDisplayInvoiceNumber({ skipSave: false });
     const data = getFormData();
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
@@ -10760,6 +10721,7 @@ PDF_CASENOTE_ADVERT +
       if (!row) { showToast('Record not found', 'error'); return; }
       var data = {};
       try { data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {}); } catch (_) {}
+      ensureBillingDisplayInvoiceNumber({ data: data, skipSave: true });
       window.api.getSettings().then(function(settings) {
         var builder = getPdfBuilderForData(data);
         var html = builder(data, settings);
@@ -10800,151 +10762,8 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
-  function printAttendanceNoteWithData(data) {
-    if (!data) return;
-    window.api.getSettings().then(settings => {
-      const builder = getPdfBuilderForData(data);
-      const html = builder(data, settings);
-      printGeneratedDoc(html);
-    }).catch(e => showToast('Print failed: ' + (e && e.message), 'error'));
-  }
-
-  /** Generate PDF from given attendance data and open in-app print preview (for picker flow). */
-  function previewPdfWithData(data) {
-    if (!data) return;
-    window.api.getSettings().then(settings => {
-      const builder = getPdfBuilderForData(data);
-      const html = builder(data, settings);
-      printGeneratedDoc(html);
-    }).catch(e => showToast('Preview failed: ' + (e && e.message), 'error'));
-  }
-
-  function getInstructingSolicitorEmailContext(data) {
-    var d = data || {};
-    var clientName = [d.forename, d.surname].filter(Boolean).join(' ').trim();
-    var station = d.policeStationName || d.otherLocation || '';
-    var attendanceType = d._formType === 'telephone'
-      ? 'telephone advice'
-      : (d.attendanceMode === 'voluntary' ? 'voluntary attendance' : 'police station attendance');
-    return {
-      contactName: (d.firmContactName || '').trim(),
-      firmName: (d.firmName || '').trim(),
-      clientName: clientName,
-      station: station,
-      date: d.date ? fmtDate(d.date) : '',
-      outcome: (d.outcomeDecision || '').trim(),
-      nextStep: [d.nextLocationName, d.nextDate ? fmtDate(d.nextDate) : ''].filter(Boolean).join(' - '),
-      followUp: (d.followUpRequired || '').trim(),
-      attendanceType: attendanceType,
-      feeEarnerName: (d.feeEarnerName || ((window._appSettingsCache || {}).feeEarnerNameDefault || '')).trim(),
-      ourFileNumber: (d.ourFileNumber || d.fileReference || '').trim(),
-      ufn: (d.ufn || '').trim()
-    };
-  }
-
-  function getSolicitorEmailTemplateOptions() {
-    var options = [{ value: 'default_preset', label: 'Default preset' }];
-    var customTemplates = typeof window._getCustomEmailTemplates === 'function'
-      ? (window._getCustomEmailTemplates() || [])
-      : [];
-    customTemplates.forEach(function(tpl, idx) {
-      var scope = tpl && tpl.scope ? tpl.scope : 'all';
-      if (scope !== 'all' && scope !== 'solicitor') return;
-      var labelPrefix = scope === 'solicitor' ? '[Solicitor] ' : '';
-      options.push({ value: 'custom:' + idx, label: labelPrefix + (tpl && tpl.name ? tpl.name : ('Custom template ' + (idx + 1))) });
-    });
-    return options;
-  }
-
-  function getSolicitorEmailTemplateById(templateId) {
-    if (!templateId || templateId === 'default_preset') return null;
-    if (String(templateId).indexOf('custom:') !== 0) return null;
-    var idx = parseInt(String(templateId).slice(7), 10);
-    if (!Number.isFinite(idx) || idx < 0) return null;
-    var customTemplates = typeof window._getCustomEmailTemplates === 'function'
-      ? (window._getCustomEmailTemplates() || [])
-      : [];
-    var tpl = customTemplates[idx] || null;
-    if (!tpl) return null;
-    var scope = tpl.scope || 'all';
-    return (scope === 'all' || scope === 'solicitor') ? tpl : null;
-  }
-
-  function getSolicitorEmailPlaceholderMap(data) {
-    var ctx = getInstructingSolicitorEmailContext(data);
-    return {
-      clientName: ctx.clientName,
-      contactName: ctx.contactName,
-      firmName: ctx.firmName,
-      station: ctx.station,
-      date: ctx.date,
-      outcome: ctx.outcome,
-      nextStep: ctx.nextStep,
-      followUp: ctx.followUp,
-      attendanceType: ctx.attendanceType,
-      feeEarnerName: ctx.feeEarnerName,
-      ourFileNumber: ctx.ourFileNumber,
-      ufn: ctx.ufn,
-      oicName: (data && data.oicName) || '',
-      offenceType: (data && data.offenceSummary) || ''
-    };
-  }
-
-  function applySolicitorEmailPlaceholders(text, data) {
-    var map = getSolicitorEmailPlaceholderMap(data || {});
-    return String(text || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
-      return map[key] != null ? String(map[key]) : '';
-    });
-  }
-
-  function buildDefaultSolicitorEmailTemplate(data) {
-    var ctx = getInstructingSolicitorEmailContext(data);
-    var subject = (ctx.attendanceType === 'telephone advice'
-      ? 'Telephone advice update'
-      : 'Attendance update') +
-      (ctx.clientName ? ' - ' + ctx.clientName : '') +
-      (ctx.date ? ' - ' + ctx.date : '');
-    var greeting = ctx.contactName ? ('Dear ' + ctx.contactName + ',') : 'Dear Sir / Madam,';
-    var lines = [
-      greeting,
-      '',
-      'I write further to my ' + ctx.attendanceType +
-        (ctx.clientName ? ' for ' + ctx.clientName : '') +
-        (ctx.station ? ' at ' + ctx.station : '') +
-        (ctx.date ? ' on ' + ctx.date : '') + '.',
-      ''
-    ];
-    if (ctx.outcome) lines.push('Outcome: ' + ctx.outcome);
-    if (ctx.nextStep) lines.push('Next step: ' + ctx.nextStep);
-    if (ctx.followUp) lines.push('Follow-up required: ' + ctx.followUp);
-    if (ctx.ourFileNumber || ctx.ufn) {
-      lines.push('Reference: ' + [ctx.ourFileNumber, ctx.ufn].filter(Boolean).join(' / '));
-    }
-    lines.push('', 'Please let me know if anything further is needed.', '', 'Kind regards,', '', ctx.feeEarnerName || 'Fee Earner');
-    return { subject: subject, body: lines.join('\n') };
-  }
-
-  function loadSolicitorEmailTemplate() {
-    var data = getFormData();
-    var templateId = (data.solicitorEmailTemplateId || 'default_preset').trim() || 'default_preset';
-    var tpl = buildDefaultSolicitorEmailTemplate(data);
-    var customTemplate = getSolicitorEmailTemplateById(templateId);
-    if (customTemplate) {
-      tpl.subject = applySolicitorEmailPlaceholders(customTemplate.subject || '', data);
-      tpl.body = applySolicitorEmailPlaceholders(customTemplate.body || '', data);
-    }
-    formData.solicitorEmailTemplateId = templateId;
-    formData.solicitorEmailSubject = tpl.subject;
-    formData.solicitorEmailBody = tpl.body;
-    setFieldValue('solicitorEmailTemplateId', templateId);
-    setFieldValue('solicitorEmailSubject', tpl.subject);
-    setFieldValue('solicitorEmailBody', tpl.body);
-    quietSave();
-    showToast(customTemplate ? 'Saved email template loaded' : 'Default email template loaded', 'success');
-  }
-
   /**
-   * After Template Manager "Use template": put rendered subject/body into a form field or email draft.
+   * After Template Manager "Use template": insert rendered text into a form field or clipboard.
    */
   function applyTemplateManagerOutput(subject, content, meta) {
     var subj = String(subject || '').trim();
@@ -10961,11 +10780,10 @@ PDF_CASENOTE_ADVERT +
       : '';
     box.innerHTML =
       '<h3 style="margin:0 0 8px;font-size:1.05rem;">Insert template</h3>' +
-      '<p style="margin:0 0 12px;font-size:13px;color:#64748b;">Choose where to place the rendered text. For email, subject and body are written to the instructing solicitor fields.</p>' +
+      '<p style="margin:0 0 12px;font-size:13px;color:#64748b;">Choose where to place the rendered text.</p>' +
       warn +
       '<label class="form-label" for="tpl-insert-target">Destination</label>' +
       '<select id="tpl-insert-target" class="form-input" style="width:100%;margin-bottom:12px;">' +
-      '<option value="email">Instructing solicitor email (subject + body)</option>' +
       '<option value="disclosureNarrative">Narrative / Disclosure Notes</option>' +
       '<option value="clientInstructions">Summary of client instructions</option>' +
       '<option value="notesToOffice">Notes to Office / Firm</option>' +
@@ -10987,8 +10805,7 @@ PDF_CASENOTE_ADVERT +
     var sel = box.querySelector('#tpl-insert-target');
     var appendRow = box.querySelector('#tpl-append-row');
     function syncModeVisibility() {
-      var v = sel.value;
-      appendRow.style.display = (v === 'email' || v === 'clipboard') ? 'none' : '';
+      appendRow.style.display = sel.value === 'clipboard' ? 'none' : '';
     }
     sel.addEventListener('change', syncModeVisibility);
     syncModeVisibility();
@@ -11016,15 +10833,6 @@ PDF_CASENOTE_ADVERT +
         } else {
           showToast('Clipboard not available', 'error');
         }
-        return;
-      }
-
-      if (target === 'email') {
-        setFieldValue('solicitorEmailSubject', subj);
-        setFieldValue('solicitorEmailBody', body);
-        if (typeof quietSave === 'function') quietSave();
-        showToast('Email subject and body updated — review in Instructing Solicitor section', 'success');
-        close();
         return;
       }
 
@@ -11077,128 +10885,8 @@ PDF_CASENOTE_ADVERT +
     });
   }
 
-  function openSolicitorEmail() {
-    var data = getFormData();
-    var firmEmail = (data.firmContactEmail || '').trim();
-    if (!firmEmail) {
-      showToast('No email address for the instructing solicitor contact. Add contact email in the record or Firms page.', 'error');
-      return;
-    }
-    var subject = (data.solicitorEmailSubject || '').trim();
-    var body = data.solicitorEmailBody || '';
-    if (!subject && !body) {
-      var tpl = buildDefaultSolicitorEmailTemplate(data);
-      subject = tpl.subject;
-      body = tpl.body;
-      formData.solicitorEmailSubject = subject;
-      formData.solicitorEmailBody = body;
-      setFieldValue('solicitorEmailSubject', subject);
-      setFieldValue('solicitorEmailBody', body);
-      quietSave();
-    }
-    openOutlookWebCompose(firmEmail, subject, body);
-  }
-
-  function emailToSolicitorWithData(data) {
-    if (!data) return;
-    const firmEmail = (data.firmContactEmail || '').trim();
-    if (!firmEmail) {
-      showToast('No email address for the instructing firm. Add contact email in the attendance or on the Firms page.', 'error');
-      return;
-    }
-    var savedSubject = (data.solicitorEmailSubject || '').trim();
-    var savedBody = data.solicitorEmailBody || '';
-    if (savedSubject || savedBody) {
-      if (!savedSubject || !savedBody) {
-        var tpl = buildDefaultSolicitorEmailTemplate(data);
-        if (!savedSubject) savedSubject = tpl.subject;
-        if (!savedBody) savedBody = tpl.body;
-      }
-      openOutlookWebCompose(firmEmail, savedSubject, savedBody);
-      return;
-    }
-    window.api.getSettings().then(settings => {
-      const builder = getPdfBuilderForData(data);
-      const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
-      const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
-      const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-      window.api.printToPdf({ html: html, filename: fn }).then(p => {
-        var subjRaw = (data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance note')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || '');
-        var bodyRaw = 'Please find the attendance note PDF attached.\n\nFilename: ' + fn + '\n\nSent from Custody Note.';
-        openOutlookWebCompose(firmEmail, subjRaw, bodyRaw);
-        showToast('PDF saved to Desktop. Attach "' + fn + '" and send to ' + firmEmail, 'success');
-      }).catch(e => showToast('Failed: ' + (e && e.message), 'error'));
-    });
-  }
-
-  var _attendancePickerAction = null;
-
-  function showAttendancePickerModal(action) {
-    _attendancePickerAction = action;
-    var modal = document.getElementById('attendance-picker-modal');
-    var titleEl = document.getElementById('attendance-picker-title');
-    var listEl = document.getElementById('attendance-picker-list');
-    if (!modal || !listEl) return;
-    titleEl.textContent = action === 'email' ? 'Email to instructing solicitor' : 'Print or preview attendance note';
-    listEl.innerHTML = '<li class="home-recent-empty">Loading…</li>';
-    modal.classList.remove('hidden');
-    var listFn = window.api.attendanceListFull || window.api.attendanceList;
-    var isPrint = action === 'print';
-    listFn().then(function(rows) {
-      if (!rows || !rows.length) {
-        listEl.innerHTML = '<li class="home-recent-empty">No attendances found. Create one first.</li>';
-        return;
-      }
-      var sorted = rows.slice().sort(function(a, b) { return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''); });
-      listEl.innerHTML = sorted.map(function(r) {
-        var name = (r.client_name && String(r.client_name).trim()) || 'Draft (no name)';
-        var station = r.station_name || '';
-        var date = r.attendance_date || '';
-        if (date) {
-          var dm = String(date).match(/^(\d{4})-(\d{2})-(\d{2})/);
-          if (dm) date = dm[3] + '/' + dm[2] + '/' + dm[1];
-        }
-        var meta = [station, date].filter(Boolean).join(' \u00B7 ');
-        if (isPrint) {
-          return '<li class="attendance-picker-item" data-id="' + r.id + '">' +
-            '<span class="picker-item-name">' + esc(name) + '</span><span class="picker-item-meta">' + esc(meta) + '</span>' +
-            '<div class="picker-item-actions"><button type="button" class="btn btn-small picker-preview-btn" data-id="' + r.id + '">Preview</button>' +
-            '<button type="button" class="btn btn-small picker-print-btn" data-id="' + r.id + '">Print</button></div></li>';
-        }
-        return '<li class="attendance-picker-item" data-id="' + r.id + '"><span class="picker-item-name">' + esc(name) + '</span><span class="picker-item-meta">' + esc(meta) + '</span></li>';
-      }).join('');
-      listEl.querySelectorAll('.attendance-picker-item').forEach(function(li) {
-        var id = parseInt(li.dataset.id, 10);
-        if (isNaN(id)) return;
-        function loadAndRun(fn) {
-          modal.classList.add('hidden');
-          window.api.attendanceGet(id).then(function(row) {
-            if (!row || !row.data) { showToast('Could not load attendance', 'error'); return; }
-            var data = safeJson(row.data);
-            fn(data);
-          }).catch(function(err) {
-            showToast('Failed to load attendance: ' + (err && err.message), 'error');
-          });
-        }
-        if (isPrint) {
-          li.querySelector('.picker-preview-btn')?.addEventListener('click', function(e) { e.stopPropagation(); confirmConfidentialityThen(function() { loadAndRun(previewPdfWithData); }); });
-          li.querySelector('.picker-print-btn')?.addEventListener('click', function(e) { e.stopPropagation(); confirmConfidentialityThen(function() { loadAndRun(function(d) { printAttendanceNoteWithData(d); showToast('Print dialog opened', 'success'); }); }); });
-        } else {
-          li.addEventListener('click', function() {
-            confirmConfidentialityThen(function() { loadAndRun(emailToSolicitorWithData); });
-          });
-        }
-      });
-    }).catch(function(err) {
-      listEl.innerHTML = '<li class="home-recent-empty">Failed to load list.</li>';
-      showToast('Failed to load attendances', 'error');
-    });
-  }
-
   function closeAttendancePickerModal() {
     document.getElementById('attendance-picker-modal')?.classList.add('hidden');
-    _attendancePickerAction = null;
   }
 
   /* ═══════════════════════════════════════════════
@@ -11753,18 +11441,6 @@ PDF_CASENOTE_ADVERT +
         e.preventDefault();
         showSection(currentSectionIdx - 1);
       }
-      if (e.ctrlKey && e.key === 'e') {
-        e.preventDefault();
-        exportPdf();
-      }
-      if (e.ctrlKey && e.key === 'p') {
-        e.preventDefault();
-        printAttendanceNote();
-      }
-      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
-        e.preventDefault();
-        previewPdf();
-      }
     });
   }
 
@@ -11914,9 +11590,18 @@ PDF_CASENOTE_ADVERT +
       '<div class="form-panel-row"><span>OIC</span><strong>' + esc(oic) + '</strong></div>';
 
     var current = activeFormSections && activeFormSections[currentSectionIdx];
+    var formRoot = document.getElementById('attendance-form');
+    var sectionElByIdx = {};
+    if (formRoot) {
+      formRoot.querySelectorAll('.form-section[data-sec-idx]').forEach(function(el) {
+        var k = el.dataset.secIdx;
+        if (k !== undefined && k !== '') sectionElByIdx[k] = el;
+      });
+    }
     var visibleStatuses = [];
     activeFormSections.forEach(function(sec, idx) {
-      var section = document.querySelector('.form-section[data-sec-idx="' + idx + '"]');
+      if (sec.id === 'supervisorReview' && !isSupervisorSectionEnabled()) return;
+      var section = sectionElByIdx[idx];
       if (section && section.style.display === 'none') return;
       visibleStatuses.push({
         idx: idx,
@@ -12293,14 +11978,6 @@ PDF_CASENOTE_ADVERT +
               showView('new');
               break;
             case 'laa-forms': showLaaFormsNav(); break;
-            case 'shortcut-print-pdf':
-              if (document.getElementById('view-form')?.classList.contains('active') && currentAttendanceId) {
-                confirmConfidentialityThen(printAttendanceNote);
-              } else {
-                showAttendancePickerModal('print');
-              }
-              break;
-            case 'shortcut-email-solicitor': showAttendancePickerModal('email'); break;
             case 'firms': showView('firms'); break;
             case 'reports': showView('reports'); break;
             case 'station-mileage': showView('station-mileage'); break;
@@ -12358,14 +12035,6 @@ PDF_CASENOTE_ADVERT +
             case 'reports': showView('reports'); break;
             case 'station-mileage': showView('station-mileage'); break;
             case 'authorities': showView('authorities'); break;
-            case 'shortcut-print-pdf':
-              if (document.getElementById('view-form')?.classList.contains('active') && currentAttendanceId) {
-                confirmConfidentialityThen(printAttendanceNote);
-              } else {
-                showAttendancePickerModal('print');
-              }
-              break;
-            case 'shortcut-email-solicitor': showAttendancePickerModal('email'); break;
             case 'shortcut-backup-now':
               window.api.backupNow().then(function(p) { showToast('Backup saved: ' + p, 'success'); }).catch(function(e) { showToast('Failed: ' + (e && e.message), 'error'); });
               break;
@@ -12760,12 +12429,7 @@ PDF_CASENOTE_ADVERT +
       if (!btn || !btn.id || !btn.id.startsWith('form-')) return;
       switch (btn.id) {
         case 'form-finalise': validateBeforeFinalise(); break;
-        case 'form-pdf': case 'form-pdf-end': confirmConfidentialityThen(exportPdf); break;
-        case 'form-docx': case 'form-docx-end': confirmConfidentialityThen(exportDocx); break;
-        case 'form-declaration': confirmConfidentialityThen(printDeclarationFromForm); break;
-        case 'form-print': case 'form-print-end': confirmConfidentialityThen(printAttendanceNote); break;
         case 'form-email': confirmConfidentialityThen(emailPdf); break;
-        case 'form-email-solicitor': confirmConfidentialityThen(function() { emailToSolicitorWithData(getFormData()); }); break;
         case 'form-report-firm': confirmConfidentialityThen(sendReportToFirm); break;
         case 'form-audit-log': showAuditLog(currentAttendanceId); break;
         case 'form-supervisor-approve':
@@ -12806,7 +12470,8 @@ PDF_CASENOTE_ADVERT +
       }
     });
 
-    /* Auto-save audit: track last-modified per section */
+    /* Auto-save audit: track last-modified per section (input debounced to avoid work every keystroke) */
+    var _sectionModifiedInputTimer = null;
     function recordSectionModified(e) {
       if (!e.target.matches('input, select, textarea')) return;
       const section = e.target.closest('[data-sec-idx]');
@@ -12818,8 +12483,12 @@ PDF_CASENOTE_ADVERT +
         }
       }
     }
+    function recordSectionModifiedDebounced(e) {
+      clearTimeout(_sectionModifiedInputTimer);
+      _sectionModifiedInputTimer = setTimeout(function() { recordSectionModified(e); }, 400);
+    }
     const formEl = document.getElementById('attendance-form');
-    formEl?.addEventListener('input', recordSectionModified);
+    formEl?.addEventListener('input', recordSectionModifiedDebounced);
     formEl?.addEventListener('change', recordSectionModified);
 
     document.getElementById('standalone-back-btn')?.addEventListener('click', function() {
@@ -12837,9 +12506,6 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('billing-panel-btn')?.addEventListener('click', () => { promptBeforeOpeningBilling(); });
     document.getElementById('kb-help-btn')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
-    document.getElementById('form-header-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
-    document.getElementById('form-header-export-docx')?.addEventListener('click', () => { confirmConfidentialityThen(exportDocx); });
-
     document.getElementById('form-header-history-btn')?.addEventListener('click', function() {
       if (!currentAttendanceId) { showToast('Save the record first to view history', 'info'); return; }
       window.api.auditLogGetHistory(currentAttendanceId).then(function(entries) {
@@ -14792,12 +14458,18 @@ PDF_CASENOTE_ADVERT +
       });
     });
 
-    document.addEventListener('input', debounce(function() {
-      if (document.getElementById('view-form')?.classList.contains('active')) updateFormContextPanel();
-    }, 180));
+    document.addEventListener('input', debounce(function(e) {
+      if (!document.getElementById('view-form')?.classList.contains('active')) return;
+      if (!e || !e.target || typeof e.target.closest !== 'function') return;
+      if (!e.target.closest('#attendance-form')) return;
+      updateFormContextPanel();
+    }, 520));
 
-    document.addEventListener('change', function() {
-      if (document.getElementById('view-form')?.classList.contains('active')) updateFormContextPanel();
+    document.addEventListener('change', function(e) {
+      if (!document.getElementById('view-form')?.classList.contains('active')) return;
+      if (!e.target || typeof e.target.closest !== 'function') return;
+      if (!e.target.closest('#attendance-form')) return;
+      updateFormContextPanel();
     });
 
     document.getElementById('validation-close')?.addEventListener('click', () => {

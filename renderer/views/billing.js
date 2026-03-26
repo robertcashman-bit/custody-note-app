@@ -229,29 +229,46 @@ function _renderBillingPanel(data, recordId, opts) {
     auditHtml += '</div></details>';
   }
 
+  var invDisp = '';
+  try {
+    invDisp = String((data && data.billingDisplayInvoiceNumber) || '').trim().replace(/^\.+/, '');
+    invDisp = invDisp.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim().slice(0, 20);
+  } catch (e) { invDisp = ''; }
+  if (!invDisp) invDisp = '\u2014 (assigned on first PDF preview or invoice)';
+
   var html =
-    '<div id="billing-panel-overlay" class="billing-overlay" role="dialog" aria-modal="true" aria-label="Billing &amp; Generated Documents">' +
-      '<div class="billing-panel">' +
+    '<div id="billing-panel-overlay" class="billing-overlay" role="dialog" aria-modal="true" aria-label="Billing &amp; Documents">' +
+      '<div class="billing-panel billing-panel--flow">' +
         '<div class="billing-panel-header">' +
-          '<h2 class="billing-panel-title">&#163; Billing &amp; Generated Documents</h2>' +
+          '<h2 class="billing-panel-title">&#163; Billing &amp; documents</h2>' +
           '<button type="button" class="billing-panel-close" aria-label="Close">&times;</button>' +
         '</div>' +
         '<div class="billing-panel-body">' +
-
           '<div class="billing-section">' +
-            '<h3>Matter Details</h3>' +
+            '<h3>Summary</h3>' +
+            '<p class="settings-hint" style="margin-top:0;">Review the matter, preview the attendance PDF (generated in the main process), then create the QuickFile invoice.</p>' +
             '<div class="billing-detail-grid">' +
               '<div><span class="billing-label">Firm</span><span class="billing-value">' + _escHtml(opts.firmName) + '</span></div>' +
               '<div><span class="billing-label">Client</span><span class="billing-value">' + _escHtml(opts.clientName) + '</span></div>' +
               '<div><span class="billing-label">Police Station</span><span class="billing-value">' + _escHtml(opts.stationName) + '</span></div>' +
               '<div><span class="billing-label">Attendance Date</span><span class="billing-value">' + _escHtml(_billingFmtDate(opts.attendanceDate)) + '</span></div>' +
+              '<div style="grid-column:1/-1;"><span class="billing-label">Billing invoice no. (auto)</span><span id="billing-invoice-ref-display" class="billing-value">' + _escHtml(invDisp) + '</span></div>' +
               '<div style="grid-column:1/-1;"><span class="billing-label">Offence Summary</span><span class="billing-value">' + _escHtml(opts.offenceSummary) + '</span></div>' +
             '</div>' +
           '</div>' +
 
           '<div class="billing-section">' +
-            '<h3>Generated documents</h3>' +
-            docsHtml +
+            '<h3>Attendance PDF</h3>' +
+            '<p id="billing-preview-hint" class="settings-hint">PDF is built in the main process and shown here — not while typing in the form.</p>' +
+            '<div class="billing-pdf-toolbar">' +
+              '<button type="button" id="billing-preview-pdf-primary" class="btn btn-primary">Preview PDF</button>' +
+              '<button type="button" id="billing-download-pdf" class="btn btn-secondary">Download PDF</button>' +
+              '<button type="button" id="billing-preview-word-layout" class="btn btn-secondary">Word layout (HTML)</button>' +
+            '</div>' +
+            '<div class="billing-pdf-preview-wrap">' +
+              '<div id="billing-pdf-loading" class="billing-pdf-loading hidden" aria-live="polite">Generating PDF…</div>' +
+              '<iframe id="billing-preview-iframe" class="billing-preview-iframe" title="PDF preview"></iframe>' +
+            '</div>' +
           '</div>' +
 
           '<div class="billing-section">' +
@@ -260,7 +277,12 @@ function _renderBillingPanel(data, recordId, opts) {
           '</div>' +
 
           '<div class="billing-section">' +
-            '<h3>Billing Preview</h3>' +
+            '<h3>Other documents</h3>' +
+            docsHtml +
+          '</div>' +
+
+          '<div class="billing-section">' +
+            '<h3>Fees &amp; narrative</h3>' +
             '<div class="billing-edit-grid">' +
               '<div class="billing-edit-row">' +
                 '<label for="billing-attendance-fee">Attendance Fee (&pound;)</label>' +
@@ -288,32 +310,22 @@ function _renderBillingPanel(data, recordId, opts) {
               '<div class="billing-total-row"><span>VAT</span><span id="billing-vat">' + _fmtCurrency(vatAmt) + '</span></div>' +
               '<div class="billing-total-row billing-total-final"><span>Total</span><span id="billing-total">' + _fmtCurrency(total) + '</span></div>' +
             '</div>' +
-          '</div>' +
-
-          '<div class="billing-section">' +
-            '<h3>Invoice Narrative</h3>' +
+            '<h3 style="margin-top:1rem;">Invoice Narrative</h3>' +
             '<textarea id="billing-narrative" class="form-input billing-narrative-input" rows="3">' + _escHtml(opts.narrative) + '</textarea>' +
-          '</div>' +
-
-          '<div class="billing-section">' +
-            '<h3>QuickFile Status</h3>' +
+            '<h3 style="margin-top:1rem;">QuickFile Status</h3>' +
             invoiceStatusHtml +
-          '</div>' +
-
-          '<div class="billing-section">' +
-            '<h3>Review Confirmation</h3>' +
+            '<h3 style="margin-top:1rem;">Review Confirmation</h3>' +
             '<div class="billing-checklist">' +
               '<label class="billing-check-item"><input type="checkbox" id="billing-check-attendance"> Attendance note reviewed</label>' +
               '<label class="billing-check-item"><input type="checkbox" id="billing-check-docs"> Generated documents reviewed</label>' +
               '<label class="billing-check-item"><input type="checkbox" id="billing-check-billing"> Billing details confirmed</label>' +
             '</div>' +
+            auditHtml +
           '</div>' +
-
-          auditHtml +
 
         '</div>' +
 
-        '<div class="billing-panel-footer">' +
+        '<div class="billing-panel-footer billing-panel-footer--flow">' +
           '<button type="button" id="billing-create-invoice" class="btn btn-primary btn-billing-create" disabled>' +
             (opts.hasExistingInvoice ? '&#9888; Create Another Invoice' : 'Create QuickFile Invoice') +
           '</button>' +
@@ -332,6 +344,17 @@ function _renderBillingPanel(data, recordId, opts) {
 function _bindBillingEvents(recordId, opts) {
   var overlay = document.getElementById('billing-panel-overlay');
   if (!overlay) return;
+
+  var prevPdf = document.getElementById('billing-preview-pdf-primary');
+  var dlPdf = document.getElementById('billing-download-pdf');
+  var prevWord = document.getElementById('billing-preview-word-layout');
+  if (prevPdf) prevPdf.addEventListener('click', function () { _runBillingPdfPreview(); });
+  if (dlPdf) {
+    dlPdf.addEventListener('click', function () {
+      if (typeof confirmConfidentialityThen === 'function' && typeof exportPdf === 'function') confirmConfidentialityThen(exportPdf);
+    });
+  }
+  if (prevWord) prevWord.addEventListener('click', function () { _loadBillingAttendanceHtmlPreview('word'); });
 
   overlay.querySelector('.billing-panel-close').addEventListener('click', closeBillingPanel);
   document.getElementById('billing-cancel').addEventListener('click', closeBillingPanel);
@@ -388,6 +411,112 @@ function _bindBillingEvents(recordId, opts) {
       _openEmailPackModal(recordId, opts);
     });
   }
+}
+
+/** PDF preview via main process (async IPC); allocates billing invoice number. */
+function _runBillingPdfPreview() {
+  var iframe = document.getElementById('billing-preview-iframe');
+  var hint = document.getElementById('billing-preview-hint');
+  var loading = document.getElementById('billing-pdf-loading');
+  var invEl = document.getElementById('billing-invoice-ref-display');
+  if (!iframe) return;
+  if (!window.api || !window.api.getSettings || !window.api.previewPdfFromHtml) {
+    if (typeof showToast === 'function') showToast('PDF preview is not available in this environment.', 'error');
+    return;
+  }
+  if (typeof ensureBillingDisplayInvoiceNumber === 'function') {
+    ensureBillingDisplayInvoiceNumber({ skipSave: false });
+  }
+  if (invEl && typeof window.sanitizeBillingInvoiceNumber === 'function' && window.formData) {
+    var sn = window.sanitizeBillingInvoiceNumber(window.formData.billingDisplayInvoiceNumber);
+    invEl.textContent = sn || '\u2014 (assigned on first PDF preview or invoice)';
+  }
+  if (loading) loading.classList.remove('hidden');
+  if (hint) hint.textContent = 'Generating PDF in main process…';
+  if (typeof ensureAllSectionsRendered === 'function') ensureAllSectionsRendered();
+
+  window.api.getSettings().then(function (settings) {
+    var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+    var builder = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : (typeof buildPdfHtml === 'function' ? buildPdfHtml : null);
+    if (!builder) {
+      if (loading) loading.classList.add('hidden');
+      if (hint) hint.textContent = '';
+      if (typeof showToast === 'function') showToast('Preview builder not available', 'error');
+      return;
+    }
+    var html = builder(data, settings || {});
+    var fn = ([data.surname, data.forename].filter(Boolean).join('_') || 'attendance') + '-preview.pdf';
+    return window.api.previewPdfFromHtml({ html: html, filename: fn });
+  }).then(function (res) {
+    if (loading) loading.classList.add('hidden');
+    if (!res || !res.ok) {
+      if (hint) hint.textContent = '';
+      if (typeof showToast === 'function') showToast('PDF preview failed: ' + ((res && res.error) || 'unknown'), 'error');
+      return;
+    }
+    try {
+      var bin = atob(res.base64);
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (iframe._billingPdfBlobUrl) {
+        try { URL.revokeObjectURL(iframe._billingPdfBlobUrl); } catch (e) { /* ignore */ }
+      }
+      var blob = new Blob([bytes], { type: 'application/pdf' });
+      iframe._billingPdfBlobUrl = URL.createObjectURL(blob);
+      iframe.src = iframe._billingPdfBlobUrl;
+      if (hint) hint.textContent = 'PDF preview (same content as download). Main process generation — UI stays responsive.';
+    } catch (e) {
+      if (hint) hint.textContent = '';
+      if (typeof showToast === 'function') showToast('Could not display PDF', 'error');
+    }
+  }).catch(function () {
+    if (loading) loading.classList.add('hidden');
+    if (hint) hint.textContent = '';
+    if (typeof showToast === 'function') showToast('Could not build PDF preview', 'error');
+  });
+}
+
+/** Load attendance HTML into the billing iframe (Word structure reference). */
+function _loadBillingAttendanceHtmlPreview(mode) {
+  var iframe = document.getElementById('billing-preview-iframe');
+  var hint = document.getElementById('billing-preview-hint');
+  if (!iframe) return;
+  if (!window.api || !window.api.getSettings) {
+    if (typeof showToast === 'function') showToast('Preview is not available in this environment.', 'error');
+    return;
+  }
+  if (hint) hint.textContent = 'Building HTML preview…';
+  if (typeof ensureAllSectionsRendered === 'function') ensureAllSectionsRendered();
+  window.api.getSettings().then(function (settings) {
+    var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+    var builder = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : (typeof buildPdfHtml === 'function' ? buildPdfHtml : null);
+    if (!builder) {
+      if (hint) hint.textContent = '';
+      if (typeof showToast === 'function') showToast('Preview builder not available', 'error');
+      return;
+    }
+    var html = builder(data, settings || {});
+    if (iframe._billingPdfBlobUrl) {
+      try { URL.revokeObjectURL(iframe._billingPdfBlobUrl); } catch (e) { /* ignore */ }
+      iframe._billingPdfBlobUrl = null;
+    }
+    if (iframe._billingBlobUrl) {
+      URL.revokeObjectURL(iframe._billingBlobUrl);
+      iframe._billingBlobUrl = null;
+    }
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    iframe._billingBlobUrl = url;
+    iframe.src = url;
+    if (hint) {
+      hint.textContent = mode === 'word'
+        ? 'HTML mirrors printable structure; .docx export uses the same data in the Word template.'
+        : 'HTML preview of the attendance note.';
+    }
+  }).catch(function () {
+    if (hint) hint.textContent = '';
+    if (typeof showToast === 'function') showToast('Could not build preview', 'error');
+  });
 }
 
 function _recalcBillingTotals() {
@@ -448,6 +577,11 @@ async function _handleCreateInvoice(recordId, opts) {
     if (firm) firmEmail = firm.contact_email || '';
   }
 
+  var billingInv = '';
+  if (typeof ensureBillingDisplayInvoiceNumber === 'function') {
+    billingInv = ensureBillingDisplayInvoiceNumber({ skipSave: false });
+  }
+
   window.api.quickfileCreateInvoice({
     attendanceId: recordId,
     firmName: opts.firmName,
@@ -460,6 +594,7 @@ async function _handleCreateInvoice(recordId, opts) {
     narrative: narrative,
     invoiceDate: opts.attendanceDate || new Date().toISOString().slice(0, 10),
     userName: userName,
+    billingInvoiceNumber: billingInv,
   }).then(function (result) {
     if (result.ok) {
       if (typeof formData === 'object' && formData) {
@@ -650,6 +785,18 @@ function _openEmailPackModal(recordId, opts) {
 
 function closeBillingPanel() {
   _billingPanelOpen = false;
+  var iframe = document.getElementById('billing-preview-iframe');
+  if (iframe && iframe._billingPdfBlobUrl) {
+    try { URL.revokeObjectURL(iframe._billingPdfBlobUrl); } catch (e) { /* ignore */ }
+    iframe._billingPdfBlobUrl = null;
+  }
+  if (iframe && iframe._billingBlobUrl) {
+    try {
+      URL.revokeObjectURL(iframe._billingBlobUrl);
+    } catch (e) { /* ignore */ }
+    iframe._billingBlobUrl = null;
+    iframe.removeAttribute('src');
+  }
   var overlay = document.getElementById('billing-panel-overlay');
   if (overlay) {
     if (overlay._billingEscHandler) document.removeEventListener('keydown', overlay._billingEscHandler);

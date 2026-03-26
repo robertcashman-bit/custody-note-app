@@ -53,6 +53,7 @@ describe('Database schema — billing columns', () => {
 
 describe('IPC handlers — main.js', () => {
   const expectedHandlers = [
+    'preview-pdf-from-html',
     'quickfile-create-invoice',
     'station-mileage-get',
     'stations-mileage-list',
@@ -77,9 +78,10 @@ describe('QuickFile invoice creation handler', () => {
   });
 
   it('creates invoice with line items for fee, mileage, and parking', () => {
-    assert.ok(mainJs.includes('Police Station Attendance Fixed Fee'));
-    assert.ok(mainJs.includes("ItemName: 'Mileage'"));
-    assert.ok(mainJs.includes("ItemName: 'Parking / Disbursements'"));
+    assert.ok(mainJs.includes('PS attendance fee'));
+    assert.ok(mainJs.includes("'Mileage'"));
+    assert.ok(mainJs.includes("'Parking/disburse'"));
+    assert.ok(mainJs.includes('function buildQuickFileItemLine'));
   });
 
   it('stores invoice result on attendance record', () => {
@@ -115,6 +117,7 @@ describe('Billable attendances query', () => {
 
 describe('Preload API surface', () => {
   const expectedMethods = [
+    'previewPdfFromHtml',
     'quickfileCreateInvoice',
     'stationMileageGet',
     'stationsMileageList',
@@ -246,8 +249,10 @@ describe('billing.js — core functions', () => {
     assert.ok(billingJs.includes('Police Station Attendance Fixed Fee'));
   });
 
-  it('has document preview functionality', () => {
+  it('has document preview and main-process PDF preview', () => {
     assert.ok(billingJs.includes('function _previewDocument'));
+    assert.ok(billingJs.includes('previewPdfFromHtml'));
+    assert.ok(billingJs.includes('function _runBillingPdfPreview'));
   });
 
   it('has review confirmation checklist (3 checkboxes)', () => {
@@ -274,14 +279,17 @@ describe('billing.js — core functions', () => {
 
   it('creates QuickFile invoice with correct parameters', () => {
     assert.ok(billingJs.includes('quickfileCreateInvoice'));
+    assert.ok(billingJs.includes('billingInvoiceNumber'));
   });
 
-  it('shows matter details (firm, client, station, date, offence)', () => {
-    assert.ok(billingJs.includes('Matter Details'));
+  it('shows billing summary (firm, client, station, date, offence, auto invoice ref)', () => {
+    assert.ok(billingJs.includes('Billing &amp; documents') || billingJs.includes('Billing & documents'));
     assert.ok(billingJs.includes('firmName'));
     assert.ok(billingJs.includes('clientName'));
     assert.ok(billingJs.includes('stationName'));
     assert.ok(billingJs.includes('attendanceDate'));
+    assert.ok(billingJs.includes('billing-invoice-ref-display'));
+    assert.ok(billingJs.includes('Billing invoice no. (auto)'));
   });
 
   it('has QuickFile status display', () => {
@@ -415,6 +423,12 @@ describe('styles.css — billing styles', () => {
 
   it('has billing audit log styles', () => {
     assert.ok(stylesCss.includes('.billing-audit-entry'));
+  });
+
+  it('has billing flow panel and PDF toolbar styles', () => {
+    assert.ok(stylesCss.includes('.billing-panel--flow'));
+    assert.ok(stylesCss.includes('.billing-pdf-toolbar'));
+    assert.ok(stylesCss.includes('.billing-pdf-loading'));
   });
 });
 

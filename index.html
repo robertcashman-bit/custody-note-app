@@ -105,8 +105,6 @@
           <div id="gear-dropdown" class="gear-dropdown hidden">
             <button type="button" class="gear-item gear-item-licence" data-action="enter-licence-key">Enter licence key</button>
             <div class="gear-divider gear-divider-licence"></div>
-            <button type="button" class="gear-item" data-action="shortcut-print-pdf">&#128424; Print PDF</button>
-            <button type="button" class="gear-item" data-action="shortcut-email-solicitor">&#9993; Email to solicitor</button>
             <button type="button" class="gear-item" data-action="shortcut-backup-now">&#128190; Backup now</button>
             <button type="button" class="gear-item" data-action="new-attendance">&#10133; New attendance</button>
             <button type="button" class="gear-item" data-action="settings">&#9881; Settings</button>
@@ -311,8 +309,6 @@
                 <button type="button" class="home-tool-btn" data-action="reports" title="Attendance and fee reports">Reports</button>
                 <button type="button" class="home-tool-btn" data-action="authorities" title="Authority forms for criminal defence">Authorities</button>
                 <button type="button" class="home-tool-btn" data-action="station-mileage" title="Station mileage records">Station Mileage</button>
-                <button type="button" class="home-tool-btn" data-action="shortcut-print-pdf" title="Print attendance note PDF">Print PDF</button>
-                <button type="button" class="home-tool-btn" data-action="shortcut-email-solicitor" title="Email attendance note to instructing solicitor">Email to solicitor</button>
                 <button type="button" class="home-tool-btn" data-action="shortcut-backup-now" title="Create a backup now">Backup now</button>
                 <button type="button" class="home-tool-btn" data-action="settings" title="App settings and backup">Settings</button>
                 <button type="button" class="home-tool-btn" data-action="help" title="How to use Custody Note">Help</button>
@@ -579,8 +575,6 @@
           <div class="header-right-group">
             <span id="autosave-indicator" class="autosave-indicator"></span>
             <button type="button" id="form-header-history-btn" class="btn btn-small" title="View change history for this record">&#128203; History</button>
-            <button type="button" id="form-header-export-pdf" class="btn btn-small btn-accent" title="Export PDF to Desktop">&#128196; PDF</button>
-            <button type="button" id="form-header-export-docx" class="btn btn-small btn-accent" title="Export Word document to Desktop">&#128196; Word</button>
             <button type="button" id="form-backup-now-btn" class="btn btn-small btn-backup-now" title="Save &amp; backup now">&#128190; Backup</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
@@ -607,9 +601,6 @@
               <tr><td><kbd>Ctrl</kbd>+<kbd>→</kbd></td><td>Next section</td></tr>
               <tr><td><kbd>Ctrl</kbd>+<kbd>←</kbd></td><td>Previous section</td></tr>
               <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save &amp; exit</td></tr>
-              <tr><td><kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Export PDF</td></tr>
-              <tr><td><kbd>Ctrl</kbd>+<kbd>P</kbd></td><td>Print attendance note</td></tr>
-              <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd></td><td>PDF preview</td></tr>
               <tr><td><kbd>Esc</kbd></td><td>Clear search / close popup</td></tr>
             </table>
             <button type="button" id="kb-help-close" class="btn btn-secondary" style="margin-top:0.75rem;width:100%;">Close</button>
@@ -1635,7 +1626,7 @@
                 <li><strong>Outcome &amp; Billing</strong> &mdash; Outcome code (CN04–CN11), sufficient benefit, time recording.</li>
                 <li><strong>Client Aftercare</strong> &mdash; What was explained, next steps, follow-up tasks.</li>
               </ol>
-              <p>The <strong>Billing readiness</strong> panel (near Finalise) shows warnings for missing UFN, outcome code, DSCC reference, or sufficient benefit note. A <strong>confidentiality reminder</strong> appears before exporting or emailing.</p>
+              <p>The <strong>Billing readiness</strong> panel (near Finalise) shows checks for outcome, time recording, DSCC (where applicable), and an <strong>optional</strong> sufficient-benefit reminder that does not block invoicing. A <strong>confidentiality reminder</strong> may appear before export.</p>
             </div>
           </details>
 
@@ -1668,9 +1659,6 @@
                 <tr><td><kbd>Ctrl</kbd> + <kbd>&rarr;</kbd></td><td>Next section</td></tr>
                 <tr><td><kbd>Ctrl</kbd> + <kbd>&larr;</kbd></td><td>Previous section</td></tr>
                 <tr><td><kbd>Ctrl</kbd> + <kbd>S</kbd></td><td>Save and exit</td></tr>
-                <tr><td><kbd>Ctrl</kbd> + <kbd>E</kbd></td><td>Export PDF</td></tr>
-                <tr><td><kbd>Ctrl</kbd> + <kbd>P</kbd></td><td>Print attendance note</td></tr>
-                <tr><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd></td><td>Print preview</td></tr>
                 <tr><td><kbd>Esc</kbd></td><td>Close popup / go back</td></tr>
               </table>
             </div>
@@ -1783,7 +1771,7 @@
                 <li><strong>Finalised</strong> &mdash; locked for editing. To make changes, use the <strong>Amend</strong> button in All Records, which reverts the record to draft.</li>
               </ul>
               <p>To finalise a record, press <strong>Save / Exit</strong> and choose <strong>Finalise</strong>. The app checks for missing required fields and warns you before finalising.</p>
-              <p>To export a PDF, press <kbd>Ctrl</kbd> + <kbd>E</kbd> or use the <strong>Export PDF</strong> button. The PDF (including the LAA declaration) is saved to your Desktop as a single file. To print, use the <strong>Print Attendance Note</strong> button or press <kbd>Ctrl</kbd> + <kbd>P</kbd> for an in-app print preview with a Print dialog. Before export, print, or email, a <strong>confidentiality reminder</strong> appears &mdash; only share with authorised recipients and ensure client confidentiality (SRA standards).</p>
+              <p>To export an attendance PDF, use <strong>&#163; Billing</strong> (preview or download), or <strong>Export PDF</strong> from All Records. PDFs are generated in the main process. A <strong>confidentiality reminder</strong> may appear before export &mdash; only share with authorised recipients (SRA standards).</p>
               <p>Official LAA forms (CRM1, CRM2, CRM3, Applicant Declaration) are available in Settings and from the <strong>LAA Forms</strong> button in the form header. Forms are pre-filled from the current record where possible.</p>
               <h4>LAA billing codes</h4>
               <p>The form uses standard LAA codes for billing and claims. Key fields: <strong>DSCC number</strong> (from the duty solicitor call centre), <strong>UFN</strong> (Unique File Number from the instructing firm), <strong>MAAT ID</strong> (client identifier on the Legal Aid Agency system), and <strong>LAA account</strong> (for case tracking). These appear in Admin &amp; Billing and in the form header. Use them to match your exported PDFs and time records to LAA claims and firm file systems.</p>

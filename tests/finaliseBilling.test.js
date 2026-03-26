@@ -291,4 +291,16 @@ describe('Billing readiness warnings', () => {
     const w = getBillingWarnings({ _formType: 'telephone' });
     assert.strictEqual(w.length, 0);
   });
+
+  it('missing sufficient benefit does not add a blocking billing readiness warning', { skip: !getBillingWarnings }, () => {
+    const w = getBillingWarnings({
+      matterTypeCode: 'CRM14',
+      outcomeDecision: 'Ongoing / Unknown',
+      totalMinutes: '60',
+      sufficientBenefitTest: '',
+      sufficientBenefitNotes: '',
+    });
+    const sbt = w.find(msg => /sufficient benefit/i.test(msg));
+    assert.strictEqual(sbt, undefined, 'SBT should be informational only, not in blocking list');
+  });
 });
