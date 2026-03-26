@@ -1,0 +1,11 @@
+# Keep Vercel CLI uploads small (explicit; complements .gitignore)
+node_modules
+dist
+.git
+coverage
+playwright-report
+test-results
+.vscode
+*.log
+.env
+.env.*

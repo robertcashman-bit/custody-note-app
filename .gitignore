@@ -5,3 +5,5 @@ dist/
 # Code signing certificates — never commit
 *.pfx
 *.p12
+
+.vercel
