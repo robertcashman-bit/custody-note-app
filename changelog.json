@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.4.143",
+      "date": "2026-03-26",
+      "latest": true,
+      "changes": [
+        "Remove billing panel print preview, PDF/Word controls, and iframe preview area"
+      ]
+    },
+    {
       "version": "1.4.142",
       "date": "2026-03-25",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Hardened Outlook Web email policy tests with full codebase compliance scan and edge-case coverage"
       ]
