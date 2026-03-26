@@ -1,6 +1,8 @@
 {
   "version": 2,
-  "buildCommand": "",
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "echo Static deploy - no Electron build",
   "outputDirectory": ".",
   "routes": [
     { "src": "/sw.js", "headers": { "Cache-Control": "no-cache", "Service-Worker-Allowed": "/" } },
