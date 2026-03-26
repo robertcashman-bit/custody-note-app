@@ -6244,6 +6244,27 @@ function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) 
   };
 }
 
+/* Product note: invoice/create shipped first; Document_Upload was added so the attendance PDF
+   matches billing preview. Earlier “billing overhaul” removed list exports before this unified flow. */
+/** Attach a PDF to a sales invoice via QuickFile Document_Upload (same auth as other calls). */
+async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, notes) {
+  const invId = parseInt(String(invoiceId), 10);
+  if (!Number.isFinite(invId)) throw new Error('Invalid InvoiceId for attachment');
+  const safeName = String(fileName || 'attendance-note.pdf').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
+  const fn = safeName.length >= 5 ? safeName.slice(0, 150) : 'note.pdf';
+  const b64 = Buffer.from(pdfBuffer).toString('base64');
+  await quickFileRequest('/1_2/document/upload', {
+    DocumentDetails: {
+      FileName: fn,
+      EmbeddedFileBinaryObject: b64,
+      SalesAttachment: {
+        InvoiceId: invId,
+        Notes: String(notes || 'Attendance note PDF').slice(0, 600),
+      },
+    },
+  });
+}
+
 ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   const {
     attendanceId,
@@ -6258,6 +6279,8 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     invoiceDate,
     userName,
     billingInvoiceNumber,
+    attachAttendanceHtml,
+    attachPdfFileName,
   } = params;
 
   try {
@@ -6335,6 +6358,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       ? 'https://app.quickfile.co.uk/invoice/view/' + invoiceId
       : '';
 
+    let attachmentOk = false;
+    let attachmentError = '';
+
     if (attendanceId) {
       db.run(
         `UPDATE attendances SET
@@ -6372,6 +6398,33 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       saveDb();
     }
 
+    /* Same HTML as billing PDF preview → PDF buffer → QuickFile Document_Upload (invoice stays valid if attach fails). */
+    if (invoiceId && attachAttendanceHtml && String(attachAttendanceHtml).trim()) {
+      try {
+        const pdfBuf = await renderHtmlToPdfBuffer(String(attachAttendanceHtml));
+        const fn = (attachPdfFileName && String(attachPdfFileName).trim()) || 'attendance-note.pdf';
+        await quickFileUploadSalesAttachment(invoiceId, fn, pdfBuf, 'Attendance note (Custody Note)');
+        attachmentOk = true;
+        if (attendanceId) {
+          db.run(
+            `INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)`,
+            [attendanceId, 'invoice_attachment_uploaded', JSON.stringify({ invoiceId: String(invoiceId), fileName: fn }), userName || '']
+          );
+          saveDb();
+        }
+      } catch (attErr) {
+        attachmentError = attErr && attErr.message ? attErr.message : String(attErr);
+        console.error('[QuickFile] Invoice attachment failed:', attachmentError);
+        if (attendanceId) {
+          db.run(
+            `INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)`,
+            [attendanceId, 'invoice_attachment_failed', attachmentError, userName || '']
+          );
+          saveDb();
+        }
+      }
+    }
+
     return {
       ok: true,
       invoiceId: String(invoiceId),
@@ -6380,6 +6433,8 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       subtotal,
       vat,
       total,
+      attachmentOk,
+      attachmentError: attachmentError || undefined,
     };
   } catch (err) {
     if (attendanceId) {

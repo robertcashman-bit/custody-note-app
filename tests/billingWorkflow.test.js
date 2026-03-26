@@ -273,13 +273,10 @@ describe('billing.js — core functions', () => {
     assert.ok(billingJs.includes('function _recalcBillingTotals'));
   });
 
-  it('has email pack preparation', () => {
-    assert.ok(billingJs.includes('function _openEmailPackModal'));
-  });
-
-  it('creates QuickFile invoice with correct parameters', () => {
+  it('creates QuickFile invoice with correct parameters (incl. attendance HTML for PDF attach)', () => {
     assert.ok(billingJs.includes('quickfileCreateInvoice'));
     assert.ok(billingJs.includes('billingInvoiceNumber'));
+    assert.ok(billingJs.includes('attachAttendanceHtml'));
   });
 
   it('shows billing summary (firm, client, station, date, offence, auto invoice ref)', () => {
@@ -467,26 +464,16 @@ describe('Billing narrative generation', () => {
   });
 });
 
-describe('Email pack preparation', () => {
-  it('populates To field with firm contact email', () => {
-    assert.ok(billingJs.includes('billing-email-to'));
-    assert.ok(billingJs.includes('firmEmail'));
+describe('Billing print preview (no firm email pack)', () => {
+  it('uses consolidated Print Preview control', () => {
+    assert.ok(billingJs.includes('billing-print-preview-open'));
+    assert.ok(billingJs.includes('billing-print-choice-pdf'));
+    assert.ok(billingJs.includes('billing-print-choice-word'));
   });
 
-  it('populates Subject with invoice details', () => {
-    assert.ok(billingJs.includes('Police Station Attendance Invoice'));
-  });
-
-  it('opens email via openOutlookWebCompose (Outlook Web)', () => {
-    assert.ok(billingJs.includes('openOutlookWebCompose'));
-  });
-
-  it('has copy email functionality', () => {
-    assert.ok(billingJs.includes('billing-email-copy'));
-    assert.ok(billingJs.includes('clipboard'));
-  });
-
-  it('logs email preparation in audit log', () => {
-    assert.ok(billingJs.includes("'email_prepared'"));
+  it('does not include Prepare Email to Firm flow', () => {
+    assert.ok(!billingJs.includes('_openEmailPackModal'));
+    assert.ok(!billingJs.includes('billing-email-pack'));
+    assert.ok(!billingJs.includes('email_prepared'));
   });
 });

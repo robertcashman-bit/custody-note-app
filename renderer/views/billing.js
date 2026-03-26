@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════
    BILLING & GENERATED DOCUMENTS PANEL
-   Full billing workflow: review docs → confirm → create invoice → email pack
+   Full billing workflow: review docs → confirm → create invoice (+ attach PDF in QuickFile)
    Depends on: showToast, esc, safeJson, getFormData, currentAttendanceId,
                formData, stations (app.js globals), window.api
    ═══════════════════════════════════════════════════════ */
@@ -258,12 +258,15 @@ function _renderBillingPanel(data, recordId, opts) {
           '</div>' +
 
           '<div class="billing-section">' +
-            '<h3>Attendance PDF</h3>' +
-            '<p id="billing-preview-hint" class="settings-hint">PDF is built in the main process and shown here — not while typing in the form.</p>' +
+            '<h3>Print preview</h3>' +
+            '<p id="billing-preview-hint" class="settings-hint">Open a print preview: PDF matches the main-process export; Word layout shows the HTML structure used for .docx.</p>' +
             '<div class="billing-pdf-toolbar">' +
-              '<button type="button" id="billing-preview-pdf-primary" class="btn btn-primary">Preview PDF</button>' +
+              '<button type="button" id="billing-print-preview-open" class="btn btn-primary">Print Preview</button>' +
+            '</div>' +
+            '<div id="billing-print-preview-choices" class="billing-print-preview-choices hidden" role="group" aria-label="Preview format">' +
+              '<button type="button" id="billing-print-choice-pdf" class="btn btn-secondary">PDF</button>' +
+              '<button type="button" id="billing-print-choice-word" class="btn btn-secondary">Word layout (HTML)</button>' +
               '<button type="button" id="billing-download-pdf" class="btn btn-secondary">Download PDF</button>' +
-              '<button type="button" id="billing-preview-word-layout" class="btn btn-secondary">Word layout (HTML)</button>' +
             '</div>' +
             '<div class="billing-pdf-preview-wrap">' +
               '<div id="billing-pdf-loading" class="billing-pdf-loading hidden" aria-live="polite">Generating PDF…</div>' +
@@ -329,9 +332,6 @@ function _renderBillingPanel(data, recordId, opts) {
           '<button type="button" id="billing-create-invoice" class="btn btn-primary btn-billing-create" disabled>' +
             (opts.hasExistingInvoice ? '&#9888; Create Another Invoice' : 'Create QuickFile Invoice') +
           '</button>' +
-          (opts.hasExistingInvoice
-            ? '<button type="button" id="billing-email-pack" class="btn btn-secondary">Prepare Email to Firm</button>'
-            : '') +
           '<button type="button" id="billing-cancel" class="btn btn-secondary">Close</button>' +
         '</div>' +
       '</div>' +
@@ -345,16 +345,23 @@ function _bindBillingEvents(recordId, opts) {
   var overlay = document.getElementById('billing-panel-overlay');
   if (!overlay) return;
 
-  var prevPdf = document.getElementById('billing-preview-pdf-primary');
+  var printOpen = document.getElementById('billing-print-preview-open');
+  var printChoices = document.getElementById('billing-print-preview-choices');
+  var choicePdf = document.getElementById('billing-print-choice-pdf');
+  var choiceWord = document.getElementById('billing-print-choice-word');
   var dlPdf = document.getElementById('billing-download-pdf');
-  var prevWord = document.getElementById('billing-preview-word-layout');
-  if (prevPdf) prevPdf.addEventListener('click', function () { _runBillingPdfPreview(); });
+  if (printOpen && printChoices) {
+    printOpen.addEventListener('click', function () {
+      printChoices.classList.toggle('hidden');
+    });
+  }
+  if (choicePdf) choicePdf.addEventListener('click', function () { _runBillingPdfPreview(); });
+  if (choiceWord) choiceWord.addEventListener('click', function () { _loadBillingAttendanceHtmlPreview('word'); });
   if (dlPdf) {
     dlPdf.addEventListener('click', function () {
       if (typeof confirmConfidentialityThen === 'function' && typeof exportPdf === 'function') confirmConfidentialityThen(exportPdf);
     });
   }
-  if (prevWord) prevWord.addEventListener('click', function () { _loadBillingAttendanceHtmlPreview('word'); });
 
   overlay.querySelector('.billing-panel-close').addEventListener('click', closeBillingPanel);
   document.getElementById('billing-cancel').addEventListener('click', closeBillingPanel);
@@ -405,12 +412,6 @@ function _bindBillingEvents(recordId, opts) {
     });
   });
 
-  var emailPackBtn = document.getElementById('billing-email-pack');
-  if (emailPackBtn) {
-    emailPackBtn.addEventListener('click', function () {
-      _openEmailPackModal(recordId, opts);
-    });
-  }
 }
 
 /** PDF preview via main process (async IPC); allocates billing invoice number. */
@@ -582,37 +583,41 @@ async function _handleCreateInvoice(recordId, opts) {
     billingInv = ensureBillingDisplayInvoiceNumber({ skipSave: false });
   }
 
-  window.api.quickfileCreateInvoice({
-    attendanceId: recordId,
-    firmName: opts.firmName,
-    contactEmail: firmEmail,
-    attendanceFee: fee,
-    mileageMiles: miles,
-    mileageRate: rate,
-    parkingAmount: parking,
-    vatRate: vatRate,
-    narrative: narrative,
-    invoiceDate: opts.attendanceDate || new Date().toISOString().slice(0, 10),
-    userName: userName,
-    billingInvoiceNumber: billingInv,
+  var dataForAttach = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+  var attachName = ([dataForAttach.surname, dataForAttach.forename].filter(Boolean).join('_') || 'attendance') + '-note.pdf';
+
+  window.api.getSettings().then(function (settings) {
+    var builder = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : (typeof buildPdfHtml === 'function' ? buildPdfHtml : null);
+    var attachHtml = builder ? builder(dataForAttach, settings || {}) : '';
+    return window.api.quickfileCreateInvoice({
+      attendanceId: recordId,
+      firmName: opts.firmName,
+      contactEmail: firmEmail,
+      attendanceFee: fee,
+      mileageMiles: miles,
+      mileageRate: rate,
+      parkingAmount: parking,
+      vatRate: vatRate,
+      narrative: narrative,
+      invoiceDate: opts.attendanceDate || new Date().toISOString().slice(0, 10),
+      userName: userName,
+      billingInvoiceNumber: billingInv,
+      attachAttendanceHtml: attachHtml || undefined,
+      attachPdfFileName: attachName,
+    });
   }).then(function (result) {
     if (result.ok) {
       if (typeof formData === 'object' && formData) {
         formData.quickfileInvoiceNumber = result.invoiceNumber || '';
         formData.quickfileInvoiceUrl = result.invoiceUrl || '';
       }
-      showToast('Invoice created: ' + (result.invoiceNumber || result.invoiceId), 'success');
+      var msg = 'Invoice created: ' + (result.invoiceNumber || result.invoiceId);
+      if (result.attachmentOk) msg += ' — attendance PDF attached in QuickFile';
+      else if (result.attachmentError) msg += ' — PDF not attached: ' + result.attachmentError;
+      showToast(msg, result.attachmentError ? 'warning' : 'success');
       if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
       if (typeof updateContextBar === 'function') updateContextBar();
       closeBillingPanel();
-      if (window.api && window.api.billingAuditLogAdd) {
-        window.api.billingAuditLogAdd({
-          attendanceId: recordId,
-          action: 'invoice_created',
-          details: JSON.stringify({ invoiceId: result.invoiceId, invoiceNumber: result.invoiceNumber, total: result.total }),
-          userName: userName,
-        });
-      }
       if (result.invoiceUrl && window.api && window.api.openExternal) {
         setTimeout(function () {
           window.api.openExternal(result.invoiceUrl);
@@ -696,89 +701,6 @@ function _previewDocument(docType) {
       window.openHtmlPreviewWindow(html);
     } else if (html && typeof printGeneratedDoc === 'function') {
       printGeneratedDoc(html);
-    }
-  });
-}
-
-function _openEmailPackModal(recordId, opts) {
-  var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
-
-  var firmEmail = '';
-  if (data.firmId && window.firms) {
-    var firm = window.firms.find(function (f) { return String(f.id) === String(data.firmId); });
-    if (firm) firmEmail = firm.contact_email || '';
-  }
-
-  var stale = document.getElementById('billing-email-modal');
-  if (stale) stale.remove();
-
-  var subject = 'Police Station Attendance Invoice \u2013 ' +
-    [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' +
-    (opts.stationName || '') + ' \u2013 ' + _billingFmtDate(opts.attendanceDate);
-
-  var body = 'Dear Sir/Madam,\n\nPlease find attached our invoice for the above police station attendance.\n\n' +
-    'Invoice Number: ' + (opts.invoiceStatus.quickfile_invoice_number || '') + '\n' +
-    'Amount: ' + _fmtCurrency(opts.invoiceStatus.invoice_total || 0) + '\n\n' +
-    'Please do not hesitate to contact us if you have any queries.\n\nKind regards';
-
-  var html =
-    '<div id="billing-email-modal" class="billing-overlay" role="dialog" aria-modal="true" aria-label="Email to Firm">' +
-      '<div class="billing-panel" style="max-width:600px;">' +
-        '<div class="billing-panel-header">' +
-          '<h2 class="billing-panel-title">&#9993; Prepare Email to Firm</h2>' +
-          '<button type="button" class="billing-panel-close billing-email-close" aria-label="Close">&times;</button>' +
-        '</div>' +
-        '<div class="billing-panel-body">' +
-          '<div class="billing-section">' +
-            '<label class="billing-label" for="billing-email-to">To</label>' +
-            '<input type="email" id="billing-email-to" class="form-input" value="' + _escAttr(firmEmail) + '" placeholder="Firm contact email">' +
-            '<label class="billing-label" for="billing-email-subject" style="margin-top:0.5rem;">Subject</label>' +
-            '<input type="text" id="billing-email-subject" class="form-input" value="' + _escAttr(subject) + '">' +
-            '<label class="billing-label" for="billing-email-body" style="margin-top:0.5rem;">Message</label>' +
-            '<textarea id="billing-email-body" class="form-input" rows="10">' + _escHtml(body) + '</textarea>' +
-          '</div>' +
-        '</div>' +
-        '<div class="billing-panel-footer">' +
-          '<button type="button" id="billing-email-open" class="btn btn-primary">Open in Outlook Web</button>' +
-          '<button type="button" id="billing-email-copy" class="btn btn-secondary">Copy Email</button>' +
-          '<button type="button" class="btn btn-secondary billing-email-close">Cancel</button>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
-
-  document.body.insertAdjacentHTML('beforeend', html);
-
-  document.querySelectorAll('.billing-email-close').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var m = document.getElementById('billing-email-modal');
-      if (m) m.remove();
-    });
-  });
-
-  document.getElementById('billing-email-open').addEventListener('click', function () {
-    var to = document.getElementById('billing-email-to').value.trim();
-    var subj = document.getElementById('billing-email-subject').value.trim();
-    var b = document.getElementById('billing-email-body').value;
-    if (typeof openOutlookWebCompose === 'function') {
-      openOutlookWebCompose(to, subj, b);
-    }
-
-    if (window.api && window.api.billingAuditLogAdd && recordId) {
-      window.api.billingAuditLogAdd({
-        attendanceId: recordId,
-        action: 'email_prepared',
-        details: 'Sent to: ' + to,
-        userName: (window._appSettingsCache || {}).feeEarnerNameDefault || '',
-      });
-    }
-  });
-
-  document.getElementById('billing-email-copy').addEventListener('click', function () {
-    var b = document.getElementById('billing-email-body').value;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(b).then(function () {
-        showToast('Email copied to clipboard', 'success');
-      });
     }
   });
 }

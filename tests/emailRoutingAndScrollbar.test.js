@@ -96,12 +96,9 @@ describe('Outlook Web email routing', () => {
     assert.ok(!tpl.includes('buildEmailClientUrl'), 'buildEmailClientUrl removed');
   });
 
-  it('billing email opens via openOutlookWebCompose only', () => {
-    const handlerIdx = billingJs.indexOf("'billing-email-open'");
-    assert.ok(handlerIdx > -1);
-    const handlerSlice = billingJs.slice(handlerIdx, handlerIdx + 500);
-    assert.ok(handlerSlice.includes('openOutlookWebCompose'), 'delegates to openOutlookWebCompose');
-    assert.ok(!handlerSlice.includes('mailto:'), 'no mailto in billing handler');
+  it('billing panel does not embed firm email compose flow', () => {
+    assert.ok(!billingJs.includes('billing-email-open'));
+    assert.ok(!billingJs.includes('Prepare Email to Firm'));
   });
 
   it('settings.js no longer saves preferredEmailClient', () => {

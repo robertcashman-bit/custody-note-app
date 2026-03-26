@@ -5150,8 +5150,6 @@ var REQUIRED_FIELD_KEYS = [
         e.stopPropagation();
         switch (actionBtn.dataset.action) {
           case 'amend': amendAttendance(id, rec.status, title); break;
-          case 'print': printFromList(id); break;
-          case 'export-docx': confirmConfidentialityThen(function() { window.exportDocxById(id); }); break;
           case 'dup': duplicateAttendance(id); break;
           case 'newMatter': newMatterFromAttendance(id); break;
           case 'delete': deleteAttendance(id, title); break;
@@ -5251,8 +5249,6 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
-              '<button type="button" class="btn-list-action" data-action="print" title="Export attendance note PDF to Desktop">Export PDF</button>' +
-              '<button type="button" class="btn-list-action" data-action="export-docx" title="Export as Word document to Desktop">Export Word</button>' +
               '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
               '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
               '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>' +
@@ -5288,26 +5284,6 @@ var REQUIRED_FIELD_KEYS = [
     } else {
       openAttendance(id);
     }
-  }
-
-  /* ─── EXPORT PDF FROM LIST ─── */
-  function printFromList(id) {
-    window.api.attendanceGet(id).then(function(row) {
-      if (!row || !row.data) { showToast('Could not load record', 'error'); return; }
-      var data = safeJson(row.data);
-      ensureBillingDisplayInvoiceNumber({ data: data, skipSave: true });
-      window.api.getSettings().then(function(settings) {
-        const builder = getPdfBuilderForData(data);
-        const html = builder(data, settings);
-        const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
-        const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
-        const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-        window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
-          if (window.api.openPath) window.api.openPath(p);
-          showToast('PDF saved: ' + p, 'success');
-        }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
-      }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
-    }).catch(function(e) { showToast('Export failed: ' + (e && e.message), 'error'); });
   }
 
   /* ─── DELETE ATTENDANCE (#13) ─── */
@@ -5644,7 +5620,7 @@ var REQUIRED_FIELD_KEYS = [
     updateBillingReadinessPanel();
   }
 
-  /** Blocking checks only — used for “Ready to invoice” status (SBT is separate; see getBillingReadinessInformationalNotes). */
+  /** Blocking checks only — used for “Ready to invoice” status. */
   function getBillingReadinessWarnings() {
     var d = formData;
     var w = [];
@@ -5666,25 +5642,6 @@ var REQUIRED_FIELD_KEYS = [
     return w;
   }
 
-  /** LAA sufficient-benefit reminder: shown in billing readiness but does not block invoicing. */
-  function getBillingReadinessInformationalNotes() {
-    var d = formData;
-    var n = [];
-    if (d._formType === 'telephone') return n;
-    if (d.attendanceMode === 'voluntary') {
-      var sbtVol = (d.sufficientBenefitTest || '').trim();
-      var hasSbtSelection = !!(sbtVol && sbtVol.split('|').filter(Boolean).length);
-      if (!hasSbtSelection && !(d.sufficientBenefitNotes || '').trim()) {
-        n.push('Sufficient benefit: add SBT selection or notes (does not block invoicing)');
-      }
-    } else {
-      if (!(d.sufficientBenefitTest || '').trim() && !(d.sufficientBenefitNotes || '').trim()) {
-        n.push('Sufficient benefit: add SBT selection or notes (does not block invoicing)');
-      }
-    }
-    return n;
-  }
-
   function updateBillingReadinessPanel() {
     var list = document.getElementById('billing-readiness-list');
     var panel = document.getElementById('billing-readiness-panel');
@@ -5694,7 +5651,6 @@ var REQUIRED_FIELD_KEYS = [
     var openBtn = document.getElementById('billing-readiness-open');
     if (!list || !panel || !statusEl || !summaryEl || !warningsWrap || !openBtn) return;
     var w = getBillingReadinessWarnings();
-    var infoNotes = getBillingReadinessInformationalNotes();
     var hasInvoice = !!(formData.quickfileInvoiceNumber || formData.quickfileInvoiceUrl);
     var invoiceSent = formData.invoiceSent === 'Yes';
     var quickFileReady = hasQuickFileSettingsConfigured();
@@ -5731,9 +5687,8 @@ var REQUIRED_FIELD_KEYS = [
     summaryEl.textContent = summary;
     openBtn.textContent = hasInvoice ? 'Review Billing & Invoice' : 'Open Billing & Invoice';
     var listHtml = w.map(function(msg) { return '<li>' + esc(msg) + '</li>'; }).join('');
-    listHtml += infoNotes.map(function(msg) { return '<li class="billing-readiness-note">' + esc(msg) + '</li>'; }).join('');
     list.innerHTML = listHtml;
-    warningsWrap.style.display = (w.length || infoNotes.length) ? '' : 'none';
+    warningsWrap.style.display = w.length ? '' : 'none';
     panel.style.display = '';
   }
 
@@ -6200,7 +6155,7 @@ var REQUIRED_FIELD_KEYS = [
         if (sec.extraActions) {
           const actions = document.createElement('div');
           actions.className = 'form-actions';
-          actions.innerHTML = '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button><button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button><button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button><button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
+          actions.innerHTML = '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button><button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
           section.appendChild(actions);
         }
         if (sec.id === 'supervisorReview') {
@@ -6564,8 +6519,6 @@ var REQUIRED_FIELD_KEYS = [
         actions.className = 'form-actions';
         actions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button>' +
-          '<button type="button" class="btn btn-accent" id="form-email">Email PDF to me</button>' +
-          '<button type="button" class="btn btn-secondary" id="form-report-firm">Send Report to Firm</button>' +
           '<button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
         section.appendChild(actions);
       }
@@ -6635,7 +6588,7 @@ var REQUIRED_FIELD_KEYS = [
           '</div>' +
           '<ol class="billing-readiness-steps">' +
             '<li>When the police-station work is finished, <strong>finalise</strong> the attendance (toolbar).</li>' +
-            '<li>Open Billing: follow Review → Declaration → Preview → Export; on the last step tick LAA forms, confirm fees, then create the QuickFile invoice.</li>' +
+            '<li>Open Billing: review LAA forms on file, use Print preview to check PDF or Word layout, confirm fees, then create the QuickFile invoice (attendance PDF is attached to the invoice when possible).</li>' +
             '<li>After sending the invoice, set <strong>Invoice sent?</strong> to Yes; when the file is closed, <strong>Archive</strong> the record from the toolbar.</li>' +
           '</ol>' +
           '<div id="billing-readiness-warnings-wrap" class="billing-readiness-warnings">' +
@@ -10184,55 +10137,6 @@ PDF_CASENOTE_ADVERT +
 '</body></html>';
   }
 
-  /* ─── EXPORT / EMAIL ─── */
-  function sendReportToFirm() {
-    collectCurrentData();
-    const d = formData;
-    const clientName = [d.forename, d.surname].filter(Boolean).join(' ') || 'Unknown Client';
-    const firmEmail = d.firmContactEmail || '';
-    const firmName = d.firmName || 'Firm';
-    if (!firmEmail) {
-      showToast('No email address found for the instructing firm — add it on the Firms page', 'error');
-      return;
-    }
-    const lines = [
-      'ATTENDANCE REPORT',
-      '=================',
-      '',
-      'Client: ' + clientName,
-      'Station: ' + (d.policeStationName || 'N/A'),
-      'Date: ' + (d.date ? formatDateGB(d.date) : 'N/A'),
-      'DSCC: ' + (d.dsccRef || 'N/A'),
-      'Offence: ' + (d.offenceSummary || d.offence1Details || 'N/A'),
-      'Custody No: ' + (d.custodyNumber || 'N/A'),
-      'File / matter ref: ' + (d.ourFileNumber || d.fileReference || 'N/A'),
-      'Billing invoice no.: ' + (pdfBillingInvoiceLine(d) === '\u2014' ? 'N/A' : pdfBillingInvoiceLine(d)),
-      'UFN: ' + (d.ufn || 'N/A'),
-      '',
-      'TIMES',
-      '-----',
-      'Instruction received: ' + (formatInstructionDateTime(d.instructionDateTime) || 'N/A'),
-      'Set off: ' + (d.timeSetOff || 'N/A'),
-      'Arrived: ' + (d.timeArrival || 'N/A'),
-      'Departed: ' + (d.timeDeparture || 'N/A'),
-      '',
-      'OUTCOME',
-      '-------',
-      'Decision: ' + (d.outcomeDecision || 'N/A'),
-      'Further attendance: ' + (d.furtherAttendance || 'N/A'),
-      '',
-      'KEY NOTES',
-      '---------',
-      d.adviceGivenNotes || d.attendingOthersNotes || 'None recorded.',
-      '',
-      '---',
-      'Sent from Custody Note | © Defence Legal Services Ltd',
-    ];
-    const subject = 'Attendance Report: ' + clientName + ' (' + (d.date ? formatDateGB(d.date) : '') + ')';
-    const body = lines.join('\n');
-    openOutlookWebCompose(firmEmail, subject, body);
-  }
-
   /* ─── TELEPHONE ADVICE PDF (INVB) ─── */
   function buildTelephonePdfHtml(d, settings) {
     var h = function(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
@@ -10698,23 +10602,7 @@ PDF_CASENOTE_ADVERT +
     }).catch(function(e) { showToast('Export failed: could not load settings', 'error'); console.error('[exportDocx]', e); });
   }
 
-  window.exportDocxById = function(recordId) {
-    window.api.attendanceGet(recordId).then(function(row) {
-      if (!row) { showToast('Record not found', 'error'); return; }
-      var data = {};
-      try { data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {}); } catch (_) {}
-      window.api.getSettings().then(function(settings) {
-        var label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
-        var n = [data.surname, data.forename].filter(Boolean).join('_') || label;
-        var fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.docx';
-        window.api.exportDocx({ data: data, settings: settings, filename: fn }).then(function(p) {
-          showToast('Word document saved: ' + (p || '').replace(/\\/g, '/').split('/').pop(), 'success');
-        }).catch(function(e) { showToast('Word export failed: ' + (e && e.message), 'error'); });
-      });
-    }).catch(function() { showToast('Could not load record', 'error'); });
-  };
-
-  /* Export PDF directly from a record ID — used by the list view PDF button.
+  /* Export PDF directly from a record ID (e.g. programmatic use).
      Opens the OS print/preview dialog so the user can print or save as PDF. */
   window.exportPdfById = function(recordId) {
     window.api.attendanceGet(recordId).then(function(row) {
@@ -10741,26 +10629,6 @@ PDF_CASENOTE_ADVERT +
   }
 
   var previewPdf = printAttendanceNote;
-
-  function emailPdf() {
-    ensureAllSectionsRendered();
-    const data = getFormData();
-    window.api.getSettings().then(settings => {
-      const email = (settings.email || '').trim();
-      if (!email) { showToast('Set your email in Settings first', 'error'); return; }
-      const builder = getActivePdfBuilder();
-      const html = builder(data, settings);
-      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
-      const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
-      const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-      window.api.printToPdf({ html: html, filename: fn }).then(p => {
-        var subjRaw = (data._formType === 'telephone' ? 'Tel Advice' : (data.attendanceMode === 'voluntary' ? 'Voluntary attendance' : 'Attendance')) + ' \u2013 ' + [data.forename, data.surname].filter(Boolean).join(' ') + ' \u2013 ' + (data.ufn || '');
-        var bodyRaw = 'PDF attached: ' + fn;
-        openOutlookWebCompose(email, subjRaw, bodyRaw);
-        showToast('PDF saved to Desktop \u2014 attach: ' + fn, 'success');
-      }).catch(e => showToast('Failed: ' + (e && e.message), 'error'));
-    });
-  }
 
   /**
    * After Template Manager "Use template": insert rendered text into a form field or clipboard.
@@ -12429,8 +12297,6 @@ PDF_CASENOTE_ADVERT +
       if (!btn || !btn.id || !btn.id.startsWith('form-')) return;
       switch (btn.id) {
         case 'form-finalise': validateBeforeFinalise(); break;
-        case 'form-email': confirmConfidentialityThen(emailPdf); break;
-        case 'form-report-firm': confirmConfidentialityThen(sendReportToFirm); break;
         case 'form-audit-log': showAuditLog(currentAttendanceId); break;
         case 'form-supervisor-approve':
           if (!currentAttendanceId) { showToast('Save the record first before recording supervisor approval', 'error'); return; }

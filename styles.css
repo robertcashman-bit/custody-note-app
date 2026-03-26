@@ -4373,6 +4373,12 @@ html.dark .addon-buy-link { color: #7dd3fc; }
 .billing-pdf-toolbar {
   display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.75rem; align-items: center;
 }
+.billing-print-preview-choices {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.35rem 0 0.75rem; align-items: center;
+}
+.billing-print-preview-choices.hidden {
+  display: none;
+}
 .billing-pdf-preview-wrap {
   position: relative;
   border: 1px solid var(--border, #cbd5e1); border-radius: 8px;

@@ -80,18 +80,17 @@ describe('Auto invoice number wiring', () => {
   });
 });
 
-describe('Voluntary SBT warnings are informational only', () => {
-  it('SBT reminder lives in getBillingReadinessInformationalNotes and does not block status', () => {
-    const infoIdx = appJs.indexOf('function getBillingReadinessInformationalNotes');
-    assert.ok(infoIdx !== -1, 'getBillingReadinessInformationalNotes must exist');
-    const infoBlock = appJs.substring(infoIdx, infoIdx + 1200);
-    assert.ok(infoBlock.includes('sufficientBenefitNotes'));
-    assert.ok(infoBlock.includes('does not block invoicing'));
+describe('SBT is not surfaced in billing readiness panel', () => {
+  it('does not define getBillingReadinessInformationalNotes', () => {
+    assert.ok(!appJs.includes('function getBillingReadinessInformationalNotes'));
+  });
+  it('blocking warnings omit sufficient benefit / SBT', () => {
     const warnIdx = appJs.indexOf('function getBillingReadinessWarnings');
-    const warnEnd = appJs.indexOf('function getBillingReadinessInformationalNotes', warnIdx);
-    const warnOnly = appJs.substring(warnIdx, warnEnd);
-    assert.ok(!warnOnly.includes('sufficientBenefitNotes'), 'blocking warnings must not include SBT');
+    assert.ok(warnIdx !== -1);
+    const warnBlock = appJs.substring(warnIdx, warnIdx + 900);
+    assert.ok(!warnBlock.includes('sufficientBenefit'));
     assert.ok(!appJs.includes('Sufficient benefit note missing'));
+    assert.ok(!appJs.includes('Sufficient benefit: add SBT'));
   });
 });
 
