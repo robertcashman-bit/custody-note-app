@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.144",
+      "version": "1.4.145",
       "date": "2026-03-26",
       "latest": true,
+      "changes": [
+        "Fix QuickFile SearchParameters error (missing OrderResultsBy/OrderDirection)",
+        "Invoice success confirmation modal"
+      ]
+    },
+    {
+      "version": "1.4.144",
+      "date": "2026-03-26",
+      "latest": false,
       "changes": [
         "Release script auto-commits version bump and pushes to trigger Vercel",
         "removed dead website sync"
