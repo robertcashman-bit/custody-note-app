@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Release script: bumps/syncs version, syncs website, builds app, publishes to GitHub, deploys website.
+ * Release script: bumps version, builds app, publishes to GitHub, pushes to trigger Vercel.
  *
  * Usage:
  *   npm run release [patch|minor|major|current] [-- --changes "item1; item2; item3"]
@@ -14,9 +14,8 @@
  * This script:
  * 1. Bumps version in package.json (or uses current version in "current" mode)
  * 2. Appends to changelog.json (or validates changelog in "current" mode)
- * 3. Syncs version + changelog to website (custody note - website production)
- * 4. Builds the Electron app and publishes to GitHub (creates release, uploads installer)
- * 5. Deploys the website to Vercel (so download page serves new version)
+ * 3. Builds the Electron app and publishes to GitHub (creates release, uploads installer)
+ * 4. Commits + pushes version bump — Vercel deploys automatically via git integration
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -25,7 +24,6 @@ import { createInterface } from 'readline';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
-const WEBSITE_ROOT = join(APP_ROOT, '..', 'custody note - website production');
 
 /** Load GH_TOKEN from .env or .env.local if not already set */
 function loadEnvToken() {
@@ -156,19 +154,6 @@ async function main() {
   // Always verify consistency before build/publish
   verifyReleaseConsistency(pkg, changelog);
 
-  // Sync to website
-  const websiteDataPath = join(WEBSITE_ROOT, 'src', 'data', 'releases.json');
-  const websiteDataDir = dirname(websiteDataPath);
-  if (!existsSync(websiteDataDir)) {
-    const { mkdirSync } = await import('fs');
-    mkdirSync(websiteDataDir, { recursive: true });
-  }
-  writeJson(websiteDataPath, {
-    version: newVersion,
-    releases,
-  });
-  console.log('Website data synced');
-
   // Build and publish app to GitHub
   loadEnvToken();
   const { spawn } = await import('child_process');
@@ -264,29 +249,13 @@ async function main() {
   }
   console.log('Build complete.');
 
-  // Deploy website (Vercel) — only if a deploy script exists and VERCEL_TOKEN is set
-  const websitePkgPath = join(WEBSITE_ROOT, 'package.json');
-  if (existsSync(websitePkgPath)) {
-    const websitePkg = readJson(websitePkgPath);
-    const hasDeployScript = websitePkg.scripts && websitePkg.scripts.deploy;
-    const hasVercelToken = (process.env.VERCEL_TOKEN || '').trim();
-    if (hasDeployScript && hasVercelToken) {
-      console.log('Deploying website...');
-      await new Promise((resolve, reject) => {
-        const proc = spawn('npm', ['run', 'deploy'], {
-          cwd: WEBSITE_ROOT,
-          stdio: 'inherit',
-          shell: true,
-        });
-        proc.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Website deploy exited ${code}`))));
-      });
-      console.log('Website deployed.');
-    } else {
-      console.log('Website deploy skipped (no deploy script or VERCEL_TOKEN not set). Push to website repo to trigger Vercel.');
-    }
-  } else {
-    console.log('Website not found, skipping deploy.');
-  }
+  // Commit and push version bump so Vercel deploys via git integration
+  const { execSync } = await import('child_process');
+  console.log('Committing version bump...');
+  execSync('git add package.json changelog.json', { cwd: APP_ROOT, stdio: 'inherit' });
+  execSync(`git commit -m "chore(release): v${newVersion}"`, { cwd: APP_ROOT, stdio: 'inherit' });
+  execSync('git push origin master', { cwd: APP_ROOT, stdio: 'inherit' });
+  console.log('Pushed to origin/master \u2014 Vercel deploy will trigger automatically.');
 }
 
 main().catch((err) => {
