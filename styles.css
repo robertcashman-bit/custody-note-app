@@ -4364,33 +4364,9 @@ html.dark .addon-buy-link { color: #7dd3fc; }
   border: 1px solid var(--border, #cbd5e1); border-radius: 8px;
   overflow: hidden; background: #fff; min-height: 280px;
 }
-.billing-preview-iframe {
-  width: 100%; height: min(50vh, 420px); border: 0; display: block;
-}
 .billing-panel--flow {
   max-width: 920px;
 }
-.billing-pdf-toolbar {
-  display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0 0.75rem; align-items: center;
-}
-.billing-print-preview-choices {
-  display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.35rem 0 0.75rem; align-items: center;
-}
-.billing-print-preview-choices.hidden {
-  display: none;
-}
-.billing-pdf-preview-wrap {
-  position: relative;
-  border: 1px solid var(--border, #cbd5e1); border-radius: 8px;
-  overflow: hidden; background: #f8fafc; min-height: 200px;
-}
-.billing-pdf-loading {
-  position: absolute; inset: 0; z-index: 2;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(248, 250, 252, 0.92);
-  font-size: 0.9rem; font-weight: 600; color: var(--text-muted, #64748b);
-}
-.billing-pdf-loading.hidden { display: none; }
 .billing-panel-footer--flow {
   justify-content: flex-end;
 }

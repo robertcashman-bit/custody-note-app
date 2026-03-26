@@ -249,10 +249,9 @@ describe('billing.js — core functions', () => {
     assert.ok(billingJs.includes('Police Station Attendance Fixed Fee'));
   });
 
-  it('has document preview and main-process PDF preview', () => {
+  it('has document preview and attendance HTML for invoice attach', () => {
     assert.ok(billingJs.includes('function _previewDocument'));
-    assert.ok(billingJs.includes('previewPdfFromHtml'));
-    assert.ok(billingJs.includes('function _runBillingPdfPreview'));
+    assert.ok(billingJs.includes('attachAttendanceHtml'));
   });
 
   it('has review confirmation checklist (3 checkboxes)', () => {
@@ -422,10 +421,8 @@ describe('styles.css — billing styles', () => {
     assert.ok(stylesCss.includes('.billing-audit-entry'));
   });
 
-  it('has billing flow panel and PDF toolbar styles', () => {
+  it('has billing flow panel styles', () => {
     assert.ok(stylesCss.includes('.billing-panel--flow'));
-    assert.ok(stylesCss.includes('.billing-pdf-toolbar'));
-    assert.ok(stylesCss.includes('.billing-pdf-loading'));
   });
 });
 
@@ -464,11 +461,10 @@ describe('Billing narrative generation', () => {
   });
 });
 
-describe('Billing print preview (no firm email pack)', () => {
-  it('uses consolidated Print Preview control', () => {
-    assert.ok(billingJs.includes('billing-print-preview-open'));
-    assert.ok(billingJs.includes('billing-print-choice-pdf'));
-    assert.ok(billingJs.includes('billing-print-choice-word'));
+describe('Billing panel (no firm email pack)', () => {
+  it('does not embed inline billing PDF iframe / print preview toolbar', () => {
+    assert.ok(!billingJs.includes('billing-print-preview-open'));
+    assert.ok(!billingJs.includes('billing-preview-iframe'));
   });
 
   it('does not include Prepare Email to Firm flow', () => {
