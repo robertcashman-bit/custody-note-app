@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.143",
+      "version": "1.4.144",
       "date": "2026-03-26",
       "latest": true,
+      "changes": [
+        "Release script auto-commits version bump and pushes to trigger Vercel",
+        "removed dead website sync"
+      ]
+    },
+    {
+      "version": "1.4.143",
+      "date": "2026-03-26",
+      "latest": false,
       "changes": [
         "Remove billing panel print preview, PDF/Word controls, and iframe preview area"
       ]
