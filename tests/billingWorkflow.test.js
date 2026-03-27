@@ -245,8 +245,8 @@ describe('billing.js — core functions', () => {
     assert.ok(billingJs.includes('function closeBillingPanel'));
   });
 
-  it('builds invoice narrative with correct format', () => {
-    assert.ok(billingJs.includes('Police Station Attendance Fixed Fee'));
+  it('builds invoice narrative with client - station format', () => {
+    assert.ok(billingJs.includes("filter(Boolean).join(' - ')"));
   });
 
   it('has document preview and attendance HTML for invoice attach', () => {
@@ -447,8 +447,9 @@ describe('Security — API keys server-side only', () => {
 });
 
 describe('Billing narrative generation', () => {
-  it('uses correct format: Fee – Client – Station – Date – Offence', () => {
-    assert.ok(billingJs.includes("'Police Station Attendance Fixed Fee'"));
+  it('uses correct format: Client - Station – Date – Offence', () => {
+    assert.ok(billingJs.includes("_buildInvoiceNarrative"));
+    assert.ok(billingJs.includes("filter(Boolean).join(' - ')"));
   });
 
   it('narrative is editable via textarea', () => {
@@ -529,6 +530,17 @@ describe('QuickFile input validation', () => {
 
   it('guards oversized PDF in attachment upload', () => {
     assert.ok(mainJs.includes('Attachment too large'));
+  });
+
+  it('wraps SalesAttachment inside Type element for Document_Upload', () => {
+    const fnMatch = mainJs.match(/function quickFileUploadSalesAttachment[\s\S]*?^\}/m);
+    assert.ok(fnMatch, 'quickFileUploadSalesAttachment function should exist');
+    const fnBody = fnMatch[0];
+    assert.ok(fnBody.includes('Type: {'), 'DocumentDetails must contain a Type wrapper');
+    assert.ok(fnBody.includes('SalesAttachment: {'), 'Type must contain SalesAttachment');
+    const typeIdx = fnBody.indexOf('Type: {');
+    const salesIdx = fnBody.indexOf('SalesAttachment: {');
+    assert.ok(salesIdx > typeIdx, 'SalesAttachment must be nested inside Type');
   });
 
   it('checks HTTP status in QuickFile response handler', () => {

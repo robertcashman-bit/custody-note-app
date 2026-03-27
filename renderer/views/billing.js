@@ -117,7 +117,8 @@ function _buildInvoiceNarrative(client, station, date, offence) {
     var parts = date.split('-');
     if (parts.length === 3) dateFmt = parts[2] + '.' + parts[1] + '.' + parts[0].slice(2);
   }
-  return ['Police Station Attendance Fixed Fee', client, station, dateFmt, offence]
+  var label = [client, station].filter(Boolean).join(' - ');
+  return [label, dateFmt, offence]
     .map(function (s) { return (s || '').trim(); })
     .filter(Boolean)
     .join(' \u2013 ');
@@ -458,6 +459,8 @@ async function _handleCreateInvoice(recordId, opts) {
       attendanceId: recordId,
       firmName: opts.firmName,
       contactEmail: firmEmail,
+      clientName: opts.clientName || '',
+      stationName: opts.stationName || '',
       attendanceFee: fee,
       mileageMiles: miles,
       mileageRate: rate,

@@ -6234,6 +6234,16 @@ function sanitizeQuickFileInvoiceNumber(raw) {
   return s;
 }
 
+function getNextSequentialInvoiceNumber() {
+  const row = dbAll("SELECT value FROM settings WHERE key = 'nextInvoiceNumber'");
+  let next = row.length ? parseInt(row[0].value, 10) : NaN;
+  if (!Number.isFinite(next) || next < 1) next = 6066;
+  const formatted = String(next).padStart(6, '0');
+  db.run("INSERT OR REPLACE INTO settings (key, value) VALUES ('nextInvoiceNumber', ?)", [String(next + 1)]);
+  saveDb();
+  return formatted;
+}
+
 function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) {
   const vr = Number.isFinite(Number(vatRate)) ? Number(vatRate) : 0.2;
   const net = Number.isFinite(Number(unitCost)) ? Number(unitCost) : 0;
@@ -6272,9 +6282,11 @@ async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, no
     DocumentDetails: {
       FileName: fn,
       EmbeddedFileBinaryObject: b64,
-      SalesAttachment: {
-        InvoiceId: invId,
-        Notes: String(notes || 'Attendance note PDF').slice(0, 600),
+      Type: {
+        SalesAttachment: {
+          InvoiceId: invId,
+          Notes: String(notes || 'Attendance note PDF').slice(0, 600),
+        },
       },
     },
   });
@@ -6325,6 +6337,8 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     attendanceId,
     firmName,
     contactEmail,
+    clientName,
+    stationName,
     attendanceFee,
     mileageMiles,
     mileageRate,
@@ -6350,11 +6364,15 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     if (!Number.isFinite(clientIdNum)) throw new Error('Invalid QuickFile ClientID: ' + String(clientId));
 
     const vr = Number.isFinite(Number(vatRate)) ? Number(vatRate) : 0.2;
+    const cn = (clientName || '').trim();
+    const sn = (stationName || '').trim();
+    const itemLabel = [cn, sn].filter(Boolean).join(' - ') || 'PS attendance fee';
+
     const lineItems = [];
     if (attendanceFee > 0) {
       lineItems.push(buildQuickFileItemLine(
-        'PS attendance fee',
-        narrative || 'Police station attendance',
+        itemLabel,
+        narrative || itemLabel,
         attendanceFee,
         1,
         vr
@@ -6385,10 +6403,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     if (!lineItems.length) throw new Error('No billable items to invoice');
 
     const invDate = invoiceDate || new Date().toISOString().slice(0, 10);
-    const invNumSan = sanitizeQuickFileInvoiceNumber(billingInvoiceNumber);
+    const invNum = getNextSequentialInvoiceNumber();
 
-    const singleInvoiceData = { IssueDate: invDate };
-    if (invNumSan) singleInvoiceData.InvoiceNumber = invNumSan;
+    const singleInvoiceData = { IssueDate: invDate, InvoiceNumber: invNum };
 
     const invoicePayload = {
       InvoiceData: {
