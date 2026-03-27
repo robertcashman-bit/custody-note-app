@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.4.149",
+      "date": "2026-03-27",
+      "latest": true,
+      "changes": [
+        "Fix Document_Upload attachment (Type wrapper)",
+        "Sequential invoice numbers (006066, 006067, ...)",
+        "Invoice name shows client - station instead of generic text"
+      ]
+    },
+    {
       "version": "1.4.148",
       "date": "2026-03-26",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Bug fixes and improvements"
       ]
