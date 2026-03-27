@@ -20,7 +20,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
-const WEBSITE_ROOT = join(APP_ROOT, '..', 'custody note - website production');
+const WEBSITE_ROOT = join(APP_ROOT, '..', 'custody-note-website');
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf8'));
@@ -119,7 +119,7 @@ for (let i = 0; i < semverVersions.length - 1; i++) {
 
 // --- Website releases.json cross-check ---
 
-const websiteReleasesPath = join(WEBSITE_ROOT, 'src', 'data', 'releases.json');
+const websiteReleasesPath = join(WEBSITE_ROOT, 'data', 'releases.json');
 if (existsSync(websiteReleasesPath)) {
   try {
     const websiteData = readJson(websiteReleasesPath);
