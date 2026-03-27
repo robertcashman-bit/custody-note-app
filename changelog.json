@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.150",
+      "version": "1.4.151",
       "date": "2026-03-27",
       "latest": true,
+      "changes": [
+        "End-of-matter workflow: Documents, Billing, Complete stepper",
+        "Filename and billing utility helpers",
+        "Fix verify-release-consistency website path"
+      ]
+    },
+    {
+      "version": "1.4.150",
+      "date": "2026-03-27",
+      "latest": false,
       "changes": [
         "Add Document_Upload preflight validator",
         "Comprehensive attachment test coverage (40+ tests)",
