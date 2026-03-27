@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.149",
+      "version": "1.4.150",
       "date": "2026-03-27",
       "latest": true,
+      "changes": [
+        "Add Document_Upload preflight validator",
+        "Comprehensive attachment test coverage (40+ tests)",
+        "Improved error surfacing in success modal"
+      ]
+    },
+    {
+      "version": "1.4.149",
+      "date": "2026-03-27",
+      "latest": false,
       "changes": [
         "Fix Document_Upload attachment (Type wrapper)",
         "Sequential invoice numbers (006066, 006067, ...)",
