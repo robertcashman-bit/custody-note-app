@@ -5701,23 +5701,11 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function promptBeforeOpeningBilling() {
-    if (typeof showConfirm !== 'function') {
-      if (typeof openBillingPanel === 'function') openBillingPanel();
-      return;
+    if (typeof openWorkflow === 'function') {
+      openWorkflow(0);
+    } else if (typeof openBillingPanel === 'function') {
+      openBillingPanel();
     }
-    showConfirm(
-      'Add official LAA PDFs or other documents to Attachments before you open Billing?\n\n' +
-      'OK — stay here and scroll to Attachments.\n' +
-      'Cancel — open Billing now (you can still use Preview there and attach files later).',
-      'Attachments Before Billing'
-    ).then(function(addAttachmentsFirst) {
-      if (addAttachmentsFirst) {
-        scrollToAttachmentsForBilling();
-        showToast('Attach your signed LAA forms here, then open Billing to tick them off the checklist.', 'info', 5000);
-        return;
-      }
-      if (typeof openBillingPanel === 'function') openBillingPanel();
-    });
   }
 
   /* ─── AUTO-FILL DECLARATION & RETAINER FROM CLIENT (#4) ─── */
