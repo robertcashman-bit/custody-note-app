@@ -579,7 +579,13 @@ function _showInvoiceSuccessModal(result, opts) {
     '<div class="billing-success-detail"><span class="billing-label">Firm</span><span class="billing-value">' + _escHtml(opts.firmName || '') + '</span></div>' +
     '<div class="billing-success-detail"><span class="billing-label">Total</span><span class="billing-value">' + totalDisplay + '</span></div>' +
     '<div class="billing-success-detail"><span class="billing-label">Attachment</span><span class="billing-value">' +
-      (result.attachmentOk ? 'PDF uploaded' : (result.attachmentError ? _escHtml(result.attachmentError) : 'No attachment sent')) +
+      (result.attachmentOk ? '&#10003; PDF uploaded' :
+        (result.attachmentError ?
+          '<span class="billing-attach-error">&#10007; Failed</span>' +
+          '<span class="billing-attach-error-detail" title="' + _escHtml(result.attachmentError) + '">' +
+            _escHtml(String(result.attachmentError).length > 120 ? String(result.attachmentError).slice(0, 120) + '...' : result.attachmentError) +
+          '</span>' :
+          'No attachment sent')) +
     '</span></div>';
 
   var html =

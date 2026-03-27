@@ -4482,6 +4482,15 @@ html.dark .addon-buy-link { color: #7dd3fc; }
   border-bottom: 1px solid var(--border, #e2e8f0);
 }
 .billing-success-detail:last-child { border-bottom: none; }
+.billing-attach-error {
+  color: #dc2626; font-weight: 600; display: block;
+}
+.billing-attach-error-detail {
+  display: block; font-size: 0.78rem; color: #92400e;
+  margin-top: 0.2rem; word-break: break-word; line-height: 1.35;
+}
+html.dark .billing-attach-error { color: #f87171; }
+html.dark .billing-attach-error-detail { color: #fbbf24; }
 .billing-success-actions {
   display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;
   margin-top: 0.5rem;

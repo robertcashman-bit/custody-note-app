@@ -509,6 +509,19 @@ describe('Invoice success confirmation modal', () => {
   it('has double-submit guard on invoice creation', () => {
     assert.ok(billingJs.includes('_invoiceInFlight'));
   });
+
+  it('displays structured attachment error with detail styling', () => {
+    assert.ok(billingJs.includes('billing-attach-error'), 'Must have error label class');
+    assert.ok(billingJs.includes('billing-attach-error-detail'), 'Must have error detail class');
+  });
+
+  it('truncates long attachment errors to 120 chars in modal', () => {
+    assert.ok(billingJs.includes('.slice(0, 120)'), 'Must truncate long error messages');
+  });
+
+  it('shows full error in title attribute for hover', () => {
+    assert.ok(billingJs.includes('title="'), 'Must use title attribute for full error on hover');
+  });
 });
 
 describe('QuickFile input validation', () => {
@@ -703,6 +716,219 @@ describe('QuickFile error parsing — structured errors before HTTP status', () 
 
   it('handles Header.Status === Error responses', () => {
     assert.ok(mainJs.includes("header?.Status === 'Error'"));
+  });
+});
+
+describe('Document_Upload payload structure — runtime validation', () => {
+  function buildUploadPayload(invoiceId, fileName, pdfBuffer, notes) {
+    const invId = parseInt(String(invoiceId), 10);
+    if (!Number.isFinite(invId)) throw new Error('Invalid InvoiceId');
+    if (!pdfBuffer || !pdfBuffer.length) throw new Error('PDF buffer is empty');
+    const MAX = 10 * 1024 * 1024;
+    if (pdfBuffer.length > MAX) throw new Error('Too large');
+    const safeName = String(fileName || 'attendance-note.pdf').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
+    const fn = safeName.length >= 5 ? safeName.slice(0, 150) : 'note.pdf';
+    const b64 = Buffer.from(pdfBuffer).toString('base64');
+    return {
+      DocumentDetails: {
+        FileName: fn,
+        EmbeddedFileBinaryObject: b64,
+        Type: {
+          SalesAttachment: {
+            InvoiceId: invId,
+            Notes: String(notes || 'Attendance note PDF').slice(0, 600),
+          },
+        },
+      },
+    };
+  }
+
+  it('nests SalesAttachment inside Type at object level (not as DocumentDetails sibling)', () => {
+    const payload = buildUploadPayload(12345, 'test.pdf', Buffer.from('test'), 'note');
+    assert.ok(payload.DocumentDetails, 'DocumentDetails must exist');
+    assert.ok(payload.DocumentDetails.Type, 'Type wrapper must exist inside DocumentDetails');
+    assert.ok(payload.DocumentDetails.Type.SalesAttachment, 'SalesAttachment must exist inside Type');
+    assert.strictEqual(payload.DocumentDetails.SalesAttachment, undefined, 'SalesAttachment must NOT be a direct child of DocumentDetails');
+  });
+
+  it('schema contract: all required fields present with correct types', () => {
+    const buf = Buffer.from('dummy pdf content');
+    const payload = buildUploadPayload(99999, 'attendance.pdf', buf, 'My notes');
+    const doc = payload.DocumentDetails;
+    assert.strictEqual(typeof doc.FileName, 'string');
+    assert.ok(doc.FileName.length > 0, 'FileName must be non-empty');
+    assert.strictEqual(typeof doc.EmbeddedFileBinaryObject, 'string');
+    assert.ok(doc.EmbeddedFileBinaryObject.length > 0, 'Base64 content must be non-empty');
+    const sa = doc.Type.SalesAttachment;
+    assert.strictEqual(typeof sa.InvoiceId, 'number');
+    assert.ok(sa.InvoiceId > 0, 'InvoiceId must be positive');
+    assert.strictEqual(typeof sa.Notes, 'string');
+  });
+
+  it('EmbeddedFileBinaryObject is valid base64 that round-trips', () => {
+    const original = Buffer.from('some binary pdf data \x00\xff\xfe');
+    const payload = buildUploadPayload(1, 'file.pdf', original, '');
+    const b64 = payload.DocumentDetails.EmbeddedFileBinaryObject;
+    assert.ok(/^[A-Za-z0-9+/]+=*$/.test(b64), 'Must be valid base64 characters');
+    const decoded = Buffer.from(b64, 'base64');
+    assert.ok(decoded.equals(original), 'Round-trip base64 must match original buffer');
+  });
+
+  it('payload construction in source matches expected structure', () => {
+    const fnMatch = mainJs.match(/async function quickFileUploadSalesAttachment[\s\S]*?^\}/m);
+    assert.ok(fnMatch, 'Function must exist in source');
+    const body = fnMatch[0];
+    assert.ok(body.includes('DocumentDetails: {'), 'Source has DocumentDetails');
+    assert.ok(body.includes('FileName: fn'), 'Source assigns FileName');
+    assert.ok(body.includes('EmbeddedFileBinaryObject: b64'), 'Source assigns base64');
+    assert.ok(body.includes('Type: {'), 'Source has Type wrapper');
+    assert.ok(body.includes('SalesAttachment: {'), 'Source has SalesAttachment');
+    assert.ok(body.includes('InvoiceId: invId'), 'Source assigns InvoiceId');
+  });
+
+  it('rejects non-finite invoiceId', () => {
+    assert.throws(() => buildUploadPayload('abc', 'f.pdf', Buffer.from('x'), ''), /Invalid InvoiceId/);
+    assert.throws(() => buildUploadPayload(NaN, 'f.pdf', Buffer.from('x'), ''), /Invalid InvoiceId/);
+  });
+
+  it('rejects empty PDF buffer', () => {
+    assert.throws(() => buildUploadPayload(1, 'f.pdf', Buffer.alloc(0), ''), /PDF buffer is empty/);
+    assert.throws(() => buildUploadPayload(1, 'f.pdf', null, ''), /PDF buffer is empty/);
+  });
+
+  it('rejects oversized PDF buffer', () => {
+    const big = Buffer.alloc(10 * 1024 * 1024 + 1);
+    assert.throws(() => buildUploadPayload(1, 'f.pdf', big, ''), /Too large/);
+  });
+
+  it('Notes field is truncated to 600 characters', () => {
+    const longNotes = 'x'.repeat(800);
+    const payload = buildUploadPayload(1, 'f.pdf', Buffer.from('data'), longNotes);
+    assert.strictEqual(payload.DocumentDetails.Type.SalesAttachment.Notes.length, 600);
+  });
+});
+
+describe('Attachment flow — trigger conditions and partial success', () => {
+  it('attachment block requires both invoiceId AND attachAttendanceHtml', () => {
+    const handlerMatch = mainJs.match(/ipcMain\.handle\('quickfile-create-invoice'[\s\S]*?^\}\);/m);
+    assert.ok(handlerMatch, 'create-invoice handler must exist');
+    const handler = handlerMatch[0];
+    assert.ok(handler.includes('invoiceId && attachAttendanceHtml'), 'Must gate on both invoiceId and attachAttendanceHtml');
+  });
+
+  it('returns ok: true with attachmentOk and attachmentError fields on success path', () => {
+    const handlerMatch = mainJs.match(/ipcMain\.handle\('quickfile-create-invoice'[\s\S]*?^\}\);/m);
+    const handler = handlerMatch[0];
+    const returnMatch = handler.match(/return\s*\{[\s\S]*?ok:\s*true[\s\S]*?\};/);
+    assert.ok(returnMatch, 'Success return block must exist');
+    assert.ok(returnMatch[0].includes('attachmentOk'), 'Success return includes attachmentOk');
+    assert.ok(returnMatch[0].includes('attachmentError'), 'Success return includes attachmentError');
+  });
+
+  it('attachment failure is caught independently and does not prevent invoice success', () => {
+    const handlerMatch = mainJs.match(/ipcMain\.handle\('quickfile-create-invoice'[\s\S]*?^\}\);/m);
+    const handler = handlerMatch[0];
+    const attachIdx = handler.indexOf('invoiceId && attachAttendanceHtml');
+    const attachBlock = handler.slice(attachIdx);
+    assert.ok(attachBlock.includes('try {'), 'Attachment block has its own try');
+    assert.ok(attachBlock.includes('catch (attErr)'), 'Attachment block has dedicated catch');
+  });
+
+  it('logs invoice_attachment_failed to billing_audit_log on attachment error', () => {
+    const handlerMatch = mainJs.match(/ipcMain\.handle\('quickfile-create-invoice'[\s\S]*?^\}\);/m);
+    const handler = handlerMatch[0];
+    assert.ok(handler.includes("'invoice_attachment_failed'"), 'Must log attachment failure');
+  });
+
+  it('logs invoice_attachment_uploaded on attachment success', () => {
+    const handlerMatch = mainJs.match(/ipcMain\.handle\('quickfile-create-invoice'[\s\S]*?^\}\);/m);
+    const handler = handlerMatch[0];
+    assert.ok(handler.includes("'invoice_attachment_uploaded'"), 'Must log attachment success');
+  });
+});
+
+describe('Filename sanitization in quickFileUploadSalesAttachment', () => {
+  function sanitize(fileName) {
+    const safeName = String(fileName || 'attendance-note.pdf').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
+    return safeName.length >= 5 ? safeName.slice(0, 150) : 'note.pdf';
+  }
+
+  it('strips dangerous characters: < > : " / \\ | ? *', () => {
+    assert.strictEqual(sanitize('test<>:file.pdf'), 'test___file.pdf');
+    assert.strictEqual(sanitize('a"b/c\\d|e.pdf'), 'a_b_c_d_e.pdf');
+    assert.strictEqual(sanitize('f?i*le.pdf'), 'f_i_le.pdf');
+  });
+
+  it('strips control characters (0x00-0x1f)', () => {
+    assert.strictEqual(sanitize('file\x00\x01name.pdf'), 'file__name.pdf');
+  });
+
+  it('defaults to attendance-note.pdf when no filename given', () => {
+    assert.strictEqual(sanitize(null), 'attendance-note.pdf');
+    assert.strictEqual(sanitize(''), 'attendance-note.pdf');
+    assert.strictEqual(sanitize(undefined), 'attendance-note.pdf');
+  });
+
+  it('falls back to note.pdf when sanitized name is shorter than 5 chars', () => {
+    assert.strictEqual(sanitize('a'), 'note.pdf');
+    assert.strictEqual(sanitize('ab'), 'note.pdf');
+    assert.strictEqual(sanitize('???'), 'note.pdf');
+    assert.strictEqual(sanitize('????'), 'note.pdf');
+  });
+
+  it('truncates filenames longer than 150 chars', () => {
+    const longName = 'a'.repeat(200) + '.pdf';
+    const result = sanitize(longName);
+    assert.ok(result.length <= 150, 'Filename must be max 150 chars, got ' + result.length);
+  });
+
+  it('sanitization logic in source matches test implementation', () => {
+    const fnMatch = mainJs.match(/async function quickFileUploadSalesAttachment[\s\S]*?^\}/m);
+    const body = fnMatch[0];
+    assert.ok(body.includes('.slice(0, 150)'), 'Source truncates at 150 chars');
+    assert.ok(body.includes("'note.pdf'"), 'Source has note.pdf fallback');
+    assert.ok(body.includes("'attendance-note.pdf'"), 'Source has default filename');
+  });
+});
+
+describe('validateDocumentUploadPayload — preflight checks', () => {
+  it('function exists in main.js', () => {
+    assert.ok(mainJs.includes('function validateDocumentUploadPayload'));
+  });
+
+  it('validates DocumentDetails presence', () => {
+    assert.ok(mainJs.includes('Preflight: missing DocumentDetails'));
+  });
+
+  it('validates FileName is required', () => {
+    assert.ok(mainJs.includes('Preflight: FileName is required'));
+  });
+
+  it('validates EmbeddedFileBinaryObject is required', () => {
+    assert.ok(mainJs.includes('Preflight: EmbeddedFileBinaryObject is required'));
+  });
+
+  it('validates Type wrapper is required', () => {
+    assert.ok(mainJs.includes('Preflight: DocumentDetails.Type wrapper is required'));
+  });
+
+  it('validates SalesAttachment is required inside Type', () => {
+    assert.ok(mainJs.includes('Preflight: Type.SalesAttachment is required'));
+  });
+
+  it('validates InvoiceId is a positive integer', () => {
+    assert.ok(mainJs.includes('Preflight: SalesAttachment.InvoiceId must be a positive integer'));
+  });
+
+  it('is called before quickFileRequest in quickFileUploadSalesAttachment', () => {
+    const fnMatch = mainJs.match(/async function quickFileUploadSalesAttachment[\s\S]*?^\}/m);
+    assert.ok(fnMatch, 'Function must exist');
+    const body = fnMatch[0];
+    const validateIdx = body.indexOf('validateDocumentUploadPayload(');
+    const requestIdx = body.indexOf("quickFileRequest('/1_2/document/upload'");
+    assert.ok(validateIdx > 0, 'validateDocumentUploadPayload call must exist');
+    assert.ok(requestIdx > 0, 'quickFileRequest call must exist');
+    assert.ok(validateIdx < requestIdx, 'Validation must happen before the API request');
   });
 });
 

@@ -6269,6 +6269,28 @@ function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) 
 /* Product note: invoice/create shipped first; Document_Upload was added so the attendance PDF
    matches billing preview. Earlier “billing overhaul” removed list exports before this unified flow. */
 /** Attach a PDF to a sales invoice via QuickFile Document_Upload (same auth as other calls). */
+function validateDocumentUploadPayload(body) {
+  const doc = body && body.DocumentDetails;
+  if (!doc || typeof doc !== 'object') throw new Error('Preflight: missing DocumentDetails');
+  if (!doc.FileName || typeof doc.FileName !== 'string' || !doc.FileName.trim()) {
+    throw new Error('Preflight: FileName is required');
+  }
+  if (!doc.EmbeddedFileBinaryObject || typeof doc.EmbeddedFileBinaryObject !== 'string') {
+    throw new Error('Preflight: EmbeddedFileBinaryObject is required');
+  }
+  const type = doc.Type;
+  if (!type || typeof type !== 'object') {
+    throw new Error('Preflight: DocumentDetails.Type wrapper is required');
+  }
+  const sa = type.SalesAttachment;
+  if (!sa || typeof sa !== 'object') {
+    throw new Error('Preflight: Type.SalesAttachment is required');
+  }
+  if (!Number.isFinite(sa.InvoiceId) || sa.InvoiceId <= 0) {
+    throw new Error('Preflight: SalesAttachment.InvoiceId must be a positive integer');
+  }
+}
+
 async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, notes) {
   const invId = parseInt(String(invoiceId), 10);
   if (!Number.isFinite(invId)) throw new Error('Invalid InvoiceId for attachment');
@@ -6278,7 +6300,7 @@ async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, no
   const safeName = String(fileName || 'attendance-note.pdf').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
   const fn = safeName.length >= 5 ? safeName.slice(0, 150) : 'note.pdf';
   const b64 = Buffer.from(pdfBuffer).toString('base64');
-  await quickFileRequest('/1_2/document/upload', {
+  const uploadPayload = {
     DocumentDetails: {
       FileName: fn,
       EmbeddedFileBinaryObject: b64,
@@ -6289,7 +6311,9 @@ async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, no
         },
       },
     },
-  });
+  };
+  validateDocumentUploadPayload(uploadPayload);
+  await quickFileRequest('/1_2/document/upload', uploadPayload);
 }
 
 function validateQuickFileInvoicePayload(body) {
