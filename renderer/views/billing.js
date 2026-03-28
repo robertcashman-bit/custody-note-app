@@ -429,7 +429,7 @@ async function _handleCreateInvoice(recordId, opts) {
   }
 
   if (!opts.firmName) {
-    showToast('No firm name found — cannot create invoice', 'error');
+    showToast('Select the instructing firm on the record (Case Reference & Arrival) before creating an invoice.', 'error', 6500);
     return;
   }
 

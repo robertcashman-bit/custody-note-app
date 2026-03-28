@@ -7,9 +7,13 @@
 #   Create at https://github.com/settings/tokens
 # GITHUB_TOKEN is provided automatically and is used to create the app release.
 #
-# To run: push a tag matching package.json version, e.g.:
-#   git tag v1.4.24
-#   git push origin v1.4.24
+# To run:
+#   • Automatic: push version + changelog to main/master → "Auto-tag release if needed"
+#     creates v{x.y.z} if missing → this workflow runs on that tag.
+#   • Manual app build: Actions → this workflow → Run workflow (builds from selected branch).
+#   • Manual tag: git tag v1.4.24 && git push origin v1.4.24
+#
+# Secrets (optional website deploy): GH_PAT, VERCEL_TOKEN — see below.
 
 name: Release and deploy
 
@@ -17,6 +21,11 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   # ─── Job 1: Build the Electron app and publish to GitHub Releases ────────────
@@ -81,9 +90,13 @@ jobs:
         run: npm ci
         working-directory: custody-note-app
 
-      - name: Sync and deploy website
+      - name: Configure git for website commit
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync website releases.json and push
         working-directory: custody-note-app
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: node scripts/release.mjs current --skip-build
+          WEBSITE_ROOT: ${{ github.workspace }}/custody note - website production
+        run: node scripts/sync-website.mjs

@@ -2902,7 +2902,18 @@ var REQUIRED_FIELD_KEYS = [
         if (subEl) subEl.innerHTML = 'Paste the key from your email. Get a free trial or buy at <strong>custodynote.com</strong>';
         if (btnEl) btnEl.textContent = 'Enter key \u2192';
       }
-    }).catch(function() { if (card) card.style.display = 'none'; });
+      var hintWrap = document.getElementById('home-subscription-features-hint');
+      if (hintWrap) {
+        var badStatus = st && (st.status === 'expired' || st.status === 'grace_expired');
+        var hasEmailAddon = st && st.addons && st.addons.emailAddon;
+        var eligible = st && st.key && !badStatus && (st.isTrial || st.status === 'active' || st.status === 'expiring_soon');
+        hintWrap.style.display = (eligible && !hasEmailAddon) ? '' : 'none';
+      }
+    }).catch(function() {
+      if (card) card.style.display = 'none';
+      var hintWrapErr = document.getElementById('home-subscription-features-hint');
+      if (hintWrapErr) hintWrapErr.style.display = 'none';
+    });
   }
 
   function updateGearLicenceItem() {
@@ -3010,6 +3021,23 @@ var REQUIRED_FIELD_KEYS = [
     }).join('');
   }
 
+  /** Tooltip copy for status badges on Home (list uses renderer/views/list.js). */
+  function homeRecordStatusTooltip(r) {
+    if (!r) return '';
+    var hasInvoice = !!(r.quickfile_invoice_id && String(r.quickfile_invoice_id).trim());
+    var st = r.status || 'draft';
+    if (hasInvoice) {
+      return 'Invoiced: a QuickFile invoice is linked to this record. The note remains finalised for the legal record.';
+    }
+    if (st === 'finalised') {
+      return 'Finalised: the attendance note is locked. Use Edit to re-open for amendment if you need changes.';
+    }
+    if (st === 'completed') {
+      return 'Completed: marked complete in your workflow (e.g. after billing steps).';
+    }
+    return 'Draft: editable. Finalise when the attendance is complete.';
+  }
+
   function formatRelativeUpdated(value) {
     if (!value) return 'Updated recently';
     var diff = Math.max(0, Date.now() - new Date(value).getTime());
@@ -3045,7 +3073,7 @@ var REQUIRED_FIELD_KEYS = [
               '<span class="home-active-title">' + esc(name) + '</span>' +
               '<span class="home-active-subtitle">' + esc(station) + '</span>' +
             '</div>' +
-            '<span class="badge ' + esc(status === 'finalised' ? 'finalised' : 'draft') + '">' + esc(status) + '</span>' +
+            '<span class="badge ' + esc(status === 'finalised' ? 'finalised' : 'draft') + '" title="' + esc(homeRecordStatusTooltip(r)) + '">' + esc(status) + '</span>' +
           '</div>' +
           '<div class="home-active-subtitle">' + esc(offence) + '</div>' +
           '<div class="home-active-footer">' +
@@ -3129,7 +3157,7 @@ var REQUIRED_FIELD_KEYS = [
         return '<li class="home-recent-item" data-id="' + r.id + '">' +
           '<div class="home-item-left"><span class="home-item-name">' + esc(name) + '</span><span class="home-item-meta">' + esc(station) + (station && date ? ' \u00B7 ' : '') + esc(date) + '</span>' +
           (healthBadges ? '<span class="home-item-health">' + healthBadges + '</span>' : '') + '</div>' +
-          '<div class="home-item-right"><span class="' + badgeClass + '">' + esc(status) + '</span></div>' +
+          '<div class="home-item-right"><span class="' + badgeClass + '" title="' + esc(homeRecordStatusTooltip(r)) + '">' + esc(status) + '</span></div>' +
           '</li>';
       }).join('');
       if (statsEl) {
@@ -4128,7 +4156,17 @@ var REQUIRED_FIELD_KEYS = [
       showAutoSaveIndicator();
       var savedEl = document.getElementById('form-last-saved');
       if (savedEl) savedEl.textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }).catch(function(e) { console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000); }).finally(() => {
+    }).catch(function(e) {
+      console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000);
+      ['autosave-indicator', 'header-autosave'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = 'Not saved';
+        el.title = 'Autosave failed. Check disk space, then use Save or try again. Your edits are still on screen until you close the record.';
+        el.setAttribute('data-autosave-error', '1');
+        el.classList.add('visible');
+      });
+    }).finally(() => {
       _draftSaveInFlight = false;
       if (_draftSaveQueued && !_finalising && currentRecordStatus !== 'finalised') {
         _draftSaveQueued = false;
@@ -4143,7 +4181,8 @@ var REQUIRED_FIELD_KEYS = [
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
-      el.textContent = 'Saving\u2026';
+      el.textContent = 'Saving to this computer\u2026';
+      el.removeAttribute('data-autosave-error');
       el.classList.add('visible');
     });
     var footerEl = document.getElementById('footer-autosave');
@@ -4158,11 +4197,13 @@ var REQUIRED_FIELD_KEYS = [
     var now = new Date();
     _lastQuietSaveDurationMs = _lastQuietSaveStart ? (now.getTime() - _lastQuietSaveStart) : null;
     _lastDbWrite = now.toISOString();
-    var txt = '\u2713 Saved ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    var txt = '\u2713 Saved on this computer ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.textContent = txt;
+      el.removeAttribute('data-autosave-error');
+      el.title = 'Last draft save written to this device. Finalised records do not autosave.';
       el.classList.add('visible');
     });
     var footerWrap = document.getElementById('footer-autosave-wrap');
@@ -5346,7 +5387,7 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── DELETE ATTENDANCE (#13) ─── */
   function deleteAttendance(id, title) {
-    showConfirm('Delete "' + title + '"?\n\nThis record will be removed from the active list. It can only be recovered from a database backup.', 'Confirm Delete').then(function(ok) {
+    showConfirm('Delete "' + title + '"?\n\nThis soft-deletes the record: it leaves the main list and appears under the Deleted filter. You can restore it from there while it remains in your database.', 'Confirm delete').then(function(ok) {
       if (!ok) return;
       window.api.attendanceDelete({ id: id, reason: 'User deleted from list' }).then(function(result) {
         if (result && result.error) showToast('Delete failed: ' + result.error, 'error');
@@ -5657,6 +5698,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function updateFormBarVisibility() {
     const finaliseBar = document.getElementById('form-finalise-bar');
+    const postFinaliseBar = document.getElementById('form-post-finalise-bar');
     const archiveBtn = document.getElementById('form-archive-btn');
     const unarchiveBtn = document.getElementById('form-unarchive-btn');
     if (!finaliseBar || !archiveBtn || !unarchiveBtn) return;
@@ -5664,6 +5706,9 @@ var REQUIRED_FIELD_KEYS = [
       finaliseBar.style.display = '';
     } else {
       finaliseBar.style.display = 'none';
+    }
+    if (postFinaliseBar) {
+      postFinaliseBar.style.display = (currentRecordStatus === 'finalised' && !currentRecordArchived) ? '' : 'none';
     }
     if (currentAttendanceId && !currentRecordArchived) {
       archiveBtn.style.display = '';
@@ -5676,6 +5721,38 @@ var REQUIRED_FIELD_KEYS = [
       unarchiveBtn.style.display = 'none';
     }
     updateBillingReadinessPanel();
+  }
+
+  window.goToInstructingFirmSection = function () {
+    if (typeof closeWorkflow === 'function') closeWorkflow();
+    if (typeof showView === 'function') showView('new');
+    var idx = -1;
+    if (activeFormSections && activeFormSections.length) {
+      for (var gi = 0; gi < activeFormSections.length; gi++) {
+        if (activeFormSections[gi].id === 'caseArrival') { idx = gi; break; }
+      }
+    }
+    if (idx >= 0) {
+      showSection(idx);
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          var firmWrap = document.querySelector('#attendance-form .form-firm-wrap');
+          var firmInp = document.querySelector('#attendance-form input[name="firmId"]');
+          var scrollTarget = firmWrap || firmInp;
+          if (scrollTarget && scrollTarget.scrollIntoView) {
+            scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+          var choiceBtn = document.querySelector('#attendance-form .form-firm-choice-btn');
+          if (choiceBtn && choiceBtn.focus) choiceBtn.focus();
+        });
+      });
+    } else {
+      showToast('Open the record, go to Case Reference & Arrival, then select the instructing firm.', 'info', 6000);
+    }
+  };
+
+  function showPostFinaliseNextStepsHint() {
+    showToast('Next: use Documents & Billing (bottom bar) for attachments and invoice, or open this record and use LAA Forms / PDF in the header.', 'info', 7500);
   }
 
   /** Blocking checks only — used for “Ready to invoice” status. */
@@ -6586,7 +6663,13 @@ var REQUIRED_FIELD_KEYS = [
         endActions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
-          '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>';
+          '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>' +
+          '<div id="form-post-finalise-bar" class="form-post-finalise-bar" style="display:none;">' +
+            '<div class="form-post-finalise-inner">' +
+              '<span class="form-post-finalise-text">This note is finalised. Continue with documents, invoice and attachments.</span>' +
+              '<button type="button" class="btn btn-primary btn-small" id="form-post-finalise-workflow">Documents and billing</button>' +
+            '</div>' +
+          '</div>';
         section.appendChild(endActions);
         const billingLink = document.createElement('div');
         billingLink.className = 'section9-billing-link';
@@ -9081,6 +9164,7 @@ var REQUIRED_FIELD_KEYS = [
               updateFormBarVisibility();
               showToast('Record finalised and saved', 'success');
               setListFilterAndShowList('finalised');
+              showPostFinaliseNextStepsHint();
               return;
             }
             _finalising = false;
@@ -9117,6 +9201,7 @@ var REQUIRED_FIELD_KEYS = [
                 updateFormBarVisibility();
                 showToast('Record finalised and saved', 'success');
                 setListFilterAndShowList('finalised');
+                showPostFinaliseNextStepsHint();
               } else if (attemptNum < 3) {
                 console.error('[FINALISE] DB MISMATCH: id=' + verifyId + ' status=' + (row ? row.status : 'MISSING') + ' — retrying');
                 setTimeout(doSaveIPC, 500);
@@ -9131,6 +9216,7 @@ var REQUIRED_FIELD_KEYS = [
                       updateFormBarVisibility();
                       showToast('Record finalised and saved', 'success');
                       setListFilterAndShowList('finalised');
+                      showPostFinaliseNextStepsHint();
                     } else {
                       console.error('[FINALISE] FORCE-STATUS failed:', r);
                       _finalising = false;
@@ -9163,6 +9249,7 @@ var REQUIRED_FIELD_KEYS = [
             updateFormBarVisibility();
             showToast('Record finalised and saved', 'success');
             setListFilterAndShowList('finalised');
+            showPostFinaliseNextStepsHint();
           }
         } else {
           showToast('Saved as draft', 'success');
@@ -11919,6 +12006,12 @@ PDF_CASENOTE_ADVERT +
 
         if (!t.id) return;
         switch (t.id) {
+          case 'home-addon-hint-pricing':
+            e.preventDefault();
+            if (window.api && window.api.openExternal) {
+              window.api.openExternal('https://www.custodynote.com/pricing');
+            }
+            return;
           case 'home-enter-licence-btn':
             e.preventDefault();
             showView('settings');
@@ -12325,12 +12418,22 @@ PDF_CASENOTE_ADVERT +
           });
           break;
         case 'form-finalise-bar': validateBeforeFinalise(); break;
+        case 'form-post-finalise-workflow':
+          e.preventDefault();
+          promptBeforeOpeningBilling();
+          break;
         case 'form-archive-btn':
           if (!currentAttendanceId) return;
-          window.api.attendanceArchive(currentAttendanceId).then(function() {
-            showToast('Record archived', 'info');
-            setListFilterAndShowList('archived');
-          }).catch(function() { showToast('Failed to archive record', 'error'); });
+          showConfirm(
+            'Archive this record? It will be hidden from the main list but you can restore it from the Archived filter.',
+            'Archive record'
+          ).then(function(ok) {
+            if (!ok) return;
+            window.api.attendanceArchive(currentAttendanceId).then(function() {
+              showToast('Record archived', 'info');
+              setListFilterAndShowList('archived');
+            }).catch(function() { showToast('Failed to archive record', 'error'); });
+          });
           break;
         case 'form-unarchive-btn':
           if (!currentAttendanceId) return;

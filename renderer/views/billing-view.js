@@ -9,6 +9,42 @@
 var _billingViewData = [];
 var _billingViewLoading = false;
 
+var BV_LS_PREFIX = 'cn_bv_';
+function _bvPersistFilters() {
+  try {
+    var s = document.getElementById('bv-search');
+    var f = document.getElementById('bv-firm-filter');
+    var st = document.getElementById('bv-status-filter');
+    var df = document.getElementById('bv-date-from');
+    var dt = document.getElementById('bv-date-to');
+    if (s) localStorage.setItem(BV_LS_PREFIX + 'search', s.value || '');
+    if (f) localStorage.setItem(BV_LS_PREFIX + 'firm', f.value || '');
+    if (st) localStorage.setItem(BV_LS_PREFIX + 'status', st.value || '');
+    if (df) localStorage.setItem(BV_LS_PREFIX + 'dateFrom', df.value || '');
+    if (dt) localStorage.setItem(BV_LS_PREFIX + 'dateTo', dt.value || '');
+  } catch (_) {}
+}
+function _bvRestoreFilters() {
+  try {
+    var s = document.getElementById('bv-search');
+    var f = document.getElementById('bv-firm-filter');
+    var st = document.getElementById('bv-status-filter');
+    var df = document.getElementById('bv-date-from');
+    var dt = document.getElementById('bv-date-to');
+    if (s && localStorage.getItem(BV_LS_PREFIX + 'search') != null) s.value = localStorage.getItem(BV_LS_PREFIX + 'search') || '';
+    if (f) {
+      var fv = localStorage.getItem(BV_LS_PREFIX + 'firm') || '';
+      if (fv && Array.prototype.some.call(f.options, function (o) { return o.value === fv; })) f.value = fv;
+    }
+    if (st) {
+      var sv = localStorage.getItem(BV_LS_PREFIX + 'status') || '';
+      if (!sv || Array.prototype.some.call(st.options, function (o) { return o.value === sv; })) st.value = sv;
+    }
+    if (df) df.value = localStorage.getItem(BV_LS_PREFIX + 'dateFrom') || '';
+    if (dt) dt.value = localStorage.getItem(BV_LS_PREFIX + 'dateTo') || '';
+  } catch (_) {}
+}
+
 function loadBillingView() {
   if (!window.api) return;
 
@@ -56,6 +92,7 @@ function loadBillingView() {
 
     _billingViewLoading = false;
     _bvPopulateFirmFilter();
+    _bvRestoreFilters();
     _bvRenderSummary();
     _bvRenderTable();
     _bvBindFilters();
@@ -245,8 +282,8 @@ function _bvBindFilters() {
   ['bv-search', 'bv-firm-filter', 'bv-status-filter', 'bv-date-from', 'bv-date-to'].forEach(function (id) {
     var el = document.getElementById(id);
     if (el) {
-      el.addEventListener('input', function () { _bvRenderTable(); });
-      el.addEventListener('change', function () { _bvRenderTable(); });
+      el.addEventListener('input', function () { _bvPersistFilters(); _bvRenderTable(); });
+      el.addEventListener('change', function () { _bvPersistFilters(); _bvRenderTable(); });
     }
   });
 

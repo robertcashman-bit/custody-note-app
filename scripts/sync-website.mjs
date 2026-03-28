@@ -4,6 +4,11 @@
  * Use when you've manually edited changelog.json and want to update the website.
  *
  * Runs verify-release-consistency checks first to catch drift early.
+ *
+ * Env:
+ *   WEBSITE_ROOT — override path to website repo clone (required in CI when checkout path differs)
+ *   WEBSITE_GIT_BRANCH — branch to push (default: detect origin/HEAD, else master)
+ *   SYNC_WEBSITE_NO_PUSH — if "1", write releases.json only (no git commit/push)
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
@@ -12,12 +17,35 @@ import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
-// custody-note-website is the custodynote.com product site (separate repo)
-const WEBSITE_ROOT = join(APP_ROOT, '..', 'custody-note-website');
+const WEBSITE_ROOT =
+  process.env.WEBSITE_ROOT && process.env.WEBSITE_ROOT.trim()
+    ? process.env.WEBSITE_ROOT.trim()
+    : join(APP_ROOT, '..', 'custody-note-website');
 
-// Run consistency check first
+const noPush = process.env.SYNC_WEBSITE_NO_PUSH === '1' || process.argv.includes('--no-push');
+
+function getWebsitePushRef() {
+  if (process.env.WEBSITE_GIT_BRANCH && process.env.WEBSITE_GIT_BRANCH.trim()) {
+    return process.env.WEBSITE_GIT_BRANCH.trim();
+  }
+  try {
+    const sym = execSync('git symbolic-ref refs/remotes/origin/HEAD', {
+      cwd: WEBSITE_ROOT,
+      encoding: 'utf8',
+    }).trim();
+    const m = sym.match(/origin\/(.+)$/);
+    if (m) return m[1];
+  } catch (_) {}
+  return 'master';
+}
+
+// Run consistency check first (WEBSITE_ROOT passed through env for verify script)
 try {
-  execSync('node scripts/verify-release-consistency.mjs', { cwd: APP_ROOT, stdio: 'inherit' });
+  execSync('node scripts/verify-release-consistency.mjs', {
+    cwd: APP_ROOT,
+    stdio: 'inherit',
+    env: { ...process.env, WEBSITE_ROOT },
+  });
 } catch {
   console.error('[sync-website] Aborting — release consistency check failed. Fix errors above first.');
   process.exit(1);
@@ -40,16 +68,27 @@ writeFileSync(
 );
 console.log(`[sync-website] Synced v${pkg.version} and ${changelog.releases.length} releases to website`);
 
+if (noPush) {
+  console.log('[sync-website] No-push mode — skipping git commit/push');
+  process.exit(0);
+}
+
 // Auto-commit and push — Vercel deploys automatically from GitHub
 try {
+  if (!existsSync(join(WEBSITE_ROOT, '.git'))) {
+    console.error('[sync-website] No .git in WEBSITE_ROOT — cannot push. Set SYNC_WEBSITE_NO_PUSH=1 to write files only.');
+    process.exit(process.env.GITHUB_ACTIONS ? 1 : 0);
+  }
   execSync('git add -A', { cwd: WEBSITE_ROOT, stdio: 'inherit' });
   try {
     execSync(`git commit -m "Changelog: sync releases.json to v${pkg.version}"`, { cwd: WEBSITE_ROOT, stdio: 'inherit' });
   } catch {
     console.log('[sync-website] Nothing to commit (already up to date)');
   }
-  execSync('git push origin master', { cwd: WEBSITE_ROOT, stdio: 'inherit' });
+  const branch = getWebsitePushRef();
+  execSync(`git push origin ${branch}`, { cwd: WEBSITE_ROOT, stdio: 'inherit' });
   console.log('[sync-website] Pushed to GitHub → Vercel will auto-deploy custodynote.com');
 } catch (e) {
   console.error('[sync-website] Git push failed:', e.message);
+  process.exit(process.env.GITHUB_ACTIONS ? 1 : 0);
 }

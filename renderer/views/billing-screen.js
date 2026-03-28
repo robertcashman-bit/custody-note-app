@@ -105,6 +105,16 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
     statusBadge = '<span class="wf-status-badge wf-status--draft">Draft</span>';
   }
 
+  var firmMissing = !((opts.firmName || '').trim());
+  var firmCallout = '';
+  if (firmMissing) {
+    firmCallout =
+      '<div class="wf-callout wf-callout-warn" id="wf-firm-missing-callout">' +
+        '<p><strong>Instructing firm required.</strong> Select the firm on this record before creating an invoice.</p>' +
+        '<button type="button" class="btn btn-primary" id="wf-goto-firm-section">Go to firm section</button>' +
+      '</div>';
+  }
+
   var attachments = _wfGetAttachments(meta.data);
   var linkedHtml = '';
   if (attachments.length) {
@@ -142,6 +152,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
         '<p class="wf-screen-sub">Create the QuickFile invoice and link supporting PDFs.</p>' +
         statusBadge +
       '</div>' +
+      firmCallout +
 
       '<div class="wf-billing-grid">' +
         '<div class="wf-card">' +
@@ -233,6 +244,17 @@ function _wfBuildBillingFooter(footer, meta, opts) {
 function _wfBindBillingEvents(meta, opts) {
   var overlay = document.getElementById('workflow-overlay');
   if (!overlay) return;
+
+  var gotoFirm = document.getElementById('wf-goto-firm-section');
+  if (gotoFirm) {
+    gotoFirm.addEventListener('click', function () {
+      if (typeof window.goToInstructingFirmSection === 'function') {
+        window.goToInstructingFirmSection();
+      } else {
+        showToast('Open the record, go to Case Reference & Arrival, then select the instructing firm.', 'info', 6000);
+      }
+    });
+  }
 
   overlay.querySelectorAll('.wf-calc').forEach(function (inp) {
     inp.addEventListener('input', function () { _wfRecalcPreview(meta); });
