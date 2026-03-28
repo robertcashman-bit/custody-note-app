@@ -334,13 +334,11 @@ function _wfRenderCompleteStep(body, footer) {
   var attachments = _wfGetAttachments(data);
 
   var allNamed = attachments.length === 0 || attachments.every(function (a) { return !!a.documentType; });
-  var hasInvoice = !!(data.quickfile_invoice_id || (data.invoiceSent === 'Yes'));
   var detailsComplete = !!(meta.clientName && meta.stationName && meta.attendanceDate && meta.firmName);
 
   var checks = [
     { label: 'Required matter details complete', done: detailsComplete },
     { label: 'Attachments standardised', done: allNamed },
-    { label: 'Invoice created', done: hasInvoice },
   ];
 
   var allDone = checks.every(function (c) { return c.done; });

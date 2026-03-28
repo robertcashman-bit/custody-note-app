@@ -69,15 +69,13 @@ function workflowArchiveReadiness(meta) {
   var data = meta.data;
   var attachments = wfGetAttachmentsFromData(data);
   var allNamed = attachments.length === 0 || attachments.every(function (a) { return !!a.documentType; });
-  var hasInvoice = !!(data.quickfile_invoice_id || (data.invoiceSent === 'Yes'));
   var detailsComplete = !!(meta.clientName && meta.stationName && meta.attendanceDate && meta.firmName);
   return {
     checks: [
       { label: 'Required matter details complete', done: detailsComplete },
       { label: 'Attachments standardised', done: allNamed },
-      { label: 'Invoice created', done: hasInvoice },
     ],
-    allDone: detailsComplete && allNamed && hasInvoice,
+    allDone: detailsComplete && allNamed,
   };
 }
 
@@ -137,11 +135,14 @@ describe('Jamie Crouch / Medway — invoice strings', () => {
 });
 
 describe('Jamie Crouch / Medway — Ready to Archive (workflow complete step)', () => {
-  it('all checks pass with invoice linked and no attachments', () => {
-    var meta = matterMetaFromFormData(jamieCrouchBaseFormData());
+  it('all checks pass with matter details and no attachments (invoice not required)', () => {
+    var meta = matterMetaFromFormData(jamieCrouchBaseFormData({
+      quickfile_invoice_id: '',
+      quickfile_invoice_number: '',
+    }));
     var r = workflowArchiveReadiness(meta);
     assert.strictEqual(r.allDone, true, JSON.stringify(r.checks));
-    assert.strictEqual(r.checks.filter(function (c) { return c.done; }).length, 3);
+    assert.strictEqual(r.checks.filter(function (c) { return c.done; }).length, 2);
   });
 
   it('fails when firm is missing', () => {
@@ -150,29 +151,6 @@ describe('Jamie Crouch / Medway — Ready to Archive (workflow complete step)', 
     assert.strictEqual(r.allDone, false);
     var det = r.checks.find(function (c) { return c.label === 'Required matter details complete'; });
     assert.strictEqual(det.done, false);
-  });
-
-  it('fails when QuickFile invoice not linked and invoiceSent is not Yes', () => {
-    var meta = matterMetaFromFormData(jamieCrouchBaseFormData({
-      quickfile_invoice_id: '',
-      quickfile_invoice_number: '',
-      invoiceSent: 'No',
-    }));
-    var r = workflowArchiveReadiness(meta);
-    assert.strictEqual(r.allDone, false);
-    var inv = r.checks.find(function (c) { return c.label === 'Invoice created'; });
-    assert.strictEqual(inv.done, false);
-  });
-
-  it('passes invoice check with invoiceSent Yes when no QuickFile id (legacy)', () => {
-    var meta = matterMetaFromFormData(jamieCrouchBaseFormData({
-      quickfile_invoice_id: '',
-      quickfile_invoice_number: '',
-      invoiceSent: 'Yes',
-    }));
-    var r = workflowArchiveReadiness(meta);
-    var inv = r.checks.find(function (c) { return c.label === 'Invoice created'; });
-    assert.strictEqual(inv.done, true);
   });
 
   it('fails attachments when a file has no documentType', () => {
@@ -203,11 +181,9 @@ describe('Jamie Crouch / Medway — Ready to Archive (workflow complete step)', 
 });
 
 describe('billing-screen.js — archive checklist source stays aligned', () => {
-  it('complete step still defines three checklist labels (regression)', () => {
+  it('complete step defines two checklist labels only (no invoice gate)', () => {
     assert.ok(billingScreenSrc.includes("'Required matter details complete'"));
     assert.ok(billingScreenSrc.includes("'Attachments standardised'"));
-    assert.ok(billingScreenSrc.includes("'Invoice created'"));
-    assert.ok(billingScreenSrc.includes('quickfile_invoice_id'));
-    assert.ok(billingScreenSrc.includes("invoiceSent === 'Yes'"));
+    assert.ok(!billingScreenSrc.includes("'Invoice created'"));
   });
 });

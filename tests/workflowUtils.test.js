@@ -420,10 +420,10 @@ describe('Billing screen source', () => {
     assert.ok(billingScreenSrc.includes('Archive Record'));
   });
 
-  it('finalise checklist has 3 items: details, attachments, invoice created', () => {
+  it('finalise checklist has 2 items: details and attachments (no invoice required)', () => {
     assert.ok(billingScreenSrc.includes('Required matter details complete'));
     assert.ok(billingScreenSrc.includes('Attachments standardised'));
-    assert.ok(billingScreenSrc.includes('Invoice created'));
+    assert.ok(!billingScreenSrc.includes("'Invoice created'"));
   });
 
   it('has status badges for draft and invoiced states', () => {
