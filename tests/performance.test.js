@@ -268,7 +268,7 @@ describe('Voluntary form and outcome statuses', () => {
     const volBlock = appJsSource.substring(volStart, volEnd);
     assert.ok(volBlock.includes('multiInterview: true'), 'voluntary must have multiInterview');
     assert.ok(volBlock.includes("'travelSocial'"), 'voluntary must have travelSocial time breakdown');
-    assert.ok(volBlock.includes("'invoiceSent'"), 'voluntary must have invoiceSent');
+    assert.ok(volBlock.includes("'invoiceNotes'"), 'voluntary must have invoiceNotes');
   });
 
   it('voluntary form excludes custody-specific fields', () => {

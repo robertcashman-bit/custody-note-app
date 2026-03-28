@@ -63,14 +63,12 @@ function loadBillingView() {
     _billingViewData = (rows || []).map(function (r) {
       var d = (typeof safeJson === 'function') ? safeJson(r.data) : {};
       var hasInvoice = !!(r.quickfile_invoice_id);
-      var invoiceSent = (d.invoiceSent === 'Yes');
       var hasAttachments = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
       var attachCount = hasAttachments ? d.photos.attachments.length : 0;
       var allNamed = !hasAttachments || d.photos.attachments.every(function (a) { return !!a.documentType; });
 
       var status = 'needs_invoice';
-      if (invoiceSent) status = 'sent';
-      else if (hasInvoice) status = 'invoiced';
+      if (hasInvoice) status = 'invoiced';
       else if (!hasAttachments || !allNamed) status = 'needs_documents';
 
       return {
@@ -83,7 +81,6 @@ function loadBillingView() {
         allNamed: allNamed,
         hasInvoice: hasInvoice,
         invoiceNumber: r.quickfile_invoice_number || '',
-        invoiceSent: invoiceSent,
         status: status,
         raw: d,
         recordStatus: r.status,
@@ -151,14 +148,12 @@ function _bvRenderSummary() {
   var needsDocs = _billingViewData.filter(function (r) { return r.status === 'needs_documents'; }).length;
   var needsInvoice = _billingViewData.filter(function (r) { return r.status === 'needs_invoice'; }).length;
   var invoiced = _billingViewData.filter(function (r) { return r.status === 'invoiced'; }).length;
-  var sent = _billingViewData.filter(function (r) { return r.status === 'sent'; }).length;
 
   el.innerHTML =
     '<div class="bv-summary-item"><span class="bv-summary-num">' + total + '</span><span class="bv-summary-label">Total</span></div>' +
     '<div class="bv-summary-item bv-summary-warn"><span class="bv-summary-num">' + needsDocs + '</span><span class="bv-summary-label">Needs docs</span></div>' +
     '<div class="bv-summary-item bv-summary-warn"><span class="bv-summary-num">' + needsInvoice + '</span><span class="bv-summary-label">Needs invoice</span></div>' +
-    '<div class="bv-summary-item bv-summary-ok"><span class="bv-summary-num">' + invoiced + '</span><span class="bv-summary-label">Invoiced</span></div>' +
-    '<div class="bv-summary-item bv-summary-done"><span class="bv-summary-num">' + sent + '</span><span class="bv-summary-label">Sent</span></div>';
+    '<div class="bv-summary-item bv-summary-ok"><span class="bv-summary-num">' + invoiced + '</span><span class="bv-summary-label">Invoiced</span></div>';
 
   var badge = document.getElementById('billing-nav-badge');
   var actionCount = needsDocs + needsInvoice;
@@ -177,7 +172,6 @@ function _bvStatusBadge(status) {
     needs_documents: '<span class="bv-badge bv-badge--docs">Needs docs</span>',
     needs_invoice: '<span class="bv-badge bv-badge--invoice">Needs invoice</span>',
     invoiced: '<span class="bv-badge bv-badge--invoiced">Invoiced</span>',
-    sent: '<span class="bv-badge bv-badge--sent">Sent</span>',
   };
   return map[status] || '<span class="bv-badge">—</span>';
 }
