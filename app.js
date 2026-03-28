@@ -969,9 +969,6 @@ var LAA = {
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
-        { key: 'invoiceSent', label: 'Invoice sent?', type: 'select', options: ['No','Yes'] },
-        { key: 'invoiceSentDate', label: 'Date sent', type: 'date', readonly: true, showIf: { field: 'invoiceSent', value: 'Yes' } },
-        { key: 'invoiceSentTime', label: 'Time sent', type: 'time', readonly: true, showIf: { field: 'invoiceSent', value: 'Yes' } },
         { key: 'invoiceNotes', label: 'Invoice notes', type: 'text', placeholder: 'e.g. Sent via CWA portal', cols: 2 },
       ],
     },
@@ -1728,9 +1725,6 @@ var LAA = {
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
-        { key: 'invoiceSent', label: 'Invoice sent?', type: 'select', options: ['No','Yes'] },
-        { key: 'invoiceSentDate', label: 'Date sent', type: 'date', readonly: true, showIf: { field: 'invoiceSent', value: 'Yes' } },
-        { key: 'invoiceSentTime', label: 'Time sent', type: 'time', readonly: true, showIf: { field: 'invoiceSent', value: 'Yes' } },
         { key: 'invoiceNotes', label: 'Invoice notes', type: 'text', placeholder: 'e.g. Sent via CWA portal', cols: 2 },
       ],
     },
@@ -3345,14 +3339,12 @@ var REQUIRED_FIELD_KEYS = [
 
     fetchFn().then(function (rows) {
       var relevant = rows || [];
-      var needsDocs = 0, needsInvoice = 0, invoiced = 0, sent = 0;
+      var needsDocs = 0, needsInvoice = 0, invoiced = 0;
       relevant.forEach(function (r) {
         var d = safeJson(r.data);
         var hasInv = !!r.quickfile_invoice_id;
-        var invSent = (d.invoiceSent === 'Yes');
         var hasAtt = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
-        if (invSent) sent++;
-        else if (hasInv) invoiced++;
+        if (hasInv) invoiced++;
         else if (!hasAtt) needsDocs++;
         else needsInvoice++;
       });
@@ -3367,7 +3359,6 @@ var REQUIRED_FIELD_KEYS = [
           (needsDocs > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsDocs + '</span> needs docs</span>' : '') +
           (needsInvoice > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsInvoice + '</span> needs invoice</span>' : '') +
           (invoiced > 0 ? '<span class="home-billing-widget-stat"><span class="home-billing-widget-num">' + invoiced + '</span> invoiced</span>' : '') +
-          (sent > 0 ? '<span class="home-billing-widget-stat"><span class="home-billing-widget-num">' + sent + '</span> sent</span>' : '') +
           (actionCount === 0 ? '<span class="home-billing-widget-stat">All up to date</span>' : '') +
         '</div>';
 
@@ -4028,7 +4019,7 @@ var REQUIRED_FIELD_KEYS = [
     if (!formData.commsLog || !Array.isArray(formData.commsLog)) formData.commsLog = [];
     if (!formData.medicalAuthorities || !Array.isArray(formData.medicalAuthorities)) formData.medicalAuthorities = [];
     if (!formData.otherAuthorities || !Array.isArray(formData.otherAuthorities)) formData.otherAuthorities = [];
-    if (!formData.invoiceSent) formData.invoiceSent = 'No';
+
     if (!formData.outcomeDecision && formData.caseOutcomeStatus) {
       formData.outcomeDecision = getLegacyOutcomeDecision(formData.caseOutcomeStatus, formData._formType);
     }
@@ -5327,10 +5318,8 @@ var REQUIRED_FIELD_KEYS = [
         var billingBadge = '';
         if (r.status === 'finalised' || r.quickfile_invoice_id) {
           var _hasInv = !!r.quickfile_invoice_id;
-          var _invSent = (d.invoiceSent === 'Yes');
           var _hasAtt = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
-          if (_invSent) billingBadge = '<span class="record-billing-badge record-billing-badge--sent">Sent</span>';
-          else if (_hasInv) billingBadge = '<span class="record-billing-badge record-billing-badge--invoiced">Invoiced</span>';
+          if (_hasInv) billingBadge = '<span class="record-billing-badge record-billing-badge--invoiced">Invoiced</span>';
           else if (!_hasAtt) billingBadge = '<span class="record-billing-badge record-billing-badge--docs">Needs docs</span>';
           else billingBadge = '<span class="record-billing-badge record-billing-badge--invoice">Needs invoice</span>';
         }
@@ -5787,22 +5776,14 @@ var REQUIRED_FIELD_KEYS = [
     if (!list || !panel || !statusEl || !summaryEl || !warningsWrap || !openBtn) return;
     var w = getBillingReadinessWarnings();
     var hasInvoice = !!(formData.quickfileInvoiceNumber || formData.quickfileInvoiceUrl);
-    var invoiceSent = formData.invoiceSent === 'Yes';
     var quickFileReady = hasQuickFileSettingsConfigured();
     var statusText = 'Needs review';
     var statusClass = 'state-review';
     var summary = '';
-    if (invoiceSent) {
-      statusText = 'Sent';
-      statusClass = 'state-sent';
-      summary = 'Invoice sent is already marked on this record' + (formData.invoiceNotes ? ' - ' + formData.invoiceNotes : '') + '.';
-      if (typeof currentRecordStatus !== 'undefined' && currentRecordStatus === 'finalised' && !currentRecordArchived) {
-        summary += ' When the file is complete, use Archive record on the form toolbar to tidy your list.';
-      }
-    } else if (hasInvoice) {
+    if (hasInvoice) {
       statusText = 'Invoiced';
       statusClass = 'state-invoiced';
-      summary = 'QuickFile invoice ' + (formData.quickfileInvoiceNumber || 'created') + ' is linked to this record. Mark "Invoice sent?" as Yes after dispatching it.';
+      summary = 'QuickFile invoice ' + (formData.quickfileInvoiceNumber || 'created') + ' is linked to this record.';
       if (typeof currentRecordStatus !== 'undefined' && currentRecordStatus === 'finalised' && !currentRecordArchived) {
         summary += ' File billed — archive when you have finished all follow-up.';
       }
@@ -8788,13 +8769,6 @@ var REQUIRED_FIELD_KEYS = [
       if (formData.passportedBenefit !== 'Unknown') { formData.passportedBenefit = 'Unknown'; setFieldValue('passportedBenefit', 'Unknown'); }
     }
 
-    /* Auto-stamp invoice sent date/time */
-    if (formData.invoiceSent === 'Yes' && !formData.invoiceSentDate) {
-      var now = new Date(); formData.invoiceSentDate = now.toISOString().slice(0, 10);
-      formData.invoiceSentTime = pad2(now.getHours()) + ':' + pad2(now.getMinutes());
-      setFieldValueSilent('invoiceSentDate', formData.invoiceSentDate);
-      setFieldValueSilent('invoiceSentTime', formData.invoiceSentTime);
-    }
   }
 
   /* ─── MULTI-INTERVIEW ─── */
