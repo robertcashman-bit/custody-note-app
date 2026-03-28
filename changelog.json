@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.158",
+      "version": "1.4.159",
       "date": "2026-03-28",
       "latest": true,
+      "changes": [
+        "Ready to Archive: invoice no longer required to enable Archive",
+        "two-item checklist only"
+      ]
+    },
+    {
+      "version": "1.4.158",
+      "date": "2026-03-28",
+      "latest": false,
       "changes": [
         "Remove Invoice sent field from billing",
         "invoiced status only",
