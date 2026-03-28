@@ -2024,10 +2024,11 @@ function createWindow() {
   ses.clearCache().catch(() => {});
   ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
   mainWindow.on('close', (e) => {
-    if (mainWindow && !mainWindow._forceClose) {
-      e.preventDefault();
-      mainWindow.webContents.send('check-unsaved-changes');
-    }
+    if (!mainWindow || mainWindow._forceClose) return;
+    /* Automated tests (isolated userData): allow window to close so Playwright/e2e can exit */
+    if (process.env.CUSTODYNOTE_TEST_USERDATA) return;
+    e.preventDefault();
+    mainWindow.webContents.send('check-unsaved-changes');
   });
   ipcMain.once('close-confirmed', () => {
     if (mainWindow) {

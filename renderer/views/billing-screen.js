@@ -341,7 +341,6 @@ function _wfRenderCompleteStep(body, footer) {
     { label: 'Required matter details complete', done: detailsComplete },
     { label: 'Attachments standardised', done: allNamed },
     { label: 'Invoice created', done: hasInvoice },
-    { label: 'Invoice sent', done: data.invoiceSent === 'Yes' },
   ];
 
   var allDone = checks.every(function (c) { return c.done; });
