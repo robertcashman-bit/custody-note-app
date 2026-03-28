@@ -5108,12 +5108,17 @@ ipcMain.handle('pick-image', async () => {
   });
   if (canceled || !filePaths.length) return null;
   const filePath = filePaths[0];
-  const ext = path.extname(filePath).slice(1).toLowerCase();
-  const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
-  const mime = mimeMap[ext] || 'image/jpeg';
-  const buf = fs.readFileSync(filePath);
-  if (buf.length > 5 * 1024 * 1024) return { error: 'File too large (max 5MB)' };
-  return { dataUrl: 'data:' + mime + ';base64,' + buf.toString('base64'), name: path.basename(filePath) };
+  try {
+    const stat = fs.statSync(filePath);
+    if (stat.size > 5 * 1024 * 1024) return { error: 'File too large (max 5 MB)' };
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const mimeMap = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' };
+    const mime = mimeMap[ext] || 'image/jpeg';
+    const buf = fs.readFileSync(filePath);
+    return { dataUrl: 'data:' + mime + ';base64,' + buf.toString('base64'), name: path.basename(filePath) };
+  } catch (err) {
+    return { error: 'Could not read file: ' + (err.message || String(err)) };
+  }
 });
 
 ipcMain.handle('pick-file', async () => {
@@ -5123,19 +5128,24 @@ ipcMain.handle('pick-file', async () => {
   });
   if (canceled || !filePaths.length) return null;
   const filePath = filePaths[0];
-  const ext = path.extname(filePath).slice(1).toLowerCase();
-  const mimeMap = {
-    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
-    webp: 'image/webp', bmp: 'image/bmp', heic: 'image/heic', heif: 'image/heif',
-    pdf: 'application/pdf',
-    doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    txt: 'text/plain', csv: 'text/csv',
-  };
-  const mime = mimeMap[ext] || 'application/octet-stream';
-  const buf = fs.readFileSync(filePath);
-  if (buf.length > 15 * 1024 * 1024) return { error: 'File too large (max 15MB)' };
-  return { dataUrl: 'data:' + mime + ';base64,' + buf.toString('base64'), name: path.basename(filePath), mime };
+  try {
+    const stat = fs.statSync(filePath);
+    if (stat.size > 15 * 1024 * 1024) return { error: 'File too large (max 15 MB)' };
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const mimeMap = {
+      jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+      webp: 'image/webp', bmp: 'image/bmp', heic: 'image/heic', heif: 'image/heif',
+      pdf: 'application/pdf',
+      doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      txt: 'text/plain', csv: 'text/csv',
+    };
+    const mime = mimeMap[ext] || 'application/octet-stream';
+    const buf = fs.readFileSync(filePath);
+    return { dataUrl: 'data:' + mime + ';base64,' + buf.toString('base64'), name: path.basename(filePath), mime };
+  } catch (err) {
+    return { error: 'Could not read file: ' + (err.message || String(err)) };
+  }
 });
 
 /* ─── Import record from PDF or JSON (Settings / Admin) ─── */
@@ -5432,12 +5442,17 @@ async function renderHtmlToPdfBuffer(html) {
 }
 
 ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
-  const desktop = app.getPath('desktop');
-  const safeName = path.basename(filename || `attendance-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
-  const filePath = path.join(desktop, safeName);
-  const buf = await renderHtmlToPdfBuffer(html);
-  fs.writeFileSync(filePath, buf);
-  return filePath;
+  try {
+    const desktop = app.getPath('desktop');
+    const safeName = path.basename(filename || `attendance-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
+    const filePath = path.join(desktop, safeName);
+    const buf = await renderHtmlToPdfBuffer(html);
+    fs.writeFileSync(filePath, buf);
+    return filePath;
+  } catch (err) {
+    console.error('[print-to-pdf]', err && err.message ? err.message : err);
+    throw err;
+  }
 });
 
 /** Returns PDF as base64 for in-app preview (renderer); work stays in main process. */
@@ -6378,6 +6393,13 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
 
   if (!firmName || typeof firmName !== 'string' || !firmName.trim()) {
     return { ok: false, error: 'Firm name is required to create an invoice' };
+  }
+
+  if (attendanceId) {
+    const existingInv = dbGet('SELECT quickfile_invoice_id, quickfile_invoice_number FROM attendances WHERE id = ?', [attendanceId]);
+    if (existingInv && existingInv.quickfile_invoice_id && !params.allowDuplicate) {
+      return { ok: false, error: 'This record already has invoice #' + (existingInv.quickfile_invoice_number || existingInv.quickfile_invoice_id) + '. Set allowDuplicate to override.' };
+    }
   }
 
   try {

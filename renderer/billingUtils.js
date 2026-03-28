@@ -27,9 +27,12 @@ var INVOICE_STATUS_LABELS = {
 };
 
 function calculateInvoiceTotals(opts) {
-  var fixedFee = parseFloat(opts.fixedFee) || 0;
-  var mileageMiles = parseFloat(opts.mileageMiles) || 0;
-  var mileageRate = parseFloat(opts.mileageRate) || BILLING_DEFAULTS.mileageRate;
+  var fixedFee = parseFloat(opts.fixedFee);
+  if (!Number.isFinite(fixedFee) || fixedFee < 0) fixedFee = 0;
+  var mileageMiles = parseFloat(opts.mileageMiles);
+  if (!Number.isFinite(mileageMiles) || mileageMiles < 0) mileageMiles = 0;
+  var mileageRate = parseFloat(opts.mileageRate);
+  if (!Number.isFinite(mileageRate)) mileageRate = BILLING_DEFAULTS.mileageRate;
   var vatRate = parseFloat(opts.vatRate);
   if (!Number.isFinite(vatRate)) vatRate = BILLING_DEFAULTS.vatRate;
 
@@ -38,7 +41,9 @@ function calculateInvoiceTotals(opts) {
   var parkingAmount = parseFloat(opts.parkingAmount) || 0;
   subTotal += parkingAmount;
   var vatTotal = subTotal * vatRate;
-  var grandTotal = subTotal + vatTotal;
+
+  var roundedSub = Number(subTotal.toFixed(2));
+  var roundedVat = Number(vatTotal.toFixed(2));
 
   return {
     fixedFee: Number(fixedFee.toFixed(2)),
@@ -46,10 +51,10 @@ function calculateInvoiceTotals(opts) {
     mileageRate: Number(mileageRate.toFixed(2)),
     mileageAmount: Number(mileageAmount.toFixed(2)),
     parkingAmount: Number(parkingAmount.toFixed(2)),
-    subTotal: Number(subTotal.toFixed(2)),
+    subTotal: roundedSub,
     vatRate: vatRate,
-    vatTotal: Number(vatTotal.toFixed(2)),
-    grandTotal: Number(grandTotal.toFixed(2)),
+    vatTotal: roundedVat,
+    grandTotal: Number((roundedSub + roundedVat).toFixed(2)),
   };
 }
 
@@ -92,9 +97,9 @@ function buildQuickFilePayload(record) {
     : (record.clientName || '') + ' - ' + (record.policeStation || record.stationName || '');
 
   var totals = calculateInvoiceTotals({
-    fixedFee: record.fixedFee || record.attendanceFee || BILLING_DEFAULTS.fixedFee,
+    fixedFee: record.fixedFee != null ? record.fixedFee : (record.attendanceFee != null ? record.attendanceFee : BILLING_DEFAULTS.fixedFee),
     mileageMiles: record.mileageMiles,
-    mileageRate: record.mileageRate || BILLING_DEFAULTS.mileageRate,
+    mileageRate: record.mileageRate != null ? record.mileageRate : BILLING_DEFAULTS.mileageRate,
     parkingAmount: record.parkingAmount,
     vatRate: record.vatRate != null ? record.vatRate : BILLING_DEFAULTS.vatRate,
   });

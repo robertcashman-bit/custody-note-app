@@ -421,9 +421,11 @@ async function _handleCreateInvoice(recordId, opts) {
   var vatRate = vatPct / 100;
   var narrative = document.getElementById('billing-narrative').value.trim();
 
+  var allowDuplicate = false;
   if (opts.hasExistingInvoice) {
     var confirmed = await showConfirm('This record already has an invoice (' + (opts.invoiceStatus.quickfile_invoice_number || 'unknown') + ').\n\nAre you sure you want to create another invoice?');
     if (!confirmed) return;
+    allowDuplicate = true;
   }
 
   if (!opts.firmName) {
@@ -472,11 +474,13 @@ async function _handleCreateInvoice(recordId, opts) {
       billingInvoiceNumber: billingInv,
       attachAttendanceHtml: attachHtml || undefined,
       attachPdfFileName: attachName,
+      allowDuplicate: allowDuplicate,
     });
   }).then(function (result) {
     _invoiceInFlight = false;
     if (result.ok) {
       if (typeof formData === 'object' && formData) {
+        formData.quickfile_invoice_id = result.invoiceId || '';
         formData.quickfileInvoiceNumber = result.invoiceNumber || '';
         formData.quickfileInvoiceUrl = result.invoiceUrl || '';
       }
