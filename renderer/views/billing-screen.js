@@ -354,11 +354,19 @@ function _wfRenderCompleteStep(body, footer) {
       showToast('Complete all items before archiving', 'error');
       return;
     }
-    if (typeof archiveRecord === 'function') {
+    if (typeof showConfirm === 'function') {
+      showConfirm('Archive this record? It will be hidden from the main records list.').then(function (ok) {
+        if (!ok) return;
+        if (typeof archiveRecord === 'function') {
+          archiveRecord();
+          closeWorkflow();
+        } else {
+          showToast('Archive function not available', 'error');
+        }
+      });
+    } else if (typeof archiveRecord === 'function') {
       archiveRecord();
       closeWorkflow();
-    } else {
-      showToast('Archive function not available', 'error');
     }
   });
 }

@@ -81,10 +81,11 @@ function _renderBillableTable() {
 
   var totalBillable = filtered.length;
   var totalRevenue = 0;
+  var _vatMult = 1 + ((window._billingDefaults || {}).vatRate || BILLING_DEFAULTS && BILLING_DEFAULTS.vatRate || 0.20);
   filtered.forEach(function (r) {
     var mileageCost = r.mileageMiles * r.mileageRate;
     var sub = r.attendanceFee + mileageCost + r.parkingAmount;
-    var total = sub * 1.20;
+    var total = sub * _vatMult;
     totalRevenue += total;
   });
 
@@ -107,7 +108,7 @@ function _renderBillableTable() {
   filtered.forEach(function (r) {
     var mileageCost = r.mileageMiles * r.mileageRate;
     var sub = r.attendanceFee + mileageCost + r.parkingAmount;
-    var total = sub * 1.20;
+    var total = sub * _vatMult;
     html += '<tr>' +
       '<td>' + _billableEsc(r.clientName) + '</td>' +
       '<td>' + _billableEsc(r.firmName) + '</td>' +

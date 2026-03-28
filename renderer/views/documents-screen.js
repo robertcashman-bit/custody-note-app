@@ -178,6 +178,10 @@ function _wfBindDocEvents(meta) {
         var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
         if (!data.photos) data.photos = {};
         if (!data.photos.attachments) data.photos.attachments = [];
+        if (data.photos.attachments.length >= 20) {
+          showToast('Maximum 20 attachments per record', 'error');
+          return;
+        }
         data.photos.attachments.push({
           dataUrl: result.dataUrl,
           name: result.name,
