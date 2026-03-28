@@ -8,6 +8,7 @@
 
 var _workflowOpen = false;
 var _workflowStep = 0; // 0=Documents, 1=Billing, 2=Complete
+var _workflowOnClose = null;
 
 var _workflowSteps = [
   { id: 'documents', label: 'Documents', icon: '&#128196;' },
@@ -71,10 +72,11 @@ function _wfBuildSummaryStrip(meta, statusHtml) {
   '</div>';
 }
 
-function openWorkflow(startStep) {
+function openWorkflow(startStep, onClose) {
   if (_workflowOpen) return;
   _workflowOpen = true;
   _workflowStep = startStep || 0;
+  _workflowOnClose = onClose || null;
 
   var existing = document.getElementById('workflow-overlay');
   if (existing) existing.remove();
@@ -172,5 +174,10 @@ function closeWorkflow() {
   if (overlay) {
     if (overlay._wfEscHandler) document.removeEventListener('keydown', overlay._wfEscHandler);
     overlay.remove();
+  }
+  if (typeof _workflowOnClose === 'function') {
+    var cb = _workflowOnClose;
+    _workflowOnClose = null;
+    cb();
   }
 }

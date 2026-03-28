@@ -4040,9 +4040,9 @@ ipcMain.handle('attendance-list', () => {
 });
 
 ipcMain.handle('attendance-list-full', () => {
-  /* Full rows including data blob — used by CSV export and reports. */
+  /* Full rows including data blob — used by CSV export, reports, and records list. */
   return dbAll(
-    'SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, data FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC'
+    'SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, data, quickfile_invoice_id, quickfile_invoice_number FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC'
   );
 });
 
@@ -6623,6 +6623,17 @@ ipcMain.handle('billable-attendances', () => {
      ORDER BY attendance_date DESC`
   );
   return rows;
+});
+
+ipcMain.handle('billing-view-records', () => {
+  return dbAll(
+    `SELECT id, data, status, created_at, updated_at, client_name, station_name, attendance_date,
+            quickfile_invoice_id, quickfile_invoice_number, invoice_total
+     FROM attendances
+     WHERE deleted_at IS NULL AND archived_at IS NULL
+       AND (status = 'finalised' OR status = 'completed' OR quickfile_invoice_id IS NOT NULL)
+     ORDER BY attendance_date DESC`
+  );
 });
 
 /* ═══════════════════════════════════════════════════════
