@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.153",
+      "version": "1.4.154",
       "date": "2026-03-28",
       "latest": true,
+      "changes": [
+        "Audit fixes: XSS prevention, billing rounding, file size guards, duplicate invoice prevention, archive confirmation, 18 regression tests"
+      ]
+    },
+    {
+      "version": "1.4.153",
+      "date": "2026-03-28",
+      "latest": false,
       "changes": [
         "Documents & Billing promoted to top-level navigation",
         "New Billing view with record table, filters, status badges",
