@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.156",
+      "version": "1.4.157",
       "date": "2026-03-28",
       "latest": true,
+      "changes": [
+        "Ready to Archive: no separate Invoice sent step",
+        "Jamie Crouch invoice scenario tests",
+        "billing/main tweaks"
+      ]
+    },
+    {
+      "version": "1.4.156",
+      "date": "2026-03-28",
+      "latest": false,
       "changes": [
         "UX: post-finalise next-step hint, post-finalise Documents & billing bar, status tooltips, clearer autosave indicator",
         "UX: billing view filter persistence, workflow firm callout + jump to Case Reference, sharper archive/delete copy",
