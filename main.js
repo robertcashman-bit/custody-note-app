@@ -796,17 +796,17 @@ function findExistingDraftIdByCaseKey(parsed) {
     let rows;
     if (dscc) {
       rows = dbAll(
-        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL AND dscc_ref=? ORDER BY updated_at DESC LIMIT 5",
+        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL AND archived_at IS NULL AND dscc_ref=? ORDER BY updated_at DESC LIMIT 5",
         [dscc]
       );
     } else if (client && date && station) {
       rows = dbAll(
-        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL AND client_name=? AND attendance_date=? ORDER BY updated_at DESC LIMIT 5",
+        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL AND archived_at IS NULL AND client_name=? AND attendance_date=? ORDER BY updated_at DESC LIMIT 5",
         [client, date]
       );
     } else {
       rows = dbAll(
-        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL ORDER BY updated_at DESC"
+        "SELECT id, data, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC"
       );
     }
     for (const r of rows) {
@@ -825,7 +825,7 @@ function dedupeDraftsByCaseKeys() {
   if (!db) return 0;
   try {
     const rows = dbAll(
-      "SELECT id, data, updated_at, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL"
+      "SELECT id, data, updated_at, client_name, station_name, dscc_ref, attendance_date FROM attendances WHERE status='draft' AND deleted_at IS NULL AND archived_at IS NULL"
     );
     if (!rows || rows.length < 2) return 0;
 
@@ -5220,7 +5220,7 @@ function insertImportedDraftAttendance(data) {
     try {
       const ofn = String(data.ourFileNumber).trim();
       const row = dbGet(
-        "SELECT id FROM attendances WHERE status='draft' AND deleted_at IS NULL AND data LIKE ? ORDER BY updated_at DESC LIMIT 1",
+        "SELECT id FROM attendances WHERE status='draft' AND deleted_at IS NULL AND archived_at IS NULL AND data LIKE ? ORDER BY updated_at DESC LIMIT 1",
         [`%"ourFileNumber":"${ofn}"%`]
       );
       if (row && row.id) existingId = row.id;
