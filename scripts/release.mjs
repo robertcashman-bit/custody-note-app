@@ -11,11 +11,15 @@
  *
  * Requires: GH_TOKEN or GITHUB_TOKEN (GitHub PAT with repo scope) for publishing.
  *
+ * Flags: --skip-website-sync — do not run npm-equivalent sync to custody-note-website after push
+ *        (use if the website repo is unavailable; run `npm run sync-website` later).
+ *
  * This script:
  * 1. Bumps version in package.json (or uses current version in "current" mode)
  * 2. Appends to changelog.json (or validates changelog in "current" mode)
  * 3. Builds the Electron app and publishes to GitHub (creates release, uploads installer)
  * 4. Commits + pushes version bump — Vercel deploys automatically via git integration
+ * 5. Runs sync-website so custodynote.com releases.json matches (unless --skip-website-sync)
  */
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -256,6 +260,20 @@ async function main() {
   execSync(`git commit -m "chore(release): v${newVersion}"`, { cwd: APP_ROOT, stdio: 'inherit' });
   execSync('git push origin master', { cwd: APP_ROOT, stdio: 'inherit' });
   console.log('Pushed to origin/master \u2014 Vercel deploy will trigger automatically.');
+
+  if (argv.includes('--skip-website-sync')) {
+    console.log('--skip-website-sync set — skipping custody-note-website sync (run npm run sync-website when ready).');
+  } else {
+    console.log('Syncing marketing site releases.json (custody-note-website)...');
+    try {
+      execSync('node scripts/sync-website.mjs', { cwd: APP_ROOT, stdio: 'inherit' });
+      console.log('Website releases synced and pushed.');
+    } catch (err) {
+      console.error('sync-website failed:', err && err.message ? err.message : err);
+      console.error('Fix the issue and run: npm run sync-website');
+      process.exit(1);
+    }
+  }
 }
 
 main().catch((err) => {
