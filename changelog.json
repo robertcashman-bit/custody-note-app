@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.157",
+      "version": "1.4.158",
       "date": "2026-03-28",
       "latest": true,
+      "changes": [
+        "Remove Invoice sent field from billing",
+        "invoiced status only",
+        "billing/tests/UI cleanup"
+      ]
+    },
+    {
+      "version": "1.4.157",
+      "date": "2026-03-28",
+      "latest": false,
       "changes": [
         "Ready to Archive: no separate Invoice sent step",
         "Jamie Crouch invoice scenario tests",
