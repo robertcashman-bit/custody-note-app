@@ -81,6 +81,16 @@ function refreshList() {
       if (dsccLabel)    metaParts.push(dsccLabel);
       var meta = metaParts.join(' \u00B7 ');
 
+      var hasInvoice = !!(d.quickfile_invoice_id || d.quickfileInvoiceNumber || d.quickfileInvoiceUrl);
+      var st = r.status || 'draft';
+      var statusTitle = hasInvoice
+        ? 'Invoiced: a QuickFile invoice is linked to this record. The note stays finalised for the legal record.'
+        : (st === 'finalised'
+          ? 'Finalised: the attendance note is locked. Use Edit to re-open for amendment if you need changes.'
+          : (st === 'completed'
+            ? 'Completed: marked complete in your workflow (e.g. after billing steps).'
+            : 'Draft: editable. Save and finalise when the attendance is complete.'));
+
       var approved = r.supervisor_approved_at
         ? ' <span class="badge supervisor-approved" title="Supervisor approved">&#10003; Approved</span>' : '';
       var archivedBadge = r.archived_at
@@ -88,8 +98,8 @@ function refreshList() {
       var deletedBadge = r.deleted_at
         ? ' <span class="badge deleted" title="Deleted">Deleted</span>' : '';
       var archiveBtn = r.archived_at
-        ? '<button type="button" class="btn-list-action unarchive-btn" title="Restore from archive" data-id="' + r.id + '">Unarchive</button>'
-        : '<button type="button" class="btn-list-action archive-btn" title="Archive this record" data-id="' + r.id + '">Archive</button>';
+        ? '<button type="button" class="btn-list-action unarchive-btn" title="Restore from archive — record returns to the main Records list" data-id="' + r.id + '">Unarchive</button>'
+        : '<button type="button" class="btn-list-action archive-btn" title="Hide from main list — use Archived filter to find later" data-id="' + r.id + '">Archive</button>';
 
       /* Officer Email Templates add-on — Email OIC button + Sent badge (gated on licence entitlement + user setting) */
       var emailOicBtn  = '';
@@ -124,7 +134,7 @@ function refreshList() {
           '</div>' +
           '<div class="list-item-actions">' +
             '<div class="list-item-badges">' +
-              '<span class="badge ' + esc(r.status || 'draft') + '">' + esc(r.status || 'draft') + '</span>' +
+              '<span class="badge ' + esc(st) + '" title="' + esc(statusTitle) + '">' + esc(st) + '</span>' +
               approved +
               archivedBadge +
               oicSentBadge +
@@ -195,27 +205,34 @@ function renderListPagination(total) {
 }
 
 function archiveAttendance(id, title) {
-  /* Delay the actual archive call by 5 seconds to allow undo */
-  var undone = false;
-  var toast = document.createElement('div');
-  toast.className = 'cn-toast cn-toast-visible cn-toast-info cn-undo-toast';
-  toast.innerHTML = 'Record archived. <button class="cn-undo-btn" type="button">Undo</button>';
-  document.body.appendChild(toast);
-  toast.querySelector('.cn-undo-btn').addEventListener('click', function() {
-    undone = true;
-    toast.remove();
-    showToast('Archive undone', 'success');
-  });
-  var timer = setTimeout(function() {
-    toast.remove();
-    if (undone) return;
-    window.api.attendanceArchive(id).then(function() {
-      refreshList();
-    }).catch(function() {
-      showToast('Failed to archive record', 'error');
+  var label = title || 'this record';
+  showConfirm(
+    'Archive "' + label + '"?\n\nThe record will be hidden from the main Records list. Open the Archived filter to find it again, or use Unarchive to restore it to the main list.',
+    'Archive record'
+  ).then(function (ok) {
+    if (!ok) return;
+    /* Delay the actual archive call by 5 seconds to allow undo */
+    var undone = false;
+    var toast = document.createElement('div');
+    toast.className = 'cn-toast cn-toast-visible cn-toast-info cn-undo-toast';
+    toast.innerHTML = 'Archiving in 5s&hellip; <button class="cn-undo-btn" type="button">Undo</button>';
+    document.body.appendChild(toast);
+    toast.querySelector('.cn-undo-btn').addEventListener('click', function () {
+      undone = true;
+      toast.remove();
+      showToast('Archive cancelled', 'success');
     });
-  }, 5000);
-  void timer;
+    var timer = setTimeout(function () {
+      toast.remove();
+      if (undone) return;
+      window.api.attendanceArchive(id).then(function () {
+        refreshList();
+      }).catch(function () {
+        showToast('Failed to archive record', 'error');
+      });
+    }, 5000);
+    void timer;
+  });
 }
 
 function unarchiveAttendance(id) {
@@ -228,7 +245,7 @@ function unarchiveAttendance(id) {
 }
 
 function deleteAttendance(id, title) {
-  showConfirm('Delete "' + title + '"?\n\nThe record will be moved to the Deleted list. You can restore it from there.', 'Confirm Delete').then(function(ok) {
+  showConfirm('Delete "' + title + '"?\n\nThis soft-deletes the record: it leaves the main list and appears under the Deleted filter. You can restore it from there while it remains in your database.', 'Confirm delete').then(function(ok) {
     if (!ok) return;
     window.api.attendanceDelete({ id: id, reason: 'User deleted from list' }).then(function(result) {
       if (result && result.soft) showToast('Record moved to Deleted list', 'info');

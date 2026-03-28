@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.4.155",
+      "version": "1.4.156",
       "date": "2026-03-28",
       "latest": true,
+      "changes": [
+        "UX: post-finalise next-step hint, post-finalise Documents & billing bar, status tooltips, clearer autosave indicator",
+        "UX: billing view filter persistence, workflow firm callout + jump to Case Reference, sharper archive/delete copy",
+        "UX: home subscription features hint, gear Navigate de-dupe, Help recommended order of work",
+        "CI: auto-tag on version/changelog push, manual release workflow_dispatch, website sync path fix (WEBSITE_ROOT)"
+      ]
+    },
+    {
+      "version": "1.4.155",
+      "date": "2026-03-28",
+      "latest": false,
       "changes": [
         "Draft dedupe: do not merge into archived records",
         "full-app audit report",

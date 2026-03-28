@@ -91,7 +91,7 @@
       </div>
       <div class="header-right">
         <span id="header-form-actions" class="header-form-actions">
-          <span id="header-autosave" class="autosave-indicator"></span>
+          <span id="header-autosave" class="autosave-indicator" title="Drafts save automatically to this computer while you edit. After finalise, autosave stops because the note is locked."></span>
           <button type="button" class="btn btn-small btn-backup-now" id="header-backup-now-btn" title="Save &amp; backup now">&#128190; Backup</button>
           <button type="button" class="btn-small" id="header-kb-help" title="Keyboard shortcuts">?</button>
           <button type="button" class="btn btn-small" id="header-laa-forms" title="Generate LAA forms">LAA Forms</button>
@@ -111,9 +111,7 @@
             <div class="gear-divider"></div>
             <button type="button" class="gear-item gear-more-toggle" id="gear-more-toggle">&#8943; More&hellip;</button>
             <div id="gear-more-section" class="gear-more-section" style="display:none;">
-              <div class="gear-section-label">Navigate</div>
-              <button type="button" class="gear-item" data-action="home">&#8962; Home</button>
-              <button type="button" class="gear-item" data-action="records">&#128196; Records</button>
+              <p class="gear-nav-hint" style="margin:0.35rem 0.75rem 0.5rem;font-size:0.8rem;opacity:0.85;line-height:1.35;">Use the bottom bar for Home and Records.</p>
               <div class="gear-section-label">Documents</div>
               <button type="button" class="gear-item" data-action="laa-forms">&#128203; LAA Forms</button>
               <button type="button" class="gear-item" data-action="authorities">&#128220; Authorities</button>
@@ -146,6 +144,16 @@
                 <p style="margin:0.35rem 0 0 0;font-size:0.95rem;color:#bfdbfe;">Paste the key from your email. Get a free trial or buy at <strong>custodynote.com</strong></p>
               </div>
               <button type="button" id="home-enter-licence-btn" class="btn btn-primary" style="background:#fff;color:#1e40af;font-weight:700;font-size:1rem;padding:0.6rem 1.2rem;">Enter key &rarr;</button>
+            </div>
+          </div>
+          <div id="home-subscription-features-hint" class="home-addon-hint-card" style="display:none;">
+            <div style="display:flex;align-items:flex-start;gap:0.75rem;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:10px;padding:0.75rem 1rem;margin-bottom:0.75rem;">
+              <span style="font-size:1.25rem;line-height:1;">&#128231;</span>
+              <div style="flex:1;">
+                <p style="margin:0;font-weight:600;font-size:0.9rem;color:#1e3a8a;">Email to OIC and related tools</p>
+                <p style="margin:0.25rem 0 0 0;font-size:0.82rem;color:#334155;">Officer email and other add-ons are included with a full subscription.</p>
+                <button type="button" id="home-addon-hint-pricing" class="btn btn-secondary" style="margin-top:0.45rem;padding:0.35rem 0.75rem;font-size:0.8rem;min-height:auto;">View plans at custodynote.com</button>
+              </div>
             </div>
           </div>
           <div class="home-top">
@@ -1518,6 +1526,20 @@
 
           <p class="help-intro">Custody Note is a complete digital attendance note and LAA billing tool for police station representatives. Everything is stored locally on your computer &mdash; no internet connection is required. This guide covers every feature in detail.</p>
           <p class="help-intro" style="margin-top:0.5rem;">Need help? <a href="#" onclick="if(window.api&&window.api.openExternal){window.api.openExternal('https://www.custodynote.com/support');}return false;">Support forum</a> &middot; <a href="#" onclick="if(window.api&&window.api.openExternal){window.api.openExternal('https://www.custodynote.com/contact');}return false;">Contact us</a> &middot; <a href="#" onclick="if(window.api&&window.api.openExternal){window.api.openExternal('https://www.custodynote.com/faq');}return false;">FAQ</a></p>
+
+          <details class="help-section" open>
+            <summary class="help-heading">Recommended order of work (typical matter)</summary>
+            <div class="help-content">
+              <ol style="margin-top:0.5rem;padding-left:1.25rem;">
+                <li>Start a record from <strong>Home</strong> (Custody, Voluntary, Quick Capture, or Tel Advice).</li>
+                <li>Complete the sections in order; use <strong>Sections</strong> in the header to jump. The app saves drafts automatically while you work.</li>
+                <li>When the note is complete, <strong>Finalise</strong> &mdash; the record locks to protect the legal record.</li>
+                <li>Then use <strong>Billing</strong> (bottom bar) or <strong>Documents &amp; Billing</strong> on the record for attachments, QuickFile invoice, and completion.</li>
+                <li>Generate <strong>PDF</strong> or <strong>LAA Forms</strong> from the header when you need outputs.</li>
+                <li>When the file is finished, <strong>Archive</strong> the record to hide it from the main list (you can still find it under the Archived filter).</li>
+              </ol>
+            </div>
+          </details>
 
           <details class="help-section" open>
             <summary class="help-heading">Getting Started</summary>

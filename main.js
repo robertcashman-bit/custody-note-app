@@ -1,6 +1,14 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu } = require('electron');
 const os = require('os');
 const path = require('path');
+/* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use). */
+if (process.env.CUSTODYNOTE_TEST_USERDATA && String(process.env.CUSTODYNOTE_TEST_USERDATA).trim()) {
+  try {
+    app.setPath('userData', path.resolve(String(process.env.CUSTODYNOTE_TEST_USERDATA).trim()));
+  } catch (e) {
+    console.warn('[CUSTODYNOTE_TEST_USERDATA] setPath failed:', e && e.message);
+  }
+}
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
@@ -4056,6 +4064,7 @@ ipcMain.handle('attendance-home-stats', () => {
        station_name,
        attendance_date,
        status,
+       quickfile_invoice_id,
        COALESCE(json_extract(data, '$.clientSig'), '') AS clientSig,
        COALESCE(json_extract(data, '$.feeEarnerSig'), '') AS feeEarnerSig,
        COALESCE(json_extract(data, '$.firmId'), '') AS firmId,
