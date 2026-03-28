@@ -191,6 +191,11 @@
               <span class="home-card-title">Quick Email</span>
               <span class="home-card-sub">Email an officer without creating a record first</span>
             </button>
+            <button type="button" id="home-card-billing" class="home-action-card home-card-green">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="7" y1="15" x2="13" y2="15"/></svg></span>
+              <span class="home-card-title">Documents &amp; Billing</span>
+              <span class="home-card-sub">Manage attachments, create invoices and finalise matters</span>
+            </button>
           </div>
 
           <!-- Update Available Banner (shows when an update is downloading or ready) -->
@@ -367,6 +372,7 @@
             <span id="home-backup-status" class="home-status-item">Auto backup: checking&hellip;</span>
             <span id="home-sync-now-wrap" style="display:none;"><span class="home-status-sep">&middot;</span><button type="button" id="home-sync-now-btn" style="background:none;border:1px solid #2563eb;color:#2563eb;padding:0.15rem 0.6rem;border-radius:5px;font-size:0.78rem;cursor:pointer;font-weight:600;transition:background 0.15s,color 0.15s;" title="Sync records now">&#9729; Sync now</button></span>
           </div>
+          <div id="home-billing-widget" class="home-billing-widget" style="display:none;"></div>
         </div>
       </div>
 
@@ -757,6 +763,29 @@
           <button type="button" id="mileage-save-all" class="btn btn-primary">Save All Changes</button>
         </div>
         <div id="station-mileage-table-wrap" style="overflow-x:auto;"></div>
+      </div>
+
+      <!-- BILLING VIEW -->
+      <div id="view-billing" class="view">
+        <div class="firms-page-header">
+          <button type="button" id="billing-view-back-btn" class="btn btn-secondary">&larr; Home</button>
+          <h2 style="margin:0;color:var(--primary);">Documents &amp; Billing</h2>
+        </div>
+        <div id="billing-view-summary" class="bv-summary-strip"></div>
+        <div class="bv-filter-bar">
+          <input type="text" id="bv-search" class="form-input" placeholder="Search client, firm, station..." style="max-width:260px;">
+          <select id="bv-firm-filter" class="form-input" style="max-width:180px;"><option value="">All firms</option></select>
+          <select id="bv-status-filter" class="form-input" style="max-width:160px;">
+            <option value="">All statuses</option>
+            <option value="needs_documents">Needs documents</option>
+            <option value="needs_invoice">Needs invoice</option>
+            <option value="invoiced">Invoiced</option>
+            <option value="sent">Sent</option>
+          </select>
+          <input type="date" id="bv-date-from" class="form-input" style="max-width:150px;" title="From date">
+          <input type="date" id="bv-date-to" class="form-input" style="max-width:150px;" title="To date">
+        </div>
+        <div id="billing-view-table-wrap" class="bv-table-wrap"></div>
       </div>
 
       <!-- AUTHORITIES VIEW -->
@@ -1863,6 +1892,11 @@
         <span class="bottom-nav-icon">&#127970;</span>
         <span class="bottom-nav-label">Firms</span>
       </button>
+      <button type="button" class="bottom-nav-btn" data-nav="billing" title="Billing">
+        <span class="bottom-nav-icon">&#163;</span>
+        <span class="bottom-nav-label">Billing</span>
+        <span id="billing-nav-badge" class="bottom-nav-badge" style="display:none;"></span>
+      </button>
       <button type="button" class="bottom-nav-btn" data-nav="settings" title="Settings">
         <span class="bottom-nav-icon">&#9881;</span>
         <span class="bottom-nav-label">Settings</span>
@@ -2040,6 +2074,7 @@
   <script src="renderer/views/documents-screen.js"></script>
   <script src="renderer/views/billing-screen.js"></script>
   <script src="renderer/views/billable-attendances.js"></script>
+  <script src="renderer/views/billing-view.js"></script>
   <script src="renderer/views/station-mileage-admin.js"></script>
   <!-- laa-forms.js: CRM14 HTML summary for billing previews; CRM1–3 & declaration use official PDFs via IPC -->
   <script src="renderer/audit-log.js"></script>

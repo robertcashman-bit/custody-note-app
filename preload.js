@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld('api', {
   billingAuditLogGet: (attendanceId) => ipcRenderer.invoke('billing-audit-log-get', attendanceId),
   /* Billable attendances report */
   billableAttendances: () => ipcRenderer.invoke('billable-attendances'),
+  billingViewRecords: () => ipcRenderer.invoke('billing-view-records'),
   attendanceInvoiceStatus: (attendanceId) => ipcRenderer.invoke('attendance-invoice-status', attendanceId),
   pickImage: () => ipcRenderer.invoke('pick-image'),
   pickFile: () => ipcRenderer.invoke('pick-file'),

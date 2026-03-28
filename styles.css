@@ -6023,3 +6023,136 @@ html.dark .wf-audit-details summary { color: #93c5fd; }
 html.dark .wf-finalise-item { border-color: #334155; }
 html.dark .wf-check-done { color: #6ee7b7; }
 html.dark .wf-empty-state { color: #64748b; }
+
+/* ═══════════════════════════════════════════════════════
+   BILLING VIEW
+   ═══════════════════════════════════════════════════════ */
+.bv-summary-strip {
+  display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.75rem 0;
+}
+.bv-summary-item {
+  display: flex; flex-direction: column; align-items: center;
+  background: #f0f4f8; border-radius: 10px; padding: 0.65rem 1rem; min-width: 90px;
+}
+.bv-summary-num { font-size: 1.35rem; font-weight: 700; color: var(--primary); }
+.bv-summary-label { font-size: 0.72rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.03em; margin-top: 0.15rem; }
+.bv-summary-warn .bv-summary-num { color: #d97706; }
+.bv-summary-ok .bv-summary-num { color: #059669; }
+.bv-summary-done .bv-summary-num { color: #6366f1; }
+
+.bv-filter-bar {
+  display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center;
+}
+
+.bv-table-wrap { overflow-x: auto; }
+.bv-table {
+  width: 100%; border-collapse: collapse; font-size: 0.88rem;
+}
+.bv-table th {
+  text-align: left; padding: 0.6rem 0.75rem; font-weight: 600; color: #475569;
+  border-bottom: 2px solid #e2e8f0; white-space: nowrap; font-size: 0.78rem;
+  text-transform: uppercase; letter-spacing: 0.02em;
+}
+.bv-table td {
+  padding: 0.6rem 0.75rem; border-bottom: 1px solid #f1f5f9;
+}
+.bv-row { cursor: pointer; transition: background 0.15s; }
+.bv-row:hover { background: rgba(59,130,246,0.05); }
+.bv-cell-client { font-weight: 600; color: var(--primary); }
+
+.bv-att-warn { color: #d97706; font-size: 0.85rem; }
+
+.bv-badge {
+  display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; white-space: nowrap;
+}
+.bv-badge--docs { background: #fef3c7; color: #92400e; }
+.bv-badge--invoice { background: #dbeafe; color: #1e40af; }
+.bv-badge--invoiced { background: #d1fae5; color: #065f46; }
+.bv-badge--sent { background: #e0e7ff; color: #3730a3; }
+
+.bv-loading { text-align: center; padding: 2rem; color: #64748b; }
+.bv-empty { text-align: center; padding: 2rem; color: #94a3b8; font-style: italic; }
+
+/* Bottom nav badge */
+.bottom-nav-badge {
+  position: absolute; top: 2px; right: 6px;
+  background: #ef4444; color: #fff; font-size: 0.62rem; font-weight: 700;
+  min-width: 16px; height: 16px; line-height: 16px; text-align: center;
+  border-radius: 999px; padding: 0 4px;
+}
+.bottom-nav-btn { position: relative; }
+
+/* Section 9 billing link card */
+.section9-billing-link { margin-top: 1.25rem; }
+.section9-billing-link-inner {
+  display: flex; align-items: center; gap: 1rem;
+  background: linear-gradient(135deg, #ecfdf5, #f0f9ff);
+  border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 1rem 1.25rem;
+  transition: box-shadow 0.2s;
+}
+.section9-billing-link-inner:hover { box-shadow: 0 2px 12px rgba(16,185,129,0.12); }
+.section9-billing-link-icon { font-size: 1.8rem; color: #059669; }
+.section9-billing-link-text { flex: 1; }
+.section9-billing-link-text h4 { color: #065f46; }
+.section9-billing-link-text p { color: #475569; }
+.section9-billing-link-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+/* Records list billing badge */
+.record-billing-badge {
+  display: inline-block; padding: 0.12rem 0.45rem; border-radius: 999px;
+  font-size: 0.65rem; font-weight: 600; margin-left: 0.4rem; vertical-align: middle;
+}
+.record-billing-badge--docs { background: #fef3c7; color: #92400e; }
+.record-billing-badge--invoice { background: #dbeafe; color: #1e40af; }
+.record-billing-badge--invoiced { background: #d1fae5; color: #065f46; }
+.record-billing-badge--sent { background: #e0e7ff; color: #3730a3; }
+
+/* Home dashboard billing widget */
+.home-billing-widget {
+  background: linear-gradient(135deg, #ecfdf5, #eff6ff);
+  border: 1px solid #a7f3d0; border-radius: 12px;
+  padding: 0.85rem 1rem; margin-top: 1rem; cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.home-billing-widget:hover { box-shadow: 0 2px 12px rgba(16,185,129,0.12); }
+.home-billing-widget-title { font-weight: 700; font-size: 0.9rem; color: #065f46; margin-bottom: 0.35rem; }
+.home-billing-widget-stats { display: flex; gap: 1rem; font-size: 0.82rem; color: #334155; flex-wrap: wrap; }
+.home-billing-widget-stat { display: flex; gap: 0.25rem; align-items: center; }
+.home-billing-widget-num { font-weight: 700; }
+.home-billing-widget-warn { color: #d97706; }
+
+/* Home card green */
+.home-card-green { border-left: 3px solid #059669; }
+.home-card-green .home-card-icon { color: #059669; }
+
+/* ─── Dark theme: Billing view ─── */
+html.dark .bv-summary-item { background: #1e293b; }
+html.dark .bv-summary-label { color: #94a3b8; }
+html.dark .bv-table th { color: #94a3b8; border-color: #334155; }
+html.dark .bv-table td { border-color: #1e293b; }
+html.dark .bv-row:hover { background: rgba(30,41,59,0.7); }
+html.dark .bv-cell-client { color: #93c5fd; }
+html.dark .bv-loading { color: #94a3b8; }
+html.dark .bv-empty { color: #64748b; }
+html.dark .bv-badge--docs { background: #422006; color: #fbbf24; }
+html.dark .bv-badge--invoice { background: #1e3a5f; color: #93c5fd; }
+html.dark .bv-badge--invoiced { background: #064e3b; color: #6ee7b7; }
+html.dark .bv-badge--sent { background: #1e1b4b; color: #a5b4fc; }
+
+html.dark .section9-billing-link-inner { background: linear-gradient(135deg, #042f2e, #0c1e30); border-color: #059669; }
+html.dark .section9-billing-link-icon { color: #6ee7b7; }
+html.dark .section9-billing-link-text h4 { color: #6ee7b7; }
+html.dark .section9-billing-link-text p { color: #94a3b8; }
+
+html.dark .record-billing-badge--docs { background: #422006; color: #fbbf24; }
+html.dark .record-billing-badge--invoice { background: #1e3a5f; color: #93c5fd; }
+html.dark .record-billing-badge--invoiced { background: #064e3b; color: #6ee7b7; }
+html.dark .record-billing-badge--sent { background: #1e1b4b; color: #a5b4fc; }
+
+html.dark .home-billing-widget { background: linear-gradient(135deg, #042f2e, #0c1e30); border-color: #059669; }
+html.dark .home-billing-widget-title { color: #6ee7b7; }
+html.dark .home-billing-widget-stats { color: #94a3b8; }
+html.dark .home-billing-widget-warn { color: #fbbf24; }
+html.dark .home-card-green { border-left-color: #059669; }
+html.dark .home-card-green .home-card-icon { color: #6ee7b7; }

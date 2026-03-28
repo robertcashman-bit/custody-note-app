@@ -1,5 +1,5 @@
 /* ─── STATE ─── */
-var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage' };
+var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', billing: 'view-billing' };
 var currentAttendanceId = null;
 var stations = [];
 var firms = [];
@@ -2728,13 +2728,14 @@ var REQUIRED_FIELD_KEYS = [
     if (name === 'reports') { loadReports(); if (typeof loadBillableAttendances === 'function') loadBillableAttendances(); }
     if (name === 'station-mileage') { if (typeof loadStationMileage === 'function') loadStationMileage(); }
     if (name === 'authorities') { if (typeof loadAuthorities === 'function') loadAuthorities(); }
+    if (name === 'billing') { if (typeof loadBillingView === 'function') loadBillingView(); }
     if (name === 'settings') {
       loadSettings();
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     }
     if (name === 'new' && !currentAttendanceId && !Object.keys(formData).length) { activeFormSections = formSections; formData = {}; currentSectionIdx = 0; prefillDefaults(); renderForm(formData); }
     // sync bottom nav active state
-    var navMap = { home: 'home', list: 'list', new: 'new-attendance', firms: 'firms', settings: 'settings' };
+    var navMap = { home: 'home', list: 'list', new: 'new-attendance', firms: 'firms', billing: 'billing', settings: 'settings' };
     document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
       btn.classList.toggle('active', btn.dataset.nav === (navMap[name] || name));
     });
@@ -2755,6 +2756,7 @@ var REQUIRED_FIELD_KEYS = [
     updateHomeLicenceCard();
     updateGearLicenceItem();
     initSyncStatus();
+    updateHomeBillingWidget();
   }
 
   function initSyncStatus() {
@@ -3304,6 +3306,51 @@ var REQUIRED_FIELD_KEYS = [
         }
       });
     }
+  }
+
+  function updateHomeBillingWidget() {
+    var widget = document.getElementById('home-billing-widget');
+    if (!widget || !window.api) return;
+
+    var fetchFn = window.api.billingViewRecords || window.api.billableAttendances;
+    if (!fetchFn) return;
+
+    fetchFn().then(function (rows) {
+      var relevant = rows || [];
+      var needsDocs = 0, needsInvoice = 0, invoiced = 0, sent = 0;
+      relevant.forEach(function (r) {
+        var d = safeJson(r.data);
+        var hasInv = !!r.quickfile_invoice_id;
+        var invSent = (d.invoiceSent === 'Yes');
+        var hasAtt = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
+        if (invSent) sent++;
+        else if (hasInv) invoiced++;
+        else if (!hasAtt) needsDocs++;
+        else needsInvoice++;
+      });
+
+      var actionCount = needsDocs + needsInvoice;
+      if (relevant.length === 0) { widget.style.display = 'none'; return; }
+
+      widget.style.display = '';
+      widget.innerHTML =
+        '<div class="home-billing-widget-title">&#163; Billing Summary</div>' +
+        '<div class="home-billing-widget-stats">' +
+          (needsDocs > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsDocs + '</span> needs docs</span>' : '') +
+          (needsInvoice > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsInvoice + '</span> needs invoice</span>' : '') +
+          (invoiced > 0 ? '<span class="home-billing-widget-stat"><span class="home-billing-widget-num">' + invoiced + '</span> invoiced</span>' : '') +
+          (sent > 0 ? '<span class="home-billing-widget-stat"><span class="home-billing-widget-num">' + sent + '</span> sent</span>' : '') +
+          (actionCount === 0 ? '<span class="home-billing-widget-stat">All up to date</span>' : '') +
+        '</div>';
+
+      widget.onclick = function () { showView('billing'); };
+
+      var badge = document.getElementById('billing-nav-badge');
+      if (badge) {
+        if (actionCount > 0) { badge.textContent = String(actionCount); badge.style.display = ''; }
+        else { badge.style.display = 'none'; }
+      }
+    }).catch(function () { widget.style.display = 'none'; });
   }
 
   function isSupervisorSectionEnabled() {
@@ -5236,6 +5283,16 @@ var REQUIRED_FIELD_KEYS = [
           attendance_date: r.attendance_date,
           data: d
         }, 2, 'list-health-badge');
+        var billingBadge = '';
+        if (r.status === 'finalised' || r.quickfile_invoice_id) {
+          var _hasInv = !!r.quickfile_invoice_id;
+          var _invSent = (d.invoiceSent === 'Yes');
+          var _hasAtt = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
+          if (_invSent) billingBadge = '<span class="record-billing-badge record-billing-badge--sent">Sent</span>';
+          else if (_hasInv) billingBadge = '<span class="record-billing-badge record-billing-badge--invoiced">Invoiced</span>';
+          else if (!_hasAtt) billingBadge = '<span class="record-billing-badge record-billing-badge--docs">Needs docs</span>';
+          else billingBadge = '<span class="record-billing-badge record-billing-badge--invoice">Needs invoice</span>';
+        }
         const li = document.createElement('li');
         li.dataset.id = r.id;
         li.dataset.title = title;
@@ -5245,6 +5302,7 @@ var REQUIRED_FIELD_KEYS = [
               formTypeBadge +
               declBadge +
               healthBadges +
+              billingBadge +
               '<span class="badge ' + (r.status || 'draft') + '">' + (r.status || 'draft') + '</span>' +
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
@@ -6530,63 +6588,23 @@ var REQUIRED_FIELD_KEYS = [
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
           '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>';
         section.appendChild(endActions);
-        const photoWrap = document.createElement('div');
-        photoWrap.className = 'photo-attach-area photo-attach-area-prominent';
-        photoWrap.innerHTML = '<div class="photo-attach-header">' +
-          '<h4 class="section-heading photo-attach-title" style="margin-top:0;cursor:default;">Attachments &amp; Documents</h4>' +
-          '<span class="photo-attach-badge">Add files here</span>' +
-          '</div>' +
-          '<p class="photo-attach-copy">Attach photos, documents, screenshots, audio, archives, or any other supporting file for this attendance. Files added here are saved with the record and included in exports.</p>';
-        const thumbs = document.createElement('div');
-        thumbs.className = 'photo-thumbs';
-        thumbs.id = 'photo-thumbs-attachments';
-        photoWrap.appendChild(thumbs);
-        const attachBtn = document.createElement('button');
-        attachBtn.type = 'button';
-        attachBtn.className = 'btn btn-primary photo-attach-btn';
-        attachBtn.textContent = '+ Add Attachment';
-        attachBtn.addEventListener('click', () => {
-          const picker = (window.api && window.api.pickFile) ? window.api.pickFile : (window.api && window.api.pickImage ? window.api.pickImage : null);
-          if (!picker) return;
-          picker().then(result => {
-            if (!result || result.error) { if (result && result.error) showToast(result.error, 'error'); return; }
-            if (!formData.photos) formData.photos = {};
-            if (!formData.photos['attachments']) formData.photos['attachments'] = [];
-            formData.photos['attachments'].push({ dataUrl: result.dataUrl, name: result.name, mime: result.mime });
-            renderPhotoThumbs('attachments');
-            quietSave();
-          });
-        });
-        photoWrap.appendChild(attachBtn);
-        section.appendChild(photoWrap);
-        const billingPanel = document.createElement('div');
-        billingPanel.id = 'billing-readiness-panel';
-        billingPanel.className = 'billing-readiness-panel';
-        billingPanel.innerHTML =
-          '<div class="billing-readiness-head">' +
-            '<div>' +
-              '<h4 class="billing-readiness-title">Billing &amp; Invoice</h4>' +
-              '<p class="billing-readiness-copy">Finalise the matter, attach official LAA PDFs, bill via QuickFile, then archive the record when the file is complete.</p>' +
+        const billingLink = document.createElement('div');
+        billingLink.className = 'section9-billing-link';
+        billingLink.innerHTML =
+          '<div class="section9-billing-link-inner">' +
+            '<div class="section9-billing-link-icon">&#163;</div>' +
+            '<div class="section9-billing-link-text">' +
+              '<h4 style="margin:0 0 0.25rem 0;">Documents &amp; Billing</h4>' +
+              '<p style="margin:0;font-size:0.85rem;opacity:0.8;">Manage attachments, create invoices and finalise matters from the dedicated Billing view.</p>' +
             '</div>' +
-            '<span id="billing-readiness-status" class="billing-readiness-status state-review">Needs review</span>' +
-          '</div>' +
-          '<div class="billing-readiness-actions">' +
-            '<button type="button" id="billing-readiness-open" class="btn btn-primary">Open Billing &amp; Invoice</button>' +
-            '<p id="billing-readiness-summary" class="billing-readiness-summary"></p>' +
-          '</div>' +
-          '<ol class="billing-readiness-steps">' +
-            '<li>When the police-station work is finished, <strong>finalise</strong> the attendance (toolbar).</li>' +
-            '<li>Open Billing: review LAA forms on file, use Print preview to check PDF or Word layout, confirm fees, then create the QuickFile invoice (attendance PDF is attached to the invoice when possible).</li>' +
-            '<li>After sending the invoice, set <strong>Invoice sent?</strong> to Yes; when the file is closed, <strong>Archive</strong> the record from the toolbar.</li>' +
-          '</ol>' +
-          '<div id="billing-readiness-warnings-wrap" class="billing-readiness-warnings">' +
-            '<p class="billing-readiness-warning-title">Still to check before invoicing:</p>' +
-            '<ul id="billing-readiness-list" class="billing-readiness-list"></ul>' +
+            '<div class="section9-billing-link-actions">' +
+              '<button type="button" class="btn btn-primary" id="section9-goto-billing-view">Go to Billing</button>' +
+              '<button type="button" class="btn btn-secondary" id="section9-open-workflow">Open Workflow</button>' +
+            '</div>' +
           '</div>';
-        billingPanel.querySelector('#billing-readiness-open').onclick = function() {
-          promptBeforeOpeningBilling();
-        };
-        section.appendChild(billingPanel);
+        billingLink.querySelector('#section9-goto-billing-view').onclick = function() { showView('billing'); };
+        billingLink.querySelector('#section9-open-workflow').onclick = function() { promptBeforeOpeningBilling(); };
+        section.appendChild(billingLink);
         if (formData.photos) {
           const legacyKeys = ['custody', 'disclosure', 'interview', 'injuriesAppearance'];
           for (const lk of legacyKeys) {
@@ -6597,7 +6615,6 @@ var REQUIRED_FIELD_KEYS = [
             }
           }
         }
-        renderPhotoThumbs('attachments');
         updateTimeBreakdownPanel();
       }
 
@@ -11972,6 +11989,10 @@ PDF_CASENOTE_ADVERT +
             e.preventDefault();
             if (typeof openQuickEmailModal === 'function') openQuickEmailModal();
             return;
+          case 'home-card-billing':
+            e.preventDefault();
+            showView('billing');
+            return;
           case 'home-focus-open':
             e.preventDefault();
             if (t.dataset.id) {
@@ -12424,7 +12445,7 @@ PDF_CASENOTE_ADVERT +
           } else {
             showView('new');
           }
-        } else if (nav === 'home' || nav === 'list' || nav === 'firms' || nav === 'settings') {
+        } else if (nav === 'home' || nav === 'list' || nav === 'firms' || nav === 'billing' || nav === 'settings') {
           _guardedNav(nav);
         }
       });
