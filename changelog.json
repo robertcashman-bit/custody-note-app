@@ -1,9 +1,28 @@
 {
   "releases": [
     {
+      "version": "1.4.153",
+      "date": "2026-03-28",
+      "latest": true,
+      "changes": [
+        "Documents & Billing promoted to top-level navigation",
+        "New Billing view with record table, filters, status badges",
+        "Home screen billing widget and nav badge",
+        "Section 9 streamlined with link to billing view"
+      ]
+    },
+    {
+      "version": "1.4.152",
+      "date": "2026-03-28",
+      "latest": false,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
       "version": "1.4.151",
       "date": "2026-03-27",
-      "latest": true,
+      "latest": false,
       "changes": [
         "End-of-matter workflow: Documents, Billing, Complete stepper",
         "Filename and billing utility helpers",
