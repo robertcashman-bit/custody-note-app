@@ -317,10 +317,10 @@ describe('Workflow stepper source', () => {
     assert.ok(workflowStepperSrc.includes('function closeWorkflow'));
   });
 
-  it('has 3 workflow steps: documents, billing, complete', () => {
+  it('has 2 workflow steps: documents and billing only', () => {
     assert.ok(workflowStepperSrc.includes("id: 'documents'"));
     assert.ok(workflowStepperSrc.includes("id: 'billing'"));
-    assert.ok(workflowStepperSrc.includes("id: 'complete'"));
+    assert.ok(!workflowStepperSrc.includes("id: 'complete'"));
   });
 
   it('builds stepper navigation with step numbers', () => {
@@ -414,16 +414,11 @@ describe('Billing screen source', () => {
     assert.ok(billingScreenSrc.includes('buildLine1Description'));
   });
 
-  it('has complete/finalise step with archive action', () => {
-    assert.ok(billingScreenSrc.includes('function _wfRenderCompleteStep'));
-    assert.ok(billingScreenSrc.includes('Ready to Archive'));
-    assert.ok(billingScreenSrc.includes('Archive Record'));
-  });
-
-  it('finalise checklist has 2 items: details and attachments (no invoice required)', () => {
-    assert.ok(billingScreenSrc.includes('Required matter details complete'));
-    assert.ok(billingScreenSrc.includes('Attachments standardised'));
-    assert.ok(!billingScreenSrc.includes("'Invoice created'"));
+  it('billing footer closes workflow (no Complete / Ready to Archive step)', () => {
+    assert.ok(!billingScreenSrc.includes('Ready to Archive'));
+    assert.ok(!billingScreenSrc.includes('function _wfRenderCompleteStep'));
+    assert.ok(billingScreenSrc.includes('wf-bill-close'));
+    assert.ok(billingScreenSrc.includes('closeWorkflow'));
   });
 
   it('has status badges for draft and invoiced states', () => {

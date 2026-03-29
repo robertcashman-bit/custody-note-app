@@ -1,19 +1,18 @@
 /* ═══════════════════════════════════════════════════════
    END-OF-MATTER WORKFLOW
-   3-step flow: Documents → Billing → Complete
+   2-step flow: Documents → Billing
    Replaces the old billing overlay with a full-panel workflow.
    Depends on: filenameUtils.js, billingUtils.js, billing.js globals,
                app.js globals (getFormData, currentAttendanceId, formData, stations, firms)
    ═══════════════════════════════════════════════════════ */
 
 var _workflowOpen = false;
-var _workflowStep = 0; // 0=Documents, 1=Billing, 2=Complete
+var _workflowStep = 0; // 0=Documents, 1=Billing
 var _workflowOnClose = null;
 
 var _workflowSteps = [
   { id: 'documents', label: 'Documents', icon: '&#128196;' },
   { id: 'billing',   label: 'Billing',   icon: '&#163;' },
-  { id: 'complete',  label: 'Complete',   icon: '&#10003;' },
 ];
 
 function _wfMatterMeta() {
@@ -148,7 +147,6 @@ function _wfRenderCurrentStep() {
   switch (_workflowSteps[_workflowStep].id) {
     case 'documents': _wfRenderDocumentsStep(body, footer); break;
     case 'billing':   _wfRenderBillingStep(body, footer); break;
-    case 'complete':  _wfRenderCompleteStep(body, footer); break;
   }
 }
 

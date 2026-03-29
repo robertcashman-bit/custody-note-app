@@ -231,10 +231,10 @@ function _wfBuildBillingFooter(footer, meta, opts) {
     '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create" disabled>' +
       (opts.hasExistingInvoice ? '&#9888; Create Another Invoice' : 'Generate Invoice') +
     '</button>' +
-    '<button type="button" id="wf-bill-next" class="btn btn-accent">Next: Complete &#9654;</button>';
+    '<button type="button" id="wf-bill-close" class="btn btn-secondary">Close</button>';
 
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
-  document.getElementById('wf-bill-next').addEventListener('click', _wfGoNext);
+  document.getElementById('wf-bill-close').addEventListener('click', closeWorkflow);
 
   document.getElementById('wf-bill-create').addEventListener('click', function () {
     _wfHandleCreateInvoice(meta, opts);
@@ -320,72 +320,4 @@ function _wfHandleCreateInvoice(meta, opts) {
   };
 
   _handleCreateInvoice(recordId, mergedOpts);
-}
-
-
-/* ═══════════════════════════════════════════════════════
-   COMPLETE SCREEN (Workflow Step 3)
-   Finalisation checklist and archive action.
-   ═══════════════════════════════════════════════════════ */
-
-function _wfRenderCompleteStep(body, footer) {
-  var meta = _wfMatterMeta();
-  var data = meta.data;
-  var attachments = _wfGetAttachments(data);
-
-  var allNamed = attachments.length === 0 || attachments.every(function (a) { return !!a.documentType; });
-  var detailsComplete = !!(meta.clientName && meta.stationName && meta.attendanceDate && meta.firmName);
-
-  var checks = [
-    { label: 'Required matter details complete', done: detailsComplete },
-    { label: 'Attachments standardised', done: allNamed },
-  ];
-
-  var allDone = checks.every(function (c) { return c.done; });
-
-  var html =
-    '<div class="wf-screen wf-complete">' +
-      '<div class="wf-screen-header">' +
-        '<h3>Ready to Archive</h3>' +
-        '<p class="wf-screen-sub">Confirm all steps are complete before archiving this record.</p>' +
-      '</div>' +
-      '<div class="wf-card wf-finalise-card">' +
-        '<ul class="wf-finalise-list">';
-
-  checks.forEach(function (c) {
-    var icon = c.done ? '<span class="wf-check-done">&#10003;</span>' : '<span class="wf-check-pending">&#9744;</span>';
-    html += '<li class="wf-finalise-item">' + icon + ' ' + _wfEsc(c.label) + '</li>';
-  });
-
-  html += '</ul></div></div>';
-
-  body.innerHTML = html;
-
-  footer.innerHTML =
-    '<button type="button" id="wf-comp-back" class="btn btn-secondary">&#9664; Back</button>' +
-    '<button type="button" id="wf-comp-archive" class="btn btn-primary"' + (allDone ? '' : ' disabled') + '>Archive Record</button>' +
-    '<button type="button" id="wf-comp-close" class="btn btn-secondary">Close</button>';
-
-  document.getElementById('wf-comp-back').addEventListener('click', _wfGoBack);
-  document.getElementById('wf-comp-close').addEventListener('click', closeWorkflow);
-  document.getElementById('wf-comp-archive').addEventListener('click', function () {
-    if (!allDone) {
-      showToast('Complete all items before archiving', 'error');
-      return;
-    }
-    if (typeof showConfirm === 'function') {
-      showConfirm('Archive this record? It will be hidden from the main records list.').then(function (ok) {
-        if (!ok) return;
-        if (typeof archiveRecord === 'function') {
-          archiveRecord();
-          closeWorkflow();
-        } else {
-          showToast('Archive function not available', 'error');
-        }
-      });
-    } else if (typeof archiveRecord === 'function') {
-      archiveRecord();
-      closeWorkflow();
-    }
-  });
 }
