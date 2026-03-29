@@ -160,12 +160,12 @@ test('billable-attendances.js does NOT use hardcoded 1.20 VAT multiplier', () =>
 });
 
 /* ══════════════════════════════════════════════════
-   BILLING SCREEN — ARCHIVE CONFIRMATION
+   ARCHIVE CONFIRMATION (main form — workflow no longer archives in overlay)
    ══════════════════════════════════════════════════ */
 
-test('billing-screen Complete step has archive confirmation dialog', () => {
-  const src = readSrc('renderer/views/billing-screen.js');
-  assert.ok(src.includes('showConfirm'), 'Archive action must have a confirmation dialog');
+test('app.js archive flow uses confirmation dialog', () => {
+  const src = readSrc('app.js');
+  assert.ok(src.includes('showConfirm'), 'Archive action must use confirmation dialog');
   assert.ok(src.includes('Archive this record'), 'Confirmation should mention archiving');
 });
 
