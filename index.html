@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://sql.js.org 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://sql.js.org https://custodynote.com https://www.custodynote.com; object-src 'none'; base-uri 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://sql.js.org 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://sql.js.org https://custodynote.com https://www.custodynote.com; object-src 'none'; base-uri 'none';">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta name="theme-color" content="#0f172a">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -810,7 +810,7 @@
         <div class="sections-index-content" style="max-width:480px;width:94%;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
             <h3 id="authority-record-picker-title" style="margin:0;font-size:1.05rem;">Select record</h3>
-            <button type="button" class="btn btn-secondary btn-small" onclick="_closeAuthorityRecordPicker()">&times; Close</button>
+            <button type="button" id="authority-record-picker-close" class="btn btn-secondary btn-small">&times; Close</button>
           </div>
           <ul id="authority-record-list" class="attendance-picker-list" style="max-height:55vh;overflow-y:auto;"></ul>
         </div>
@@ -821,7 +821,7 @@
         <div class="sections-index-content" style="max-width:460px;width:94%;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
             <h3 id="authority-fill-title" style="margin:0;font-size:1.05rem;">Missing fields</h3>
-            <button type="button" class="btn btn-secondary btn-small" onclick="_closeAuthorityFillModal()">&times; Close</button>
+            <button type="button" id="authority-fill-modal-close" class="btn btn-secondary btn-small">&times; Close</button>
           </div>
           <p class="settings-hint" style="margin-bottom:0.75rem;">These fields were not found in the record. Please enter them below.</p>
           <div id="authority-fill-form"></div>
@@ -1524,7 +1524,7 @@
         <div class="help-page">
 
           <p class="help-intro">Custody Note is a complete digital attendance note and LAA billing tool for police station representatives. Everything is stored locally on your computer &mdash; no internet connection is required. This guide covers every feature in detail.</p>
-          <p class="help-intro" style="margin-top:0.5rem;">Need help? <a href="#" onclick="if(window.api&&window.api.openExternal){window.api.openExternal('https://www.custodynote.com/support');}return false;">Support forum</a> &middot; <a href="#" onclick="if(window.api&&window.api.openExternal){window.api.openExternal('https://www.custodynote.com/contact');}return false;">Contact us</a> &middot; <a href="#" onclick="if(window.api&&window.api.openExternal){window.api.openExternal('https://www.custodynote.com/faq');}return false;">FAQ</a></p>
+          <p class="help-intro" style="margin-top:0.5rem;">Need help? <a href="#" data-ext-href="https://www.custodynote.com/support">Support forum</a> &middot; <a href="#" data-ext-href="https://www.custodynote.com/contact">Contact us</a> &middot; <a href="#" data-ext-href="https://www.custodynote.com/faq">FAQ</a></p>
 
           <details class="help-section" open>
             <summary class="help-heading">Recommended order of work (typical matter)</summary>
@@ -1852,7 +1852,7 @@
                 <li><strong>Isolated:</strong> Only your licence key can access your backups. No other subscriber can see your data (SRA-compliant).</li>
                 <li><strong>Restore:</strong> If your computer fails, install Custody Note on a new machine, enter your licence key, and restore from the cloud. You will need your recovery password.</li>
               </ul>
-              <p>To subscribe, go to <strong>Settings &gt; Cloud Backup</strong> or visit <a href="#" onclick="if(window.api&&window.api.openExternal)window.api.openExternal('https://custodynote.com/pricing');return false;">custodynote.com/pricing</a>.</p>
+              <p>To subscribe, go to <strong>Settings &gt; Cloud Backup</strong> or visit <a href="#" data-ext-href="https://custodynote.com/pricing">custodynote.com/pricing</a>.</p>
               <p style="margin-top:0.75rem;padding:0.75rem;background:#d1fae5;border-radius:6px;border:1px solid #10b981;font-size:0.9rem;"><strong>&#10003; Cloud Backup included:</strong> With an active licence, your database is automatically backed up to AWS (encrypted, UK data centre). Connect to the internet to sync and enable backups.</p>
             </div>
           </details>
@@ -2103,41 +2103,8 @@
   <script src="renderer/templateSystem/templateEngine.js"></script>
   <script src="renderer/templateSystem/templateStore.js"></script>
   <script src="renderer/templateSystem/templateManager.js"></script>
-  <!-- Unregister any stale service workers (not needed in Electron) -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (regs) {
-        regs.forEach(function (r) { r.unregister(); });
-        if (regs.length) console.log('[SW] Unregistered', regs.length, 'stale service worker(s)');
-      });
-      if ('caches' in window) {
-        caches.keys().then(function (names) {
-          names.forEach(function (n) { caches.delete(n); });
-          if (names.length) console.log('[SW] Cleared', names.length, 'cache(s)');
-        });
-      }
-    }
-    // Fallback: if init() never runs (e.g. script error), hide splash after 9s so user is not stuck
-    setTimeout(function () {
-      var s = document.getElementById('splash');
-      if (s && s.parentNode) {
-        s.classList.add('fade-out');
-        setTimeout(function () { s.remove(); }, 600);
-      }
-    }, 9000);
-
-    // Admin panel: Ctrl+Shift+A
-    document.addEventListener('keydown', function(e) {
-      if (e.ctrlKey && e.shiftKey && e.key === 'A') {
-        e.preventDefault();
-        var panel = document.getElementById('admin-licence-panel');
-        if (panel) {
-          var show = panel.style.display !== 'flex';
-          panel.style.display = show ? 'flex' : 'none';
-        }
-      }
-    });
-  </script>
+  <!-- Event wiring, service-worker cleanup, fallback splash timer, admin shortcut -->
+  <script src="renderer/init-events.js"></script>
 
   <!-- Admin licence panel (hidden, Ctrl+Shift+A to toggle) -->
   <div id="admin-licence-panel" class="admin-panel" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;flex;">

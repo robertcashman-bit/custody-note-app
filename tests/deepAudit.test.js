@@ -347,11 +347,17 @@ describe('8 · Content Security Policy', () => {
     assert.ok(csp.includes("'self'"), "'self' missing from CSP");
   });
 
-  it('unsafe-inline audit (warning, not failure)', () => {
-    if (csp.includes("'unsafe-inline'")) {
-      console.log("    ⚠  CSP contains 'unsafe-inline' — consider removing when feasible");
-    } else {
-      console.log("    ✓  CSP does not contain 'unsafe-inline'");
+  it("script-src does not contain 'unsafe-inline'", () => {
+    const scriptSrcMatch = csp.match(/script-src\s+([^;]+)/);
+    const scriptSrc = scriptSrcMatch ? scriptSrcMatch[1] : '';
+    assert.ok(!scriptSrc.includes("'unsafe-inline'"), "script-src must not contain 'unsafe-inline' — move inline scripts to external files");
+  });
+
+  it("style-src unsafe-inline audit (warning only)", () => {
+    const styleSrcMatch = csp.match(/style-src\s+([^;]+)/);
+    const styleSrc = styleSrcMatch ? styleSrcMatch[1] : '';
+    if (styleSrc.includes("'unsafe-inline'")) {
+      console.log("    ⚠  style-src contains 'unsafe-inline' — acceptable for inline style attrs; remove if nonces added");
     }
     assert.ok(true);
   });
@@ -383,17 +389,18 @@ describe('10 · Dead Code & Broken References', () => {
   const pkg = JSON.parse(readFile('package.json'));
   const indexSrc = readFile('index.html');
 
-  it('stations script path points to an existing file OR is flagged', () => {
-    const stationsCmd = pkg.scripts.stations || '';
-    const scriptPathMatch = stationsCmd.match(/node\s+(.+)/);
-    if (scriptPathMatch) {
-      const scriptFile = scriptPathMatch[1].trim();
-      const fullPath = path.join(ROOT, scriptFile);
-      if (!fs.existsSync(fullPath)) {
-        console.log(`    ⚠  BROKEN REF: stations script references "${scriptFile}" which does not exist — flag for cleanup`);
+  it('no broken node script references in package.json scripts', () => {
+    const scripts = pkg.scripts || {};
+    const broken = [];
+    for (const [name, cmd] of Object.entries(scripts)) {
+      const m = (cmd || '').match(/^node\s+([\w./\-]+\.(?:js|mjs|cjs))/);
+      if (m) {
+        const scriptFile = m[1];
+        const fullPath = path.join(ROOT, scriptFile);
+        if (!fs.existsSync(fullPath)) broken.push(`${name}: ${scriptFile}`);
       }
     }
-    assert.ok(true, 'stations script path checked');
+    assert.deepEqual(broken, [], `Broken node script references: ${broken.join(', ')}`);
   });
 
   it('all script tags in index.html reference existing files', () => {
