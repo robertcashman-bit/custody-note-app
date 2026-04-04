@@ -3781,19 +3781,20 @@ app.whenReady().then(async () => {
 
     console.log(`[AutoUpdate] Init — app ${app.getVersion()}, packaged=${app.isPackaged}, platform=${process.platform}`);
 
-    safeCheckForUpdates = function safeCheckForUpdates(source) {
+    safeCheckForUpdates = function safeCheckForUpdates(source, opts) {
+      var force = opts && opts.force;
       if (_updaterState === 'downloaded' || _updaterState === 'installing') {
         console.log(`[AutoUpdate] Skipping check (${source}) — already downloaded v${_downloadedVersion}`);
-        return;
+        return 'downloaded';
       }
       if (_updaterState === 'checking' || _updaterState === 'downloading') {
         console.log(`[AutoUpdate] Skipping check (${source}) — already in state: ${_updaterState}`);
-        return;
+        return _updaterState;
       }
       const now = Date.now();
-      if (now - _lastCheckTime < UPDATE_CHECK_COOLDOWN) {
+      if (!force && now - _lastCheckTime < UPDATE_CHECK_COOLDOWN) {
         console.log(`[AutoUpdate] Skipping check (${source}) — cooldown (${Math.round((UPDATE_CHECK_COOLDOWN - (now - _lastCheckTime)) / 1000)}s remaining)`);
-        return;
+        return 'cooldown';
       }
       _updaterState = 'checking';
       _lastCheckTime = now;
@@ -3802,6 +3803,7 @@ app.whenReady().then(async () => {
         console.warn(`[AutoUpdate] Check failed (${source}):`, err?.message || err);
         _updaterState = 'idle';
       });
+      return 'checking';
     }
 
     autoUpdater.on('update-available', (info) => {
@@ -3854,7 +3856,10 @@ app.whenReady().then(async () => {
         return { status: 'ready', version: _downloadedVersion };
       }
       try {
-        safeCheckForUpdates('manual-ipc');
+        var result = safeCheckForUpdates('manual-ipc', { force: true });
+        if (result === 'checking') return { status: 'checking' };
+        if (result === 'downloading') return { status: 'downloading' };
+        if (result === 'downloaded') return { status: 'ready', version: _downloadedVersion };
         return { status: 'checking' };
       } catch (e) {
         return { status: 'error', message: e?.message || 'Update check failed' };

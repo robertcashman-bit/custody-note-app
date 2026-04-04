@@ -2778,15 +2778,28 @@ var REQUIRED_FIELD_KEYS = [
           btn.textContent = '\u2713 Up to date';
           btn.style.color = '#059669';
           showToast('You\u2019re on the latest version', 'success');
+        } else if (res.status === 'checking') {
+          btn.textContent = '\u21BB Checking\u2026';
+          btn.style.color = '#d97706';
+        } else if (res.status === 'downloading') {
+          btn.textContent = '\u21BB Downloading\u2026';
+          btn.style.color = '#d97706';
+        } else if (res.status === 'ready') {
+          btn.textContent = '\u21BB Install v' + (res.version || '');
+          btn.style.color = '#059669';
+          btn.onclick = function() { window.api.appUpdateInstall(); };
+          showToast('Update ready — click to install', 'success');
         } else if (res.status === 'available') {
           btn.textContent = '\u21BB Downloading v' + (res.version || '') + '\u2026';
           btn.style.color = '#d97706';
         } else if (res.status === 'dev') {
           btn.textContent = '\u21BB Check for updates';
           showToast('Updates only apply to the installed app', 'info');
+        } else if (res.status === 'error') {
+          btn.textContent = '\u21BB Check for updates';
+          showToast('Could not check: ' + (res.message || 'Update check failed'), 'error');
         } else {
           btn.textContent = '\u21BB Check for updates';
-          showToast('Could not check: ' + (res.message || 'Unknown error'), 'error');
         }
       }).catch(function() {
         btn.textContent = '\u21BB Check for updates';
@@ -2794,8 +2807,10 @@ var REQUIRED_FIELD_KEYS = [
       }).finally(function() {
         btn.disabled = false;
         setTimeout(function() {
-          btn.textContent = '\u21BB Check for updates';
-          btn.style.color = '';
+          if (btn.textContent.indexOf('Install') === -1) {
+            btn.textContent = '\u21BB Check for updates';
+            btn.style.color = '';
+          }
         }, 10000);
       });
     });
@@ -13365,6 +13380,16 @@ PDF_CASENOTE_ADVERT +
           showToast('You\'re up to date', 'success');
           if (gearBtn) gearBtn.textContent = '\u2713 Up to date';
           if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
+        } else if (res.status === 'checking') {
+          if (statusEl) statusEl.textContent = 'Checking for updates\u2026';
+        } else if (res.status === 'downloading') {
+          showToast('Downloading update\u2026', 'info');
+          if (gearBtn) gearBtn.textContent = '\u21BB Downloading\u2026';
+          if (statusEl) statusEl.textContent = 'Downloading update\u2026';
+        } else if (res.status === 'ready') {
+          showToast('Update v' + (res.version || '') + ' ready — restart to install', 'success');
+          if (gearBtn) gearBtn.textContent = '\u21BB Install v' + (res.version || '');
+          if (statusEl) statusEl.textContent = 'Update v' + (res.version || '') + ' ready — restart to install';
         } else if (res.status === 'available') {
           showToast('Update v' + (res.version || '') + ' found \u2014 downloading\u2026', 'success');
           if (gearBtn) gearBtn.textContent = '\u21BB Downloading v' + (res.version || '') + '\u2026';
@@ -13372,9 +13397,9 @@ PDF_CASENOTE_ADVERT +
         } else if (res.status === 'dev') {
           showToast('Updates only apply to the installed app', 'info');
           if (statusEl) statusEl.textContent = 'Updates only apply to the installed app.';
-        } else {
-          showToast('Could not check: ' + (res.message || 'Unknown error'), 'error');
-          if (statusEl) statusEl.textContent = 'Could not check: ' + (res.message || 'Unknown error');
+        } else if (res.status === 'error') {
+          showToast('Could not check: ' + (res.message || 'Update check failed'), 'error');
+          if (statusEl) statusEl.textContent = 'Could not check: ' + (res.message || 'Update check failed');
         }
       }).catch(function() {
         showToast('Update check failed', 'error');
