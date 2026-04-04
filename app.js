@@ -3623,6 +3623,12 @@ var REQUIRED_FIELD_KEYS = [
         selectedLine.querySelector('.form-firm-change').addEventListener('click', function() {
           hiddenInput.value = '';
           rememberQuickCaptureFirmId('');
+          var nameEl = document.getElementById('qc-referral-name');
+          var phoneEl = document.getElementById('qc-referral-phone');
+          var emailEl = document.getElementById('qc-referral-email');
+          if (nameEl) nameEl.value = '';
+          if (phoneEl) phoneEl.value = '';
+          if (emailEl) emailEl.value = '';
           qcUpdateFirmSelectedLine();
           choiceRow.style.display = 'flex';
           addSection.style.display = 'none';
@@ -3665,15 +3671,7 @@ var REQUIRED_FIELD_KEYS = [
     if (addSection) addSection.style.display = 'none';
     if (useSection) useSection.style.display = 'none';
     refreshQuickCaptureContactSuggestions();
-    if (!hiddenInput.value) {
-      var rememberedId = getRememberedQuickCaptureFirmId();
-      var preferredFirm = (rememberedId && firms.find(function(fi) { return String(fi.id) === String(rememberedId); })) ||
-        firms.find(function(fi) { return !!fi.is_default; });
-      if (preferredFirm) {
-        hiddenInput.value = String(preferredFirm.id);
-        qcSetReferralFromFirm(preferredFirm, { overwrite: false });
-      }
-    }
+    /* Firm fields start blank — user must actively select a firm. */
     qcUpdateFirmSelectedLine();
 
     if (wrap.dataset.qcFirmInit === '1') {
@@ -3982,7 +3980,7 @@ var REQUIRED_FIELD_KEYS = [
       formData.address3 = '';
       formData._addressMigrated = true;
     }
-    if (!formData.travelOriginPostcode) formData.travelOriginPostcode = 'TN156ER';
+    /* travelOriginPostcode pulled from settings below (inside getSettings callback). */
     if (!formData.clientType) formData.clientType = 'New';
     if (!formData.fitToBeDetained) formData.fitToBeDetained = 'Yes';
     if (!formData.fitToBeInterviewed) formData.fitToBeInterviewed = 'Yes';
@@ -4042,6 +4040,10 @@ var REQUIRED_FIELD_KEYS = [
         formData.laaFeeEarnerFullName = s.feeEarnerNameDefault;
         setFieldValue('laaFeeEarnerFullName', s.feeEarnerNameDefault);
       }
+      if (!formData.travelOriginPostcode && s.officePostcode) {
+        formData.travelOriginPostcode = s.officePostcode;
+        setFieldValue('travelOriginPostcode', s.officePostcode);
+      }
       const today = new Date().toISOString().slice(0, 10);
       const dow = new Date().getDay();
       const isWeekend = dow === 0 || dow === 6;
@@ -4049,21 +4051,8 @@ var REQUIRED_FIELD_KEYS = [
       const wbh = (isWeekend || isBH) ? 'Yes' : 'No';
       if (!formData.date) setFieldValue('date', today);
       setFieldValue('weekendBankHoliday', wbh);
-      if (!formData.firmId && firms && firms.length) {
-        var defaultFirm = firms.find(function(f) { return f.is_default; });
-        if (defaultFirm) {
-          formData.firmId = String(defaultFirm.id);
-          formData.firmName = defaultFirm.name || '';
-          setFieldValueSilent('firmLaaAccount', defaultFirm.laa_account || '');
-          setFieldValueSilent('firmContactName', defaultFirm.contact_name || '');
-          setFieldValueSilent('firmContactPhone', defaultFirm.contact_phone || '');
-          setFieldValueSilent('firmContactEmail', defaultFirm.contact_email || '');
-          if (defaultFirm.source_of_referral) {
-            setFieldValueSilent('sourceOfReferral', defaultFirm.source_of_referral);
-            setFieldValueSilent('instructionSource', defaultFirm.source_of_referral);
-          }
-        }
-      }
+      /* Firm fields intentionally left blank on new records —
+         user must actively select a firm via the firm picker. */
     });
   }
 
@@ -4447,6 +4436,8 @@ var REQUIRED_FIELD_KEYS = [
       if (qfApp) qfApp.value = s.quickfileAppId || '';
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
+      const opc = document.getElementById('setting-office-postcode');
+      if (opc) opc.value = s.officePostcode || '';
       const dm = document.getElementById('setting-dark-mode');
       if (dm) dm.checked = s.darkMode === 'true';
       if (s.colourTheme) applyTheme(s.colourTheme);
@@ -4669,6 +4660,7 @@ var REQUIRED_FIELD_KEYS = [
       billingMileageRate: document.getElementById('setting-billing-mileage-rate')?.value?.trim() || '0.45',
       billingVatRate: document.getElementById('setting-billing-vat-rate')?.value?.trim() || '20',
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
+      officePostcode: document.getElementById('setting-office-postcode')?.value?.trim() || '',
       darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
       fontSize: document.getElementById('setting-font-size')?.value || '16',
       layoutMode: document.getElementById('setting-layout-mode')?.value || 'standard',
@@ -7622,6 +7614,14 @@ var REQUIRED_FIELD_KEYS = [
             hiddenFirmInput.value = '';
             formData.firmId = '';
             formData.firmName = '';
+            formData.firmLaaAccount = '';
+            formData.firmContactName = '';
+            formData.firmContactPhone = '';
+            formData.firmContactEmail = '';
+            setFieldValue('firmLaaAccount', '');
+            setFieldValue('firmContactName', '');
+            setFieldValue('firmContactPhone', '');
+            setFieldValue('firmContactEmail', '');
             updateSelectedLine();
             choiceRow.style.display = 'flex';
             addRow.style.display = 'none';
@@ -14304,9 +14304,12 @@ PDF_CASENOTE_ADVERT +
       }
     });
 
-    // Fee earner name — was missing auto-save, so changes were lost on restart
     document.getElementById('setting-fee-earner-name')?.addEventListener('input', debounce((e) => {
       window.api.setSettings({ feeEarnerNameDefault: e.target.value.trim() }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
+    }, 800));
+
+    document.getElementById('setting-office-postcode')?.addEventListener('input', debounce((e) => {
+      window.api.setSettings({ officePostcode: e.target.value.trim() }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     }, 800));
 
     document.getElementById('setting-dark-mode')?.addEventListener('change', (e) => {
@@ -14809,8 +14812,10 @@ PDF_CASENOTE_ADVERT +
       if (!name) { showToast('Please enter your fee earner name', 'error'); return; }
       if (!pin) { showToast('Please enter your DSCC PIN/number', 'error'); return; }
       var email = (document.getElementById('fl-email').value || '').trim();
+      var officePostcode = (document.getElementById('fl-office-postcode')?.value || '').trim();
       _flSettings = { feeEarnerNameDefault: name, dsccPin: pin };
       if (email) _flSettings.email = email;
+      if (officePostcode) _flSettings.officePostcode = officePostcode;
       window.api.setSettings(_flSettings).then(function() {
         window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, _flSettings);
         showStep(2);
