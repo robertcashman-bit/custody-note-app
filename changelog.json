@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.161",
+      "version": "1.4.162",
       "date": "2026-04-04",
       "latest": true,
+      "changes": [
+        "Remove unsafe-inline from script-src CSP (move inline scripts to renderer/init-events.js)",
+        "remove broken stations script ref",
+        "deep audit now 59/59"
+      ]
+    },
+    {
+      "version": "1.4.161",
+      "date": "2026-04-04",
+      "latest": false,
       "changes": [
         "Main process IPC path hardening",
         "updater re-download loop fix",
