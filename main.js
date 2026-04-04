@@ -12,6 +12,9 @@ if (process.env.CUSTODYNOTE_TEST_USERDATA && String(process.env.CUSTODYNOTE_TEST
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 
+/** Populated inside app.whenReady() when running packaged NSIS builds. */
+let safeCheckForUpdates = null;
+
 function getFallbackAppDataRoot() {
   if (process.platform === 'win32') {
     return process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
@@ -448,6 +451,7 @@ function showPasswordInputDialog() {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
+        sandbox: true,
         preload: path.join(__dirname, 'password-preload.js'),
       },
       title: 'Recovery Password',
@@ -2037,8 +2041,8 @@ function createWindow() {
     }
   });
   mainWindow.on('closed', () => { mainWindow = null; });
-  if (app.isPackaged) {
-    mainWindow.on('focus', () => { autoUpdater.checkForUpdates().catch(() => {}); });
+  if (app.isPackaged && !IS_PORTABLE_BUILD) {
+    mainWindow.on('focus', () => { if (safeCheckForUpdates) safeCheckForUpdates('window-focus'); });
   }
 
   if (isCaptureMode) {
@@ -3248,7 +3252,9 @@ ipcMain.handle('app-update-install', () => {
   if (IS_PORTABLE_BUILD) {
     return { ok: false, error: 'Portable builds do not auto-install updates.' };
   }
-  autoUpdater.quitAndInstall(true, true);
+  console.log('[AutoUpdate] User requested install via IPC');
+  if (mainWindow) mainWindow._forceClose = true;
+  setImmediate(() => autoUpdater.quitAndInstall(false, true));
   return { ok: true };
 });
 
@@ -3737,6 +3743,7 @@ process.on('uncaughtException', (err) => {
 });
 
 app.whenReady().then(async () => {
+  console.log(`[Startup] Custody Note v${app.getVersion()} — packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}`);
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
@@ -3767,47 +3774,95 @@ app.whenReady().then(async () => {
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.logger = { info: console.log, warn: console.warn, error: console.error, debug: () => {} };
 
+    let _updaterState = 'idle';          // idle | checking | downloading | downloaded | installing
+    let _downloadedVersion = null;       // version string of the downloaded update
+    let _lastCheckTime = 0;              // Date.now() of last check
+    const UPDATE_CHECK_COOLDOWN = 10 * 60 * 1000; // 10 min between checks
+
+    console.log(`[AutoUpdate] Init — app ${app.getVersion()}, packaged=${app.isPackaged}, platform=${process.platform}`);
+
+    safeCheckForUpdates = function safeCheckForUpdates(source) {
+      if (_updaterState === 'downloaded' || _updaterState === 'installing') {
+        console.log(`[AutoUpdate] Skipping check (${source}) — already downloaded v${_downloadedVersion}`);
+        return;
+      }
+      if (_updaterState === 'checking' || _updaterState === 'downloading') {
+        console.log(`[AutoUpdate] Skipping check (${source}) — already in state: ${_updaterState}`);
+        return;
+      }
+      const now = Date.now();
+      if (now - _lastCheckTime < UPDATE_CHECK_COOLDOWN) {
+        console.log(`[AutoUpdate] Skipping check (${source}) — cooldown (${Math.round((UPDATE_CHECK_COOLDOWN - (now - _lastCheckTime)) / 1000)}s remaining)`);
+        return;
+      }
+      _updaterState = 'checking';
+      _lastCheckTime = now;
+      console.log(`[AutoUpdate] Checking for updates (${source})`);
+      autoUpdater.checkForUpdates().catch((err) => {
+        console.warn(`[AutoUpdate] Check failed (${source}):`, err?.message || err);
+        _updaterState = 'idle';
+      });
+    }
+
     autoUpdater.on('update-available', (info) => {
-      console.log('[AutoUpdate] Update available:', info.version);
+      console.log(`[AutoUpdate] Update available: v${info.version} (current: v${app.getVersion()})`);
+      _updaterState = 'downloading';
       if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'downloading', version: info.version });
     });
+
     autoUpdater.on('update-downloaded', (info) => {
-      console.log('[AutoUpdate] Update downloaded:', info.version, '— will install on next restart');
+      console.log(`[AutoUpdate] Downloaded: v${info.version} — ready to install on quit`);
+      _updaterState = 'downloaded';
+      _downloadedVersion = info.version;
       if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'ready', version: info.version });
     });
-    autoUpdater.on('update-not-available', () => {
-      console.log('[AutoUpdate] No update available');
+
+    autoUpdater.on('update-not-available', (info) => {
+      console.log(`[AutoUpdate] Up to date (latest: v${info?.version || '?'})`);
+      _updaterState = 'idle';
       if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'up-to-date' });
     });
-    var _updateRetryTimer = null;
-    var _updateRetrying = false;
-    autoUpdater.on('error', (err) => {
-      console.warn('[AutoUpdate] Error:', err?.message || err);
-      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'error', message: err?.message || 'Update check failed' });
-      if (!_updateRetrying) {
-        _updateRetrying = true;
-        clearTimeout(_updateRetryTimer);
-        _updateRetryTimer = setTimeout(() => {
-          _updateRetrying = false;
-          autoUpdater.checkForUpdates().catch(() => {});
-        }, 2 * 60 * 1000);
+
+    autoUpdater.on('download-progress', (progress) => {
+      if (progress && typeof progress.percent === 'number') {
+        console.log(`[AutoUpdate] Download progress: ${progress.percent.toFixed(1)}%`);
       }
     });
 
+    autoUpdater.on('error', (err) => {
+      console.warn('[AutoUpdate] Error:', err?.message || err);
+      const prevState = _updaterState;
+      _updaterState = 'idle';
+      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'error', message: err?.message || 'Update check failed' });
+      if (prevState === 'checking' || prevState === 'downloading') {
+        setTimeout(() => safeCheckForUpdates('error-retry'), 3 * 60 * 1000);
+      }
+    });
+
+    /** Force-quit the app bypassing the unsaved-changes interceptor so NSIS can install. */
+    function forceQuitForUpdate() {
+      console.log('[AutoUpdate] forceQuitForUpdate — bypassing close interceptor');
+      _updaterState = 'installing';
+      if (mainWindow) {
+        mainWindow._forceClose = true;
+      }
+      autoUpdater.quitAndInstall(false, true);
+    }
+
     ipcMain.handle('app-check-updates', async () => {
+      if (_updaterState === 'downloaded') {
+        return { status: 'ready', version: _downloadedVersion };
+      }
       try {
-        const result = await autoUpdater.checkForUpdates();
-        if (result?.updateInfo && result.updateInfo.version !== app.getVersion()) {
-          return { status: 'available', version: result.updateInfo.version };
-        }
-        return { status: 'up-to-date' };
+        safeCheckForUpdates('manual-ipc');
+        return { status: 'checking' };
       } catch (e) {
         return { status: 'error', message: e?.message || 'Update check failed' };
       }
     });
 
-    autoUpdater.checkForUpdates().catch(() => {});
-    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 45 * 60 * 1000);
+    safeCheckForUpdates('startup');
+    setInterval(() => safeCheckForUpdates('interval'), 45 * 60 * 1000);
   } else if (IS_PORTABLE_BUILD) {
     ipcMain.handle('app-check-updates', async () => ({
       status: 'manual',
@@ -4023,6 +4078,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  if (mainWindow) mainWindow._forceClose = true;
   if (db) flushDbSync();
 });
 
@@ -4931,7 +4987,7 @@ ipcMain.handle('prepare-trial', async () => {
   }
   return new Promise((resolve) => {
     const { spawn } = require('child_process');
-    const proc = spawn('node', [scriptPath], { cwd: __dirname, stdio: 'inherit', shell: true });
+    const proc = spawn('node', [scriptPath], { cwd: __dirname, stdio: 'inherit', shell: false });
     proc.on('close', (code) => resolve({ ok: code === 0, error: code !== 0 ? 'Script failed' : null }));
     proc.on('error', (err) => resolve({ ok: false, error: err.message }));
   });
@@ -5308,6 +5364,12 @@ ipcMain.handle('import-record-from-path', async (_, filePath) => {
 });
 
 /* ─── Photo file storage (encrypted, separate files) ─── */
+function sanitizePathSegment(seg) {
+  if (typeof seg !== 'string') return null;
+  const clean = seg.replace(/[^a-zA-Z0-9_\-]/g, '');
+  return clean.length > 0 ? clean : null;
+}
+
 function getPhotosDir(attendanceId) {
   const dir = path.join(app.getPath('userData'), 'photos', String(attendanceId));
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -5315,9 +5377,12 @@ function getPhotosDir(attendanceId) {
 }
 
 ipcMain.handle('photo-save', (_, { attendanceId, photoId, dataUrl, name, mimeType }) => {
+  const safeAttId = sanitizePathSegment(String(attendanceId));
+  const safePhotoId = sanitizePathSegment(String(photoId));
+  if (!safeAttId || !safePhotoId) return { error: 'Invalid identifier' };
   try {
-    const dir = getPhotosDir(attendanceId);
-    const filePath = path.join(dir, photoId + '.enc');
+    const dir = getPhotosDir(safeAttId);
+    const filePath = path.join(dir, safePhotoId + '.enc');
     const buf = Buffer.from(dataUrl, 'utf8');
     fs.writeFileSync(filePath, encryptBuffer(buf));
     return { photoId, name, mimeType };
@@ -5327,8 +5392,11 @@ ipcMain.handle('photo-save', (_, { attendanceId, photoId, dataUrl, name, mimeTyp
 });
 
 ipcMain.handle('photo-load', (_, { attendanceId, photoId }) => {
+  const safeAttId = sanitizePathSegment(String(attendanceId));
+  const safePhotoId = sanitizePathSegment(String(photoId));
+  if (!safeAttId || !safePhotoId) return { error: 'Invalid identifier' };
   try {
-    const filePath = path.join(app.getPath('userData'), 'photos', String(attendanceId), photoId + '.enc');
+    const filePath = path.join(app.getPath('userData'), 'photos', safeAttId, safePhotoId + '.enc');
     if (!fs.existsSync(filePath)) return null;
     const enc = fs.readFileSync(filePath);
     const dec = decryptBuffer(enc);
@@ -5340,8 +5408,11 @@ ipcMain.handle('photo-load', (_, { attendanceId, photoId }) => {
 });
 
 ipcMain.handle('photo-delete', (_, { attendanceId, photoId }) => {
+  const safeAttId = sanitizePathSegment(String(attendanceId));
+  const safePhotoId = sanitizePathSegment(String(photoId));
+  if (!safeAttId || !safePhotoId) return { error: 'Invalid identifier' };
   try {
-    const filePath = path.join(app.getPath('userData'), 'photos', String(attendanceId), photoId + '.enc');
+    const filePath = path.join(app.getPath('userData'), 'photos', safeAttId, safePhotoId + '.enc');
     if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     return true;
   } catch (err) {
@@ -5379,9 +5450,14 @@ ipcMain.handle('open-path', async (_, filePath) => {
     if (typeof filePath !== 'string') return false;
     const p = filePath.trim();
     if (!p) return false;
+    const allowedRoots = [app.getPath('userData'), app.getPath('desktop'), app.getPath('documents'), app.getPath('temp')];
+    const resolved = path.resolve(p);
+    if (!allowedRoots.some(root => resolved.startsWith(root))) {
+      return { error: 'Path outside allowed directories' };
+    }
     await shell.openPath(p);
     return true;
-  } catch (_) {
+  } catch (_e) {
     return false;
   }
 });
@@ -5422,7 +5498,7 @@ ipcMain.handle('open-app-folder', async () => {
 async function renderHtmlToPdfBuffer(html) {
   const win = new BrowserWindow({
     width: 800, height: 600, show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   try {
     win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
@@ -5670,9 +5746,15 @@ ipcMain.handle('export-docx', async (_, { data, settings, filename }) => {
 /* ─── Print an existing PDF file ─── */
 ipcMain.handle('print-pdf-file', async (_, filePath) => {
   if (!filePath || !fs.existsSync(filePath)) return { error: 'File not found' };
+  const resolvedPath = path.resolve(filePath);
+  const userDataDir = app.getPath('userData');
+  const tempDir = app.getPath('temp');
+  if (!resolvedPath.startsWith(userDataDir) && !resolvedPath.startsWith(tempDir)) {
+    return { error: 'Path outside allowed directories' };
+  }
   const win = new BrowserWindow({
     width: 800, height: 600, show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
   win.loadFile(filePath);
   await new Promise((resolve) => win.webContents.on('did-finish-load', resolve));

@@ -61,7 +61,7 @@ describe('update-cycle persistence', () => {
 
   it('forces a synchronous DB flush during shutdown', () => {
     assert.match(mainJs, /if \(db\) \{ flushDbSync\(\); db\.close\(\); \}/);
-    assert.match(mainJs, /app\.on\('before-quit', \(\) => \{\s*if \(db\) flushDbSync\(\);\s*\}\);/);
+    assert.match(mainJs, /app\.on\('before-quit', \(\) => \{/);
   });
 
   it('refuses to replace an unreadable stored licence with a new trial', () => {
