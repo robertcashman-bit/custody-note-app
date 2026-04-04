@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.163",
+      "version": "1.4.164",
       "date": "2026-04-04",
       "latest": true,
+      "changes": [
+        "Fix: Check for updates no longer shows Unknown error",
+        "manual checks bypass cooldown and correctly show checking/downloading/ready states"
+      ]
+    },
+    {
+      "version": "1.4.163",
+      "date": "2026-04-04",
+      "latest": false,
       "changes": [
         "Firm fields start blank on new records",
         "Change Firm button clears all contact fields",
