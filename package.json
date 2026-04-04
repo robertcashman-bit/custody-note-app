@@ -21,6 +21,8 @@
     "test": "node scripts/smoke-test.js",
     "test:e2e": "playwright test",
     "test:unit": "node --test tests/*.test.js",
+    "test:deep": "node --test tests/deepAudit.test.js",
+    "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
     "prepare-trial": "node scripts/prepare-trial.js",
     "capture-screenshots": "node scripts/capture-screenshots.js"
   },
