@@ -645,27 +645,32 @@ function openQuickEmailModal() {
   ];
 
   var _activeRawTemplate = null;
-  var _subjectUserEdited = false;
-  var _bodyUserEdited = false;
+  /* true once the user has typed directly into subject or body;
+     prevents live field updates from overwriting their text.
+     Reset to false whenever a new template is selected. */
+  var _isManualMode = false;
 
-  /** Re-apply placeholder substitution from the raw template.
-   *  Skips subject/body if: the user is actively focused there, OR they have manually edited it. */
-  function _forceTemplateSync(modal) {
-    if (!modal || !_activeRawTemplate) return;
+  /** Render the active template into subject + body using current field values.
+   *  Skipped entirely when the user has entered manual mode. */
+  function renderTemplate() {
+    if (!_activeRawTemplate || _isManualMode) return;
+    var modal = document.getElementById('quick-email-modal');
+    if (!modal) return;
     modal._activeRawTemplate = _activeRawTemplate;
     var subjectEl = modal.querySelector('#quick-email-subject');
     var bodyEl = modal.querySelector('#quick-email-body');
     if (!subjectEl || !bodyEl) return;
     try {
-      if (!_subjectUserEdited && document.activeElement !== subjectEl) {
-        subjectEl.value = _applyPlaceholders(_activeRawTemplate.subject || '');
-      }
-      if (!_bodyUserEdited && document.activeElement !== bodyEl) {
-        bodyEl.value = _applyPlaceholders(_activeRawTemplate.body || '');
-      }
+      subjectEl.value = _applyPlaceholders(_activeRawTemplate.subject || '');
+      bodyEl.value    = _applyPlaceholders(_activeRawTemplate.body    || '');
     } catch (e) {
-      console.error('[QuickEmail] template sync failed:', e);
+      console.error('[QuickEmail] renderTemplate failed:', e);
     }
+  }
+
+  /** @deprecated Use renderTemplate() instead. Kept for internal call-sites below. */
+  function _forceTemplateSync(modal) {
+    renderTemplate();
   }
 
   function _getCustomTemplateByIdQuick(templateId) {
@@ -763,15 +768,14 @@ function openQuickEmailModal() {
       tpl = _autoConvertLegacyTemplate(tpl, templateId);
     }
     _activeRawTemplate = tpl;
-    _subjectUserEdited = false;
-    _bodyUserEdited = false;
+    _isManualMode = false;
     var modal = document.getElementById('quick-email-modal');
     if (modal) modal._activeRawTemplate = tpl;
-    _forceTemplateSync(modal);
+    renderTemplate();
   }
 
   function _refreshTemplateFields() {
-    _forceTemplateSync(document.getElementById('quick-email-modal'));
+    renderTemplate();
   }
 
   function _autoSubject() {
@@ -910,62 +914,60 @@ function openQuickEmailModal() {
     modal.querySelector('#quick-email-cancel').addEventListener('click', _close);
     modal.addEventListener('click', function(e) { if (e.target === modal) _close(); });
 
+    /* — Context fields: update template live (unless in manual mode) — */
     var templateFields = [
       'quick-email-officer-name', 'quick-email-client-name',
       'quick-email-station', 'quick-email-offence',
       'quick-email-attendance-type', 'quick-email-date', 'quick-email-time'
     ];
-    function onQuickTemplateContextChange() {
-      if (_activeRawTemplate) _forceTemplateSync(modal);
+    function onContextChange() {
+      if (!_isManualMode) renderTemplate();
       _updateQuickMissingWarn();
     }
     templateFields.forEach(function(fieldId) {
       var el = modal.querySelector('#' + fieldId);
       if (el) {
-        el.addEventListener('input', onQuickTemplateContextChange);
-        el.addEventListener('change', onQuickTemplateContextChange);
+        el.addEventListener('input',  onContextChange);
+        el.addEventListener('change', onContextChange);
         if (['quick-email-client-name', 'quick-email-station', 'quick-email-date'].indexOf(fieldId) !== -1) {
           el.addEventListener('blur', function() {
-            var subjectEl = document.getElementById('quick-email-subject');
-            if (subjectEl && !subjectEl.dataset.userEdited && !_activeRawTemplate) {
-              subjectEl.value = _autoSubject();
+            if (!_activeRawTemplate && !_isManualMode) {
+              var subjectEl = document.getElementById('quick-email-subject');
+              if (subjectEl) subjectEl.value = _autoSubject();
             }
           });
         }
       }
     });
 
+    /* — Subject / body: entering text triggers manual mode — */
     var subjectField = document.getElementById('quick-email-subject');
     if (subjectField) {
       subjectField.addEventListener('input', function() {
-        subjectField.dataset.userEdited = '1';
-        _subjectUserEdited = true;
+        _isManualMode = true;
       });
     }
 
     var bodyField = document.getElementById('quick-email-body');
     if (bodyField) {
       bodyField.addEventListener('input', function() {
-        _bodyUserEdited = true;
+        _isManualMode = true;
       });
     }
 
+    /* — Template selector — */
     var customSelect = modal.querySelector('#quick-email-custom-template');
     if (customSelect) {
       customSelect.addEventListener('change', function(e) {
         currentCustomTpl = e.target.value || '';
         if (currentCustomTpl) {
-          _applyCustomTemplate(currentCustomTpl);
+          _applyCustomTemplate(currentCustomTpl);   /* resets _isManualMode internally */
         } else {
           _activeRawTemplate = null;
-          _subjectUserEdited = false;
-          _bodyUserEdited = false;
+          _isManualMode = false;
           modal._activeRawTemplate = null;
           var subjectEl = document.getElementById('quick-email-subject');
-          if (subjectEl) {
-            delete subjectEl.dataset.userEdited;
-            subjectEl.value = _autoSubject();
-          }
+          if (subjectEl) subjectEl.value = _autoSubject();
           var bodyEl = document.getElementById('quick-email-body');
           if (bodyEl) bodyEl.value = '';
         }
@@ -977,9 +979,7 @@ function openQuickEmailModal() {
     var _qToEl = modal.querySelector('#quick-email-to');
     if (_qToEl) _qToEl.addEventListener('input', _updateQuickMissingWarn);
     _updateQuickMissingWarn();
-    setTimeout(function() {
-      _forceTemplateSync(modal);
-    }, 50);
+    setTimeout(renderTemplate, 50);
 
     modal.querySelector('#quick-email-open-app').addEventListener('click', function() {
       var to = ((modal.querySelector('#quick-email-to') || {}).value || '').trim();
