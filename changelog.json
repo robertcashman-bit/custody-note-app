@@ -1,9 +1,35 @@
 {
   "releases": [
     {
+      "version": "1.4.167",
+      "date": "2026-04-05",
+      "latest": true,
+      "changes": [
+        "Fix Quick Email to Officer: templates now update live as fields are typed",
+        "single isManualMode flag replaces unreliable dual edit-lock flags"
+      ]
+    },
+    {
+      "version": "1.4.166",
+      "date": "2026-04-05",
+      "latest": false,
+      "changes": [
+        "Fix Quick Email to Officer: templates now update live as fields are typed",
+        "single isManualMode flag replaces unreliable dual edit-lock flags"
+      ]
+    },
+    {
+      "version": "1.4.165",
+      "date": "2026-04-05",
+      "latest": false,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
       "version": "1.4.164",
       "date": "2026-04-04",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix: Check for updates no longer shows Unknown error",
         "manual checks bypass cooldown and correctly show checking/downloading/ready states"
