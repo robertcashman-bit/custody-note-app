@@ -1732,11 +1732,11 @@ body.form-scrollbar-dragging { user-select: none; }
 .form-row-2col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem 2rem; width: 100%;
+  gap: 1.25rem 2rem; width: 100%;
 }
 
-.form-group { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.85rem; width: 100%; }
-.form-group label { font-size: 1rem; font-weight: 700; color: var(--on-surface); display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.form-group { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 1rem; width: 100%; }
+.form-group label { font-size: 0.95rem; font-weight: 700; color: var(--on-surface); display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .form-group label .required-asterisk { color: #dc2626; font-weight: 700; }
 
 /* "Firm completes" badge for fields the instructing firm fills in */
@@ -1887,7 +1887,7 @@ html.dark .station-code { color: var(--primary); }
 .form-group select,
 .form-group textarea {
   width: 100%;
-  padding: 0.75rem 1rem;
+  padding: 0.8rem 1rem;
   border: 2px solid var(--border); border-radius: 8px;
   font-size: 1.1rem; font-family: inherit;
   background: var(--input-bg); color: var(--on-surface);
@@ -1900,7 +1900,7 @@ html.dark .station-code { color: var(--primary); }
   outline: none; 
   border-color: var(--primary); 
   background: var(--input-focus-bg);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 .form-group textarea { 
   min-height: 120px; 
@@ -2015,8 +2015,12 @@ html.dark .station-code { color: var(--primary); }
   grid-column: 1 / -1;
   font-size: 0.82rem;
   color: var(--text-muted);
-  margin: 0 0 0.25rem 0;
-  line-height: 1.4;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.5;
+  padding: 0.4rem 0.6rem;
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface) 96%);
+  border-radius: 6px;
+  border-left: 3px solid color-mix(in srgb, var(--primary) 25%, var(--border) 75%);
 }
 .section-note.fraud-warning {
   padding: 0.75rem 1rem;
@@ -2097,19 +2101,23 @@ html.dark .grounds-card .checkbox-item.grounds-option:hover {
 /* Section headings within form sections */
 .section-heading {
   grid-column: 1 / -1;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
   font-weight: 700;
   color: var(--primary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   border-left: 4px solid var(--accent-brand);
   background: var(--section-bg);
-  padding: 0.45rem 0.75rem;
-  margin: 1rem 0 0.35rem 0;
-  border-radius: 0 4px 4px 0;
+  padding: 0.6rem 0.85rem;
+  margin: 1.5rem 0 0.6rem 0;
+  border-radius: 0 6px 6px 0;
   cursor: pointer;
   user-select: none;
   display: flex; align-items: center; justify-content: space-between;
+  transition: background 0.15s ease;
+}
+.section-heading:hover {
+  background: color-mix(in srgb, var(--primary) 8%, var(--section-bg) 92%);
 }
 .section-heading::after {
   content: '\25B2'; font-size: 0.6rem; color: var(--text-muted); transition: transform 0.2s;
@@ -2163,13 +2171,14 @@ html.dark .grounds-card .checkbox-item.grounds-option:hover {
 }
 .btn-tick-all:hover { background: var(--primary); color: white; }
 .checklist-item {
-  display: flex; align-items: center; gap: 0.6rem;
-  padding: 0.4rem 0.7rem; margin-bottom: 0.15rem;
-  border-radius: 6px; cursor: pointer; font-size: 0.92rem;
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.5rem 0.75rem; margin-bottom: 0.2rem;
+  border-radius: 8px; cursor: pointer; font-size: 0.92rem;
   color: var(--on-surface);
+  transition: background 0.1s ease;
 }
 .checklist-item:hover { background: var(--section-bg); }
-.checklist-item input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--primary); cursor: pointer; }
+.checklist-item input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary); cursor: pointer; flex-shrink: 0; }
 
 /* Grouped checklists (consultation + advice given) */
 .consultation-checklist .checklist-subhead,
@@ -4991,9 +5000,10 @@ html.hide-home-status #home-status-section {
 .attendance-form {
   padding: 1.4rem 1.5rem;
   background: transparent;
+  scroll-padding-top: 3rem;
 }
 .form-section {
-  padding: 1.2rem 1.25rem 1.45rem;
+  padding: 1.5rem 1.4rem 1.75rem;
   border: 1px solid color-mix(in srgb, var(--primary) 12%, var(--border) 88%);
   border-radius: 18px;
   background: linear-gradient(180deg, var(--surface), var(--surface-raised));
@@ -6205,3 +6215,39 @@ html.dark .home-billing-widget-stats { color: #94a3b8; }
 html.dark .home-billing-widget-warn { color: #fbbf24; }
 html.dark .home-card-green { border-left-color: #059669; }
 html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
+
+/* ═══════════════════════════════════════════════════════
+   UX IMPROVEMENTS — spacing, density, scroll, focus
+   ═══════════════════════════════════════════════════════ */
+
+/* Keyboard focus ring on all interactive elements */
+.btn:focus-visible,
+.bottom-btn:focus-visible,
+.section-index-btn:focus-visible,
+.checklist-item:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Section heading first-in-section: no extra top margin */
+.form-row-2col > .section-heading:first-child {
+  margin-top: 0;
+}
+
+/* Action buttons — more breathing room */
+.action-btn-group {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* Collapsed section heading indicator text */
+.section-heading.collapsed {
+  opacity: 0.8;
+}
+
+/* Tab order visual: inputs get subtle left border on focus for scan-ability */
+.form-group input:focus,
+.form-group select:focus {
+  border-left-width: 3px;
+  border-left-color: var(--primary);
+}

@@ -590,7 +590,7 @@ var LAA = {
         { key: 'relevantTime', label: 'Relevant Time (auto = detention authorised)', type: 'time', readonly: true, showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'timeDetentionAuthorised', label: 'Detention Authorised', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
 
-        { key: '_h_pace_reviews', label: 'PACE Reviews', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: '_h_pace_reviews', label: 'PACE Reviews', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' }, defaultCollapsed: true },
         { key: 'firstReviewDue', label: '1st Review due (6 hrs)', type: 'time', readonly: true, showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'firstReviewActual', label: '1st Review \u2013 Actual Time', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'firstReviewNotes', label: '1st Review Notes', type: 'textarea', placeholder: 'Notes from 1st review', cols: 2, showIf: { field: 'voluntaryInterview', value: 'No' } },
@@ -638,7 +638,7 @@ var LAA = {
         { key: 'fitToBeDetained', label: 'Fit to be detained?', type: 'select', options: ['Yes','No'] },
         { key: 'fitToBeInterviewed', label: 'Fit to be interviewed?', type: 'select', options: ['Yes','No'] },
 
-        { key: '_h_strip_search', label: 'Strip Search / Intimate Search', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: '_h_strip_search', label: 'Strip Search / Intimate Search', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' }, defaultCollapsed: true },
         { key: 'stripSearchConducted', label: 'Strip search conducted?', type: 'select', options: ['No','Yes'], showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'stripSearchType', label: 'Search type', type: 'select', options: ['Strip search (PACE s.54)','Intimate search (PACE s.55)'], showIf: { field: 'stripSearchConducted', value: 'Yes' } },
         { key: 'stripSearchGrounds', label: 'Grounds given', type: 'textarea', placeholder: 'Grounds for the search as given by police', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
@@ -649,7 +649,7 @@ var LAA = {
         { key: 'stripSearchResult', label: 'Result / items found', type: 'text', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
         { key: 'stripSearchRepresentations', label: 'Representations made by rep', type: 'textarea', placeholder: 'Any representations made about the search', cols: 2, showIf: { field: 'stripSearchConducted', value: 'Yes' } },
 
-        { key: '_h_property', label: 'Property & Belongings', type: 'sectionHeading' },
+        { key: '_h_property', label: 'Property & Belongings', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'propertyTaken', label: 'Property taken on arrival?', type: 'select', options: ['Yes','No','Unknown'] },
         { key: 'propertyList', label: 'Property list', type: 'textarea', placeholder: 'e.g. Cash \u00a345, iPhone, house keys, wallet, documents', cols: 2, showIf: { field: 'propertyTaken', values: ['Yes','Unknown'] } },
         { key: 'propertyReturned', label: 'Property returned on release?', type: 'select', options: ['Yes','No','Partial','N/A'], showIf: { field: 'propertyTaken', value: 'Yes' } },
@@ -729,13 +729,13 @@ var LAA = {
         { key: 'pncDisclosed', label: 'PNC / previous convictions disclosed?', type: 'select', options: ['Yes','No'] },
         { key: 'pncNotes', label: 'Previous convictions – details if disclosed', type: 'textarea', placeholder: 'e.g. List convictions and dates', cols: 2, showIf: { field: 'pncDisclosed', value: 'Yes' } },
         { key: '_pace_searches', label: 'PACE searches (s18, s32, s54, person, property, vehicle)', type: 'multiPaceSearch' },
-        { key: '_h_forensics', label: 'Forensics & seized items', type: 'sectionHeading' },
+        { key: '_h_forensics', label: 'Forensics & seized items', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'samplesDisclosed', label: 'Samples (DNA, fingerprints, etc.) disclosed?', type: 'select', options: ['Yes','No','Not applicable'] },
         { key: '_forensic_samples', label: 'Forensic samples – type and what was done', type: 'multiForensicSample' },
         { key: 'clothingShoesSeized', label: 'Clothing / shoes / phone seized?', type: 'select', options: ['Yes','No'] },
         { key: 'clothingShoesSeizedWhat', label: 'What was seized?', type: 'text', placeholder: 'e.g. Trainers, jacket, iPhone', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
         { key: 'clothingShoesSeizedNotes', label: 'Seizure notes', type: 'textarea', placeholder: 'Condition, replacement clothing given, etc.', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
-        { key: '_h_device_seizure', label: 'Device seizure', type: 'sectionHeading' },
+        { key: '_h_device_seizure', label: 'Device seizure', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'deviceSeized', label: 'Electronic device(s) seized?', type: 'select', options: ['No','Yes'] },
         { key: 'deviceType', label: 'Device type(s)', type: 'text', placeholder: 'e.g. iPhone 15, Samsung Galaxy, laptop, tablet', cols: 2, showIf: { field: 'deviceSeized', value: 'Yes' } },
         { key: 'devicePinRequested', label: 'PIN / passcode requested?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'deviceSeized', value: 'Yes' } },
@@ -743,7 +743,7 @@ var LAA = {
         { key: 'deviceExtractionConsent', label: 'Data extraction consent given?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'deviceSeized', value: 'Yes' } },
         { key: 'deviceRIPAAuthority', label: 'RIPA authority / s.49 notice?', type: 'select', options: ['Yes','No','Unknown','N/A'], showIf: { field: 'deviceSeized', value: 'Yes' } },
         { key: 'deviceNotes', label: 'Device seizure notes', type: 'textarea', placeholder: 'Advice given, representations made, return timeline', cols: 2, showIf: { field: 'deviceSeized', value: 'Yes' } },
-        { key: '_h_special_warnings', label: 'Special Warnings', type: 'sectionHeading' },
+        { key: '_h_special_warnings', label: 'Special Warnings', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'specialWarningGiven', label: 'Special warning given?', type: 'select', options: ['No','Yes'] },
         { key: 'specialWarningType', label: 'Warning type', type: 'checkboxGroup', options: ['s.36 CJPOA 1994 \u2013 failure to account for objects/substances/marks','s.37 CJPOA 1994 \u2013 failure to account for presence at a place'], cols: 2, showIf: { field: 'specialWarningGiven', value: 'Yes' } },
         { key: 'specialWarningDetails', label: 'Warning details', type: 'textarea', placeholder: 'What was the warning about? What objects/marks/location?', cols: 2, showIf: { field: 'specialWarningGiven', value: 'Yes' } },
@@ -782,6 +782,7 @@ var LAA = {
         { key: '_h_conflict', label: 'Conflict Check', type: 'sectionHeading' },
         { key: '_note_conflict_mandatory', label: 'A conflict of interest check MUST be completed before advising the client. Record the result below.', type: 'sectionNote' },
         { key: 'conflictCheckResult', label: 'Conflict check result', type: 'select', options: ['Negative','Positive','N/A'] },
+        { key: 'conflictCheckDate', label: 'Date of conflict check', type: 'date' },
         { key: 'conflictCheckNotes', label: 'Conflict check notes', type: 'textarea', placeholder: 'Required if positive', cols: 2 },
         { key: '_btn_conflict_cert', label: '📄 Generate Conflict Check Certificate', type: 'actionButton', action: 'generateConflictCert' },
         { key: '_h_eligibility', label: 'Client Eligibility (from consultation)', type: 'sectionHeading' },
@@ -790,7 +791,7 @@ var LAA = {
         { key: '_h_id', label: 'Identification', type: 'sectionHeading' },
         { key: 'niNumber', label: 'National Insurance No.', type: 'text', placeholder: 'e.g. AB 12 34 56 C' },
         { key: 'arcNumber', label: 'ARC Number (if no NI)', type: 'text', placeholder: 'For non-UK nationals' },
-        { key: '_h_benefits', label: 'Benefits & Income', type: 'sectionHeading' },
+        { key: '_h_benefits', label: 'Benefits & Income', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'benefits', label: 'Receiving benefits?', type: 'select', options: ['Yes','No','Unknown'] },
         { key: 'benefitType', label: 'Benefit type', type: 'select', options: [
           '','N/A','Universal Credit','Universal Credit (with housing element)','Income Support','Income-based JSA (Jobseeker\'s Allowance)','Income-related ESA (Employment & Support Allowance)','Pension Credit (Guarantee Credit)','Housing Benefit','Child Tax Credit (income under £16,190)','Working Tax Credit','Personal Independence Payment (PIP)','Disability Living Allowance (DLA)','Attendance Allowance','Carer\'s Allowance','State Pension','Contribution-based JSA','Contribution-based ESA','Child Benefit','Maternity Allowance','Bereavement Support Payment','Industrial Injuries Benefit','Asylum Support (Section 95/98)','Other'
@@ -803,7 +804,7 @@ var LAA = {
         { key: 'partnerIncome', label: "Partner's gross annual income (£)", type: 'number', placeholder: 'e.g. 18000', showIf: { field: 'passportedBenefit', value: 'No' } },
         { key: 'partnerName', label: "Partner's name", type: 'text', placeholder: 'For means test / Legal Aid', showIf: { field: 'passportedBenefit', value: 'No' } },
         { key: 'incomeNotes', label: 'Income / means notes', type: 'text' },
-        { key: '_h_circumstances', label: 'Personal Circumstances', type: 'sectionHeading' },
+        { key: '_h_circumstances', label: 'Personal Circumstances', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'employmentStatus', label: 'Employment', type: 'select', options: ['Employed','Self-employed','Unemployed','Student','Retired','Other'] },
         { key: 'accommodationStatus', label: 'Accommodation', type: 'select', options: ['Owner/Occupier','Private rental (tenant)','Local Authority housing','Housing Association','Hostel / supported housing','Living with parents / family','Temporary accommodation','Homeless (rough sleeping)','NFA (no fixed abode)','Prison / custody (pre-trial)','Other'] },
         { key: 'accommodationDetails', label: 'Accommodation notes', type: 'textarea', cols: 2 },
@@ -877,7 +878,7 @@ var LAA = {
         { key: 'instructionsSignatureTime', label: 'Signature time (auto)', type: 'time', readonly: true, showIf: { field: 'instructionsSignRequired', value: 'Yes' } },
         { key: '_btn_client_instructions', label: '📄 Print Client Instructions Confirmation', type: 'actionButton', action: 'generateClientInstructions' },
         { key: '_btn_prepared_statement', label: '📄 Print Prepared Statement Template', type: 'actionButton', action: 'generatePreparedStatement' },
-        { key: '_h_monitoring', label: 'Monitoring', type: 'sectionHeading' },
+        { key: '_h_monitoring', label: 'Monitoring', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'ethnicOriginCode', label: 'Ethnic Origin', type: 'codedSelect', codeKey: 'ethnicCodes' },
         { key: 'disabilityCode', label: 'Disability', type: 'codedSelect', codeKey: 'disabilityCodes' },
         { key: 'riskAssessment', label: 'Risk Assessment', type: 'select', options: ['Low','Medium','High'] },
@@ -1222,6 +1223,7 @@ var LAA = {
         { key: 'firstContactWithin45Mins', label: 'Within 45 mins of duty call?', type: 'select', options: ['Yes','No','N/A'] },
         { key: 'firstContactOver45MinsReason', label: 'Reason >45 mins', type: 'textarea', placeholder: 'Required if first contact exceeded 45 mins', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
         { key: 'conflictCheckResult', label: 'Conflict check', type: 'select', options: ['Negative','Positive','N/A'] },
+        { key: 'conflictCheckDate', label: 'Date of conflict check', type: 'date' },
         { key: 'conflictCheckNotes', label: 'Conflict notes', type: 'textarea', placeholder: 'Required if positive', cols: 2, showIf: { field: 'conflictCheckResult', value: 'Positive' } },
         { key: '_h_advice', label: 'Advice', type: 'sectionHeading' },
         { key: 'telephoneAdviceSummary', label: 'Summary of advice given', type: 'textarea', placeholder: 'Detailed summary of the advice provided to the client during the call(s)', cols: 2 },
@@ -1545,6 +1547,7 @@ var LAA = {
         { key: '_h_conflict', label: 'Conflict Check', type: 'sectionHeading' },
         { key: '_note_conflict_mandatory', label: 'A conflict of interest check MUST be completed before advising the client. Record the result below.', type: 'sectionNote' },
         { key: 'conflictCheckResult', label: 'Conflict check result', type: 'select', options: ['Negative','Positive','N/A'] },
+        { key: 'conflictCheckDate', label: 'Date of conflict check', type: 'date' },
         { key: 'conflictCheckNotes', label: 'Conflict check notes', type: 'textarea', placeholder: 'Required if positive', cols: 2 },
         { key: '_btn_conflict_cert', label: '\uD83D\uDCC4 Generate Conflict Check Certificate', type: 'actionButton', action: 'generateConflictCert' },
         { key: '_h_eligibility', label: 'Client Eligibility', type: 'sectionHeading' },
@@ -4026,6 +4029,7 @@ var REQUIRED_FIELD_KEYS = [
     if (!formData.witnessIntimidation) formData.witnessIntimidation = 'No';
     if (!formData.pncDisclosed) formData.pncDisclosed = 'No';
     if (!formData.caseAssessment) formData.caseAssessment = 'N/A';
+    if (!formData.conflictCheckDate) formData.conflictCheckDate = new Date().toISOString().slice(0, 10);
     if (!formData.paceSearches || !Array.isArray(formData.paceSearches)) formData.paceSearches = [{ searchType: '', whatFound: '' }];
     if (!formData.forensicSamples || !Array.isArray(formData.forensicSamples)) formData.forensicSamples = [{ sampleType: '', whatDone: '', notes: '' }];
     if (!formData.thirdPartyEntries || !Array.isArray(formData.thirdPartyEntries)) formData.thirdPartyEntries = [];
@@ -5563,7 +5567,7 @@ var REQUIRED_FIELD_KEYS = [
       'dutySolicitor','weekendBankHoliday',
       'matterTypeCode','offenceSummary','offence1Details','offence1Date','offence1ModeOfTrial','offence1Statute',
       'offence2Details','offence2Date','offence2ModeOfTrial','offence2Statute',
-      'caseSummary','conflictCheckResult','conflictCheckNotes','coSuspects','coSuspectDetails',
+      'caseSummary','conflictCheckResult','conflictCheckDate','conflictCheckNotes','coSuspects','coSuspectDetails',
       'previousAdvice','previousAdviceDetails','feeCode'
     ];
     showConfirm(
@@ -6756,6 +6760,7 @@ var REQUIRED_FIELD_KEYS = [
       const h = document.createElement('h3');
       h.className = 'section-heading';
       h.textContent = f.label;
+      if (f.defaultCollapsed) h.classList.add('collapsed');
       h.addEventListener('click', () => {
         h.classList.toggle('collapsed');
         let sib = h.nextElementSibling;
@@ -6767,6 +6772,16 @@ var REQUIRED_FIELD_KEYS = [
       });
       const wrap = f.showIf ? document.createElement('div') : null;
       if (wrap) { wrap.style.gridColumn = '1 / -1'; wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); wrap.appendChild(h); grid.appendChild(wrap); } else grid.appendChild(h);
+      if (f.defaultCollapsed) {
+        requestAnimationFrame(() => {
+          let sib = h.nextElementSibling;
+          while (sib && !sib.classList.contains('section-heading')) {
+            sib.classList.add('collapsed');
+            sib.style.display = 'none';
+            sib = sib.nextElementSibling;
+          }
+        });
+      }
       return;
     }
     if (f.type === 'sectionNote') {
@@ -6911,7 +6926,7 @@ var REQUIRED_FIELD_KEYS = [
       wrap.appendChild(lbl);
       const container = document.createElement('div');
       container.id = 'multi-pace-search-container';
-      const searchTypes = ['s18 (premises)','s32 (on arrest)','s54 (intimate)','Person search','Property search','Vehicle search','Other'];
+      const searchTypes = ['N/A','s18 (premises)','s32 (on arrest)','s54 (intimate)','Person search','Property search','Vehicle search','Other'];
       if (!formData.paceSearches || !formData.paceSearches.length) formData.paceSearches = [{ searchType: '', whatFound: '' }];
       function renderPaceSearches() {
         container.innerHTML = '';
@@ -9996,7 +10011,7 @@ row('Injuries (disclosure)', d.disclosureReInjuries) +
 '<li>' + check('chkReasonForArrest', 'Explained reason for arrest') + '</li>' +
 '<li>' + check('chkDisclosure', 'Explained disclosure') + '</li>' +
 '</ul>' +
-'<table>' + row('Conflict check result', d.conflictCheckResult) + row('Conflict check notes', d.conflictCheckNotes) +
+'<table>' + row('Conflict check result', d.conflictCheckResult) + row('Date of conflict check', d.conflictCheckDate ? formatDateGB(d.conflictCheckDate) : '') + row('Conflict check notes', d.conflictCheckNotes) +
 row('Type', d.clientType) + row('National Insurance number', d.niNumber) + row('Application Registration Card number', d.arcNumber) +
 row('Benefits', d.benefits) + row('Benefit Type', d.benefitType === 'Other' ? d.benefitOther : d.benefitType) + row('Benefit Notes', d.benefitNotes) +
 row('Passported Benefit', d.passportedBenefit) + row('Gross Income', d.grossIncome) + row('Partner Income', d.partnerIncome) + row('Partner name', d.partnerName) + row('Income Notes', d.incomeNotes) +
@@ -10302,6 +10317,7 @@ PDF_CASENOTE_ADVERT +
       row('Within 45 mins of duty call?', d.firstContactWithin45Mins) +
       (d.firstContactOver45MinsReason ? row('Reason >45 mins', d.firstContactOver45MinsReason) : '') +
       row('Conflict check', d.conflictCheckResult) +
+      row('Date of conflict check', d.conflictCheckDate ? formatDateGB(d.conflictCheckDate) : '') +
       (d.conflictCheckNotes ? row('Conflict notes', d.conflictCheckNotes) : '') +
       row("Client's Decision", d.clientDecision) +
       '</table>' +
@@ -10508,7 +10524,7 @@ PDF_CASENOTE_ADVERT +
       '<li>' + check('chkDisclosure', 'Explained disclosure') + '</li>' +
       '</ul>' +
       '<table>' +
-      row('Conflict check result', d.conflictCheckResult) + row('Conflict check notes', d.conflictCheckNotes) +
+      row('Conflict check result', d.conflictCheckResult) + row('Date of conflict check', d.conflictCheckDate ? formatDateGB(d.conflictCheckDate) : '') + row('Conflict check notes', d.conflictCheckNotes) +
       row('Client type', d.clientType) + row('National Insurance number', d.niNumber) + row('ARC number', d.arcNumber) +
       row('Benefits', d.benefits) + row('Benefit type', d.benefitType === 'Other' ? d.benefitOther : d.benefitType) + row('Benefit notes', d.benefitNotes) +
       row('Passported benefit', d.passportedBenefit) +
@@ -11040,7 +11056,7 @@ PDF_CASENOTE_ADVERT +
     const d = getFormData();
     const client = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || 'Client not yet named';
     const fee = d.feeEarnerName || d.laaFeeEarnerFullName || '';
-    const date = formatDateGB(d.date || new Date().toISOString().slice(0, 10));
+    const date = formatDateGB(d.conflictCheckDate || d.date || new Date().toISOString().slice(0, 10));
     const result = d.conflictCheckResult || '(not yet recorded)';
     const notes = d.conflictCheckNotes || 'None';
     const offence = d.offenceSummary || d.offence1Details || '(not yet recorded)';
