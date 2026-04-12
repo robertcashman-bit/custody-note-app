@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.169",
+      "version": "1.4.170",
       "date": "2026-04-12",
       "latest": true,
+      "changes": [
+        "Auto-update now installs silently without requiring user action",
+        "toast notifications show download progress and restart countdown",
+        "retry logic hardened with exponential backoff"
+      ]
+    },
+    {
+      "version": "1.4.169",
+      "date": "2026-04-12",
+      "latest": false,
       "changes": [
         "Add N/A option to PACE Search",
         "Add conflict check date auto-fill",
