@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.4.168",
+      "date": "2026-04-12",
+      "latest": true,
+      "changes": [
+        "Fix postcode lookup: show real error messages instead of generic connection error",
+        "Fix auto-update loop: defer startup check until renderer loads, persist update state across restarts"
+      ]
+    },
+    {
       "version": "1.4.167",
       "date": "2026-04-05",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix Quick Email to Officer: templates now update live as fields are typed",
         "single isManualMode flag replaces unreliable dual edit-lock flags"
