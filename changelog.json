@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.168",
+      "version": "1.4.169",
       "date": "2026-04-12",
       "latest": true,
+      "changes": [
+        "Add N/A option to PACE Search",
+        "Add conflict check date auto-fill",
+        "UX: progressive disclosure, improved spacing, section headings, keyboard focus"
+      ]
+    },
+    {
+      "version": "1.4.168",
+      "date": "2026-04-12",
+      "latest": false,
       "changes": [
         "Fix postcode lookup: show real error messages instead of generic connection error",
         "Fix auto-update loop: defer startup check until renderer loads, persist update state across restarts"
