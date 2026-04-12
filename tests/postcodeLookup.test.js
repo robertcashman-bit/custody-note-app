@@ -78,3 +78,55 @@ describe('Postcode – URL encoding', () => {
     assert.ok(url.includes('SW1A2AA'), 'URL must contain the no-space postcode');
   });
 });
+
+/* ── 3. Error-handling paths ──────────────────────────────────────── */
+
+describe('Postcode IPC handler – error handling', () => {
+  function getHandlerBody() {
+    const lookupIdx = mainJs.indexOf("ipcMain.handle('postcode-lookup'");
+    const nextHandler = mainJs.indexOf("ipcMain.handle(", lookupIdx + 1);
+    return mainJs.slice(lookupIdx, nextHandler !== -1 ? nextHandler : lookupIdx + 3000);
+  }
+
+  it('does not silently swallow errors with catch(_)', () => {
+    const body = getHandlerBody();
+    assert.ok(
+      !body.includes('catch (_)'),
+      'postcode-lookup must not use catch(_) — error details must be preserved'
+    );
+  });
+
+  it('extracts message from caught error', () => {
+    const body = getHandlerBody();
+    assert.ok(
+      body.includes('e.message') || body.includes('e && e.message'),
+      'postcode-lookup catch block must read the error message'
+    );
+  });
+
+  it('handles "Postcode not found" from rejected httpPost', () => {
+    const body = getHandlerBody();
+    const catchIdx = body.indexOf('catch');
+    const catchBody = body.slice(catchIdx);
+    assert.ok(
+      catchBody.includes('Postcode not found'),
+      'catch block must handle "Postcode not found" error from server 404'
+    );
+  });
+
+  it('handles ETIMEDOUT explicitly', () => {
+    const body = getHandlerBody();
+    assert.ok(
+      body.includes('ETIMEDOUT'),
+      'postcode-lookup must handle timeout errors'
+    );
+  });
+
+  it('logs diagnostic information on lookup attempt', () => {
+    const body = getHandlerBody();
+    assert.ok(
+      body.includes('[Postcode]'),
+      'postcode-lookup must log with [Postcode] prefix for diagnostics'
+    );
+  });
+});
