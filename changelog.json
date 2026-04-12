@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.172",
+      "version": "1.4.173",
       "date": "2026-04-12",
       "latest": true,
+      "changes": [
+        "Fix NSIS installer failure: switch to oneClick installer (no uninstall step)",
+        "add single-instance lock",
+        "full resource cleanup before install (DB, sync, windows)",
+        "3s delay for OS file handle release",
+        "disable allowElevation to prevent Program Files installs"
+      ]
+    },
+    {
+      "version": "1.4.172",
+      "date": "2026-04-12",
+      "latest": false,
       "changes": [
         "Fix NSIS 'Failed to uninstall old application files' by fully closing window and DB before launching installer",
         "use silent mode for NSIS",
