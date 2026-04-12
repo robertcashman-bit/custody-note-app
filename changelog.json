@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.170",
+      "version": "1.4.171",
       "date": "2026-04-12",
       "latest": true,
+      "changes": [
+        "Fix NSIS installer error: updates now install silently on app quit instead of forcing mid-session restart",
+        "manual Install Now button closes app cleanly before running installer in silent mode"
+      ]
+    },
+    {
+      "version": "1.4.170",
+      "date": "2026-04-12",
+      "latest": false,
       "changes": [
         "Auto-update now installs silently without requiring user action",
         "toast notifications show download progress and restart countdown",
