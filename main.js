@@ -6426,7 +6426,7 @@ ipcMain.handle('quickfile-test-connection', async () => {
 });
 
 /* ═══════════════════════════════════════════════════════
-   POSTCODE LOOKUP  (Ideal Postcodes API)
+   POSTCODE LOOKUP  (server proxy → Ideal Postcodes API)
    ═══════════════════════════════════════════════════════ */
 ipcMain.handle('postcode-lookup', async (_, postcode) => {
   const pc = (postcode || '').trim().replace(/\s+/g, '');
@@ -6437,16 +6437,28 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
   const apiUrl = getManagedCloudApiUrl();
 
   if (!licenceKey || !apiUrl) {
+    console.warn('[Postcode] Missing licence key or API URL', { hasKey: !!licenceKey, hasUrl: !!apiUrl });
     return { ok: false, error: 'Postcode lookup requires a valid licence. Check your internet connection or contact support.' };
   }
 
+  console.log(`[Postcode] Looking up "${pc}" via ${apiUrl}/api/postcodes/lookup`);
   try {
     const resp = await httpPost(`${apiUrl}/api/postcodes/lookup`, { postcode: pc, licenceKey });
+    console.log(`[Postcode] Response ok=${resp.ok}, addresses=${resp.addresses ? resp.addresses.length : 0}`);
     if (resp.ok && resp.addresses) return { ok: true, addresses: resp.addresses };
     if (resp.error === 'Postcode not found') return { ok: false, error: 'Postcode not found.' };
     return { ok: false, error: resp.error || 'Lookup failed.' };
-  } catch (_) {
-    return { ok: false, error: 'Postcode lookup failed. Check your internet connection.' };
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    const code = e && e.statusCode;
+    console.warn(`[Postcode] Lookup failed — status=${code || '?'}, message="${msg}"`);
+    if (msg === 'Postcode not found') return { ok: false, error: 'Postcode not found.' };
+    if (msg === 'Invalid licence key') return { ok: false, error: 'Invalid licence key. Re-activate in Settings.' };
+    if (msg === 'Licence key is required') return { ok: false, error: 'Licence key is required for postcode lookup.' };
+    if (/subscription required/i.test(msg)) return { ok: false, error: 'Active subscription required for postcode lookup.' };
+    if (/not configured/i.test(msg)) return { ok: false, error: 'Postcode service is temporarily unavailable.' };
+    if (e && e.code === 'ETIMEDOUT') return { ok: false, error: 'Postcode lookup timed out. Try again.' };
+    return { ok: false, error: msg || 'Postcode lookup failed. Check your internet connection.' };
   }
 });
 

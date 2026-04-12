@@ -8207,25 +8207,31 @@ var REQUIRED_FIELD_KEYS = [
         if (!pc) { showToast('Enter a postcode first', 'warning'); return; }
         pcBtn.disabled = true;
         pcBtn.textContent = 'Looking up…';
+        pcDropWrap.style.display = 'none';
         window.api.postcodeLookup(pc).then(function(r) {
           pcBtn.disabled = false;
           pcBtn.textContent = 'Find Address';
-          if (!r.ok) { showToast(r.error || 'Lookup failed', 'error'); return; }
+          if (!r || !r.ok) {
+            var errMsg = (r && r.error) || 'Lookup failed';
+            showToast(errMsg, errMsg === 'Postcode not found.' ? 'warning' : 'error');
+            return;
+          }
           if (!r.addresses || !r.addresses.length) { showToast('No addresses found for this postcode', 'warning'); return; }
           pcSelect.innerHTML = '<option value="">Select an address (' + r.addresses.length + ' found)…</option>';
           r.addresses.forEach(function(addr, idx) {
             var opt = document.createElement('option');
             opt.value = idx;
-            opt.textContent = addr.summary;
+            opt.textContent = addr.summary || [addr.line1, addr.line2, addr.city].filter(Boolean).join(', ');
             pcSelect.appendChild(opt);
           });
           pcDropWrap.style.display = 'block';
           pcDropWrap._addresses = r.addresses;
           pcSelect.focus();
-        }).catch(function() {
+        }).catch(function(e) {
           pcBtn.disabled = false;
           pcBtn.textContent = 'Find Address';
-          showToast('Postcode lookup failed — check your connection', 'error');
+          var msg = (e && e.message) ? e.message : 'Postcode lookup failed';
+          showToast(msg, 'error');
         });
       });
 
