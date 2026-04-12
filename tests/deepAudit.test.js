@@ -180,20 +180,27 @@ describe('4 · Updater Flow', () => {
     assert.ok(mainSrc.includes('quitAndInstall'), 'quitAndInstall call missing');
   });
 
-  it('no raw autoUpdater.checkForUpdates() outside safeCheckForUpdates', () => {
+  it('autoUpdater.checkForUpdates only in safeCheckForUpdates or runManualUpdateCheckIpc', () => {
     const lines = mainSrc.split('\n');
     let insideSafe = false;
+    let manualDepth = 0;
     const violations = [];
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (/function safeCheckForUpdates/.test(line)) insideSafe = true;
       if (insideSafe && line.trim() === '};') insideSafe = false;
-      if (!insideSafe && /autoUpdater\.checkForUpdates\s*\(/.test(line)) {
+      if (/async function runManualUpdateCheckIpc\s*\(\)/.test(line)) manualDepth = 1;
+      else if (manualDepth > 0) {
+        manualDepth += (line.match(/\{/g) || []).length;
+        manualDepth -= (line.match(/\}/g) || []).length;
+      }
+      const inManualIpc = manualDepth > 0;
+      if (!insideSafe && !inManualIpc && /autoUpdater\.checkForUpdates\s*\(/.test(line)) {
         violations.push(`line ${i + 1}: ${line.trim()}`);
       }
     }
     assert.deepStrictEqual(violations, [],
-      `raw checkForUpdates calls found outside safeCheckForUpdates:\n${violations.join('\n')}`);
+      `unexpected checkForUpdates calls outside updater helpers:\n${violations.join('\n')}`);
   });
 });
 

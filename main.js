@@ -14,6 +14,8 @@ const { autoUpdater } = require('electron-updater');
 
 /** Populated inside app.whenReady() when running packaged NSIS builds. */
 let safeCheckForUpdates = null;
+/** Assigned when auto-update is enabled; createWindow invokes so the first check runs after the renderer exists (avoids dropped IPC events). */
+let scheduleDeferredAutoUpdateCheck = null;
 
 function getFallbackAppDataRoot() {
   if (process.platform === 'win32') {
@@ -40,6 +42,48 @@ const IS_PORTABLE_BUILD = !!(PORTABLE_USERDATA_PATH && fs.existsSync(PORTABLE_US
 if (IS_PORTABLE_BUILD) {
   app.setPath('userData', PORTABLE_USERDATA_PATH);
 }
+
+/** Persisted auto-update metadata (survives restarts). Separate from electron-updater's internal cache. */
+function getAutoUpdateStatePath() {
+  return path.join(app.getPath('userData'), 'cn-auto-update-state.json');
+}
+function parseSemverTriple(v) {
+  if (!v || typeof v !== 'string') return null;
+  const m = String(v).trim().match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!m) return null;
+  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
+}
+function semverEq(a, b) {
+  const pa = parseSemverTriple(a);
+  const pb = parseSemverTriple(b);
+  if (!pa || !pb) return String(a) === String(b);
+  return pa[0] === pb[0] && pa[1] === pb[1] && pa[2] === pb[2];
+}
+function readAutoUpdatePersistedState() {
+  try {
+    const p = getAutoUpdateStatePath();
+    if (!fs.existsSync(p)) return null;
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch (e) {
+    console.warn('[AutoUpdate] read persist failed:', e.message);
+    return null;
+  }
+}
+function writeAutoUpdatePersistedState(data) {
+  try {
+    fs.writeFileSync(getAutoUpdateStatePath(), JSON.stringify(data, null, 0), 'utf8');
+  } catch (e) {
+    console.warn('[AutoUpdate] write persist failed:', e.message);
+  }
+}
+function mergeAutoUpdatePersisted(patch) {
+  const cur = readAutoUpdatePersistedState() || {};
+  const next = Object.assign({}, cur, patch);
+  writeAutoUpdatePersistedState(next);
+  console.log('[AutoUpdate] Persisted:', JSON.stringify(next));
+  return next;
+}
+
 const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
@@ -2027,6 +2071,7 @@ function createWindow() {
   const ses = mainWindow.webContents.session;
   ses.clearCache().catch(() => {});
   ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
+  if (scheduleDeferredAutoUpdateCheck) scheduleDeferredAutoUpdateCheck(mainWindow);
   mainWindow.on('close', (e) => {
     if (!mainWindow || mainWindow._forceClose) return;
     /* Automated tests (isolated userData): allow window to close so Playwright/e2e can exit */
@@ -3779,7 +3824,34 @@ app.whenReady().then(async () => {
     let _lastCheckTime = 0;              // Date.now() of last check
     const UPDATE_CHECK_COOLDOWN = 10 * 60 * 1000; // 10 min between checks
 
+    try {
+      const persisted = readAutoUpdatePersistedState();
+      if (persisted && persisted.pendingInstallVersion && semverEq(persisted.pendingInstallVersion, app.getVersion())) {
+        console.log(`[AutoUpdate] Running version v${app.getVersion()} matches persisted pending install — clearing marker`);
+        mergeAutoUpdatePersisted({
+          pendingInstallVersion: null,
+          lastAppliedVersion: app.getVersion(),
+          lastAppliedAt: Date.now(),
+        });
+      }
+      if (persisted) {
+        console.log('[AutoUpdate] Startup persisted snapshot:', JSON.stringify(persisted));
+      }
+    } catch (e) {
+      console.warn('[AutoUpdate] Persisted state reconcile failed:', e.message);
+    }
+
     console.log(`[AutoUpdate] Init — app ${app.getVersion()}, packaged=${app.isPackaged}, platform=${process.platform}`);
+
+    function sendUpdateStatusToRenderer(payload) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try {
+          mainWindow.webContents.send('app-update-status', payload);
+        } catch (e) {
+          console.warn('[AutoUpdate] send to renderer failed:', e.message);
+        }
+      }
+    }
 
     safeCheckForUpdates = function safeCheckForUpdates(source, opts) {
       var force = opts && opts.force;
@@ -3804,25 +3876,41 @@ app.whenReady().then(async () => {
         _updaterState = 'idle';
       });
       return 'checking';
-    }
+    };
+
+    autoUpdater.on('checking-for-update', () => {
+      _updaterState = 'checking';
+    });
 
     autoUpdater.on('update-available', (info) => {
       console.log(`[AutoUpdate] Update available: v${info.version} (current: v${app.getVersion()})`);
       _updaterState = 'downloading';
-      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'downloading', version: info.version });
+      sendUpdateStatusToRenderer({ status: 'downloading', version: info.version });
     });
 
     autoUpdater.on('update-downloaded', (info) => {
       console.log(`[AutoUpdate] Downloaded: v${info.version} — ready to install on quit`);
       _updaterState = 'downloaded';
       _downloadedVersion = info.version;
-      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'ready', version: info.version });
+      mergeAutoUpdatePersisted({
+        pendingInstallVersion: info.version,
+        pendingDownloadedAt: Date.now(),
+      });
+      sendUpdateStatusToRenderer({ status: 'ready', version: info.version });
     });
 
     autoUpdater.on('update-not-available', (info) => {
       console.log(`[AutoUpdate] Up to date (latest: v${info?.version || '?'})`);
       _updaterState = 'idle';
-      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'up-to-date' });
+      mergeAutoUpdatePersisted({
+        lastRemoteVersion: info && info.version,
+        lastNoUpdateCheckAt: Date.now(),
+        appVersionAtCheck: app.getVersion(),
+      });
+      if (info && info.version && semverEq(info.version, app.getVersion())) {
+        mergeAutoUpdatePersisted({ pendingInstallVersion: null });
+      }
+      sendUpdateStatusToRenderer({ status: 'up-to-date', version: app.getVersion(), remoteVersion: info && info.version });
     });
 
     autoUpdater.on('download-progress', (progress) => {
@@ -3835,46 +3923,100 @@ app.whenReady().then(async () => {
       console.warn('[AutoUpdate] Error:', err?.message || err);
       const prevState = _updaterState;
       _updaterState = 'idle';
-      if (mainWindow) mainWindow.webContents.send('app-update-status', { status: 'error', message: err?.message || 'Update check failed' });
+      sendUpdateStatusToRenderer({ status: 'error', message: err?.message || 'Update check failed' });
       if (prevState === 'checking' || prevState === 'downloading') {
         setTimeout(() => safeCheckForUpdates('error-retry'), 3 * 60 * 1000);
       }
     });
 
-    /** Force-quit the app bypassing the unsaved-changes interceptor so NSIS can install. */
-    function forceQuitForUpdate() {
-      console.log('[AutoUpdate] forceQuitForUpdate — bypassing close interceptor');
-      _updaterState = 'installing';
-      if (mainWindow) {
-        mainWindow._forceClose = true;
+    /** Await full check + optional download so IPC returns a definitive status (no perpetual "checking"). */
+    async function runManualUpdateCheckIpc() {
+      if (_updaterState === 'downloaded' && _downloadedVersion) {
+        return { status: 'ready', version: _downloadedVersion, currentVersion: app.getVersion() };
       }
-      autoUpdater.quitAndInstall(false, true);
+      if (_updaterState === 'checking' || _updaterState === 'downloading') {
+        return { status: _updaterState === 'downloading' ? 'downloading' : 'checking', currentVersion: app.getVersion() };
+      }
+      _lastCheckTime = Date.now();
+      _updaterState = 'checking';
+      try {
+        const result = await autoUpdater.checkForUpdates();
+        if (!result) {
+          _updaterState = 'idle';
+          return { status: 'error', message: 'Update check returned no result', currentVersion: app.getVersion() };
+        }
+        if (!result.isUpdateAvailable) {
+          _updaterState = 'idle';
+          const remoteV = result.updateInfo && result.updateInfo.version;
+          mergeAutoUpdatePersisted({
+            lastRemoteVersion: remoteV,
+            lastNoUpdateCheckAt: Date.now(),
+            appVersionAtCheck: app.getVersion(),
+          });
+          if (remoteV && semverEq(remoteV, app.getVersion())) {
+            mergeAutoUpdatePersisted({ pendingInstallVersion: null });
+          }
+          return {
+            status: 'up-to-date',
+            version: app.getVersion(),
+            remoteVersion: remoteV,
+          };
+        }
+        _updaterState = 'downloading';
+        if (result.downloadPromise) {
+          await result.downloadPromise;
+        }
+        _updaterState = 'downloaded';
+        _downloadedVersion = result.updateInfo ? result.updateInfo.version : _downloadedVersion;
+        return {
+          status: 'ready',
+          version: _downloadedVersion,
+          currentVersion: app.getVersion(),
+        };
+      } catch (e) {
+        _updaterState = 'idle';
+        const msg = e && e.message ? e.message : String(e);
+        return { status: 'error', message: msg, currentVersion: app.getVersion() };
+      }
     }
 
-    ipcMain.handle('app-check-updates', async () => {
-      if (_updaterState === 'downloaded') {
-        return { status: 'ready', version: _downloadedVersion };
-      }
-      try {
-        var result = safeCheckForUpdates('manual-ipc', { force: true });
-        if (result === 'checking') return { status: 'checking' };
-        if (result === 'downloading') return { status: 'downloading' };
-        if (result === 'downloaded') return { status: 'ready', version: _downloadedVersion };
-        return { status: 'checking' };
-      } catch (e) {
-        return { status: 'error', message: e?.message || 'Update check failed' };
-      }
-    });
+    ipcMain.handle('app-check-updates', () => runManualUpdateCheckIpc());
 
-    safeCheckForUpdates('startup');
+    ipcMain.handle('get-auto-update-state', () => ({
+      state: _updaterState,
+      downloadedVersion: _downloadedVersion,
+      currentVersion: app.getVersion(),
+      persisted: readAutoUpdatePersistedState(),
+    }));
+
+    scheduleDeferredAutoUpdateCheck = function scheduleDeferredAutoUpdateCheck(browserWindow) {
+      if (!browserWindow || browserWindow.isDestroyed()) return;
+      browserWindow.webContents.once('did-finish-load', () => {
+        setTimeout(() => {
+          console.log('[AutoUpdate] First scheduled check (renderer loaded)');
+          safeCheckForUpdates('startup-window-ready');
+        }, 400);
+      });
+    };
+
     setInterval(() => safeCheckForUpdates('interval'), 45 * 60 * 1000);
   } else if (IS_PORTABLE_BUILD) {
     ipcMain.handle('app-check-updates', async () => ({
       status: 'manual',
       message: 'Portable builds do not auto-update to avoid switching to a different data location. Download a new portable build and keep the existing userData folder.',
     }));
+    ipcMain.handle('get-auto-update-state', async () => ({
+      status: 'manual',
+      currentVersion: app.getVersion(),
+      persisted: null,
+    }));
   } else {
     ipcMain.handle('app-check-updates', async () => ({ status: 'dev', message: 'Updates only apply to the installed app' }));
+    ipcMain.handle('get-auto-update-state', async () => ({
+      status: 'dev',
+      currentVersion: app.getVersion(),
+      persisted: null,
+    }));
   }
 
   const isCliMode = !!(trialInitOnly || cliImportPath || cliListRecords || cliDumpId);
