@@ -13325,46 +13325,62 @@ PDF_CASENOTE_ADVERT +
       });
     });
 
+    function applyAppUpdateStatusPayload(data) {
+      if (!data) return;
+      var wrap = document.getElementById('update-footer-wrap');
+      var el = document.getElementById('update-footer-status');
+      var banner = document.getElementById('home-update-banner');
+      var bannerText = document.getElementById('home-update-banner-text');
+      var restartBtn = document.getElementById('home-update-restart-btn');
+      if (data.status === 'downloading') {
+        if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Downloading v' + data.version, 'backup-active'); el.onclick = null; }
+        if (banner) banner.style.display = '';
+        if (bannerText) bannerText.textContent = 'A new version (v' + data.version + ') is downloading. You\'ll be notified when it\'s ready to install.';
+        if (restartBtn) restartBtn.style.display = 'none';
+      } else if (data.status === 'ready') {
+        if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Update v' + data.version + ' ready', 'synced'); el.onclick = function() { window.api.appUpdateInstall(); }; }
+        if (banner) banner.style.display = '';
+        if (bannerText) bannerText.textContent = 'Update v' + data.version + ' is ready. Restart the app to install.';
+        if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Restart to install'; restartBtn.onclick = function() { window.api.appUpdateInstall(); }; }
+      } else if (data.status === 'up-to-date') {
+        if (banner) banner.style.display = 'none';
+        var statusEl = document.getElementById('check-updates-status');
+        if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
+      } else if (data.status === 'error') {
+        if (banner) banner.style.display = 'none';
+      }
+      var homeBtn = document.getElementById('home-check-update-btn');
+      if (homeBtn) {
+        if (data.status === 'ready') {
+          homeBtn.textContent = '\u21BB Install v' + data.version;
+          homeBtn.style.color = '#059669';
+          homeBtn.style.borderColor = '#059669';
+          homeBtn.disabled = false;
+          homeBtn.onclick = function() { window.api.appUpdateInstall(); };
+        } else if (data.status === 'downloading') {
+          homeBtn.textContent = '\u21BB Downloading v' + data.version + '\u2026';
+          homeBtn.style.color = '#d97706';
+          homeBtn.disabled = true;
+        } else if (data.status === 'up-to-date') {
+          homeBtn.textContent = '\u2713 Up to date';
+          homeBtn.style.color = '#059669';
+          homeBtn.disabled = false;
+          homeBtn.onclick = null;
+        }
+      }
+    }
     // Auto-update status listener
     if (window.api.onAppUpdateStatus) {
-      window.api.onAppUpdateStatus(function(data) {
-        var wrap = document.getElementById('update-footer-wrap');
-        var el = document.getElementById('update-footer-status');
-        var banner = document.getElementById('home-update-banner');
-        var bannerText = document.getElementById('home-update-banner-text');
-        var restartBtn = document.getElementById('home-update-restart-btn');
-        if (data.status === 'downloading') {
-          if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Downloading v' + data.version, 'backup-active'); el.onclick = null; }
-          if (banner) banner.style.display = '';
-          if (bannerText) bannerText.textContent = 'A new version (v' + data.version + ') is downloading. You\'ll be notified when it\'s ready to install.';
-          if (restartBtn) restartBtn.style.display = 'none';
-        } else if (data.status === 'ready') {
-          if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Update v' + data.version + ' ready', 'synced'); el.onclick = function() { window.api.appUpdateInstall(); }; }
-          if (banner) banner.style.display = '';
-          if (bannerText) bannerText.textContent = 'Update v' + data.version + ' is ready. Restart the app to install.';
-          if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Restart to install'; restartBtn.onclick = function() { window.api.appUpdateInstall(); }; }
-        } else if (data.status === 'up-to-date') {
-          if (banner) banner.style.display = 'none';
-          var statusEl = document.getElementById('check-updates-status');
-          if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
-        } else if (data.status === 'error') {
-          if (banner) banner.style.display = 'none';
+      window.api.onAppUpdateStatus(applyAppUpdateStatusPayload);
+    }
+    if (window.api.getAutoUpdateState) {
+      window.api.getAutoUpdateState().then(function(snap) {
+        if (!snap || snap.status === 'dev' || snap.status === 'manual') return;
+        try { console.log('[AutoUpdate] Renderer snapshot:', JSON.stringify(snap)); } catch (_) {}
+        if (snap.state === 'downloaded' && snap.downloadedVersion) {
+          applyAppUpdateStatusPayload({ status: 'ready', version: snap.downloadedVersion });
         }
-        // Also update the home-screen update button
-        var homeBtn = document.getElementById('home-check-update-btn');
-        if (homeBtn) {
-          if (data.status === 'ready') {
-            homeBtn.textContent = '\u21BB Install v' + data.version;
-            homeBtn.style.color = '#059669';
-            homeBtn.style.borderColor = '#059669';
-            homeBtn.onclick = function() { window.api.appUpdateInstall(); };
-          } else if (data.status === 'downloading') {
-            homeBtn.textContent = '\u21BB Downloading v' + data.version + '\u2026';
-            homeBtn.style.color = '#d97706';
-            homeBtn.disabled = true;
-          }
-        }
-      });
+      }).catch(function(e) { console.warn('[AutoUpdate] getAutoUpdateState failed', e); });
     }
     function triggerUpdateCheck() {
       if (!window.api || !window.api.appCheckUpdates) {

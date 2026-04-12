@@ -59,6 +59,17 @@ describe('update-cycle persistence', () => {
     assert.match(mainJs, /Portable builds do not auto-update to avoid switching to a different data location/);
   });
 
+  it('defers the first update check until the renderer has loaded (no dropped IPC)', () => {
+    assert.match(mainJs, /scheduleDeferredAutoUpdateCheck/);
+    assert.match(mainJs, /startup-window-ready/);
+    assert.doesNotMatch(mainJs, /safeCheckForUpdates\('startup'\)/);
+  });
+
+  it('persists auto-update metadata under userData for cross-restart diagnostics', () => {
+    assert.match(mainJs, /cn-auto-update-state\.json/);
+    assert.match(mainJs, /mergeAutoUpdatePersisted/);
+  });
+
   it('forces a synchronous DB flush during shutdown', () => {
     assert.match(mainJs, /if \(db\) \{ flushDbSync\(\); db\.close\(\); \}/);
     assert.match(mainJs, /app\.on\('before-quit', \(\) => \{/);

@@ -127,6 +127,7 @@ contextBridge.exposeInMainWorld('api', {
   onAppUpdateStatus: (cb) => ipcRenderer.on('app-update-status', (_, data) => cb(data)),
   appUpdateInstall: () => ipcRenderer.invoke('app-update-install'),
   appCheckUpdates: () => ipcRenderer.invoke('app-check-updates'),
+  getAutoUpdateState: () => ipcRenderer.invoke('get-auto-update-state'),
 });
 
 contextBridge.exposeInMainWorld('emailAPI', {
