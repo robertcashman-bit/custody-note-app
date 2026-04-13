@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.181",
+      "version": "1.4.182",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Fix blank document preview — PDFs now open in system viewer",
+        "Add Save to Desktop and Email buttons for each generated form",
+        "Remove redundant Section 9 billing card — use post-finalise bar or bottom nav instead"
+      ]
+    },
+    {
+      "version": "1.4.181",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "NSIS installer now kills running app before overwriting files — prevents 'Failed to uninstall old application files' error",
         "Hardened auto-update shutdown: force-exits process after quitAndInstall to release file handles",

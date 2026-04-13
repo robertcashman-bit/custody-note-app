@@ -6803,23 +6803,7 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
           '</div>';
         section.appendChild(endActions);
-        const billingLink = document.createElement('div');
-        billingLink.className = 'section9-billing-link';
-        billingLink.innerHTML =
-          '<div class="section9-billing-link-inner">' +
-            '<div class="section9-billing-link-icon">&#163;</div>' +
-            '<div class="section9-billing-link-text">' +
-              '<h4 style="margin:0 0 0.25rem 0;">Documents &amp; Billing</h4>' +
-              '<p style="margin:0;font-size:0.85rem;opacity:0.8;">Manage attachments, create invoices and finalise matters from the dedicated Billing view.</p>' +
-            '</div>' +
-            '<div class="section9-billing-link-actions">' +
-              '<button type="button" class="btn btn-primary" id="section9-goto-billing-view">Go to Billing</button>' +
-              '<button type="button" class="btn btn-secondary" id="section9-open-workflow">Open Workflow</button>' +
-            '</div>' +
-          '</div>';
-        billingLink.querySelector('#section9-goto-billing-view').onclick = function() { showView('billing'); };
-        billingLink.querySelector('#section9-open-workflow').onclick = function() { promptBeforeOpeningBilling(); };
-        section.appendChild(billingLink);
+        /* Billing link removed — redundant with post-finalise bar and bottom nav */
         if (formData.photos) {
           const legacyKeys = ['custody', 'disclosure', 'interview', 'injuriesAppearance'];
           for (const lk of legacyKeys) {

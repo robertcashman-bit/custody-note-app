@@ -6277,20 +6277,7 @@ html.dark .wf-doc-sel-group-label { color: #94a3b8; }
 }
 .bottom-nav-btn { position: relative; }
 
-/* Section 9 billing link card */
-.section9-billing-link { margin-top: 1.25rem; }
-.section9-billing-link-inner {
-  display: flex; align-items: center; gap: 1rem;
-  background: linear-gradient(135deg, #ecfdf5, #f0f9ff);
-  border: 1.5px solid #a7f3d0; border-radius: 12px; padding: 1rem 1.25rem;
-  transition: box-shadow 0.2s;
-}
-.section9-billing-link-inner:hover { box-shadow: 0 2px 12px rgba(16,185,129,0.12); }
-.section9-billing-link-icon { font-size: 1.8rem; color: #059669; }
-.section9-billing-link-text { flex: 1; }
-.section9-billing-link-text h4 { color: #065f46; }
-.section9-billing-link-text p { color: #475569; }
-.section9-billing-link-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+/* Section 9 billing link card — removed (redundant with post-finalise bar) */
 
 /* Records list billing badge */
 .record-billing-badge {
@@ -6334,10 +6321,7 @@ html.dark .bv-badge--invoice { background: #1e3a5f; color: #93c5fd; }
 html.dark .bv-badge--invoiced { background: #064e3b; color: #6ee7b7; }
 html.dark .bv-badge--sent { background: #1e1b4b; color: #a5b4fc; }
 
-html.dark .section9-billing-link-inner { background: linear-gradient(135deg, #042f2e, #0c1e30); border-color: #059669; }
-html.dark .section9-billing-link-icon { color: #6ee7b7; }
-html.dark .section9-billing-link-text h4 { color: #6ee7b7; }
-html.dark .section9-billing-link-text p { color: #94a3b8; }
+/* dark section9 billing link — removed */
 
 html.dark .record-billing-badge--docs { background: #422006; color: #fbbf24; }
 html.dark .record-billing-badge--invoice { background: #1e3a5f; color: #93c5fd; }

@@ -83,7 +83,9 @@ function _wfBuildGeneratableGrid(meta) {
         '<div class="wf-gen-item-actions">' +
           '<span class="wf-gen-status ' + statusCls + '">' + statusText + '</span>' +
           '<button type="button" class="btn btn-small wf-gen-btn" data-form-id="' + form.id + '">' + btnLabel + '</button>' +
-          (generated ? '<button type="button" class="btn btn-small btn-secondary wf-gen-preview-btn" data-form-id="' + form.id + '" title="Preview">&#128065; Preview</button>' : '') +
+          (generated ? '<button type="button" class="btn btn-small btn-secondary wf-gen-preview-btn" data-form-id="' + form.id + '" title="Preview">&#128065;</button>' : '') +
+          (generated ? '<button type="button" class="btn btn-small btn-secondary wf-gen-save-btn" data-form-id="' + form.id + '" title="Save to Desktop">&#128190;</button>' : '') +
+          (generated ? '<button type="button" class="btn btn-small btn-secondary wf-gen-email-btn" data-form-id="' + form.id + '" title="Email">&#9993;</button>' : '') +
         '</div>' +
       '</div>';
   });
@@ -328,6 +330,20 @@ function _wfBindDocEvents(meta) {
       _wfPreviewGeneratedForm(formId);
     });
   });
+
+  document.querySelectorAll('.wf-gen-save-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var formId = btn.getAttribute('data-form-id');
+      _wfSaveFormToDesktop(formId);
+    });
+  });
+
+  document.querySelectorAll('.wf-gen-email-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var formId = btn.getAttribute('data-form-id');
+      _wfEmailForm(formId, meta);
+    });
+  });
 }
 
 function _wfGenerateForm(formId, meta, btn) {
@@ -507,17 +523,59 @@ function _wfPreviewGeneratedForm(formId) {
   var doc = _wfGeneratedDocs[formId];
   if (!doc || !doc.base64) { showToast('Generate the form first', 'info'); return; }
 
-  var bytes = Uint8Array.from(atob(doc.base64), function (c) { return c.charCodeAt(0); });
-  var blob = new Blob([bytes], { type: 'application/pdf' });
-  var url = URL.createObjectURL(blob);
+  if (window.api && window.api.previewPdfBase64) {
+    window.api.previewPdfBase64({ base64: doc.base64, filename: doc.filename || formId + '.pdf' }).then(function (result) {
+      if (result && result.error) showToast('Preview failed: ' + result.error, 'error');
+    }).catch(function (err) {
+      showToast('Preview error: ' + (err.message || err), 'error');
+    });
+  } else {
+    showToast('PDF preview not available — update the app', 'info');
+  }
+}
 
-  var previewWin = window.open('', '_blank', 'width=900,height=700');
-  if (previewWin) {
-    previewWin.document.write(
-      '<!DOCTYPE html><html><head><title>' + _wfEsc(doc.label) + '</title></head><body style="margin:0;overflow:hidden;">' +
-      '<embed src="' + url + '" type="application/pdf" width="100%" height="100%" style="position:absolute;top:0;left:0;right:0;bottom:0;">' +
-      '</body></html>'
-    );
-    previewWin.document.close();
+function _wfSaveFormToDesktop(formId) {
+  var doc = _wfGeneratedDocs[formId];
+  if (!doc || !doc.base64) { showToast('Generate the form first', 'info'); return; }
+
+  if (window.api && window.api.getDesktopPath) {
+    window.api.getDesktopPath().then(function (desktop) {
+      var filename = doc.filename || formId + '.pdf';
+      if (window.api.previewPdfBase64) {
+        window.api.previewPdfBase64({ base64: doc.base64, filename: filename }).then(function () {
+          showToast(doc.label + ' saved and opened', 'success');
+        });
+      }
+    });
+  } else {
+    showToast('Save not available', 'error');
+  }
+}
+
+function _wfEmailForm(formId, meta) {
+  var doc = _wfGeneratedDocs[formId];
+  if (!doc || !doc.base64) { showToast('Generate the form first', 'info'); return; }
+
+  var subject = (doc.label || formId) + ' — ' + (meta.clientName || 'Client');
+  var body = 'Please find attached: ' + (doc.label || formId) + '\n\nClient: ' + (meta.clientName || '') + '\nStation: ' + (meta.stationName || '') + '\nDate: ' + (meta.attendanceDate || '');
+
+  if (window.api && window.api.previewPdfBase64) {
+    window.api.previewPdfBase64({ base64: doc.base64, filename: doc.filename || formId + '.pdf' }).then(function (result) {
+      if (result && result.path && window.emailAPI && window.emailAPI.open) {
+        window.emailAPI.open({
+          subject: subject,
+          body: body,
+          attachments: [result.path],
+        }).then(function () {
+          showToast('Email opened with ' + doc.label + ' attached', 'success');
+        }).catch(function () {
+          showToast('Could not open email client. File saved to: ' + result.path, 'info', 6000);
+        });
+      } else if (result && result.path) {
+        showToast(doc.label + ' saved to temp folder. Attach manually from: ' + result.path, 'info', 6000);
+      }
+    });
+  } else {
+    showToast('Save the form first using the save button, then attach to email manually.', 'info');
   }
 }
