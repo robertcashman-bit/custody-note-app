@@ -13550,7 +13550,7 @@ PDF_CASENOTE_ADVERT +
         'Options:\n' +
         '\u2022 Click OK to reset and retry the update\n' +
         '\u2022 Click Cancel to continue using the current version\n\n' +
-        'If the problem persists, download the latest version manually from custodynote.com/download',
+        'If the problem persists, close the app and run the latest installer as Administrator from custodynote.com/download',
         'Update Installation Issue'
       ).then(function(ok) {
         if (ok) _resetLoopAndRetry();
@@ -13691,7 +13691,7 @@ PDF_CASENOTE_ADVERT +
         if (!snap || snap.status === 'dev' || snap.status === 'manual') return;
         try { console.log('[AutoUpdate] Renderer snapshot:', JSON.stringify(snap)); } catch (_) {}
         if (snap.loopDetected) {
-          applyAppUpdateStatusPayload({ status: 'loop-blocked', message: 'Auto-update paused due to repeated failed installs.' });
+          applyAppUpdateStatusPayload({ status: 'loop-blocked', message: 'The update could not be installed automatically. Please close the app and run the installer as Administrator.' });
         } else if (snap.state === 'downloaded' && snap.downloadedVersion) {
           applyAppUpdateStatusPayload({ status: 'ready', version: snap.downloadedVersion });
         }
@@ -14026,10 +14026,10 @@ PDF_CASENOTE_ADVERT +
         }
         if (data.status === 'up-to-date') {
           setBlock('sysstat-update-icon','✅','#059669','sysstat-update-line1','Up to date' + (currentVersion ? ' — v' + currentVersion : ''),'sysstat-update-line2','');
-          if (l2El) l2El.textContent = 'Auto-update enabled · Checks every 4 hours · Next check within ' + (4 - (new Date().getMinutes() / 60)).toFixed(1) + 'h';
+          if (l2El) l2El.textContent = 'Auto-update enabled · Checks every 6 hours while the app is running';
         } else if (data.status === 'downloading') {
           setBlock('sysstat-update-icon','⬇️','#2563eb','sysstat-update-line1','Downloading update v' + data.version + '…','sysstat-update-line2','');
-          if (l2El) l2El.textContent = 'Will install automatically on next restart';
+          if (l2El) l2El.textContent = 'The update will be ready once the download completes';
         } else if (data.status === 'ready') {
           setBlock('sysstat-update-icon','🔄','#059669','sysstat-update-line1','Update v' + data.version + ' ready to install','sysstat-update-line2','');
           if (l2El) l2El.textContent = 'Restart the app to apply the update';
@@ -14041,7 +14041,7 @@ PDF_CASENOTE_ADVERT +
           if (l2El) l2El.textContent = data.message || 'Could not reach update server — will retry automatically';
         } else {
           setBlock('sysstat-update-icon','⏳','','sysstat-update-line1','Waiting for update check…','sysstat-update-line2','');
-          if (l2El) l2El.textContent = 'Auto-update checks every 4 hours when the app is running';
+          if (l2El) l2El.textContent = 'Auto-update checks every 6 hours when the app is running';
         }
       }
 
