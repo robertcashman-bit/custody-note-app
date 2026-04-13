@@ -1,9 +1,24 @@
 {
   "releases": [
     {
-      "version": "1.4.175",
+      "version": "1.4.176",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Deep auto-update fix: circuit breaker prevents restart loops after failed installs",
+        "version transition detection on startup",
+        "file-based update logging to cn-auto-update.log",
+        "remove window-focus auto-check and redundant 30m interval",
+        "single quitAndInstall guard",
+        "user confirmation before every restart",
+        "loop recovery dialog with manual retry",
+        "clear stale state on successful version advance"
+      ]
+    },
+    {
+      "version": "1.4.175",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "Fix update restart loop: stop auto-installing after download, ask user to confirm restart",
         "save draft before install",
