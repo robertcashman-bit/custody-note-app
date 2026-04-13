@@ -1,9 +1,16 @@
 {
   "releases": [
     {
-      "version": "1.4.195",
+      "version": "1.4.196",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "End-to-end auto-update verification from v1.4.195 with NSIS REBOOTOK fix"
+      ]
+    },
+    {
+      "version": "1.4.195",
+      "date": "2026-04-13",
       "changes": [
         "NSIS: Delete /REBOOTOK on app.asar and main exe so locked files (IDE/AV) no longer abort uninstall with error 2",
         "Updater: disable differential downloads to avoid checksum mismatch fallbacks; persist debug NDJSON to %APPDATA%\\custody-note\\debug-1083ef.log",
