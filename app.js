@@ -10,6 +10,10 @@ var formData = {};
 var currentSectionIdx = 0;
 var currentStandaloneSectionId = null;
 var currentRecordStatus = null;
+
+function isNoteLockedForEditing() {
+  return currentRecordStatus === 'finalised' || currentRecordStatus === 'completed';
+}
 var currentRecordArchived = false;
 var autoSaveTimer = null;
 var _draftSaveInFlight = false;
@@ -3039,7 +3043,7 @@ var REQUIRED_FIELD_KEYS = [
     var staleDraftMs = 7 * 24 * 60 * 60 * 1000;
 
     if (!d.firmId) flags.push({ key: 'no-firm', label: 'No firm', tone: 'warning' });
-    if (status !== 'finalised') {
+    if (status !== 'finalised' && status !== 'completed') {
       if (d._formType !== 'telephone' && !d.clientSig) flags.push({ key: 'client-sig', label: 'Client sign', tone: 'warning' });
       if (!d.feeEarnerSig) flags.push({ key: 'fee-earner-sig', label: 'Rep sign', tone: 'warning' });
       if (ageMs > staleDraftMs && !isOutcomeDecisionRecorded(d.outcomeDecision || getLegacyOutcomeDecision(d.caseOutcomeStatus, d._formType))) {
@@ -3090,7 +3094,10 @@ var REQUIRED_FIELD_KEYS = [
   function loadHomeActiveMatters(rows) {
     var el = document.getElementById('home-active-matters');
     if (!el) return;
-    var activeRows = (rows || []).filter(function(r) { return (r.status || 'draft') !== 'finalised'; }).slice(0, 6);
+    var activeRows = (rows || []).filter(function(r) {
+      var s = r.status || 'draft';
+      return s !== 'finalised' && s !== 'completed';
+    }).slice(0, 6);
     if (!activeRows.length) {
       el.innerHTML = '<div class="home-active-empty">No active drafts right now. Use the quick actions above to start a new note.</div>';
       return;
@@ -3110,7 +3117,7 @@ var REQUIRED_FIELD_KEYS = [
               '<span class="home-active-title">' + esc(name) + '</span>' +
               '<span class="home-active-subtitle">' + esc(station) + '</span>' +
             '</div>' +
-            '<span class="badge ' + esc(status === 'finalised' ? 'finalised' : 'draft') + '" title="' + esc(homeRecordStatusTooltip(r)) + '">' + esc(status) + '</span>' +
+            '<span class="badge ' + esc(status === 'finalised' ? 'finalised' : (status === 'completed' ? 'completed' : 'draft')) + '" title="' + esc(homeRecordStatusTooltip(r)) + '">' + esc(status) + '</span>' +
           '</div>' +
           '<div class="home-active-subtitle">' + esc(offence) + '</div>' +
           '<div class="home-active-footer">' +
@@ -3133,7 +3140,10 @@ var REQUIRED_FIELD_KEYS = [
     var helperEl = document.getElementById('home-focus-helper');
     if (!card || !titleEl || !metaEl || !badgesEl || !openBtn || !helperEl) return;
 
-    var draftRows = (rows || []).filter(function(r) { return (r.status || 'draft') !== 'finalised'; });
+    var draftRows = (rows || []).filter(function(r) {
+      var s = r.status || 'draft';
+      return s !== 'finalised' && s !== 'completed';
+    });
     var latestDraft = draftRows[0] || null;
     if (!latestDraft) {
       titleEl.textContent = 'You are caught up';
@@ -3189,7 +3199,7 @@ var REQUIRED_FIELD_KEYS = [
           if (dm) date = dm[3] + '/' + dm[2] + '/' + dm[1];
         }
         var status = r.status || 'draft';
-        var badgeClass = status === 'finalised' ? 'badge finalised' : 'badge draft';
+        var badgeClass = status === 'finalised' ? 'badge finalised' : (status === 'completed' ? 'badge completed' : 'badge draft');
         var healthBadges = renderRecordHealthBadges(r, 2, 'home-health-badge');
         return '<li class="home-recent-item" data-id="' + r.id + '">' +
           '<div class="home-item-left"><span class="home-item-name">' + esc(name) + '</span><span class="home-item-meta">' + esc(station) + (station && date ? ' \u00B7 ' : '') + esc(date) + '</span>' +
@@ -3200,10 +3210,17 @@ var REQUIRED_FIELD_KEYS = [
       if (statsEl) {
         var total = rows.length;
         var drafts = 0, finalised = 0;
-        rows.forEach(function(r) { if ((r.status || 'draft') === 'finalised') finalised++; else drafts++; });
+        var completed = 0;
+        rows.forEach(function(r) {
+          var s = r.status || 'draft';
+          if (s === 'finalised') finalised++;
+          else if (s === 'completed') completed++;
+          else drafts++;
+        });
         var parts = [];
         if (drafts) parts.push(drafts + (drafts === 1 ? ' draft' : ' drafts'));
         if (finalised) parts.push(finalised + ' finalised');
+        if (completed) parts.push(completed + ' office complete');
         if (total <= HOME_RECENT_LIMIT) {
           statsEl.textContent = total + ' record' + (total === 1 ? '' : 's') + ' \u2014 ' + parts.join(', ');
         } else {
@@ -3397,10 +3414,11 @@ var REQUIRED_FIELD_KEYS = [
 
       widget.style.display = '';
       widget.innerHTML =
-        '<div class="home-billing-widget-title">&#163; Billing Summary</div>' +
+        '<div class="home-billing-widget-title">Open matters (office tasks)</div>' +
+        '<div class="home-billing-widget-sub">Across your practice — not only the file you have open</div>' +
         '<div class="home-billing-widget-stats">' +
-          (needsDocs > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsDocs + '</span> needs docs</span>' : '') +
-          (needsInvoice > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsInvoice + '</span> needs invoice</span>' : '') +
+          (needsDocs > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsDocs + '</span> need documents</span>' : '') +
+          (needsInvoice > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsInvoice + '</span> need invoice</span>' : '') +
           (invoiced > 0 ? '<span class="home-billing-widget-stat"><span class="home-billing-widget-num">' + invoiced + '</span> invoiced</span>' : '') +
           (actionCount === 0 ? '<span class="home-billing-widget-stat">All up to date</span>' : '') +
         '</div>';
@@ -4157,7 +4175,7 @@ var REQUIRED_FIELD_KEYS = [
     clearTimeout(_quietSaveDebounceTimer);
     const formView = document.getElementById('view-form');
     if (!formView || !formView.classList.contains('active')) return;
-    if (currentRecordStatus === 'finalised') return;
+    if (isNoteLockedForEditing()) return;
     if (_finalising) return;
     const data = getFormData();
     if (!hasMeaningfulData(data)) return;
@@ -4192,7 +4210,7 @@ var REQUIRED_FIELD_KEYS = [
       });
     }).finally(() => {
       _draftSaveInFlight = false;
-      if (_draftSaveQueued && !_finalising && currentRecordStatus !== 'finalised') {
+      if (_draftSaveQueued && !_finalising && !isNoteLockedForEditing()) {
         _draftSaveQueued = false;
         setTimeout(() => quietSave(), 500);
       } else {
@@ -4259,6 +4277,7 @@ var REQUIRED_FIELD_KEYS = [
     const settings = getQuickFileSettingsPayload();
     return !!(settings.quickfileAccountNumber && settings.quickfileApiKey && settings.quickfileAppId);
   }
+  window.hasQuickFileSettingsConfigured = hasQuickFileSettingsConfigured;
 
   function openQuickFileSettings() {
     showView('settings');
@@ -5398,7 +5417,7 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── AMEND ATTENDANCE ─── */
   function amendAttendance(id, status, title) {
-    if (status === 'finalised') {
+    if (status === 'finalised' || status === 'completed') {
       showConfirm('Re-open "' + (title || 'this record') + '" for amendment?\n\nThe status will change back to draft until you re-finalise.').then(function(ok) {
         if (!ok) return;
         window.api.attendanceSave({ id: id, data: null, status: 'draft', unlock: true }).then(function() {
@@ -5728,19 +5747,23 @@ var REQUIRED_FIELD_KEYS = [
     const archiveBtn = document.getElementById('form-archive-btn');
     const unarchiveBtn = document.getElementById('form-unarchive-btn');
     if (!finaliseBar || !archiveBtn || !unarchiveBtn) return;
-    if (currentRecordStatus !== 'finalised' && !currentRecordArchived) {
+    if (!isNoteLockedForEditing() && !currentRecordArchived) {
       finaliseBar.style.display = '';
     } else {
       finaliseBar.style.display = 'none';
     }
     if (endBillingBtn) {
       endBillingBtn.style.display = currentAttendanceId ? '' : 'none';
-      endBillingBtn.textContent = (currentRecordStatus === 'finalised')
-        ? 'Documents, Attachments & Invoice'
-        : 'Prepare Documents & Invoice';
+      if (currentRecordStatus === 'completed') {
+        endBillingBtn.textContent = 'Review finish matter';
+      } else if (currentRecordStatus === 'finalised') {
+        endBillingBtn.textContent = 'Finish matter';
+      } else {
+        endBillingBtn.textContent = 'Prepare finish matter';
+      }
     }
     if (postFinaliseBar) {
-      postFinaliseBar.style.display = (currentRecordStatus === 'finalised' && !currentRecordArchived) ? '' : 'none';
+      postFinaliseBar.style.display = (isNoteLockedForEditing() && !currentRecordArchived) ? '' : 'none';
     }
     if (currentAttendanceId && !currentRecordArchived) {
       archiveBtn.style.display = '';
@@ -5784,7 +5807,7 @@ var REQUIRED_FIELD_KEYS = [
   };
 
   function showPostFinaliseNextStepsHint() {
-    showToast('Next: use Documents & Billing (bottom bar) for attachments and invoice, or open this record and use LAA Forms / PDF in the header.', 'info', 7500);
+    showToast('Next: tap Finish matter (Time recording section or header) for documents, QuickFile invoice, and marking office work complete.', 'info', 7500);
   }
 
   /** Blocking checks only — used for “Ready to invoice” status. */
@@ -5818,33 +5841,45 @@ var REQUIRED_FIELD_KEYS = [
     var openBtn = document.getElementById('billing-readiness-open');
     if (!list || !panel || !statusEl || !summaryEl || !warningsWrap || !openBtn) return;
     var w = getBillingReadinessWarnings();
-    var hasInvoice = !!(formData.quickfileInvoiceNumber || formData.quickfileInvoiceUrl);
+    var hasInvoice = !!(
+      (formData.quickfile_invoice_id && String(formData.quickfile_invoice_id).trim()) ||
+      (formData.quickfileInvoiceNumber && String(formData.quickfileInvoiceNumber).trim()) ||
+      (formData.quickfileInvoiceUrl && String(formData.quickfileInvoiceUrl).trim())
+    );
     var quickFileReady = hasQuickFileSettingsConfigured();
     var statusText = 'Needs review';
     var statusClass = 'state-review';
     var summary = '';
-    if (hasInvoice) {
+    if (currentRecordStatus === 'completed') {
+      statusText = 'Office complete';
+      statusClass = 'state-complete';
+      summary = 'Office work on this matter is marked complete. Use Archive on this section when you are ready to clear it from the main list.';
+      openBtn.textContent = 'Review finish matter';
+    } else if (hasInvoice) {
       statusText = 'Invoiced';
       statusClass = 'state-invoiced';
-      summary = 'QuickFile invoice ' + (formData.quickfileInvoiceNumber || 'created') + ' is linked to this record.';
-      if (typeof currentRecordStatus !== 'undefined' && currentRecordStatus === 'finalised' && !currentRecordArchived) {
-        summary += ' File billed — archive when you have finished all follow-up.';
+      summary = 'QuickFile invoice ' + (formData.quickfileInvoiceNumber || 'linked') + ' is on this record. Open Finish matter to confirm attachments and mark office work complete (step 3).';
+      if (currentRecordStatus === 'finalised' && !currentRecordArchived) {
+        summary += ' Then archive when all follow-up is done.';
       }
+      openBtn.textContent = 'Continue finish matter';
     } else if (!quickFileReady) {
       statusText = 'Setup needed';
       statusClass = 'state-setup';
-      summary = 'Add your QuickFile account details in Settings first, then open the billing panel to create the invoice.';
+      summary = 'Add QuickFile in Settings if you invoice from here; otherwise use Finish matter for documents and attachments.';
+      openBtn.textContent = 'Open finish matter';
     } else if (!w.length) {
       statusText = 'Ready to invoice';
       statusClass = 'state-ready';
-      summary = 'Charges look ready to review. Open the billing panel to confirm fee, mileage, parking, VAT, and create the QuickFile invoice.';
+      summary = 'Charges look ready. Open Finish matter to create the QuickFile invoice and complete the file.';
+      openBtn.textContent = 'Open finish matter';
     } else {
-      summary = 'Complete the checks below, then open the billing panel to create and send the invoice.';
+      summary = 'Complete the checks below, then open Finish matter for invoice and completion.';
+      openBtn.textContent = 'Open finish matter';
     }
     statusEl.className = 'billing-readiness-status ' + statusClass;
     statusEl.textContent = statusText;
     summaryEl.textContent = summary;
-    openBtn.textContent = hasInvoice ? 'Review Billing & Invoice' : 'Open Billing & Invoice';
     var listHtml = w.map(function(msg) { return '<li>' + esc(msg) + '</li>'; }).join('');
     list.innerHTML = listHtml;
     warningsWrap.style.display = w.length ? '' : 'none';
@@ -5861,7 +5896,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function promptBeforeOpeningBilling() {
     if (typeof openWorkflow === 'function') {
-      openWorkflow(0);
+      openWorkflow();
     } else if (typeof openBillingPanel === 'function') {
       openBillingPanel();
     }
@@ -6797,17 +6832,43 @@ var REQUIRED_FIELD_KEYS = [
           '<p id="time-breakdown-summary" class="time-breakdown-summary"></p>' +
           '<ul id="time-breakdown-list" class="time-breakdown-list"></ul>';
         section.appendChild(timeBreakdownPanel);
+        const billingReadiness = document.createElement('div');
+        billingReadiness.id = 'billing-readiness-panel';
+        billingReadiness.className = 'billing-readiness-panel';
+        billingReadiness.innerHTML =
+          '<div class="billing-readiness-head">' +
+            '<div>' +
+              '<h4 class="billing-readiness-title">File completion — this matter</h4>' +
+              '<p class="billing-readiness-copy">After you finalise the note, use <strong>Finish matter</strong> (header) for documents, QuickFile invoice, and marking office work complete.</p>' +
+            '</div>' +
+            '<span id="billing-readiness-status" class="billing-readiness-status state-review" aria-live="polite"></span>' +
+          '</div>' +
+          '<p id="billing-readiness-summary" class="billing-readiness-summary"></p>' +
+          '<div id="billing-readiness-warnings-wrap" class="billing-readiness-warnings" style="display:none;">' +
+            '<div class="billing-readiness-warning-title">Before you invoice</div>' +
+            '<ul id="billing-readiness-list" class="billing-readiness-list"></ul>' +
+          '</div>' +
+          '<div class="billing-readiness-actions">' +
+            '<button type="button" id="billing-readiness-open" class="btn btn-primary">Open finish matter</button>' +
+          '</div>' +
+          '<ol class="billing-readiness-steps">' +
+            '<li>Finalise attendance note</li>' +
+            '<li>Documents &amp; attachments</li>' +
+            '<li>QuickFile invoice</li>' +
+            '<li>Mark office work complete</li>' +
+          '</ol>';
+        section.appendChild(billingReadiness);
         const endActions = document.createElement('div');
         endActions.className = 'form-actions form-end-actions';
         endActions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
-          '<button type="button" class="btn btn-primary" id="form-end-billing-btn" style="display:none;">Documents, Attachments &amp; Invoice</button>' +
+          '<button type="button" class="btn btn-primary" id="form-end-billing-btn" style="display:none;">Finish matter</button>' +
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
           '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>' +
           '<div id="form-post-finalise-bar" class="form-post-finalise-bar" style="display:none;">' +
             '<div class="form-post-finalise-inner">' +
-              '<span class="form-post-finalise-text">This note is finalised. Continue with documents, invoice and attachments.</span>' +
-              '<button type="button" class="btn btn-primary btn-small" id="form-post-finalise-workflow">Documents and billing</button>' +
+              '<span class="form-post-finalise-text">This note is finalised. Next: finish matter — documents, QuickFile invoice, mark office complete.</span>' +
+              '<button type="button" class="btn btn-primary btn-small" id="form-post-finalise-workflow">Finish matter</button>' +
             '</div>' +
           '</div>';
         section.appendChild(endActions);
@@ -11567,7 +11628,7 @@ PDF_CASENOTE_ADVERT +
       /* NEW: Ctrl+Enter = Finalise record */
       if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
-        if (currentAttendanceId && currentRecordStatus !== 'finalised') {
+        if (currentAttendanceId && !isNoteLockedForEditing()) {
           saveForm(true);
         }
         return;
@@ -11778,7 +11839,18 @@ PDF_CASENOTE_ADVERT +
       elapsedEl.textContent = '—';
     }
 
-    billingEl.textContent = formData.quickfileInvoiceNumber ? 'Invoiced' : (current && current.id === 'timeRecording' ? 'Ready to review' : 'Draft in progress');
+    var invLine = !!(
+      (formData.quickfile_invoice_id && String(formData.quickfile_invoice_id).trim()) ||
+      (formData.quickfileInvoiceNumber && String(formData.quickfileInvoiceNumber).trim())
+    );
+    var att = (formData.photos && formData.photos.attachments) ? formData.photos.attachments : [];
+    var attLine = att.length ? (att.length + ' attachment(s)' + (att.every(function(a) { return a && a.documentType && (a.documentType !== 'other' || (String(a.customDocumentType || '').trim())); }) ? ', all named' : ', some need a type')) : 'No attachments';
+    var noteLine = currentRecordStatus === 'completed' ? 'Office work complete' : (isNoteLockedForEditing() ? 'Note finalised' : 'Note in draft');
+    var invStatusLine = invLine ? 'Invoice linked' : 'No invoice on file yet';
+    billingEl.innerHTML =
+      '<div class="form-panel-billing-row"><strong>' + esc(noteLine) + '</strong></div>' +
+      '<div class="form-panel-billing-row">' + esc(invStatusLine) + '</div>' +
+      '<div class="form-panel-billing-row">' + esc(attLine) + '</div>';
     reminderEl.textContent = current ? ('Current section: ' + current.title.replace(/^\d+\.\s*/, '') + '. Keep the key facts concise and review before moving on.') : 'Complete the current section before moving on where possible.';
   }
 
@@ -12354,7 +12426,7 @@ PDF_CASENOTE_ADVERT +
     window.addEventListener('offline', function () { setNetStatus(false); });
 
     window.addEventListener('beforeunload', function (e) {
-      if (!currentAttendanceId || currentRecordStatus === 'finalised') return;
+      if (!currentAttendanceId || isNoteLockedForEditing()) return;
       try {
         var data = collectCurrentData();
         if (hasMeaningfulData(data)) { e.preventDefault(); e.returnValue = ''; }
@@ -12584,6 +12656,11 @@ PDF_CASENOTE_ADVERT +
     /* Delegated click for form action buttons (they are created inside renderForm and may be recreated) */
     document.getElementById('attendance-form')?.addEventListener('click', function(e) {
       const btn = e.target && (e.target.closest ? e.target.closest('button') : (e.target.tagName === 'BUTTON' ? e.target : null));
+      if (btn && btn.id === 'billing-readiness-open') {
+        e.preventDefault();
+        promptBeforeOpeningBilling();
+        return;
+      }
       if (!btn || !btn.id || !btn.id.startsWith('form-')) return;
       switch (btn.id) {
         case 'form-finalise': validateBeforeFinalise(); break;
@@ -12707,7 +12784,7 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('header-kb-help')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
 
     function _guardedNav(targetView, cb) {
-      if (currentAttendanceId && currentRecordStatus !== 'finalised') {
+      if (currentAttendanceId && !isNoteLockedForEditing()) {
         try {
           var data = collectCurrentData();
           if (hasMeaningfulData(data)) {

@@ -173,9 +173,9 @@ describe('quietSave — autosave guards', () => {
 
   const quietSaveBody = extractFunctionBody(appJsSource, 'quietSave');
 
-  it('skips when currentRecordStatus is finalised', () => {
-    assert.ok(quietSaveBody.includes("currentRecordStatus === 'finalised'"),
-      'must check if record is finalised');
+  it('skips when record is locked for editing (finalised or office-completed)', () => {
+    assert.ok(quietSaveBody.includes('isNoteLockedForEditing()'),
+      'must check locked status');
   });
 
   it('skips when _finalising is true', () => {
@@ -183,8 +183,8 @@ describe('quietSave — autosave guards', () => {
       'must check _finalising flag');
   });
 
-  it('does not re-queue when finalising or finalised', () => {
-    assert.ok(quietSaveBody.includes("!_finalising && currentRecordStatus !== 'finalised'"),
+  it('does not re-queue when finalising or locked', () => {
+    assert.ok(quietSaveBody.includes('!_finalising && !isNoteLockedForEditing()'),
       'finally block must check both flags before re-queuing');
   });
 
@@ -204,9 +204,9 @@ describe('Main process — attendance-save handler', () => {
   const saveHandlerStart = mainJsSource.indexOf("ipcMain.handle('attendance-save'");
   const saveHandler = mainJsSource.substring(saveHandlerStart, saveHandlerStart + 5000);
 
-  it('blocks draft writes to finalised records', () => {
-    assert.ok(saveHandler.includes("existing.status === 'finalised' && st !== 'finalised'"),
-      'must block draft writes to finalised records');
+  it('blocks draft writes to finalised or office-completed records', () => {
+    assert.ok(saveHandler.includes("existing.status === 'finalised' || existing.status === 'completed'"),
+      'must treat finalised and completed as locked');
     assert.ok(saveHandler.includes("error: 'locked'"),
       'must return locked error');
   });
@@ -225,14 +225,16 @@ describe('Main process — attendance-save handler', () => {
       'must update sync_version');
   });
 
-  it('writes audit log for finalise', () => {
-    assert.ok(saveHandler.includes("st === 'finalised' ? 'finalised' : 'updated'"),
+  it('writes audit log for finalise and office completion', () => {
+    assert.ok(saveHandler.includes("if (st === 'finalised') action = 'finalised'"),
       'must log finalised action in audit log');
+    assert.ok(saveHandler.includes("office_completed"),
+      'must log office_completed when transitioning to completed');
   });
 
-  it('flushes DB to disk immediately after finalise', () => {
-    assert.ok(saveHandler.includes("if (st === 'finalised') flushDb()"),
-      'must call flushDb immediately after finalise write');
+  it('flushes DB to disk after finalise or office-complete', () => {
+    assert.ok(saveHandler.includes("if (st === 'finalised' || st === 'completed') flushDb()"),
+      'must call flushDb after finalise or completed write');
   });
 });
 

@@ -70,8 +70,8 @@ describe('Performance — main process', () => {
     const handlerStart = mainJsSource.indexOf("ipcMain.handle('attendance-save'");
     assert.ok(handlerStart !== -1, 'attendance-save handler must exist');
     const block = mainJsSource.substring(handlerStart, handlerStart + 4500);
-    const diffCondition = block.indexOf("existing && st === 'finalised'");
-    assert.ok(diffCondition !== -1, 'audit diff must only run when existing && st === finalised');
+    const diffCondition = block.indexOf("st === 'finalised' || (st === 'completed' && existing.status === 'finalised')");
+    assert.ok(diffCondition !== -1, 'audit diff must run only for finalise or first transition to completed');
   });
 
   it('has composite index for list query', () => {

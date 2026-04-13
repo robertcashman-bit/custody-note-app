@@ -263,7 +263,7 @@ function _bvOpenWorkflowForRecord(recordId) {
     window.currentAttendanceId = parseInt(recordId, 10) || recordId;
 
     if (typeof openWorkflow === 'function') {
-      openWorkflow(0, function () { loadBillingView(); });
+      openWorkflow(undefined, function () { loadBillingView(); });
     } else if (typeof openBillingPanel === 'function') {
       openBillingPanel();
     }

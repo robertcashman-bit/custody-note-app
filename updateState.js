@@ -11,9 +11,11 @@ function getDefaultState() {
   return {
     lastVersion: null,
     pendingUpdateVersion: null,
+    pendingInstallVersion: null,
     lastStartupAt: null,
     updateDownloadedAt: null,
     installAttemptedAt: null,
+    lastCountedInstallAttemptAt: null,
     failedInstallCount: 0,
     updaterDisabledUntil: null,
     lastError: null,
@@ -33,6 +35,9 @@ function normalizeState(raw) {
   }
   if (!Number.isFinite(state.failedInstallCount)) {
     state.failedInstallCount = 0;
+  }
+  if (state.lastCountedInstallAttemptAt != null && !Number.isFinite(state.lastCountedInstallAttemptAt)) {
+    state.lastCountedInstallAttemptAt = null;
   }
   return state;
 }

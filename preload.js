@@ -132,6 +132,7 @@ contextBridge.exposeInMainWorld('api', {
   appCheckUpdates: () => ipcRenderer.invoke('app-check-updates'),
   getAutoUpdateState: () => ipcRenderer.invoke('get-auto-update-state'),
   appUpdateResetLoop: () => ipcRenderer.invoke('app-update-reset-loop'),
+  appUpdateDiagnosticInstall: () => ipcRenderer.invoke('app-update-diagnostic-install'),
 });
 
 contextBridge.exposeInMainWorld('emailAPI', {

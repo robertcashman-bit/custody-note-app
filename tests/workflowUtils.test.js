@@ -13,6 +13,7 @@ const billingUtilsSrc = fs.readFileSync(path.join(root, 'renderer', 'billingUtil
 const workflowStepperSrc = fs.readFileSync(path.join(root, 'renderer', 'views', 'workflow-stepper.js'), 'utf8');
 const docScreenSrc = fs.readFileSync(path.join(root, 'renderer', 'views', 'documents-screen.js'), 'utf8');
 const billingScreenSrc = fs.readFileSync(path.join(root, 'renderer', 'views', 'billing-screen.js'), 'utf8');
+const completionScreenSrc = fs.readFileSync(path.join(root, 'renderer', 'views', 'completion-screen.js'), 'utf8');
 
 // Evaluate helpers in a sandbox so we can call them
 const sandbox = {};
@@ -317,10 +318,12 @@ describe('Workflow stepper source', () => {
     assert.ok(workflowStepperSrc.includes('function closeWorkflow'));
   });
 
-  it('has 2 workflow steps: documents and billing only', () => {
+  it('has 3 workflow steps: documents, invoice, complete', () => {
     assert.ok(workflowStepperSrc.includes("id: 'documents'"));
-    assert.ok(workflowStepperSrc.includes("id: 'billing'"));
-    assert.ok(!workflowStepperSrc.includes("id: 'complete'"));
+    assert.ok(workflowStepperSrc.includes("id: 'invoice'"));
+    assert.ok(workflowStepperSrc.includes("id: 'complete'"));
+    assert.ok(workflowStepperSrc.includes('_wfGoToStep'));
+    assert.ok(workflowStepperSrc.includes('cn_wf_step_'));
   });
 
   it('builds stepper navigation with step numbers', () => {
@@ -360,8 +363,8 @@ describe('Documents screen source', () => {
     assert.ok(docScreenSrc.includes('Duplicate document type'));
   });
 
-  it('has Next: Billing navigation', () => {
-    assert.ok(docScreenSrc.includes('Next: Billing'));
+  it('has Next: QuickFile invoice navigation', () => {
+    assert.ok(docScreenSrc.includes('Next: QuickFile invoice'));
   });
 });
 
@@ -395,6 +398,11 @@ describe('Billing screen source', () => {
     assert.ok(billingScreenSrc.includes('wf-doc-sel-list'));
   });
 
+  it('has next step to review when already invoiced', () => {
+    assert.ok(billingScreenSrc.includes('wf-bill-next-complete'));
+    assert.ok(billingScreenSrc.includes('Review &amp; complete'));
+  });
+
   it('has review confirmation checklist', () => {
     assert.ok(billingScreenSrc.includes('Review Confirmation'));
     assert.ok(billingScreenSrc.includes('wf-check-attendance'));
@@ -414,13 +422,6 @@ describe('Billing screen source', () => {
     assert.ok(billingScreenSrc.includes('buildLine1Description'));
   });
 
-  it('billing footer closes workflow (no Complete / Ready to Archive step)', () => {
-    assert.ok(!billingScreenSrc.includes('Ready to Archive'));
-    assert.ok(!billingScreenSrc.includes('function _wfRenderCompleteStep'));
-    assert.ok(billingScreenSrc.includes('wf-bill-close'));
-    assert.ok(billingScreenSrc.includes('closeWorkflow'));
-  });
-
   it('has status badges for draft and invoiced states', () => {
     assert.ok(billingScreenSrc.includes('wf-status--draft'));
     assert.ok(billingScreenSrc.includes('wf-status--invoiced'));
@@ -432,6 +433,21 @@ describe('Billing screen source', () => {
 
   it('uses calculateInvoiceTotals for live preview', () => {
     assert.ok(billingScreenSrc.includes('calculateInvoiceTotals'));
+  });
+});
+
+describe('Completion screen source', () => {
+  it('defines _wfRenderCompletionStep', () => {
+    assert.ok(completionScreenSrc.includes('function _wfRenderCompletionStep'));
+  });
+
+  it('marks office complete via attendanceSave completed', () => {
+    assert.ok(completionScreenSrc.includes("status: 'completed'"));
+    assert.ok(completionScreenSrc.includes('_wfRunMarkOfficeComplete'));
+  });
+
+  it('hooks post-invoice handoff', () => {
+    assert.ok(completionScreenSrc.includes('_wfAfterInvoiceCreatedGoToCompletion'));
   });
 });
 
@@ -466,12 +482,20 @@ describe('Integration: index.html loads new scripts', () => {
   it('loads billing-screen.js', () => {
     assert.ok(indexHtml.includes('billing-screen.js'));
   });
+
+  it('loads completion-screen.js after billing-screen.js', () => {
+    const bs = indexHtml.indexOf('billing-screen.js');
+    const cs = indexHtml.indexOf('completion-screen.js');
+    assert.ok(cs > 0, 'completion-screen.js must be loaded');
+    assert.ok(cs > bs, 'completion-screen.js must load after billing-screen.js');
+  });
 });
 
 describe('Integration: app.js opens workflow', () => {
   const appJs = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 
-  it('promptBeforeOpeningBilling calls openWorkflow', () => {
+  it('promptBeforeOpeningBilling calls openWorkflow without forcing step 0', () => {
     assert.ok(appJs.includes('openWorkflow'), 'app.js should reference openWorkflow');
+    assert.ok(/openWorkflow\s*\(\s*\)/.test(appJs) || appJs.includes('openWorkflow()'), 'resume-capable openWorkflow()');
   });
 });

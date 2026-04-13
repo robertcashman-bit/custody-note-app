@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const log = require('electron-log');
 const { readState, mergeState, getStatePath } = require('./updateState');
 
@@ -97,6 +98,8 @@ function initUpdater(options) {
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.disableWebInstaller = true;
+  autoUpdater.disableDifferentialDownload = true;
   autoUpdater.logger = logger;
 
   function getMainWindow() {
@@ -126,6 +129,36 @@ function initUpdater(options) {
     return !!(state.updaterDisabledUntil && state.updaterDisabledUntil > Date.now());
   }
 
+  /** Do not clear failure / pending state on "no update" if we are mid-update or recovering. */
+  function hasOutstandingInstallFailure(cur) {
+    const pending = cur.pendingUpdateVersion || cur.pendingInstallVersion;
+    if (pending && !semverEq(pending, app.getVersion())) {
+      if ((cur.failedInstallCount || 0) > 0) return true;
+      if (cur.installAttemptedAt) return true;
+      if (cur.updateDownloadedAt) return true;
+    }
+    return false;
+  }
+
+  function probeInstallDirExclusiveLock() {
+    const asarPath = path.join(process.resourcesPath || path.join(path.dirname(process.execPath), 'resources'), 'app.asar');
+    let asarExclusiveOk = null;
+    let asarErr = null;
+    const origNoAsar = process.noAsar;
+    try {
+      process.noAsar = true;
+      const fd = fs.openSync(asarPath, fs.constants.O_RDWR);
+      fs.closeSync(fd);
+      asarExclusiveOk = true;
+    } catch (e) {
+      asarExclusiveOk = false;
+      asarErr = e && e.message ? e.message : String(e);
+    } finally {
+      process.noAsar = origNoAsar;
+    }
+    return { asarPath, asarExclusiveOk, asarErr };
+  }
+
   function enterRecoveryMode(state, details) {
     const disabledUntil = Date.now() + DISABLE_FOR_MS;
     loopDetected = true;
@@ -139,6 +172,13 @@ function initUpdater(options) {
       lastVersion: app.getVersion(),
     });
     logger.error('Updater recovery mode entered:', details);
+    try {
+      dialog.showErrorBox(
+        'Custody Note — update failed',
+        'The update could not be installed automatically. Another program may be locking files in the Custody Note install folder (common with IDEs or antivirus).\n\n' +
+          'Close other apps that might be scanning that folder, download the latest installer from the website, and run it. If it still fails, run the installer as Administrator.'
+      );
+    } catch (_) {}
   }
 
   function reconcileStartupState() {
@@ -162,6 +202,7 @@ function initUpdater(options) {
         lastAppliedAt: Date.now(),
         failedInstallCount: 0,
         installAttemptedAt: null,
+        lastCountedInstallAttemptAt: null,
         updateDownloadedAt: null,
         updaterDisabledUntil: null,
         lastError: null,
@@ -172,19 +213,27 @@ function initUpdater(options) {
     }
 
     if (pendingVersion && persisted.installAttemptedAt) {
-      const newFailCount = (persisted.failedInstallCount || 0) + 1;
+      const attemptId = persisted.installAttemptedAt;
+      const alreadyCounted = persisted.lastCountedInstallAttemptAt === attemptId;
+      const newFailCount = alreadyCounted
+        ? (persisted.failedInstallCount || 0)
+        : (persisted.failedInstallCount || 0) + 1;
       const rapidRestart = lastStartupAt && (Date.now() - lastStartupAt < LOOP_WINDOW_MS);
       logger.warn(
         `Failed version transition expected=${pendingVersion} actual=${currentVersion} ` +
-        `failedInstallCount=${newFailCount} rapidRestart=${!!rapidRestart}`
+        `failedInstallCount=${newFailCount} rapidRestart=${!!rapidRestart} countedThisAttempt=${!alreadyCounted}`
       );
 
-      const nextState = setPersistedState({
+      const patch = {
         failedInstallCount: newFailCount,
         lastStartupAt: Date.now(),
         lastVersion: currentVersion,
         lastError: `Failed transition: expected ${pendingVersion} but still running ${currentVersion}`,
-      });
+      };
+      if (!alreadyCounted) {
+        patch.lastCountedInstallAttemptAt = attemptId;
+      }
+      const nextState = setPersistedState(patch);
 
       if (newFailCount >= MAX_FAILED_INSTALLS || rapidRestart) {
         enterRecoveryMode(nextState, nextState.lastError);
@@ -204,7 +253,7 @@ function initUpdater(options) {
     });
   }
 
-  function closeForInstall() {
+  function prepareForInstall() {
     try { stopSyncTimer && stopSyncTimer(); } catch (_) {}
     try { stopBackupScheduler && stopBackupScheduler(); } catch (_) {}
 
@@ -216,21 +265,17 @@ function initUpdater(options) {
       logger.warn('DB close warning:', err && err.message ? err.message : err);
     }
 
-    try {
-      const windows = BrowserWindow.getAllWindows();
-      windows.forEach((win) => {
-        try {
-          win._forceClose = true;
-          win.destroy();
-        } catch (_) {}
-      });
-      logger.info(`Destroyed ${windows.length} window(s) before install`);
-    } catch (err) {
-      logger.warn('Window close warning:', err && err.message ? err.message : err);
-    }
+    // CRITICAL: Do NOT destroy BrowserWindows here.
+    // autoUpdater.quitAndInstall() spawns the NSIS installer as a detached
+    // process, then calls app.quit() which closes windows via the standard
+    // before-quit → will-quit → window-all-closed flow.
+    // Destroying windows HERE triggers window-all-closed → app.quit() BEFORE
+    // quitAndInstall() can spawn the installer — the installer never runs.
+    // This race condition was the root cause of the v1.4.187 installer failure.
   }
 
-  function installDownloadedUpdate() {
+  function installDownloadedUpdate(opts) {
+    const options = opts || {};
     if (updaterState !== 'downloaded' || !downloadedVersion) {
       return { ok: false, error: 'No downloaded update is ready to install.' };
     }
@@ -241,7 +286,7 @@ function initUpdater(options) {
 
     quitAndInstallCalled = true;
     updaterState = 'installing';
-    logger.info(`Calling quitAndInstall for version ${downloadedVersion}`);
+    logger.info(`Installing version ${downloadedVersion} (cycle=${cycleId})`);
     sendStatus({ status: 'installing', version: downloadedVersion });
     setPersistedState({
       installAttemptedAt: Date.now(),
@@ -250,19 +295,36 @@ function initUpdater(options) {
       lastError: null,
     });
 
-    closeForInstall();
+    if (intervalHandle) {
+      clearInterval(intervalHandle);
+      intervalHandle = null;
+    }
 
-    setTimeout(() => {
-      try {
-        autoUpdater.quitAndInstall(true, true);
-      } catch (err) {
-        logger.error('quitAndInstall threw:', err && err.message ? err.message : err);
-      }
-      setTimeout(() => {
-        logger.info('Force exit after quitAndInstall safety delay');
-        app.exit(0);
-      }, 2000);
-    }, 2000);
+    prepareForInstall();
+
+    const lockProbe = probeInstallDirExclusiveLock();
+    logger.info(
+      `Pre-quit lock probe: asarExclusiveOk=${lockProbe.asarExclusiveOk} path=${lockProbe.asarPath}` +
+      (lockProbe.asarErr ? ` err=${lockProbe.asarErr}` : '')
+    );
+    const isSilent = !options.diagnostic;
+    logger.info(
+      `Invoking autoUpdater.quitAndInstall(isSilent=${isSilent}, isForceRunAfter=true) ` +
+      '— installer will be spawned then app.exit(0) on nextTick'
+    );
+    try {
+      autoUpdater.quitAndInstall(isSilent, true);
+    } catch (err) {
+      logger.error('quitAndInstall threw:', err && err.message ? err.message : err);
+    }
+
+    // quitAndInstall() spawns the detached NSIS process synchronously, then
+    // requests a graceful quit. Use nextTick so the spawn completes, then
+    // hard-exit to drop our file handles before the uninstall step runs.
+    process.nextTick(() => {
+      logger.info('app.exit(0) after quitAndInstall (nextTick) — releasing file handles for installer');
+      app.exit(0);
+    });
 
     return { ok: true };
   }
@@ -346,18 +408,28 @@ function initUpdater(options) {
       consecutiveFailures = 0;
       const remoteVersion = info && info.version ? info.version : null;
       logger.info(`Event: update-not-available latest=${remoteVersion || '?'} current=${app.getVersion()}`);
-      setPersistedState({
+      const cur = getPersistedState();
+      const outstanding = hasOutstandingInstallFailure(cur);
+      const basePatch = {
         lastRemoteVersion: remoteVersion,
         lastNoUpdateCheckAt: Date.now(),
         appVersionAtCheck: app.getVersion(),
-        failedInstallCount: 0,
-        pendingUpdateVersion: null,
-        pendingInstallVersion: null,
-        installAttemptedAt: null,
-        updateDownloadedAt: null,
-        updaterDisabledUntil: null,
-        lastError: null,
-      });
+      };
+      if (outstanding) {
+        logger.warn('update-not-available: preserving pending/failure state (outstanding install issue)');
+        setPersistedState(basePatch);
+      } else {
+        setPersistedState(Object.assign({}, basePatch, {
+          failedInstallCount: 0,
+          pendingUpdateVersion: null,
+          pendingInstallVersion: null,
+          installAttemptedAt: null,
+          updateDownloadedAt: null,
+          updaterDisabledUntil: null,
+          lastError: null,
+          lastCountedInstallAttemptAt: null,
+        }));
+      }
       sendStatus({ status: 'up-to-date', version: app.getVersion(), remoteVersion });
     });
 
@@ -430,18 +502,28 @@ function initUpdater(options) {
         updaterState = 'idle';
         consecutiveFailures = 0;
         const remoteVersion = result.updateInfo && result.updateInfo.version;
-        setPersistedState({
+        const cur = getPersistedState();
+        const outstanding = hasOutstandingInstallFailure(cur);
+        const basePatch = {
           lastRemoteVersion: remoteVersion,
           lastNoUpdateCheckAt: Date.now(),
           appVersionAtCheck: app.getVersion(),
-          failedInstallCount: 0,
-          pendingUpdateVersion: null,
-          pendingInstallVersion: null,
-          installAttemptedAt: null,
-          updateDownloadedAt: null,
-          updaterDisabledUntil: null,
-          lastError: null,
-        });
+        };
+        if (outstanding) {
+          logger.warn(`checkForUpdates: no remote update but outstanding pending/failure — keeping state source=${source}`);
+          setPersistedState(basePatch);
+        } else {
+          setPersistedState(Object.assign({}, basePatch, {
+            failedInstallCount: 0,
+            pendingUpdateVersion: null,
+            pendingInstallVersion: null,
+            installAttemptedAt: null,
+            updateDownloadedAt: null,
+            updaterDisabledUntil: null,
+            lastError: null,
+            lastCountedInstallAttemptAt: null,
+          }));
+        }
         return { status: 'up-to-date', version: app.getVersion(), remoteVersion };
       }
 
@@ -509,6 +591,7 @@ function initUpdater(options) {
     setPersistedState({
       failedInstallCount: 0,
       installAttemptedAt: null,
+      lastCountedInstallAttemptAt: null,
       loopDetectedAt: null,
       pendingUpdateVersion: null,
       pendingInstallVersion: null,
@@ -533,6 +616,10 @@ function initUpdater(options) {
     scheduleDeferredCheck,
     checkForUpdates,
     installDownloadedUpdate,
+    diagnosticInstall() {
+      logger.info('Diagnostic (non-silent) install requested');
+      return installDownloadedUpdate({ diagnostic: true });
+    },
     getPublicState,
     resetLoopState,
     dispose() {

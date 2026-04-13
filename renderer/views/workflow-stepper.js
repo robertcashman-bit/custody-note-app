@@ -1,19 +1,47 @@
 /* ═══════════════════════════════════════════════════════
    END-OF-MATTER WORKFLOW
-   2-step flow: Documents → Billing
-   Replaces the old billing overlay with a full-panel workflow.
-   Depends on: filenameUtils.js, billingUtils.js, billing.js globals,
-               app.js globals (getFormData, currentAttendanceId, formData, stations, firms)
+   3-step flow: Documents & attachments → QuickFile invoice → Review & complete
+   Depends: filenameUtils.js, billingUtils.js, billing.js globals,
+            documents-screen.js, billing-screen.js, completion-screen.js,
+            app.js globals (getFormData, currentAttendanceId, formData, stations, firms)
    ═══════════════════════════════════════════════════════ */
 
 var _workflowOpen = false;
-var _workflowStep = 0; // 0=Documents, 1=Billing
+var _workflowStep = 0;
 var _workflowOnClose = null;
 
 var _workflowSteps = [
-  { id: 'documents', label: 'Documents', icon: '&#128196;' },
-  { id: 'billing',   label: 'Billing',   icon: '&#163;' },
+  { id: 'documents', label: 'Documents &amp; attachments', icon: '&#128196;' },
+  { id: 'invoice',   label: 'QuickFile invoice', icon: '&#163;' },
+  { id: 'complete',  label: 'Review &amp; complete', icon: '&#10003;' },
 ];
+
+function _wfWFStepKey() {
+  var rid = window.currentAttendanceId;
+  return rid != null && rid !== '' ? 'cn_wf_step_' + String(rid) : null;
+}
+
+function _wfReadStoredStep() {
+  var k = _wfWFStepKey();
+  if (!k) return 0;
+  try {
+    var v = sessionStorage.getItem(k);
+    var n = v != null ? parseInt(v, 10) : 0;
+    if (!Number.isFinite(n) || n < 0) return 0;
+    if (n > _workflowSteps.length - 1) return _workflowSteps.length - 1;
+    return n;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function _wfPersistStep() {
+  var k = _wfWFStepKey();
+  if (!k) return;
+  try {
+    sessionStorage.setItem(k, String(_workflowStep));
+  } catch (e) {}
+}
 
 function _wfMatterMeta() {
   var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
@@ -71,10 +99,15 @@ function _wfBuildSummaryStrip(meta, statusHtml) {
   '</div>';
 }
 
+/** @param {number|undefined} startStep Omit or pass NaN to resume last step for this record (sessionStorage). */
 function openWorkflow(startStep, onClose) {
   if (_workflowOpen) return;
   _workflowOpen = true;
-  _workflowStep = startStep || 0;
+  if (typeof startStep === 'number' && Number.isFinite(startStep)) {
+    _workflowStep = Math.max(0, Math.min(_workflowSteps.length - 1, startStep));
+  } else {
+    _workflowStep = _wfReadStoredStep();
+  }
   _workflowOnClose = onClose || null;
 
   _wfGeneratedDocs = {};
@@ -92,10 +125,10 @@ function _renderWorkflowShell() {
 
   var meta = _wfMatterMeta();
   var html =
-    '<div id="workflow-overlay" class="wf-overlay" role="dialog" aria-modal="true" aria-label="End of matter workflow">' +
+    '<div id="workflow-overlay" class="wf-overlay" role="dialog" aria-modal="true" aria-label="Finish this matter">' +
       '<div class="wf-panel">' +
         '<div class="wf-panel-header">' +
-          '<h2 class="wf-panel-title">&#163; Billing &amp; Documents</h2>' +
+          '<h2 class="wf-panel-title">Finish this matter</h2>' +
           '<button type="button" class="wf-panel-close" aria-label="Close">&times;</button>' +
         '</div>' +
         _wfBuildStepper() +
@@ -107,6 +140,7 @@ function _renderWorkflowShell() {
 
   document.body.insertAdjacentHTML('beforeend', html);
   _wfBindShellEvents();
+  _wfPersistStep();
   _wfRenderCurrentStep();
 }
 
@@ -125,6 +159,7 @@ function _wfBindShellEvents() {
       if (Number.isFinite(idx) && idx >= 0 && idx < _workflowSteps.length) {
         _workflowStep = idx;
         _wfUpdateStepper();
+        _wfPersistStep();
         _wfRenderCurrentStep();
       }
     });
@@ -149,7 +184,8 @@ function _wfRenderCurrentStep() {
 
   switch (_workflowSteps[_workflowStep].id) {
     case 'documents': _wfRenderDocumentsStep(body, footer); break;
-    case 'billing':   _wfRenderBillingStep(body, footer); break;
+    case 'invoice':   _wfRenderBillingStep(body, footer); break;
+    case 'complete':  _wfRenderCompletionStep(body, footer); break;
   }
 }
 
@@ -157,6 +193,7 @@ function _wfGoNext() {
   if (_workflowStep < _workflowSteps.length - 1) {
     _workflowStep++;
     _wfUpdateStepper();
+    _wfPersistStep();
     _wfRenderCurrentStep();
   }
 }
@@ -165,11 +202,21 @@ function _wfGoBack() {
   if (_workflowStep > 0) {
     _workflowStep--;
     _wfUpdateStepper();
+    _wfPersistStep();
     _wfRenderCurrentStep();
   }
 }
 
+function _wfGoToStep(idx) {
+  if (!Number.isFinite(idx)) return;
+  _workflowStep = Math.max(0, Math.min(_workflowSteps.length - 1, idx));
+  _wfUpdateStepper();
+  _wfPersistStep();
+  _wfRenderCurrentStep();
+}
+
 function closeWorkflow() {
+  _wfPersistStep();
   _workflowOpen = false;
   var overlay = document.getElementById('workflow-overlay');
   if (overlay) {
