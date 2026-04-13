@@ -156,7 +156,10 @@ describe('4 · Updater Flow', () => {
   });
 
   it('main.js initializes the modular updater', () => {
-    assert.ok(mainSrc.includes("const { initUpdater } = require('./updater');"), 'initUpdater import missing');
+    assert.ok(
+      mainSrc.includes("require('./updater')") && mainSrc.includes('initUpdater'),
+      'initUpdater import missing'
+    );
     assert.ok(mainSrc.includes('updaterController = initUpdater({'), 'updaterController init missing');
   });
 
@@ -180,9 +183,13 @@ describe('4 · Updater Flow', () => {
       'download-progress event handler missing');
   });
 
-  it('quitAndInstall is called with _forceClose bypass', () => {
-    assert.ok(updaterSrc.includes('_forceClose = true'), '_forceClose assignment missing');
+  it('quitAndInstall is called without premature window destruction', () => {
     assert.ok(updaterSrc.includes('quitAndInstall'), 'quitAndInstall call missing');
+    assert.ok(
+      !updaterSrc.includes('win.destroy()'),
+      'updater must NOT destroy windows — that triggers window-all-closed race'
+    );
+    assert.ok(updaterSrc.includes('prepareForInstall'), 'prepareForInstall helper missing');
   });
 
   it('autoUpdater.checkForUpdates only in updater module', () => {

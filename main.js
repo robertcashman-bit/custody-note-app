@@ -1898,6 +1898,13 @@ async function syncPull(opts) {
       conflicts++;
       continue;
     }
+    if (localStatus === 'completed' && remote.status !== 'completed') {
+      console.log('[SYNC-PULL] BLOCKED: refusing to overwrite office-completed record id=' + local.id +
+        ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
+      recordSyncConflict(local.id, local, remote, 'protect_finalised');
+      conflicts++;
+      continue;
+    }
 
     const remoteNewer = remoteVersion > localVersion ||
       (remoteVersion === localVersion && remote.updatedAt > (local.updated_at || ''));
@@ -2925,75 +2932,82 @@ function createWindow() {
                 errors.push('Backup APIs not available');
               }
 
-              /* 28. Billing panel button present in form header */
+              /* 28. Finish-matter workflow (header) — documents step then QuickFile invoice step */
               var cardAtt4 = document.getElementById('home-card-attendance');
               if (cardAtt4) {
                 cardAtt4.click();
                 await sleep(800);
                 var billingBtn = document.getElementById('billing-panel-btn');
                 if (billingBtn) {
-                  log('28a. Billing panel button present in form header');
+                  log('28a. Finish matter button present in form header');
                   billingBtn.click();
                   await sleep(350);
-                  /* promptBeforeOpeningBilling: OK = attach first; Cancel = open billing */
+                  /* promptBeforeOpeningBilling: OK = attach first; Cancel = open workflow */
                   var attachCancel = document.querySelector('.cn-confirm-overlay .cn-confirm-btns .btn-secondary');
                   if (attachCancel && attachCancel.textContent === 'Cancel') {
                     attachCancel.click();
                     await sleep(450);
                   }
-                  var billingOverlay = document.getElementById('billing-panel-overlay');
-                  if (billingOverlay) {
-                    log('28b. Billing panel overlay opens');
-                    var matterH3 = billingOverlay.querySelector('h3');
-                    if (matterH3 && matterH3.textContent === 'Matter Details') {
-                      log('28c. Billing panel shows Matter Details section');
-                    } else {
-                      errors.push('Billing panel missing Matter Details section');
+                  var wfOverlay = document.getElementById('workflow-overlay');
+                  if (wfOverlay) {
+                    log('28b. Finish-matter workflow overlay opens');
+                    var feeInput = document.getElementById('wf-fee');
+                    if (!feeInput) {
+                      var step0 = wfOverlay.querySelector('.wf-step[data-wf-idx="0"]');
+                      if (step0) {
+                        step0.click();
+                        await sleep(250);
+                      }
+                      var docNext = document.getElementById('wf-doc-next');
+                      if (docNext) {
+                        docNext.click();
+                        await sleep(600);
+                        feeInput = document.getElementById('wf-fee');
+                      }
                     }
-                    var feeInput = document.getElementById('billing-attendance-fee');
-                    var milesInput = document.getElementById('billing-mileage-miles');
-                    var rateInput = document.getElementById('billing-mileage-rate');
-                    var parkingInput = document.getElementById('billing-parking');
-                    var vatInput = document.getElementById('billing-vat-rate');
+                    var milesInput = document.getElementById('wf-miles');
+                    var rateInput = document.getElementById('wf-rate');
+                    var parkingInput = document.getElementById('wf-parking');
+                    var vatInput = document.getElementById('wf-vat');
                     if (feeInput && milesInput && rateInput && parkingInput && vatInput) {
-                      log('28d. All billing input fields present');
+                      log('28d. Invoice step input fields present');
                     } else {
-                      errors.push('Billing panel missing input fields');
+                      errors.push('Invoice step missing input fields (wf-fee etc.)');
                     }
-                    var checkAtt = document.getElementById('billing-check-attendance');
-                    var checkDocs = document.getElementById('billing-check-docs');
-                    var checkBill = document.getElementById('billing-check-billing');
+                    var checkAtt = document.getElementById('wf-check-attendance');
+                    var checkDocs = document.getElementById('wf-check-docs');
+                    var checkBill = document.getElementById('wf-check-billing');
                     if (checkAtt && checkDocs && checkBill) {
                       log('28e. Review confirmation checklist present (3 checkboxes)');
                     } else {
-                      errors.push('Billing panel missing review checklist');
+                      errors.push('Invoice step missing review checklist');
                     }
-                    var createBtn = document.getElementById('billing-create-invoice');
+                    var createBtn = document.getElementById('wf-bill-create');
                     if (createBtn && createBtn.disabled) {
-                      log('28f. Create Invoice button present and disabled (checklist not yet confirmed)');
+                      log('28f. Generate Invoice button present and disabled (checklist not yet confirmed)');
                     } else if (createBtn) {
-                      errors.push('Create Invoice button should be disabled before confirming checklist');
+                      errors.push('Generate Invoice button should be disabled before confirming checklist');
                     } else {
-                      errors.push('Create Invoice button missing');
+                      errors.push('Generate Invoice button missing');
                     }
                     if (checkAtt && checkDocs && checkBill && createBtn) {
                       checkAtt.click(); checkDocs.click(); checkBill.click();
                       await sleep(100);
                       if (!createBtn.disabled) {
-                        log('28g. Create Invoice button enables after all checkboxes checked');
+                        log('28g. Generate Invoice enables after all checkboxes checked');
                       } else {
-                        errors.push('Create Invoice button did not enable after checking all boxes');
+                        errors.push('Generate Invoice did not enable after checking all boxes');
                       }
                     }
-                    var subtotalEl = document.getElementById('billing-subtotal');
-                    var vatEl = document.getElementById('billing-vat');
-                    var totalEl = document.getElementById('billing-total');
+                    var subtotalEl = document.getElementById('wf-prev-sub');
+                    var vatEl = document.getElementById('wf-prev-vat');
+                    var totalEl = document.getElementById('wf-prev-total');
                     if (subtotalEl && vatEl && totalEl) {
-                      log('28h. Billing totals display present (subtotal, VAT, total)');
+                      log('28h. QuickFile preview totals present (subtotal, VAT, total)');
                     } else {
-                      errors.push('Billing totals display missing');
+                      errors.push('QuickFile preview totals missing');
                     }
-                    var narrativeEl = document.getElementById('billing-narrative');
+                    var narrativeEl = document.getElementById('wf-narrative');
                     if (narrativeEl && narrativeEl.value) {
                       log('28i. Invoice narrative auto-generated: ' + narrativeEl.value.slice(0, 60));
                     } else if (narrativeEl) {
@@ -3006,27 +3020,27 @@ function createWindow() {
                       await sleep(100);
                       var updatedSubtotal = subtotalEl ? subtotalEl.textContent : '';
                       if (updatedSubtotal.indexOf('200') >= 0) {
-                        log('28j. Live billing recalculation works');
+                        log('28j. Live invoice preview recalculation works');
                       } else {
-                        log('28j. Billing recalc: subtotal shows ' + updatedSubtotal);
+                        log('28j. Invoice recalc: subtotal shows ' + updatedSubtotal);
                       }
                     }
-                    var closeBtn = document.getElementById('billing-cancel');
+                    var closeBtn = document.getElementById('wf-bill-close');
                     if (closeBtn) {
                       closeBtn.click();
                       await sleep(300);
-                      var overlayGone = !document.getElementById('billing-panel-overlay');
+                      var overlayGone = !document.getElementById('workflow-overlay');
                       if (overlayGone) {
-                        log('28k. Billing panel closes correctly');
+                        log('28k. Workflow closes correctly');
                       } else {
-                        errors.push('Billing panel did not close');
+                        errors.push('Workflow overlay did not close');
                       }
                     }
                   } else {
-                    errors.push('Billing panel overlay did not open');
+                    errors.push('Finish-matter workflow overlay did not open');
                   }
                 } else {
-                  errors.push('Billing panel button not found in form header');
+                  errors.push('Finish matter button not found in form header');
                 }
                 var saveExit5 = document.getElementById('form-save-exit');
                 if (saveExit5) { await saveExitToDraftAndWait(); }
@@ -3809,6 +3823,12 @@ app.whenReady().then(async () => {
   ipcMain.handle('app-check-updates', () => updaterController.checkForUpdates({ source: 'manual-ipc', force: true }));
   ipcMain.handle('app-update-reset-loop', () => updaterController.resetLoopState());
   ipcMain.handle('get-auto-update-state', () => updaterController.getPublicState());
+  ipcMain.handle('app-update-diagnostic-install', () => {
+    if (!updaterController || !updaterController.diagnosticInstall) {
+      return { ok: false, error: 'Updater is not initialized.' };
+    }
+    return updaterController.diagnosticInstall();
+  });
 
   const isCliMode = !!(trialInitOnly || cliImportPath || cliListRecords || cliDumpId);
   try {
@@ -4010,6 +4030,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
+  console.log('[App] window-all-closed event');
   try { stopSyncTimer(); } catch (_) {}
   try { if (db) { flushDbSync(); db.close(); db = null; } } catch (_) {}
   app.quit();
@@ -4219,16 +4240,25 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
         ', existing.sync_version=' + (existing ? existing.sync_version : 'N/A'));
     }
 
-    /* Block edits to finalised records unless explicitly re-finalising */
-    if (existing && existing.status === 'finalised' && st !== 'finalised') {
-      console.log('[FINALISE] BLOCKED: draft write to finalised record id=' + id);
+    /* Block edits to locked records (finalised / office-completed) unless status stays finalised|completed */
+    if (existing && (existing.status === 'finalised' || existing.status === 'completed') && st !== 'finalised' && st !== 'completed') {
+      console.log('[FINALISE] BLOCKED: draft write to locked record id=' + id);
       return { error: 'locked', message: 'This record is finalised and cannot be modified.' };
+    }
+
+    if (st === 'completed') {
+      if (!existing) {
+        return { error: 'invalid', message: 'Cannot mark complete: record not found.' };
+      }
+      if (existing.status !== 'finalised' && existing.status !== 'completed') {
+        return { error: 'invalid', message: 'Mark office complete only after the attendance note is finalised.' };
+      }
     }
 
     /* Compute diff for audit log (skip expensive diff on draft autosaves for performance) */
     let previousSnapshot = null;
     let changedFields = null;
-    if (existing && st === 'finalised') {
+    if (existing && (st === 'finalised' || (st === 'completed' && existing.status === 'finalised'))) {
       previousSnapshot = existing.data;
       try {
         const prev = JSON.parse(existing.data);
@@ -4255,13 +4285,15 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       }
     }
 
-    const action = st === 'finalised' ? 'finalised' : 'updated';
+    let action = 'updated';
+    if (st === 'finalised') action = 'finalised';
+    else if (st === 'completed' && existing && existing.status === 'finalised') action = 'office_completed';
     db.run(
       'INSERT INTO audit_log (attendance_id, action, previous_snapshot, changed_fields, timestamp) VALUES (?,?,?,?,?)',
       [id, action, previousSnapshot, changedFields, now]
     );
     markDbDirty();
-    if (st === 'finalised') flushDb();
+    if (st === 'finalised' || st === 'completed') flushDb();
     enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert');
     return id;
   }

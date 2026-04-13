@@ -222,9 +222,9 @@ describe('app.js — view wiring', () => {
     assert.ok(appJs.includes('loadStationMileage'));
   });
 
-  it('billing panel button has click handler', () => {
+  it('billing panel button opens finish-matter workflow', () => {
     assert.ok(appJs.includes('billing-panel-btn'));
-    assert.ok(appJs.includes('openBillingPanel'));
+    assert.ok(appJs.includes('promptBeforeOpeningBilling') || appJs.includes('openWorkflow'));
   });
 
   it('gear menu handles station-mileage action', () => {

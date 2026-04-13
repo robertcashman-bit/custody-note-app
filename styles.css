@@ -252,6 +252,7 @@ html.dark .gear-dropdown { background: var(--surface); border-color: var(--borde
 html.dark .gear-item:hover { background: var(--surface-alt); }
 html.dark .badge.draft { background: #422006; color: #fbbf24; }
 html.dark .badge.finalised { background: #064e3b; color: #6ee7b7; }
+html.dark .badge.completed { background: #312e81; color: #c7d2fe; border-color: #6366f1; }
 html.dark .badge.badge-tel { background: #1e3a5f; color: #93c5fd; }
 html.dark .badge.badge-att { background: #1e293b; color: #94a3b8; }
 html.dark .badge.badge-vol { background: #134e4a; color: #5eead4; }
@@ -1524,6 +1525,7 @@ html.dark .home-attention-item:hover {
 }
 .badge.draft { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }
 .badge.finalised { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }
+.badge.completed { background: #e0e7ff; color: #3730a3; border: 1px solid #818cf8; }
 .badge.badge-tel { background: #dbeafe; color: #1e40af; font-size: 0.6rem; }
 .badge.badge-att { background: #f1f5f9; color: #475569; font-size: 0.6rem; }
 .badge.badge-vol { background: #ccfbf1; color: #0f766e; font-size: 0.6rem; }
@@ -2516,6 +2518,10 @@ body.form-active .form-bottom-bar { display: flex; }
 .billing-readiness-status.state-sent {
   background: #dbeafe;
   color: #1d4ed8;
+}
+.billing-readiness-status.state-complete {
+  background: #e0e7ff;
+  color: #3730a3;
 }
 .billing-readiness-actions {
   display: flex;
@@ -5037,6 +5043,7 @@ html.hide-home-status #home-status-section {
 }
 .badge.draft { background: #fff7ed; color: #9a3412; border: 1px solid #fdba74; }
 .badge.finalised { background: #ecfdf5; color: #166534; border: 1px solid #86efac; }
+.badge.completed { background: #eef2ff; color: #3730a3; border: 1px solid #a5b4fc; }
 .badge.archived { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 .badge.deleted { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
 .badge.badge-health-warning { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
@@ -5956,6 +5963,29 @@ html.dark .tpl-mgr-warn {
   font-size: 0.95rem;
 }
 
+/* Completion step (workflow step 3) */
+.wf-completion-strip { display: flex; flex-direction: column; gap: 0.5rem; }
+.wf-completion-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 0.75rem;
+  align-items: start;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  font-size: 0.88rem;
+}
+.wf-completion-row--ok { background: #ecfdf5; border-color: #6ee7b7; }
+.wf-completion-row--pending { background: #fffbeb; border-color: #fcd34d; }
+.wf-completion-icon { font-weight: 700; line-height: 1.2; }
+.wf-completion-label { font-weight: 600; color: var(--text, #0f172a); grid-column: 2; }
+.wf-completion-hint { grid-column: 1 / -1; font-size: 0.82rem; color: var(--muted, #64748b); margin: 0; padding-left: 1.75rem; }
+.wf-completion-save-note .settings-hint { max-width: 62ch; }
+
+.form-panel-billing-lines { font-size: 0.82rem; line-height: 1.45; color: var(--text, #0f172a); }
+.form-panel-billing-row { margin: 0.15rem 0; }
+.form-panel-billing-row strong { font-weight: 600; }
+
 /* Screen headers */
 .wf-screen-header { margin-bottom: 1rem; }
 .wf-screen-header h3 { margin: 0 0 0.25rem; font-size: 1.1rem; color: var(--primary, #1e3a5f); }
@@ -6125,6 +6155,11 @@ html.dark .wf-card { background: #1e293b; border-color: #334155; color: #e5eefb;
 html.dark .wf-card-title { color: #93c5fd; }
 html.dark .wf-screen-header h3 { color: #93c5fd; }
 html.dark .wf-screen-sub { color: #94a3b8; }
+html.dark .wf-completion-row--ok { background: #064e3b; border-color: #059669; }
+html.dark .wf-completion-row--pending { background: #422006; border-color: #d97706; }
+html.dark .wf-completion-label { color: #e5eefb; }
+html.dark .wf-completion-hint { color: #94a3b8; }
+html.dark .form-panel-billing-lines { color: #e5eefb; }
 html.dark .wf-upload-card { border-color: #475569; }
 html.dark .wf-upload-text { color: #94a3b8; }
 html.dark .wf-upload-drag { border-color: #3b82f6; background: rgba(59,130,246,0.08); }
@@ -6298,6 +6333,7 @@ html.dark .wf-doc-sel-group-label { color: #94a3b8; }
 }
 .home-billing-widget:hover { box-shadow: 0 2px 12px rgba(16,185,129,0.12); }
 .home-billing-widget-title { font-weight: 700; font-size: 0.9rem; color: #065f46; margin-bottom: 0.35rem; }
+.home-billing-widget-sub { font-size: 0.75rem; color: #64748b; margin-bottom: 0.45rem; line-height: 1.35; }
 .home-billing-widget-stats { display: flex; gap: 1rem; font-size: 0.82rem; color: #334155; flex-wrap: wrap; }
 .home-billing-widget-stat { display: flex; gap: 0.25rem; align-items: center; }
 .home-billing-widget-num { font-weight: 700; }

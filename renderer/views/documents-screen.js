@@ -222,7 +222,7 @@ function _wfBuildDocFooter(footer) {
   footer.innerHTML =
     '<button type="button" id="wf-doc-back" class="btn btn-secondary">Close</button>' +
     '<span class="wf-footer-info">' + countBadge + '</span>' +
-    '<button type="button" id="wf-doc-next" class="btn btn-primary">Next: Billing &#9654;</button>';
+    '<button type="button" id="wf-doc-next" class="btn btn-primary">Next: QuickFile invoice &#9654;</button>';
 
   document.getElementById('wf-doc-back').addEventListener('click', closeWorkflow);
   document.getElementById('wf-doc-next').addEventListener('click', _wfGoNext);

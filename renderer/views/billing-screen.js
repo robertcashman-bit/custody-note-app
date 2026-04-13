@@ -136,8 +136,8 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
   body.innerHTML =
     '<div class="wf-screen wf-billing">' +
       '<div class="wf-screen-header">' +
-        '<h3>Billing &amp; Invoice</h3>' +
-        '<p class="wf-screen-sub">Create the QuickFile invoice and attach supporting documents.</p>' +
+        '<h3>QuickFile invoice</h3>' +
+        '<p class="wf-screen-sub">Create the QuickFile invoice and attach generated PDFs where selected.</p>' +
         statusBadge +
       '</div>' +
       firmCallout +
@@ -276,11 +276,15 @@ function _wfFmtCurrency(val) {
 }
 
 function _wfBuildBillingFooter(footer, meta, opts) {
+  var nextCompleteBtn = opts.hasExistingInvoice
+    ? '<button type="button" id="wf-bill-next-complete" class="btn btn-primary">Next: Review &amp; complete &#9654;</button>'
+    : '';
   footer.innerHTML =
     '<button type="button" id="wf-bill-back" class="btn btn-secondary">&#9664; Back</button>' +
     '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create" disabled>' +
       (opts.hasExistingInvoice ? '&#9888; Create Another Invoice' : 'Generate Invoice') +
     '</button>' +
+    nextCompleteBtn +
     '<button type="button" id="wf-bill-close" class="btn btn-secondary">Close</button>';
 
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
@@ -289,6 +293,13 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   document.getElementById('wf-bill-create').addEventListener('click', function () {
     _wfHandleCreateInvoice(meta, opts);
   });
+
+  var nextComplete = document.getElementById('wf-bill-next-complete');
+  if (nextComplete) {
+    nextComplete.addEventListener('click', function () {
+      if (typeof _wfGoNext === 'function') _wfGoNext();
+    });
+  }
 }
 
 function _wfBindBillingEvents(meta, opts) {
@@ -521,8 +532,13 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
 
       console.log('[billing] Invoice created: #' + (result.invoiceNumber || result.invoiceId));
       showToast('Invoice #' + (result.invoiceNumber || result.invoiceId) + ' created successfully' + attachSummary, 'success', 6000);
+      showToast('Next: review and mark office work complete (step 3).', 'info', 5000);
 
-      _wfRenderCurrentStep();
+      if (typeof _wfAfterInvoiceCreatedGoToCompletion === 'function') {
+        _wfAfterInvoiceCreatedGoToCompletion();
+      } else {
+        _wfRenderCurrentStep();
+      }
     } else {
       showToast('Invoice failed: ' + (result.error || 'Unknown error'), 'error', 8000);
     }
