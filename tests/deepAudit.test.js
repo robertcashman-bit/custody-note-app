@@ -146,64 +146,62 @@ describe('3 · IPC Surface Completeness', () => {
 
 describe('4 · Updater Flow', () => {
   const mainSrc = readFile('main.js');
+  const updaterSrc = readFile('updater.js');
 
   it('autoUpdater is guarded by app.isPackaged', () => {
-    const guardIdx = mainSrc.indexOf('app.isPackaged');
-    const updaterIdx = mainSrc.indexOf('autoUpdater.autoDownload');
+    const guardIdx = updaterSrc.indexOf('app.isPackaged');
+    const updaterIdx = updaterSrc.indexOf('autoUpdater.autoDownload');
     assert.ok(guardIdx !== -1 && updaterIdx !== -1 && guardIdx < updaterIdx,
       'app.isPackaged guard must appear before autoUpdater setup');
   });
 
-  it('safeCheckForUpdates function exists', () => {
-    assert.ok(mainSrc.includes('safeCheckForUpdates'), 'safeCheckForUpdates not found');
+  it('main.js initializes the modular updater', () => {
+    assert.ok(mainSrc.includes("const { initUpdater } = require('./updater');"), 'initUpdater import missing');
+    assert.ok(mainSrc.includes('updaterController = initUpdater({'), 'updaterController init missing');
   });
 
-  it('_updaterState tracking variable exists', () => {
-    assert.ok(mainSrc.includes('_updaterState'), '_updaterState not found');
+  it('updater module tracks updaterState', () => {
+    assert.ok(updaterSrc.includes('let updaterState ='), 'updaterState not found');
   });
 
   it('autoDownload = true is set', () => {
-    assert.ok(mainSrc.includes('autoDownload = true'), 'autoDownload not set to true');
+    assert.ok(updaterSrc.includes('autoDownload = true'), 'autoDownload not set to true');
   });
 
-  it('autoInstallOnAppQuit is set (false = manual graceful install handles it)', () => {
+  it('autoInstallOnAppQuit is explicitly disabled in favor of guarded install', () => {
     assert.ok(
-      mainSrc.includes('autoInstallOnAppQuit = true') || mainSrc.includes('autoInstallOnAppQuit = false'),
+      updaterSrc.includes('autoInstallOnAppQuit = false'),
       'autoInstallOnAppQuit not configured'
     );
   });
 
   it('download-progress handler exists', () => {
-    assert.ok(mainSrc.includes("'download-progress'") || mainSrc.includes('"download-progress"'),
+    assert.ok(updaterSrc.includes("'download-progress'") || updaterSrc.includes('"download-progress"'),
       'download-progress event handler missing');
   });
 
   it('quitAndInstall is called with _forceClose bypass', () => {
-    assert.ok(mainSrc.includes('_forceClose = true'), '_forceClose assignment missing');
-    assert.ok(mainSrc.includes('quitAndInstall'), 'quitAndInstall call missing');
+    assert.ok(updaterSrc.includes('_forceClose = true'), '_forceClose assignment missing');
+    assert.ok(updaterSrc.includes('quitAndInstall'), 'quitAndInstall call missing');
   });
 
-  it('autoUpdater.checkForUpdates only in safeCheckForUpdates or runManualUpdateCheckIpc', () => {
-    const lines = mainSrc.split('\n');
-    let insideSafe = false;
-    let manualDepth = 0;
-    const violations = [];
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (/function safeCheckForUpdates/.test(line)) insideSafe = true;
-      if (insideSafe && line.trim() === '};') insideSafe = false;
-      if (/async function runManualUpdateCheckIpc\s*\(\)/.test(line)) manualDepth = 1;
-      else if (manualDepth > 0) {
-        manualDepth += (line.match(/\{/g) || []).length;
-        manualDepth -= (line.match(/\}/g) || []).length;
-      }
-      const inManualIpc = manualDepth > 0;
-      if (!insideSafe && !inManualIpc && /autoUpdater\.checkForUpdates\s*\(/.test(line)) {
-        violations.push(`line ${i + 1}: ${line.trim()}`);
-      }
-    }
-    assert.deepStrictEqual(violations, [],
-      `unexpected checkForUpdates calls outside updater helpers:\n${violations.join('\n')}`);
+  it('autoUpdater.checkForUpdates only in updater module', () => {
+    const mainMatches = mainSrc.match(/autoUpdater\.checkForUpdates\s*\(/g) || [];
+    const updaterMatches = updaterSrc.match(/autoUpdater\.checkForUpdates\s*\(/g) || [];
+    assert.equal(mainMatches.length, 0, 'main.js should not call autoUpdater.checkForUpdates directly');
+    assert.ok(updaterMatches.length >= 1, 'updater.js should own checkForUpdates calls');
+  });
+
+  it('main.js exposes updater IPC through updaterController', () => {
+    assert.ok(mainSrc.includes("ipcMain.handle('app-check-updates'"), 'app-check-updates handler missing');
+    assert.ok(mainSrc.includes("ipcMain.handle('app-update-reset-loop'"), 'app-update-reset-loop handler missing');
+    assert.ok(mainSrc.includes("ipcMain.handle('get-auto-update-state'"), 'get-auto-update-state handler missing');
+  });
+
+  it('updater module exports loop protection and recovery helpers', () => {
+    assert.ok(updaterSrc.includes('resetLoopState'), 'resetLoopState missing');
+    assert.ok(updaterSrc.includes('loop-blocked'), 'loop-blocked state missing');
+    assert.ok(updaterSrc.includes('updaterDisabledUntil'), 'updaterDisabledUntil missing');
   });
 });
 

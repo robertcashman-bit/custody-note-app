@@ -11,6 +11,7 @@ if (process.env.CUSTODYNOTE_TEST_USERDATA && String(process.env.CUSTODYNOTE_TEST
 }
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
+const { initUpdater } = require('./updater');
 
 /* ─── Single-instance lock ─── */
 const gotTheLock = app.requestSingleInstanceLock();
@@ -19,10 +20,7 @@ if (!gotTheLock) {
   app.quit();
 }
 
-/** Populated inside app.whenReady() when running packaged NSIS builds. */
-let safeCheckForUpdates = null;
-/** Assigned when auto-update is enabled; createWindow invokes so the first check runs after the renderer exists (avoids dropped IPC events). */
-let scheduleDeferredAutoUpdateCheck = null;
+let updaterController = null;
 
 function getFallbackAppDataRoot() {
   if (process.platform === 'win32') {
@@ -49,58 +47,6 @@ const IS_PORTABLE_BUILD = !!(PORTABLE_USERDATA_PATH && fs.existsSync(PORTABLE_US
 if (IS_PORTABLE_BUILD) {
   app.setPath('userData', PORTABLE_USERDATA_PATH);
 }
-
-/** Persisted auto-update metadata (survives restarts). Separate from electron-updater's internal cache. */
-function getAutoUpdateStatePath() {
-  return path.join(app.getPath('userData'), 'cn-auto-update-state.json');
-}
-function getAutoUpdateLogPath() {
-  return path.join(app.getPath('userData'), 'cn-auto-update.log');
-}
-function parseSemverTriple(v) {
-  if (!v || typeof v !== 'string') return null;
-  const m = String(v).trim().match(/^(\d+)\.(\d+)\.(\d+)/);
-  if (!m) return null;
-  return [parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)];
-}
-function semverEq(a, b) {
-  const pa = parseSemverTriple(a);
-  const pb = parseSemverTriple(b);
-  if (!pa || !pb) return String(a) === String(b);
-  return pa[0] === pb[0] && pa[1] === pb[1] && pa[2] === pb[2];
-}
-function readAutoUpdatePersistedState() {
-  try {
-    const p = getAutoUpdateStatePath();
-    if (!fs.existsSync(p)) return null;
-    return JSON.parse(fs.readFileSync(p, 'utf8'));
-  } catch (e) {
-    console.warn('[AutoUpdate] read persist failed:', e.message);
-    return null;
-  }
-}
-function writeAutoUpdatePersistedState(data) {
-  try {
-    fs.writeFileSync(getAutoUpdateStatePath(), JSON.stringify(data, null, 0), 'utf8');
-  } catch (e) {
-    console.warn('[AutoUpdate] write persist failed:', e.message);
-  }
-}
-function mergeAutoUpdatePersisted(patch) {
-  const cur = readAutoUpdatePersistedState() || {};
-  const next = Object.assign({}, cur, patch);
-  writeAutoUpdatePersistedState(next);
-  return next;
-}
-function appendUpdateLog(msg) {
-  try {
-    const ts = new Date().toISOString();
-    const line = `[${ts}] ${msg}\n`;
-    fs.appendFileSync(getAutoUpdateLogPath(), line, 'utf8');
-  } catch (_) {}
-}
-const MAX_FAILED_INSTALLS = 3;
-const LOOP_WINDOW_MS = 5 * 60 * 1000;
 
 const https = require('https');
 const http = require('http');
@@ -2089,7 +2035,9 @@ function createWindow() {
   const ses = mainWindow.webContents.session;
   ses.clearCache().catch(() => {});
   ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
-  if (scheduleDeferredAutoUpdateCheck) scheduleDeferredAutoUpdateCheck(mainWindow);
+  if (updaterController && updaterController.scheduleDeferredCheck) {
+    updaterController.scheduleDeferredCheck(mainWindow);
+  }
   mainWindow.on('close', (e) => {
     if (!mainWindow || mainWindow._forceClose) return;
     /* Automated tests (isolated userData): allow window to close so Playwright/e2e can exit */
@@ -3310,27 +3258,15 @@ ipcMain.handle('get-app-version', () => {
 });
 
 ipcMain.handle('app-update-install', () => {
-  if (IS_PORTABLE_BUILD) {
-    return { ok: false, error: 'Portable builds do not auto-install updates.' };
-  }
-  appendUpdateLog('User requested install via IPC');
   try {
-    if (typeof safeCheckForUpdates === 'function' && safeCheckForUpdates._gracefulQuitAndInstall) {
-      safeCheckForUpdates._gracefulQuitAndInstall();
-    } else {
-      appendUpdateLog('Fallback: direct quitAndInstall');
-      if (mainWindow) mainWindow._forceClose = true;
-      mergeAutoUpdatePersisted({ installAttemptedAt: Date.now() });
-      setImmediate(() => {
-        try { autoUpdater.quitAndInstall(true, true); }
-        catch (e) { appendUpdateLog('quitAndInstall fallback failed: ' + (e?.message || '')); app.exit(0); }
-      });
+    if (!updaterController) {
+      return { ok: false, error: 'Updater is not initialized.' };
     }
+    return updaterController.installDownloadedUpdate();
   } catch (e) {
     console.error('[AutoUpdate] install handler error:', e?.message || e);
     return { ok: false, error: e?.message || 'Install failed' };
   }
-  return { ok: true };
 });
 
 ipcMain.handle('get-bank-holidays', () => {
@@ -3850,352 +3786,29 @@ app.whenReady().then(async () => {
     console.warn('[Encryption] safeStorage not available on this system. Database will not be encrypted automatically. Set a recovery password in Settings for protection.');
   }
 
-  /* ─── Silent auto-update from GitHub Releases ─── */
-  if (app.isPackaged && !IS_PORTABLE_BUILD) {
-    autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.logger = { info: (...a) => { console.log(...a); appendUpdateLog(a.join(' ')); }, warn: (...a) => { console.warn(...a); appendUpdateLog('WARN ' + a.join(' ')); }, error: (...a) => { console.error(...a); appendUpdateLog('ERROR ' + a.join(' ')); }, debug: () => {} };
-
-    let _updaterState = 'idle';          // idle | checking | downloading | downloaded | installing | loop-blocked
-    let _downloadedVersion = null;
-    let _lastCheckTime = 0;
-    let _consecutiveFailures = 0;
-    let _listenersRegistered = false;
-    let _quitAndInstallCalled = false;
-    const UPDATE_CHECK_COOLDOWN = 5 * 60 * 1000;
-    const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
-    const STARTUP_RETRY_DELAYS = [30000, 60000, 180000];
-    const _updateCycleId = Date.now().toString(36);
-
-    /* ── Phase 4: Version transition detection + Phase 5: Circuit breaker ── */
-    let _loopDetected = false;
-    try {
-      const persisted = readAutoUpdatePersistedState() || {};
-      const currentVer = app.getVersion();
-      const pendingVer = persisted.pendingInstallVersion;
-      const failedCount = persisted.failedInstallCount || 0;
-      const lastStartup = persisted.lastStartupAt || 0;
-
-      appendUpdateLog(`=== APP START cycle=${_updateCycleId} v=${currentVer} pending=${pendingVer || 'none'} failedInstalls=${failedCount} ===`);
-
-      if (pendingVer && semverEq(pendingVer, currentVer)) {
-        appendUpdateLog(`SUCCESS: Version advanced to v${currentVer}, clearing pending state`);
-        mergeAutoUpdatePersisted({
-          pendingInstallVersion: null,
-          lastAppliedVersion: currentVer,
-          lastAppliedAt: Date.now(),
-          failedInstallCount: 0,
-          installAttemptedAt: null,
-          lastStartupAt: Date.now(),
-          lastVersion: currentVer,
-        });
-      } else if (pendingVer && persisted.installAttemptedAt) {
-        const newFailCount = failedCount + 1;
-        appendUpdateLog(`FAILED TRANSITION: Expected v${pendingVer} but running v${currentVer}. Fail count now ${newFailCount}`);
-        const rapidRestart = lastStartup && (Date.now() - lastStartup < LOOP_WINDOW_MS);
-
-        if (newFailCount >= MAX_FAILED_INSTALLS || rapidRestart) {
-          _loopDetected = true;
-          _updaterState = 'loop-blocked';
-          appendUpdateLog(`LOOP DETECTED: ${newFailCount} failed installs or rapid restart (${Date.now() - lastStartup}ms). Blocking auto-update.`);
-          mergeAutoUpdatePersisted({
-            failedInstallCount: newFailCount,
-            lastStartupAt: Date.now(),
-            lastVersion: currentVer,
-            loopDetectedAt: Date.now(),
-          });
-        } else {
-          mergeAutoUpdatePersisted({
-            failedInstallCount: newFailCount,
-            lastStartupAt: Date.now(),
-            lastVersion: currentVer,
-          });
-        }
-      } else {
-        mergeAutoUpdatePersisted({
-          lastStartupAt: Date.now(),
-          lastVersion: currentVer,
-        });
+  updaterController = initUpdater({
+    app,
+    autoUpdater,
+    BrowserWindow,
+    dialog,
+    mainWindowRef: () => mainWindow,
+    flushDbSync,
+    closeDb: () => {
+      if (db) {
+        db.close();
+        db = null;
       }
-    } catch (e) {
-      console.warn('[AutoUpdate] Persisted state reconcile failed:', e.message);
-      appendUpdateLog('Reconcile error: ' + e.message);
-    }
+    },
+    stopSyncTimer,
+    stopBackupScheduler: () => {
+      if (_backupScheduler) _backupScheduler.stop();
+    },
+    isPortableBuild: IS_PORTABLE_BUILD,
+  });
 
-    appendUpdateLog(`Init — v${app.getVersion()}, packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, loopDetected=${_loopDetected}`);
-
-    function sendUpdateStatusToRenderer(payload) {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        try {
-          mainWindow.webContents.send('app-update-status', payload);
-        } catch (e) {
-          console.warn('[AutoUpdate] send to renderer failed:', e.message);
-        }
-      }
-    }
-
-    safeCheckForUpdates = function safeCheckForUpdates(source, opts) {
-      if (_loopDetected) {
-        appendUpdateLog(`CHECK BLOCKED (loop-detected) source=${source}`);
-        return 'loop-blocked';
-      }
-      var force = opts && opts.force;
-      if (_updaterState === 'downloaded' || _updaterState === 'installing') {
-        return 'downloaded';
-      }
-      if (_updaterState === 'checking' || _updaterState === 'downloading') {
-        return _updaterState;
-      }
-      const now = Date.now();
-      if (!force && now - _lastCheckTime < UPDATE_CHECK_COOLDOWN) {
-        return 'cooldown';
-      }
-      _updaterState = 'checking';
-      _lastCheckTime = now;
-      appendUpdateLog(`Checking for updates (source=${source})`);
-      autoUpdater.checkForUpdates().catch((err) => {
-        appendUpdateLog(`Check failed (${source}): ${err?.message || err}`);
-        _updaterState = 'idle';
-        _consecutiveFailures++;
-        if (_consecutiveFailures <= 3) scheduleRetryAfterFailure(source);
-      });
-      return 'checking';
-    };
-    safeCheckForUpdates._gracefulQuitAndInstall = gracefulQuitAndInstall;
-
-    function scheduleRetryAfterFailure(source) {
-      const delayIdx = Math.min(_consecutiveFailures - 1, STARTUP_RETRY_DELAYS.length - 1);
-      const delay = STARTUP_RETRY_DELAYS[Math.max(0, delayIdx)];
-      setTimeout(() => {
-        if (_updaterState === 'idle' && !_loopDetected) {
-          safeCheckForUpdates('retry-after-failure', { force: true });
-        }
-      }, delay);
-    }
-
-    if (!_listenersRegistered) {
-      _listenersRegistered = true;
-
-    autoUpdater.on('checking-for-update', () => {
-      _updaterState = 'checking';
-      appendUpdateLog('Event: checking-for-update');
-    });
-
-    autoUpdater.on('update-available', (info) => {
-      appendUpdateLog(`Event: update-available v${info.version} (current: v${app.getVersion()})`);
-      _updaterState = 'downloading';
-      _downloadedVersion = info.version;
-      _consecutiveFailures = 0;
-      sendUpdateStatusToRenderer({ status: 'downloading', version: info.version });
-    });
-
-    function gracefulQuitAndInstall() {
-      if (_quitAndInstallCalled) {
-        appendUpdateLog('gracefulQuitAndInstall BLOCKED — already called once this session');
-        return;
-      }
-      if (_updaterState === 'installing') return;
-      _updaterState = 'installing';
-      _quitAndInstallCalled = true;
-      appendUpdateLog(`=== Graceful shutdown → install v${_downloadedVersion} ===`);
-      sendUpdateStatusToRenderer({ status: 'installing', version: _downloadedVersion });
-
-      mergeAutoUpdatePersisted({
-        installAttemptedAt: Date.now(),
-        pendingInstallVersion: _downloadedVersion,
-      });
-
-      try { stopSyncTimer(); } catch (_) {}
-      try { if (_backupScheduler) { _backupScheduler.stop(); } } catch (_) {}
-
-      try { if (db) { flushDbSync(); db.close(); db = null; appendUpdateLog('DB flushed and closed'); } } catch (e) {
-        appendUpdateLog('DB close warning: ' + (e?.message || ''));
-      }
-
-      try {
-        const allWindows = BrowserWindow.getAllWindows();
-        for (const win of allWindows) {
-          try { win._forceClose = true; win.destroy(); } catch (_) {}
-        }
-        mainWindow = null;
-        appendUpdateLog(`Destroyed ${allWindows.length} window(s)`);
-      } catch (_) {}
-
-      appendUpdateLog('Waiting 2s for OS file handle release…');
-      setTimeout(() => {
-        appendUpdateLog('Calling quitAndInstall(isSilent=true, isForceRunAfter=true)');
-        try {
-          autoUpdater.quitAndInstall(true, true);
-        } catch (e) {
-          appendUpdateLog('quitAndInstall threw: ' + (e?.message || e));
-        }
-        /* Force exit after a brief grace period — ensures the process dies
-           even if quitAndInstall hangs or the NSIS installer hasn't started yet.
-           This releases all file handles so the installer can overwrite app.asar. */
-        setTimeout(() => {
-          appendUpdateLog('Force exit to release file handles');
-          app.exit(0);
-        }, 2000);
-      }, 2000);
-    }
-
-    autoUpdater.on('update-downloaded', (info) => {
-      appendUpdateLog(`Event: update-downloaded v${info.version}`);
-      _updaterState = 'downloaded';
-      _downloadedVersion = info.version;
-      _consecutiveFailures = 0;
-      mergeAutoUpdatePersisted({
-        pendingInstallVersion: info.version,
-        pendingDownloadedAt: Date.now(),
-      });
-      sendUpdateStatusToRenderer({ status: 'ready', version: info.version });
-    });
-
-    autoUpdater.on('update-not-available', (info) => {
-      appendUpdateLog(`Event: update-not-available (latest: v${info?.version || '?'}, running: v${app.getVersion()})`);
-      _updaterState = 'idle';
-      _consecutiveFailures = 0;
-      mergeAutoUpdatePersisted({
-        lastRemoteVersion: info && info.version,
-        lastNoUpdateCheckAt: Date.now(),
-        appVersionAtCheck: app.getVersion(),
-        failedInstallCount: 0,
-        pendingInstallVersion: null,
-        installAttemptedAt: null,
-      });
-      sendUpdateStatusToRenderer({ status: 'up-to-date', version: app.getVersion(), remoteVersion: info && info.version });
-    });
-
-    autoUpdater.on('download-progress', (progress) => {
-      if (progress && typeof progress.percent === 'number') {
-        const pct = progress.percent.toFixed(1);
-        if (pct === '0.0' || pct === '100.0' || Math.floor(progress.percent) % 25 === 0) {
-          appendUpdateLog(`download-progress ${pct}% (${(progress.transferred / 1048576).toFixed(1)}/${(progress.total / 1048576).toFixed(1)} MB)`);
-        }
-        sendUpdateStatusToRenderer({ status: 'downloading', percent: progress.percent, version: _downloadedVersion });
-      }
-    });
-
-    autoUpdater.on('error', (err) => {
-      appendUpdateLog('Event: error — ' + (err?.message || err));
-      _updaterState = 'idle';
-      _consecutiveFailures++;
-      sendUpdateStatusToRenderer({ status: 'error', message: err?.message || 'Update check failed' });
-      if (_consecutiveFailures <= 3) {
-        scheduleRetryAfterFailure('error-event');
-      }
-    });
-
-    } /* end _listenersRegistered guard */
-
-    async function runManualUpdateCheckIpc() {
-      if (_loopDetected) {
-        return { status: 'loop-blocked', message: 'Auto-update paused — previous install attempts failed. Please download the latest version from custodynote.com or retry manually.', currentVersion: app.getVersion() };
-      }
-      if (_updaterState === 'downloaded' && _downloadedVersion) {
-        return { status: 'ready', version: _downloadedVersion, currentVersion: app.getVersion() };
-      }
-      if (_updaterState === 'checking' || _updaterState === 'downloading') {
-        return { status: _updaterState === 'downloading' ? 'downloading' : 'checking', currentVersion: app.getVersion() };
-      }
-      _lastCheckTime = Date.now();
-      _updaterState = 'checking';
-      appendUpdateLog('Manual IPC check triggered');
-      try {
-        const result = await autoUpdater.checkForUpdates();
-        if (!result) {
-          _updaterState = 'idle';
-          return { status: 'error', message: 'Update check returned no result', currentVersion: app.getVersion() };
-        }
-        if (!result.isUpdateAvailable) {
-          _updaterState = 'idle';
-          _consecutiveFailures = 0;
-          const remoteV = result.updateInfo && result.updateInfo.version;
-          mergeAutoUpdatePersisted({
-            lastRemoteVersion: remoteV,
-            lastNoUpdateCheckAt: Date.now(),
-            appVersionAtCheck: app.getVersion(),
-            failedInstallCount: 0,
-            pendingInstallVersion: null,
-            installAttemptedAt: null,
-          });
-          return { status: 'up-to-date', version: app.getVersion(), remoteVersion: remoteV };
-        }
-        _updaterState = 'downloading';
-        _downloadedVersion = result.updateInfo ? result.updateInfo.version : _downloadedVersion;
-        sendUpdateStatusToRenderer({ status: 'downloading', version: _downloadedVersion });
-        if (result.downloadPromise) {
-          await result.downloadPromise;
-        }
-        return { status: 'ready', version: _downloadedVersion, currentVersion: app.getVersion() };
-      } catch (e) {
-        _updaterState = 'idle';
-        _consecutiveFailures++;
-        const msg = e && e.message ? e.message : String(e);
-        appendUpdateLog('Manual check failed: ' + msg);
-        return { status: 'error', message: msg, currentVersion: app.getVersion() };
-      }
-    }
-
-    ipcMain.handle('app-check-updates', () => runManualUpdateCheckIpc());
-
-    ipcMain.handle('app-update-reset-loop', () => {
-      appendUpdateLog('User manually reset loop detection');
-      _loopDetected = false;
-      _updaterState = 'idle';
-      _quitAndInstallCalled = false;
-      mergeAutoUpdatePersisted({ failedInstallCount: 0, installAttemptedAt: null, loopDetectedAt: null, pendingInstallVersion: null });
-      return { ok: true };
-    });
-
-    ipcMain.handle('get-auto-update-state', () => ({
-      state: _updaterState,
-      downloadedVersion: _downloadedVersion,
-      currentVersion: app.getVersion(),
-      lastCheckTime: _lastCheckTime,
-      consecutiveFailures: _consecutiveFailures,
-      loopDetected: _loopDetected,
-      cycleId: _updateCycleId,
-      persisted: readAutoUpdatePersistedState(),
-    }));
-
-    scheduleDeferredAutoUpdateCheck = function scheduleDeferredAutoUpdateCheck(browserWindow) {
-      if (!browserWindow || browserWindow.isDestroyed()) return;
-      if (_loopDetected) {
-        appendUpdateLog('Deferred startup check SKIPPED — loop detected');
-        browserWindow.webContents.once('did-finish-load', () => {
-          sendUpdateStatusToRenderer({ status: 'loop-blocked', message: 'Auto-update paused due to repeated failed installs. Download manually from custodynote.com or click Retry.' });
-        });
-        return;
-      }
-      browserWindow.webContents.once('did-finish-load', () => {
-        setTimeout(() => {
-          appendUpdateLog('Deferred startup check (renderer loaded, 3s grace)');
-          safeCheckForUpdates('startup-deferred', { force: true });
-        }, 3000);
-      });
-    };
-
-    /* Single periodic interval: check every 6 hours (removed redundant 30m interval) */
-    setInterval(() => { if (!_loopDetected) safeCheckForUpdates('interval-6h'); }, UPDATE_CHECK_INTERVAL);
-  } else if (IS_PORTABLE_BUILD) {
-    ipcMain.handle('app-check-updates', async () => ({
-      status: 'manual',
-      message: 'Portable builds do not auto-update to avoid switching to a different data location. Download a new portable build and keep the existing userData folder.',
-    }));
-    ipcMain.handle('get-auto-update-state', async () => ({
-      status: 'manual',
-      currentVersion: app.getVersion(),
-      persisted: null,
-    }));
-  } else {
-    ipcMain.handle('app-check-updates', async () => ({ status: 'dev', message: 'Updates only apply to the installed app' }));
-    ipcMain.handle('get-auto-update-state', async () => ({
-      status: 'dev',
-      currentVersion: app.getVersion(),
-      persisted: null,
-    }));
-  }
+  ipcMain.handle('app-check-updates', () => updaterController.checkForUpdates({ source: 'manual-ipc', force: true }));
+  ipcMain.handle('app-update-reset-loop', () => updaterController.resetLoopState());
+  ipcMain.handle('get-auto-update-state', () => updaterController.getPublicState());
 
   const isCliMode = !!(trialInitOnly || cliImportPath || cliListRecords || cliDumpId);
   try {

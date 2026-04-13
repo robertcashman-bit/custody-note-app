@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.4.186",
+      "version": "1.4.187",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Replace the monolithic main.js updater with dedicated updater.js and updateState.js modules",
+        "Add persisted updater state, electron-log based updater logging, and explicit failed-install loop protection",
+        "Use a single guarded quitAndInstall path and remove the unsafe direct install fallback",
+        "Keep existing update IPC/UI wiring while improving recovery messages and aligning status text with the 6-hour check cadence",
+        "Make NSIS runAfterFinish explicit and add focused updater regression tests"
+      ]
+    },
+    {
+      "version": "1.4.186",
+      "date": "2026-04-13",
       "changes": [
         "Restore a direct end-of-case button for Documents, Attachments and Invoice",
         "Make the documents and invoice workflow reachable from the final page without relying on the bottom nav or post-finalise banner"

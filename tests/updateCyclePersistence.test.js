@@ -7,6 +7,8 @@ const initSqlJs = require('sql.js');
 
 const mainJsPath = path.resolve(__dirname, '..', 'main.js');
 const mainJs = fs.readFileSync(mainJsPath, 'utf8');
+const updaterJs = fs.readFileSync(path.resolve(__dirname, '..', 'updater.js'), 'utf8');
+const updateStateJs = fs.readFileSync(path.resolve(__dirname, '..', 'updateState.js'), 'utf8');
 
 describe('update-cycle persistence', () => {
   it('persists attendance records across a restart at the database layer', async () => {
@@ -55,19 +57,19 @@ describe('update-cycle persistence', () => {
   });
 
   it('prevents portable builds from auto-updating into a different data location', () => {
-    assert.match(mainJs, /if \(app\.isPackaged && !IS_PORTABLE_BUILD\)/);
-    assert.match(mainJs, /Portable builds do not auto-update to avoid switching to a different data location/);
+    assert.match(mainJs, /isPortableBuild: IS_PORTABLE_BUILD/);
+    assert.match(updaterJs, /Portable builds do not auto-update to avoid switching to a different data location/);
   });
 
   it('defers the first update check until the renderer has loaded (no dropped IPC)', () => {
-    assert.match(mainJs, /scheduleDeferredAutoUpdateCheck/);
-    assert.match(mainJs, /startup-deferred/);
+    assert.match(mainJs, /scheduleDeferredCheck/);
+    assert.match(updaterJs, /startup-deferred/);
     assert.doesNotMatch(mainJs, /safeCheckForUpdates\('startup'\)/);
   });
 
   it('persists auto-update metadata under userData for cross-restart diagnostics', () => {
-    assert.match(mainJs, /cn-auto-update-state\.json/);
-    assert.match(mainJs, /mergeAutoUpdatePersisted/);
+    assert.match(updateStateJs, /cn-auto-update-state\.json/);
+    assert.match(updateStateJs, /mergeState/);
   });
 
   it('forces a synchronous DB flush during shutdown', () => {
