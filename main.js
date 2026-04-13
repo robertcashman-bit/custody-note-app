@@ -5801,9 +5801,17 @@ function fmtDateDMY(val) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(val);
 }
 
+/** UK NI for PDF: strip spaces, uppercase (matches in-app validation AB123456C). */
+function normalizeNiNumberForPdf(s) {
+  if (s === undefined || s === null) return '';
+  return String(s).replace(/\s+/g, '').toUpperCase();
+}
+
 function safeSet(form, fieldName, value) {
-  if (!value) return;
-  try { form.getTextField(fieldName).setText(String(value)); } catch (_) {}
+  if (value === undefined || value === null) return;
+  const t = String(value);
+  if (t === '') return;
+  try { form.getTextField(fieldName).setText(t); } catch (_) {}
 }
 
 function safeCheck(form, fieldName, condition) {
@@ -5847,7 +5855,8 @@ async function embedSignature(pdfDoc, form, fieldName, dataUri) {
 
 function fillCRM1(form, d) {
   safeSet(form, 'Surname', d.surname);
-  safeSet(form, 'First_name', d.forename);
+  const firstLine = [d.forename, d.middleName].filter(Boolean).join(' ').trim();
+  safeSet(form, 'First_name', firstLine || d.forename);
   const dob = fmtDateDMY(d.dob);
   if (dob) {
     const parts = dob.split('/');
@@ -5855,8 +5864,15 @@ function fillCRM1(form, d) {
     safeSet(form, 'Date_of_birth1', parts[1] || '');
     safeSet(form, 'Date_of_birth2', parts[2] || '');
   }
-  safeSet(form, 'National_insurance_number', d.niNumber ? d.niNumber.substring(0, 2) : '');
-  safeSet(form, 'National_insurance_number1', d.niNumber ? d.niNumber.substring(2) : '');
+  const ni = normalizeNiNumberForPdf(d.niNumber || d.crm14NiNumber || '');
+  if (ni.length >= 2) {
+    safeSet(form, 'National_insurance_number', ni.substring(0, 2));
+    safeSet(form, 'National_insurance_number1', ni.substring(2));
+  }
+  /* CRM1 v16 (Feb 2025): visible NI boxes are Comb1–Comb9 (one character each). */
+  for (let i = 0; i < 9; i++) {
+    safeSet(form, `Comb${i + 1}`, ni[i] || '');
+  }
   safeSet(form, 'Current_address', [d.address1, d.address2, d.address3].filter(Boolean).join(', '));
   safeSet(form, 'FillText1', d.city);
   safeSet(form, 'County', d.county);
@@ -6005,6 +6021,15 @@ async function fillDeclaration(pdfDoc, form, d, settings) {
   }
 }
 
+function mergeFeeEarnerSigFromSettings(data, settings) {
+  const d = data && typeof data === 'object' ? { ...data } : {};
+  const s = settings || {};
+  if ((s.feeEarnerSigMode || 'draw') === 'saved' && s.feeEarnerSigMaster && String(s.feeEarnerSigMaster).startsWith('data:image')) {
+    d.feeEarnerSig = s.feeEarnerSigMaster;
+  }
+  return d;
+}
+
 ipcMain.handle('laa-generate-official-pdf', async (_, { formType, data }) => {
   try {
     const filename = LAA_FORM_FILES[formType];
@@ -6015,10 +6040,9 @@ ipcMain.handle('laa-generate-official-pdf', async (_, { formType, data }) => {
     const templateBytes = fs.readFileSync(templatePath);
     const pdfDoc = await PDFDocument.load(templateBytes, { ignoreEncryption: true });
     const form = pdfDoc.getForm();
-    const d = data || {};
-
     const rows = dbAll ? dbAll('SELECT key, value FROM settings') : [];
     const settings = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    const d = mergeFeeEarnerSigFromSettings(data || {}, settings);
     settings.firmName = settings.firmName || '';
     settings.firmLaaAccount = settings.firmLaaAccount || '';
     settings.feeEarnerName = settings.feeEarnerName || '';
@@ -6053,10 +6077,10 @@ ipcMain.handle('laa-generate-pdf-buffer', async (_, { formType, data }) => {
     const templateBytes = fs.readFileSync(templatePath);
     const pdfDoc = await PDFDocument.load(templateBytes, { ignoreEncryption: true });
     const form = pdfDoc.getForm();
-    const d = data || {};
 
     const rows = dbAll ? dbAll('SELECT key, value FROM settings') : [];
     const settings = Object.fromEntries(rows.map(r => [r.key, r.value]));
+    const d = mergeFeeEarnerSigFromSettings(data || {}, settings);
     settings.firmName = settings.firmName || '';
     settings.firmLaaAccount = settings.firmLaaAccount || '';
     settings.feeEarnerName = settings.feeEarnerName || '';
