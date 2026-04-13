@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.187",
+      "version": "1.4.188",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Smoke-test release for the new modular updater to validate 1.4.187 to 1.4.188 update flow",
+        "No functional app changes beyond the updater verification bump"
+      ]
+    },
+    {
+      "version": "1.4.187",
+      "date": "2026-04-13",
       "changes": [
         "Replace the monolithic main.js updater with dedicated updater.js and updateState.js modules",
         "Add persisted updater state, electron-log based updater logging, and explicit failed-install loop protection",
