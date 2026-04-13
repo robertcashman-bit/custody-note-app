@@ -7175,9 +7175,9 @@ ipcMain.handle('billable-attendances', () => {
 ipcMain.handle('billing-view-records', () => {
   return dbAll(
     `SELECT id, data, status, created_at, updated_at, client_name, station_name, attendance_date,
-            quickfile_invoice_id, quickfile_invoice_number, invoice_total
+            quickfile_invoice_id, quickfile_invoice_number, invoice_total, archived_at
      FROM attendances
-     WHERE deleted_at IS NULL AND archived_at IS NULL
+     WHERE deleted_at IS NULL
        AND (status = 'finalised' OR status = 'completed' OR quickfile_invoice_id IS NOT NULL)
      ORDER BY attendance_date DESC`
   );
