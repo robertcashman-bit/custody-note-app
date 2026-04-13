@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.176",
+      "version": "1.4.177",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Fix faint button text colors for better readability",
+        "Bump border-radius on all buttons to 10px",
+        "Widen scrollbar from 8px to 14px for easier scrolling"
+      ]
+    },
+    {
+      "version": "1.4.176",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "Deep auto-update fix: circuit breaker prevents restart loops after failed installs",
         "version transition detection on startup",
