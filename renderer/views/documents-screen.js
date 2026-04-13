@@ -1,25 +1,48 @@
 /* ═══════════════════════════════════════════════════════
    DOCUMENTS SCREEN (Workflow Step 1)
-   Upload, manage, and auto-rename attachments.
+   Upload, manage, auto-rename attachments, and generate
+   in-app forms (CRM1-3, Conflict Cert, etc.).
    Rendered inside #wf-body by workflow-stepper.js.
    Depends on: filenameUtils.js, workflow-stepper.js globals,
-               app.js globals (formData, quietSave, renderPhotoThumbs)
+               app.js globals (formData, quietSave, renderPhotoThumbs,
+                               generateConflictCert, docStyles, esc)
    ═══════════════════════════════════════════════════════ */
+
+var _wfGeneratedDocs = {};
+
+var _wfGeneratableForms = [
+  { id: 'attendance_note', label: 'Police Station Attendance Note', icon: '&#128221;', type: 'html', description: 'Full attendance note PDF' },
+  { id: 'crm1',            label: 'CRM1 — Client Details',         icon: '&#128196;', type: 'laa',  description: 'Legal Aid Agency form' },
+  { id: 'crm2',            label: 'CRM2 — Advice & Assistance',    icon: '&#128196;', type: 'laa',  description: 'Legal Aid Agency form' },
+  { id: 'crm3',            label: 'CRM3 — Advocacy Assistance',    icon: '&#128196;', type: 'laa',  description: 'Legal Aid Agency form' },
+  { id: 'declaration',     label: 'Applicant Declaration',         icon: '&#128196;', type: 'laa',  description: 'Legal Aid Agency form' },
+  { id: 'conflict_cert',   label: 'Conflict Check Certificate',    icon: '&#128203;', type: 'html', description: 'Conflict of interest check' },
+  { id: 'client_instructions', label: 'Client Instructions',       icon: '&#128203;', type: 'html', description: 'Confirmation of instructions' },
+  { id: 'prepared_statement',  label: 'Prepared Statement',        icon: '&#128203;', type: 'html', description: 'Statement template' },
+];
 
 function _wfRenderDocumentsStep(body, footer) {
   var meta = _wfMatterMeta();
   var data = meta.data;
-
   var attachments = _wfGetAttachments(data);
 
   var html =
     '<div class="wf-screen wf-documents">' +
       '<div class="wf-screen-header">' +
-        '<h3>Documents</h3>' +
-        '<p class="wf-screen-sub">Upload and standardise attendance files before billing.</p>' +
+        '<h3>Documents &amp; Forms</h3>' +
+        '<p class="wf-screen-sub">Generate forms, upload files, and prepare documents for billing.</p>' +
+      '</div>' +
+
+      '<div class="wf-card wf-gen-forms-card">' +
+        '<h4 class="wf-card-title">Generate Forms</h4>' +
+        '<p class="wf-gen-forms-sub">Click to generate pre-populated PDFs from this attendance record. Generated documents will be available to attach to the invoice.</p>' +
+        '<div class="wf-gen-grid">' +
+        _wfBuildGeneratableGrid(meta) +
+        '</div>' +
       '</div>' +
 
       '<div class="wf-card wf-upload-card">' +
+        '<h4 class="wf-card-title">Upload Additional Files</h4>' +
         '<div class="wf-upload-area" id="wf-upload-dropzone">' +
           '<div class="wf-upload-icon">&#128196;</div>' +
           '<p class="wf-upload-text">Drag files here or click Add Files</p>' +
@@ -28,7 +51,7 @@ function _wfRenderDocumentsStep(body, footer) {
       '</div>' +
 
       '<div class="wf-card">' +
-        '<h4 class="wf-card-title">Attachment List</h4>' +
+        '<h4 class="wf-card-title">Uploaded Attachments (' + attachments.length + ')</h4>' +
         _wfBuildAttachmentTable(attachments, meta) +
       '</div>' +
 
@@ -38,6 +61,39 @@ function _wfRenderDocumentsStep(body, footer) {
   body.innerHTML = html;
   _wfBuildDocFooter(footer);
   _wfBindDocEvents(meta);
+}
+
+function _wfBuildGeneratableGrid(meta) {
+  var html = '';
+  _wfGeneratableForms.forEach(function (form) {
+    var generated = _wfGeneratedDocs[form.id];
+    var statusCls = generated ? 'wf-gen-status--ready' : 'wf-gen-status--none';
+    var statusText = generated ? 'Ready (' + _wfFmtFileSize(generated.size) + ')' : 'Not generated';
+    var btnLabel = generated ? 'Regenerate' : 'Generate';
+
+    html +=
+      '<div class="wf-gen-item" data-form-id="' + form.id + '">' +
+        '<div class="wf-gen-item-header">' +
+          '<span class="wf-gen-icon">' + form.icon + '</span>' +
+          '<div class="wf-gen-info">' +
+            '<span class="wf-gen-label">' + _wfEsc(form.label) + '</span>' +
+            '<span class="wf-gen-desc">' + _wfEsc(form.description) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="wf-gen-item-actions">' +
+          '<span class="wf-gen-status ' + statusCls + '">' + statusText + '</span>' +
+          '<button type="button" class="btn btn-small wf-gen-btn" data-form-id="' + form.id + '">' + btnLabel + '</button>' +
+          (generated ? '<button type="button" class="btn btn-small btn-secondary wf-gen-preview-btn" data-form-id="' + form.id + '" title="Preview">&#128065; Preview</button>' : '') +
+        '</div>' +
+      '</div>';
+  });
+  return html;
+}
+
+function _wfFmtFileSize(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024) return bytes + ' B';
+  return (bytes / 1024).toFixed(1) + ' KB';
 }
 
 function _wfGetAttachments(data) {
@@ -60,7 +116,7 @@ function _wfGetAttachments(data) {
 
 function _wfBuildAttachmentTable(attachments, meta) {
   if (!attachments.length) {
-    return '<p class="wf-empty-state">No attachments yet. Use the upload area above to add files.</p>';
+    return '<p class="wf-empty-state">No files uploaded yet. Use the upload area above or generate forms.</p>';
   }
   var html =
     '<div class="wf-table-wrap">' +
@@ -121,8 +177,8 @@ function _wfExtFromName(name) {
 
 function _wfBuildValidationPanel(attachments, meta) {
   var warnings = [];
-  if (!attachments.length) {
-    warnings.push({ type: 'info', msg: 'No attachments uploaded — you can proceed to billing without them.' });
+  if (!attachments.length && !Object.keys(_wfGeneratedDocs).length) {
+    warnings.push({ type: 'info', msg: 'No documents prepared — generate forms or upload files before proceeding.' });
   }
   attachments.forEach(function (att) {
     if (!att.documentType) {
@@ -159,8 +215,11 @@ function _wfBuildValidationPanel(attachments, meta) {
 }
 
 function _wfBuildDocFooter(footer) {
+  var genCount = Object.keys(_wfGeneratedDocs).length;
+  var countBadge = genCount > 0 ? ' <span class="wf-gen-count-badge">' + genCount + ' form' + (genCount > 1 ? 's' : '') + ' ready</span>' : '';
   footer.innerHTML =
     '<button type="button" id="wf-doc-back" class="btn btn-secondary">Close</button>' +
+    '<span class="wf-footer-info">' + countBadge + '</span>' +
     '<button type="button" id="wf-doc-next" class="btn btn-primary">Next: Billing &#9654;</button>';
 
   document.getElementById('wf-doc-back').addEventListener('click', closeWorkflow);
@@ -255,4 +314,210 @@ function _wfBindDocEvents(meta) {
       }
     });
   });
+
+  document.querySelectorAll('.wf-gen-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var formId = btn.getAttribute('data-form-id');
+      _wfGenerateForm(formId, meta, btn);
+    });
+  });
+
+  document.querySelectorAll('.wf-gen-preview-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var formId = btn.getAttribute('data-form-id');
+      _wfPreviewGeneratedForm(formId);
+    });
+  });
+}
+
+function _wfGenerateForm(formId, meta, btn) {
+  var form = _wfGeneratableForms.find(function (f) { return f.id === formId; });
+  if (!form) return;
+
+  var origText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+
+  if (form.type === 'laa') {
+    _wfGenerateLaaForm(formId, meta).then(function (result) {
+      btn.disabled = false;
+      btn.textContent = origText;
+      if (result.error) {
+        showToast('Failed to generate ' + form.label + ': ' + result.error, 'error');
+      } else {
+        _wfGeneratedDocs[formId] = { base64: result.base64, size: result.size, label: form.label, filename: _wfFormFilename(formId, meta) };
+        showToast(form.label + ' generated successfully', 'success');
+        _wfRenderCurrentStep();
+      }
+    });
+  } else if (form.type === 'html') {
+    _wfGenerateHtmlForm(formId, meta).then(function (result) {
+      btn.disabled = false;
+      btn.textContent = origText;
+      if (result.error) {
+        showToast('Failed to generate ' + form.label + ': ' + result.error, 'error');
+      } else {
+        _wfGeneratedDocs[formId] = { base64: result.base64, size: result.size, label: form.label, filename: _wfFormFilename(formId, meta) };
+        showToast(form.label + ' generated successfully', 'success');
+        _wfRenderCurrentStep();
+      }
+    });
+  }
+}
+
+function _wfGenerateLaaForm(formId, meta) {
+  var data = meta.data || {};
+  if (!window.api || !window.api.laaGeneratePdfBuffer) {
+    return Promise.resolve({ error: 'PDF generation not available' });
+  }
+  return window.api.laaGeneratePdfBuffer({ formType: formId, data: data });
+}
+
+function _wfGenerateHtmlForm(formId, meta) {
+  var data = meta.data || {};
+  if (!window.api || !window.api.htmlToPdfBuffer) {
+    return Promise.resolve({ error: 'PDF generation not available' });
+  }
+
+  var html = '';
+  try {
+    html = _wfBuildFormHtml(formId, data, meta);
+  } catch (err) {
+    return Promise.resolve({ error: err.message || 'Failed to build HTML' });
+  }
+
+  if (!html) return Promise.resolve({ error: 'No content generated for ' + formId });
+
+  return window.api.htmlToPdfBuffer({ html: html });
+}
+
+function _wfBuildFormHtml(formId, data, meta) {
+  var _esc = typeof esc === 'function' ? esc : _wfEsc;
+  var _docStyles = typeof docStyles === 'function' ? docStyles : function () { return '<style>body{font-family:Arial,sans-serif;font-size:11pt;color:#111;margin:2cm}</style>'; };
+  var _formatDateGB = typeof formatDateGB === 'function' ? formatDateGB : function (d) { return d || ''; };
+
+  var client = [data.forename, data.middleName, data.surname].filter(Boolean).join(' ') || 'Client not yet named';
+  var fee = data.feeEarnerName || data.laaFeeEarnerFullName || '';
+  var offence = data.offenceSummary || data.offence1Details || '';
+  var station = data.policeStationName || '';
+
+  switch (formId) {
+    case 'attendance_note': {
+      var settings = window._appSettingsCache || {};
+      var builder = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : (typeof buildPdfHtml === 'function' ? buildPdfHtml : null);
+      if (!builder) return '';
+      return builder(data, settings);
+    }
+
+    case 'conflict_cert': {
+      var date = _formatDateGB(data.conflictCheckDate || data.date || new Date().toISOString().slice(0, 10));
+      var result = data.conflictCheckResult || '(not yet recorded)';
+      var notes = data.conflictCheckNotes || 'None';
+      return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Conflict Check Certificate</title>' + _docStyles() + '</head><body>' +
+        '<h1>Conflict of Interest Check \u2013 Certificate</h1>' +
+        '<table><tr><th>Field</th><th>Detail</th></tr>' +
+        '<tr><td>Date of check</td><td>' + _esc(date) + '</td></tr>' +
+        '<tr><td>Fee earner</td><td>' + _esc(fee) + '</td></tr>' +
+        '<tr><td>Client</td><td>' + _esc(client) + '</td></tr>' +
+        '<tr><td>Offence</td><td>' + _esc(offence) + '</td></tr>' +
+        '<tr><td>Police station</td><td>' + _esc(station) + '</td></tr>' +
+        '<tr><td>Result</td><td><strong>' + _esc(result) + '</strong></td></tr>' +
+        '<tr><td>Notes</td><td>' + _esc(notes) + '</td></tr>' +
+        '</table>' +
+        '<p>I confirm that a conflict of interest check was carried out prior to advising the above-named client and that no conflict exists.</p>' +
+        '<h2>Signature</h2><div class="sig-box"></div>' +
+        '<p>Name: ' + _esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ____________</p>' +
+        '<div class="footer">Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
+        '</body></html>';
+    }
+
+    case 'client_instructions': {
+      var ciDate = _formatDateGB(data.instructionsSignatureDate || data.date || new Date().toISOString().slice(0, 10));
+      var ciTime = data.instructionsSignatureTime || '';
+      var instructions = data.clientInstructions || '(no instructions recorded)';
+      var adviceRe = data.adviceReInterview || '';
+      var decision = data.clientDecision || '';
+      return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Client Instructions</title>' + _docStyles() + '</head><body>' +
+        '<h1>Confirmation of Client Instructions</h1>' +
+        '<table><tr><th>Field</th><th>Detail</th></tr>' +
+        '<tr><td>Date</td><td>' + _esc(ciDate) + '</td></tr>' +
+        (ciTime ? '<tr><td>Time</td><td>' + _esc(ciTime) + '</td></tr>' : '') +
+        '<tr><td>Client</td><td>' + _esc(client) + '</td></tr>' +
+        '<tr><td>Offence</td><td>' + _esc(offence) + '</td></tr>' +
+        '<tr><td>Police station</td><td>' + _esc(station) + '</td></tr>' +
+        '</table>' +
+        '<h2>Client\'s Instructions</h2>' +
+        '<p style="white-space:pre-wrap;border:1px solid #ccc;padding:8px;min-height:80px">' + _esc(instructions) + '</p>' +
+        (adviceRe ? '<h2>Advice Re Interview</h2><p>' + _esc(adviceRe) + '</p>' : '') +
+        (decision ? '<p><strong>Client\'s decision:</strong> ' + _esc(decision) + '</p>' : '') +
+        '<h2>Rep Signature</h2><div class="sig-box"></div>' +
+        '<p>Name: ' + _esc(fee) + '</p>' +
+        '<h2>Client Signature</h2><div class="sig-box"></div>' +
+        '<p>Name (BLOCK CAPITALS): ______________________________</p>' +
+        '<div class="footer">Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
+        '</body></html>';
+    }
+
+    case 'prepared_statement': {
+      var psDate = _formatDateGB(data.date || new Date().toISOString().slice(0, 10));
+      var custodyNo = data.custodyNumber || '';
+      var oicName = data.oicName || '';
+      return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Prepared Statement</title>' + _docStyles() + '</head><body>' +
+        '<h1>Prepared Statement</h1>' +
+        '<table><tr><th>Field</th><th>Detail</th></tr>' +
+        '<tr><td>Name</td><td>' + _esc(client) + '</td></tr>' +
+        '<tr><td>Date</td><td>' + _esc(psDate) + '</td></tr>' +
+        '<tr><td>Custody No.</td><td>' + _esc(custodyNo) + '</td></tr>' +
+        '<tr><td>Police station</td><td>' + _esc(station) + '</td></tr>' +
+        (oicName ? '<tr><td>OIC</td><td>' + _esc(oicName) + '</td></tr>' : '') +
+        '<tr><td>Alleged offence(s)</td><td>' + _esc(offence) + '</td></tr>' +
+        '</table>' +
+        '<h2>Statement</h2>' +
+        '<p>I, <strong>' + _esc(client) + '</strong>, wish to make the following statement in advance of my police interview:</p>' +
+        '<p style="border:1px solid #ccc;padding:8px;min-height:200px">&nbsp;</p>' +
+        '<p>I reserve the right to give a fuller account at a later stage.</p>' +
+        '<h2>Signature</h2><div class="sig-box"></div>' +
+        '<p>Name: ' + _esc(client.toUpperCase()) + '</p>' +
+        '<div class="footer">Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
+        '</body></html>';
+    }
+
+    default:
+      return '';
+  }
+}
+
+function _wfFormFilename(formId, meta) {
+  var clientSlug = [meta.clientName].filter(Boolean).join('_').replace(/\s+/g, '_') || 'client';
+  var dateSlug = (meta.attendanceDate || '').replace(/-/g, '') || 'nodate';
+  var names = {
+    attendance_note: clientSlug + '_attendance_note_' + dateSlug + '.pdf',
+    crm1: clientSlug + '_CRM1_' + dateSlug + '.pdf',
+    crm2: clientSlug + '_CRM2_' + dateSlug + '.pdf',
+    crm3: clientSlug + '_CRM3_' + dateSlug + '.pdf',
+    declaration: clientSlug + '_applicant_declaration_' + dateSlug + '.pdf',
+    conflict_cert: clientSlug + '_conflict_certificate_' + dateSlug + '.pdf',
+    client_instructions: clientSlug + '_client_instructions_' + dateSlug + '.pdf',
+    prepared_statement: clientSlug + '_prepared_statement_' + dateSlug + '.pdf',
+  };
+  return (names[formId] || formId + '.pdf').replace(/[<>:"/\\|?*]/g, '_');
+}
+
+function _wfPreviewGeneratedForm(formId) {
+  var doc = _wfGeneratedDocs[formId];
+  if (!doc || !doc.base64) { showToast('Generate the form first', 'info'); return; }
+
+  var bytes = Uint8Array.from(atob(doc.base64), function (c) { return c.charCodeAt(0); });
+  var blob = new Blob([bytes], { type: 'application/pdf' });
+  var url = URL.createObjectURL(blob);
+
+  var previewWin = window.open('', '_blank', 'width=900,height=700');
+  if (previewWin) {
+    previewWin.document.write(
+      '<!DOCTYPE html><html><head><title>' + _wfEsc(doc.label) + '</title></head><body style="margin:0;overflow:hidden;">' +
+      '<embed src="' + url + '" type="application/pdf" width="100%" height="100%" style="position:absolute;top:0;left:0;right:0;bottom:0;">' +
+      '</body></html>'
+    );
+    previewWin.document.close();
+  }
 }

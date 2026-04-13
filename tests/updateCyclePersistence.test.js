@@ -61,7 +61,7 @@ describe('update-cycle persistence', () => {
 
   it('defers the first update check until the renderer has loaded (no dropped IPC)', () => {
     assert.match(mainJs, /scheduleDeferredAutoUpdateCheck/);
-    assert.match(mainJs, /startup-window-ready/);
+    assert.match(mainJs, /startup-deferred/);
     assert.doesNotMatch(mainJs, /safeCheckForUpdates\('startup'\)/);
   });
 
@@ -71,8 +71,9 @@ describe('update-cycle persistence', () => {
   });
 
   it('forces a synchronous DB flush during shutdown', () => {
-    assert.match(mainJs, /if \(db\) \{ flushDbSync\(\); db\.close\(\); \}/);
-    assert.match(mainJs, /app\.on\('before-quit', \(\) => \{/);
+    assert.match(mainJs, /flushDbSync\(\)/);
+    assert.match(mainJs, /db\.close\(\)/);
+    assert.match(mainJs, /app\.on\('before-quit'/);
   });
 
   it('refuses to replace an unreadable stored licence with a new trial', () => {

@@ -283,6 +283,6 @@ function _bvBindFilters() {
 
   var backBtn = document.getElementById('billing-view-back-btn');
   if (backBtn) {
-    backBtn.addEventListener('click', function () { showView('home'); });
+    backBtn.addEventListener('click', function () { if (typeof goBack === 'function') goBack(); else showView('home'); });
   }
 }

@@ -1,14 +1,17 @@
 /* ═══════════════════════════════════════════════════════
    BILLING SCREEN (Workflow Step 2)
-   Invoice details, charges, QuickFile preview, linked attachments.
+   Invoice details, charges, QuickFile preview, document
+   selection for attachment, and invoice generation.
    Rendered inside #wf-body by workflow-stepper.js.
    Depends on: filenameUtils.js, billingUtils.js, workflow-stepper.js,
                billing.js (_handleCreateInvoice, _previewDocument),
+               documents-screen.js (_wfGeneratedDocs),
                app.js globals
    ═══════════════════════════════════════════════════════ */
 
 var _wfBillingLoaded = false;
 var _wfBillingOpts = null;
+var _wfSelectedDocs = {};
 
 function _wfRenderBillingStep(body, footer) {
   var meta = _wfMatterMeta();
@@ -115,21 +118,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
       '</div>';
   }
 
-  var attachments = _wfGetAttachments(meta.data);
-  var linkedHtml = '';
-  if (attachments.length) {
-    linkedHtml = '<div class="wf-card"><h4 class="wf-card-title">Linked Supporting PDFs</h4><ul class="wf-linked-list">';
-    attachments.forEach(function (att) {
-      var renamed = att.documentType ? formatAttachmentFilename({
-        clientName: meta.clientName, policeStation: meta.stationName,
-        attendanceDate: meta.attendanceDate, documentType: att.documentType,
-        customDocumentType: att.customDocumentType, firmName: meta.firmName,
-        extension: _wfExtFromName(att.originalName),
-      }) : att.originalName;
-      linkedHtml += '<li class="wf-linked-file">&#128196; ' + _wfEsc(renamed) + '</li>';
-    });
-    linkedHtml += '</ul></div>';
-  }
+  var docSelectionHtml = _wfBuildDocumentSelectionPanel(meta);
 
   var auditHtml = '';
   if (opts.auditLog && opts.auditLog.length) {
@@ -149,7 +138,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
     '<div class="wf-screen wf-billing">' +
       '<div class="wf-screen-header">' +
         '<h3>Billing &amp; Invoice</h3>' +
-        '<p class="wf-screen-sub">Create the QuickFile invoice and link supporting PDFs.</p>' +
+        '<p class="wf-screen-sub">Create the QuickFile invoice and attach supporting documents.</p>' +
         statusBadge +
       '</div>' +
       firmCallout +
@@ -198,7 +187,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
         '</div>' +
       '</div>' +
 
-      linkedHtml +
+      docSelectionHtml +
 
       '<div class="wf-card">' +
         '<h4 class="wf-card-title">Invoice Narrative</h4>' +
@@ -219,6 +208,70 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
 
   _wfBuildBillingFooter(footer, meta, opts);
   _wfBindBillingEvents(meta, opts);
+}
+
+function _wfBuildDocumentSelectionPanel(meta) {
+  var generatedDocs = _wfGeneratedDocs || {};
+  var attachments = _wfGetAttachments(meta.data);
+  var hasAnyDocs = Object.keys(generatedDocs).length > 0 || attachments.length > 0;
+
+  if (!hasAnyDocs) {
+    return '<div class="wf-card wf-doc-selection">' +
+      '<h4 class="wf-card-title">&#128206; Documents to Attach to Invoice</h4>' +
+      '<p class="wf-empty-state">No documents available. Go back to the Documents step to generate forms or upload files.</p>' +
+    '</div>';
+  }
+
+  var html = '<div class="wf-card wf-doc-selection">' +
+    '<h4 class="wf-card-title">&#128206; Documents to Attach to Invoice</h4>' +
+    '<p class="wf-doc-sel-sub">Select which documents to upload to QuickFile with this invoice.</p>' +
+    '<div class="wf-doc-sel-actions">' +
+      '<button type="button" class="btn btn-small wf-doc-sel-all">Select All</button>' +
+      '<button type="button" class="btn btn-small btn-secondary wf-doc-sel-none">Deselect All</button>' +
+    '</div>' +
+    '<div class="wf-doc-sel-list">';
+
+  var genKeys = Object.keys(generatedDocs);
+  if (genKeys.length) {
+    html += '<div class="wf-doc-sel-group"><span class="wf-doc-sel-group-label">Generated Forms</span></div>';
+    genKeys.forEach(function (key) {
+      var doc = generatedDocs[key];
+      var checked = _wfSelectedDocs['gen_' + key] !== false ? ' checked' : '';
+      if (_wfSelectedDocs['gen_' + key] === undefined) _wfSelectedDocs['gen_' + key] = true;
+      html += '<label class="wf-doc-sel-item">' +
+        '<input type="checkbox" class="wf-doc-sel-cb" data-doc-key="gen_' + key + '"' + checked + '>' +
+        '<span class="wf-doc-sel-icon">&#128196;</span>' +
+        '<span class="wf-doc-sel-name">' + _wfEsc(doc.label) + '</span>' +
+        '<span class="wf-doc-sel-size">' + _wfFmtFileSize(doc.size) + '</span>' +
+      '</label>';
+    });
+  }
+
+  if (attachments.length) {
+    html += '<div class="wf-doc-sel-group"><span class="wf-doc-sel-group-label">Uploaded Files</span></div>';
+    attachments.forEach(function (att) {
+      var renamed = att.documentType ? formatAttachmentFilename({
+        clientName: meta.clientName, policeStation: meta.stationName,
+        attendanceDate: meta.attendanceDate, documentType: att.documentType,
+        customDocumentType: att.customDocumentType, firmName: meta.firmName,
+        extension: _wfExtFromName(att.originalName),
+      }) : att.originalName;
+      var checked = _wfSelectedDocs['att_' + att.index] !== false ? ' checked' : '';
+      if (_wfSelectedDocs['att_' + att.index] === undefined) _wfSelectedDocs['att_' + att.index] = true;
+      html += '<label class="wf-doc-sel-item">' +
+        '<input type="checkbox" class="wf-doc-sel-cb" data-doc-key="att_' + att.index + '"' + checked + '>' +
+        '<span class="wf-doc-sel-icon">&#128206;</span>' +
+        '<span class="wf-doc-sel-name">' + _wfEsc(renamed) + '</span>' +
+      '</label>';
+    });
+  }
+
+  html += '</div>';
+
+  var selectedCount = Object.keys(_wfSelectedDocs).filter(function (k) { return _wfSelectedDocs[k]; }).length;
+  html += '<div class="wf-doc-sel-summary" id="wf-doc-sel-summary">' + selectedCount + ' document' + (selectedCount !== 1 ? 's' : '') + ' selected for attachment</div>';
+  html += '</div>';
+  return html;
 }
 
 function _wfFmtCurrency(val) {
@@ -268,6 +321,42 @@ function _wfBindBillingEvents(meta, opts) {
     if (createBtn) createBtn.disabled = !allChecked;
   }
   checkboxes.forEach(function (cb) { cb.addEventListener('change', updateBtn); });
+
+  overlay.querySelectorAll('.wf-doc-sel-cb').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      var key = cb.getAttribute('data-doc-key');
+      _wfSelectedDocs[key] = cb.checked;
+      _wfUpdateDocSelSummary();
+    });
+  });
+
+  var selAllBtn = overlay.querySelector('.wf-doc-sel-all');
+  if (selAllBtn) {
+    selAllBtn.addEventListener('click', function () {
+      overlay.querySelectorAll('.wf-doc-sel-cb').forEach(function (cb) {
+        cb.checked = true;
+        _wfSelectedDocs[cb.getAttribute('data-doc-key')] = true;
+      });
+      _wfUpdateDocSelSummary();
+    });
+  }
+
+  var selNoneBtn = overlay.querySelector('.wf-doc-sel-none');
+  if (selNoneBtn) {
+    selNoneBtn.addEventListener('click', function () {
+      overlay.querySelectorAll('.wf-doc-sel-cb').forEach(function (cb) {
+        cb.checked = false;
+        _wfSelectedDocs[cb.getAttribute('data-doc-key')] = false;
+      });
+      _wfUpdateDocSelSummary();
+    });
+  }
+}
+
+function _wfUpdateDocSelSummary() {
+  var count = Object.keys(_wfSelectedDocs).filter(function (k) { return _wfSelectedDocs[k]; }).length;
+  var el = document.getElementById('wf-doc-sel-summary');
+  if (el) el.textContent = count + ' document' + (count !== 1 ? 's' : '') + ' selected for attachment';
 }
 
 function _wfRecalcPreview(meta) {
@@ -295,6 +384,29 @@ function _wfRecalcPreview(meta) {
   if (l1el) l1el.textContent = line1;
 }
 
+function _wfGetSelectedDocAttachments() {
+  var attachments = [];
+  var generatedDocs = _wfGeneratedDocs || {};
+
+  Object.keys(_wfSelectedDocs).forEach(function (key) {
+    if (!_wfSelectedDocs[key]) return;
+
+    if (key.startsWith('gen_')) {
+      var formId = key.slice(4);
+      var doc = generatedDocs[formId];
+      if (doc && doc.base64) {
+        attachments.push({
+          base64: doc.base64,
+          filename: doc.filename || formId + '.pdf',
+          description: doc.label || formId,
+        });
+      }
+    }
+  });
+
+  return attachments;
+}
+
 function _wfHandleCreateInvoice(meta, opts) {
   var recordId = meta.recordId;
   var fee = parseFloat(document.getElementById('wf-fee').value) || 0;
@@ -303,6 +415,8 @@ function _wfHandleCreateInvoice(meta, opts) {
   var parking = parseFloat(document.getElementById('wf-parking').value) || 0;
   var vatPct = parseFloat(document.getElementById('wf-vat').value) || 0;
   var narrative = (document.getElementById('wf-narrative') || {}).value || '';
+
+  var extraAttachments = _wfGetSelectedDocAttachments();
 
   var mergedOpts = {
     clientName: meta.clientName,
@@ -317,7 +431,103 @@ function _wfHandleCreateInvoice(meta, opts) {
     narrative: narrative,
     hasExistingInvoice: opts.hasExistingInvoice,
     invoiceStatus: opts.invoiceStatus,
+    extraAttachments: extraAttachments,
   };
 
-  _handleCreateInvoice(recordId, mergedOpts);
+  _wfHandleCreateInvoiceImpl(recordId, mergedOpts);
+}
+
+async function _wfHandleCreateInvoiceImpl(recordId, opts) {
+  if (!recordId) {
+    showToast('Save the record first before creating an invoice', 'error');
+    return;
+  }
+  if (!window.api || !window.api.quickfileCreateInvoice || !window.api.getSettings) {
+    showToast('Invoice API is not available in this environment', 'error');
+    return;
+  }
+
+  var allowDuplicate = false;
+  if (opts.hasExistingInvoice) {
+    var confirmed = await showConfirm('This record already has an invoice (' + ((opts.invoiceStatus || {}).quickfile_invoice_number || 'unknown') + ').\n\nAre you sure you want to create another invoice?');
+    if (!confirmed) return;
+    allowDuplicate = true;
+  }
+
+  if (!opts.firmName) {
+    showToast('Select the instructing firm on the record before creating an invoice.', 'error', 6500);
+    return;
+  }
+
+  var createBtn = document.getElementById('wf-bill-create');
+  if (createBtn) { createBtn.disabled = true; createBtn.textContent = 'Creating invoice...'; }
+
+  var settings = window._appSettingsCache || {};
+  var userName = settings.feeEarnerNameDefault || settings.feeEarnerName || '';
+  var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+  var firmEmail = '';
+  if (data.firmId && window.firms) {
+    var firm = window.firms.find(function (f) { return String(f.id) === String(data.firmId); });
+    if (firm) firmEmail = firm.contact_email || '';
+  }
+
+  var billingInv = '';
+  if (typeof ensureBillingDisplayInvoiceNumber === 'function') {
+    billingInv = ensureBillingDisplayInvoiceNumber({ skipSave: false });
+  }
+
+  var attachName = ([data.surname, data.forename].filter(Boolean).join('_') || 'attendance') + '-note.pdf';
+
+  try {
+    var fetchedSettings = await window.api.getSettings();
+    var builder = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : (typeof buildPdfHtml === 'function' ? buildPdfHtml : null);
+    var attachHtml = builder ? builder(data, fetchedSettings || {}) : '';
+
+    var result = await window.api.quickfileCreateInvoice({
+      attendanceId: recordId,
+      firmName: opts.firmName,
+      contactEmail: firmEmail,
+      clientName: opts.clientName || '',
+      stationName: opts.stationName || '',
+      attendanceFee: opts.attendanceFee,
+      mileageMiles: opts.mileageMiles,
+      mileageRate: opts.mileageRate,
+      parkingAmount: opts.parkingAmount,
+      vatRate: opts.vatRate,
+      narrative: opts.narrative,
+      invoiceDate: opts.attendanceDate || new Date().toISOString().slice(0, 10),
+      userName: userName,
+      billingInvoiceNumber: billingInv,
+      attachAttendanceHtml: attachHtml || undefined,
+      attachPdfFileName: attachName,
+      allowDuplicate: allowDuplicate,
+      extraAttachments: opts.extraAttachments || [],
+    });
+
+    if (result.ok) {
+      if (typeof formData === 'object' && formData) {
+        formData.quickfile_invoice_id = result.invoiceId || '';
+        formData.quickfileInvoiceNumber = result.invoiceNumber || '';
+      }
+      if (typeof quietSave === 'function') quietSave();
+
+      var attachSummary = '';
+      if (result.attachResults && result.attachResults.length) {
+        var okCount = result.attachResults.filter(function (r) { return r.ok; }).length;
+        var failCount = result.attachResults.filter(function (r) { return !r.ok; }).length;
+        attachSummary = ' | ' + okCount + ' attachment' + (okCount !== 1 ? 's' : '') + ' uploaded';
+        if (failCount > 0) attachSummary += ', ' + failCount + ' failed';
+      }
+
+      showToast('Invoice #' + (result.invoiceNumber || result.invoiceId) + ' created successfully' + attachSummary, 'success', 6000);
+
+      _wfRenderCurrentStep();
+    } else {
+      showToast('Invoice failed: ' + (result.error || 'Unknown error'), 'error', 8000);
+    }
+  } catch (err) {
+    showToast('Invoice error: ' + (err.message || String(err)), 'error', 8000);
+  } finally {
+    if (createBtn) { createBtn.disabled = false; createBtn.textContent = opts.hasExistingInvoice ? '\u26A0 Create Another Invoice' : 'Generate Invoice'; }
+  }
 }

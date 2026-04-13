@@ -313,7 +313,7 @@ function duplicateAttendance(id) {
       formData.caseStatus = 'Existing case';
       formData.clientType = 'Existing';
       renderForm(formData);
-      showView('new');
+      if (typeof navigateTo === 'function') navigateTo('new'); else showView('new');
     }, 200);
   }).catch(function() {
     showToast('Failed to duplicate record', 'error');
@@ -328,7 +328,7 @@ function openAttendance(id) {
     formData = row && row.data ? safeJson(row.data) : {};
     currentSectionIdx = 0;
     renderForm(formData);
-    showView('new');
+    if (typeof navigateTo === 'function') navigateTo('new'); else showView('new');
   }).catch(function() {
     showToast('Failed to open record', 'error');
   });

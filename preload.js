@@ -88,6 +88,8 @@ contextBridge.exposeInMainWorld('api', {
   /* LAA Official PDF forms */
   laaGenerateOfficialPdf: (params) => ipcRenderer.invoke('laa-generate-official-pdf', params),
   laaOpenOfficialTemplate: (formType) => ipcRenderer.invoke('laa-open-official-template', formType),
+  laaGeneratePdfBuffer: (params) => ipcRenderer.invoke('laa-generate-pdf-buffer', params),
+  htmlToPdfBuffer: (params) => ipcRenderer.invoke('html-to-pdf-buffer', params),
   /* Auth */
   authStatus: () => ipcRenderer.invoke('auth:status'),
   authMagicLink: (params) => ipcRenderer.invoke('auth:magic-link', params),
@@ -128,6 +130,7 @@ contextBridge.exposeInMainWorld('api', {
   appUpdateInstall: () => ipcRenderer.invoke('app-update-install'),
   appCheckUpdates: () => ipcRenderer.invoke('app-check-updates'),
   getAutoUpdateState: () => ipcRenderer.invoke('get-auto-update-state'),
+  appUpdateResetLoop: () => ipcRenderer.invoke('app-update-reset-loop'),
 });
 
 contextBridge.exposeInMainWorld('emailAPI', {
