@@ -486,6 +486,7 @@ async function _handleCreateInvoice(recordId, opts) {
       }
       if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
       if (typeof updateContextBar === 'function') updateContextBar();
+      if (typeof refreshQuickFileInvoiceRefDisplay === 'function') refreshQuickFileInvoiceRefDisplay();
       closeBillingPanel();
       _showInvoiceSuccessModal(result, opts);
     } else {

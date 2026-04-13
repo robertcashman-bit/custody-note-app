@@ -521,6 +521,7 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
         formData.quickfileInvoiceNumber = result.invoiceNumber || '';
       }
       if (typeof quietSave === 'function') quietSave();
+      if (typeof refreshQuickFileInvoiceRefDisplay === 'function') refreshQuickFileInvoiceRefDisplay();
 
       var attachSummary = '';
       if (result.attachResults && result.attachResults.length) {
