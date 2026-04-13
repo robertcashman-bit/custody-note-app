@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.194",
+      "version": "1.4.195",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "NSIS: Delete /REBOOTOK on app.asar and main exe so locked files (IDE/AV) no longer abort uninstall with error 2",
+        "Updater: disable differential downloads to avoid checksum mismatch fallbacks; persist debug NDJSON to %APPDATA%\\custody-note\\debug-1083ef.log",
+        "Updater: count each install failure once (lastCountedInstallAttemptAt); do not clear failure state on spurious update-not-available while pending"
+      ]
+    },
+    {
+      "version": "1.4.194",
+      "date": "2026-04-13",
       "changes": [
         "Smoke-test: end-to-end auto-update from v1.4.193 (with NSIS pre-clear fix)"
       ]
