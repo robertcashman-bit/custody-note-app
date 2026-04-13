@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.183",
+      "version": "1.4.184",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Fix billing view showing empty — archived records that still need invoicing now appear in the billing list",
+        "Include archived_at in billing view data for UI badges"
+      ]
+    },
+    {
+      "version": "1.4.183",
+      "date": "2026-04-13",
       "changes": [
         "Fix billing failure — remove duplicate IPC handler registration that blocked all billing and QuickFile handlers from loading",
         "Clean up duplicate previewPdfBase64 entry in preload bridge"
