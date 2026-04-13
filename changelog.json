@@ -1,9 +1,16 @@
 {
   "releases": [
     {
-      "version": "1.4.189",
+      "version": "1.4.190",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Smoke-test release to verify the fixed installer handoff from v1.4.189"
+      ]
+    },
+    {
+      "version": "1.4.189",
+      "date": "2026-04-13",
       "changes": [
         "Fix critical installer handoff race condition: window destruction in closeForInstall triggered app.quit() before quitAndInstall could spawn the NSIS installer",
         "Harden NSIS custom script with retry kill, 6s total wait (up from 2s), and file-based diagnostic logging to cn-nsis-install.log",
