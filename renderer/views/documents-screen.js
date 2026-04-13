@@ -426,13 +426,20 @@ function _wfBuildFormHtml(formId, data, meta) {
     }
 
     case 'conflict_cert': {
-      var date = _formatDateGB(data.conflictCheckDate || data.date || new Date().toISOString().slice(0, 10));
+      var attendanceDateGb = _formatDateGB(data.date || '');
+      var conflictCheckDateGb = _formatDateGB(data.conflictCheckDate || data.date || new Date().toISOString().slice(0, 10));
       var result = data.conflictCheckResult || '(not yet recorded)';
       var notes = data.conflictCheckNotes || 'None';
+      var sigDateLine = attendanceDateGb || conflictCheckDateGb || '';
+      var repSig = (typeof window.getEffectiveFeeEarnerSig === 'function') ? window.getEffectiveFeeEarnerSig(data) : (data.feeEarnerSig || '');
+      var repSigHtml = repSig
+        ? '<img class="sig-img-cert" src="' + repSig + '" alt="Fee earner signature" style="max-height:56px;max-width:320px;border:1px solid #333;padding:4px;display:block">'
+        : '<div class="sig-box"></div>';
       return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Conflict Check Certificate</title>' + _docStyles() + '</head><body>' +
         '<h1>Conflict of Interest Check \u2013 Certificate</h1>' +
         '<table><tr><th>Field</th><th>Detail</th></tr>' +
-        '<tr><td>Date of check</td><td>' + _esc(date) + '</td></tr>' +
+        '<tr><td>Police station attendance date</td><td>' + _esc(attendanceDateGb || '(not recorded)') + '</td></tr>' +
+        '<tr><td>Date of conflict check</td><td>' + _esc(conflictCheckDateGb) + '</td></tr>' +
         '<tr><td>Fee earner</td><td>' + _esc(fee) + '</td></tr>' +
         '<tr><td>Client</td><td>' + _esc(client) + '</td></tr>' +
         '<tr><td>Offence</td><td>' + _esc(offence) + '</td></tr>' +
@@ -441,8 +448,8 @@ function _wfBuildFormHtml(formId, data, meta) {
         '<tr><td>Notes</td><td>' + _esc(notes) + '</td></tr>' +
         '</table>' +
         '<p>I confirm that a conflict of interest check was carried out prior to advising the above-named client and that no conflict exists.</p>' +
-        '<h2>Signature</h2><div class="sig-box"></div>' +
-        '<p>Name: ' + _esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ____________</p>' +
+        '<h2>Representative signature</h2>' + repSigHtml +
+        '<p>Name: ' + _esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ' + _esc(sigDateLine || '____________') + '</p>' +
         '<div class="footer">Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
         '</body></html>';
     }

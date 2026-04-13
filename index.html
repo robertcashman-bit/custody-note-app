@@ -912,6 +912,28 @@
           <label style="margin-top:0.75rem;">Fee Earner Name</label>
           <input type="text" id="setting-fee-earner-name" class="settings-input" placeholder="e.g. Robert Smith">
           <p class="settings-hint" style="margin-top:4px;">Auto-fills fee earner name in conflict certificates and LAA declarations.</p>
+          <label style="margin-top:0.75rem;">Fee earner signature on documents</label>
+          <div class="settings-radio-group" style="margin:6px 0 10px;display:flex;flex-direction:column;gap:8px;">
+            <label class="toggle-row" style="margin:0;">
+              <input type="radio" name="fee-earner-sig-mode" id="setting-fee-earner-sig-mode-draw" value="draw" checked>
+              <span>Draw or sign on each attendance record (signature pad on the form)</span>
+            </label>
+            <label class="toggle-row" style="margin:0;">
+              <input type="radio" name="fee-earner-sig-mode" id="setting-fee-earner-sig-mode-saved" value="saved">
+              <span>Use a saved image (e.g. scan or photo of your usual wet signature)</span>
+            </label>
+          </div>
+          <div id="fee-earner-sig-saved-panel" style="display:none;margin-bottom:10px;padding:10px 12px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;background:var(--input-bg,#f8fafc);">
+            <p class="settings-hint" style="margin:0 0 8px 0;">PNG or JPG works best. This image is used on PDFs, LAA forms, and the conflict certificate when saved mode is on.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+              <button type="button" id="btn-fee-earner-sig-pick" class="btn btn-secondary btn-small">Choose image…</button>
+              <button type="button" id="btn-fee-earner-sig-clear" class="btn btn-secondary btn-small">Remove image</button>
+            </div>
+            <div id="fee-earner-sig-preview-wrap" style="margin-top:10px;display:none;">
+              <span class="settings-hint" style="display:block;margin-bottom:4px;">Preview</span>
+              <img id="fee-earner-sig-preview" alt="Saved signature preview" style="max-height:72px;max-width:320px;border:1px solid #cbd5e1;border-radius:4px;padding:4px;background:#fff;">
+            </div>
+          </div>
           <label style="margin-top:0.75rem;">Office Postcode (travel origin)</label>
           <input type="text" id="setting-office-postcode" class="settings-input" placeholder="e.g. ME1 1AA">
           <p class="settings-hint" style="margin-top:4px;">Auto-fills the origin postcode for journey-to-station mileage on new records.</p>

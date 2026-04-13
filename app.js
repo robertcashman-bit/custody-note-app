@@ -2090,6 +2090,20 @@ var REQUIRED_FIELD_KEYS = [
     var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
     return day + '/' + m + '/' + y;
   }
+
+  /**
+   * Fee earner signature for PDFs/LAA: either a scanned image stored in Settings (saved mode)
+   * or the per-record canvas capture (draw mode / fallback).
+   */
+  function getEffectiveFeeEarnerSig(formData) {
+    const d = formData || {};
+    const s = window._appSettingsCache || {};
+    if ((s.feeEarnerSigMode || 'draw') === 'saved' && s.feeEarnerSigMaster && String(s.feeEarnerSigMaster).indexOf('data:image') === 0) {
+      return s.feeEarnerSigMaster;
+    }
+    return d.feeEarnerSig || '';
+  }
+  window.getEffectiveFeeEarnerSig = getEffectiveFeeEarnerSig;
   /* ─── INPUT VALIDATION HELPERS ─── */
   var PHONE_REGEX = /^[\d\s+\-()]*$/;
 
@@ -3045,7 +3059,7 @@ var REQUIRED_FIELD_KEYS = [
     if (!d.firmId) flags.push({ key: 'no-firm', label: 'No firm', tone: 'warning' });
     if (status !== 'finalised' && status !== 'completed') {
       if (d._formType !== 'telephone' && !d.clientSig) flags.push({ key: 'client-sig', label: 'Client sign', tone: 'warning' });
-      if (!d.feeEarnerSig) flags.push({ key: 'fee-earner-sig', label: 'Rep sign', tone: 'warning' });
+      if (!getEffectiveFeeEarnerSig(d)) flags.push({ key: 'fee-earner-sig', label: 'Rep sign', tone: 'warning' });
       if (ageMs > staleDraftMs && !isOutcomeDecisionRecorded(d.outcomeDecision || getLegacyOutcomeDecision(d.caseOutcomeStatus, d._formType))) {
         flags.push({ key: 'outcome', label: 'Outcome', tone: 'danger' });
       }
@@ -3327,7 +3341,7 @@ var REQUIRED_FIELD_KEYS = [
       if (recordAgeMs > sevenDaysMs && !isOutcomeDecisionRecorded(d.outcomeDecision || getLegacyOutcomeDecision(d.caseOutcomeStatus, d._formType))) {
         issues.push({ id: id, name: name, reason: 'No outcome recorded' });
       }
-      if (!d.feeEarnerSig) issues.push({ id: id, name: name, reason: 'Missing fee earner signature' });
+      if (!getEffectiveFeeEarnerSig(d)) issues.push({ id: id, name: name, reason: 'Missing fee earner signature' });
       if (!d.firmId) issues.push({ id: id, name: name, reason: 'No firm assigned' });
     });
 
@@ -4466,6 +4480,30 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  function applyFeeEarnerSigModeUI(mode) {
+    const saved = mode === 'saved';
+    const panel = document.getElementById('fee-earner-sig-saved-panel');
+    if (panel) panel.style.display = saved ? 'block' : 'none';
+    const rDraw = document.getElementById('setting-fee-earner-sig-mode-draw');
+    const rSaved = document.getElementById('setting-fee-earner-sig-mode-saved');
+    if (rDraw && rSaved) {
+      rDraw.checked = !saved;
+      rSaved.checked = saved;
+    }
+  }
+  function updateFeeEarnerSigPreview(dataUrl) {
+    const wrap = document.getElementById('fee-earner-sig-preview-wrap');
+    const img = document.getElementById('fee-earner-sig-preview');
+    if (!wrap || !img) return;
+    if (dataUrl && String(dataUrl).indexOf('data:image') === 0) {
+      img.src = dataUrl;
+      wrap.style.display = 'block';
+    } else {
+      img.removeAttribute('src');
+      wrap.style.display = 'none';
+    }
+  }
+
   function loadSettings() {
     if (!window.api) return;
     loadLicenceSettingsUI();
@@ -4547,6 +4585,9 @@ var REQUIRED_FIELD_KEYS = [
       if (reducedMotion) reducedMotion.checked = s.reducedMotion === 'true';
       applyLayoutPreferences(s || {});
       updateBackupDestSummary(s);
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
+      applyFeeEarnerSigModeUI(s.feeEarnerSigMode || 'draw');
+      updateFeeEarnerSigPreview(s.feeEarnerSigMaster || '');
     });
     if (window.api.getDbPath) {
       window.api.getDbPath().then(p => {
@@ -4723,6 +4764,10 @@ var REQUIRED_FIELD_KEYS = [
       billingMileageRate: document.getElementById('setting-billing-mileage-rate')?.value?.trim() || '0.45',
       billingVatRate: document.getElementById('setting-billing-vat-rate')?.value?.trim() || '20',
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
+      feeEarnerSigMode: (function() {
+        const c = document.querySelector('input[name="fee-earner-sig-mode"]:checked');
+        return c && c.value === 'saved' ? 'saved' : 'draw';
+      })(),
       officePostcode: document.getElementById('setting-office-postcode')?.value?.trim() || '',
       darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
       fontSize: document.getElementById('setting-font-size')?.value || '16',
@@ -8018,6 +8063,32 @@ var REQUIRED_FIELD_KEYS = [
       grid.appendChild(wrap);
       return;
     } else if (f.type === 'signature') {
+      if (f.sigKey === 'feeEarnerSig') {
+        const s = window._appSettingsCache || {};
+        const savedMode = (s.feeEarnerSigMode || 'draw') === 'saved' && s.feeEarnerSigMaster && String(s.feeEarnerSigMaster).indexOf('data:image') === 0;
+        if (savedMode) {
+          const sw = document.createElement('div');
+          sw.className = 'signature-wrap fee-earner-sig-saved-mode';
+          const note = document.createElement('p');
+          note.className = 'settings-hint';
+          note.style.marginBottom = '10px';
+          note.innerHTML = 'Using your <strong>saved signature image</strong> from Settings. Change mode or image under <strong>Settings \u2192 Your Details</strong>.';
+          sw.appendChild(note);
+          const prev = document.createElement('img');
+          prev.className = 'sig-img-cert';
+          prev.src = s.feeEarnerSigMaster;
+          prev.alt = 'Saved fee earner signature';
+          prev.style.maxHeight = '72px';
+          prev.style.border = '1px solid #cbd5e1';
+          prev.style.borderRadius = '6px';
+          prev.style.padding = '6px';
+          prev.style.background = '#fff';
+          sw.appendChild(prev);
+          wrap.appendChild(sw);
+          grid.appendChild(wrap);
+          return;
+        }
+      }
       const sw = document.createElement('div'); sw.className = 'signature-wrap';
       const canvas = document.createElement('canvas'); canvas.className = 'signature-canvas';
       canvas.width = 900; canvas.height = 200; canvas.dataset.sigKey = f.sigKey;
@@ -10066,7 +10137,8 @@ var REQUIRED_FIELD_KEYS = [
     const h = esc;
     const row = (l, v) => v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : '';
     const check = (k, l) => d[k] ? '<span class="chk">\u2611 ' + h(l) + '</span>' : '<span class="chk unc">\u2610 ' + h(l) + '</span>';
-    const sig = k => d[k] ? '<img src="' + d[k] + '" class="sig-img" alt="">' : '<em class="sig-unsigned">Not signed</em>';
+    const sigUri = function(k) { return k === 'feeEarnerSig' ? getEffectiveFeeEarnerSig(d) : (d[k] || ''); };
+    const sig = k => sigUri(k) ? '<img src="' + sigUri(k) + '" class="sig-img" alt="">' : '<em class="sig-unsigned">Not signed</em>';
     const sn = d.policeStationName || '';
     const firmName = d.firmName || '';
     const brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
@@ -10392,7 +10464,7 @@ row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice se
     row('Client name', d.laaClientFullName) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
     (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
     row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
-  var hasSig = d.clientSig || d.feeEarnerSig || d.laaPartnerSig;
+  var hasSig = d.clientSig || getEffectiveFeeEarnerSig(d) || d.laaPartnerSig;
   if (!laaRows && !hasSig) return '';
   return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
     ((d.workType === 'Police Station Telephone Attendance' || (d.sufficientBenefitTest && d.sufficientBenefitTest.split('|').indexOf('Telephone advice only') >= 0)) ? '<p style="font-size:10px;color:#64748b;margin-bottom:8px;"><em>For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.</em></p>' : '') +
@@ -10467,7 +10539,8 @@ PDF_CASENOTE_ADVERT +
   function buildTelephonePdfHtml(d, settings) {
     var h = function(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
     var row = function(l, v) { return v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : ''; };
-    var sig = function(k) { return d[k] ? '<img src="' + d[k] + '" class="sig-img" alt="">' : '<em class="sig-unsigned">(not signed)</em>'; };
+    var sigUri = function(k) { return k === 'feeEarnerSig' ? getEffectiveFeeEarnerSig(d) : (d[k] || ''); };
+    var sig = function(k) { return sigUri(k) ? '<img src="' + sigUri(k) + '" class="sig-img" alt="">' : '<em class="sig-unsigned">(not signed)</em>'; };
     var sn = d.policeStationName || d.policeStationId || '';
     var firmName = d.firmName || d.firmId || '';
     var brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
@@ -10564,7 +10637,7 @@ PDF_CASENOTE_ADVERT +
       row('Client Name', d.laaClientFullName) +
       '</table>' +
       (d.clientSig ? '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' : '') +
-      (d.feeEarnerSig ? '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>' : '') +
+      (getEffectiveFeeEarnerSig(d) ? '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>' : '') +
       '<table>' + row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification) +
       row('UFN', d.ufn) + row('Firm LAA Account', d.firmLaaAccount) +
       row('Ethnic Origin', d.ethnicOriginCode) + row('Disability', d.disabilityCode) +
@@ -10579,7 +10652,8 @@ PDF_CASENOTE_ADVERT +
     var h = function(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
     var row = function(l, v) { return v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : ''; };
     var check = function(k, l) { return d[k] ? '<span class="chk">\u2611 ' + h(l) + '</span>' : '<span class="chk unc">\u2610 ' + h(l) + '</span>'; };
-    var sig = function(k) { return d[k] ? '<img src="' + d[k] + '" class="sig-img" alt="">' : '<em class="sig-unsigned">Not signed</em>'; };
+    var sigUri = function(k) { return k === 'feeEarnerSig' ? getEffectiveFeeEarnerSig(d) : (d[k] || ''); };
+    var sig = function(k) { return sigUri(k) ? '<img src="' + sigUri(k) + '" class="sig-img" alt="">' : '<em class="sig-unsigned">Not signed</em>'; };
     var sn = d.policeStationName || d.policeStationId || '';
     var firmName = d.firmName || d.firmId || '';
     var brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
@@ -10839,7 +10913,7 @@ PDF_CASENOTE_ADVERT +
           row('Client name', d.laaClientFullName) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
           (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
           row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
-        var hasSig = d.clientSig || d.feeEarnerSig || d.laaPartnerSig;
+        var hasSig = d.clientSig || getEffectiveFeeEarnerSig(d) || d.laaPartnerSig;
         if (!laaRows && !hasSig) return '';
         return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
           '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
@@ -11276,6 +11350,7 @@ PDF_CASENOTE_ADVERT +
       'table{width:100%;border-collapse:collapse;margin-bottom:12px}' +
       'td,th{border:1px solid #ccc;padding:5px 8px;font-size:10pt}th{background:#eff6ff;font-weight:bold}' +
       '.sig-box{border:1px solid #333;height:60px;margin-top:4px;margin-bottom:12px}' +
+      '.sig-img-cert{max-height:56px;max-width:320px;display:block;border:1px solid #333;padding:4px;margin:4px 0}' +
       '.footer{font-size:8pt;color:#555;margin-top:2cm;border-top:1px solid #ccc;padding-top:6px}' +
       '@media print{@page{margin:1.5cm}}</style>';
   }
@@ -11285,16 +11360,23 @@ PDF_CASENOTE_ADVERT +
     const d = getFormData();
     const client = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || 'Client not yet named';
     const fee = d.feeEarnerName || d.laaFeeEarnerFullName || '';
-    const date = formatDateGB(d.conflictCheckDate || d.date || new Date().toISOString().slice(0, 10));
+    const attendanceDateGb = formatDateGB(d.date || '');
+    const conflictCheckDateGb = formatDateGB(d.conflictCheckDate || d.date || new Date().toISOString().slice(0, 10));
     const result = d.conflictCheckResult || '(not yet recorded)';
     const notes = d.conflictCheckNotes || 'None';
     const offence = d.offenceSummary || d.offence1Details || '(not yet recorded)';
     const station = d.policeStationName || '(not yet recorded)';
+    const sigDateLine = attendanceDateGb || conflictCheckDateGb || '';
+    const repSig = getEffectiveFeeEarnerSig(d);
+    const repSigHtml = repSig
+      ? '<img class="sig-img-cert" src="' + repSig + '" alt="Fee earner signature">'
+      : '<div class="sig-box"></div>';
 
     const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Conflict Check Certificate</title>' + docStyles() + '</head><body>' +
       '<h1>Conflict of Interest Check – Certificate</h1>' +
       '<table><tr><th>Field</th><th>Detail</th></tr>' +
-      '<tr><td>Date of check</td><td>' + esc(date) + '</td></tr>' +
+      '<tr><td>Police station attendance date</td><td>' + esc(attendanceDateGb || '(not recorded)') + '</td></tr>' +
+      '<tr><td>Date of conflict check</td><td>' + esc(conflictCheckDateGb) + '</td></tr>' +
       '<tr><td>Fee earner</td><td>' + esc(fee) + '</td></tr>' +
       '<tr><td>Client</td><td>' + esc(client) + '</td></tr>' +
       '<tr><td>Offence</td><td>' + esc(offence) + '</td></tr>' +
@@ -11303,9 +11385,9 @@ PDF_CASENOTE_ADVERT +
       '<tr><td>Notes</td><td>' + esc(notes) + '</td></tr>' +
       '</table>' +
       '<p>I confirm that a conflict of interest check was carried out prior to advising the above-named client and that no conflict exists (or, if positive, that the matter has been referred as noted above).</p>' +
-      '<h2>Signature</h2>' +
-      '<div class="sig-box"></div>' +
-      '<p>Name: ' + esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ____________</p>' +
+      '<h2>Representative signature</h2>' +
+      repSigHtml +
+      '<p>Name: ' + esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ' + esc(sigDateLine || '____________') + '</p>' +
       '<div class="footer">© Defence Legal Services Ltd &nbsp;|&nbsp; Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
       PDF_CASENOTE_ADVERT +
       '</body></html>';
@@ -12602,6 +12684,8 @@ PDF_CASENOTE_ADVERT +
     window._billingDefaults = {};
     window.api.getSettings().then(function(s) {
       window._appSettingsCache = s || {};
+      applyFeeEarnerSigModeUI(s.feeEarnerSigMode || 'draw');
+      updateFeeEarnerSigPreview(s.feeEarnerSigMaster || '');
       window._billingDefaults = {
         attendanceFee: parseFloat(s.billingAttendanceFee) || 160.00,
         mileageRate: parseFloat(s.billingMileageRate) || 0.45,
@@ -14745,6 +14829,54 @@ PDF_CASENOTE_ADVERT +
       window.api.setSettings({ feeEarnerNameDefault: e.target.value.trim() }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     }, 800));
 
+    document.querySelectorAll('input[name="fee-earner-sig-mode"]').forEach(function(r) {
+      r.addEventListener('change', function() {
+        const mode = document.querySelector('input[name="fee-earner-sig-mode"]:checked')?.value === 'saved' ? 'saved' : 'draw';
+        applyFeeEarnerSigModeUI(mode);
+        window.api.setSettings({ feeEarnerSigMode: mode }).then(function() {
+          return window.api.getSettings();
+        }).then(function(s) {
+          window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
+          showSettingsSavedToast();
+          if (typeof renderForm === 'function') renderForm(formData);
+        }).catch(function(e) { console.error('[setSettings]', e); });
+      });
+    });
+    document.getElementById('btn-fee-earner-sig-pick')?.addEventListener('click', function() {
+      if (!window.api || !window.api.pickImage) {
+        showToast('Image picker not available', 'error');
+        return;
+      }
+      window.api.pickImage().then(function(res) {
+        if (!res || res.error) {
+          if (res && res.error) showToast(res.error, 'error');
+          return;
+        }
+        if (!res.dataUrl) return;
+        window.api.setSettings({ feeEarnerSigMaster: res.dataUrl, feeEarnerSigMode: 'saved' }).then(function() {
+          return window.api.getSettings();
+        }).then(function(s) {
+          window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
+          applyFeeEarnerSigModeUI('saved');
+          updateFeeEarnerSigPreview(s.feeEarnerSigMaster || '');
+          const rSaved = document.getElementById('setting-fee-earner-sig-mode-saved');
+          if (rSaved) rSaved.checked = true;
+          showToast('Signature image saved', 'success');
+          if (typeof renderForm === 'function') renderForm(formData);
+        }).catch(function(e) { console.error('[setSettings]', e); showToast('Could not save signature image', 'error'); });
+      });
+    });
+    document.getElementById('btn-fee-earner-sig-clear')?.addEventListener('click', function() {
+      window.api.setSettings({ feeEarnerSigMaster: '' }).then(function() {
+        return window.api.getSettings();
+      }).then(function(s) {
+        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
+        updateFeeEarnerSigPreview('');
+        showToast('Saved signature removed', 'info');
+        if (typeof renderForm === 'function') renderForm(formData);
+      }).catch(function(e) { console.error('[setSettings]', e); });
+    });
+
     document.getElementById('setting-office-postcode')?.addEventListener('input', debounce((e) => {
       window.api.setSettings({ officePostcode: e.target.value.trim() }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     }, 800));
@@ -14919,7 +15051,7 @@ PDF_CASENOTE_ADVERT +
     }
 
     var needsClientSig = !data.clientSig;
-    var needsFeeEarnerSig = !data.feeEarnerSig;
+    var needsFeeEarnerSig = !getEffectiveFeeEarnerSig(data);
     var sigQueue = [];
     if (needsClientSig) sigQueue.push({ sigKey: 'clientSig', label: 'Client Signature — ' + title });
     if (needsFeeEarnerSig) sigQueue.push({ sigKey: 'feeEarnerSig', label: 'Fee Earner Signature — ' + title });
@@ -15015,7 +15147,8 @@ PDF_CASENOTE_ADVERT +
 
   function generateLaaFormPdf(formType, title, data) {
     showToast('Generating ' + title + ' PDF…', 'info');
-    window.api.laaGenerateOfficialPdf({ formType: formType, data: data }).then(function(result) {
+    var payload = Object.assign({}, data, { feeEarnerSig: getEffectiveFeeEarnerSig(data) });
+    window.api.laaGenerateOfficialPdf({ formType: formType, data: payload }).then(function(result) {
       if (result.error) {
         showToast('PDF error: ' + result.error, 'error');
         return;
@@ -15036,7 +15169,7 @@ PDF_CASENOTE_ADVERT +
     var sigStatus = '';
     if (data.clientSig) sigStatus += '<span style="color:#22c55e;font-size:0.8rem;margin-right:0.75rem;" title="Client has signed">&#10003; Client signed</span>';
     else sigStatus += '<span style="color:#ef4444;font-size:0.8rem;margin-right:0.75rem;" title="Client has NOT signed">&#10007; Client unsigned</span>';
-    if (data.feeEarnerSig) sigStatus += '<span style="color:#22c55e;font-size:0.8rem;" title="Fee earner has signed">&#10003; Fee earner signed</span>';
+    if (getEffectiveFeeEarnerSig(data)) sigStatus += '<span style="color:#22c55e;font-size:0.8rem;" title="Fee earner has signed">&#10003; Fee earner signed</span>';
     else sigStatus += '<span style="color:#ef4444;font-size:0.8rem;" title="Fee earner has NOT signed">&#10007; Fee earner unsigned</span>';
 
     modal.innerHTML =
