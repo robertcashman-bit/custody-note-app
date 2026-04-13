@@ -5867,6 +5867,21 @@ ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
   }
 });
 
+/** Save a base64 PDF to temp and open in system PDF viewer */
+ipcMain.handle('preview-pdf-base64', async (_, { base64, filename }) => {
+  try {
+    const tempDir = app.getPath('temp');
+    const safeName = (filename || `preview-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
+    const filePath = path.join(tempDir, safeName);
+    fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
+    await shell.openPath(filePath);
+    return { ok: true, path: filePath };
+  } catch (err) {
+    console.error('[preview-pdf-base64]', err);
+    return { ok: false, error: err.message || String(err) };
+  }
+});
+
 /** Returns PDF as base64 for in-app preview (renderer); work stays in main process. */
 ipcMain.handle('preview-pdf-from-html', async (_, { html }) => {
   try {
