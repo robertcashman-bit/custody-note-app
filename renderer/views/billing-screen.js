@@ -9,7 +9,6 @@
                app.js globals
    ═══════════════════════════════════════════════════════ */
 
-var _wfBillingLoaded = false;
 var _wfBillingOpts = null;
 var _wfSelectedDocs = {};
 
@@ -248,7 +247,8 @@ function _wfBuildDocumentSelectionPanel(meta) {
   }
 
   if (attachments.length) {
-    html += '<div class="wf-doc-sel-group"><span class="wf-doc-sel-group-label">Uploaded Files</span></div>';
+    html += '<div class="wf-doc-sel-group"><span class="wf-doc-sel-group-label">Uploaded Files</span>' +
+      '<span class="wf-doc-sel-hint">(uploaded files must be attached to QuickFile manually)</span></div>';
     attachments.forEach(function (att) {
       var renamed = att.documentType ? formatAttachmentFilename({
         clientName: meta.clientName, policeStation: meta.stationName,
@@ -256,10 +256,7 @@ function _wfBuildDocumentSelectionPanel(meta) {
         customDocumentType: att.customDocumentType, firmName: meta.firmName,
         extension: _wfExtFromName(att.originalName),
       }) : att.originalName;
-      var checked = _wfSelectedDocs['att_' + att.index] !== false ? ' checked' : '';
-      if (_wfSelectedDocs['att_' + att.index] === undefined) _wfSelectedDocs['att_' + att.index] = true;
-      html += '<label class="wf-doc-sel-item">' +
-        '<input type="checkbox" class="wf-doc-sel-cb" data-doc-key="att_' + att.index + '"' + checked + '>' +
+      html += '<label class="wf-doc-sel-item wf-doc-sel-item--disabled">' +
         '<span class="wf-doc-sel-icon">&#128206;</span>' +
         '<span class="wf-doc-sel-name">' + _wfEsc(renamed) + '</span>' +
       '</label>';
@@ -360,11 +357,13 @@ function _wfUpdateDocSelSummary() {
 }
 
 function _wfRecalcPreview(meta) {
-  var fee = parseFloat(document.getElementById('wf-fee').value) || 0;
-  var miles = parseFloat(document.getElementById('wf-miles').value) || 0;
-  var rate = parseFloat(document.getElementById('wf-rate').value) || 0;
-  var parking = parseFloat(document.getElementById('wf-parking').value) || 0;
-  var vatPct = parseFloat(document.getElementById('wf-vat').value) || 0;
+  var feeEl = document.getElementById('wf-fee');
+  if (!feeEl) return;
+  var fee = parseFloat(feeEl.value) || 0;
+  var miles = parseFloat((document.getElementById('wf-miles') || {}).value) || 0;
+  var rate = parseFloat((document.getElementById('wf-rate') || {}).value) || 0;
+  var parking = parseFloat((document.getElementById('wf-parking') || {}).value) || 0;
+  var vatPct = parseFloat((document.getElementById('wf-vat') || {}).value) || 0;
   var totals = calculateInvoiceTotals({
     fixedFee: fee, mileageMiles: miles, mileageRate: rate,
     parkingAmount: parking, vatRate: vatPct / 100,
@@ -438,6 +437,7 @@ function _wfHandleCreateInvoice(meta, opts) {
 }
 
 async function _wfHandleCreateInvoiceImpl(recordId, opts) {
+  console.log('[billing] Invoice creation started for record', recordId);
   if (!recordId) {
     showToast('Save the record first before creating an invoice', 'error');
     return;
@@ -519,6 +519,7 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
         if (failCount > 0) attachSummary += ', ' + failCount + ' failed';
       }
 
+      console.log('[billing] Invoice created: #' + (result.invoiceNumber || result.invoiceId));
       showToast('Invoice #' + (result.invoiceNumber || result.invoiceId) + ' created successfully' + attachSummary, 'success', 6000);
 
       _wfRenderCurrentStep();
@@ -526,6 +527,7 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
       showToast('Invoice failed: ' + (result.error || 'Unknown error'), 'error', 8000);
     }
   } catch (err) {
+    console.error('[billing] Invoice creation failed:', err);
     showToast('Invoice error: ' + (err.message || String(err)), 'error', 8000);
   } finally {
     if (createBtn) { createBtn.disabled = false; createBtn.textContent = opts.hasExistingInvoice ? '\u26A0 Create Another Invoice' : 'Generate Invoice'; }

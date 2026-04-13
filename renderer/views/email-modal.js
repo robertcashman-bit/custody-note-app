@@ -312,7 +312,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
           id: recordId,
           data: Object.assign({}, data),
           status: recordStatus || 'draft'
-        }).catch(function() {});
+        }).catch(function(err) { console.error('[email-modal] Save oicEmail failed:', err); });
       }
       _openUrl(to, subject, body);
     });

@@ -4308,7 +4308,7 @@ var REQUIRED_FIELD_KEYS = [
     recentStationIds = recentStationIds.filter(x => x !== id);
     recentStationIds.unshift(id);
     if (recentStationIds.length > 5) recentStationIds = recentStationIds.slice(0, 5);
-    window.api.setSettings({ recentStations: JSON.stringify(recentStationIds) });
+    window.api.setSettings({ recentStations: JSON.stringify(recentStationIds) }).catch(function(e) { console.error('[setSettings]', e); });
   }
 
   function loadMagistratesCourts() {
@@ -4894,7 +4894,7 @@ var REQUIRED_FIELD_KEYS = [
             contact_phone: phoneVal,
             contact_email: editRow.querySelector('.fe-email').value.trim(),
           });
-          window.api.firmSave(updated).then(() => { showToast('Firm updated', 'success'); loadFirmsList(); });
+          window.api.firmSave(updated).then(() => { showToast('Firm updated', 'success'); loadFirmsList(); }).catch(function(err) { showToast('Failed to save firm: ' + (err && err.message || ''), 'error'); });
         });
         var _fePhone = editRow.querySelector('.fe-phone');
         if (_fePhone) attachPhoneValidation(_fePhone);
@@ -6301,7 +6301,7 @@ var REQUIRED_FIELD_KEYS = [
         if (window.api && window.api.setSettings) {
           var patch = {};
           patch[key] = String(state.targetWidth);
-          window.api.setSettings(patch);
+          window.api.setSettings(patch).catch(function(e) { console.error('[setSettings]', e); });
         }
       }
 
@@ -9781,6 +9781,7 @@ var REQUIRED_FIELD_KEYS = [
           }
         }).catch(function(err) {
           console.error('[FINALISE] Duplicate check failed:', err);
+          showToast('Duplicate check unavailable — proceeding with finalise', 'warning', 3000);
           waitForDraftThenFinalise();
         });
       }
@@ -9801,6 +9802,7 @@ var REQUIRED_FIELD_KEYS = [
           }
         }).catch(function(err) {
           console.error('[FINALISE] Confirm dialog error:', err);
+          showToast('Finalise interrupted — please try again', 'warning');
           _finalising = false;
           startAutoSave();
         });
@@ -11829,7 +11831,7 @@ PDF_CASENOTE_ADVERT +
       document.getElementById('scratchpad')?.classList.toggle('fullscreen');
     });
     document.getElementById('scratchpad-text')?.addEventListener('input', debounce((e) => {
-      window.api.setSettings({ scratchpadText: e.target.value });
+      window.api.setSettings({ scratchpadText: e.target.value }).catch(function(e) { console.error('[setSettings]', e); });
     }, 1000));
   }
 
@@ -13140,7 +13142,7 @@ PDF_CASENOTE_ADVERT +
       const dm = document.getElementById('setting-dark-mode');
       if (dm) dm.checked = isDark;
       updateDarkModeToggleIcon(isDark);
-      if (window.api) window.api.setSettings({ darkMode: isDark ? 'true' : 'false' });
+      if (window.api) window.api.setSettings({ darkMode: isDark ? 'true' : 'false' }).catch(function(e) { console.error('[setSettings]', e); });
     });
     /* settings-back-btn already attached above */
     document.getElementById('setting-show-supervisor-review')?.addEventListener('change', (e) => {
