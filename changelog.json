@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.188",
+      "version": "1.4.189",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Fix critical installer handoff race condition: window destruction in closeForInstall triggered app.quit() before quitAndInstall could spawn the NSIS installer",
+        "Harden NSIS custom script with retry kill, 6s total wait (up from 2s), and file-based diagnostic logging to cn-nsis-install.log",
+        "Add non-silent diagnostic install mode for visible NSIS error diagnosis",
+        "Suppress disableWebInstaller warning by setting autoUpdater.disableWebInstaller = true"
+      ]
+    },
+    {
+      "version": "1.4.188",
+      "date": "2026-04-13",
       "changes": [
         "Smoke-test release for the new modular updater to validate 1.4.187 to 1.4.188 update flow",
         "No functional app changes beyond the updater verification bump"
