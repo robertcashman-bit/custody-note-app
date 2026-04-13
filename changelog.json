@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.200",
+      "version": "1.4.201",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Matter completion workflow (step 3) with office checklist and post-invoice CTAs",
+        "clearer practice-wide vs current-matter billing labels",
+        "billing readiness panel wired",
+        "finalised to completed status for office handoff",
+        "tests and audit updates"
+      ]
+    },
+    {
+      "version": "1.4.200",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "End-to-end auto-update test from v1.4.199 with customRemoveFiles override"
       ]
@@ -14,14 +26,16 @@
       "changes": [
         "CRITICAL: override NSIS customRemoveFiles to skip un.atomicRMDir that aborts on locked files — use Delete /REBOOTOK + RMDir /r instead",
         "Root cause: Cursor IDE holds app.asar handle; un.atomicRMDir rename fails → 'Failed to uninstall old application files' error 2 → abort"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.198",
       "date": "2026-04-13",
       "changes": [
         "End-to-end auto-update verification from v1.4.197"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.197",
@@ -29,14 +43,16 @@
       "changes": [
         "CRITICAL FIX: remove /T (tree-kill) from NSIS taskkill — it was killing the installer itself because Windows sees it as a child of Custody Note.exe",
         "Fix lock probe: bypass Electron ASAR intercept with process.noAsar for accurate file-lock detection"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.196",
       "date": "2026-04-13",
       "changes": [
         "End-to-end auto-update verification from v1.4.195 with NSIS REBOOTOK fix"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.195",
@@ -45,14 +61,16 @@
         "NSIS: Delete /REBOOTOK on app.asar and main exe so locked files (IDE/AV) no longer abort uninstall with error 2",
         "Updater: disable differential downloads to avoid checksum mismatch fallbacks; persist debug NDJSON to %APPDATA%\\custody-note\\debug-1083ef.log",
         "Updater: count each install failure once (lastCountedInstallAttemptAt); do not clear failure state on spurious update-not-available while pending"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.194",
       "date": "2026-04-13",
       "changes": [
         "Smoke-test: end-to-end auto-update from v1.4.193 (with NSIS pre-clear fix)"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.193",
@@ -60,28 +78,32 @@
       "changes": [
         "NSIS installer: pre-clear app.asar and exe with rename fallback to survive external file locks from IDE indexers and antivirus",
         "Root cause found: Cursor IDE holds file handles on app.asar, blocking all NSIS uninstall/replace operations"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.192",
       "date": "2026-04-13",
       "changes": [
         "Smoke-test release to verify end-to-end auto-update from v1.4.191"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.191",
       "date": "2026-04-13",
       "changes": [
         "Force app.exit(0) 500ms after quitAndInstall to release file handles immediately, preventing NSIS 'failed to uninstall old application files' errors caused by slow graceful shutdown"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.190",
       "date": "2026-04-13",
       "changes": [
         "Smoke-test release to verify the fixed installer handoff from v1.4.189"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.189",
@@ -91,7 +113,8 @@
         "Harden NSIS custom script with retry kill, 6s total wait (up from 2s), and file-based diagnostic logging to cn-nsis-install.log",
         "Add non-silent diagnostic install mode for visible NSIS error diagnosis",
         "Suppress disableWebInstaller warning by setting autoUpdater.disableWebInstaller = true"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.188",
@@ -99,7 +122,8 @@
       "changes": [
         "Smoke-test release for the new modular updater to validate 1.4.187 to 1.4.188 update flow",
         "No functional app changes beyond the updater verification bump"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.187",
@@ -110,7 +134,8 @@
         "Use a single guarded quitAndInstall path and remove the unsafe direct install fallback",
         "Keep existing update IPC/UI wiring while improving recovery messages and aligning status text with the 6-hour check cadence",
         "Make NSIS runAfterFinish explicit and add focused updater regression tests"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.186",
@@ -118,7 +143,8 @@
       "changes": [
         "Restore a direct end-of-case button for Documents, Attachments and Invoice",
         "Make the documents and invoice workflow reachable from the final page without relying on the bottom nav or post-finalise banner"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.185",
@@ -131,7 +157,8 @@
         "Fix null-safety crash in billing preview recalculation when elements are not yet rendered",
         "Remove dead _wfBillingLoaded variable from billing screen",
         "Add diagnostic logging to billing view load, invoice creation, and email-modal save"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.184",
@@ -139,7 +166,8 @@
       "changes": [
         "Fix billing view showing empty — archived records that still need invoicing now appear in the billing list",
         "Include archived_at in billing view data for UI badges"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.183",
@@ -147,7 +175,8 @@
       "changes": [
         "Fix billing failure — remove duplicate IPC handler registration that blocked all billing and QuickFile handlers from loading",
         "Clean up duplicate previewPdfBase64 entry in preload bridge"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.182",
@@ -156,7 +185,8 @@
         "Fix blank document preview — PDFs now open in system viewer",
         "Add Save to Desktop and Email buttons for each generated form",
         "Remove redundant Section 9 billing card — use post-finalise bar or bottom nav instead"
-      ]
+      ],
+      "latest": false
     },
     {
       "version": "1.4.181",
