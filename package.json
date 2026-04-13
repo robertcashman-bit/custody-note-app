@@ -1,6 +1,6 @@
 {
   "name": "custody-note",
-  "version": "1.4.180",
+  "version": "1.4.181",
   "lastUpdated": "2026-04-13",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
@@ -61,13 +61,14 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "allowElevation": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "menuCategory": "Custody Note",
       "shortcutName": "Custody Note",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
     },
     "files": [
       "**/*",
