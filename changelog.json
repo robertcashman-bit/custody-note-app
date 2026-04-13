@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.4.174",
+      "version": "1.4.175",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Fix update restart loop: stop auto-installing after download, ask user to confirm restart",
+        "save draft before install",
+        "re-enable autoInstallOnAppQuit for graceful close",
+        "clean stale updater cache"
+      ]
+    },
+    {
+      "version": "1.4.174",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "UI modernization: section expand/collapse redesign with visible chevron toggle and field count hints",
         "smooth CSS transitions on buttons, cards, nav items",
