@@ -1,9 +1,16 @@
 {
   "releases": [
     {
-      "version": "1.4.191",
+      "version": "1.4.192",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Smoke-test release to verify end-to-end auto-update from v1.4.191"
+      ]
+    },
+    {
+      "version": "1.4.191",
+      "date": "2026-04-13",
       "changes": [
         "Force app.exit(0) 500ms after quitAndInstall to release file handles immediately, preventing NSIS 'failed to uninstall old application files' errors caused by slow graceful shutdown"
       ]
