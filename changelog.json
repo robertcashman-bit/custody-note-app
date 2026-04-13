@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.192",
+      "version": "1.4.193",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "NSIS installer: pre-clear app.asar and exe with rename fallback to survive external file locks from IDE indexers and antivirus",
+        "Root cause found: Cursor IDE holds file handles on app.asar, blocking all NSIS uninstall/replace operations"
+      ]
+    },
+    {
+      "version": "1.4.192",
+      "date": "2026-04-13",
       "changes": [
         "Smoke-test release to verify end-to-end auto-update from v1.4.191"
       ]
