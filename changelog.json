@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.185",
+      "version": "1.4.186",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Restore a direct end-of-case button for Documents, Attachments and Invoice",
+        "Make the documents and invoice workflow reachable from the final page without relying on the bottom nav or post-finalise banner"
+      ]
+    },
+    {
+      "version": "1.4.185",
+      "date": "2026-04-13",
       "changes": [
         "Billing empty-state now distinguishes 'no records yet' from 'no matches for current filters'",
         "Uploaded file checkboxes in billing invoice no longer misleadingly appear selectable (they cannot be auto-attached to QuickFile)",
