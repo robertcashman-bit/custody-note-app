@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.4.178",
+      "version": "1.4.180",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Billing workflow: generate CRM1-3, Conflict Cert, Client Instructions, Prepared Statement, and Attendance Note PDFs directly in the Documents step",
+        "Select which generated forms and uploaded files to attach to QuickFile invoices",
+        "Multiple PDF attachments now uploaded to QuickFile with each invoice",
+        "Wider 20px scrollbars for improved accessibility"
+      ]
+    },
+    {
+      "version": "1.4.178",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "Fix views not displaying content - replaced broken absolute-positioned CSS transitions with reliable display toggle",
         "Ensure all screens are scrollable and responsive"
