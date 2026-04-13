@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.177",
+      "version": "1.4.178",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Fix views not displaying content - replaced broken absolute-positioned CSS transitions with reliable display toggle",
+        "Ensure all screens are scrollable and responsive"
+      ]
+    },
+    {
+      "version": "1.4.177",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "Fix faint button text colors for better readability",
         "Bump border-radius on all buttons to 10px",
