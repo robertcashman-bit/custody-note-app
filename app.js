@@ -5723,6 +5723,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function updateFormBarVisibility() {
     const finaliseBar = document.getElementById('form-finalise-bar');
+    const endBillingBtn = document.getElementById('form-end-billing-btn');
     const postFinaliseBar = document.getElementById('form-post-finalise-bar');
     const archiveBtn = document.getElementById('form-archive-btn');
     const unarchiveBtn = document.getElementById('form-unarchive-btn');
@@ -5731,6 +5732,12 @@ var REQUIRED_FIELD_KEYS = [
       finaliseBar.style.display = '';
     } else {
       finaliseBar.style.display = 'none';
+    }
+    if (endBillingBtn) {
+      endBillingBtn.style.display = currentAttendanceId ? '' : 'none';
+      endBillingBtn.textContent = (currentRecordStatus === 'finalised')
+        ? 'Documents, Attachments & Invoice'
+        : 'Prepare Documents & Invoice';
     }
     if (postFinaliseBar) {
       postFinaliseBar.style.display = (currentRecordStatus === 'finalised' && !currentRecordArchived) ? '' : 'none';
@@ -6794,6 +6801,7 @@ var REQUIRED_FIELD_KEYS = [
         endActions.className = 'form-actions form-end-actions';
         endActions.innerHTML =
           '<button type="button" class="btn btn-finalise" id="form-finalise-bar" style="display:none;">Attendance Finished &mdash; Finalise</button>' +
+          '<button type="button" class="btn btn-primary" id="form-end-billing-btn" style="display:none;">Documents, Attachments &amp; Invoice</button>' +
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
           '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>' +
           '<div id="form-post-finalise-bar" class="form-post-finalise-bar" style="display:none;">' +
@@ -6803,7 +6811,6 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
           '</div>';
         section.appendChild(endActions);
-        /* Billing link removed — redundant with post-finalise bar and bottom nav */
         if (formData.photos) {
           const legacyKeys = ['custody', 'disclosure', 'interview', 'injuriesAppearance'];
           for (const lk of legacyKeys) {
@@ -12599,6 +12606,10 @@ PDF_CASENOTE_ADVERT +
           });
           break;
         case 'form-finalise-bar': validateBeforeFinalise(); break;
+        case 'form-end-billing-btn':
+          e.preventDefault();
+          promptBeforeOpeningBilling();
+          break;
         case 'form-post-finalise-workflow':
           e.preventDefault();
           promptBeforeOpeningBilling();
