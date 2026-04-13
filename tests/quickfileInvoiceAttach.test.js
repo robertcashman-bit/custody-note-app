@@ -128,3 +128,23 @@ describe('QuickFile error parsing for attachment failures', () => {
     assert.ok(body.includes('validateDocumentUploadPayload('), 'Must call validateDocumentUploadPayload');
   });
 });
+
+describe('QuickFile invoice number — ledger sync and duplicate retry', () => {
+  it('calls invoice/search ordered by InvoiceNumber DESC before create', () => {
+    assert.ok(mainJs.includes('/1_2/invoice/search'));
+    assert.ok(mainJs.includes('syncNextInvoiceNumberFromQuickFileLedger'));
+    assert.ok(mainJs.includes('OrderResultsBy'));
+    assert.ok(mainJs.includes("'DESC'"));
+  });
+
+  it('retries invoice/create when QuickFile reports an existing invoice number', () => {
+    assert.ok(mainJs.includes('isQuickFileInvoiceNumberDuplicateError'));
+    assert.ok(mainJs.includes('Invoice number conflict, trying next'));
+    assert.ok(mainJs.includes('MAX_INVOICE_NUMBER_ATTEMPTS'));
+  });
+
+  it('extracts invoice rows and numeric parts for max-number sync', () => {
+    assert.ok(mainJs.includes('quickFileExtractInvoiceSearchRecords'));
+    assert.ok(mainJs.includes('parseInvoiceNumberNumericPart'));
+  });
+});

@@ -974,6 +974,7 @@ var LAA = {
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
+        { key: 'invoiceNumberRef', label: 'Invoice # (QuickFile reference)', type: 'text', readonly: true, placeholder: '\u2014', cols: 2 },
         { key: 'invoiceNotes', label: 'Invoice notes', type: 'text', placeholder: 'e.g. Sent via CWA portal', cols: 2 },
       ],
     },
@@ -1732,6 +1733,7 @@ var LAA = {
         { key: '_h_attachments', label: 'Attachments & Documents', type: 'sectionHeading' },
         { key: '_note_attachments', label: 'Use the attachment area below to add photos, documents, or screenshots related to this attendance.', type: 'sectionNote' },
         { key: '_h_invoice', label: 'Invoice', type: 'sectionHeading' },
+        { key: 'invoiceNumberRef', label: 'Invoice # (QuickFile reference)', type: 'text', readonly: true, placeholder: '\u2014', cols: 2 },
         { key: 'invoiceNotes', label: 'Invoice notes', type: 'text', placeholder: 'e.g. Sent via CWA portal', cols: 2 },
       ],
     },
@@ -1886,6 +1888,62 @@ var REQUIRED_FIELD_KEYS = [
 
   window.sanitizeBillingInvoiceNumber = sanitizeBillingInvoiceNumber;
   window.ensureBillingDisplayInvoiceNumber = ensureBillingDisplayInvoiceNumber;
+
+  /** Shows next QuickFile invoice # (after syncing with ledger) or the issued # once invoiced. */
+  function refreshQuickFileInvoiceRefDisplay() {
+    var fieldEl = document.querySelector('[data-field="invoiceNumberRef"]');
+    if (!fieldEl) return;
+
+    function applyInvoicedLabel(raw) {
+      var s = String(raw || '').trim().replace(/^#+/, '');
+      if (!s) return;
+      setFieldValueSilent('invoiceNumberRef', 'Invoiced: #' + s);
+    }
+
+    var fromForm = (formData.quickfileInvoiceNumber && String(formData.quickfileInvoiceNumber).trim())
+      || (formData.quickfile_invoice_number && String(formData.quickfile_invoice_number).trim());
+    if (fromForm) {
+      applyInvoicedLabel(fromForm);
+      return;
+    }
+
+    var id = typeof currentAttendanceId !== 'undefined' ? currentAttendanceId : null;
+
+    function suggestNext() {
+      var addons = window._addons || {};
+      if (!addons.quickfile) {
+        setFieldValueSilent('invoiceNumberRef', '');
+        return;
+      }
+      if (!window.api || typeof window.api.quickfileSuggestNextInvoiceNumber !== 'function') {
+        setFieldValueSilent('invoiceNumberRef', '');
+        return;
+      }
+      setFieldValueSilent('invoiceNumberRef', '\u2026');
+      window.api.quickfileSuggestNextInvoiceNumber().then(function(res) {
+        var num = res && res.number ? String(res.number) : '';
+        setFieldValueSilent('invoiceNumberRef', num ? ('Next: #' + num) : '\u2014');
+      }).catch(function() {
+        setFieldValueSilent('invoiceNumberRef', '\u2014');
+      });
+    }
+
+    if (id && window.api && typeof window.api.attendanceInvoiceStatus === 'function') {
+      window.api.attendanceInvoiceStatus(id).then(function(st) {
+        var n = st && st.quickfile_invoice_number && String(st.quickfile_invoice_number).trim();
+        if (n) {
+          if (!formData.quickfileInvoiceNumber) formData.quickfileInvoiceNumber = n;
+          applyInvoicedLabel(n);
+          return;
+        }
+        suggestNext();
+      }).catch(function() { suggestNext(); });
+    } else {
+      suggestNext();
+    }
+  }
+
+  window.refreshQuickFileInvoiceRefDisplay = refreshQuickFileInvoiceRefDisplay;
 
   /* ─── HELPERS ─── */
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
@@ -5773,6 +5831,10 @@ var REQUIRED_FIELD_KEYS = [
     if (activeFormSections[currentSectionIdx].id === 'timeRecording' && formData.attendanceMode === 'voluntary') { autoCalcVoluntaryTimes(); }
     if (activeFormSections[currentSectionIdx].id === 'timeRecording') { updateBillingReadinessPanel(); }
     if (activeFormSections[currentSectionIdx].id === 'offences') { prefillOffence1FromSummary(); }
+    var _secInvRef = activeFormSections[currentSectionIdx];
+    if (_secInvRef && (_secInvRef.fields || []).some(function(f) { return f.key === 'invoiceNumberRef'; })) {
+      setTimeout(function() { refreshQuickFileInvoiceRefDisplay(); }, 0);
+    }
     autoFillFromClient();
     applyConditionalVisibility();
     updateContextBar();
@@ -6942,6 +7004,10 @@ var REQUIRED_FIELD_KEYS = [
         section.appendChild(supActions);
       }
 
+      if ((sec.fields || []).some(function(ff) { return ff.key === 'invoiceNumberRef'; })) {
+        setTimeout(function() { refreshQuickFileInvoiceRefDisplay(); }, 0);
+      }
+
       attachSectionListeners(section);
       _renderedSections[secIdx] = true;
     }
@@ -6990,6 +7056,12 @@ var REQUIRED_FIELD_KEYS = [
       _customFormScrollbarState._mo.observe(form, { childList: true, subtree: true });
     }
     requestAnimationFrame(function() { refreshCustomFormScrollbar(); });
+    setTimeout(function() {
+      var sec0 = activeFormSections[currentSectionIdx];
+      if (sec0 && (sec0.fields || []).some(function(f) { return f.key === 'invoiceNumberRef'; }) && document.querySelector('[data-field="invoiceNumberRef"]')) {
+        refreshQuickFileInvoiceRefDisplay();
+      }
+    }, 0);
   }
 
   function _countFieldsUnderHeading(h) {
@@ -10384,7 +10456,9 @@ row('Total minutes', d.totalMinutes) + row('Miles claimable (45p)', d.milesClaim
 ((d.disbursements && d.disbursements.length) ? d.disbursements.filter(function(dis) { return (dis.description || '').trim() || (parseFloat(dis.amount) > 0); }).map(function(dis, i) { return row('Disbursement ' + (i + 1), (dis.description || '') + ' \u2013 \u00A3' + (dis.amount || '0') + ' (' + (dis.vatTreatment || 'No VAT') + ')'); }).join('') || '' : '') +
 row('Number of suspects', d.numSuspects) + row('No. Attendances', d.numAttendances) + row('Case stage', d.caseStage) +
 row('Date police station finalised', fmtDate(d.policeStationFinalisedDate)) + row('Time police station finalised', d.policeStationFinalisedTime) +
-row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice sent date', fmtDate(d.invoiceSentDate)) + row('Invoice sent time', d.invoiceSentTime) : '') + row('Invoice notes', d.invoiceNotes) +
+row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice sent date', fmtDate(d.invoiceSentDate)) + row('Invoice sent time', d.invoiceSentTime) : '') +
+(d.invoiceNumberRef ? row('Invoice # (QuickFile reference)', d.invoiceNumberRef) : '') +
+row('Invoice notes', d.invoiceNotes) +
 '</table>' +
 (d.repConfirmationSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation</p>' + sig('repConfirmationSig') + '</div>' : '') +
 (d.notesToOffice ? '<div class="nar">' + h(d.notesToOffice) + '</div>' : '') +
@@ -10901,6 +10975,7 @@ PDF_CASENOTE_ADVERT +
       row('Number of suspects', d.numSuspects) + row('No. Attendances', d.numAttendances) + row('Case stage', d.caseStage) +
       row('Date police station finalised', fmtDate(d.policeStationFinalisedDate)) + row('Time police station finalised', d.policeStationFinalisedTime) +
       row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice sent date', fmtDate(d.invoiceSentDate)) + row('Invoice sent time', d.invoiceSentTime) : '') +
+      (d.invoiceNumberRef ? row('Invoice # (QuickFile reference)', d.invoiceNumberRef) : '') +
       row('Invoice notes', d.invoiceNotes) +
       '</table>' +
       (d.repConfirmationSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation</p>' + sig('repConfirmationSig') + '</div>' : '') +

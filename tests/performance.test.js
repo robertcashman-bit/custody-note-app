@@ -269,6 +269,7 @@ describe('Voluntary form and outcome statuses', () => {
     assert.ok(volBlock.includes('multiInterview: true'), 'voluntary must have multiInterview');
     assert.ok(volBlock.includes("'travelSocial'"), 'voluntary must have travelSocial time breakdown');
     assert.ok(volBlock.includes("'invoiceNotes'"), 'voluntary must have invoiceNotes');
+    assert.ok(volBlock.includes("'invoiceNumberRef'"), 'voluntary must have invoiceNumberRef');
   });
 
   it('voluntary form excludes custody-specific fields', () => {

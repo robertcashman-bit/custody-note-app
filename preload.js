@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('api', {
   printPdfFile: (filePath) => ipcRenderer.invoke('print-pdf-file', filePath),
   quickfileFetchClients: () => ipcRenderer.invoke('quickfile-fetch-clients'),
   quickfileTestConnection: () => ipcRenderer.invoke('quickfile-test-connection'),
+  quickfileSuggestNextInvoiceNumber: () => ipcRenderer.invoke('quickfile-suggest-next-invoice-number'),
   quickfileCreateInvoice: (params) => ipcRenderer.invoke('quickfile-create-invoice', params),
   /* Postcode lookup */
   postcodeLookup: (postcode) => ipcRenderer.invoke('postcode-lookup', postcode),
