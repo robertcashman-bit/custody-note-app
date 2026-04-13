@@ -329,26 +329,6 @@ function initUpdater(options) {
     return { ok: true };
   }
 
-  function maybePromptReadyToInstall(version) {
-    const win = getMainWindow();
-    if (!win || win.isDestroyed()) return;
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Update Ready',
-      message: `Update v${version} is ready to install.`,
-      detail: 'Custody Note needs to restart to apply the update.',
-      buttons: ['Restart now', 'Later'],
-      cancelId: 1,
-      defaultId: 0,
-    }).then((result) => {
-      if (result.response === 0) {
-        installDownloadedUpdate();
-      }
-    }).catch((err) => {
-      logger.warn('Update-ready prompt failed:', err && err.message ? err.message : err);
-    });
-  }
-
   function scheduleRetryAfterFailure(source) {
     const delays = [30000, 60000, 180000];
     const idx = Math.min(Math.max(consecutiveFailures - 1, 0), delays.length - 1);
@@ -400,7 +380,6 @@ function initUpdater(options) {
         lastError: null,
       });
       sendStatus({ status: 'ready', version: downloadedVersion });
-      maybePromptReadyToInstall(downloadedVersion);
     });
 
     autoUpdater.on('update-not-available', (info) => {
