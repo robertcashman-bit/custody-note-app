@@ -390,9 +390,9 @@ describe('Billing screen source', () => {
     assert.ok(billingScreenSrc.includes('wf-preview-title'));
   });
 
-  it('has linked attachments section', () => {
-    assert.ok(billingScreenSrc.includes('Linked Supporting PDFs'));
-    assert.ok(billingScreenSrc.includes('wf-linked-list'));
+  it('has document selection panel for invoice attachments', () => {
+    assert.ok(billingScreenSrc.includes('Documents to Attach to Invoice'));
+    assert.ok(billingScreenSrc.includes('wf-doc-sel-list'));
   });
 
   it('has review confirmation checklist', () => {
