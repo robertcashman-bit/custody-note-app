@@ -114,7 +114,7 @@ function _saveAllMileage() {
     var backBtn = document.getElementById('station-mileage-back-btn');
     if (backBtn) {
       backBtn.addEventListener('click', function () {
-        if (typeof showView === 'function') showView('home');
+        if (typeof goBack === 'function') goBack(); else if (typeof showView === 'function') showView('home');
       });
     }
   });

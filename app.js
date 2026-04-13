@@ -2698,16 +2698,41 @@ var REQUIRED_FIELD_KEYS = [
 
   var _currentView = null;
   var _showViewCooldown = 0;
+  var _viewHistory = [];
+  var _VIEW_HISTORY_MAX = 20;
+  var _isGoingBack = false;
+
+  function navigateTo(name) {
+    if (name === _currentView) return;
+    if (_currentView && !_isGoingBack) {
+      _viewHistory.push(_currentView);
+      if (_viewHistory.length > _VIEW_HISTORY_MAX) _viewHistory.shift();
+    }
+    showView(name);
+  }
+
+  function goBack() {
+    if (!_viewHistory.length) { showView('home'); return; }
+    _isGoingBack = true;
+    var prev = _viewHistory.pop();
+    showView(prev);
+    _isGoingBack = false;
+  }
 
   function showView(name) {
     var now = Date.now();
     if (name === _currentView && now - _showViewCooldown < 100) return;
     _showViewCooldown = now;
+    var prevView = _currentView;
     _currentView = name;
     if (_homeGreetingTimer) { clearInterval(_homeGreetingTimer); _homeGreetingTimer = null; }
-    Object.keys(views).forEach(k => {
-      document.getElementById(views[k])?.classList.toggle('active', k === name);
+
+    Object.keys(views).forEach(function(k) {
+      var el = document.getElementById(views[k]);
+      if (!el) return;
+      el.classList.toggle('active', k === name);
     });
+
     var isForm = (name === 'new');
     document.body.classList.toggle('form-active', isForm);
     if (!isForm) {
@@ -2731,7 +2756,6 @@ var REQUIRED_FIELD_KEYS = [
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     }
     if (name === 'new' && !currentAttendanceId && !Object.keys(formData).length) { activeFormSections = formSections; formData = {}; currentSectionIdx = 0; prefillDefaults(); renderForm(formData); }
-    // sync bottom nav active state
     var navMap = { home: 'home', list: 'list', new: 'new-attendance', firms: 'firms', billing: 'billing', settings: 'settings' };
     document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
       btn.classList.toggle('active', btn.dataset.nav === (navMap[name] || name));
@@ -2787,13 +2811,14 @@ var REQUIRED_FIELD_KEYS = [
         } else if (res.status === 'downloading') {
           btn.textContent = '\u21BB Downloading\u2026';
           btn.style.color = '#d97706';
-        } else if (res.status === 'ready') {
-          btn.textContent = '\u21BB Install v' + (res.version || '');
+        } else if (res.status === 'ready' || res.status === 'installing') {
+          btn.textContent = '\u2B06 Install v' + (res.version || '');
           btn.style.color = '#059669';
-          btn.onclick = function() { window.api.appUpdateInstall(); };
-          showToast('Update ready — click to install', 'success');
+          btn.style.borderColor = '#059669';
+          btn.onclick = function() { _confirmAndInstallUpdate('v' + (res.version || '')); };
+          showToast('Update v' + (res.version || '') + ' ready \u2014 restart when you\u2019re ready', 'success', 4000);
         } else if (res.status === 'available') {
-          btn.textContent = '\u21BB Downloading v' + (res.version || '') + '\u2026';
+          btn.textContent = '\u21BB Downloading\u2026';
           btn.style.color = '#d97706';
         } else if (res.status === 'dev') {
           btn.textContent = '\u21BB Check for updates';
@@ -2808,9 +2833,9 @@ var REQUIRED_FIELD_KEYS = [
         btn.textContent = '\u21BB Check for updates';
         showToast('Update check failed', 'error');
       }).finally(function() {
-        btn.disabled = false;
         setTimeout(function() {
           if (btn.textContent.indexOf('Install') === -1) {
+            btn.disabled = false;
             btn.textContent = '\u21BB Check for updates';
             btn.style.color = '';
           }
@@ -3891,7 +3916,7 @@ var REQUIRED_FIELD_KEYS = [
           phone: data.firmContactPhone || '',
           email: data.firmContactEmail || ''
         });
-        showView('home');
+        navigateTo('home');
       }).catch(function(err) {
         console.error('[QuickCapture] Save failed:', err);
         showToast('Failed to save quick capture: ' + (err && err.message || err), 'error', 5000);
@@ -6187,6 +6212,121 @@ var REQUIRED_FIELD_KEYS = [
     state._layout();
   }
 
+  /* ═══════════════════════════════════════════════════════
+     PANEL RESIZER — smooth RAF-based drag resize
+     ═══════════════════════════════════════════════════════ */
+  var _panelResizerState = null;
+
+  function initPanelResizers() {
+    var resizers = document.querySelectorAll('.panel-resizer');
+    if (!resizers.length) return;
+
+    var LIMITS = {
+      'sidebar':       { min: 180, max: 400 },
+      'context-panel': { min: 250, max: 600 }
+    };
+    var PANEL_MAP = {
+      'sidebar':       'form-section-sidebar',
+      'context-panel': 'form-context-panel'
+    };
+
+    var state = {
+      active: false,
+      target: null,
+      panelEl: null,
+      startX: 0,
+      startWidth: 0,
+      targetWidth: 0,
+      appliedWidth: -1,
+      rafId: null,
+      resizerEl: null,
+      direction: 1
+    };
+    _panelResizerState = state;
+
+    function rafLoop() {
+      if (!state.active) return;
+      if (state.targetWidth !== state.appliedWidth && state.panelEl) {
+        state.panelEl.style.width = state.targetWidth + 'px';
+        state.appliedWidth = state.targetWidth;
+      }
+      state.rafId = requestAnimationFrame(rafLoop);
+    }
+
+    function onMouseDown(e) {
+      var resizer = e.currentTarget;
+      var target = resizer.getAttribute('data-target');
+      var panelId = PANEL_MAP[target];
+      var panelEl = panelId && document.getElementById(panelId);
+      if (!panelEl) return;
+
+      e.preventDefault();
+      var limits = LIMITS[target] || { min: 180, max: 600 };
+      var currentWidth = panelEl.getBoundingClientRect().width;
+
+      state.active = true;
+      state.target = target;
+      state.panelEl = panelEl;
+      state.startX = e.clientX;
+      state.startWidth = currentWidth;
+      state.targetWidth = currentWidth;
+      state.appliedWidth = -1;
+      state.resizerEl = resizer;
+      state.limits = limits;
+      state.direction = (target === 'context-panel') ? -1 : 1;
+
+      resizer.classList.add('dragging');
+      document.body.classList.add('panel-resizing');
+      state.rafId = requestAnimationFrame(rafLoop);
+    }
+
+    function onMouseMove(e) {
+      if (!state.active) return;
+      e.preventDefault();
+      var dx = (e.clientX - state.startX) * state.direction;
+      var w = Math.round(Math.max(state.limits.min, Math.min(state.limits.max, state.startWidth + dx)));
+      state.targetWidth = w;
+    }
+
+    function onMouseUp() {
+      if (!state.active) return;
+      state.active = false;
+      if (state.rafId) { cancelAnimationFrame(state.rafId); state.rafId = null; }
+      if (state.resizerEl) state.resizerEl.classList.remove('dragging');
+      document.body.classList.remove('panel-resizing');
+
+      if (state.panelEl && state.targetWidth !== state.startWidth) {
+        state.panelEl.style.width = state.targetWidth + 'px';
+        var key = state.target === 'sidebar' ? 'sidebarWidth' : 'contextPanelWidth';
+        if (window.api && window.api.setSettings) {
+          var patch = {};
+          patch[key] = String(state.targetWidth);
+          window.api.setSettings(patch);
+        }
+      }
+
+      if (typeof refreshCustomFormScrollbar === 'function') {
+        requestAnimationFrame(refreshCustomFormScrollbar);
+      }
+    }
+
+    resizers.forEach(function(r) { r.addEventListener('mousedown', onMouseDown); });
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  function restorePanelWidths(settings) {
+    if (!settings) return;
+    if (settings.sidebarWidth) {
+      var sb = document.getElementById('form-section-sidebar');
+      if (sb) sb.style.width = settings.sidebarWidth + 'px';
+    }
+    if (settings.contextPanelWidth) {
+      var cp = document.getElementById('form-context-panel');
+      if (cp) cp.style.width = settings.contextPanelWidth + 'px';
+    }
+  }
+
   function renderForm(data) {
     const form = document.getElementById('attendance-form');
     if (!form) return;
@@ -6755,31 +6895,61 @@ var REQUIRED_FIELD_KEYS = [
     requestAnimationFrame(function() { refreshCustomFormScrollbar(); });
   }
 
+  function _countFieldsUnderHeading(h) {
+    var count = 0;
+    var sib = h.nextElementSibling;
+    while (sib && !sib.classList.contains('section-heading')) {
+      if (sib.classList.contains('form-group')) count++;
+      sib = sib.nextElementSibling;
+    }
+    return count;
+  }
+
   function renderField(f, data, grid) {
     if (f.type === 'sectionHeading') {
       const h = document.createElement('h3');
       h.className = 'section-heading';
-      h.textContent = f.label;
+
+      var labelSpan = document.createElement('span');
+      labelSpan.className = 'section-heading-label';
+      labelSpan.textContent = f.label;
+      h.appendChild(labelSpan);
+
+      var hint = document.createElement('span');
+      hint.className = 'section-collapsed-hint';
+      h.appendChild(hint);
+
+      var toggle = document.createElement('span');
+      toggle.className = 'section-toggle';
+      toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+      h.appendChild(toggle);
+
       if (f.defaultCollapsed) h.classList.add('collapsed');
+
       h.addEventListener('click', () => {
         h.classList.toggle('collapsed');
-        let sib = h.nextElementSibling;
+        var isCollapsed = h.classList.contains('collapsed');
+        var sib = h.nextElementSibling;
         while (sib && !sib.classList.contains('section-heading')) {
-          sib.classList.toggle('collapsed');
-          sib.style.display = h.classList.contains('collapsed') ? 'none' : '';
+          sib.classList.toggle('collapsed', isCollapsed);
+          sib.style.display = isCollapsed ? 'none' : '';
           sib = sib.nextElementSibling;
         }
+        var fieldCount = _countFieldsUnderHeading(h);
+        hint.textContent = isCollapsed ? (fieldCount + ' field' + (fieldCount !== 1 ? 's' : '') + ' hidden') : '';
       });
       const wrap = f.showIf ? document.createElement('div') : null;
       if (wrap) { wrap.style.gridColumn = '1 / -1'; wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); wrap.appendChild(h); grid.appendChild(wrap); } else grid.appendChild(h);
       if (f.defaultCollapsed) {
         requestAnimationFrame(() => {
-          let sib = h.nextElementSibling;
+          var sib = h.nextElementSibling;
           while (sib && !sib.classList.contains('section-heading')) {
             sib.classList.add('collapsed');
             sib.style.display = 'none';
             sib = sib.nextElementSibling;
           }
+          var fieldCount = _countFieldsUnderHeading(h);
+          hint.textContent = fieldCount + ' field' + (fieldCount !== 1 ? 's' : '') + ' hidden';
         });
       }
       return;
@@ -9286,7 +9456,7 @@ var REQUIRED_FIELD_KEYS = [
       if (currentAttendanceId) window.api.attendanceDelete({ id: currentAttendanceId, reason: 'Discarded empty form' });
       currentAttendanceId = null;
       stopAutoSave();
-      showView('home');
+      goBack();
       return;
     }
     /* Show menu: Save as draft & exit, or Finalise & exit (matches help text) */
@@ -9308,7 +9478,7 @@ var REQUIRED_FIELD_KEYS = [
       window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(function() {
         currentAttendanceId = null;
         stopAutoSave();
-        showView('home');
+        goBack();
         showToast('Saved as draft', 'success');
       }).catch(function(err) { showToast('Failed to save: ' + (err && err.message || err), 'error', 5000); });
     });
@@ -10661,6 +10831,8 @@ PDF_CASENOTE_ADVERT +
     if (data.attendanceMode === 'voluntary') return buildVoluntaryPdfHtml;
     return buildPdfHtml;
   }
+  window.getActivePdfBuilder = getActivePdfBuilder;
+  window.buildPdfHtml = buildPdfHtml;
 
   var CONFIDENTIALITY_REMINDER = 'Only share with authorised recipients. Client confidentiality and SRA standards apply.';
 
@@ -11040,6 +11212,8 @@ PDF_CASENOTE_ADVERT +
     w.focus();
   }
   window.openHtmlPreviewWindow = openHtmlPreviewWindow;
+  window.esc = esc;
+  window.formatDateGB = formatDateGB;
 
   function docStyles() {
     return '<style>body{font-family:Arial,sans-serif;font-size:11pt;color:#111;margin:2cm}' +
@@ -11051,6 +11225,7 @@ PDF_CASENOTE_ADVERT +
       '.footer{font-size:8pt;color:#555;margin-top:2cm;border-top:1px solid #ccc;padding-top:6px}' +
       '@media print{@page{margin:1.5cm}}</style>';
   }
+  window.docStyles = docStyles;
 
   function generateConflictCert() {
     const d = getFormData();
@@ -11307,6 +11482,11 @@ PDF_CASENOTE_ADVERT +
 
   function initKeyboardShortcuts() {
     document.addEventListener('keydown', (e) => {
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        goBack();
+        return;
+      }
       if (e.ctrlKey && e.shiftKey && e.key === 'D') {
         e.preventDefault();
         var ov = document.getElementById('sync-diagnostics-overlay');
@@ -11505,6 +11685,8 @@ PDF_CASENOTE_ADVERT +
     document.querySelectorAll('.layout-preview-btn').forEach(function(btn) {
       btn.classList.toggle('active', btn.getAttribute('data-layout-mode') === layoutMode);
     });
+
+    if (typeof restorePanelWidths === 'function') restorePanelWidths(settings);
   }
 
   function initLayoutPreferences() {
@@ -11934,8 +12116,8 @@ PDF_CASENOTE_ADVERT +
             case 'enter-licence-key':
               if (window.showLicenceOverlay) window.showLicenceOverlay({ title: 'Sign in to Custody Note', message: 'Enter your email or paste a licence key.' });
               break;
-            case 'home': showView('home'); break;
-            case 'records': showView('list'); break;
+            case 'home': navigateTo('home'); break;
+            case 'records': navigateTo('list'); break;
             case 'new-attendance':
               if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); break; }
               currentStandaloneSectionId = null;
@@ -11967,6 +12149,7 @@ PDF_CASENOTE_ADVERT +
               break;
             case 'settings': showView('settings'); break;
             case 'check-updates': triggerUpdateCheck(); break;
+            case 'install-update': _confirmAndInstallUpdate(''); break;
             case 'help': showView('help'); break;
           }
           return;
@@ -12119,17 +12302,17 @@ PDF_CASENOTE_ADVERT +
             return;
           case 'list-back-home':
             e.preventDefault();
-            showView('home');
+            goBack();
             return;
           case 'gear-menu-btn':
             e.preventDefault();
             var dd = document.getElementById('gear-dropdown');
             if (dd) dd.classList.toggle('hidden');
             return;
-          case 'qc-cancel': e.preventDefault(); showView('home'); return;
+          case 'qc-cancel': e.preventDefault(); goBack(); return;
           case 'qc-save': e.preventDefault(); saveQuickCapture(false); return;
           case 'qc-expand': e.preventDefault(); saveQuickCapture(true); return;
-          case 'firms-back-btn': case 'reports-back-btn': case 'authorities-back-btn': case 'settings-back-btn': case 'help-back-btn': case 'station-mileage-back-btn': e.preventDefault(); showView('home'); return;
+          case 'firms-back-btn': case 'reports-back-btn': case 'authorities-back-btn': case 'settings-back-btn': case 'help-back-btn': case 'station-mileage-back-btn': e.preventDefault(); goBack(); return;
           default: break;
         }
       }, true);
@@ -12398,6 +12581,7 @@ PDF_CASENOTE_ADVERT +
     initScrollbarSize();
     initDensity();
     initLayoutPreferences();
+    initPanelResizers();
     initKeyboardShortcuts();
     initScratchpad();
     initEnterNavigation();
@@ -12533,17 +12717,17 @@ PDF_CASENOTE_ADVERT +
             showConfirm('You have unsaved changes. Save as draft before leaving?').then(function(ok) {
               if (ok) {
                 window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(function() {
-                  currentAttendanceId = null; stopAutoSave(); if (cb) cb(); else showView(targetView);
+                  currentAttendanceId = null; stopAutoSave(); if (cb) cb(); else navigateTo(targetView);
                 }).catch(function() { showToast('Save failed — staying on form', 'error'); });
               } else {
-                currentAttendanceId = null; stopAutoSave(); if (cb) cb(); else showView(targetView);
+                currentAttendanceId = null; stopAutoSave(); if (cb) cb(); else navigateTo(targetView);
               }
             });
             return;
           }
         } catch (_) {}
       }
-      if (cb) cb(); else showView(targetView);
+      if (cb) cb(); else navigateTo(targetView);
     }
 
     // Bottom navigation bar
@@ -13347,6 +13531,48 @@ PDF_CASENOTE_ADVERT +
       });
     });
 
+    var _lastUpdateToastPct = -1;
+    var _updateToastShown = {};
+
+    function _confirmAndInstallUpdate(vLabel) {
+      if (typeof showConfirm !== 'function') { window.api.appUpdateInstall(); return; }
+      showConfirm(
+        'The app will close and restart to install update ' + (vLabel || '') + '.\n\nAny unsaved changes will be saved as a draft.\n\nRestart now?',
+        'Restart & Update'
+      ).then(function(ok) {
+        if (!ok) return;
+        try { if (typeof quietSave === 'function') quietSave(); } catch (_) {}
+        window.api.appUpdateInstall();
+      });
+    }
+
+    function _showLoopRecoveryDialog() {
+      if (typeof showConfirm !== 'function') return;
+      showConfirm(
+        'The last update could not be installed automatically. This can happen if files were locked or the installer was blocked.\n\n' +
+        'Options:\n' +
+        '\u2022 Click OK to reset and retry the update\n' +
+        '\u2022 Click Cancel to continue using the current version\n\n' +
+        'If the problem persists, download the latest version manually from custodynote.com/download',
+        'Update Installation Issue'
+      ).then(function(ok) {
+        if (ok) _resetLoopAndRetry();
+      });
+    }
+
+    function _resetLoopAndRetry() {
+      if (!window.api || !window.api.appUpdateResetLoop) return;
+      window.api.appUpdateResetLoop().then(function() {
+        _updateToastShown = {};
+        showToast('Update loop reset \u2014 checking for updates\u2026', 'info', 3000);
+        if (window.api.appCheckUpdates) {
+          window.api.appCheckUpdates().then(function(res) {
+            applyAppUpdateStatusPayload(res);
+          });
+        }
+      });
+    }
+
     function applyAppUpdateStatusPayload(data) {
       if (!data) return;
       var wrap = document.getElementById('update-footer-wrap');
@@ -13354,35 +13580,103 @@ PDF_CASENOTE_ADVERT +
       var banner = document.getElementById('home-update-banner');
       var bannerText = document.getElementById('home-update-banner-text');
       var restartBtn = document.getElementById('home-update-restart-btn');
+      var gearBtn = document.getElementById('gear-check-updates');
       if (data.status === 'downloading') {
-        if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Downloading v' + data.version, 'backup-active'); el.onclick = null; }
+        var pctInt = typeof data.percent === 'number' ? Math.round(data.percent) : null;
+        var pctStr = pctInt !== null ? pctInt + '%' : '';
+        var vStr = data.version ? 'v' + data.version : '';
+        if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Updating\u2026 ' + pctStr, 'backup-active'); el.onclick = null; }
         if (banner) banner.style.display = '';
-        if (bannerText) bannerText.textContent = 'A new version (v' + data.version + ') is downloading. You\'ll be notified when it\'s ready to install.';
+        if (bannerText) bannerText.textContent = 'Downloading ' + vStr + '\u2026 ' + pctStr;
         if (restartBtn) restartBtn.style.display = 'none';
-      } else if (data.status === 'ready') {
-        if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Update v' + data.version + ' ready', 'synced'); el.onclick = function() { window.api.appUpdateInstall(); }; }
+        if (gearBtn) { gearBtn.textContent = '\u21BB Updating ' + pctStr; gearBtn.style.color = '#d97706'; }
+        if (pctInt !== null && pctInt !== _lastUpdateToastPct && (pctInt === 0 || pctInt >= (_lastUpdateToastPct + 25))) {
+          _lastUpdateToastPct = pctInt;
+          if (typeof showToast === 'function') showToast('Downloading update ' + vStr + '\u2026 ' + pctStr, 'info', 2500);
+        }
+      } else if (data.status === 'installing') {
+        if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Installing update\u2026', 'synced'); el.onclick = null; }
         if (banner) banner.style.display = '';
-        if (bannerText) bannerText.textContent = 'Update v' + data.version + ' is ready. Restart the app to install.';
-        if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Restart to install'; restartBtn.onclick = function() { window.api.appUpdateInstall(); }; }
+        if (bannerText) bannerText.textContent = 'Installing v' + (data.version || '') + '\u2026 the app will restart momentarily.';
+        if (restartBtn) restartBtn.style.display = 'none';
+        if (gearBtn) { gearBtn.textContent = '\u21BB Restarting\u2026'; gearBtn.style.color = '#059669'; gearBtn.disabled = true; }
+        if (typeof showToast === 'function' && !_updateToastShown.installing) {
+          _updateToastShown.installing = true;
+          showToast('Update downloaded. Restarting\u2026', 'success', 5000);
+        }
+        _lastUpdateToastPct = -1;
+      } else if (data.status === 'ready') {
+        var vLabel = data.version ? 'v' + data.version : '';
+        if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Update ' + vLabel + ' ready \u2014 click to install', 'synced'); el.onclick = function() { _confirmAndInstallUpdate(vLabel); }; }
+        if (banner) banner.style.display = '';
+        if (bannerText) bannerText.textContent = 'Update ' + vLabel + ' downloaded. Restart when you\u2019re ready to install.';
+        if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Restart & Update'; restartBtn.onclick = function() { _confirmAndInstallUpdate(vLabel); }; }
+        if (gearBtn) { gearBtn.textContent = '\u2B06 Install ' + vLabel; gearBtn.style.color = '#059669'; gearBtn.dataset.action = 'install-update'; }
+        if (typeof showConfirm === 'function' && !_updateToastShown.ready) {
+          _updateToastShown.ready = true;
+          showConfirm(
+            'Update ' + vLabel + ' is ready to install.\n\n' +
+            'The app needs to restart to apply the update. Any unsaved work will be saved as a draft automatically.\n\n' +
+            'Restart now?',
+            'Update Available'
+          ).then(function(ok) {
+            if (ok) {
+              window.api.appUpdateInstall();
+            } else {
+              showToast('Update will install when you next close the app', 'info', 4000);
+            }
+          });
+        }
+        _lastUpdateToastPct = -1;
       } else if (data.status === 'up-to-date') {
         if (banner) banner.style.display = 'none';
         var statusEl = document.getElementById('check-updates-status');
         if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
+        if (gearBtn) { gearBtn.textContent = '\u2713 Up to date'; gearBtn.style.color = '#059669'; setTimeout(function() { if (gearBtn) { gearBtn.textContent = '\u21BB Check for updates'; gearBtn.style.color = ''; } }, 5000); }
+        _lastUpdateToastPct = -1;
+        _updateToastShown = {};
+      } else if (data.status === 'loop-blocked') {
+        if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, '\u26A0 Update failed repeatedly \u2014 click for options', 'error'); el.onclick = function() { _showLoopRecoveryDialog(); }; }
+        if (banner) banner.style.display = '';
+        if (bannerText) bannerText.textContent = 'Auto-update paused \u2014 the last update could not be installed. Download manually or retry.';
+        if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Retry Update'; restartBtn.onclick = function() { _resetLoopAndRetry(); }; }
+        if (gearBtn) { gearBtn.textContent = '\u26A0 Update Issue'; gearBtn.style.color = '#dc2626'; }
+        if (typeof showToast === 'function' && !_updateToastShown.loopBlocked) {
+          _updateToastShown.loopBlocked = true;
+          showToast('Auto-update paused \u2014 previous install failed. Use the banner to retry or download manually.', 'warning', 8000);
+        }
+        _lastUpdateToastPct = -1;
       } else if (data.status === 'error') {
         if (banner) banner.style.display = 'none';
+        if (typeof showToast === 'function' && data.message && !_updateToastShown.error) {
+          _updateToastShown.error = true;
+          showToast('Update error: ' + data.message, 'error', 4000);
+          setTimeout(function() { _updateToastShown.error = false; }, 30000);
+        }
+        _lastUpdateToastPct = -1;
       }
       var homeBtn = document.getElementById('home-check-update-btn');
       if (homeBtn) {
-        if (data.status === 'ready') {
-          homeBtn.textContent = '\u21BB Install v' + data.version;
+        if (data.status === 'installing') {
+          homeBtn.textContent = '\u21BB Restarting\u2026';
+          homeBtn.style.color = '#059669';
+          homeBtn.disabled = true;
+          homeBtn.onclick = null;
+        } else if (data.status === 'ready') {
+          homeBtn.textContent = '\u2B06 Install v' + data.version;
           homeBtn.style.color = '#059669';
           homeBtn.style.borderColor = '#059669';
           homeBtn.disabled = false;
-          homeBtn.onclick = function() { window.api.appUpdateInstall(); };
+          homeBtn.onclick = function() { _confirmAndInstallUpdate('v' + data.version); };
         } else if (data.status === 'downloading') {
-          homeBtn.textContent = '\u21BB Downloading v' + data.version + '\u2026';
+          homeBtn.textContent = '\u21BB Downloading\u2026';
           homeBtn.style.color = '#d97706';
           homeBtn.disabled = true;
+        } else if (data.status === 'loop-blocked') {
+          homeBtn.textContent = '\u26A0 Update Issue';
+          homeBtn.style.color = '#dc2626';
+          homeBtn.disabled = false;
+          homeBtn.onclick = function() { _showLoopRecoveryDialog(); };
         } else if (data.status === 'up-to-date') {
           homeBtn.textContent = '\u2713 Up to date';
           homeBtn.style.color = '#059669';
@@ -13399,7 +13693,9 @@ PDF_CASENOTE_ADVERT +
       window.api.getAutoUpdateState().then(function(snap) {
         if (!snap || snap.status === 'dev' || snap.status === 'manual') return;
         try { console.log('[AutoUpdate] Renderer snapshot:', JSON.stringify(snap)); } catch (_) {}
-        if (snap.state === 'downloaded' && snap.downloadedVersion) {
+        if (snap.loopDetected) {
+          applyAppUpdateStatusPayload({ status: 'loop-blocked', message: 'Auto-update paused due to repeated failed installs.' });
+        } else if (snap.state === 'downloaded' && snap.downloadedVersion) {
           applyAppUpdateStatusPayload({ status: 'ready', version: snap.downloadedVersion });
         }
       }).catch(function(e) { console.warn('[AutoUpdate] getAutoUpdateState failed', e); });
@@ -13411,30 +13707,34 @@ PDF_CASENOTE_ADVERT +
       }
       var gearBtn = document.getElementById('gear-check-updates');
       if (gearBtn) { gearBtn.textContent = '\u21BB Checking\u2026'; gearBtn.disabled = true; }
-      showToast('Checking for updates\u2026', 'info');
+      showToast('Checking for updates\u2026', 'info', 2000);
       window.api.appCheckUpdates().then(function(res) {
         var statusEl = document.getElementById('check-updates-status');
         if (res.status === 'up-to-date') {
-          showToast('You\'re up to date', 'success');
+          showToast('You\'re up to date (v' + (res.version || '') + ')', 'success');
           if (gearBtn) gearBtn.textContent = '\u2713 Up to date';
-          if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
+          if (statusEl) statusEl.textContent = '\u2713 You\'re up to date (v' + (res.version || '') + ')';
         } else if (res.status === 'checking') {
           if (statusEl) statusEl.textContent = 'Checking for updates\u2026';
         } else if (res.status === 'downloading') {
           showToast('Downloading update\u2026', 'info');
           if (gearBtn) gearBtn.textContent = '\u21BB Downloading\u2026';
           if (statusEl) statusEl.textContent = 'Downloading update\u2026';
-        } else if (res.status === 'ready') {
-          showToast('Update v' + (res.version || '') + ' ready — restart to install', 'success');
-          if (gearBtn) gearBtn.textContent = '\u21BB Install v' + (res.version || '');
-          if (statusEl) statusEl.textContent = 'Update v' + (res.version || '') + ' ready — restart to install';
+        } else if (res.status === 'ready' || res.status === 'installing') {
+          showToast('Update v' + (res.version || '') + ' ready \u2014 will install on next restart', 'success', 4000);
+          if (gearBtn) { gearBtn.textContent = '\u2B06 Install v' + (res.version || ''); gearBtn.style.color = '#059669'; gearBtn.dataset.action = 'install-update'; }
+          if (statusEl) statusEl.textContent = 'Update v' + (res.version || '') + ' ready. Close app to install, or click Install Now.';
+          applyAppUpdateStatusPayload({ status: 'ready', version: res.version });
         } else if (res.status === 'available') {
-          showToast('Update v' + (res.version || '') + ' found \u2014 downloading\u2026', 'success');
-          if (gearBtn) gearBtn.textContent = '\u21BB Downloading v' + (res.version || '') + '\u2026';
-          if (statusEl) statusEl.textContent = 'Update v' + (res.version || '') + ' found \u2014 downloading\u2026';
+          showToast('Update found \u2014 downloading\u2026', 'success');
+          if (gearBtn) gearBtn.textContent = '\u21BB Downloading\u2026';
+          if (statusEl) statusEl.textContent = 'Downloading update\u2026';
         } else if (res.status === 'dev') {
           showToast('Updates only apply to the installed app', 'info');
           if (statusEl) statusEl.textContent = 'Updates only apply to the installed app.';
+        } else if (res.status === 'loop-blocked') {
+          applyAppUpdateStatusPayload({ status: 'loop-blocked', message: res.message });
+          if (statusEl) statusEl.textContent = res.message || 'Auto-update paused.';
         } else if (res.status === 'error') {
           showToast('Could not check: ' + (res.message || 'Update check failed'), 'error');
           if (statusEl) statusEl.textContent = 'Could not check: ' + (res.message || 'Update check failed');
@@ -13443,7 +13743,7 @@ PDF_CASENOTE_ADVERT +
         showToast('Update check failed', 'error');
       }).finally(function() {
         if (gearBtn) { gearBtn.disabled = false; }
-        setTimeout(function() { if (gearBtn) gearBtn.textContent = '\u21BB Check for updates'; }, 5000);
+        setTimeout(function() { if (gearBtn && gearBtn.textContent.indexOf('Install') === -1) { gearBtn.textContent = '\u21BB Check for updates'; gearBtn.style.color = ''; } }, 5000);
       });
     }
     document.getElementById('check-updates-btn')?.addEventListener('click', function() {
@@ -13828,7 +14128,7 @@ PDF_CASENOTE_ADVERT +
         delete data.updated_at;
         window.api.attendanceSave({ data: data, status: 'draft' }).then(function(id) {
           if (id && id.error) { showToast(id.message || id.error || 'Save failed', 'error'); return; }
-          showView('home');
+          navigateTo('home');
           openAttendance(id);
           showToast('Record imported and opened', 'success');
         }).catch(function(e) { showToast('Save failed: ' + (e && e.message), 'error'); });
@@ -13848,7 +14148,7 @@ PDF_CASENOTE_ADVERT +
       delete data.updated_at;
       window.api.attendanceSave({ data: data, status: 'draft' }).then(function(id) {
         if (id && id.error) { showToast(id.message || id.error || 'Save failed', 'error'); return; }
-        showView('home');
+        navigateTo('home');
         openAttendance(id);
         showToast('Record imported and opened', 'success');
       }).catch(function(e) { showToast('Save failed: ' + (e && e.message), 'error'); });

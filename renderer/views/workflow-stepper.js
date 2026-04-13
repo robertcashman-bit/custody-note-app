@@ -77,6 +77,9 @@ function openWorkflow(startStep, onClose) {
   _workflowStep = startStep || 0;
   _workflowOnClose = onClose || null;
 
+  _wfGeneratedDocs = {};
+  _wfSelectedDocs = {};
+
   var existing = document.getElementById('workflow-overlay');
   if (existing) existing.remove();
 
