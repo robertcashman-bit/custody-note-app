@@ -4021,16 +4021,22 @@ app.whenReady().then(async () => {
         appendUpdateLog(`Destroyed ${allWindows.length} window(s)`);
       } catch (_) {}
 
-      appendUpdateLog('Waiting 3s for OS file handle release…');
+      appendUpdateLog('Waiting 2s for OS file handle release…');
       setTimeout(() => {
         appendUpdateLog('Calling quitAndInstall(isSilent=true, isForceRunAfter=true)');
         try {
           autoUpdater.quitAndInstall(true, true);
         } catch (e) {
           appendUpdateLog('quitAndInstall threw: ' + (e?.message || e));
-          app.exit(0);
         }
-      }, 3000);
+        /* Force exit after a brief grace period — ensures the process dies
+           even if quitAndInstall hangs or the NSIS installer hasn't started yet.
+           This releases all file handles so the installer can overwrite app.asar. */
+        setTimeout(() => {
+          appendUpdateLog('Force exit to release file handles');
+          app.exit(0);
+        }, 2000);
+      }, 2000);
     }
 
     autoUpdater.on('update-downloaded', (info) => {

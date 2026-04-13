@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.180",
+      "version": "1.4.181",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "NSIS installer now kills running app before overwriting files — prevents 'Failed to uninstall old application files' error",
+        "Hardened auto-update shutdown: force-exits process after quitAndInstall to release file handles",
+        "Enabled elevation for installer to handle locked files"
+      ]
+    },
+    {
+      "version": "1.4.180",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "Billing workflow: generate CRM1-3, Conflict Cert, Client Instructions, Prepared Statement, and Attendance Note PDFs directly in the Documents step",
         "Select which generated forms and uploaded files to attach to QuickFile invoices",
