@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.202",
+      "version": "1.4.203",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "QuickFile: sync next invoice number with ledger before create",
+        "retry on duplicate invoice number",
+        "Invoice # (QuickFile reference) field in attendance form section 9",
+        "IPC quickfile-suggest-next-invoice-number",
+        "tests updated"
+      ]
+    },
+    {
+      "version": "1.4.202",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "CRM1 official PDF: fill Comb1-9 for NI",
         "normalise NI",
