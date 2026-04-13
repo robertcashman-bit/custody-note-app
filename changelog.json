@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.182",
+      "version": "1.4.183",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Fix billing failure — remove duplicate IPC handler registration that blocked all billing and QuickFile handlers from loading",
+        "Clean up duplicate previewPdfBase64 entry in preload bridge"
+      ]
+    },
+    {
+      "version": "1.4.182",
+      "date": "2026-04-13",
       "changes": [
         "Fix blank document preview — PDFs now open in system viewer",
         "Add Save to Desktop and Email buttons for each generated form",

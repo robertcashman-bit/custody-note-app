@@ -6442,21 +6442,6 @@ ipcMain.handle('html-to-pdf-buffer', async (_, { html }) => {
   }
 });
 
-/* Preview a base64 PDF by writing to temp file and opening with system viewer */
-ipcMain.handle('preview-pdf-base64', async (_, { base64, filename }) => {
-  try {
-    const tmpDir = path.join(app.getPath('temp'), 'custody-note-preview');
-    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-    const safeName = (filename || 'preview.pdf').replace(/[<>:"/\\|?*]/g, '_');
-    const filePath = path.join(tmpDir, safeName);
-    fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
-    await shell.openPath(filePath);
-    return { path: filePath };
-  } catch (err) {
-    console.error('[Preview PDF]', err);
-    return { error: err.message || String(err) };
-  }
-});
 
 ipcMain.handle('laa-open-official-template', async (_, formType) => {
   try {
