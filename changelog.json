@@ -1,9 +1,22 @@
 {
   "releases": [
     {
+      "version": "1.4.174",
+      "date": "2026-04-13",
+      "latest": true,
+      "changes": [
+        "UI modernization: section expand/collapse redesign with visible chevron toggle and field count hints",
+        "smooth CSS transitions on buttons, cards, nav items",
+        "panel resizer with RAF-based dragging",
+        "animated view transitions",
+        "navigation history with Alt+Left back",
+        "print layout fixes"
+      ]
+    },
+    {
       "version": "1.4.173",
       "date": "2026-04-12",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix NSIS installer failure: switch to oneClick installer (no uninstall step)",
         "add single-instance lock",
