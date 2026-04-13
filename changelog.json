@@ -1,9 +1,16 @@
 {
   "releases": [
     {
-      "version": "1.4.199",
+      "version": "1.4.200",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "End-to-end auto-update test from v1.4.199 with customRemoveFiles override"
+      ]
+    },
+    {
+      "version": "1.4.199",
+      "date": "2026-04-13",
       "changes": [
         "CRITICAL: override NSIS customRemoveFiles to skip un.atomicRMDir that aborts on locked files — use Delete /REBOOTOK + RMDir /r instead",
         "Root cause: Cursor IDE holds app.asar handle; un.atomicRMDir rename fails → 'Failed to uninstall old application files' error 2 → abort"
