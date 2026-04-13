@@ -88,6 +88,7 @@ function loadBillingView() {
     });
 
     _billingViewLoading = false;
+    console.log('[billing-view] Loaded ' + _billingViewData.length + ' records');
     _bvPopulateFirmFilter();
     _bvRestoreFilters();
     _bvRenderSummary();
@@ -183,7 +184,10 @@ function _bvRenderTable() {
   var filtered = _bvFilterData();
 
   if (!filtered.length) {
-    wrap.innerHTML = '<div class="bv-empty">No records match the current filters.</div>';
+    var msg = _billingViewData.length
+      ? 'No records match the current filters.'
+      : 'No billable records yet. Finalise and archive an attendance to see it here.';
+    wrap.innerHTML = '<div class="bv-empty">' + msg + '</div>';
     return;
   }
 

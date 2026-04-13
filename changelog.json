@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.4.184",
+      "version": "1.4.185",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Billing empty-state now distinguishes 'no records yet' from 'no matches for current filters'",
+        "Uploaded file checkboxes in billing invoice no longer misleadingly appear selectable (they cannot be auto-attached to QuickFile)",
+        "Finalise: duplicate-check and confirm-dialog failures now show user-visible warnings instead of failing silently",
+        "Add .catch error handling to all fire-and-forget setSettings and firmSave calls",
+        "Fix null-safety crash in billing preview recalculation when elements are not yet rendered",
+        "Remove dead _wfBillingLoaded variable from billing screen",
+        "Add diagnostic logging to billing view load, invoice creation, and email-modal save"
+      ]
+    },
+    {
+      "version": "1.4.184",
+      "date": "2026-04-13",
       "changes": [
         "Fix billing view showing empty — archived records that still need invoicing now appear in the billing list",
         "Include archived_at in billing view data for UI badges"
