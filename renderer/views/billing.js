@@ -118,7 +118,7 @@ function _buildInvoiceNarrative(client, station, date, offence) {
     if (parts.length === 3) dateFmt = parts[2] + '.' + parts[1] + '.' + parts[0].slice(2);
   }
   var label = [client, station].filter(Boolean).join(' - ');
-  return [label, dateFmt, offence]
+  return ['Police station attendance', label, dateFmt, offence]
     .map(function (s) { return (s || '').trim(); })
     .filter(Boolean)
     .join(' \u2013 ');

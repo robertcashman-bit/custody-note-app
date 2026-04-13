@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.4.203",
+      "version": "1.4.204",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "CRM1 official PDF: USN left blank; weekly income from annual; capital/dependants; equal opportunities ethnicity and disability field maps",
+        "CRM3 PDF: Yes1/No1 action started; counsel ticks; involved another way; clear header UFN; advocacy reason fallback",
+        "Applicant Declaration: clear Text4 USN",
+        "Billing default narrative: Police station attendance prefix",
+        "LAA Declaration: CRM3 fields (counsel, advocacy, involved another way)",
+        "Tests: crm1PdfFill regression"
+      ]
+    },
+    {
+      "version": "1.4.203",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "QuickFile: sync next invoice number with ledger before create",
         "retry on duplicate invoice number",

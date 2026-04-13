@@ -5814,9 +5814,90 @@ function safeSet(form, fieldName, value) {
   try { form.getTextField(fieldName).setText(t); } catch (_) {}
 }
 
+function safeClearText(form, fieldName) {
+  try { form.getTextField(fieldName).setText(''); } catch (_) {}
+}
+
 function safeCheck(form, fieldName, condition) {
   if (!condition) return;
   try { form.getCheckBox(fieldName).check(); } catch (_) {}
+}
+
+function safeUncheck(form, fieldName) {
+  try { form.getCheckBox(fieldName).uncheck(); } catch (_) {}
+}
+
+/** CRM1 income section: stored gross annual (£) → weekly. */
+function poundsAnnualToWeeklyOrEmpty(val) {
+  if (val === undefined || val === null || val === '') return '';
+  const n = parseFloat(String(val).replace(/,/g, ''));
+  if (!Number.isFinite(n)) return '';
+  return String(Math.round((n / 52) * 100) / 100);
+}
+
+/** CRM1 page 7 Q2: Universal Credit or Guarantee Pension Credit only (narrower than main passporting list). */
+function benefitIndicatesUniversalCreditOrPensionGuarantee(d) {
+  const s = `${d.benefitType || ''} ${d.benefitOther || ''}`;
+  return /\bUniversal Credit\b/i.test(s) || /Pension Credit/i.test(s);
+}
+
+/**
+ * CRM1 page 6 — Ethnicity (v16): codes from data/laa-reference-data.json ethnicCodes, left-to-right /
+ * top-to-bottom field order on the official PDF (18 single-choice boxes).
+ */
+const CRM1_ETHNICITY_FIELD_BY_CODE = {
+  '01': 'CheckBox137',
+  '02': 'CheckBox132',
+  '14': 'CheckBox101',
+  '16': 'CheckBox138',
+  '10': 'CheckBox134',
+  '11': 'CheckBox67',
+  '12': 'CheckBox145',
+  '13': 'CheckBox135',
+  '06': 'CheckBox68',
+  '07': 'CheckBox136',
+  '08': 'CheckBox116',
+  '09': 'CheckBox147',
+  '15': 'CheckBox150',
+  '04': 'CheckBox151',
+  '03': 'CheckBox148',
+  '05': 'CheckBox2',
+  '00': 'CheckBox152',
+  '99': 'CheckBox149',
+};
+
+/**
+ * CRM1 page 6 — Disability: codes from disabilityCodes; physical order matches the printed
+ * “Definitions:” list on v16 (CheckBox66 = “Prefer not to say” — no app code, left blank).
+ */
+const CRM1_DISABILITY_FIELD_BY_CODE = {
+  NCD: 'CheckBox31',
+  VIS: 'CheckBox32',
+  ILL: 'CheckBox3',
+  OTH: 'CheckBox65',
+  UKN: 'CheckBox4',
+  MHC: 'CheckBox5',
+  LDD: 'CheckBox72',
+  MOB: 'CheckBox117',
+  DEA: 'CheckBox73',
+  HEA: 'CheckBox120',
+  BLI: 'CheckBox100',
+};
+
+const CRM1_ALL_ETHNICITY_FIELDS = Object.values(CRM1_ETHNICITY_FIELD_BY_CODE);
+const CRM1_ALL_DISABILITY_FIELDS = Object.values(CRM1_DISABILITY_FIELD_BY_CODE);
+
+function fillCRM1EqualOpportunities(form, d) {
+  CRM1_ALL_ETHNICITY_FIELDS.forEach((name) => safeUncheck(form, name));
+  const eth = String(d.ethnicOriginCode || '').trim();
+  const ethField = CRM1_ETHNICITY_FIELD_BY_CODE[eth];
+  if (ethField) safeCheck(form, ethField, true);
+
+  CRM1_ALL_DISABILITY_FIELDS.forEach((name) => safeUncheck(form, name));
+  safeUncheck(form, 'CheckBox66');
+  const dis = String(d.disabilityCode || '').trim();
+  const disField = CRM1_DISABILITY_FIELD_BY_CODE[dis];
+  if (disField) safeCheck(form, disField, true);
 }
 
 async function embedSignature(pdfDoc, form, fieldName, dataUri) {
@@ -5877,7 +5958,8 @@ function fillCRM1(form, d) {
   safeSet(form, 'FillText1', d.city);
   safeSet(form, 'County', d.county);
   safeSet(form, 'Postcode', d.postCode);
-  safeSet(form, 'FillText644', d.ufn);
+  /* FillText644 = USN (Unique Supplier Number) — must remain blank for the firm to complete (not UFN). */
+  safeClearText(form, 'FillText644');
 
   const ms = d.maritalStatus || '';
   safeCheck(form, 'Married', ms === 'Married' || ms === 'Civil Partner' || ms === 'Married/Civil Partner');
@@ -5892,17 +5974,55 @@ function fillCRM1(form, d) {
   safeCheck(form, 'CheckBox14', g === 'Female');
   safeCheck(form, 'CheckBox1', g === 'Prefer not to say');
 
+  fillCRM1EqualOpportunities(form, d);
+
   const under18 = d.juvenileVulnerable === 'Juvenile';
   safeCheck(form, 'Client under 18 checkbox', under18);
   safeCheck(form, 'Client not under 18 checkbox', !under18);
 
   const onBenefit = d.passportedBenefit === 'Yes' || d.benefits === 'Yes';
-  safeCheck(form, 'CheckBox9', onBenefit);
-  safeCheck(form, 'CheckBox10', !onBenefit);
+  /* Main income question: Yes = left (CheckBox10), No = right (CheckBox9) — CRM1 v16 layout. */
+  safeUncheck(form, 'CheckBox9');
+  safeUncheck(form, 'CheckBox10');
+  safeCheck(form, 'CheckBox10', onBenefit);
+  safeCheck(form, 'CheckBox9', !onBenefit);
 
-  safeSet(form, 'The_client1', d.grossIncome);
+  /* Narrow UC / Guarantee Pension Credit row (CheckBox13 = Yes left, CheckBox6 = No right). */
+  safeUncheck(form, 'CheckBox13');
+  safeUncheck(form, 'CheckBox6');
+  const ucPc = benefitIndicatesUniversalCreditOrPensionGuarantee(d);
+  if (d.benefits === 'Yes') {
+    safeCheck(form, 'CheckBox13', ucPc);
+    safeCheck(form, 'CheckBox6', !ucPc);
+  } else if (d.benefits === 'No') {
+    safeCheck(form, 'CheckBox6', true);
+  }
+
+  const wkClient = onBenefit ? '' : poundsAnnualToWeeklyOrEmpty(d.grossIncome);
+  const wkPartner = onBenefit ? '' : poundsAnnualToWeeklyOrEmpty(d.partnerIncome);
+  safeSet(form, 'The_client1', wkClient);
+  /* Field name is legacy; box is partner weekly £ (not name). */
+  safeSet(form, 'Partner_if_living_with_t_', wkPartner);
+  if (!onBenefit && (wkClient !== '' || wkPartner !== '')) {
+    const a = parseFloat(wkClient) || 0;
+    const b = parseFloat(wkPartner) || 0;
+    safeSet(form, 'Total1', String(Math.round((a + b) * 100) / 100));
+  }
+
   safeSet(form, 'FillText15', d.dependants);
-  safeSet(form, 'Partner_if_living_with_t_', d.partnerName);
+
+  const capC = d.capitalClient;
+  const capP = d.capitalPartner;
+  const capT = d.capitalTotal;
+  if (capC !== undefined && capC !== null && String(capC).trim() !== '') safeSet(form, 'FillText23', String(capC).trim());
+  if (capP !== undefined && capP !== null && String(capP).trim() !== '') safeSet(form, 'FillText24', String(capP).trim());
+  if (capT !== undefined && capT !== null && String(capT).trim() !== '') {
+    safeSet(form, 'FillText27', String(capT).trim());
+  } else if ((capC !== undefined && capC !== null && String(capC).trim() !== '') || (capP !== undefined && capP !== null && String(capP).trim() !== '')) {
+    const x = parseFloat(String(capC).replace(/,/g, '')) || 0;
+    const y = parseFloat(String(capP).replace(/,/g, '')) || 0;
+    safeSet(form, 'FillText27', String(Math.round((x + y) * 100) / 100));
+  }
 }
 
 function fillCRM2(form, d) {
@@ -5942,7 +6062,12 @@ function fillCRM3(form, d) {
   const isDefending = d.outcomeDecision ? (d.outcomeDecision.indexOf('Charged') >= 0 || d.outcomeDecision.indexOf('Bail') >= 0) : true;
   safeCheck(form, 'defending_the', isDefending);
   safeCheck(form, 'CheckBox4', !isDefending);
-  safeCheck(form, 'involved_in_another_way', false);
+  const involvedOther = d.clientInvolvedAnotherWay === 'Yes';
+  safeUncheck(form, 'involved_in_another_way');
+  safeCheck(form, 'involved_in_another_way', involvedOther);
+  safeSet(form, 'FillText2', d.clientInvolvedDetails);
+  /* Header UFN line — firm completes; do not pre-fill from record UFN */
+  safeClearText(form, 'FillText8');
 
   const instrDate = fmtDateDMY(d.date);
   if (instrDate) {
@@ -5952,7 +6077,7 @@ function fillCRM3(form, d) {
     safeSet(form, 'Date_first_instructed_by2', parts[2] || '');
   }
 
-  const reason = d.advocacyReason || '';
+  const reason = d.advocacyReason || d.offenceSummary || d.offence1Details || '';
   safeCheck(form, 'Disciplinary_proceedings', reason.indexOf('Disciplinary') >= 0);
   safeCheck(form, 'CheckBox10', reason.indexOf('Parole') >= 0);
   safeCheck(form, 'CheckBox1', reason.indexOf('Category A') >= 0);
@@ -5972,17 +6097,25 @@ function fillCRM3(form, d) {
     safeSet(form, 'Date_of_next_hearing2', parts[2] || '');
   }
 
-  const actionStarted = fmtDateDMY(d.date);
-  if (actionStarted) {
-    const parts = actionStarted.split('/');
+  const dateCourtActionStarted = fmtDateDMY(d.date);
+  if (dateCourtActionStarted) {
+    const parts = dateCourtActionStarted.split('/');
     safeSet(form, 'Date_court_action_started', parts[0] || '');
     safeSet(form, 'Date_court_action_started1', parts[1] || '');
     safeSet(form, 'Date_court_action_started2', parts[2] || '');
   }
 
-  safeCheck(form, 'Yes1', true);
-  safeCheck(form, 'CheckBox2', d.counselInstructed === 'Yes');
-  safeCheck(form, 'CheckBox7', d.counselInstructed !== 'Yes');
+  const hasCourtAction = !!(d.date && String(d.date).trim());
+  safeUncheck(form, 'Yes1');
+  safeUncheck(form, 'No1');
+  safeCheck(form, 'Yes1', hasCourtAction);
+  safeCheck(form, 'No1', !hasCourtAction);
+
+  const counselYes = d.counselInstructed === 'Yes';
+  safeUncheck(form, 'CheckBox2');
+  safeUncheck(form, 'CheckBox7');
+  safeCheck(form, 'CheckBox2', counselYes);
+  safeCheck(form, 'CheckBox7', !counselYes);
 
   safeSet(form, 'FillText10', d.offenceSummary || d.offence1Details);
   safeSet(form, 'FillText17', reason || (d.outcomeDecision && d.outcomeDecision.indexOf('Charged') >= 0 ? 'Bail application / remand hearing following charge at police station.' : ''));
@@ -5990,7 +6123,8 @@ function fillCRM3(form, d) {
 
 async function fillDeclaration(pdfDoc, form, d, settings) {
   const s = settings || {};
-  // Text4 = USN — left blank; the firm fills this in
+  /* Text4 = USN — must remain blank for the firm (same as CRM1 USN). */
+  safeClearText(form, 'Text4');
   safeSet(form, 'Text5', [d.forename, d.surname].filter(Boolean).join(' '));
   safeSet(form, 'Text6', d.niNumber);
   safeSet(form, 'Text7', fmtDateDMY(d.dob));

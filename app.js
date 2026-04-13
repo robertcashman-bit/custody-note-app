@@ -807,6 +807,10 @@ var LAA = {
         { key: 'grossIncome', label: 'Gross annual income (£)', type: 'number', placeholder: 'e.g. 22000', showIf: { field: 'passportedBenefit', value: 'No' } },
         { key: 'partnerIncome', label: "Partner's gross annual income (£)", type: 'number', placeholder: 'e.g. 18000', showIf: { field: 'passportedBenefit', value: 'No' } },
         { key: 'partnerName', label: "Partner's name", type: 'text', placeholder: 'For means test / Legal Aid', showIf: { field: 'passportedBenefit', value: 'No' } },
+        { key: 'dependants', label: 'Number of dependants (CRM1 capital)', type: 'number', placeholder: 'e.g. 0' },
+        { key: 'capitalClient', label: 'Savings/capital — client (£)', type: 'number', placeholder: 'e.g. 0' },
+        { key: 'capitalPartner', label: 'Savings/capital — partner (£)', type: 'number', placeholder: 'e.g. 0' },
+        { key: 'capitalTotal', label: 'Savings/capital — total (£)', type: 'number', placeholder: 'Leave blank to sum client + partner' },
         { key: 'incomeNotes', label: 'Income / means notes', type: 'text' },
         { key: '_h_circumstances', label: 'Personal Circumstances', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'employmentStatus', label: 'Employment', type: 'select', options: ['Employed','Self-employed','Unemployed','Student','Retired','Other'] },
@@ -1104,6 +1108,11 @@ var LAA = {
     { id: 'laaDeclaration', title: 'LAA Declaration', keyFields: ['laaClientFullName', 'clientSig'], hasDeclarationText: true, fields: [
       { key: 'previousAdvice', label: 'Has client received advice on this matter before?', type: 'select', options: ['Yes','No'] },
       { key: 'previousAdviceDetails', label: 'Previous advice details', type: 'text', cols: 2, showIf: { field: 'previousAdvice', value: 'Yes' } },
+      { key: '_h_crm3', label: 'CRM3 (Advocacy Assistance)', type: 'sectionHeading' },
+      { key: 'clientInvolvedAnotherWay', label: 'Client involved in another way?', type: 'select', options: ['','Yes','No'] },
+      { key: 'clientInvolvedDetails', label: 'If involved in another way — details', type: 'textarea', cols: 2, rows: 3, showIf: { field: 'clientInvolvedAnotherWay', value: 'Yes' } },
+      { key: 'counselInstructed', label: 'Has counsel been instructed? (CRM3)', type: 'select', options: ['','Yes','No'] },
+      { key: 'advocacyReason', label: 'Advocacy Assistance — proceedings / reason (CRM3)', type: 'textarea', cols: 2, rows: 2, placeholder: 'e.g. bail variation, Parole, Warrant of Further Detention' },
       { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['Yes','No'] },
       { key: 'laaHasPartner', label: 'Does the client have a partner?', type: 'select', options: ['Yes','No'] },
       { key: '_note_partner_decl', label: 'Partner\u2019s declaration: I declare that the information included in this application is a true statement of all my financial circumstances to the best of my knowledge and belief. I agree to the LAA checking the information I have given. I authorise those organisations to provide the information for which the LAA may ask. I have read the Fraud Notice.', type: 'sectionNote', showIf: { field: 'laaHasPartner', value: 'Yes' } },
@@ -1572,6 +1581,10 @@ var LAA = {
         { key: 'grossIncome', label: 'Gross annual income (\u00a3)', type: 'number', placeholder: 'e.g. 22000', showIf: { field: 'passportedBenefit', value: 'No' } },
         { key: 'partnerIncome', label: "Partner's gross annual income (\u00a3)", type: 'number', placeholder: 'e.g. 18000', showIf: { field: 'passportedBenefit', value: 'No' } },
         { key: 'partnerName', label: "Partner's name", type: 'text', placeholder: 'For means test / Legal Aid', showIf: { field: 'passportedBenefit', value: 'No' } },
+        { key: 'dependants', label: 'Number of dependants (CRM1 capital)', type: 'number', placeholder: 'e.g. 0' },
+        { key: 'capitalClient', label: 'Savings/capital — client (£)', type: 'number', placeholder: 'e.g. 0' },
+        { key: 'capitalPartner', label: 'Savings/capital — partner (£)', type: 'number', placeholder: 'e.g. 0' },
+        { key: 'capitalTotal', label: 'Savings/capital — total (£)', type: 'number', placeholder: 'Leave blank to sum client + partner' },
         { key: 'incomeNotes', label: 'Income / means notes', type: 'text' },
         { key: '_h_circumstances', label: 'Personal Circumstances', type: 'sectionHeading' },
         { key: 'employmentStatus', label: 'Employment', type: 'select', options: ['Employed','Self-employed','Unemployed','Student','Retired','Other'] },
@@ -1751,7 +1764,8 @@ var clientLookupKeys = [
     'maritalStatus','employmentStatus',
     'accommodationStatus','accommodationDetails',
     'benefits','benefitType','benefitOther','benefitNotes',
-    'passportedBenefit','grossIncome','partnerIncome','partnerName','incomeNotes',
+    'passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes',
+    'clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason',
     'medicationRequired','medication','psychiatricIssues','psychiatricNotes'
   ];
 
@@ -5553,7 +5567,8 @@ var REQUIRED_FIELD_KEYS = [
       const copyKeys = ['title','surname','forename','middleName','gender','dob','custodyNumber','clientPhone','clientEmail',
         'clientEmailConsent','address1','address2','address3','city','county','postCode','accommodationStatus',
         'accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber',
-        'benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','incomeNotes',
+        'benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes',
+        'clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason',
         'nationality','nationalityOther','ethnicOriginCode','disabilityCode','riskAssessment',
         'groundsForArrest','groundsForDetention','dateOfArrest','custodyRecordRead','custodyRecordIssues',
         'medicationRequired','medication','psychiatricIssues','psychiatricNotes','literate','drugsTest','medicalExaminationOutcome',
@@ -5595,7 +5610,7 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   /* ─── NEW MATTER (SAME CLIENT) ─── Copy only client personal details; new file number on save */
-  var clientPersonalKeys = ['title','forename','middleName','surname','dob','gender','address1','address2','address3','city','county','postCode','clientPhone','clientEmail','clientEmailConsent','nationality','nationalityOther','accommodationStatus','accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber','benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','incomeNotes','ethnicOriginCode','disabilityCode','riskAssessment','juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress','interpreterName','interpreterLanguage','languageIssues'];
+  var clientPersonalKeys = ['title','forename','middleName','surname','dob','gender','address1','address2','address3','city','county','postCode','clientPhone','clientEmail','clientEmailConsent','nationality','nationalityOther','accommodationStatus','accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber','benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes','clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason','ethnicOriginCode','disabilityCode','riskAssessment','juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress','interpreterName','interpreterLanguage','languageIssues'];
 
   function newMatterFromAttendance(id) {
     window.api.attendanceGet(id).then(row => {
@@ -13770,8 +13785,8 @@ PDF_CASENOTE_ADVERT +
     function _confirmAndInstallUpdate(vLabel) {
       if (typeof showConfirm !== 'function') { window.api.appUpdateInstall(); return; }
       showConfirm(
-        'The app will close and restart to install update ' + (vLabel || '') + '.\n\nAny unsaved changes will be saved as a draft.\n\nRestart now?',
-        'Restart & Update'
+        'Install update ' + (vLabel || '') + ' now?\n\nThe app will close and restart. Any unsaved changes will be saved as a draft first.',
+        'Install update now'
       ).then(function(ok) {
         if (!ok) return;
         try { if (typeof quietSave === 'function') quietSave(); } catch (_) {}
@@ -13842,24 +13857,11 @@ PDF_CASENOTE_ADVERT +
         var vLabel = data.version ? 'v' + data.version : '';
         if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Update ' + vLabel + ' ready \u2014 click to install', 'synced'); el.onclick = function() { _confirmAndInstallUpdate(vLabel); }; }
         if (banner) banner.style.display = '';
-        if (bannerText) bannerText.textContent = 'Update ' + vLabel + ' downloaded. Restart when you\u2019re ready to install.';
+        if (bannerText) {
+          bannerText.textContent = 'Update ' + vLabel + ' is downloaded. Finish your note, then use Restart & Update or the footer when you are ready.';
+        }
         if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Restart & Update'; restartBtn.onclick = function() { _confirmAndInstallUpdate(vLabel); }; }
         if (gearBtn) { gearBtn.textContent = '\u2B06 Install ' + vLabel; gearBtn.style.color = '#059669'; gearBtn.dataset.action = 'install-update'; }
-        if (typeof showConfirm === 'function' && !_updateToastShown.ready) {
-          _updateToastShown.ready = true;
-          showConfirm(
-            'Update ' + vLabel + ' is ready to install.\n\n' +
-            'The app needs to restart to apply the update. Any unsaved work will be saved as a draft automatically.\n\n' +
-            'Restart now?',
-            'Update Available'
-          ).then(function(ok) {
-            if (ok) {
-              window.api.appUpdateInstall();
-            } else {
-              showToast('Update will install when you next close the app', 'info', 4000);
-            }
-          });
-        }
         _lastUpdateToastPct = -1;
       } else if (data.status === 'up-to-date') {
         if (banner) banner.style.display = 'none';
@@ -13954,7 +13956,7 @@ PDF_CASENOTE_ADVERT +
           if (gearBtn) gearBtn.textContent = '\u21BB Downloading\u2026';
           if (statusEl) statusEl.textContent = 'Downloading update\u2026';
         } else if (res.status === 'ready' || res.status === 'installing') {
-          showToast('Update v' + (res.version || '') + ' ready \u2014 will install on next restart', 'success', 4000);
+          showToast('Update v' + (res.version || '') + ' downloaded. Install from the footer or banner when you are ready.', 'success', 5000);
           if (gearBtn) { gearBtn.textContent = '\u2B06 Install v' + (res.version || ''); gearBtn.style.color = '#059669'; gearBtn.dataset.action = 'install-update'; }
           if (statusEl) statusEl.textContent = 'Update v' + (res.version || '') + ' ready. Close app to install, or click Install Now.';
           applyAppUpdateStatusPayload({ status: 'ready', version: res.version });
