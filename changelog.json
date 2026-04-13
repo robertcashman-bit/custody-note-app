@@ -1,9 +1,24 @@
 {
   "releases": [
     {
-      "version": "1.4.201",
+      "version": "1.4.202",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "CRM1 official PDF: fill Comb1-9 for NI",
+        "normalise NI",
+        "fix numeric fields (0)",
+        "middle name in first name",
+        "Fee earner signature: Settings choice draw per record vs saved scan/image",
+        "getEffectiveFeeEarnerSig for PDFs LAA and conflict cert",
+        "main LAA merge",
+        "Conflict certificate: attendance date row and rep signature from effective sig"
+      ]
+    },
+    {
+      "version": "1.4.201",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "Matter completion workflow (step 3) with office checklist and post-invoice CTAs",
         "clearer practice-wide vs current-matter billing labels",
