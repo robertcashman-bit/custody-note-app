@@ -91,7 +91,6 @@ contextBridge.exposeInMainWorld('api', {
   laaOpenOfficialTemplate: (formType) => ipcRenderer.invoke('laa-open-official-template', formType),
   laaGeneratePdfBuffer: (params) => ipcRenderer.invoke('laa-generate-pdf-buffer', params),
   htmlToPdfBuffer: (params) => ipcRenderer.invoke('html-to-pdf-buffer', params),
-  previewPdfBase64: (params) => ipcRenderer.invoke('preview-pdf-base64', params),
   /* Auth */
   authStatus: () => ipcRenderer.invoke('auth:status'),
   authMagicLink: (params) => ipcRenderer.invoke('auth:magic-link', params),
