@@ -253,13 +253,24 @@ async function main() {
   }
   console.log('Build complete.');
 
-  // Commit and push version bump so Vercel deploys via git integration
+  // Commit and push version bump so Vercel deploys via git integration (skip if re-publishing same version)
   const { execSync } = await import('child_process');
-  console.log('Committing version bump...');
   execSync('git add package.json changelog.json', { cwd: APP_ROOT, stdio: 'inherit' });
-  execSync(`git commit -m "chore(release): v${newVersion}"`, { cwd: APP_ROOT, stdio: 'inherit' });
-  execSync('git push origin master', { cwd: APP_ROOT, stdio: 'inherit' });
-  console.log('Pushed to origin/master \u2014 Vercel deploy will trigger automatically.');
+  let hasStagedVersionFiles = true;
+  try {
+    execSync('git diff --cached --quiet', { cwd: APP_ROOT, stdio: 'ignore' });
+    hasStagedVersionFiles = false;
+  } catch {
+    /* exit 1 = staged diff exists */
+  }
+  if (hasStagedVersionFiles) {
+    console.log('Committing version bump...');
+    execSync(`git commit -m "chore(release): v${newVersion}"`, { cwd: APP_ROOT, stdio: 'inherit' });
+    execSync('git push origin master', { cwd: APP_ROOT, stdio: 'inherit' });
+    console.log('Pushed to origin/master \u2014 Vercel deploy will trigger automatically.');
+  } else {
+    console.log('No package.json/changelog changes to commit (e.g. npm run release current) — skipping git push.');
+  }
 
   if (argv.includes('--skip-website-sync')) {
     console.log('--skip-website-sync set — skipping custody-note-website sync (run npm run sync-website when ready).');
