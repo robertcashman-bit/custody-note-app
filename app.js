@@ -13290,13 +13290,47 @@ PDF_CASENOTE_ADVERT +
     function _normalizeTemplateScope(scope) {
       return scope === 'officer' || scope === 'solicitor' ? scope : 'all';
     }
+    function _newEmailTemplateId() {
+      try {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return 'cn-etpl-' + crypto.randomUUID();
+      } catch (_) {}
+      return 'cn-etpl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
+    }
+    /** Stable id for legacy templates without id (same name+subject prefix → same id). */
+    function _legacyEmailTemplateId(tpl) {
+      tpl = tpl || {};
+      var base = String(tpl.name || '') + '\n' + String(tpl.subject || '').slice(0, 120) + '\n' + String(tpl.body || '').slice(0, 160);
+      var h = 2166136261;
+      for (var i = 0; i < base.length; i++) {
+        h ^= base.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return 'cn-etpl-legacy-' + (h >>> 0).toString(16);
+    }
     function _normalizeCustomTemplate(tpl) {
       tpl = tpl || {};
+      var subject = tpl.subject || '';
+      var body = tpl.body || '';
+      var requiredFields = Array.isArray(tpl.requiredFields) ? tpl.requiredFields.slice() : null;
+      if (requiredFields == null && typeof window.extractQuickEmailPlaceholderKeys === 'function') {
+        requiredFields = window.extractQuickEmailPlaceholderKeys(subject, body);
+      } else if (requiredFields == null) {
+        requiredFields = [];
+      }
+      var id = tpl.id;
+      if (!id) id = _legacyEmailTemplateId(tpl);
+      var createdAt = tpl.createdAt || new Date(0).toISOString();
+      var updatedAt = tpl.updatedAt || createdAt;
       return {
+        id: id,
         name: tpl.name || '',
-        subject: tpl.subject || '',
-        body: tpl.body || '',
-        scope: _normalizeTemplateScope(tpl.scope)
+        subject: subject,
+        body: body,
+        scope: _normalizeTemplateScope(tpl.scope),
+        requiredFields: requiredFields,
+        category: typeof tpl.category === 'string' ? tpl.category : '',
+        createdAt: createdAt,
+        updatedAt: updatedAt
       };
     }
     function _getCustomTemplates() {
@@ -13380,7 +13414,22 @@ PDF_CASENOTE_ADVERT +
       if (!name) { showToast('Enter a template name', 'error'); return; }
       if (!subject || !body) { showToast('Subject and body are required', 'error'); return; }
       var tpls = _getCustomTemplates();
-      var nextTemplate = { name: name, subject: subject, body: body, scope: scope };
+      var nowIso = new Date().toISOString();
+      var prev = (_editingTemplateIdx >= 0 && _editingTemplateIdx < tpls.length) ? tpls[_editingTemplateIdx] : null;
+      var reqFields = typeof window.extractQuickEmailPlaceholderKeys === 'function'
+        ? window.extractQuickEmailPlaceholderKeys(subject, body)
+        : [];
+      var nextTemplate = {
+        id: prev && prev.id ? prev.id : _newEmailTemplateId(),
+        name: name,
+        subject: subject,
+        body: body,
+        scope: scope,
+        requiredFields: reqFields,
+        category: prev && prev.category ? prev.category : '',
+        createdAt: prev && prev.createdAt ? prev.createdAt : nowIso,
+        updatedAt: nowIso
+      };
       if (_editingTemplateIdx >= 0 && _editingTemplateIdx < tpls.length) tpls[_editingTemplateIdx] = nextTemplate;
       else tpls.push(nextTemplate);
       _saveCustomTemplates(tpls);

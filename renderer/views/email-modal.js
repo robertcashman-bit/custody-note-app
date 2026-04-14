@@ -470,7 +470,27 @@ function _saveAsTemplate(modalId) {
     var tpls = typeof window._getCustomEmailTemplates === 'function'
       ? (window._getCustomEmailTemplates() || []).slice()
       : [];
-    tpls.push({ name: name, subject: subjectTpl, body: bodyTpl, scope: 'officer' });
+    var nowIso = new Date().toISOString();
+    var reqFields = typeof window.extractQuickEmailPlaceholderKeys === 'function'
+      ? window.extractQuickEmailPlaceholderKeys(subjectTpl, bodyTpl)
+      : [];
+    var newId = (function() {
+      try {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) return 'cn-etpl-' + crypto.randomUUID();
+      } catch (_) {}
+      return 'cn-etpl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
+    })();
+    tpls.push({
+      id: newId,
+      name: name,
+      subject: subjectTpl,
+      body: bodyTpl,
+      scope: 'officer',
+      requiredFields: reqFields,
+      category: '',
+      createdAt: nowIso,
+      updatedAt: nowIso
+    });
     if (typeof window._saveCustomEmailTemplates === 'function') {
       window._saveCustomEmailTemplates(tpls);
     }
@@ -537,6 +557,25 @@ function openQuickEmailModal() {
     return '';
   }
 
+  /** HTML time (HH:MM) → UK-style phrase for letters, e.g. 12:00 → "12 p.m.", 10:15 → "10:15 a.m." */
+  function _quickEmailFmtTimeForSentence(hhmm) {
+    var raw = String(hhmm || '').trim();
+    if (!raw) return '';
+    var m = raw.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return raw;
+    var h24 = parseInt(m[1], 10);
+    var min = parseInt(m[2], 10);
+    if (!Number.isFinite(h24) || !Number.isFinite(min)) return raw;
+    h24 = ((h24 % 24) + 24) % 24;
+    min = ((min % 60) + 60) % 60;
+    var isAM = h24 < 12;
+    var h12 = h24 % 12;
+    if (h12 === 0) h12 = 12;
+    var minPart = min === 0 ? '' : ':' + (min < 10 ? '0' : '') + min;
+    var suffix = isAM ? 'a.m.' : 'p.m.';
+    return h12 + minPart + ' ' + suffix;
+  }
+
   function _getPlaceholderMap() {
     var modal = document.getElementById('quick-email-modal');
     if (!modal) return {};
@@ -552,6 +591,8 @@ function openQuickEmailModal() {
     var timeEl = modal.querySelector('#quick-email-time');
     var timeVal = (timeEl && timeEl.value ? timeEl.value : '').slice(0, 5);
     var attendanceVal = (modal.querySelector('#quick-email-attendance-type') || {}).value || '';
+    var toEl = modal.querySelector('#quick-email-to');
+    var officerEmailVal = toEl && String(toEl.value || '').trim() ? String(toEl.value || '').trim() : '';
     return {
       clientName: (modal.querySelector('#quick-email-client-name') || {}).value || '',
       oicName: (modal.querySelector('#quick-email-officer-name') || {}).value || '',
@@ -559,7 +600,9 @@ function openQuickEmailModal() {
       offenceType: (modal.querySelector('#quick-email-offence') || {}).value || '',
       feeEarnerName: feeEarnerName,
       date: dateFormatted,
-      time: timeVal,
+      time: _quickEmailFmtTimeForSentence(timeVal),
+      time24: timeVal,
+      officerEmail: officerEmailVal,
       contactName: '',
       firmName: '',
       outcome: '',
@@ -571,11 +614,23 @@ function openQuickEmailModal() {
     };
   }
 
-  function _applyPlaceholders(text) {
+  function _renderQuickEmailFieldsFromTemplate() {
     var map = _getPlaceholderMap();
-    return String(text || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
-      return map[key] != null ? String(map[key]) : '';
-    });
+    if (typeof window.renderQuickEmailFromTemplates === 'function') {
+      return window.renderQuickEmailFromTemplates(
+        _activeRawTemplate.subject || '',
+        _activeRawTemplate.body || '',
+        map
+      );
+    }
+    return {
+      subject: String(_activeRawTemplate.subject || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
+        return map[key] != null ? String(map[key]) : '';
+      }),
+      body: String(_activeRawTemplate.body || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
+        return map[key] != null ? String(map[key]) : '';
+      })
+    };
   }
 
   /* ── Quick-email missing-field detection ─────────────── */
@@ -586,25 +641,39 @@ function openQuickEmailModal() {
     if (!modal) return missing;
     var toEl = modal.querySelector('#quick-email-to');
     if (!toEl || !String(toEl.value || '').trim()) {
-      missing.push({ key: 'to', label: 'Officer email address' });
+      missing.push({ key: 'to', label: 'Officer email (needed for Outlook Web)' });
     }
-    if (_activeRawTemplate) {
+    if (_activeRawTemplate && typeof window.listMissingQuickEmailPlaceholders === 'function') {
       var map = _getPlaceholderMap();
+      var ph = window.listMissingQuickEmailPlaceholders(
+        _activeRawTemplate.subject || '',
+        _activeRawTemplate.body || '',
+        map
+      );
+      for (var i = 0; i < ph.length; i++) missing.push(ph[i]);
+    } else if (_activeRawTemplate) {
+      var mapLegacy = _getPlaceholderMap();
+      var mapLookup = typeof window.expandQuickEmailValueMap === 'function'
+        ? window.expandQuickEmailValueMap(mapLegacy)
+        : mapLegacy;
       var rawText = (_activeRawTemplate.subject || '') + '\n' + (_activeRawTemplate.body || '');
       var re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
       var seen = {};
       var m;
       var qLabels = {
         clientName: 'Client name', oicName: 'Officer name', station: 'Police station',
-        offenceType: 'Offence', date: 'Date', feeEarnerName: 'Fee earner'
+        offenceType: 'Offence', date: 'Date', time: 'Time', feeEarnerName: 'Fee earner',
+        officerEmail: 'Officer email'
       };
       while ((m = re.exec(rawText)) !== null) {
         var key = m[1];
         if (seen[key]) continue;
         seen[key] = true;
-        var val = map[key];
+        var ck = typeof window.canonicalPlaceholderKey === 'function'
+          ? window.canonicalPlaceholderKey(key) : key;
+        var val = mapLookup[key] != null ? mapLookup[key] : mapLookup[ck];
         if (val == null || String(val).trim() === '') {
-          missing.push({ key: key, label: qLabels[key] || key });
+          missing.push({ key: ck, label: qLabels[key] || qLabels[ck] || key });
         }
       }
     }
@@ -621,11 +690,27 @@ function openQuickEmailModal() {
     var warnEl = document.getElementById('quick-email-missing-warn');
     if (!warnEl) return;
     var missing = _computeQuickMissing();
+    var openBtn = document.getElementById('quick-email-open-app');
+    var toOk = !!document.querySelector('#quick-email-to') &&
+      String(document.querySelector('#quick-email-to').value || '').trim();
+    if (openBtn) openBtn.disabled = !toOk;
+
     if (!missing.length) { warnEl.style.display = 'none'; return; }
-    warnEl.innerHTML = '&#9888;&nbsp;<strong>Missing:</strong> ' +
-      missing.map(function(f) {
-        return '<span class="email-oic-missing-tag">' + _escAttrQ(f.label) + '</span>';
-      }).join('');
+    var needTo = missing.some(function(f) { return f.key === 'to'; });
+    var tplGaps = missing.filter(function(f) { return f.key !== 'to'; });
+    var parts = [];
+    parts.push('<span class="quick-email-missing-intro">Complete required fields to send email</span>');
+    if (needTo) {
+      parts.push('<span class="quick-email-missing-detail">Add officer email for Outlook Web.</span>');
+    }
+    if (tplGaps.length) {
+      parts.push('<span class="quick-email-missing-tags">' +
+        tplGaps.map(function(f) {
+          return '<span class="email-oic-missing-tag">' + _escAttrQ(f.label) + '</span>';
+        }).join('') +
+      '</span>');
+    }
+    warnEl.innerHTML = parts.join('');
     warnEl.style.display = '';
   }
 
@@ -651,9 +736,11 @@ function openQuickEmailModal() {
   var _isManualMode = false;
 
   /** Render the active template into subject + body using current field values.
-   *  Skipped entirely when the user has entered manual mode. */
-  function renderTemplate() {
-    if (!_activeRawTemplate || _isManualMode) return;
+   *  Skipped when the user has entered manual mode, unless ignoreManual is true
+   *  (e.g. date/time/attendance changed — must refresh {{time}} etc.). */
+  function renderTemplate(ignoreManual) {
+    if (!_activeRawTemplate) return;
+    if (_isManualMode && !ignoreManual) return;
     var modal = document.getElementById('quick-email-modal');
     if (!modal) return;
     modal._activeRawTemplate = _activeRawTemplate;
@@ -661,8 +748,9 @@ function openQuickEmailModal() {
     var bodyEl = modal.querySelector('#quick-email-body');
     if (!subjectEl || !bodyEl) return;
     try {
-      subjectEl.value = _applyPlaceholders(_activeRawTemplate.subject || '');
-      bodyEl.value    = _applyPlaceholders(_activeRawTemplate.body    || '');
+      var rendered = _renderQuickEmailFieldsFromTemplate();
+      subjectEl.value = rendered.subject;
+      bodyEl.value    = rendered.body;
     } catch (e) {
       console.error('[QuickEmail] renderTemplate failed:', e);
     }
@@ -805,15 +893,12 @@ function openQuickEmailModal() {
         _escAttr(tpl.name || 'Custom template') + '</option>';
     }).join('');
 
-    var customTemplateHtml =
-      '<label class="email-oic-label" for="quick-email-custom-template">Template</label>' +
-      '<select id="quick-email-custom-template" class="email-oic-input">' +
-        '<option value="">— None (compose freely) —</option>' +
-        '<optgroup label="Built-in">' + builtinOptionsHtml + '</optgroup>' +
-        (customTemplates.length
-          ? '<optgroup label="Saved templates">' + customOptionsHtml + '</optgroup>'
-          : '') +
-      '</select>';
+    var templateSelectInner =
+      '<option value="">— None (compose freely) —</option>' +
+      '<optgroup label="Built-in">' + builtinOptionsHtml + '</optgroup>' +
+      (customTemplates.length
+        ? '<optgroup label="Saved templates">' + customOptionsHtml + '</optgroup>'
+        : '');
 
     var html =
       '<div id="quick-email-modal" class="email-oic-overlay" role="dialog" aria-modal="true" aria-label="Quick Email">' +
@@ -822,61 +907,114 @@ function openQuickEmailModal() {
             '<h3 class="email-oic-title">&#9993; Quick Email to Officer</h3>' +
             '<button type="button" class="email-oic-close" aria-label="Close modal">&times;</button>' +
           '</div>' +
-          '<div class="email-oic-fields">' +
-            '<label class="email-oic-label" for="quick-email-to">Officer email <span style="color:#ef4444;">*</span></label>' +
-            '<input type="email" id="quick-email-to" class="email-oic-input" placeholder="officer@police.uk">' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">' +
-              '<div>' +
-                '<label class="email-oic-label" for="quick-email-officer-name">Officer name</label>' +
-                '<input type="text" id="quick-email-officer-name" class="email-oic-input" placeholder="e.g. DC Smith">' +
+          '<div class="email-oic-fields quick-email-fields">' +
+            '<section class="quick-email-section" aria-labelledby="quick-email-h-case">' +
+              '<h4 id="quick-email-h-case" class="quick-email-section-title">Case details</h4>' +
+              '<p class="quick-email-section-lead">Enter matter details first — they drive the email below.</p>' +
+              '<label class="email-oic-label" for="quick-email-to">Officer email <span class="quick-email-req">*</span></label>' +
+              '<input type="email" id="quick-email-to" class="email-oic-input" placeholder="officer@police.uk">' +
+              '<div class="quick-email-grid-2">' +
+                '<div>' +
+                  '<label class="email-oic-label" for="quick-email-officer-name">Officer name</label>' +
+                  '<input type="text" id="quick-email-officer-name" class="email-oic-input" placeholder="e.g. DC Smith">' +
+                '</div>' +
+                '<div>' +
+                  '<label class="email-oic-label" for="quick-email-client-name">Client name</label>' +
+                  '<input type="text" id="quick-email-client-name" class="email-oic-input" placeholder="e.g. John Doe">' +
+                '</div>' +
               '</div>' +
-              '<div>' +
-                '<label class="email-oic-label" for="quick-email-client-name">Client name</label>' +
-                '<input type="text" id="quick-email-client-name" class="email-oic-input" placeholder="e.g. John Doe">' +
+              '<div class="quick-email-grid-2">' +
+                '<div>' +
+                  '<label class="email-oic-label" for="quick-email-station">Police station</label>' +
+                  '<input type="text" id="quick-email-station" class="email-oic-input" placeholder="e.g. Holborn">' +
+                '</div>' +
+                '<div>' +
+                  '<label class="email-oic-label" for="quick-email-offence">Offence / case</label>' +
+                  '<input type="text" id="quick-email-offence" class="email-oic-input" placeholder="e.g. ABH">' +
+                '</div>' +
               '</div>' +
-            '</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">' +
-              '<div>' +
-                '<label class="email-oic-label" for="quick-email-station">Police station</label>' +
-                '<input type="text" id="quick-email-station" class="email-oic-input" placeholder="e.g. Holborn">' +
+              '<div class="quick-email-grid-3">' +
+                '<div>' +
+                  '<label class="email-oic-label" for="quick-email-attendance-type">Type of attendance</label>' +
+                  '<select id="quick-email-attendance-type" class="email-oic-input">' +
+                    '<option value="">—</option>' +
+                    '<option value="custody">Custody</option>' +
+                    '<option value="voluntary">Voluntary</option>' +
+                    '<option value="telephone">Telephone advice</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div>' +
+                  '<label class="email-oic-label" for="quick-email-date">Date</label>' +
+                  '<input type="date" id="quick-email-date" class="email-oic-input">' +
+                '</div>' +
+                '<div>' +
+                  '<label class="email-oic-label" for="quick-email-time">Time</label>' +
+                  '<input type="time" id="quick-email-time" class="email-oic-input">' +
+                '</div>' +
               '</div>' +
-              '<div>' +
-                '<label class="email-oic-label" for="quick-email-offence">Offence / case</label>' +
-                '<input type="text" id="quick-email-offence" class="email-oic-input" placeholder="e.g. ABH">' +
+            '</section>' +
+
+            '<section class="quick-email-section quick-email-section-template" aria-labelledby="quick-email-h-tpl">' +
+              '<h4 id="quick-email-h-tpl" class="quick-email-section-title">Email template</h4>' +
+              '<p class="quick-email-section-lead">Choose a template, then review subject and message.</p>' +
+              '<div class="quick-email-template-toolbar">' +
+                '<label class="email-oic-label" for="quick-email-custom-template">Template</label>' +
+                '<div class="quick-email-template-select-row">' +
+                  '<select id="quick-email-custom-template" class="email-oic-input quick-email-template-select">' +
+                    templateSelectInner +
+                  '</select>' +
+                  '<div class="quick-email-help-anchor">' +
+                    '<button type="button" id="quick-email-template-help" class="quick-email-help-btn" ' +
+                      'aria-label="How templates work" aria-expanded="false" aria-controls="quick-email-help-popover" title="Help">?</button>' +
+                    '<div id="quick-email-help-popover" class="quick-email-help-popover" role="tooltip" hidden>' +
+                      '<p class="quick-email-help-heading">How templates work</p>' +
+                      '<ol class="quick-email-help-steps">' +
+                        '<li>Select a template</li>' +
+                        '<li>Fill in the fields above</li>' +
+                        '<li>The email auto-fills with your details</li>' +
+                        '<li>Edit before sending if you need to</li>' +
+                      '</ol>' +
+                      '<p class="quick-email-help-note">Missing fields are highlighted below — you can still pick a template.</p>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
               '</div>' +
-            '</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.5rem;">' +
-              '<div>' +
-                '<label class="email-oic-label" for="quick-email-attendance-type">Type of attendance</label>' +
-                '<select id="quick-email-attendance-type" class="email-oic-input">' +
-                  '<option value="">—</option>' +
-                  '<option value="custody">Custody</option>' +
-                  '<option value="voluntary">Voluntary</option>' +
-                  '<option value="telephone">Telephone advice</option>' +
-                '</select>' +
-              '</div>' +
-              '<div>' +
-                '<label class="email-oic-label" for="quick-email-date">Date</label>' +
-                '<input type="date" id="quick-email-date" class="email-oic-input">' +
-              '</div>' +
-              '<div>' +
-                '<label class="email-oic-label" for="quick-email-time">Time</label>' +
-                '<input type="time" id="quick-email-time" class="email-oic-input">' +
-              '</div>' +
-            '</div>' +
-            '<hr style="border:none;border-top:1px solid #e2e8f0;margin:0.5rem 0;">' +
-            customTemplateHtml +
-            '<label class="email-oic-label" for="quick-email-subject">Subject</label>' +
-            '<input type="text" id="quick-email-subject" class="email-oic-input" value="" placeholder="Auto-filled from fields above">' +
-            '<label class="email-oic-label" for="quick-email-body">Message</label>' +
-            '<textarea id="quick-email-body" class="email-oic-textarea" rows="10" placeholder="Type your message here..."></textarea>' +
+              '<p id="quick-email-template-applied-hint" class="quick-email-applied-hint" hidden>' +
+                'Template applied — update details above if needed' +
+              '</p>' +
+              '<label class="email-oic-label" for="quick-email-subject">Subject</label>' +
+              '<input type="text" id="quick-email-subject" class="email-oic-input quick-email-subject-input" value="" placeholder="Filled from template or type your own">' +
+              '<label class="email-oic-label" for="quick-email-body">Message</label>' +
+              '<textarea id="quick-email-body" class="email-oic-textarea quick-email-message-textarea" rows="10" ' +
+                'placeholder="Template will appear here — you can edit before sending"></textarea>' +
+              '<label class="email-oic-label" for="quick-email-insert-token">Insert placeholder</label>' +
+              '<select id="quick-email-insert-token" class="email-oic-input quick-email-insert-select">' +
+                '<option value="">— Choose token to append —</option>' +
+                '<option value="{{clientName}}">{{clientName}}</option>' +
+                '<option value="{{oicName}}">{{oicName}} (officer surname / name)</option>' +
+                '<option value="{{officerName}}">{{officerName}} (alias)</option>' +
+                '<option value="{{station}}">{{station}}</option>' +
+                '<option value="{{policeStation}}">{{policeStation}} (alias)</option>' +
+                '<option value="{{offenceType}}">{{offenceType}}</option>' +
+                '<option value="{{offence}}">{{offence}} (alias)</option>' +
+                '<option value="{{date}}">{{date}}</option>' +
+                '<option value="{{time}}">{{time}}</option>' +
+                '<option value="{{time24}}">{{time24}}</option>' +
+                '<option value="{{attendanceType}}">{{attendanceType}}</option>' +
+                '<option value="{{feeEarnerName}}">{{feeEarnerName}}</option>' +
+                '<option value="{{officerEmail}}">{{officerEmail}}</option>' +
+              '</select>' +
+              '<p class="quick-email-save-hint">Saving a template stores <code class="quick-email-code">{{tokens}}</code> so you can reuse wording next time.</p>' +
+            '</section>' +
+
+            '<div id="quick-email-missing-warn" class="quick-email-missing-strip email-oic-missing-warn" style="display:none" role="status"></div>' +
           '</div>' +
-          '<div id="quick-email-missing-warn" class="email-oic-missing-warn" style="display:none"></div>' +
-          '<div class="email-oic-actions quick-email-actions">' +
+
+          '<div class="email-oic-actions quick-email-actions quick-email-actions-bar">' +
             '<button type="button" id="quick-email-open-app" class="btn btn-primary">Open in Outlook Web</button>' +
             '<button type="button" id="quick-email-copy" class="btn btn-secondary">Copy Email</button>' +
             '<button type="button" id="quick-email-save-tpl" class="btn btn-secondary">Save as Template</button>' +
-            '<button type="button" id="quick-email-cancel" class="btn btn-secondary">Cancel</button>' +
+            '<button type="button" id="quick-email-cancel" class="btn btn-tertiary quick-email-btn-cancel">Cancel</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -900,8 +1038,49 @@ function openQuickEmailModal() {
     function _close() {
       var m = document.getElementById('quick-email-modal');
       if (!m) return;
+      if (m._hintTimer) clearTimeout(m._hintTimer);
       if (m._escHandler) document.removeEventListener('keydown', m._escHandler);
+      if (m._helpOutside) document.removeEventListener('click', m._helpOutside);
       m.remove();
+    }
+
+    function _setHelpPopoverOpen(open) {
+      var btn = document.getElementById('quick-email-template-help');
+      var pop = document.getElementById('quick-email-help-popover');
+      if (!pop) return;
+      if (open) {
+        pop.removeAttribute('hidden');
+        if (btn) { btn.setAttribute('aria-expanded', 'true'); }
+      } else {
+        pop.setAttribute('hidden', '');
+        if (btn) { btn.setAttribute('aria-expanded', 'false'); }
+      }
+    }
+
+    function _flashTemplateAppliedUI() {
+      var hint = document.getElementById('quick-email-template-applied-hint');
+      var sub = document.getElementById('quick-email-subject');
+      var body = document.getElementById('quick-email-body');
+      if (hint) {
+        hint.removeAttribute('hidden');
+        hint.setAttribute('aria-live', 'polite');
+      }
+      if (sub) {
+        sub.classList.remove('quick-email-field-flash');
+        void sub.offsetWidth;
+        sub.classList.add('quick-email-field-flash');
+      }
+      if (body) {
+        body.classList.remove('quick-email-field-flash');
+        void body.offsetWidth;
+        body.classList.add('quick-email-field-flash');
+      }
+      if (modal._hintTimer) clearTimeout(modal._hintTimer);
+      modal._hintTimer = setTimeout(function() {
+        if (hint) hint.setAttribute('hidden', '');
+        if (sub) sub.classList.remove('quick-email-field-flash');
+        if (body) body.classList.remove('quick-email-field-flash');
+      }, 4200);
     }
 
     function _onKey(e) {
@@ -914,14 +1093,45 @@ function openQuickEmailModal() {
     modal.querySelector('#quick-email-cancel').addEventListener('click', _close);
     modal.addEventListener('click', function(e) { if (e.target === modal) _close(); });
 
+    var helpBtn = document.getElementById('quick-email-template-help');
+    if (helpBtn) {
+      helpBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var pop = document.getElementById('quick-email-help-popover');
+        if (!pop) return;
+        var willOpen = pop.hasAttribute('hidden');
+        _setHelpPopoverOpen(willOpen);
+      });
+    }
+    modal._helpOutside = function(e) {
+      var pop = document.getElementById('quick-email-help-popover');
+      var btn = document.getElementById('quick-email-template-help');
+      if (!pop || pop.hasAttribute('hidden')) return;
+      if (pop.contains(e.target) || (btn && btn.contains(e.target))) return;
+      _setHelpPopoverOpen(false);
+    };
+    document.addEventListener('click', modal._helpOutside);
+
     /* — Context fields: update template live (unless in manual mode) — */
     var templateFields = [
       'quick-email-officer-name', 'quick-email-client-name',
       'quick-email-station', 'quick-email-offence',
       'quick-email-attendance-type', 'quick-email-date', 'quick-email-time'
     ];
-    function onContextChange() {
-      if (!_isManualMode) renderTemplate();
+    function onContextChange(ev) {
+      var id = ev && ev.target && ev.target.id;
+      /* Re-apply template when these fields change even if the user edited subject/body,
+         so {{time}} / {{date}} / {{attendanceType}} stay in sync with the form. */
+      var forceFromScheduleFields = id && (
+        id === 'quick-email-time' ||
+        id === 'quick-email-date' ||
+        id === 'quick-email-attendance-type'
+      );
+      if (forceFromScheduleFields && _activeRawTemplate) {
+        renderTemplate(true);
+      } else if (!_isManualMode) {
+        renderTemplate();
+      }
       _updateQuickMissingWarn();
     }
     templateFields.forEach(function(fieldId) {
@@ -960,8 +1170,11 @@ function openQuickEmailModal() {
     if (customSelect) {
       customSelect.addEventListener('change', function(e) {
         currentCustomTpl = e.target.value || '';
+        var appliedHint = document.getElementById('quick-email-template-applied-hint');
+        if (appliedHint) appliedHint.setAttribute('hidden', '');
         if (currentCustomTpl) {
           _applyCustomTemplate(currentCustomTpl);   /* resets _isManualMode internally */
+          _flashTemplateAppliedUI();
         } else {
           _activeRawTemplate = null;
           _isManualMode = false;
@@ -975,9 +1188,28 @@ function openQuickEmailModal() {
       });
     }
 
-    /* To-field and initial missing-warn */
+    /* To-field: validation + refresh {{officerEmail}} in template */
     var _qToEl = modal.querySelector('#quick-email-to');
-    if (_qToEl) _qToEl.addEventListener('input', _updateQuickMissingWarn);
+    if (_qToEl) {
+      _qToEl.addEventListener('input', function() {
+        if (_activeRawTemplate) renderTemplate(true);
+        _updateQuickMissingWarn();
+      });
+    }
+
+    var insertSel = modal.querySelector('#quick-email-insert-token');
+    if (insertSel) {
+      insertSel.addEventListener('change', function() {
+        var v = insertSel.value;
+        if (!v) return;
+        var bodyEl = document.getElementById('quick-email-body');
+        if (bodyEl) {
+          bodyEl.value = (bodyEl.value || '') + (bodyEl.value && !/\n$/.test(bodyEl.value) ? ' ' : '') + v;
+          _isManualMode = true;
+        }
+        insertSel.value = '';
+      });
+    }
     _updateQuickMissingWarn();
     setTimeout(renderTemplate, 50);
 

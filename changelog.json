@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.4.204",
+      "version": "1.4.205",
       "date": "2026-04-13",
       "latest": true,
+      "changes": [
+        "Quick Email: central template renderer (tokens + aliases), template metadata in settings (id, requiredFields, timestamps)",
+        "Quick Email modal: Case details / Email template / Actions layout, template-applied hint + field flash, help popover, softer missing-field strip",
+        "Home screen: scroll column width aligned with other views on large screens",
+        "Tests: quick-email-template-render, email policy allowlist"
+      ]
+    },
+    {
+      "version": "1.4.204",
+      "date": "2026-04-13",
+      "latest": false,
       "changes": [
         "CRM1 official PDF: USN left blank; weekly income from annual; capital/dependants; equal opportunities ethnicity and disability field maps",
         "CRM3 PDF: Yes1/No1 action started; counsel ticks; involved another way; clear header UFN; advocacy reason fallback",
