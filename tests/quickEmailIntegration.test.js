@@ -15,6 +15,10 @@ const fs = require('fs');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 
+const renderSrc = fs.readFileSync(
+  path.join(__dirname, '..', 'renderer', 'quick-email-template-render.js'),
+  'utf8'
+);
 const modalSrc = fs.readFileSync(
   path.join(__dirname, '..', 'renderer', 'views', 'email-modal.js'),
   'utf8'
@@ -55,7 +59,7 @@ function createEnv() {
   `;
 
   const scriptEl = document.createElement('script');
-  scriptEl.textContent = globals + '\n' + modalSrc;
+  scriptEl.textContent = globals + '\n' + renderSrc + '\n' + modalSrc;
   document.body.appendChild(scriptEl);
 
   return { dom, window, document };
