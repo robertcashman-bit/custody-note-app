@@ -86,6 +86,18 @@ function initUpdater(options) {
   log.transports.file.resolvePathFn = () => path.join(app.getPath('userData'), 'cn-auto-update.log');
   const logger = log.scope('updater');
 
+  /* NSIS updates are driven only by electron-updater (NsisUpdater). Electron's legacy
+   * autoUpdater can still carry default Windows handlers that show a second (system)
+   * "update ready" prompt alongside our in-app UI — clear them before we register ours. */
+  if (process.platform === 'win32') {
+    try {
+      const legacy = require('electron').autoUpdater;
+      if (legacy && typeof legacy.removeAllListeners === 'function') {
+        legacy.removeAllListeners();
+      }
+    } catch (_) {}
+  }
+
   let updaterState = 'idle';
   let downloadedVersion = null;
   let lastCheckTime = 0;
