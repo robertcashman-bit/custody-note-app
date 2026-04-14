@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.4.206",
+      "date": "2026-04-14",
+      "latest": true,
+      "changes": [
+        "Chore: redeploy web build (Vercel)"
+      ]
+    },
+    {
       "version": "1.4.205",
       "date": "2026-04-13",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Quick Email: central template renderer (tokens + aliases), template metadata in settings (id, requiredFields, timestamps)",
         "Quick Email modal: Case details / Email template / Actions layout, template-applied hint + field flash, help popover, softer missing-field strip",
