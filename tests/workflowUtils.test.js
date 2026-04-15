@@ -449,6 +449,12 @@ describe('Completion screen source', () => {
   it('hooks post-invoice handoff', () => {
     assert.ok(completionScreenSrc.includes('_wfAfterInvoiceCreatedGoToCompletion'));
   });
+
+  it('records billing handover and archive path', () => {
+    assert.ok(completionScreenSrc.includes('billingProcessCompletedAt'));
+    assert.ok(completionScreenSrc.includes('_wfRunMarkBillingComplete'));
+    assert.ok(completionScreenSrc.includes('_wfRunArchiveFromWorkflow'));
+  });
 });
 
 describe('Integration: index.html loads new scripts', () => {
