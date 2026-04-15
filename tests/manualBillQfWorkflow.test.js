@@ -343,6 +343,47 @@ describe('Step 2: Billing screen — QuickFile-configured path', () => {
   });
 });
 
+describe('Step 2: Billing screen — skip invoice path', () => {
+  it('shows "Next: complete without invoice" button when QF configured and no existing invoice', () => {
+    assert.ok(billingScreenJs.includes('wf-bill-skip-invoice'));
+    assert.ok(billingScreenJs.includes('complete without invoice'));
+  });
+
+  it('skip button only appears when QF is on and no existing invoice', () => {
+    const idx = billingScreenJs.indexOf('wf-bill-skip-invoice');
+    assert.ok(idx !== -1);
+    const before = billingScreenJs.substring(Math.max(0, idx - 200), idx);
+    assert.ok(before.includes('qfConfigured') && before.includes('!opts.hasExistingInvoice'));
+  });
+
+  it('skip button uses secondary styling (not primary action)', () => {
+    const idx = billingScreenJs.indexOf('wf-bill-skip-invoice');
+    const line = billingScreenJs.substring(Math.max(0, idx - 150), idx + 60);
+    assert.ok(line.includes('btn-secondary'));
+    assert.ok(!line.includes('wf-btn-next-action'));
+  });
+
+  it('skip button shows confirmation dialog before advancing', () => {
+    const idx = billingScreenJs.indexOf("getElementById('wf-bill-skip-invoice')");
+    assert.ok(idx !== -1, 'skip button event wiring not found');
+    const block = billingScreenJs.substring(idx, idx + 400);
+    assert.ok(block.includes('showConfirm'), 'should use showConfirm for confirmation');
+    assert.ok(block.includes('No QuickFile invoice'), 'confirmation message should explain no invoice');
+    assert.ok(block.includes('_wfGoNext'), 'should advance to next step on confirm');
+  });
+
+  it('skip button is not rendered when invoice already exists', () => {
+    const fnIdx = billingScreenJs.indexOf('function _wfBuildBillingFooter');
+    assert.ok(fnIdx !== -1);
+    const fnBlock = billingScreenJs.substring(fnIdx, fnIdx + 600);
+    assert.ok(fnBlock.includes('wf-bill-skip-invoice'), 'skip button HTML should be in footer builder');
+    const skipIdx = fnBlock.indexOf('wf-bill-skip-invoice');
+    const before = fnBlock.substring(0, skipIdx);
+    assert.ok(before.includes('!opts.hasExistingInvoice'),
+      'skip button should be conditional on no existing invoice');
+  });
+});
+
 describe('Step 2: Billing screen — action guide', () => {
   it('shows "What to do on this step" guide when QF configured', () => {
     assert.ok(billingScreenJs.includes('wf-action-guide'));
@@ -358,6 +399,11 @@ describe('Step 2: Billing screen — action guide', () => {
   it('guide differs when invoice already exists', () => {
     assert.ok(billingScreenJs.includes('Invoice already created'));
     assert.ok(billingScreenJs.includes('Next: Review &amp; complete'));
+  });
+
+  it('guide mentions skip-invoice path when no existing invoice', () => {
+    assert.ok(billingScreenJs.includes('complete without invoice'));
+    assert.ok(billingScreenJs.includes('invoicing was handled separately'));
   });
 });
 
