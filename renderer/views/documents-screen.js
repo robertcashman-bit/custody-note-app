@@ -26,12 +26,36 @@ function _wfRenderDocumentsStep(body, footer) {
   var data = meta.data;
   var attachments = _wfGetAttachments(data);
 
+  var hasGenDocs = Object.keys(_wfGeneratedDocs).length > 0;
+  var hasAttachments = attachments.length > 0;
+  var allNamed = !attachments.length || attachments.every(function (a) { return !!a.documentType; });
+
+  var guideSteps = [];
+  if (!hasGenDocs) {
+    guideSteps.push({ num: 1, text: 'Generate at least the <strong>Attendance Note PDF</strong> below (click Generate).', done: false });
+  } else {
+    guideSteps.push({ num: 1, text: 'Attendance note and forms generated.', done: true });
+  }
+  if (hasAttachments && !allNamed) {
+    guideSteps.push({ num: 2, text: 'Select a <strong>document type</strong> for every uploaded attachment.', done: false });
+  } else if (hasAttachments) {
+    guideSteps.push({ num: 2, text: 'All attachments named.', done: true });
+  }
+  guideSteps.push({ num: guideSteps.length + 1, text: 'Click <strong>Next: QuickFile invoice</strong> at the bottom when ready.', done: false });
+
+  var guideHtml = '<div class="wf-action-guide"><h4 class="wf-action-guide-title">What to do on this step</h4><ol class="wf-action-guide-list">';
+  guideSteps.forEach(function (s) {
+    guideHtml += '<li class="wf-action-guide-item' + (s.done ? ' wf-action-guide-item--done' : '') + '">' + (s.done ? '&#10003; ' : '') + s.text + '</li>';
+  });
+  guideHtml += '</ol></div>';
+
   var html =
     '<div class="wf-screen wf-documents">' +
       '<div class="wf-screen-header">' +
-        '<h3>Documents &amp; Forms</h3>' +
+        '<h3>Step 1 &mdash; Documents &amp; Forms</h3>' +
         '<p class="wf-screen-sub">Generate forms, upload files, and prepare documents for billing.</p>' +
       '</div>' +
+      guideHtml +
 
       '<div class="wf-card wf-gen-forms-card">' +
         '<h4 class="wf-card-title">Generate Forms</h4>' +
@@ -220,9 +244,9 @@ function _wfBuildDocFooter(footer) {
   var genCount = Object.keys(_wfGeneratedDocs).length;
   var countBadge = genCount > 0 ? ' <span class="wf-gen-count-badge">' + genCount + ' form' + (genCount > 1 ? 's' : '') + ' ready</span>' : '';
   footer.innerHTML =
-    '<button type="button" id="wf-doc-back" class="btn btn-secondary">Close</button>' +
+    '<button type="button" id="wf-doc-back" class="btn btn-secondary btn-small">Close</button>' +
     '<span class="wf-footer-info">' + countBadge + '</span>' +
-    '<button type="button" id="wf-doc-next" class="btn btn-primary">Next: QuickFile invoice &#9654;</button>';
+    '<button type="button" id="wf-doc-next" class="btn btn-primary wf-btn-next-action">Next: QuickFile invoice &#9654;</button>';
 
   document.getElementById('wf-doc-back').addEventListener('click', closeWorkflow);
   document.getElementById('wf-doc-next').addEventListener('click', _wfGoNext);

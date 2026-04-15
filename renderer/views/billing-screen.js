@@ -134,10 +134,28 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
   }
 
   var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
-  var screenTitle = qfConfigured ? 'QuickFile invoice' : 'Billing review';
+  var screenTitle = qfConfigured ? 'Step 2 &mdash; QuickFile invoice' : 'Step 2 &mdash; Billing review';
   var screenSub = qfConfigured
     ? 'Create the QuickFile invoice and attach generated PDFs where selected.'
     : 'Review the billing details for this matter before marking it complete.';
+
+  var billingGuideHtml = '';
+  if (qfConfigured) {
+    var gSteps = [];
+    if (opts.hasExistingInvoice) {
+      gSteps.push({ text: 'Invoice already created. Review below or create another if needed.', done: true });
+      gSteps.push({ text: 'Click <strong>Next: Review &amp; complete</strong> to continue.', done: false });
+    } else {
+      gSteps.push({ text: 'Check the charges and amounts are correct (edit if needed).', done: false });
+      gSteps.push({ text: 'Tick all 3 checkboxes under <strong>Review Confirmation</strong> below to unlock the invoice button.', done: false });
+      gSteps.push({ text: 'Click <strong>Generate Invoice</strong> to send to QuickFile.', done: false });
+    }
+    billingGuideHtml = '<div class="wf-action-guide"><h4 class="wf-action-guide-title">What to do on this step</h4><ol class="wf-action-guide-list">';
+    gSteps.forEach(function (s) {
+      billingGuideHtml += '<li class="wf-action-guide-item' + (s.done ? ' wf-action-guide-item--done' : '') + '">' + (s.done ? '&#10003; ' : '') + s.text + '</li>';
+    });
+    billingGuideHtml += '</ol></div>';
+  }
 
   body.innerHTML =
     '<div class="wf-screen wf-billing">' +
@@ -146,6 +164,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
         '<p class="wf-screen-sub">' + screenSub + '</p>' +
         statusBadge +
       '</div>' +
+      billingGuideHtml +
       firmCallout +
 
       '<div class="wf-billing-grid">' +
@@ -199,13 +218,15 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
         '<textarea id="wf-narrative" class="form-input wf-narrative-input" rows="3">' + _wfEsc(opts.narrative) + '</textarea>' +
       '</div>' +
 
-      '<div class="wf-card">' +
-        '<h4 class="wf-card-title">Review Confirmation</h4>' +
+      '<div class="wf-card wf-review-confirmation-card">' +
+        '<h4 class="wf-card-title">&#9888; Review Confirmation &mdash; tick all 3 to unlock invoice</h4>' +
+        '<p class="wf-review-confirm-hint">You must tick every box before the <strong>Generate Invoice</strong> button becomes active.</p>' +
         '<div class="wf-checklist">' +
           '<label class="wf-check-item"><input type="checkbox" id="wf-check-attendance"> Attendance note reviewed</label>' +
           '<label class="wf-check-item"><input type="checkbox" id="wf-check-docs"> Documents reviewed &amp; named</label>' +
           '<label class="wf-check-item"><input type="checkbox" id="wf-check-billing"> Billing details confirmed</label>' +
         '</div>' +
+        '<p class="wf-review-confirm-status" id="wf-review-status">&#128274; Generate Invoice is locked &mdash; tick all 3 boxes above.</p>' +
       '</div>' +
 
       auditHtml +
@@ -285,18 +306,26 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
   var showNextBtn = opts.hasExistingInvoice || !qfConfigured;
   var nextCompleteBtn = showNextBtn
-    ? '<button type="button" id="wf-bill-next-complete" class="btn btn-primary">Next: Review &amp; complete &#9654;</button>'
+    ? '<button type="button" id="wf-bill-next-complete" class="btn btn-primary wf-btn-next-action">Next: Review &amp; complete &#9654;</button>'
     : '';
-  var createBtnHtml = qfConfigured
-    ? '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create" disabled>' +
-        (opts.hasExistingInvoice ? '&#9888; Create Another Invoice' : 'Generate Invoice') +
-      '</button>'
-    : '';
+  var createBtnHtml = '';
+  if (qfConfigured && !opts.hasExistingInvoice) {
+    createBtnHtml =
+      '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create wf-btn-next-action" disabled>' +
+        '&#128274; Generate Invoice &mdash; tick all 3 checkboxes first' +
+      '</button>';
+  } else if (qfConfigured && opts.hasExistingInvoice) {
+    createBtnHtml =
+      '<button type="button" id="wf-bill-create" class="btn btn-secondary btn-billing-create" disabled>' +
+        '&#9888; Create Another Invoice' +
+      '</button>';
+  }
   footer.innerHTML =
-    '<button type="button" id="wf-bill-back" class="btn btn-secondary">&#9664; Back</button>' +
+    '<button type="button" id="wf-bill-back" class="btn btn-secondary btn-small">&#9664; Back</button>' +
+    '<span class="wf-footer-spacer"></span>' +
     createBtnHtml +
     nextCompleteBtn +
-    '<button type="button" id="wf-bill-close" class="btn btn-secondary">Close</button>';
+    '<button type="button" id="wf-bill-close" class="btn btn-secondary btn-small">Close</button>';
 
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
   document.getElementById('wf-bill-close').addEventListener('click', closeWorkflow);
@@ -337,10 +366,28 @@ function _wfBindBillingEvents(meta, opts) {
 
   var checkboxes = overlay.querySelectorAll('.wf-checklist input[type="checkbox"]');
   var createBtn = document.getElementById('wf-bill-create');
+  var reviewStatusEl = document.getElementById('wf-review-status');
   function updateBtn() {
     var allChecked = true;
-    checkboxes.forEach(function (cb) { if (!cb.checked) allChecked = false; });
-    if (createBtn) createBtn.disabled = !allChecked;
+    var checkedCount = 0;
+    checkboxes.forEach(function (cb) { if (cb.checked) checkedCount++; else allChecked = false; });
+    if (createBtn) {
+      createBtn.disabled = !allChecked;
+      if (allChecked) {
+        createBtn.innerHTML = '&#10003; Generate Invoice';
+      } else {
+        createBtn.innerHTML = '&#128274; Generate Invoice &mdash; tick all 3 checkboxes first';
+      }
+    }
+    if (reviewStatusEl) {
+      if (allChecked) {
+        reviewStatusEl.innerHTML = '&#128275; <strong>Generate Invoice is now unlocked</strong> &mdash; click it in the footer below.';
+        reviewStatusEl.className = 'wf-review-confirm-status wf-review-confirm-status--unlocked';
+      } else {
+        reviewStatusEl.innerHTML = '&#128274; Generate Invoice is locked &mdash; tick all 3 boxes above (' + checkedCount + '/3 done).';
+        reviewStatusEl.className = 'wf-review-confirm-status';
+      }
+    }
   }
   checkboxes.forEach(function (cb) { cb.addEventListener('change', updateBtn); });
 
