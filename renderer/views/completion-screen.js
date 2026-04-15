@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════
    COMPLETION SCREEN (Workflow Step 3)
-   Review file completion, safeguards, billing handover, mark office work complete.
+   Review summary, then Archive or Close (billing/office completion saved on archive if needed).
    Depends: workflow-stepper.js, documents-screen.js (_wfGetAttachments),
             app.js globals (formData, currentRecordStatus, currentAttendanceId,
             getFormData, showConfirm, showToast, quietSave, hasQuickFileSettingsConfigured,
-            matterBillingArchiveReady, currentRecordArchived)
+            currentRecordArchived)
    ═══════════════════════════════════════════════════════ */
 
 function _wfCompletionNoteFinalised() {
@@ -31,32 +31,13 @@ function _wfCompletionAttachmentsMeta(data) {
   return { count: att.length, allNamed: allNamed, list: att };
 }
 
-function _wfCompletionOfficeMarked() {
-  return (typeof currentRecordStatus !== 'undefined' && currentRecordStatus === 'completed');
-}
-
-/** Billing handover done: explicit timestamp, or legacy office-work completion. */
-function _wfBillingHandoverDone(data) {
-  var d = data || {};
-  if (d.billingProcessCompletedAt) return true;
-  if (d.officeWorkCompletedAt) return true;
-  return false;
-}
-
-function _wfShowMarkBillingButton(data) {
-  var d = data || {};
-  return !d.billingProcessCompletedAt && !d.officeWorkCompletedAt;
-}
-
 function _wfRenderCompletionStep(body, footer) {
   var meta = _wfMatterMeta();
   var d = meta.data || {};
   var noteOk = _wfCompletionNoteFinalised();
   var invOk = _wfCompletionHasInvoice(d);
   var am = _wfCompletionAttachmentsMeta(d);
-  var officeOk = _wfCompletionOfficeMarked();
-  var billingOk = _wfBillingHandoverDone(d);
-  var showBillingBtn = _wfShowMarkBillingButton(d);
+  var archived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
   var qfOn = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
 
   var hardWarnings = (typeof getBillingHardWarnings === 'function') ? getBillingHardWarnings() : [];
@@ -67,12 +48,10 @@ function _wfRenderCompletionStep(body, footer) {
     { key: 'data', label: 'Billing data complete', ok: billingDataOk, hint: !billingDataOk ? 'Missing: ' + hardWarnings.join(', ') + '.' : 'All required billing fields are present.' },
   ];
   if (qfOn) {
-    rows.push({ key: 'inv', label: 'QuickFile invoice linked', ok: invOk, hint: !invOk ? 'Create the invoice in the Billing review step.' : '' });
+    rows.push({ key: 'inv', label: 'QuickFile invoice linked', ok: invOk, hint: !invOk ? 'Create the invoice in the Billing review step (or use complete without invoice there).' : '' });
   }
   rows.push(
-    { key: 'att', label: 'Attachments named on file', ok: am.count === 0 || am.allNamed, hint: am.count && !am.allNamed ? 'Name every attachment (document type) on step 1 or the form.' : (am.count === 0 ? 'No attachments on this record \u2014 confirm if that is correct for this matter.' : '') },
-    { key: 'bill', label: 'Billing process completed', ok: billingOk, hint: billingOk ? 'Recorded for your firm billing / finance handover.' : 'Confirm when your office billing steps are done, then you can archive.' },
-    { key: 'off', label: 'Office work marked complete', ok: officeOk, hint: officeOk ? 'This matter is marked complete in your workflow.' : 'Use the button below when admin on this file is finished.' }
+    { key: 'att', label: 'Attachments named on file', ok: am.count === 0 || am.allNamed, hint: am.count && !am.allNamed ? 'Name every attachment (document type) on step 1 or the form.' : (am.count === 0 ? 'No attachments on this record \u2014 confirm if that is correct for this matter.' : '') }
   );
 
   var strip = '<div class="wf-completion-strip">';
@@ -87,29 +66,17 @@ function _wfRenderCompletionStep(body, footer) {
 
   var billingSummaryHtml = _wfBuildBillingSummaryCard(d);
 
-  var completionGuideHtml = '<div class="wf-action-guide"><h4 class="wf-action-guide-title">What to do on this step &mdash; in order</h4><ol class="wf-action-guide-list">';
-  if (!billingOk) {
-    completionGuideHtml += '<li class="wf-action-guide-item"><strong>1.</strong> Review the billing summary below, then click <strong>Mark billing process complete</strong>.</li>';
-  } else {
-    completionGuideHtml += '<li class="wf-action-guide-item wf-action-guide-item--done">&#10003; Billing marked complete.</li>';
-  }
-  if (!officeOk) {
-    completionGuideHtml += '<li class="wf-action-guide-item"><strong>' + (billingOk ? '1' : '2') + '.</strong> Click <strong>Mark office work complete</strong> when all admin is done.</li>';
-  } else {
-    completionGuideHtml += '<li class="wf-action-guide-item wf-action-guide-item--done">&#10003; Office work marked complete.</li>';
-  }
-  if (billingOk && officeOk && noteOk) {
-    completionGuideHtml += '<li class="wf-action-guide-item"><strong>Final.</strong> Click <strong>Archive record</strong> to file this matter away.</li>';
-  } else if (billingOk && officeOk) {
-    completionGuideHtml += '<li class="wf-action-guide-item">Finalise the attendance note to unlock archiving.</li>';
-  }
-  completionGuideHtml += '</ol></div>';
+  var completionGuideHtml =
+    '<div class="wf-action-guide"><h4 class="wf-action-guide-title">What to do on this step</h4><ol class="wf-action-guide-list">' +
+    '<li class="wf-action-guide-item">Review the checklist and billing summary below.</li>' +
+    '<li class="wf-action-guide-item">Click <strong>Archive</strong> to file this matter away (billing and office completion are recorded automatically if not already saved). Click <strong>Close</strong> to leave without archiving.</li>' +
+    '</ol></div>';
 
   body.innerHTML =
     '<div class="wf-screen wf-completion">' +
       '<div class="wf-screen-header">' +
-        '<h3>Step 3 &mdash; Review &amp; mark complete</h3>' +
-        '<p class="wf-screen-sub">Confirm this matter is complete: billing data checked, documents in order, then archive when ready.</p>' +
+        '<h3>Step 3 &mdash; Review &amp; archive</h3>' +
+        '<p class="wf-screen-sub">Check billing details and attachments, then archive the file or close to return later.</p>' +
       '</div>' +
       completionGuideHtml +
       '<div class="wf-card">' +
@@ -124,40 +91,20 @@ function _wfRenderCompletionStep(body, footer) {
 
   _wfBuildCompletionFooter(footer, {
     noteOk: noteOk,
-    invOk: invOk,
-    qfOn: qfOn,
-    attMeta: am,
-    officeOk: officeOk,
-    billingOk: billingOk,
-    showBillingBtn: showBillingBtn,
+    canArchive: noteOk && !archived,
   });
 }
 
 function _wfBuildCompletionFooter(footer, ctx) {
-  var matterReady = (typeof window.matterBillingArchiveReady === 'function')
-    ? window.matterBillingArchiveReady()
-    : ctx.billingOk;
-  var archived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
-  var canArchive = matterReady && ctx.noteOk && !archived;
+  var canArchive = ctx.canArchive;
 
   var html =
     '<button type="button" id="wf-complete-back" class="btn btn-secondary btn-small">&#9664; Back</button>' +
     '<button type="button" id="wf-export-billing-pdf" class="btn btn-secondary btn-small">Export PDF</button>' +
     '<span class="wf-footer-spacer"></span>';
 
-  if (ctx.showBillingBtn) {
-    html += '<button type="button" id="wf-billing-done" class="btn btn-primary wf-btn-next-action">1. Mark billing complete</button>';
-  }
-
-  if (!ctx.officeOk) {
-    var officeNum = ctx.showBillingBtn ? '2' : '1';
-    html += '<button type="button" id="wf-complete-done" class="btn ' + (ctx.showBillingBtn ? 'btn-secondary' : 'btn-primary wf-btn-next-action') + '">' + officeNum + '. Mark office work complete</button>';
-  } else {
-    html += '<button type="button" id="wf-complete-done" class="btn btn-secondary btn-small" disabled>&#10003; Office complete</button>';
-  }
-
   if (canArchive) {
-    html += '<button type="button" id="wf-complete-archive" class="btn btn-primary wf-btn-next-action">Final: Archive record</button>';
+    html += '<button type="button" id="wf-complete-archive" class="btn btn-primary wf-btn-next-action">Archive</button>';
   }
 
   html +=
@@ -175,20 +122,6 @@ function _wfBuildCompletionFooter(footer, ctx) {
     });
   }
 
-  var billBtn = document.getElementById('wf-billing-done');
-  if (billBtn) {
-    billBtn.addEventListener('click', function () {
-      _wfRunMarkBillingComplete(ctx);
-    });
-  }
-
-  var doneBtn = document.getElementById('wf-complete-done');
-  if (doneBtn && !ctx.officeOk) {
-    doneBtn.addEventListener('click', function () {
-      _wfRunMarkOfficeComplete(ctx);
-    });
-  }
-
   var archBtn = document.getElementById('wf-complete-archive');
   if (archBtn) {
     archBtn.addEventListener('click', function () {
@@ -197,111 +130,52 @@ function _wfBuildCompletionFooter(footer, ctx) {
   }
 }
 
-function _wfRunMarkBillingComplete(ctx) {
-  if (!ctx.noteOk) {
-    showToast('Finalise the attendance note before marking billing complete.', 'error');
-    return;
-  }
-  showConfirm(
-    'Mark the billing process as completed for this matter?\n\nUse this after invoicing / firm finance steps are done. You can archive the record next.',
-    'Billing process complete'
-  ).then(function (ok) {
-    if (!ok) return;
-    if (!currentAttendanceId || !window.api || !window.api.attendanceSave) {
-      showToast('Cannot save — open a saved record first.', 'error');
-      return;
-    }
-    var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
-    var st = typeof currentRecordStatus !== 'undefined' ? currentRecordStatus : 'finalised';
-    var iso = new Date().toISOString();
-    if (typeof formData === 'object' && formData) {
-      formData.billingProcessCompletedAt = iso;
-    }
-    data.billingProcessCompletedAt = iso;
-
-    window.api.attendanceSave({ id: currentAttendanceId, data: data, status: st }).then(function (result) {
-      if (result && typeof result === 'object' && result.error) {
-        showToast(result.message || result.error || 'Save failed', 'error', 7000);
-        return;
-      }
-      if (typeof updateFormBarVisibility === 'function') updateFormBarVisibility();
-      if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
-      if (typeof updateFormContextPanel === 'function') updateFormContextPanel();
-      showToast('Billing marked complete. You can archive this record when ready.', 'success', 6000);
-      _wfRenderCurrentStep();
-    }).catch(function (err) {
-      showToast('Could not save: ' + (err && err.message ? err.message : String(err)), 'error');
-    });
-  });
-}
-
 function _wfRunArchiveFromWorkflow() {
-  if (typeof window.matterBillingArchiveReady === 'function' && !window.matterBillingArchiveReady()) {
-    showToast('Complete billing handover (or office work) before archiving.', 'error');
+  if (!currentAttendanceId) return;
+  if (!_wfCompletionNoteFinalised()) {
+    showToast('Finalise the attendance note before archiving.', 'error');
     return;
   }
-  if (!currentAttendanceId) return;
+  if (!window.api || !window.api.attendanceSave || !window.api.attendanceArchive) {
+    showToast('Save or archive is not available.', 'error');
+    return;
+  }
   showConfirm(
-    'Archive this record? It will be hidden from the main list but you can restore it from the Archived filter.',
+    'Archive this matter? Billing and office completion will be recorded if not already saved, then the file moves to Archived.',
     'Archive record'
   ).then(function (ok) {
     if (!ok) return;
-    if (!window.api || !window.api.attendanceArchive) {
-      showToast('Archive is not available.', 'error');
-      return;
+    var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+    var iso = new Date().toISOString();
+    if (!data.billingProcessCompletedAt) {
+      data.billingProcessCompletedAt = iso;
+      if (typeof formData === 'object' && formData) formData.billingProcessCompletedAt = iso;
     }
-    window.api.attendanceArchive(currentAttendanceId).then(function () {
+    if (!data.officeWorkCompletedAt) {
+      data.officeWorkCompletedAt = iso;
+      if (typeof formData === 'object' && formData) formData.officeWorkCompletedAt = iso;
+    }
+    window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'completed' }).then(function (result) {
+      if (result && typeof result === 'object' && result.error) {
+        showToast(result.message || result.error || 'Save failed', 'error', 7000);
+        return Promise.reject(new Error('save'));
+      }
+      if (typeof currentRecordStatus !== 'undefined') currentRecordStatus = 'completed';
+      return window.api.attendanceArchive(currentAttendanceId);
+    }).then(function () {
       if (typeof closeWorkflow === 'function') closeWorkflow();
       showToast('Record archived', 'info');
       if (typeof setListFilterAndShowList === 'function') setListFilterAndShowList('archived');
-    }).catch(function () {
+      if (typeof updateFormBarVisibility === 'function') updateFormBarVisibility();
+      if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
+      if (typeof updateFormContextPanel === 'function') updateFormContextPanel();
+    }).catch(function (err) {
+      if (err && err.message === 'save') return;
       showToast('Failed to archive record', 'error');
     });
   });
 }
-
-function _wfRunMarkOfficeComplete(ctx) {
-  var blockers = [];
-  if (!ctx.noteOk) blockers.push('The attendance note is not finalised.');
-  if (ctx.qfOn && !ctx.invOk) blockers.push('QuickFile is set up but this record has no linked invoice.');
-  if (ctx.attMeta.count && !ctx.attMeta.allNamed) blockers.push('Some attachments do not have a document type selected.');
-
-  var intro = 'Mark office work complete for this matter?\n\n';
-  if (blockers.length) {
-    intro += 'Outstanding:\n\u2022 ' + blockers.join('\n\u2022 ') + '\n\n';
-    intro += 'You can go back to fix these, or continue if you intentionally leave them open.\n\nContinue anyway?';
-  } else {
-    intro += 'This confirms admin on the file is finished (separate from the legal finalised note). Mark billing complete before archiving if you have not already.';
-  }
-
-  showConfirm(intro, 'Mark office work complete').then(function (ok) {
-    if (!ok) return;
-    if (!currentAttendanceId || !window.api || !window.api.attendanceSave) {
-      showToast('Cannot save — open a saved record first.', 'error');
-      return;
-    }
-    var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
-    if (typeof formData === 'object' && formData) {
-      formData.officeWorkCompletedAt = new Date().toISOString();
-    }
-    data.officeWorkCompletedAt = new Date().toISOString();
-
-    window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'completed' }).then(function (result) {
-      if (result && typeof result === 'object' && result.error) {
-        showToast(result.message || result.error || 'Save failed', 'error', 7000);
-        return;
-      }
-      currentRecordStatus = 'completed';
-      if (typeof updateFormBarVisibility === 'function') updateFormBarVisibility();
-      if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
-      if (typeof updateFormContextPanel === 'function') updateFormContextPanel();
-      showToast('Office work marked complete. You can archive when ready.', 'success', 6500);
-      _wfRenderCurrentStep();
-    }).catch(function (err) {
-      showToast('Could not mark complete: ' + (err && err.message ? err.message : String(err)), 'error');
-    });
-  });
-}
+window._wfRunArchiveFromWorkflow = _wfRunArchiveFromWorkflow;
 
 function _wfAfterInvoiceCreatedGoToCompletion() {
   if (typeof _wfGoToStep !== 'function') return;

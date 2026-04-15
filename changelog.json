@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.214",
+      "version": "1.4.215",
       "date": "2026-04-15",
       "latest": true,
+      "changes": [
+        "Billing workflow: instructing firm name now stays correct — meta is refreshed after invoice data loads, firms list backfills missing firmName, open workflow syncs form first",
+        "Finish matter: step 3 is Archive + Close only — archiving records billing and office completion automatically (no separate mark-complete buttons)"
+      ]
+    },
+    {
+      "version": "1.4.214",
+      "date": "2026-04-15",
+      "latest": false,
       "changes": [
         "Fix: 'Mark billing complete' and 'Mark office work complete' buttons now work correctly inside workflow (confirm dialog z-index fix)",
         "Invoicing: line item names standardised — 'PS Attendance Fixed Fee', 'Mileage', 'Parking'",

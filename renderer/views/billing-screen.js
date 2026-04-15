@@ -33,6 +33,8 @@ function _wfRenderBillingStep(body, footer) {
     recordId && window.api && window.api.attendanceInvoiceStatus ? window.api.attendanceInvoiceStatus(recordId) : Promise.resolve({}),
     recordId && window.api && window.api.billingAuditLogGet ? window.api.billingAuditLogGet(recordId) : Promise.resolve([]),
   ]).then(function (results) {
+    meta = _wfMatterMeta();
+    data = meta.data;
     var stationMileage = results[0];
     var invoiceStatus = results[1] || {};
     var auditLog = results[2] || [];
@@ -72,6 +74,7 @@ function _wfRenderBillingStep(body, footer) {
 
     _wfRenderBillingBody(body, footer, meta, _wfBillingOpts);
   }).catch(function () {
+    meta = _wfMatterMeta();
     var invoiceTitle = formatInvoiceTitle(meta.clientName, meta.stationName);
     _wfBillingOpts = {
       clientName: meta.clientName, firmName: meta.firmName, stationName: meta.stationName,
@@ -150,6 +153,13 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
       gSteps.push({ text: 'Tick all 3 checkboxes under <strong>Review Confirmation</strong> below to unlock the invoice button.', done: false });
       gSteps.push({ text: 'Click <strong>Generate Invoice</strong> to send to QuickFile.', done: false });
       gSteps.push({ text: 'Or click <strong>Next: complete without invoice</strong> if invoicing was handled separately.', done: false });
+    }
+    var archivedGuide = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
+    if (_wfBillingNoteFinalised() && !archivedGuide) {
+      gSteps.push({
+        text: 'When finished: use <strong>Archive &amp; close</strong> in the footer to file the matter away, or <strong>Close</strong> to exit without archiving.',
+        done: false,
+      });
     }
     billingGuideHtml = '<div class="wf-action-guide"><h4 class="wf-action-guide-title">What to do on this step</h4><ol class="wf-action-guide-list">';
     gSteps.forEach(function (s) {
@@ -303,8 +313,15 @@ function _wfFmtCurrency(val) {
   return '\u00A3' + (parseFloat(val) || 0).toFixed(2);
 }
 
+function _wfBillingNoteFinalised() {
+  var st = typeof currentRecordStatus !== 'undefined' ? currentRecordStatus : null;
+  return st === 'finalised' || st === 'completed';
+}
+
 function _wfBuildBillingFooter(footer, meta, opts) {
   var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
+  var archived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
+  var canArchiveFromBilling = _wfBillingNoteFinalised() && !archived;
   var showNextBtn = opts.hasExistingInvoice || !qfConfigured;
   var nextCompleteBtn = showNextBtn
     ? '<button type="button" id="wf-bill-next-complete" class="btn btn-primary wf-btn-next-action">Next: Review &amp; complete &#9654;</button>'
@@ -326,12 +343,17 @@ function _wfBuildBillingFooter(footer, meta, opts) {
         '&#9888; Create Another Invoice' +
       '</button>';
   }
+  var archiveBtnHtml = canArchiveFromBilling
+    ? '<button type="button" id="wf-bill-archive" class="btn btn-primary wf-btn-next-action">Archive &amp; close</button>'
+    : '';
+
   footer.innerHTML =
     '<button type="button" id="wf-bill-back" class="btn btn-secondary btn-small">&#9664; Back</button>' +
     '<span class="wf-footer-spacer"></span>' +
     createBtnHtml +
     nextCompleteBtn +
     skipInvoiceBtn +
+    archiveBtnHtml +
     '<button type="button" id="wf-bill-close" class="btn btn-secondary btn-small">Close</button>';
 
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
@@ -360,6 +382,17 @@ function _wfBuildBillingFooter(footer, meta, opts) {
         });
       } else {
         if (typeof _wfGoNext === 'function') _wfGoNext();
+      }
+    });
+  }
+
+  var archiveBill = document.getElementById('wf-bill-archive');
+  if (archiveBill) {
+    archiveBill.addEventListener('click', function () {
+      if (typeof window._wfRunArchiveFromWorkflow === 'function') {
+        window._wfRunArchiveFromWorkflow();
+      } else {
+        showToast('Archive is not available — open Review and complete step.', 'error');
       }
     });
   }
