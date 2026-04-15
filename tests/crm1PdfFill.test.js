@@ -10,8 +10,11 @@ const root = path.join(__dirname, '..');
 const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
 describe('CRM1 PDF fill (main.js)', () => {
-  it('clears USN field FillText644 and does not write UFN into it', () => {
-    assert.ok(mainSrc.includes("safeClearText(form, 'FillText644')"), 'expected USN field clear');
+  it('clears UFN header combs and maps NI to correct comb fields', () => {
+    assert.ok(mainSrc.includes("CRM1_UFN_COMBS"), 'UFN combs array expected');
+    assert.ok(mainSrc.includes("safeClearText(form, c)"), 'UFN combs must be cleared');
+    assert.ok(mainSrc.includes("NI_COMBS"), 'NI combs array expected');
+    assert.ok(mainSrc.includes("'National_insurance_number','National_insurance_number1','Comb10','Comb101','Comb8','Comb9','Comb12','Comb13','FillText644'"), 'NI mapped to correct 9 comb fields');
     assert.ok(!mainSrc.includes("safeSet(form, 'FillText644', d.ufn)"), 'UFN must not populate USN');
   });
 
@@ -25,9 +28,13 @@ describe('CRM1 PDF fill (main.js)', () => {
     assert.ok(mainSrc.includes("safeSet(form, 'Partner_if_living_with_t_', wkPartner)"), 'partner box must be weekly £');
   });
 
-  it('fills capital page fields FillText23–FillText27 from record', () => {
-    assert.ok(mainSrc.includes("safeSet(form, 'FillText23'"), 'capital client');
+  it('fills capital page fields FillText23–FillText28 from record', () => {
+    assert.ok(mainSrc.includes("safeSet(form, 'FillText23'"), 'capital client savings');
+    assert.ok(mainSrc.includes("safeSet(form, 'FillText24'"), 'capital partner savings');
+    assert.ok(mainSrc.includes("safeSet(form, 'FillText25'"), 'capital client investments');
+    assert.ok(mainSrc.includes("safeSet(form, 'FillText26'"), 'capital partner investments');
     assert.ok(mainSrc.includes("safeSet(form, 'FillText27'"), 'capital total');
+    assert.ok(mainSrc.includes("safeSet(form, 'FillText28'"), 'capital above threshold');
   });
 
   it('maps equal opportunities ethnicity/disability codes to CRM1 page 6 checkboxes', () => {

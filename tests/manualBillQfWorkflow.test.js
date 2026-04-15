@@ -1104,7 +1104,7 @@ describe('billingUtils — buildQuickFilePayload', () => {
   it('builds line items array with fee, mileage, parking', () => {
     assert.ok(billingUtilsJs.includes('function buildQuickFileLineItems'));
     assert.ok(billingUtilsJs.includes("description: 'Mileage'"));
-    assert.ok(billingUtilsJs.includes("description: 'Parking/disbursements'"));
+    assert.ok(billingUtilsJs.includes("description: 'Parking'"));
   });
 
   it('only adds mileage line when amount > 0', () => {

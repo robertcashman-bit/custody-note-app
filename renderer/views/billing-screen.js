@@ -568,7 +568,11 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
     billingInv = ensureBillingDisplayInvoiceNumber({ skipSave: false });
   }
 
-  var attachName = ([data.surname, data.forename].filter(Boolean).join('_') || 'attendance') + '-note.pdf';
+  var attachTitle = (typeof buildAttachmentTitle === 'function')
+    ? buildAttachmentTitle({ clientName: opts.clientName, stationName: opts.stationName, attendanceDate: opts.attendanceDate, firmName: opts.firmName })
+    : '';
+  var attachName = (attachTitle || ([data.surname, data.forename].filter(Boolean).join('_') || 'attendance') + '-note') + '.pdf';
+  attachName = attachName.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 240);
 
   try {
     var fetchedSettings = await window.api.getSettings();

@@ -5955,21 +5955,20 @@ function fillCRM1(form, d) {
     safeSet(form, 'Date_of_birth1', parts[1] || '');
     safeSet(form, 'Date_of_birth2', parts[2] || '');
   }
+  /* CRM1 v16 header UFN combs (y=674 row) — leave blank for firm to complete */
+  const CRM1_UFN_COMBS = ['Comb1','Comb11','Comb2','Comb3','Comb4','Comb5','Comb21','Comb6','Comb7'];
+  CRM1_UFN_COMBS.forEach(c => safeClearText(form, c));
+
+  /* NI number: 9 individual comb boxes on the DOB row (y=627) */
   const ni = normalizeNiNumberForPdf(d.niNumber || d.crm14NiNumber || '');
-  if (ni.length >= 2) {
-    safeSet(form, 'National_insurance_number', ni.substring(0, 2));
-    safeSet(form, 'National_insurance_number1', ni.substring(2));
-  }
-  /* CRM1 v16 (Feb 2025): visible NI boxes are Comb1–Comb9 (one character each). */
-  for (let i = 0; i < 9; i++) {
-    safeSet(form, `Comb${i + 1}`, ni[i] || '');
+  const NI_COMBS = ['National_insurance_number','National_insurance_number1','Comb10','Comb101','Comb8','Comb9','Comb12','Comb13','FillText644'];
+  for (let i = 0; i < NI_COMBS.length; i++) {
+    safeSet(form, NI_COMBS[i], ni[i] || '');
   }
   safeSet(form, 'Current_address', [d.address1, d.address2, d.address3].filter(Boolean).join(', '));
   safeSet(form, 'FillText1', d.city);
   safeSet(form, 'County', d.county);
   safeSet(form, 'Postcode', d.postCode);
-  /* FillText644 = USN (Unique Supplier Number) — must remain blank for the firm to complete (not UFN). */
-  safeClearText(form, 'FillText644');
 
   const ms = d.maritalStatus || '';
   safeCheck(form, 'Married', ms === 'Married' || ms === 'Civil Partner' || ms === 'Married/Civil Partner');
@@ -6024,14 +6023,29 @@ function fillCRM1(form, d) {
   const capC = d.capitalClient;
   const capP = d.capitalPartner;
   const capT = d.capitalTotal;
-  if (capC !== undefined && capC !== null && String(capC).trim() !== '') safeSet(form, 'FillText23', String(capC).trim());
-  if (capP !== undefined && capP !== null && String(capP).trim() !== '') safeSet(form, 'FillText24', String(capP).trim());
-  if (capT !== undefined && capT !== null && String(capT).trim() !== '') {
+  const hasCapC = capC !== undefined && capC !== null && String(capC).trim() !== '';
+  const hasCapP = capP !== undefined && capP !== null && String(capP).trim() !== '';
+  const hasCapT = capT !== undefined && capT !== null && String(capT).trim() !== '';
+  /* Row 1 (FillText23/24): savings — client / partner */
+  if (hasCapC) safeSet(form, 'FillText23', String(capC).trim());
+  if (hasCapP) safeSet(form, 'FillText24', String(capP).trim());
+  /* Row 2 (FillText25/26): investments — default 0 when any capital data given */
+  if (hasCapC || hasCapP || hasCapT) {
+    safeSet(form, 'FillText25', '0');
+    safeSet(form, 'FillText26', '0');
+  }
+  /* Total (FillText27) */
+  if (hasCapT) {
     safeSet(form, 'FillText27', String(capT).trim());
-  } else if ((capC !== undefined && capC !== null && String(capC).trim() !== '') || (capP !== undefined && capP !== null && String(capP).trim() !== '')) {
+  } else if (hasCapC || hasCapP) {
     const x = parseFloat(String(capC).replace(/,/g, '')) || 0;
     const y = parseFloat(String(capP).replace(/,/g, '')) || 0;
     safeSet(form, 'FillText27', String(Math.round((x + y) * 100) / 100));
+  }
+  /* FillText28: amount above upper limit — set to total or 0 */
+  if (hasCapC || hasCapP || hasCapT) {
+    const totalVal = hasCapT ? String(capT).trim() : String((parseFloat(String(capC).replace(/,/g, '')) || 0) + (parseFloat(String(capP).replace(/,/g, '')) || 0));
+    safeSet(form, 'FillText28', totalVal);
   }
 }
 
@@ -6797,13 +6811,12 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     const vr = Number.isFinite(Number(vatRate)) ? Number(vatRate) : 0.2;
     const cn = (clientName || '').trim();
     const sn = (stationName || '').trim();
-    const itemLabel = [cn, sn].filter(Boolean).join(' - ') || 'PS attendance fee';
 
     const lineItems = [];
     if (attendanceFee > 0) {
       lineItems.push(buildQuickFileItemLine(
-        itemLabel,
-        narrative || itemLabel,
+        'PS Attendance Fixed Fee',
+        narrative || [cn, sn].filter(Boolean).join(' - ') || 'Police Station Attendance Fixed Fee',
         attendanceFee,
         1,
         vr
@@ -6823,8 +6836,8 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
 
     if (parkingAmount > 0) {
       lineItems.push(buildQuickFileItemLine(
-        'Parking/disburse',
-        'Parking and disbursements',
+        'Parking',
+        'Parking',
         parkingAmount,
         1,
         vr
