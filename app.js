@@ -6029,7 +6029,27 @@ var REQUIRED_FIELD_KEYS = [
     showToast('Next: tap Finish matter (Time recording section or header) for documents, QuickFile invoice, and marking office work complete.', 'info', 7500);
   }
 
-function raw() { [native code] }
+  function getBillingReadinessWarnings() {
+    var d = formData;
+    var w = [];
+    if (d._formType === 'telephone') return w;
+    if (!(d.matterTypeCode || '').trim()) w.push('Criminal matter type missing');
+    var volOd = (d.outcomeDecision || '').trim();
+    var hasOutcomeDecision = !!volOd;
+    var voluntaryConcluded = d.attendanceMode === 'voluntary' ? (volOd && volOd !== 'Ongoing / Unknown') : false;
+    if (!hasOutcomeDecision) w.push('Outcome missing');
+    if (voluntaryConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code missing (matter concluded)');
+    if (d.attendanceMode === 'voluntary') {
+      if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim()) w.push('DSCC reference or reason missing');
+      if (d.attendanceSubType === 'voluntary_non_police_body' && !d.constablePresent) w.push('Constable present? required for non-police body');
+    } else {
+      if (!(d.dsccRef || '').trim() && (d.sourceOfReferral || '').toLowerCase().indexOf('duty') >= 0) w.push('DSCC number missing (duty route)');
+    }
+    var mins = parseInt((d.totalMinutes || '').toString(), 10);
+    if (isNaN(mins) || mins <= 0) w.push('Time record incomplete');
+    return w;
+  }
+
   function updateBillingReadinessPanel() {
     var list = document.getElementById('billing-readiness-list');
     var panel = document.getElementById('billing-readiness-panel');

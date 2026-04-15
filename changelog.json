@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.210",
+      "version": "1.4.211",
       "date": "2026-04-15",
       "latest": true,
+      "changes": [
+        "Fix: critical app startup crash caused by corrupted source in billing readiness panel",
+        "Fix: restored getBillingReadinessWarnings function deleted in v1.4.209 overhaul",
+        "Tests: 4 new source integrity regression guards (syntax check, native code detection, orphan call detection)"
+      ]
+    },
+    {
+      "version": "1.4.210",
+      "date": "2026-04-15",
+      "latest": false,
       "changes": [
         "Billing workflow: step-by-step action guide on every screen (What to do on this step)",
         "Billing step 2: Generate Invoice button now explains why it is locked (tick all 3 checkboxes)",
