@@ -1,9 +1,28 @@
 {
   "releases": [
     {
+      "version": "1.4.208",
+      "date": "2026-04-15",
+      "latest": true,
+      "changes": [
+        "Fix: office postcode now persists correctly in settings",
+        "Licence: 3-month grace period before revocation",
+        "Billing: mark billing complete and archive record options",
+        "Licence: concurrent device limit with admin bypass"
+      ]
+    },
+    {
+      "version": "1.4.207",
+      "date": "2026-04-15",
+      "latest": false,
+      "changes": [
+        "Bug fixes and improvements"
+      ]
+    },
+    {
       "version": "1.4.206",
       "date": "2026-04-14",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Chore: redeploy web build (Vercel)"
       ]
