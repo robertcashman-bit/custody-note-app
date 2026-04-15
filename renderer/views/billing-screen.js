@@ -149,6 +149,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
       gSteps.push({ text: 'Check the charges and amounts are correct (edit if needed).', done: false });
       gSteps.push({ text: 'Tick all 3 checkboxes under <strong>Review Confirmation</strong> below to unlock the invoice button.', done: false });
       gSteps.push({ text: 'Click <strong>Generate Invoice</strong> to send to QuickFile.', done: false });
+      gSteps.push({ text: 'Or click <strong>Next: complete without invoice</strong> if invoicing was handled separately.', done: false });
     }
     billingGuideHtml = '<div class="wf-action-guide"><h4 class="wf-action-guide-title">What to do on this step</h4><ol class="wf-action-guide-list">';
     gSteps.forEach(function (s) {
@@ -308,6 +309,11 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   var nextCompleteBtn = showNextBtn
     ? '<button type="button" id="wf-bill-next-complete" class="btn btn-primary wf-btn-next-action">Next: Review &amp; complete &#9654;</button>'
     : '';
+  var skipInvoiceBtn = '';
+  if (qfConfigured && !opts.hasExistingInvoice) {
+    skipInvoiceBtn =
+      '<button type="button" id="wf-bill-skip-invoice" class="btn btn-secondary btn-small">Next: complete without invoice &#9654;</button>';
+  }
   var createBtnHtml = '';
   if (qfConfigured && !opts.hasExistingInvoice) {
     createBtnHtml =
@@ -325,6 +331,7 @@ function _wfBuildBillingFooter(footer, meta, opts) {
     '<span class="wf-footer-spacer"></span>' +
     createBtnHtml +
     nextCompleteBtn +
+    skipInvoiceBtn +
     '<button type="button" id="wf-bill-close" class="btn btn-secondary btn-small">Close</button>';
 
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
@@ -341,6 +348,19 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   if (nextComplete) {
     nextComplete.addEventListener('click', function () {
       if (typeof _wfGoNext === 'function') _wfGoNext();
+    });
+  }
+
+  var skipInvoice = document.getElementById('wf-bill-skip-invoice');
+  if (skipInvoice) {
+    skipInvoice.addEventListener('click', function () {
+      if (typeof showConfirm === 'function') {
+        showConfirm('No QuickFile invoice will be created for this matter.\n\nContinue to review and complete?').then(function (ok) {
+          if (ok && typeof _wfGoNext === 'function') _wfGoNext();
+        });
+      } else {
+        if (typeof _wfGoNext === 'function') _wfGoNext();
+      }
     });
   }
 }

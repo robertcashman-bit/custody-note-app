@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.211",
+      "version": "1.4.212",
       "date": "2026-04-15",
       "latest": true,
+      "changes": [
+        "Billing step 2: 'Next: complete without invoice' button lets you skip invoice and go straight to archive/complete",
+        "Billing step 2: skip button confirms before proceeding (no accidental skips)",
+        "Billing step 2: action guide now mentions the skip-invoice option for previously invoiced matters"
+      ]
+    },
+    {
+      "version": "1.4.211",
+      "date": "2026-04-15",
+      "latest": false,
       "changes": [
         "Fix: critical app startup crash caused by corrupted source in billing readiness panel",
         "Fix: restored getBillingReadinessWarnings function deleted in v1.4.209 overhaul",
