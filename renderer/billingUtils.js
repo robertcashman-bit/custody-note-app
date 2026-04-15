@@ -82,7 +82,7 @@ function buildQuickFileLineItems(record, totals) {
   }
   if (totals.parkingAmount > 0) {
     lines.push({
-      description: 'Parking/disbursements',
+      description: 'Parking',
       unitCost: totals.parkingAmount,
       qty: 1,
       vatRate: totals.vatRate,

@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.213",
+      "version": "1.4.214",
       "date": "2026-04-15",
       "latest": true,
+      "changes": [
+        "Fix: 'Mark billing complete' and 'Mark office work complete' buttons now work correctly inside workflow (confirm dialog z-index fix)",
+        "Invoicing: line item names standardised — 'PS Attendance Fixed Fee', 'Mileage', 'Parking'",
+        "Invoicing: attachment filename now follows format 'Name - Station - Date - police station attendance note - Firm.pdf'",
+        "CRM1: fixed NI number going into UFN header boxes — UFN combs now left blank, NI mapped to correct comb fields",
+        "CRM1: capital section now fills investments row and above-threshold field when savings data entered"
+      ]
+    },
+    {
+      "version": "1.4.213",
+      "date": "2026-04-15",
+      "latest": false,
       "changes": [
         "Time recording: social/unsocial minute fields and total minutes are now editable (type to override auto-calculated values)",
         "Time recording: section heading and note updated to explain auto-fill and manual override"

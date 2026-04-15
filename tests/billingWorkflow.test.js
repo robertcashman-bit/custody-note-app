@@ -78,9 +78,9 @@ describe('QuickFile invoice creation handler', () => {
   });
 
   it('creates invoice with line items for fee, mileage, and parking', () => {
-    assert.ok(mainJs.includes('PS attendance fee'));
+    assert.ok(mainJs.includes('PS Attendance Fixed Fee'));
     assert.ok(mainJs.includes("'Mileage'"));
-    assert.ok(mainJs.includes("'Parking/disburse'"));
+    assert.ok(mainJs.includes("'Parking'"));
     assert.ok(mainJs.includes('function buildQuickFileItemLine'));
   });
 

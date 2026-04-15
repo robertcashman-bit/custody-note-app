@@ -452,7 +452,11 @@ async function _handleCreateInvoice(recordId, opts) {
   }
 
   var dataForAttach = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
-  var attachName = ([dataForAttach.surname, dataForAttach.forename].filter(Boolean).join('_') || 'attendance') + '-note.pdf';
+  var attachTitle = (typeof buildAttachmentTitle === 'function')
+    ? buildAttachmentTitle({ clientName: opts.clientName, stationName: opts.stationName, attendanceDate: opts.attendanceDate, firmName: opts.firmName })
+    : '';
+  var attachName = (attachTitle || ([dataForAttach.surname, dataForAttach.forename].filter(Boolean).join('_') || 'attendance') + '-note') + '.pdf';
+  attachName = attachName.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').slice(0, 240);
 
   window.api.getSettings().then(function (settings) {
     var builder = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : (typeof buildPdfHtml === 'function' ? buildPdfHtml : null);

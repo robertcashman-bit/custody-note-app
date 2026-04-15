@@ -3503,7 +3503,7 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 8500;
+  z-index: 10000;
 }
 .cn-confirm-box {
   background: var(--surface, #fff);

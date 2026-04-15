@@ -90,6 +90,22 @@ function formatAttachmentFilename(opts) {
   return name + ext;
 }
 
+function formatDateShort(dateStr) {
+  if (!dateStr) return '';
+  var m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return '';
+  return parseInt(m[3], 10) + '.' + parseInt(m[2], 10) + '.' + m[1].slice(2);
+}
+
+function buildAttachmentTitle(opts) {
+  var client = _collapseSpaces(opts.clientName || '');
+  var station = _collapseSpaces(opts.policeStation || opts.stationName || '');
+  var dateFmt = formatDateShort(opts.attendanceDate || opts.date || '');
+  var firm = _collapseSpaces(opts.firmName || '');
+  return [client, station, dateFmt, 'police station attendance note', firm]
+    .filter(Boolean).join(' - ');
+}
+
 function buildLine1Description(record) {
   var client = _collapseSpaces(record.clientName || '');
   var station = _collapseSpaces(record.policeStation || record.stationName || '');
