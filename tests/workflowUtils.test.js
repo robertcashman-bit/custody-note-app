@@ -441,19 +441,19 @@ describe('Completion screen source', () => {
     assert.ok(completionScreenSrc.includes('function _wfRenderCompletionStep'));
   });
 
-  it('marks office complete via attendanceSave completed', () => {
+  it('archive saves completed status and stamps handover timestamps', () => {
     assert.ok(completionScreenSrc.includes("status: 'completed'"));
-    assert.ok(completionScreenSrc.includes('_wfRunMarkOfficeComplete'));
+    assert.ok(completionScreenSrc.includes('billingProcessCompletedAt'));
+    assert.ok(completionScreenSrc.includes('officeWorkCompletedAt'));
   });
 
   it('hooks post-invoice handoff', () => {
     assert.ok(completionScreenSrc.includes('_wfAfterInvoiceCreatedGoToCompletion'));
   });
 
-  it('records billing handover and archive path', () => {
-    assert.ok(completionScreenSrc.includes('billingProcessCompletedAt'));
-    assert.ok(completionScreenSrc.includes('_wfRunMarkBillingComplete'));
+  it('exposes workflow archive helper', () => {
     assert.ok(completionScreenSrc.includes('_wfRunArchiveFromWorkflow'));
+    assert.ok(completionScreenSrc.includes('window._wfRunArchiveFromWorkflow'));
   });
 });
 

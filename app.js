@@ -4961,6 +4961,10 @@ var REQUIRED_FIELD_KEYS = [
     if (!window.api) return;
     window.api.firmsList().then(f => {
       firms = f;
+      if (formData && formData.firmId && !(String(formData.firmName || '').trim())) {
+        const fi = firms.find(function (x) { return String(x.id) === String(formData.firmId); });
+        if (fi && fi.name) formData.firmName = fi.name;
+      }
       refreshQuickCaptureContactSuggestions();
       renderFirmsPage();
       const useSec = document.getElementById('firms-use-existing-section');
@@ -5950,12 +5954,9 @@ var REQUIRED_FIELD_KEYS = [
     if (form) form.scrollTop = 0;
   }
 
-  /** Billing handover or legacy office-complete must be recorded before archiving (see finish-matter workflow). */
+  /** True when the note is finalised — user may archive (handover timestamps are set on archive if missing). */
   function matterBillingArchiveReady() {
-    const d = typeof formData !== 'undefined' && formData ? formData : {};
-    if (d.billingProcessCompletedAt) return true;
-    if (d.officeWorkCompletedAt) return true;
-    return false;
+    return typeof isNoteLockedForEditing === 'function' && isNoteLockedForEditing();
   }
   window.matterBillingArchiveReady = matterBillingArchiveReady;
 
@@ -13060,15 +13061,40 @@ PDF_CASENOTE_ADVERT +
           break;
         case 'form-archive-btn':
           if (!currentAttendanceId) return;
+          if (!isNoteLockedForEditing()) {
+            showToast('Finalise the attendance note before archiving.', 'error');
+            return;
+          }
           showConfirm(
-            'Archive this record? It will be hidden from the main list but you can restore it from the Archived filter.',
+            'Archive this matter? Billing and office completion will be recorded if not already saved, then the file moves to Archived.',
             'Archive record'
           ).then(function(ok) {
             if (!ok) return;
-            window.api.attendanceArchive(currentAttendanceId).then(function() {
+            const data = getFormData();
+            const iso = new Date().toISOString();
+            if (!data.billingProcessCompletedAt) {
+              data.billingProcessCompletedAt = iso;
+              if (formData) formData.billingProcessCompletedAt = iso;
+            }
+            if (!data.officeWorkCompletedAt) {
+              data.officeWorkCompletedAt = iso;
+              if (formData) formData.officeWorkCompletedAt = iso;
+            }
+            window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'completed' }).then(function(result) {
+              if (result && typeof result === 'object' && result.error) {
+                showToast(result.message || result.error || 'Save failed', 'error', 7000);
+                return Promise.reject(new Error('save'));
+              }
+              currentRecordStatus = 'completed';
+              return window.api.attendanceArchive(currentAttendanceId);
+            }).then(function() {
               showToast('Record archived', 'info');
               setListFilterAndShowList('archived');
-            }).catch(function() { showToast('Failed to archive record', 'error'); });
+              updateFormBarVisibility();
+            }).catch(function(err) {
+              if (err && err.message === 'save') return;
+              showToast('Failed to archive record', 'error');
+            });
           });
           break;
         case 'form-unarchive-btn':

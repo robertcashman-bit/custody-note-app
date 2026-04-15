@@ -166,7 +166,10 @@ test('billable-attendances.js does NOT use hardcoded 1.20 VAT multiplier', () =>
 test('app.js archive flow uses confirmation dialog', () => {
   const src = readSrc('app.js');
   assert.ok(src.includes('showConfirm'), 'Archive action must use confirmation dialog');
-  assert.ok(src.includes('Archive this record'), 'Confirmation should mention archiving');
+  assert.ok(
+    src.includes('Archive this record') || src.includes('Archive this matter'),
+    'Confirmation should mention archiving'
+  );
 });
 
 /* ══════════════════════════════════════════════════

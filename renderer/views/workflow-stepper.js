@@ -43,10 +43,34 @@ function _wfPersistStep() {
   } catch (e) {}
 }
 
+function _wfResolveFirmDisplayName(data) {
+  var d = data || {};
+  var firmName = (d.firmName || '').trim();
+  var fid = d.firmId != null && d.firmId !== '' ? String(d.firmId) : '';
+  var firmList = typeof firms !== 'undefined' && firms && firms.length ? firms : (typeof window !== 'undefined' && window.firms ? window.firms : []);
+  if (!firmName && fid && firmList && firmList.length) {
+    var match = firmList.find(function (f) { return String(f.id) === fid; });
+    if (match && match.name) firmName = String(match.name).trim();
+  }
+  if (!firmName && fid && typeof document !== 'undefined') {
+    var form = document.getElementById('attendance-form');
+    var hid = form && form.querySelector('[data-field="firmId"]');
+    if (hid && String(hid.value || '') === fid && firmList && firmList.length) {
+      var m2 = firmList.find(function (f) { return String(f.id) === fid; });
+      if (m2 && m2.name) firmName = String(m2.name).trim();
+    }
+  }
+  if (!firmName && typeof document !== 'undefined') {
+    var strong = document.querySelector('.form-firm-selected strong');
+    if (strong && strong.textContent) firmName = String(strong.textContent).trim();
+  }
+  return firmName;
+}
+
 function _wfMatterMeta() {
   var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
   var clientName = [data.forename, data.surname].filter(Boolean).join(' ') || '';
-  var firmName = data.firmName || '';
+  var firmName = _wfResolveFirmDisplayName(data);
   var stationName = data.policeStationName || '';
   var attendanceDate = data.date || data.instructionDateTime || '';
   if (attendanceDate && attendanceDate.length > 10) attendanceDate = attendanceDate.slice(0, 10);
@@ -102,6 +126,7 @@ function _wfBuildSummaryStrip(meta, statusHtml) {
 /** @param {number|undefined} startStep Omit or pass NaN to resume last step for this record (sessionStorage). */
 function openWorkflow(startStep, onClose) {
   if (_workflowOpen) return;
+  if (typeof getFormData === 'function') getFormData();
   _workflowOpen = true;
   if (typeof startStep === 'number' && Number.isFinite(startStep)) {
     _workflowStep = Math.max(0, Math.min(_workflowSteps.length - 1, startStep));

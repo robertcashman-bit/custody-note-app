@@ -131,6 +131,14 @@ describe('Workflow stepper — step routing', () => {
 });
 
 describe('Workflow stepper — openWorkflow / closeWorkflow', () => {
+  it('openWorkflow syncs form via getFormData before rendering (firm/station hidden fields)', () => {
+    assert.ok(stepperJs.includes("if (typeof getFormData === 'function') getFormData()"));
+  });
+
+  it('resolves instructing firm display name from saved data, firms list, or DOM', () => {
+    assert.ok(stepperJs.includes('_wfResolveFirmDisplayName'));
+  });
+
   it('openWorkflow creates overlay and renders shell', () => {
     assert.ok(stepperJs.includes('function openWorkflow'));
     assert.ok(stepperJs.includes('_renderWorkflowShell'));
@@ -375,7 +383,7 @@ describe('Step 2: Billing screen — skip invoice path', () => {
   it('skip button is not rendered when invoice already exists', () => {
     const fnIdx = billingScreenJs.indexOf('function _wfBuildBillingFooter');
     assert.ok(fnIdx !== -1);
-    const fnBlock = billingScreenJs.substring(fnIdx, fnIdx + 600);
+    const fnBlock = billingScreenJs.substring(fnIdx, fnIdx + 1200);
     assert.ok(fnBlock.includes('wf-bill-skip-invoice'), 'skip button HTML should be in footer builder');
     const skipIdx = fnBlock.indexOf('wf-bill-skip-invoice');
     const before = fnBlock.substring(0, skipIdx);
@@ -404,6 +412,27 @@ describe('Step 2: Billing screen — action guide', () => {
   it('guide mentions skip-invoice path when no existing invoice', () => {
     assert.ok(billingScreenJs.includes('complete without invoice'));
     assert.ok(billingScreenJs.includes('invoicing was handled separately'));
+  });
+
+  it('guide mentions Archive & close and Close when note is finalised', () => {
+    assert.ok(billingScreenJs.includes('Archive &amp; close'));
+    assert.ok(billingScreenJs.includes('<strong>Close</strong> to exit without archiving'));
+  });
+});
+
+describe('Step 2: Billing screen — archive from billing step', () => {
+  it('exposes archive handler on window from completion screen', () => {
+    assert.ok(completionJs.includes('window._wfRunArchiveFromWorkflow = _wfRunArchiveFromWorkflow'));
+  });
+
+  it('billing footer builds wf-bill-archive when canArchiveFromBilling', () => {
+    assert.ok(billingScreenJs.includes('wf-bill-archive'));
+    assert.ok(billingScreenJs.includes('canArchiveFromBilling'));
+    assert.ok(billingScreenJs.includes('window._wfRunArchiveFromWorkflow'));
+  });
+
+  it('refreshes matter meta after async billing loads so firm name is not stale', () => {
+    assert.ok(billingScreenJs.includes('meta = _wfMatterMeta()'));
   });
 });
 
@@ -654,16 +683,6 @@ describe('Step 3: Completion screen — progress checklist', () => {
     assert.ok(completionJs.includes('Attachments named on file'));
   });
 
-  it('checks billing process completed', () => {
-    assert.ok(completionJs.includes('Billing process completed'));
-    assert.ok(completionJs.includes('billingProcessCompletedAt'));
-  });
-
-  it('checks office work marked complete', () => {
-    assert.ok(completionJs.includes('Office work marked complete'));
-    assert.ok(completionJs.includes('officeWorkCompletedAt'));
-  });
-
   it('all rows show ok/pending icons', () => {
     assert.ok(completionJs.includes('wf-completion-row--ok'));
     assert.ok(completionJs.includes('wf-completion-row--pending'));
@@ -710,57 +729,31 @@ describe('Step 3: Completion screen — billing summary card (LAA rates)', () =>
 });
 
 describe('Step 3: Completion screen — action guide', () => {
-  it('shows "What to do on this step" guide with numbered actions', () => {
+  it('shows "What to do on this step" guide', () => {
     assert.ok(completionJs.includes('wf-action-guide'));
     assert.ok(completionJs.includes('What to do on this step'));
-    assert.ok(completionJs.includes('in order'));
   });
 
-  it('guides user to mark billing complete first', () => {
-    assert.ok(completionJs.includes('Mark billing process complete'));
-  });
-
-  it('guides user to mark office work complete second', () => {
-    assert.ok(completionJs.includes('Mark office work complete'));
-  });
-
-  it('guides user to archive as final step', () => {
-    assert.ok(completionJs.includes('Archive record'));
-  });
-
-  it('marks completed actions with done class', () => {
-    assert.ok(completionJs.includes('wf-action-guide-item--done'));
-    assert.ok(completionJs.includes('Billing marked complete'));
-    assert.ok(completionJs.includes('Office work marked complete'));
+  it('guides user to Archive or Close', () => {
+    assert.ok(completionJs.includes('<strong>Archive</strong>'));
+    assert.ok(completionJs.includes('<strong>Close</strong>'));
+    assert.ok(completionJs.includes('billing and office completion are recorded automatically'));
   });
 });
 
 describe('Step 3: Completion screen — actions', () => {
-  it('Mark billing process complete requires note finalised', () => {
-    assert.ok(completionJs.includes('Finalise the attendance note before marking billing complete'));
+  it('Archive requires note finalised', () => {
+    assert.ok(completionJs.includes('Finalise the attendance note before archiving'));
   });
 
-  it('Mark billing complete stamps billingProcessCompletedAt with ISO date', () => {
+  it('Archive stamps billingProcessCompletedAt and officeWorkCompletedAt when missing', () => {
     assert.ok(completionJs.includes('billingProcessCompletedAt'));
+    assert.ok(completionJs.includes('officeWorkCompletedAt'));
     assert.ok(completionJs.includes('new Date().toISOString()'));
   });
 
-  it('Mark office work complete warns about outstanding items but allows override', () => {
-    assert.ok(completionJs.includes('Continue anyway?'));
-    assert.ok(completionJs.includes('blockers'));
-  });
-
-  it('Mark office complete stamps officeWorkCompletedAt and sets status to completed', () => {
-    assert.ok(completionJs.includes('officeWorkCompletedAt'));
-    assert.ok(completionJs.includes("'completed'"));
-  });
-
-  it('Archive button requires billing handover + note finalised', () => {
-    assert.ok(completionJs.includes('matterBillingArchiveReady'));
-    assert.ok(completionJs.includes('ctx.noteOk'));
-  });
-
-  it('Archive calls attendanceArchive API', () => {
+  it('Archive saves completed status then calls attendanceArchive', () => {
+    assert.ok(completionJs.includes("status: 'completed'"));
     assert.ok(completionJs.includes('attendanceArchive'));
   });
 
@@ -774,10 +767,10 @@ describe('Step 3: Completion screen — actions', () => {
     assert.ok(completionJs.includes('exportBillingSummaryPdf'));
   });
 
-  it('footer buttons are numbered to show sequence', () => {
-    assert.ok(completionJs.includes('1. Mark billing complete'));
-    assert.ok(completionJs.includes('. Mark office work complete'));
-    assert.ok(completionJs.includes('Final: Archive record'));
+  it('footer has Archive and Close', () => {
+    assert.ok(completionJs.includes('id="wf-complete-archive"'));
+    assert.ok(completionJs.includes('id="wf-complete-close"'));
+    assert.ok(completionJs.includes('>Archive</button>'));
   });
 
   it('primary action buttons use wf-btn-next-action class', () => {
