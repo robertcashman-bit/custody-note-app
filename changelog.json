@@ -1,9 +1,25 @@
 {
   "releases": [
     {
-      "version": "1.4.208",
+      "version": "1.4.209",
       "date": "2026-04-15",
       "latest": true,
+      "changes": [
+        "Billing: auto-fill mileage from station table",
+        "Billing: departure time nudge on record re-open",
+        "Billing: disbursement prompt after departure",
+        "Billing: hard readiness gate (blocks incomplete records)",
+        "Billing: escape fee auto-detection",
+        "Billing: workflow adapts for non-QuickFile users",
+        "Billing: summary card with LAA rate breakdown",
+        "Billing: one-page billing summary PDF export",
+        "Billing: auto-detect weekend/bank holiday from date"
+      ]
+    },
+    {
+      "version": "1.4.208",
+      "date": "2026-04-15",
+      "latest": false,
       "changes": [
         "Fix: office postcode now persists correctly in settings",
         "Licence: 3-month grace period before revocation",
