@@ -195,28 +195,32 @@ async function main() {
       'Content-Type': 'application/json',
     };
     const tag = `v${newVersion}`;
-    let draftPublished = false;
+    let releaseReady = false;
     for (const delayMs of [3000, 5000, 10000]) {
       await new Promise((r) => setTimeout(r, delayMs));
       const listRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases?per_page=20`, { headers: ghApiHeaders });
       if (!listRes.ok) continue;
       const allReleases = await listRes.json();
-      const draftRelease = allReleases.find((r) => r.tag_name === tag && r.draft === true);
-      if (draftRelease) {
-        const patchRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/${draftRelease.id}`, {
-          method: 'PATCH',
-          headers: ghApiHeaders,
-          body: JSON.stringify({ draft: false }),
-        });
-        if (patchRes.ok) {
-          console.log(`GitHub release ${tag} published (draft → live).`);
-          draftPublished = true;
-          break;
-        }
+      const matchingRelease = allReleases.find((r) => r.tag_name === tag);
+      if (!matchingRelease) continue;
+      if (!matchingRelease.draft) {
+        console.log(`GitHub release ${tag} is already published.`);
+        releaseReady = true;
+        break;
+      }
+      const patchRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/${matchingRelease.id}`, {
+        method: 'PATCH',
+        headers: ghApiHeaders,
+        body: JSON.stringify({ draft: false }),
+      });
+      if (patchRes.ok) {
+        console.log(`GitHub release ${tag} published (draft → live).`);
+        releaseReady = true;
+        break;
       }
     }
-    if (!draftPublished) {
-      console.warn(`Warning: could not publish draft release ${tag} on GitHub. Publish manually or re-run.`);
+    if (!releaseReady) {
+      console.warn(`Warning: could not find or publish release ${tag} on GitHub. Publish manually or re-run.`);
     }
 
     // Verify GitHub latest release matches expected version before website deploy.
