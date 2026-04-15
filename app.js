@@ -4610,7 +4610,7 @@ var REQUIRED_FIELD_KEYS = [
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
       const opc = document.getElementById('setting-office-postcode');
-      if (opc) opc.value = s.officePostcode || '';
+      if (opc && document.activeElement !== opc) opc.value = s.officePostcode || '';
       const dm = document.getElementById('setting-dark-mode');
       if (dm) dm.checked = s.darkMode === 'true';
       if (s.colourTheme) applyTheme(s.colourTheme);
@@ -14946,6 +14946,7 @@ PDF_CASENOTE_ADVERT +
     const settingsFields = [
       ['setting-email', 'email'],
       ['setting-dscc-pin', 'dsccPin'],
+      ['setting-office-postcode', 'officePostcode'],
       ['setting-quickfile-account', 'quickfileAccountNumber'],
       ['setting-quickfile-apikey', 'quickfileApiKey'],
       ['setting-quickfile-appid', 'quickfileAppId'],
@@ -15018,9 +15019,9 @@ PDF_CASENOTE_ADVERT +
       }).catch(function(e) { console.error('[setSettings]', e); });
     });
 
-    document.getElementById('setting-office-postcode')?.addEventListener('input', debounce((e) => {
+    document.getElementById('setting-office-postcode')?.addEventListener('change', (e) => {
       window.api.setSettings({ officePostcode: e.target.value.trim() }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
-    }, 800));
+    });
 
     document.getElementById('setting-dark-mode')?.addEventListener('change', (e) => {
       applyDarkMode(e.target.checked);
