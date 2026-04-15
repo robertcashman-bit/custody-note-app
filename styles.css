@@ -6497,6 +6497,85 @@ html.dark .wf-gen-forms-sub { color: #94a3b8; }
 html.dark .wf-doc-sel-sub { color: #94a3b8; }
 html.dark .wf-doc-sel-group-label { color: #94a3b8; }
 
+/* Action guide — "What to do on this step" */
+.wf-action-guide {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1.1rem;
+  border-radius: 10px;
+  border: 2px solid #3b82f6;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+}
+.wf-action-guide-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #1e3a5f;
+}
+.wf-action-guide-list {
+  margin: 0; padding: 0 0 0 1.3rem;
+  list-style: decimal;
+}
+.wf-action-guide-item {
+  font-size: 0.85rem; line-height: 1.5;
+  color: #1e3a5f;
+  padding: 0.15rem 0;
+}
+.wf-action-guide-item--done {
+  color: #059669;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* Review confirmation unlock status */
+.wf-review-confirm-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+  color: var(--muted, #64748b);
+}
+.wf-review-confirm-status {
+  margin: 0.6rem 0 0;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+.wf-review-confirm-status--unlocked {
+  background: #ecfdf5;
+  color: #065f46;
+  border-color: #10b981;
+}
+.wf-review-confirmation-card {
+  border: 2px solid #f59e0b !important;
+  background: linear-gradient(135deg, #fffbeb, #fff) !important;
+}
+
+/* Primary action button prominence */
+.wf-btn-next-action {
+  font-size: 0.92rem;
+  font-weight: 700;
+  padding: 0.55rem 1.4rem;
+  letter-spacing: 0.01em;
+}
+
+/* Footer spacer pushes actions to the right */
+.wf-footer-spacer { flex: 1; }
+
+/* Dark mode — action guide */
+html.dark .wf-action-guide {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #1e293b, #172554);
+}
+html.dark .wf-action-guide-title { color: #93c5fd; }
+html.dark .wf-action-guide-item { color: #bfdbfe; }
+html.dark .wf-action-guide-item--done { color: #6ee7b7; }
+html.dark .wf-review-confirm-hint { color: #94a3b8; }
+html.dark .wf-review-confirm-status { background: #422006; color: #fde68a; border-color: #d97706; }
+html.dark .wf-review-confirm-status--unlocked { background: #064e3b; color: #6ee7b7; border-color: #10b981; }
+html.dark .wf-review-confirmation-card { border-color: #d97706 !important; background: linear-gradient(135deg, #422006, #1e293b) !important; }
+
 /* ═══════════════════════════════════════════════════════
    BILLING VIEW
    ═══════════════════════════════════════════════════════ */

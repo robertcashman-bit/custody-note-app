@@ -87,12 +87,31 @@ function _wfRenderCompletionStep(body, footer) {
 
   var billingSummaryHtml = _wfBuildBillingSummaryCard(d);
 
+  var completionGuideHtml = '<div class="wf-action-guide"><h4 class="wf-action-guide-title">What to do on this step &mdash; in order</h4><ol class="wf-action-guide-list">';
+  if (!billingOk) {
+    completionGuideHtml += '<li class="wf-action-guide-item"><strong>1.</strong> Review the billing summary below, then click <strong>Mark billing process complete</strong>.</li>';
+  } else {
+    completionGuideHtml += '<li class="wf-action-guide-item wf-action-guide-item--done">&#10003; Billing marked complete.</li>';
+  }
+  if (!officeOk) {
+    completionGuideHtml += '<li class="wf-action-guide-item"><strong>' + (billingOk ? '1' : '2') + '.</strong> Click <strong>Mark office work complete</strong> when all admin is done.</li>';
+  } else {
+    completionGuideHtml += '<li class="wf-action-guide-item wf-action-guide-item--done">&#10003; Office work marked complete.</li>';
+  }
+  if (billingOk && officeOk && noteOk) {
+    completionGuideHtml += '<li class="wf-action-guide-item"><strong>Final.</strong> Click <strong>Archive record</strong> to file this matter away.</li>';
+  } else if (billingOk && officeOk) {
+    completionGuideHtml += '<li class="wf-action-guide-item">Finalise the attendance note to unlock archiving.</li>';
+  }
+  completionGuideHtml += '</ol></div>';
+
   body.innerHTML =
     '<div class="wf-screen wf-completion">' +
       '<div class="wf-screen-header">' +
-        '<h3>Review &amp; mark complete</h3>' +
+        '<h3>Step 3 &mdash; Review &amp; mark complete</h3>' +
         '<p class="wf-screen-sub">Confirm this matter is complete: billing data checked, documents in order, then archive when ready.</p>' +
       '</div>' +
+      completionGuideHtml +
       '<div class="wf-card">' +
         '<h4 class="wf-card-title">Progress</h4>' +
         strip +
@@ -122,25 +141,27 @@ function _wfBuildCompletionFooter(footer, ctx) {
   var canArchive = matterReady && ctx.noteOk && !archived;
 
   var html =
-    '<button type="button" id="wf-complete-back" class="btn btn-secondary">&#9664; Back</button>' +
-    '<button type="button" id="wf-export-billing-pdf" class="btn btn-secondary">Export billing summary PDF</button>';
+    '<button type="button" id="wf-complete-back" class="btn btn-secondary btn-small">&#9664; Back</button>' +
+    '<button type="button" id="wf-export-billing-pdf" class="btn btn-secondary btn-small">Export PDF</button>' +
+    '<span class="wf-footer-spacer"></span>';
 
   if (ctx.showBillingBtn) {
-    html += '<button type="button" id="wf-billing-done" class="btn btn-primary">Mark billing process complete</button>';
+    html += '<button type="button" id="wf-billing-done" class="btn btn-primary wf-btn-next-action">1. Mark billing complete</button>';
   }
 
   if (!ctx.officeOk) {
-    html += '<button type="button" id="wf-complete-done" class="btn ' + (ctx.showBillingBtn ? 'btn-secondary' : 'btn-primary') + '">Mark office work complete</button>';
+    var officeNum = ctx.showBillingBtn ? '2' : '1';
+    html += '<button type="button" id="wf-complete-done" class="btn ' + (ctx.showBillingBtn ? 'btn-secondary' : 'btn-primary wf-btn-next-action') + '">' + officeNum + '. Mark office work complete</button>';
   } else {
-    html += '<button type="button" id="wf-complete-done" class="btn btn-secondary" disabled>Office work complete</button>';
+    html += '<button type="button" id="wf-complete-done" class="btn btn-secondary btn-small" disabled>&#10003; Office complete</button>';
   }
 
   if (canArchive) {
-    html += '<button type="button" id="wf-complete-archive" class="btn btn-primary">Archive record</button>';
+    html += '<button type="button" id="wf-complete-archive" class="btn btn-primary wf-btn-next-action">Final: Archive record</button>';
   }
 
   html +=
-    '<button type="button" id="wf-complete-close" class="btn btn-secondary">Close</button>';
+    '<button type="button" id="wf-complete-close" class="btn btn-secondary btn-small">Close</button>';
 
   footer.innerHTML = html;
 
