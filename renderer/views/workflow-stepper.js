@@ -12,7 +12,7 @@ var _workflowOnClose = null;
 
 var _workflowSteps = [
   { id: 'documents', label: 'Documents &amp; attachments', icon: '&#128196;' },
-  { id: 'invoice',   label: 'QuickFile invoice', icon: '&#163;' },
+  { id: 'invoice',   label: 'Billing review', icon: '&#163;' },
   { id: 'complete',  label: 'Review &amp; complete', icon: '&#10003;' },
 ];
 

@@ -2582,6 +2582,92 @@ var REQUIRED_FIELD_KEYS = [
     if (total > 0) setFieldValue('totalMinutes', total);
   }
 
+  /* ─── Auto-fill mileage from station table ─── */
+  function autoFillMileageFromStation(stationId) {
+    if (!stationId || !window.api || !window.api.stationMileageGet) return;
+    var existing = parseFloat(formData.milesClaimable);
+    if (existing > 0) return;
+    window.api.stationMileageGet(stationId).then(function (r) {
+      if (r && r.mileage_from_base != null && r.mileage_from_base > 0) {
+        formData.milesClaimable = String(r.mileage_from_base);
+        setFieldValue('milesClaimable', r.mileage_from_base);
+        recalcTotal();
+      }
+    }).catch(function () {});
+  }
+
+  /* ─── Auto-detect weekend / bank holiday from date ─── */
+  function autoDetectWeekendBankHoliday() {
+    var d = formData.date;
+    if (!d) return;
+    var dt = new Date(d + 'T12:00:00');
+    if (isNaN(dt.getTime())) return;
+    var dow = dt.getDay();
+    var isWE = dow === 0 || dow === 6;
+    var isBH = UK_BANK_HOLIDAYS.includes(d);
+    var val = (isWE || isBH) ? 'Yes' : 'No';
+    formData.weekendBankHoliday = val;
+    setFieldValue('weekendBankHoliday', val);
+  }
+
+  /* ─── Departure nudge: prompt when re-opening a record missing departure ─── */
+  var _departureNudgeShown = {};
+  function maybeDepartureNudge() {
+    if (!currentAttendanceId) return;
+    if (_departureNudgeShown[currentAttendanceId]) return;
+    if (isNoteLockedForEditing()) return;
+    var d = formData;
+    if (!d.timeArrival || d.timeDeparture) return;
+    var arrMs = parseTimeToMs(d.timeArrival);
+    if (arrMs == null) return;
+    _departureNudgeShown[currentAttendanceId] = true;
+    setTimeout(function () {
+      var now = new Date();
+      var hh = ('0' + now.getHours()).slice(-2);
+      var mm = ('0' + now.getMinutes()).slice(-2);
+      var nowTime = hh + ':' + mm;
+      showConfirm(
+        'This record has an arrival time (' + d.timeArrival + ') but no departure time.\n\nWould you like to set the departure time now?',
+        'Departure time missing'
+      ).then(function (ok) {
+        if (!ok) return;
+        var sec = activeFormSections.findIndex(function (s) { return s.id === 'timeRecording'; });
+        if (sec >= 0) {
+          goToSection(sec);
+          setTimeout(function () {
+            var el = document.querySelector('[data-field="timeDeparture"]');
+            if (el) el.focus();
+          }, 200);
+        }
+      });
+    }, 1500);
+  }
+  function parseTimeToMs(t) {
+    if (!t || !/^\d{1,2}:\d{2}$/.test(t)) return null;
+    var p = t.split(':').map(Number);
+    return p[0] * 60 + p[1];
+  }
+
+  /* ─── Disbursement prompt when departure time is entered ─── */
+  var _disbursementPromptShown = {};
+  function maybePromptDisbursements() {
+    if (!currentAttendanceId) return;
+    if (_disbursementPromptShown[currentAttendanceId]) return;
+    _disbursementPromptShown[currentAttendanceId] = true;
+    var d = formData;
+    var hasDisbursements = d.disbursements && d.disbursements.some(function (x) { return x && (parseFloat(x.amount) > 0); });
+    var hasParking = parseFloat(d.parkingCost) > 0;
+    if (hasDisbursements || hasParking) return;
+    showConfirm(
+      'You\'ve entered a departure time. Do you have any costs to claim (parking, tolls, etc.)?',
+      'Claim any costs?'
+    ).then(function (ok) {
+      if (!ok) return;
+      var el = document.querySelector('[data-field="parkingCost"]');
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.focus(); }
+    });
+  }
+
   var _suppressChangeHandlers = false;
 
   function getFieldValue(key) {
@@ -5671,6 +5757,7 @@ var REQUIRED_FIELD_KEYS = [
       currentSectionIdx = 0;
       renderForm(formData);
       showView('new');
+      maybeDepartureNudge();
       return;
     }
     
@@ -5708,6 +5795,7 @@ var REQUIRED_FIELD_KEYS = [
       currentSectionIdx = 0;
       renderForm(formData);
       showView('new');
+      maybeDepartureNudge();
     }).catch(function(err) {
       if (requestToken !== _openAttendanceToken || currentAttendanceId !== id) return;
       showToast('Could not open record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
@@ -5941,28 +6029,7 @@ var REQUIRED_FIELD_KEYS = [
     showToast('Next: tap Finish matter (Time recording section or header) for documents, QuickFile invoice, and marking office work complete.', 'info', 7500);
   }
 
-  /** Blocking checks only — used for “Ready to invoice” status. */
-  function getBillingReadinessWarnings() {
-    var d = formData;
-    var w = [];
-    if (d._formType === 'telephone') return w;
-    if (!(d.matterTypeCode || '').trim()) w.push('Criminal matter type missing');
-    var volOd = (d.outcomeDecision || '').trim();
-    var hasOutcomeDecision = !!volOd;
-    var voluntaryConcluded = d.attendanceMode === 'voluntary' ? (volOd && volOd !== 'Ongoing / Unknown') : false;
-    if (!hasOutcomeDecision) w.push('Outcome missing');
-    if (voluntaryConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code missing (matter concluded)');
-    if (d.attendanceMode === 'voluntary') {
-      if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim()) w.push('DSCC reference or reason missing');
-      if (d.attendanceSubType === 'voluntary_non_police_body' && !d.constablePresent) w.push('Constable present? required for non-police body');
-    } else {
-      if (!(d.dsccRef || '').trim() && (d.sourceOfReferral || '').toLowerCase().indexOf('duty') >= 0) w.push('DSCC number missing (duty route)');
-    }
-    var mins = parseInt((d.totalMinutes || '').toString(), 10);
-    if (isNaN(mins) || mins <= 0) w.push('Time record incomplete');
-    return w;
-  }
-
+function raw() { [native code] }
   function updateBillingReadinessPanel() {
     var list = document.getElementById('billing-readiness-list');
     var panel = document.getElementById('billing-readiness-panel');
@@ -5994,10 +6061,15 @@ var REQUIRED_FIELD_KEYS = [
         summary += ' Then archive when all follow-up is done.';
       }
       openBtn.textContent = 'Continue finish matter';
+    } else if (!quickFileReady && !w.length) {
+      statusText = 'Ready to bill';
+      statusClass = 'state-ready';
+      summary = 'Billing data looks complete. Open Finish matter to review, mark complete, and archive.';
+      openBtn.textContent = 'Open finish matter';
     } else if (!quickFileReady) {
-      statusText = 'Setup needed';
-      statusClass = 'state-setup';
-      summary = 'Add QuickFile in Settings if you invoice from here; otherwise use Finish matter for documents and attachments.';
+      statusText = 'Needs review';
+      statusClass = 'state-review';
+      summary = 'Complete the checks below, then open Finish matter to review and mark complete.';
       openBtn.textContent = 'Open finish matter';
     } else if (!w.length) {
       statusText = 'Ready to invoice';
@@ -6005,7 +6077,7 @@ var REQUIRED_FIELD_KEYS = [
       summary = 'Charges look ready. Open Finish matter to create the QuickFile invoice and complete the file.';
       openBtn.textContent = 'Open finish matter';
     } else {
-      summary = 'Complete the checks below, then open Finish matter for invoice and completion.';
+      summary = 'Complete the checks below, then open Finish matter for billing review and completion.';
       openBtn.textContent = 'Open finish matter';
     }
     statusEl.className = 'billing-readiness-status ' + statusClass;
@@ -6739,6 +6811,8 @@ var REQUIRED_FIELD_KEYS = [
           if (formData.attendanceMode === 'voluntary' && ['consultationStart','consultationEnd','interviewStart','interviewEnd'].includes(field)) { autoCalcVoluntaryTimes(); }
           if (field === 'timeDetentionAuthorised') { setFieldValue('relevantTime', el.value || ''); calcReviewTimes(); }
           if (field === 'relevantTime') { calcReviewTimes(); }
+          if (field === 'date') { autoDetectWeekendBankHoliday(); }
+          if (field === 'timeDeparture' && formData.timeDeparture) { maybePromptDisbursements(); }
           scheduleUIRefresh();
           scheduleQuietSave();
         });
@@ -8816,6 +8890,7 @@ var REQUIRED_FIELD_KEYS = [
           setFieldValue('schemeId', r.station.code);
           sugList.classList.remove('open');
           saveRecentStation(r.station.id);
+          autoFillMileageFromStation(r.station.id);
         });
         sugList.appendChild(div);
       });
@@ -11128,6 +11203,95 @@ PDF_CASENOTE_ADVERT +
       const html = builder(data, settings);
       printGeneratedDoc(html);
     });
+  }
+
+  function exportBillingSummaryPdf() {
+    ensureAllSectionsRendered();
+    var d = getFormData();
+    var html = buildBillingSummaryHtml(d);
+    var n = [d.surname, d.forename].filter(Boolean).join('_') || 'billing';
+    var fn = 'billing-summary-' + n + '-' + ((d.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
+    window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
+      showToast('Billing summary PDF saved: ' + p, 'success');
+    }).catch(function(e) { showToast('PDF failed: ' + (e && e.message), 'error'); });
+  }
+  window.exportBillingSummaryPdf = exportBillingSummaryPdf;
+
+  function buildBillingSummaryHtml(d) {
+    var tS = parseInt(d.travelSocial) || 0, tU = parseInt(d.travelUnsocial) || 0;
+    var wS = parseInt(d.waitingSocial) || 0, wU = parseInt(d.waitingUnsocial) || 0;
+    var aS = parseInt(d.adviceSocial) || 0, aU = parseInt(d.adviceUnsocial) || 0;
+    var tot = parseInt(d.totalMinutes) || 0;
+    var miles = parseFloat(d.milesClaimable) || 0;
+    var parking = parseFloat(d.parkingCost) || 0;
+    var disbTotal = 0;
+    if (d.disbursements && Array.isArray(d.disbursements)) d.disbursements.forEach(function(x) { disbTotal += parseFloat(x && x.amount) || 0; });
+
+    var r = LAA.national;
+    function lv(m, rate) { return (m / 60) * rate; }
+    var tvl = lv(tS, r.travel.social) + lv(tU, r.travel.unsocial);
+    var wvl = lv(wS, r.waiting.social) + lv(wU, r.waiting.unsocial);
+    var avl = lv(aS, r.attendance.social) + lv(aU, r.attendance.unsocial);
+    var mvl = miles * LAA.mileageRate;
+    var net = tvl + wvl + avl + mvl + parking + disbTotal;
+    var vat = net * LAA.vatRate;
+    var total = net + vat;
+    var isEscape = net > LAA.escapeThreshold;
+    function fc(v) { return '\u00A3' + (v || 0).toFixed(2); }
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function fmtDate(v) { if (!v) return ''; var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : v; }
+
+    var statusLabel = isNoteLockedForEditing() ? (currentRecordStatus === 'completed' ? 'OFFICE COMPLETE' : 'FINALISED') : 'DRAFT';
+    if (isEscape) statusLabel += ' \u2014 ESCAPE FEE';
+
+    return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
+      'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;margin:20mm 15mm;color:#1e293b;}' +
+      'h1{font-size:16pt;margin:0 0 4px;} .status{font-size:10pt;padding:3px 10px;border-radius:4px;display:inline-block;margin-bottom:12px;background:#e2e8f0;font-weight:600;}' +
+      '.status-escape{background:#fee2e2;color:#991b1b;} .status-ready{background:#d1fae5;color:#065f46;}' +
+      'table{width:100%;border-collapse:collapse;margin:10px 0;} th,td{padding:5px 8px;text-align:left;border-bottom:1px solid #e2e8f0;} th{background:#f8fafc;font-weight:600;font-size:10pt;}' +
+      '.right{text-align:right;} .total-row{font-weight:700;border-top:2px solid #1e293b;} .grand{font-size:13pt;}' +
+      '.header-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:12px 0;font-size:10pt;}' +
+      '.header-grid dt{font-weight:600;color:#64748b;} .header-grid dd{margin:0;}' +
+      '.fee-type{margin:8px 0;padding:6px 12px;border-radius:4px;font-weight:600;font-size:10pt;}' +
+      '.fee-fixed{background:#d1fae5;color:#065f46;} .fee-escape{background:#fee2e2;color:#991b1b;}' +
+      '.footer{margin-top:20px;font-size:9pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;}' +
+      '@media print{body{margin:10mm;}}' +
+      '</style></head><body>' +
+      '<h1>Billing Summary</h1>' +
+      '<span class="status ' + (isEscape ? 'status-escape' : 'status-ready') + '">' + statusLabel + '</span>' +
+      '<dl class="header-grid">' +
+        '<dt>Client</dt><dd>' + esc((d.surname || '').toUpperCase() + ', ' + (d.forename || '')) + '</dd>' +
+        '<dt>Station</dt><dd>' + esc(d.policeStationName || d.policeStationId || '') + '</dd>' +
+        '<dt>Date</dt><dd>' + esc(fmtDate(d.date)) + '</dd>' +
+        '<dt>DSCC Ref</dt><dd>' + esc(d.dsccRef || '\u2014') + '</dd>' +
+        '<dt>UFN</dt><dd>' + esc(d.ufn || '\u2014') + '</dd>' +
+        '<dt>File Ref</dt><dd>' + esc(d.ourFileNumber || '\u2014') + '</dd>' +
+        '<dt>Fee Earner</dt><dd>' + esc(d.feeEarnerName || '') + '</dd>' +
+        '<dt>Firm</dt><dd>' + esc(d.firmName || '') + '</dd>' +
+        '<dt>Matter Type</dt><dd>' + esc(d.matterTypeCode || '\u2014') + '</dd>' +
+        '<dt>Outcome</dt><dd>' + esc(d.outcomeDecision || '\u2014') + '</dd>' +
+        '<dt>Arrival</dt><dd>' + esc(d.timeArrival || '\u2014') + '</dd>' +
+        '<dt>Departure</dt><dd>' + esc(d.timeDeparture || '\u2014') + '</dd>' +
+      '</dl>' +
+      '<table>' +
+        '<thead><tr><th>Category</th><th class="right">Social (min)</th><th class="right">Unsocial (min)</th><th class="right">Total (min)</th><th class="right">Value</th></tr></thead>' +
+        '<tbody>' +
+        (tS + tU > 0 ? '<tr><td>Travel</td><td class="right">' + tS + '</td><td class="right">' + tU + '</td><td class="right">' + (tS + tU) + '</td><td class="right">' + fc(tvl) + '</td></tr>' : '') +
+        (wS + wU > 0 ? '<tr><td>Waiting</td><td class="right">' + wS + '</td><td class="right">' + wU + '</td><td class="right">' + (wS + wU) + '</td><td class="right">' + fc(wvl) + '</td></tr>' : '') +
+        '<tr><td>Attendance &amp; Advice</td><td class="right">' + aS + '</td><td class="right">' + aU + '</td><td class="right">' + (aS + aU) + '</td><td class="right">' + fc(avl) + '</td></tr>' +
+        '<tr class="total-row"><td>Total time</td><td></td><td></td><td class="right">' + tot + ' min</td><td class="right">' + fc(tvl + wvl + avl) + '</td></tr>' +
+        (miles > 0 ? '<tr><td>Mileage (' + miles + ' mi \u00D7 \u00A3' + LAA.mileageRate.toFixed(2) + ')</td><td></td><td></td><td></td><td class="right">' + fc(mvl) + '</td></tr>' : '') +
+        (parking > 0 ? '<tr><td>Parking</td><td></td><td></td><td></td><td class="right">' + fc(parking) + '</td></tr>' : '') +
+        (disbTotal > 0 ? '<tr><td>Disbursements</td><td></td><td></td><td></td><td class="right">' + fc(disbTotal) + '</td></tr>' : '') +
+        '<tr class="total-row"><td>Net</td><td></td><td></td><td></td><td class="right">' + fc(net) + '</td></tr>' +
+        '<tr><td>VAT (20%)</td><td></td><td></td><td></td><td class="right">' + fc(vat) + '</td></tr>' +
+        '<tr class="total-row grand"><td>Total (inc. VAT)</td><td></td><td></td><td></td><td class="right">' + fc(total) + '</td></tr>' +
+        '</tbody></table>' +
+      '<div class="fee-type ' + (isEscape ? 'fee-escape' : 'fee-fixed') + '">' +
+        (isEscape ? 'ESCAPE FEE \u2014 net exceeds \u00A3' + LAA.escapeThreshold.toFixed(0) + ' threshold. CRM18 required.' : 'FIXED FEE (\u00A3' + LAA.fixedFee.toFixed(0) + ' inc. VAT) \u2014 claim does not exceed escape threshold.') +
+      '</div>' +
+      '<div class="footer">Generated: ' + new Date().toLocaleString('en-GB') + ' | CustodyNote Billing Summary</div>' +
+      '</body></html>';
   }
 
   var previewPdf = printAttendanceNote;

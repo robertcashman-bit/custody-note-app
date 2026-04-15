@@ -133,11 +133,17 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
     auditHtml += '</div></details>';
   }
 
+  var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
+  var screenTitle = qfConfigured ? 'QuickFile invoice' : 'Billing review';
+  var screenSub = qfConfigured
+    ? 'Create the QuickFile invoice and attach generated PDFs where selected.'
+    : 'Review the billing details for this matter before marking it complete.';
+
   body.innerHTML =
     '<div class="wf-screen wf-billing">' +
       '<div class="wf-screen-header">' +
-        '<h3>QuickFile invoice</h3>' +
-        '<p class="wf-screen-sub">Create the QuickFile invoice and attach generated PDFs where selected.</p>' +
+        '<h3>' + screenTitle + '</h3>' +
+        '<p class="wf-screen-sub">' + screenSub + '</p>' +
         statusBadge +
       '</div>' +
       firmCallout +
@@ -276,23 +282,31 @@ function _wfFmtCurrency(val) {
 }
 
 function _wfBuildBillingFooter(footer, meta, opts) {
-  var nextCompleteBtn = opts.hasExistingInvoice
+  var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
+  var showNextBtn = opts.hasExistingInvoice || !qfConfigured;
+  var nextCompleteBtn = showNextBtn
     ? '<button type="button" id="wf-bill-next-complete" class="btn btn-primary">Next: Review &amp; complete &#9654;</button>'
+    : '';
+  var createBtnHtml = qfConfigured
+    ? '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create" disabled>' +
+        (opts.hasExistingInvoice ? '&#9888; Create Another Invoice' : 'Generate Invoice') +
+      '</button>'
     : '';
   footer.innerHTML =
     '<button type="button" id="wf-bill-back" class="btn btn-secondary">&#9664; Back</button>' +
-    '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create" disabled>' +
-      (opts.hasExistingInvoice ? '&#9888; Create Another Invoice' : 'Generate Invoice') +
-    '</button>' +
+    createBtnHtml +
     nextCompleteBtn +
     '<button type="button" id="wf-bill-close" class="btn btn-secondary">Close</button>';
 
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
   document.getElementById('wf-bill-close').addEventListener('click', closeWorkflow);
 
-  document.getElementById('wf-bill-create').addEventListener('click', function () {
-    _wfHandleCreateInvoice(meta, opts);
-  });
+  var createBtn = document.getElementById('wf-bill-create');
+  if (createBtn) {
+    createBtn.addEventListener('click', function () {
+      _wfHandleCreateInvoice(meta, opts);
+    });
+  }
 
   var nextComplete = document.getElementById('wf-bill-next-complete');
   if (nextComplete) {
