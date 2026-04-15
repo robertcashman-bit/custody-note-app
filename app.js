@@ -5862,6 +5862,15 @@ var REQUIRED_FIELD_KEYS = [
     if (form) form.scrollTop = 0;
   }
 
+  /** Billing handover or legacy office-complete must be recorded before archiving (see finish-matter workflow). */
+  function matterBillingArchiveReady() {
+    const d = typeof formData !== 'undefined' && formData ? formData : {};
+    if (d.billingProcessCompletedAt) return true;
+    if (d.officeWorkCompletedAt) return true;
+    return false;
+  }
+  window.matterBillingArchiveReady = matterBillingArchiveReady;
+
   function updateFormBarVisibility() {
     const finaliseBar = document.getElementById('form-finalise-bar');
     const endBillingBtn = document.getElementById('form-end-billing-btn');
@@ -5888,7 +5897,7 @@ var REQUIRED_FIELD_KEYS = [
       postFinaliseBar.style.display = (isNoteLockedForEditing() && !currentRecordArchived) ? '' : 'none';
     }
     if (currentAttendanceId && !currentRecordArchived) {
-      archiveBtn.style.display = '';
+      archiveBtn.style.display = matterBillingArchiveReady() ? '' : 'none';
       unarchiveBtn.style.display = 'none';
     } else if (currentAttendanceId && currentRecordArchived) {
       archiveBtn.style.display = 'none';
@@ -14770,6 +14779,7 @@ PDF_CASENOTE_ADVERT +
           '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Key</th>' +
           '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Status</th>' +
           '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Plan</th>' +
+          '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Last app use</th>' +
           '<th style="text-align:left;padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;">Created</th>' +
           '<th style="padding:0.4rem 0.5rem;border-bottom:2px solid #e2e8f0;font-size:0.78rem;color:#64748b;"></th>' +
           '</tr></thead><tbody>';
@@ -14779,12 +14789,17 @@ PDF_CASENOTE_ADVERT +
           var statusColor = l.subscriptionStatus === 'active' ? '#16a34a' : l.subscriptionStatus === 'trialing' ? '#d97706' : l.subscriptionStatus === 'cancelled' ? '#dc2626' : '#94a3b8';
           var date = l.createdAt ? new Date(l.createdAt).toLocaleDateString('en-GB') : '-';
           var maskedKey = l.licenceKey ? l.licenceKey.slice(0, 7) + '****' + l.licenceKey.slice(-4) : '-';
+          var lastUse = l.lastAppUseAt ? new Date(l.lastAppUseAt).toLocaleString('en-GB') : '—';
+          var idleNote = l.licenceRevokeIdleWarning
+            ? '<div style="font-size:0.72rem;color:#b45309;margin-top:0.25rem;max-width:14rem;">' + escapeHtml(l.licenceRevokeIdleWarning) + '</div>'
+            : '';
           html += '<tr style="background:' + bg + ';">' +
             '<td style="padding:0.35rem 0.5rem;">' + escapeHtml(l.email || '') + '</td>' +
             '<td style="padding:0.35rem 0.5rem;">' + escapeHtml(l.name || '') + '</td>' +
             '<td style="padding:0.35rem 0.5rem;"><code style="font-size:0.78rem;" class="dash-key" data-full="' + escapeHtml(l.licenceKey || '') + '">' + escapeHtml(maskedKey) + '</code></td>' +
             '<td style="padding:0.35rem 0.5rem;"><span style="color:' + statusColor + ';font-weight:600;">' + escapeHtml(l.subscriptionStatus || 'none') + '</span></td>' +
             '<td style="padding:0.35rem 0.5rem;">' + escapeHtml(l.plan || '-') + '</td>' +
+            '<td style="padding:0.35rem 0.5rem;vertical-align:top;">' + escapeHtml(lastUse) + idleNote + '</td>' +
             '<td style="padding:0.35rem 0.5rem;">' + date + '</td>' +
             '<td style="padding:0.35rem 0.5rem;white-space:nowrap;">' +
             '<button type="button" class="btn btn-small dash-reveal" data-key="' + escapeHtml(l.licenceKey || '') + '" style="font-size:0.75rem;">Reveal</button> ' +
@@ -14853,9 +14868,9 @@ PDF_CASENOTE_ADVERT +
       if (dashRefresh) dashRefresh.addEventListener('click', loadDashboard);
       if (dashExport) dashExport.addEventListener('click', function() {
         if (!_dashData || !_dashData.length) { showToast('No data to export', 'warning'); return; }
-        var csv = 'Email,Name,Licence Key,Status,Plan,Cloud Backup,Created,Expires\n';
+        var csv = 'Email,Name,Licence Key,Status,Plan,Cloud Backup,Last App Use,Idle Policy Note,Created,Expires\n';
         _dashData.forEach(function(l) {
-          csv += [l.email, l.name, l.licenceKey, l.subscriptionStatus || 'none', l.plan || '', l.cloudBackup ? 'Yes' : 'No', l.createdAt || '', l.expiresAt || ''].map(function(v) {
+          csv += [l.email, l.name, l.licenceKey, l.subscriptionStatus || 'none', l.plan || '', l.cloudBackup ? 'Yes' : 'No', l.lastAppUseAt || '', l.licenceRevokeIdleWarning || '', l.createdAt || '', l.expiresAt || ''].map(function(v) {
             return '"' + String(v || '').replace(/"/g, '""') + '"';
           }).join(',') + '\n';
         });
