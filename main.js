@@ -3541,6 +3541,16 @@ function computeLicenceStatus(data) {
   if (data.status === 'revoked' || data.status === 'invalid') {
     return { status: 'revoked', message: 'Licence has been revoked. Please enter a new licence key or contact support.', key: data.key, email: data.email, addons, entitlements: data.entitlements || null };
   }
+  if (data.status === 'already_used') {
+    return {
+      status: 'already_used',
+      message: data.message || 'Licence is already in use on the maximum number of devices. Deactivate a device in Settings on an activated PC, then try again.',
+      key: data.key,
+      email: data.email,
+      addons,
+      entitlements: data.entitlements || null,
+    };
+  }
   const now = Date.now();
   if (data.expiresAt) {
     const expiryMs = new Date(data.expiresAt).getTime();
