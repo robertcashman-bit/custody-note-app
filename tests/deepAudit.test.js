@@ -398,9 +398,59 @@ describe('9 · Release Consistency', () => {
   });
 });
 
-/* ──────────────────────────── 10. Dead Code / Broken References ──────────────────────────── */
+/* ──────────────────────────── 10. Source Integrity — no corrupted / native code strings ───── */
 
-describe('10 · Dead Code & Broken References', () => {
+describe('10 · Source Integrity', () => {
+  const appJs = readFile('app.js');
+  const jsFiles = [
+    'app.js',
+    'renderer/views/billing-screen.js',
+    'renderer/views/completion-screen.js',
+    'renderer/views/documents-screen.js',
+    'renderer/views/workflow-stepper.js',
+    'renderer/views/billing.js',
+    'renderer/views/billing-view.js',
+  ];
+
+  it('app.js passes syntax check (no parse errors)', () => {
+    try {
+      new Function(appJs);
+    } catch (e) {
+      assert.fail('app.js has a syntax error: ' + e.message);
+    }
+  });
+
+  it('no "[native code]" strings in source files', () => {
+    const tainted = [];
+    for (const rel of jsFiles) {
+      const src = readFile(rel);
+      if (src.includes('[native code]')) tainted.push(rel);
+    }
+    assert.deepEqual(tainted, [], 'Files contain "[native code]" corruption: ' + tainted.join(', '));
+  });
+
+  it('getBillingReadinessWarnings is defined in app.js (regression guard)', () => {
+    assert.ok(appJs.includes('function getBillingReadinessWarnings'),
+      'getBillingReadinessWarnings was deleted but is still called — app will crash');
+  });
+
+  it('every standalone function called in updateBillingReadinessPanel is defined', () => {
+    const fnIdx = appJs.indexOf('function updateBillingReadinessPanel');
+    assert.ok(fnIdx !== -1, 'updateBillingReadinessPanel not found');
+    const block = appJs.substring(fnIdx, fnIdx + 1500);
+    const calls = [...block.matchAll(/(?<!\.)(\b[a-zA-Z_]\w+)\(\)/g)].map(m => m[1]);
+    const builtins = ['return', 'join', 'trim', 'toString', 'map', 'filter', 'forEach', 'indexOf', 'toLowerCase', 'String'];
+    for (const fnName of calls) {
+      if (builtins.includes(fnName)) continue;
+      const defined = appJs.includes('function ' + fnName) || appJs.includes(fnName + ' = function');
+      assert.ok(defined, 'updateBillingReadinessPanel calls ' + fnName + '() but it is not defined in app.js');
+    }
+  });
+});
+
+/* ──────────────────────────── 11. Dead Code / Broken References ──────────────────────────── */
+
+describe('11 · Dead Code & Broken References', () => {
   const pkg = JSON.parse(readFile('package.json'));
   const indexSrc = readFile('index.html');
 
