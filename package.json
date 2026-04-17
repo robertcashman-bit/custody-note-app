@@ -21,7 +21,7 @@
     "test:all": "node scripts/test-all.js",
     "test:ci": "node scripts/test-all.js",
     "test:e2e": "playwright test",
-    "test:unit": "node --test tests/*.test.js",
+    "test:unit": "node scripts/run-unit-tests.js",
     "test:deep": "node --test tests/deepAudit.test.js",
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
     "prepare-trial": "node scripts/prepare-trial.js",

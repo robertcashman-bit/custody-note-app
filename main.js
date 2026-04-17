@@ -3105,42 +3105,43 @@ function createWindow() {
                 }
               }
 
-              /* 31. Billable Attendances report renders in Reports view */
-              if (gearBtn) {
-                gearBtn.click();
-                await sleep(200);
-                var gearDd7 = document.getElementById('gear-dropdown');
-                var reportsItem2 = gearDd7 ? gearDd7.querySelector('[data-action="reports"]') : null;
-                if (reportsItem2) {
-                  reportsItem2.click();
-                  await sleep(800);
-                  if (document.getElementById('view-reports')?.classList.contains('active')) {
-                    var billableSection = document.getElementById('billable-attendances-section');
-                    if (billableSection) {
-                      log('31a. Billable Attendances section present in Reports view');
+              /* 31. Open matters view renders projected uninvoiced revenue
+                 (replaces v1.4.216 Billable Attendances sub-report which duplicated
+                 this data — see v1.4.217 changelog). */
+              var openMattersBtn = document.querySelector('.bottom-nav-btn[data-nav="billing"]');
+              if (openMattersBtn) {
+                openMattersBtn.click();
+                await sleep(800);
+                if (document.getElementById('view-billing')?.classList.contains('active')) {
+                  var bvSummary = document.getElementById('billing-view-summary');
+                  if (bvSummary) {
+                    log('31a. Open matters summary strip present');
+                    var bvRevenue = document.getElementById('bv-summary-revenue');
+                    if (bvRevenue) {
+                      log('31b. Uninvoiced revenue pill present: ' + (bvRevenue.textContent || '(empty)'));
                     } else {
-                      errors.push('Billable Attendances section missing from Reports view');
+                      errors.push('Open matters revenue pill (#bv-summary-revenue) missing');
                     }
-                    var billableSearch = document.getElementById('billable-search');
-                    var billableDateFrom = document.getElementById('billable-date-from');
-                    var billableDateTo = document.getElementById('billable-date-to');
-                    var billableFirmFilter = document.getElementById('billable-firm-filter');
-                    var billableTableWrap = document.getElementById('billable-attendances-table-wrap');
-                    if (billableSearch && billableDateFrom && billableDateTo && billableFirmFilter && billableTableWrap) {
-                      log('31b. Billable Attendances filters and table wrapper present');
-                    } else {
-                      errors.push('Billable Attendances missing filter/table elements');
-                    }
-                    var billableSummary = document.getElementById('billable-summary-text');
-                    if (billableSummary) {
-                      log('31c. Billable summary: ' + (billableSummary.textContent || '(empty)'));
-                    }
-                    var reportsBack2 = document.getElementById('reports-back-btn');
-                    if (reportsBack2) {
-                      reportsBack2.click();
-                      await sleep(300);
-                    }
+                  } else {
+                    errors.push('Open matters summary strip missing');
                   }
+                  var bvSearch = document.getElementById('bv-search');
+                  var bvFirmFilter = document.getElementById('bv-firm-filter');
+                  var bvDateFrom = document.getElementById('bv-date-from');
+                  var bvDateTo = document.getElementById('bv-date-to');
+                  var bvTableWrap = document.getElementById('billing-view-table-wrap');
+                  if (bvSearch && bvFirmFilter && bvDateFrom && bvDateTo && bvTableWrap) {
+                    log('31c. Open matters filters and table wrapper present');
+                  } else {
+                    errors.push('Open matters missing filter/table elements');
+                  }
+                  var bvBack = document.getElementById('billing-view-back-btn');
+                  if (bvBack) {
+                    bvBack.click();
+                    await sleep(300);
+                  }
+                } else {
+                  errors.push('Open matters view did not activate');
                 }
               }
 

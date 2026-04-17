@@ -150,11 +150,14 @@ test('pick-image handler has try/catch for error safety', () => {
 });
 
 /* ══════════════════════════════════════════════════
-   BILLABLE ATTENDANCES — VAT NOT HARDCODED
+   OPEN MATTERS REVENUE — VAT NOT HARDCODED
+   (replaces the old billable-attendances.js test after that file
+   was deleted in v1.4.217 — the same rule still applies to the
+   projected revenue calc that took its place.)
    ══════════════════════════════════════════════════ */
 
-test('billable-attendances.js does NOT use hardcoded 1.20 VAT multiplier', () => {
-  const src = readSrc('renderer/views/billable-attendances.js');
+test('billing-view.js does NOT use hardcoded 1.20 VAT multiplier in revenue calc', () => {
+  const src = readSrc('renderer/views/billing-view.js');
   const hardcoded = src.match(/\*\s*1\.20/g);
   assert.equal(hardcoded, null, 'Should not contain hardcoded * 1.20 — must use configurable VAT rate');
 });

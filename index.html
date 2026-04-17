@@ -739,26 +739,13 @@
           </div>
         </div>
 
-        <!-- Billable Attendances sub-report -->
-        <div id="billable-attendances-section" style="margin-top:1.5rem;">
-          <div class="settings-card" style="grid-column:1/-1;">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
-              <h2 style="margin:0;">Billable Attendances</h2>
-              <span class="settings-hint" id="billable-summary-text"></span>
-            </div>
-            <p class="settings-hint" style="margin-bottom:0.75rem;">Completed attendances not yet invoiced.</p>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
-              <input type="text" id="billable-search" class="form-input" placeholder="Search client, firm, station..." style="max-width:250px;">
-              <input type="date" id="billable-date-from" class="settings-input settings-input--date">
-              <span style="font-size:0.9rem;align-self:center;">to</span>
-              <input type="date" id="billable-date-to" class="settings-input settings-input--date">
-              <select id="billable-firm-filter" class="form-input" style="max-width:200px;">
-                <option value="">All firms</option>
-              </select>
-            </div>
-            <div id="billable-attendances-table-wrap" style="overflow-x:auto;"></div>
-          </div>
-        </div>
+        <!--
+          Billable Attendances sub-report removed in v1.4.217 — its data and
+          filters fully duplicated the "Open matters" view (#view-billing).
+          The projected uninvoiced revenue total now lives on the Open matters
+          summary strip. The billableAttendances IPC handler is retained as a
+          fallback for billing-view.js and is covered by SQL contract tests.
+        -->
       </div>
 
       <!-- STATION MILEAGE ADMIN VIEW -->
@@ -2127,7 +2114,6 @@
   <script src="renderer/views/documents-screen.js"></script>
   <script src="renderer/views/billing-screen.js"></script>
   <script src="renderer/views/completion-screen.js"></script>
-  <script src="renderer/views/billable-attendances.js"></script>
   <script src="renderer/views/billing-view.js"></script>
   <script src="renderer/views/station-mileage-admin.js"></script>
   <!-- laa-forms.js: CRM14 HTML summary for billing previews; CRM1–3 & declaration use official PDFs via IPC -->
