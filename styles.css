@@ -6612,6 +6612,10 @@ html.dark .wf-review-confirmation-card { border-color: #d97706 !important; backg
 .bv-row:hover { background: rgba(59,130,246,0.05); }
 .bv-cell-client { font-weight: 600; color: var(--primary); }
 
+.bv-th-actions { min-width: 12rem; }
+.bv-actions-cell { white-space: normal; vertical-align: top; }
+.bv-actions-cell .btn { margin: 0.15rem 0.25rem 0.15rem 0; display: inline-block; }
+
 .bv-att-warn { color: #d97706; font-size: 0.85rem; }
 
 .bv-badge {

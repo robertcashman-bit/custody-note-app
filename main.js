@@ -10,6 +10,7 @@ if (process.env.CUSTODYNOTE_TEST_USERDATA && String(process.env.CUSTODYNOTE_TEST
   }
 }
 const fs = require('fs');
+const { stableStringify } = require('./lib/stableStringify');
 const { autoUpdater } = require('electron-updater');
 const { initUpdater } = require('./updater');
 
@@ -4327,21 +4328,32 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       return existingId;
     }
     // Guard against burst duplicate inserts (double-click / repeated handler firing):
-    // if we just created the exact same draft in the last 30s, reuse it.
+    // if we just created the same draft payload in the last 30s, reuse it.
+    // Compare via stableStringify — raw data=? matched only identical JSON text, so key order could miss duplicates.
     try {
-      const recentDup = dbGet(
-        "SELECT id, sync_version FROM attendances WHERE status='draft' AND deleted_at IS NULL AND data=? AND created_at >= datetime('now', '-30 seconds') ORDER BY id DESC LIMIT 1",
-        [dataToSave]
+      const incomingCanon = stableStringify(parsed);
+      const recentRows = dbAll(
+        "SELECT id, sync_version, data FROM attendances WHERE status='draft' AND deleted_at IS NULL AND created_at >= datetime('now', '-30 seconds') ORDER BY id DESC LIMIT 20"
       );
-      if (recentDup && recentDup.id) {
-        const nv = (recentDup.sync_version || 1) + 1;
-        dbRun(
-          'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
-          [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, workType, nv, recentDup.id]
-        );
-        markDbDirty();
-        enqueueSyncForRecord(recentDup.id);
-        return recentDup.id;
+      for (let i = 0; recentRows && i < recentRows.length; i++) {
+        const row = recentRows[i];
+        if (!row || !row.data) continue;
+        let prevParsed;
+        try {
+          prevParsed = JSON.parse(row.data);
+        } catch (_) {
+          continue;
+        }
+        if (stableStringify(prevParsed) === incomingCanon) {
+          const nv = (row.sync_version || 1) + 1;
+          dbRun(
+            'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
+            [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, workType, nv, row.id]
+          );
+          markDbDirty();
+          enqueueSyncForRecord(row.id);
+          return row.id;
+        }
       }
     } catch (e) {
       console.warn('[DB] Recent-duplicate guard failed:', e && e.message ? e.message : e);
@@ -7084,6 +7096,9 @@ ipcMain.handle('billing-audit-log-get', (_, attendanceId) => {
    ═══════════════════════════════════════════════════════ */
 
 ipcMain.handle('billable-attendances', () => {
+  /* archived_at IS NULL: archived matters must NOT reappear as billable, otherwise a
+     fee earner could raise a duplicate QuickFile invoice for a matter that was
+     already billed outside QuickFile (e.g. paper LAA claim) and then archived. */
   const rows = dbAll(
     `SELECT id, data, status, created_at, updated_at, client_name, station_name, attendance_date,
             quickfile_invoice_id, invoice_total
@@ -7091,6 +7106,7 @@ ipcMain.handle('billable-attendances', () => {
      WHERE (status = 'finalised' OR status = 'completed')
        AND (quickfile_invoice_id IS NULL OR quickfile_invoice_id = '')
        AND deleted_at IS NULL
+       AND archived_at IS NULL
      ORDER BY attendance_date DESC`
   );
   return rows;
@@ -7102,6 +7118,7 @@ ipcMain.handle('billing-view-records', () => {
             quickfile_invoice_id, quickfile_invoice_number, invoice_total, archived_at
      FROM attendances
      WHERE deleted_at IS NULL
+       AND archived_at IS NULL
        AND (status = 'finalised' OR status = 'completed' OR quickfile_invoice_id IS NOT NULL)
      ORDER BY attendance_date DESC`
   );

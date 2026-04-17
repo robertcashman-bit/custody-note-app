@@ -371,6 +371,8 @@
     },
   };
 
+  window.__CUSTODYNOTE_E2E__ = { skipLicenceGate: false };
+
   /* OWA URL must match lib/outlookWebComposeUrl.js + main/openOutlookWebEmail.js (browser has no IPC). */
   window.emailAPI = {
     open: function (payload) {

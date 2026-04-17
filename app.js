@@ -3604,6 +3604,7 @@ var REQUIRED_FIELD_KEYS = [
       }
     }).catch(function () { widget.style.display = 'none'; });
   }
+  window.updateHomeBillingWidget = updateHomeBillingWidget;
 
   function isSupervisorSectionEnabled() {
     const s = window._appSettingsCache || {};
@@ -4741,6 +4742,118 @@ var REQUIRED_FIELD_KEYS = [
       if (largeControls) largeControls.checked = s.largeControls === 'true';
       var reducedMotion = document.getElementById('setting-reduced-motion');
       if (reducedMotion) reducedMotion.checked = s.reducedMotion === 'true';
+
+      var forumUrlEl = document.getElementById('suggestions-forum-url');
+      if (forumUrlEl) forumUrlEl.value = s.suggestionsForumUrl || '';
+      var sup = document.getElementById('setting-show-supervisor-review');
+      if (sup) sup.checked = s.showSupervisorReview === 'true';
+
+      var ai = document.getElementById('setting-auto-import-enabled');
+      if (ai) ai.checked = s.autoImportEnabled === 'true';
+      var aif = document.getElementById('setting-auto-import-folder');
+      if (aif) aif.value = s.autoImportFolder || '';
+
+      var oetToggle = document.getElementById('setting-officer-email-templates');
+      if (oetToggle) {
+        oetToggle.checked = s.officerEmailTemplatesEnabled === 'true';
+        if (!oetToggle._oetListenerAttached) {
+          oetToggle._oetListenerAttached = true;
+          oetToggle.addEventListener('change', function() {
+            var enabled = oetToggle.checked;
+            window._emailTemplatesAddonEnabled = enabled;
+            if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
+            if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
+            window.api.setSettings({ officerEmailTemplatesEnabled: enabled ? 'true' : 'false' })
+              .then(function() {
+                showToast('Officer Email Templates ' + (enabled ? 'enabled' : 'disabled'), 'success');
+                if (typeof refreshList === 'function') refreshList();
+              })
+              .catch(function() {
+                oetToggle.checked = !enabled;
+                window._emailTemplatesAddonEnabled = !enabled;
+                if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
+                if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
+                showToast('Failed to save add-on setting', 'error');
+              });
+          });
+        }
+      }
+      window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
+      if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
+
+      var idleEl = document.getElementById('setting-idle-timeout');
+      if (idleEl) {
+        idleEl.value = s.idleTimeoutMinutes || '0';
+        if (!idleEl._idleListenerAttached) {
+          idleEl._idleListenerAttached = true;
+          idleEl.addEventListener('change', function() {
+            window.api.setSettings({ idleTimeoutMinutes: idleEl.value }).then(function() {
+              showToast('Auto-lock setting saved', 'success');
+              if (typeof window._resetIdleTimer === 'function') window._resetIdleTimer();
+            });
+          });
+        }
+      }
+      if (typeof window._resetIdleTimer === 'function') window._resetIdleTimer();
+
+      if (window.api.getSafeStorageStatus) {
+        window.api.getSafeStorageStatus().then(function(ok) {
+          var el = document.getElementById('safeStorage-warning');
+          if (el) el.style.display = ok ? 'none' : '';
+        }).catch(function(e) { console.error('[safe-storage]', e); });
+      }
+
+      var cloudBackupApplyStatus = function(status) {
+        var checking = document.getElementById('cloud-backup-checking');
+        var notSub = document.getElementById('cloud-backup-not-subscribed');
+        var isSub = document.getElementById('cloud-backup-subscribed');
+        var lastEl = document.getElementById('cloud-backup-last-success');
+        var reasonEl = document.getElementById('cloud-backup-unavailable-reason');
+        if (checking) checking.style.display = 'none';
+        if (status && status.enabled) {
+          if (notSub) notSub.style.display = 'none';
+          if (isSub) isSub.style.display = '';
+          if (lastEl && status.lastSuccess) {
+            lastEl.textContent = 'Last successful upload: ' + new Date(status.lastSuccess).toLocaleString('en-GB');
+          }
+        } else {
+          if (notSub) notSub.style.display = '';
+          if (isSub) isSub.style.display = 'none';
+          if (reasonEl) {
+            if (status && status.isTrial) {
+              reasonEl.innerHTML = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> to enable it.';
+            } else if (status && status.lastError) {
+              reasonEl.textContent = 'Cloud backup verification failed: ' + status.lastError + '. Check your internet connection and try again.';
+            } else {
+              reasonEl.innerHTML = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com</a>, then sign in or enter your licence key in Settings \u203a Licence.';
+            }
+          }
+        }
+        var errEl = document.getElementById('cloud-backup-error');
+        var supportEl = document.getElementById('cloud-backup-error-support');
+        if (errEl) {
+          if (status && status.lastError && !status.isTrial) {
+            errEl.textContent = status.lastError;
+            errEl.style.display = '';
+            if (supportEl) supportEl.style.display = '';
+          } else {
+            errEl.style.display = 'none';
+            if (supportEl) supportEl.style.display = 'none';
+          }
+        }
+      };
+      if (window.api.cloudBackupCheckEntitlement) {
+        window.api.cloudBackupCheckEntitlement().then(function() {
+          return window.api.cloudBackupStatus ? window.api.cloudBackupStatus() : null;
+        }).then(cloudBackupApplyStatus).catch(function() {
+          if (window.api.cloudBackupStatus) {
+            window.api.cloudBackupStatus().then(cloudBackupApplyStatus);
+          }
+        });
+      } else if (window.api.cloudBackupStatus) {
+        window.api.cloudBackupStatus().then(cloudBackupApplyStatus);
+      }
+
       applyLayoutPreferences(s || {});
       updateBackupDestSummary(s);
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
@@ -4945,6 +5058,12 @@ var REQUIRED_FIELD_KEYS = [
       highContrast: document.getElementById('setting-high-contrast')?.checked ? 'true' : 'false',
       largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
+      suggestionsForumUrl: document.getElementById('suggestions-forum-url')?.value?.trim() || '',
+      showSupervisorReview: document.getElementById('setting-show-supervisor-review')?.checked ? 'true' : 'false',
+      autoImportEnabled: document.getElementById('setting-auto-import-enabled')?.checked ? 'true' : 'false',
+      autoImportFolder: document.getElementById('setting-auto-import-folder')?.value?.trim() || '',
+      officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
+      idleTimeoutMinutes: document.getElementById('setting-idle-timeout')?.value || '0',
     }).then(() => window.api.getSettings()).then(function(s) {
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
       applyLayoutPreferences(s || {});
@@ -4953,6 +5072,8 @@ var REQUIRED_FIELD_KEYS = [
         mileageRate: parseFloat(s.billingMileageRate) || 0.45,
         vatRate: parseFloat(s.billingVatRate) || 0.20,
       };
+      window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;
+      if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
       showToast('Settings saved', 'success');
     }).catch(function(e) { showToast('Failed to save settings', 'error'); console.error('[saveSettings]', e); });
   }

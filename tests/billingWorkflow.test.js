@@ -72,6 +72,44 @@ describe('IPC handlers — main.js', () => {
   });
 });
 
+describe("billable-attendances handler — SQL contract (duplicate-billing guard)", () => {
+  /* Regression for the stress-journey FAIL where archived matters re-appeared as
+     billable. The handler MUST exclude archived records, otherwise a fee earner
+     could raise a duplicate QuickFile invoice for a matter that was already
+     billed outside QuickFile (e.g. paper LAA claim) and then archived. */
+  function extractBillableHandlerBody() {
+    const start = mainJs.indexOf("ipcMain.handle('billable-attendances'");
+    assert.ok(start >= 0, "billable-attendances handler not found in main.js");
+    const end = mainJs.indexOf('});', start);
+    assert.ok(end > start, "could not locate end of billable-attendances handler");
+    return mainJs.slice(start, end + 3);
+  }
+
+  it('excludes archived records (archived_at IS NULL)', () => {
+    const body = extractBillableHandlerBody();
+    assert.ok(/archived_at\s+IS\s+NULL/i.test(body),
+      "billable-attendances SQL must include 'archived_at IS NULL' to prevent duplicate billing");
+  });
+
+  it('excludes deleted records (deleted_at IS NULL)', () => {
+    const body = extractBillableHandlerBody();
+    assert.ok(/deleted_at\s+IS\s+NULL/i.test(body),
+      "billable-attendances SQL must include 'deleted_at IS NULL'");
+  });
+
+  it('excludes records that already have a QuickFile invoice', () => {
+    const body = extractBillableHandlerBody();
+    assert.ok(/quickfile_invoice_id\s+IS\s+NULL/i.test(body),
+      "billable-attendances SQL must exclude records with a quickfile_invoice_id");
+  });
+
+  it('only surfaces finalised or completed records', () => {
+    const body = extractBillableHandlerBody();
+    assert.ok(/status\s*=\s*'finalised'/i.test(body), "must include status='finalised'");
+    assert.ok(/status\s*=\s*'completed'/i.test(body), "must include status='completed'");
+  });
+});
+
 describe('QuickFile invoice creation handler', () => {
   it('finds or creates client via quickFileFindOrCreateClient', () => {
     assert.ok(mainJs.includes('quickFileFindOrCreateClient'));

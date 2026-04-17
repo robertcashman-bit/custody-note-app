@@ -140,6 +140,11 @@ contextBridge.exposeInMainWorld('emailAPI', {
   open: (payload) => ipcRenderer.invoke('open-outlook-email', payload),
 });
 
+/* Playwright / automated tests: fresh userData has no licence — allow skipping the sign-in overlay when env is set */
+contextBridge.exposeInMainWorld('__CUSTODYNOTE_E2E__', {
+  skipLicenceGate: process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1',
+});
+
 contextBridge.exposeInMainWorld('custodyNote', {
   requestLicenceEmail: (email) => ipcRenderer.invoke('custody:requestLicenceEmail', email),
   adminLogin: (password) => ipcRenderer.invoke('custody:adminLogin', password),

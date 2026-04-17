@@ -347,6 +347,15 @@
     if (_licenceChecked) return;
     _licenceChecked = true;
 
+    try {
+      var e2e = window.__CUSTODYNOTE_E2E__;
+      if (e2e && e2e.skipLicenceGate) {
+        hideOverlay();
+        markReady();
+        return;
+      }
+    } catch (_) {}
+
     if (!window.api || !window.api.licenceStatus) {
       markReady();
       return;
