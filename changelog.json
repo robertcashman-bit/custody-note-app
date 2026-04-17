@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.4.216",
+      "date": "2026-04-17",
+      "latest": true,
+      "changes": [
+        "Billing integrity (P1): archived matters no longer appear in billable list — prevents duplicate invoices for cases already billed outside QuickFile",
+        "Quality: full automated stress-test suite — 33-check end-to-end lifecycle journey covering intake, draft, edit-after-save, finalise, lock, archive, billable-list, and search",
+        "Quality: SQL contract regression tests for billable-attendances handler",
+        "Quality: new test:all orchestrator runs unit + e2e + smoke in one go"
+      ]
+    },
+    {
       "version": "1.4.215",
       "date": "2026-04-15",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Billing workflow: instructing firm name now stays correct — meta is refreshed after invoice data loads, firms list backfills missing firmName, open workflow syncs form first",
         "Finish matter: step 3 is Archive + Close only — archiving records billing and office completion automatically (no separate mark-complete buttons)"

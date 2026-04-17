@@ -104,6 +104,115 @@ function _bvEsc(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/** Stamp billing/office completion times on matter data (same as workflow Step 3 archive path). */
+function _bvStampCompletionTimes(data) {
+  var d = data || {};
+  var iso = new Date().toISOString();
+  if (!d.billingProcessCompletedAt) d.billingProcessCompletedAt = iso;
+  if (!d.officeWorkCompletedAt) d.officeWorkCompletedAt = iso;
+  return d;
+}
+
+function _bvCloseMatter(recordId, e) {
+  if (e) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+  var id = parseInt(recordId, 10);
+  if (!id || !window.api || !window.api.attendanceGet || !window.api.attendanceSave) {
+    showToast('Cannot update record', 'error');
+    return;
+  }
+  if (typeof showConfirm !== 'function') {
+    showToast('Confirmation not available', 'error');
+    return;
+  }
+  showConfirm(
+    'Mark billing and office work complete for this matter? The record stays in your active list (not moved to Archived).',
+    'Complete matter'
+  ).then(function (ok) {
+    if (!ok) return;
+    window.api.attendanceGet(id).then(function (record) {
+      if (!record) {
+        showToast('Record not found', 'error');
+        return Promise.reject(new Error('notfound'));
+      }
+      var st = record.status;
+      if (st !== 'finalised' && st !== 'completed') {
+        showToast('Finalise the attendance note before completing this matter.', 'error');
+        return Promise.reject(new Error('status'));
+      }
+      var d = (typeof safeJson === 'function') ? safeJson(record.data) : {};
+      _bvStampCompletionTimes(d);
+      return window.api.attendanceSave({ id: id, data: d, status: 'completed' });
+    }).then(function (result) {
+      if (result && typeof result === 'object' && result.error) {
+        showToast(result.message || result.error || 'Save failed', 'error', 7000);
+        return;
+      }
+      showToast('Matter marked complete', 'success');
+      loadBillingView();
+      if (typeof window.updateHomeBillingWidget === 'function') window.updateHomeBillingWidget();
+    }).catch(function (err) {
+      if (err && (err.message === 'notfound' || err.message === 'status')) return;
+      showToast('Failed to complete matter', 'error');
+    });
+  });
+}
+
+function _bvArchiveMatter(recordId, e) {
+  if (e) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+  var id = parseInt(recordId, 10);
+  if (!id || !window.api || !window.api.attendanceGet || !window.api.attendanceSave || !window.api.attendanceArchive) {
+    showToast('Cannot archive record', 'error');
+    return;
+  }
+  if (typeof showConfirm !== 'function') {
+    showToast('Confirmation not available', 'error');
+    return;
+  }
+  showConfirm(
+    'Archive this matter? Billing and office completion will be recorded if not already saved, then the file moves to Archived.',
+    'Archive record'
+  ).then(function (ok) {
+    if (!ok) return;
+    window.api.attendanceGet(id).then(function (record) {
+      if (!record) {
+        showToast('Record not found', 'error');
+        return Promise.reject(new Error('notfound'));
+      }
+      if (record.archived_at) {
+        showToast('Record is already archived', 'info');
+        return Promise.reject(new Error('archived'));
+      }
+      var st = record.status;
+      if (st !== 'finalised' && st !== 'completed') {
+        showToast('Finalise the attendance note before archiving.', 'error');
+        return Promise.reject(new Error('status'));
+      }
+      var d = (typeof safeJson === 'function') ? safeJson(record.data) : {};
+      _bvStampCompletionTimes(d);
+      return window.api.attendanceSave({ id: id, data: d, status: 'completed' }).then(function (result) {
+        if (result && typeof result === 'object' && result.error) {
+          showToast(result.message || result.error || 'Save failed', 'error', 7000);
+          return Promise.reject(new Error('save'));
+        }
+        return window.api.attendanceArchive(id);
+      });
+    }).then(function () {
+      showToast('Record archived', 'info');
+      loadBillingView();
+      if (typeof window.updateHomeBillingWidget === 'function') window.updateHomeBillingWidget();
+    }).catch(function (err) {
+      if (err && (err.message === 'notfound' || err.message === 'archived' || err.message === 'status' || err.message === 'save')) return;
+      showToast('Failed to archive record', 'error');
+    });
+  });
+}
+
 function _bvFmtDate(val) {
   if (!val) return '';
   var m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -207,7 +316,7 @@ function _bvRenderTable() {
         '<th>Attachments</th>' +
         '<th>Invoice</th>' +
         '<th>Status</th>' +
-        '<th>Action</th>' +
+        '<th class="bv-th-actions">Actions</th>' +
       '</tr></thead><tbody>';
 
   filtered.forEach(function (r) {
@@ -220,7 +329,11 @@ function _bvRenderTable() {
       '<td>' + r.attachCount + (r.allNamed ? '' : ' <span class="bv-att-warn">&#9888;</span>') + '</td>' +
       '<td>' + invText + '</td>' +
       '<td>' + _bvStatusBadge(r.status) + '</td>' +
-      '<td><button type="button" class="btn btn-small btn-primary bv-open-workflow" data-record-id="' + r.id + '">Open</button></td>' +
+      '<td class="bv-actions-cell">' +
+        '<button type="button" class="btn btn-small btn-primary bv-open-workflow" data-record-id="' + r.id + '" title="Open documents &amp; billing workflow">Open</button>' +
+        '<button type="button" class="btn btn-small btn-secondary bv-close-matter" data-record-id="' + r.id + '" title="Mark office work complete (stay in active records)">Close</button>' +
+        '<button type="button" class="btn btn-small btn-secondary bv-archive-matter" data-record-id="' + r.id + '" title="Complete and move to Archived">Archive</button>' +
+      '</td>' +
     '</tr>';
   });
 
@@ -232,6 +345,26 @@ function _bvRenderTable() {
       e.stopPropagation();
       var rid = btn.getAttribute('data-record-id');
       _bvOpenWorkflowForRecord(rid);
+    });
+  });
+
+  wrap.querySelectorAll('.bv-close-matter').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      var rid = btn.getAttribute('data-record-id');
+      _bvCloseMatter(rid, e);
+    });
+  });
+
+  wrap.querySelectorAll('.bv-archive-matter').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      var rid = btn.getAttribute('data-record-id');
+      _bvArchiveMatter(rid, e);
+    });
+  });
+
+  wrap.querySelectorAll('.bv-actions-cell').forEach(function (cell) {
+    cell.addEventListener('click', function (e) {
+      e.stopPropagation();
     });
   });
 

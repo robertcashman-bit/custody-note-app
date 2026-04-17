@@ -1,16 +1,26 @@
 import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
+import { dismissFirstLaunchModalIfPresent } from './e2e-helpers';
 
 let electronApp: ElectronApplication;
 let page: Page;
+let testUserData: string;
 
 const consoleErrors: string[] = [];
 const pageErrors: string[] = [];
 
 test.beforeAll(async () => {
+  testUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-fullsys-e2e-'));
   electronApp = await _electron.launch({
     args: [path.join(__dirname, '..', '..', 'main.js')],
-    env: { ...process.env, NODE_ENV: 'test' },
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      CUSTODYNOTE_TEST_USERDATA: testUserData,
+      CUSTODYNOTE_E2E_SKIP_LICENCE_GATE: '1',
+    },
   });
   page = await electronApp.firstWindow();
   await page.waitForLoadState('domcontentloaded');
@@ -20,12 +30,40 @@ test.beforeAll(async () => {
   });
   page.on('pageerror', err => pageErrors.push(err.message));
 
-  // Wait for the app to initialise (safeInit runs on DOMContentLoaded)
-  await page.waitForTimeout(2000);
+  const splash = page.locator('#splash');
+  await splash.waitFor({ state: 'hidden', timeout: 60000 }).catch(async () => {
+    await page.waitForSelector('.app-header, #header-app-title', { timeout: 30000 });
+  });
+  await page.waitForFunction(() => typeof (window as unknown as { api?: unknown }).api !== 'undefined', {
+    timeout: 30000,
+  });
+  await dismissFirstLaunchModalIfPresent(page);
+  await page.waitForTimeout(500);
 });
 
-test.afterAll(async () => {
-  if (electronApp) await electronApp.close();
+test.afterAll(async ({}, testInfo) => {
+  testInfo.setTimeout(120_000);
+  if (electronApp) {
+    try {
+      await Promise.race([
+        electronApp.close(),
+        new Promise<void>(resolve => setTimeout(resolve, 12_000)),
+      ]);
+    } catch {
+      /* ignore */
+    }
+    try {
+      const proc = electronApp.process();
+      if (proc && !proc.killed) proc.kill();
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    fs.rmSync(testUserData, { recursive: true, force: true });
+  } catch {
+    /* ignore cleanup on Windows file locks */
+  }
 });
 
 // ================================================================
@@ -163,6 +201,8 @@ test('gear menu opens and shows items', async () => {
 // 8. Footer status indicators exist
 // ================================================================
 test('footer has status indicators', async () => {
+  await page.locator('.bottom-nav-btn[data-nav="home"]').click();
+  await page.waitForTimeout(300);
   const footer = page.locator('.app-footer, #app-footer');
   if (await footer.count() > 0) {
     await expect(footer.first()).toBeVisible();
@@ -170,19 +210,16 @@ test('footer has status indicators', async () => {
 });
 
 // ================================================================
-// 9. Navigate back to list, verify the draft record appears
+// 9. Records list view loads (isolated DB may be empty — persistence is covered in critical-journey.spec.ts)
 // ================================================================
-test('draft record appears in list view after creation', async () => {
+test('list view activates and attendance list container is present', async () => {
   await page.locator('.bottom-nav-btn[data-nav="list"]').click();
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(500);
 
   const listView = page.locator('#view-list');
   await expect(listView).toHaveClass(/active/);
-
-  // There should be at least one record card/row
-  const records = page.locator('#view-list .record-card, #view-list .list-item, #view-list tr');
-  const count = await records.count();
-  expect(count).toBeGreaterThanOrEqual(0); // may be 0 if no prior data
+  await expect(listView).toBeVisible();
+  await expect(page.locator('#attendance-list')).toBeVisible();
 });
 
 // ================================================================
@@ -195,11 +232,12 @@ test('settings page has key sections', async () => {
   const settingsView = page.locator('#view-settings');
   await expect(settingsView).toHaveClass(/active/);
 
-  // Check for key settings cards
+  // Check for key settings cards (headings may be below the fold)
   for (const heading of ['Support', 'Useful Links']) {
-    const section = settingsView.locator(`text=${heading}`).first();
+    const section = settingsView.getByRole('heading', { name: heading });
     if (await section.count() > 0) {
-      await expect(section).toBeVisible();
+      await section.first().scrollIntoViewIfNeeded();
+      await expect(section.first()).toBeVisible();
     }
   }
 });

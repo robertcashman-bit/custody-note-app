@@ -1,7 +1,7 @@
 {
   "name": "custody-note",
-  "version": "1.4.215",
-  "lastUpdated": "2026-04-15",
+  "version": "1.4.216",
+  "lastUpdated": "2026-04-17",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
   "scripts": {
@@ -18,6 +18,8 @@
     "sync-website": "node scripts/sync-website.mjs",
     "build:icon": "node scripts/build-icon.mjs",
     "test": "node scripts/smoke-test.js",
+    "test:all": "node scripts/test-all.js",
+    "test:ci": "node scripts/test-all.js",
     "test:e2e": "playwright test",
     "test:unit": "node --test tests/*.test.js",
     "test:deep": "node --test tests/deepAudit.test.js",

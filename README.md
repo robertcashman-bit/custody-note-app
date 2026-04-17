@@ -17,6 +17,10 @@ Custody Note is an LAA-compliant desktop app for recording custody notes and pol
    npm start
    ```
 
+## Automated tests
+
+Full gate: **`npm run test:all`** (unit tests, Playwright Electron e2e, then in-app smoke). See **[docs/TESTING.md](docs/TESTING.md)** for prerequisites (`npx playwright install`), `SKIP_SMOKE`, and troubleshooting.
+
 ## Releasing a new version
 
 Version and changelog are automated. From the app folder:
