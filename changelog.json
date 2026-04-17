@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.4.216",
+      "version": "1.4.217",
       "date": "2026-04-17",
       "latest": true,
+      "changes": [
+        "Open matters: new Uninvoiced revenue pill shows total projected revenue across all matters not yet invoiced (incl. VAT)",
+        "Reports: removed duplicate Billable Attendances sub-report — its data, filters, and revenue total now live on the Open matters view",
+        "Quality: cross-shell unit-test runner fixes Windows CI (PowerShell does not expand shell globs like bash does)"
+      ]
+    },
+    {
+      "version": "1.4.216",
+      "date": "2026-04-17",
+      "latest": false,
       "changes": [
         "Billing integrity (P1): archived matters no longer appear in billable list — prevents duplicate invoices for cases already billed outside QuickFile",
         "Quality: full automated stress-test suite — 33-check end-to-end lifecycle journey covering intake, draft, edit-after-save, finalise, lock, archive, billable-list, and search",
