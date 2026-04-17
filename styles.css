@@ -6591,6 +6591,10 @@ html.dark .wf-review-confirmation-card { border-color: #d97706 !important; backg
 .bv-summary-warn .bv-summary-num { color: #d97706; }
 .bv-summary-ok .bv-summary-num { color: #059669; }
 .bv-summary-done .bv-summary-num { color: #6366f1; }
+.bv-summary-revenue { background: #ecfdf5; }
+.bv-summary-revenue .bv-summary-num { color: #047857; font-size: 1.15rem; }
+html.dark .bv-summary-revenue { background: #064e3b; }
+html.dark .bv-summary-revenue .bv-summary-num { color: #6ee7b7; }
 
 .bv-filter-bar {
   display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center;

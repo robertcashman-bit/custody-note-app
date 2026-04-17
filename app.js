@@ -2923,7 +2923,7 @@ var REQUIRED_FIELD_KEYS = [
       refreshQuickFileImportMeta();
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     }
-    if (name === 'reports') { loadReports(); if (typeof loadBillableAttendances === 'function') loadBillableAttendances(); }
+    if (name === 'reports') { loadReports(); }
     if (name === 'station-mileage') { if (typeof loadStationMileage === 'function') loadStationMileage(); }
     if (name === 'authorities') { if (typeof loadAuthorities === 'function') loadAuthorities(); }
     if (name === 'billing') { if (typeof loadBillingView === 'function') loadBillingView(); }

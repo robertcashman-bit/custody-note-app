@@ -23,7 +23,7 @@ const PROD_FILES = [
   'renderer/views/settings.js',
   'renderer/views/reports.js',
   'renderer/views/authorities.js',
-  'renderer/views/billable-attendances.js',
+  'renderer/views/billing-view.js',
   'renderer/views/station-mileage-admin.js',
   'renderer/templateSystem/templateEngine.js',
   'renderer/templateSystem/templateManager.js',

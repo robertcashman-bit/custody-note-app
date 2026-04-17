@@ -60,6 +60,7 @@ function loadBillingView() {
   if (!fetchFn) { _billingViewLoading = false; return; }
 
   fetchFn().then(function (rows) {
+    var defaults = window._billingDefaults || (typeof BILLING_DEFAULTS !== 'undefined' ? BILLING_DEFAULTS : { fixedFee: 160, mileageRate: 0.45, vatRate: 0.20 });
     _billingViewData = (rows || []).map(function (r) {
       var d = (typeof safeJson === 'function') ? safeJson(r.data) : {};
       var hasInvoice = !!(r.quickfile_invoice_id);
@@ -70,6 +71,20 @@ function loadBillingView() {
       var status = 'needs_invoice';
       if (hasInvoice) status = 'invoiced';
       else if (!hasAttachments || !allNamed) status = 'needs_documents';
+
+      /* Projected total: prefer stored invoice_total when invoiced, otherwise compute
+         from defaults + record values so the figure tracks live charge-out rates. */
+      var projectedTotal = 0;
+      if (hasInvoice && r.invoice_total != null) {
+        projectedTotal = Number(r.invoice_total) || 0;
+      } else {
+        var fee = defaults.fixedFee;
+        var miles = parseFloat(d.milesClaimable) || 0;
+        var mileage = miles * defaults.mileageRate;
+        var parking = parseFloat(d.parkingCost) || 0;
+        var sub = fee + mileage + parking;
+        projectedTotal = sub * (1 + defaults.vatRate);
+      }
 
       return {
         id: r.id,
@@ -82,6 +97,7 @@ function loadBillingView() {
         hasInvoice: hasInvoice,
         invoiceNumber: r.quickfile_invoice_number || '',
         status: status,
+        projectedTotal: projectedTotal,
         raw: d,
         recordStatus: r.status,
       };
@@ -259,11 +275,20 @@ function _bvRenderSummary() {
   var needsInvoice = _billingViewData.filter(function (r) { return r.status === 'needs_invoice'; }).length;
   var invoiced = _billingViewData.filter(function (r) { return r.status === 'invoiced'; }).length;
 
+  /* Projected uninvoiced revenue across all matters that have not yet been invoiced
+     (covers both needs_documents and needs_invoice). Replaces the old standalone
+     "Billable Attendances" report card on the Reports screen. */
+  var uninvoicedRevenue = _billingViewData
+    .filter(function (r) { return !r.hasInvoice; })
+    .reduce(function (acc, r) { return acc + (Number(r.projectedTotal) || 0); }, 0);
+  var uninvoicedRevenueText = '\u00A3' + uninvoicedRevenue.toFixed(2);
+
   el.innerHTML =
     '<div class="bv-summary-item"><span class="bv-summary-num">' + total + '</span><span class="bv-summary-label">Total</span></div>' +
     '<div class="bv-summary-item bv-summary-warn"><span class="bv-summary-num">' + needsDocs + '</span><span class="bv-summary-label">Needs docs</span></div>' +
     '<div class="bv-summary-item bv-summary-warn"><span class="bv-summary-num">' + needsInvoice + '</span><span class="bv-summary-label">Needs invoice</span></div>' +
-    '<div class="bv-summary-item bv-summary-ok"><span class="bv-summary-num">' + invoiced + '</span><span class="bv-summary-label">Invoiced</span></div>';
+    '<div class="bv-summary-item bv-summary-ok"><span class="bv-summary-num">' + invoiced + '</span><span class="bv-summary-label">Invoiced</span></div>' +
+    '<div class="bv-summary-item bv-summary-revenue" id="bv-summary-revenue" title="Projected revenue across matters not yet invoiced (incl. VAT)"><span class="bv-summary-num">' + uninvoicedRevenueText + '</span><span class="bv-summary-label">Uninvoiced revenue</span></div>';
 
   var badge = document.getElementById('billing-nav-badge');
   var actionCount = needsDocs + needsInvoice;
