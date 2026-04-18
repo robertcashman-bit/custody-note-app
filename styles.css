@@ -6760,11 +6760,32 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
 }
 .qe-picker-row .qe-label { grid-column: 1 / -1; }
 .qe-picker-row .qe-input { grid-column: 1; }
-.qe-picker-row .qe-edit-link { grid-column: 2; align-self: end; padding-bottom: 0.55rem; }
+.qe-picker-row .qe-picker-actions {
+  grid-column: 2;
+  align-self: end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 0.55rem;
+}
 .qe-edit-link {
   font-size: 0.82rem; color: #2563eb; text-decoration: none; white-space: nowrap;
 }
 .qe-edit-link:hover { text-decoration: underline; }
+.qe-delete-link {
+  font-size: 0.82rem;
+  color: #b91c1c;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+.qe-delete-link:hover { color: #991b1b; }
 
 .qe-description {
   margin: 0;
@@ -6864,5 +6885,5 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
 @media (max-width: 560px) {
   .qe-form { grid-template-columns: 1fr; }
   .qe-picker-row { grid-template-columns: 1fr; }
-  .qe-picker-row .qe-edit-link { grid-column: 1; padding-bottom: 0; }
+  .qe-picker-row .qe-picker-actions { grid-column: 1; justify-content: flex-start; padding-bottom: 0; }
 }

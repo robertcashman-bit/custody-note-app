@@ -352,4 +352,28 @@ describe('Quick Email modal — user-saved custom template', () => {
     pickTemplate(env.document, 'cn-etpl-test-1');
     assert.notStrictEqual(link.style.display, 'none', 'user templates should be editable');
   });
+
+  it('exposes Delete button only for user templates', () => {
+    const btn = env.document.getElementById('quick-email-delete-btn');
+    assert.strictEqual(btn.style.display, 'none');
+
+    pickTemplate(env.document, 'system:disclosure');
+    assert.strictEqual(btn.style.display, 'none');
+
+    pickTemplate(env.document, 'cn-etpl-test-1');
+    assert.notStrictEqual(btn.style.display, 'none');
+  });
+
+  it('toolbar Delete removes the saved template after confirm', async () => {
+    pickTemplate(env.document, 'cn-etpl-test-1');
+    env.document.getElementById('quick-email-delete-btn').click();
+    /* showConfirm().then(...) runs on a microtask — flush before asserting. */
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const picker = env.document.getElementById('quick-email-picker');
+    const opt = Array.from(picker.querySelectorAll('option')).find(o => o.value === 'cn-etpl-test-1');
+    assert.ok(!opt, 'template should be removed from picker');
+    assert.strictEqual(picker.value, '', 'selection clears to empty after delete');
+  });
 });
