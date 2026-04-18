@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.4.218",
+      "version": "1.4.219",
       "date": "2026-04-18",
       "latest": true,
+      "changes": [
+        "Quick Email: Delete template button next to Edit for your saved templates (same confirmation as the edit panel)"
+      ]
+    },
+    {
+      "version": "1.4.218",
+      "date": "2026-04-18",
+      "latest": false,
       "changes": [
         "Quick Email to Officer: template-first redesign — pick the email you want to send and the form below adapts to show only the fields needed",
         "5 built-in templates ship by default (bail details, representation, disclosure, follow-up, voluntary attendance)",
