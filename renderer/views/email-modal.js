@@ -805,6 +805,7 @@ function openQuickEmailModal() {
     var pickerEl = document.getElementById('quick-email-picker');
     var descEl   = document.getElementById('quick-email-description');
     var editLink = document.getElementById('quick-email-edit-link');
+    var deleteBtn = document.getElementById('quick-email-delete-btn');
     if (!pickerEl) return;
 
     var groups = {};
@@ -836,8 +837,12 @@ function openQuickEmailModal() {
     if (descEl) {
       descEl.textContent = _activeTemplate ? (_activeTemplate.description || '') : 'Pick the email you want to send. The form below adapts to what\'s needed.';
     }
+    var showUserTpl = _activeTemplate && !_activeTemplate.isSystemTemplate;
     if (editLink) {
-      editLink.style.display = (_activeTemplate && !_activeTemplate.isSystemTemplate) ? '' : 'none';
+      editLink.style.display = showUserTpl ? '' : 'none';
+    }
+    if (deleteBtn) {
+      deleteBtn.style.display = showUserTpl ? '' : 'none';
     }
   }
 
@@ -1031,15 +1036,21 @@ function openQuickEmailModal() {
     });
 
     document.getElementById('qe-edit-delete').addEventListener('click', function() {
-      if (typeof showConfirm === 'function') {
-        showConfirm('Delete the template "' + (_activeTemplate.name || 'this template') + '"? This cannot be undone.', 'Delete template').then(function(ok) {
-          if (!ok) return;
-          _deleteActiveTemplate(panel);
-        });
-      } else if (confirm('Delete the template "' + (_activeTemplate.name || 'this template') + '"?')) {
-        _deleteActiveTemplate(panel);
-      }
+      _confirmDeleteTemplate(function() { _deleteActiveTemplate(panel); });
     });
+  }
+
+  function _confirmDeleteTemplate(onConfirm) {
+    if (!_activeTemplate || _activeTemplate.isSystemTemplate) return;
+    var label = _activeTemplate.name || 'this template';
+    var msg = 'Delete the template "' + label + '"? This cannot be undone.';
+    if (typeof showConfirm === 'function') {
+      showConfirm(msg, 'Delete template').then(function(ok) {
+        if (ok) onConfirm();
+      });
+    } else if (confirm(msg)) {
+      onConfirm();
+    }
   }
 
   function _deleteActiveTemplate(panel) {
@@ -1052,6 +1063,12 @@ function openQuickEmailModal() {
     }
     showToast('Template deleted', 'success');
     if (panel) panel.remove();
+    else {
+      var ep = document.getElementById('qe-edit-panel');
+      if (ep) ep.remove();
+    }
+    var savePanel = document.getElementById('qe-save-panel');
+    if (savePanel) savePanel.remove();
     if (typeof window.getQuickEmailCatalog === 'function') _catalog = window.getQuickEmailCatalog();
     _selectTemplate('');
   }
@@ -1132,7 +1149,10 @@ function openQuickEmailModal() {
             '<div class="qe-picker-row">' +
               '<label class="qe-label" for="quick-email-picker">Pick the email you want to send</label>' +
               '<select id="quick-email-picker" class="qe-input"></select>' +
-              '<a href="#" id="quick-email-edit-link" class="qe-edit-link" style="display:none;">Edit this template</a>' +
+              '<div class="qe-picker-actions" id="quick-email-picker-actions">' +
+                '<a href="#" id="quick-email-edit-link" class="qe-edit-link" style="display:none;">Edit this template</a>' +
+                '<button type="button" id="quick-email-delete-btn" class="qe-delete-link" style="display:none;" title="Remove this saved template">Delete template</button>' +
+              '</div>' +
             '</div>' +
             '<p id="quick-email-description" class="qe-description"></p>' +
 
@@ -1183,6 +1203,9 @@ function openQuickEmailModal() {
     document.getElementById('quick-email-edit-link').addEventListener('click', function(e) {
       e.preventDefault();
       _openEditPanel();
+    });
+    document.getElementById('quick-email-delete-btn').addEventListener('click', function() {
+      _confirmDeleteTemplate(function() { _deleteActiveTemplate(null); });
     });
 
     var subjEl = document.getElementById('quick-email-subject');
