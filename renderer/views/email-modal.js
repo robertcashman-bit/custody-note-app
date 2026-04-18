@@ -510,8 +510,39 @@ function _saveAsTemplate(modalId) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   QUICK EMAIL MODAL — Email an officer without a record
+   QUICK EMAIL MODAL — Template-first single-screen UX
+   The user picks the email they want to send; the form below
+   adapts to show ONLY the fields that template needs.
    ═══════════════════════════════════════════════════════ */
+
+/* Field definitions: label + input type + placeholder.
+   Single source of truth for both common and optional fields. */
+var QUICK_EMAIL_FIELD_DEFS = {
+  officerEmail:       { label: 'Officer email',      type: 'email',    placeholder: 'officer@police.uk' },
+  oicName:            { label: 'Officer name',       type: 'text',     placeholder: 'e.g. Smith (no rank needed)' },
+  clientName:         { label: 'Client name',        type: 'text',     placeholder: 'e.g. John Doe' },
+  station:            { label: 'Police station',     type: 'text',     placeholder: 'e.g. Holborn' },
+  offenceType:        { label: 'Offence',            type: 'text',     placeholder: 'e.g. ABH' },
+  attendanceType:     { label: 'Type of attendance', type: 'select',   options: [
+                          { value: '',          label: '—' },
+                          { value: 'custody',   label: 'Custody' },
+                          { value: 'voluntary', label: 'Voluntary' },
+                          { value: 'telephone', label: 'Telephone advice' }
+                        ] },
+  date:               { label: 'Date',               type: 'date' },
+  time:               { label: 'Time',               type: 'time' },
+  custodyNumber:      { label: 'Custody number',     type: 'text',     placeholder: 'e.g. CRN12345' },
+  dsccRef:            { label: 'DSCC reference',     type: 'text',     placeholder: 'e.g. DSCC123456' },
+  bailDate:           { label: 'Bail return date',   type: 'date' },
+  bailTime:           { label: 'Bail return time',   type: 'time' },
+  bailConditions:     { label: 'Bail conditions',    type: 'textarea', placeholder: 'e.g. No contact with complainant' },
+  allegationSummary:  { label: 'Allegation summary', type: 'textarea', placeholder: 'Brief summary of the allegation' },
+  replyDeadline:      { label: 'Reply by',           type: 'text',     placeholder: 'e.g. Friday 24/04/2026' },
+  ourFileNumber:      { label: 'File number',        type: 'text',     placeholder: 'Internal file ref' },
+  ufn:                { label: 'UFN',                type: 'text',     placeholder: 'Unique file number' }
+};
+
+var QUICK_EMAIL_CATEGORIES = ['Bail', 'Representation', 'Disclosure', 'Follow-up', 'Voluntary attendance', 'Other'];
 
 function openQuickEmailModal() {
   var stale = document.getElementById('quick-email-modal');
@@ -519,7 +550,22 @@ function openQuickEmailModal() {
 
   var settings = window._appSettingsCache || {};
   var feeEarnerName = _oicClean(settings.feeEarnerNameDefault) || '';
-  var currentCustomTpl = '';
+  var firmName      = _oicClean(settings.firmName) || '';
+  var feeEarnerEmail = _oicClean(settings.feeEarnerEmail || settings.solicitorEmail) || '';
+  var feeEarnerPhone = _oicClean(settings.feeEarnerPhone || settings.solicitorPhone) || '';
+
+  var COMMON_FIELDS  = (typeof window.QUICK_EMAIL_COMMON_FIELDS  === 'object' && window.QUICK_EMAIL_COMMON_FIELDS)  ? window.QUICK_EMAIL_COMMON_FIELDS.slice()  : ['officerEmail','oicName','clientName','station','offenceType','attendanceType','date','time'];
+  var OPTIONAL_FIELDS = (typeof window.QUICK_EMAIL_OPTIONAL_FIELDS === 'object' && window.QUICK_EMAIL_OPTIONAL_FIELDS) ? window.QUICK_EMAIL_OPTIONAL_FIELDS.slice() : ['custodyNumber','dsccRef','bailDate','bailTime','bailConditions','allegationSummary','replyDeadline','ourFileNumber','ufn'];
+
+  /* ── State ──────────────────────────────────────────── */
+  var _catalog        = (typeof window.getQuickEmailCatalog === 'function') ? window.getQuickEmailCatalog() : { system: [], user: [], all: [] };
+  var _selectedId     = '';
+  var _activeTemplate = null;
+  var _fields         = {};      /* canonical key → string value */
+  var _manualSubject  = null;    /* string when user has hand-edited; null otherwise */
+  var _manualBody     = null;
+  var _draftSaveTimer = null;
+  /* ── Helpers ──────────────────────────────────────── */
 
   function _escAttr(str) {
     return String(str || '')
@@ -527,717 +573,536 @@ function openQuickEmailModal() {
       .replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function _openUrl(to, subject, body) {
-    return _invokeOutlookEmail({
-      to: String(to || '').trim(),
-      cc: '',
-      bcc: '',
-      subject: subject || '',
-      body: _truncateBodyForOutlook(body),
-    });
+  function _todayIsoDate() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
-  function _getCustomTemplatesForQuick() {
-    var list = typeof window._getCustomEmailTemplates === 'function'
-      ? (window._getCustomEmailTemplates() || [])
-      : [];
-    return list.map(function(tpl, idx) {
-      return { id: 'custom:' + idx, template: tpl };
-    }).filter(function(entry) {
-      var scope = entry.template && entry.template.scope ? entry.template.scope : 'all';
-      return scope === 'all' || scope === 'officer';
-    });
+  function _isoToUk(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : (iso || '');
   }
 
-  function _attendanceTypeLabelFromValue(val) {
-    var v = String(val || '').trim();
-    if (v === 'telephone') return 'telephone advice';
-    if (v === 'voluntary') return 'voluntary attendance';
-    if (v === 'custody') return 'attendance';
-    return '';
-  }
-
-  /** HTML time (HH:MM) → UK-style phrase for letters, e.g. 12:00 → "12 p.m.", 10:15 → "10:15 a.m." */
-  function _quickEmailFmtTimeForSentence(hhmm) {
+  function _hhmmTo12h(hhmm) {
     var raw = String(hhmm || '').trim();
     if (!raw) return '';
-    var m = raw.match(/^(\d{1,2}):(\d{2})$/);
+    var m = raw.match(/^(\d{1,2}):(\d{2})/);
     if (!m) return raw;
-    var h24 = parseInt(m[1], 10);
-    var min = parseInt(m[2], 10);
-    if (!Number.isFinite(h24) || !Number.isFinite(min)) return raw;
-    h24 = ((h24 % 24) + 24) % 24;
-    min = ((min % 60) + 60) % 60;
-    var isAM = h24 < 12;
-    var h12 = h24 % 12;
-    if (h12 === 0) h12 = 12;
-    var minPart = min === 0 ? '' : ':' + (min < 10 ? '0' : '') + min;
-    var suffix = isAM ? 'a.m.' : 'p.m.';
-    return h12 + minPart + ' ' + suffix;
+    var h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
+    if (!Number.isFinite(h) || !Number.isFinite(mi)) return raw;
+    h = ((h % 24) + 24) % 24;
+    var isAM = h < 12;
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    var minPart = mi === 0 ? '' : ':' + (mi < 10 ? '0' : '') + mi;
+    return h12 + minPart + ' ' + (isAM ? 'a.m.' : 'p.m.');
   }
 
-  function _getPlaceholderMap() {
-    var modal = document.getElementById('quick-email-modal');
-    if (!modal) return {};
-    var dateEl = modal.querySelector('#quick-email-date');
-    var dateVal = dateEl && dateEl.value ? dateEl.value : '';
-    var dateFormatted = '';
-    if (dateVal) {
-      var m = dateVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      dateFormatted = m ? m[3] + '/' + m[2] + '/' + m[1] : dateVal;
-    } else {
-      dateFormatted = new Date().toLocaleDateString('en-GB');
-    }
-    var timeEl = modal.querySelector('#quick-email-time');
-    var timeVal = (timeEl && timeEl.value ? timeEl.value : '').slice(0, 5);
-    var attendanceVal = (modal.querySelector('#quick-email-attendance-type') || {}).value || '';
-    var toEl = modal.querySelector('#quick-email-to');
-    var officerEmailVal = toEl && String(toEl.value || '').trim() ? String(toEl.value || '').trim() : '';
+  /* Rendering map: combines current form values + user profile + today's date.
+     Keys here match those used in the template files. */
+  function _buildRenderMap() {
+    var attendanceRaw = _fields.attendanceType || '';
+    var attendanceLabel = (function(v) {
+      if (v === 'telephone') return 'telephone advice';
+      if (v === 'voluntary') return 'voluntary attendance';
+      if (v === 'custody')   return 'attendance';
+      return '';
+    })(attendanceRaw);
     return {
-      clientName: (modal.querySelector('#quick-email-client-name') || {}).value || '',
-      oicName: (modal.querySelector('#quick-email-officer-name') || {}).value || '',
-      station: (modal.querySelector('#quick-email-station') || {}).value || '',
-      offenceType: (modal.querySelector('#quick-email-offence') || {}).value || '',
-      feeEarnerName: feeEarnerName,
-      date: dateFormatted,
-      time: _quickEmailFmtTimeForSentence(timeVal),
-      time24: timeVal,
-      officerEmail: officerEmailVal,
-      contactName: '',
-      firmName: '',
-      outcome: '',
-      nextStep: '',
-      followUp: '',
-      attendanceType: _attendanceTypeLabelFromValue(attendanceVal),
-      ourFileNumber: '',
-      ufn: ''
+      officerEmail:      _fields.officerEmail || '',
+      oicName:           _fields.oicName || '',
+      clientName:        _fields.clientName || '',
+      station:           _fields.station || '',
+      offenceType:       _fields.offenceType || '',
+      attendanceType:    attendanceLabel,
+      date:              _isoToUk(_fields.date || ''),
+      time:              _hhmmTo12h(_fields.time || ''),
+      time24:            (_fields.time || '').slice(0, 5),
+      custodyNumber:     _fields.custodyNumber || '',
+      dsccRef:           _fields.dsccRef || '',
+      bailDate:          _isoToUk(_fields.bailDate || ''),
+      bailTime:          _hhmmTo12h(_fields.bailTime || ''),
+      bailConditions:    _fields.bailConditions || '',
+      allegationSummary: _fields.allegationSummary || '',
+      replyDeadline:     _fields.replyDeadline || '',
+      ourFileNumber:     _fields.ourFileNumber || '',
+      ufn:               _fields.ufn || '',
+      feeEarnerName:     feeEarnerName,
+      firmName:          firmName,
+      feeEarnerEmail:    feeEarnerEmail,
+      feeEarnerPhone:    feeEarnerPhone,
+      todayDate:         _isoToUk(_todayIsoDate())
     };
   }
 
-  function _renderQuickEmailFieldsFromTemplate() {
-    var map = _getPlaceholderMap();
-    if (typeof window.renderQuickEmailFromTemplates === 'function') {
-      return window.renderQuickEmailFromTemplates(
-        _activeRawTemplate.subject || '',
-        _activeRawTemplate.body || '',
-        map
-      );
-    }
-    return {
-      subject: String(_activeRawTemplate.subject || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
-        return map[key] != null ? String(map[key]) : '';
-      }),
-      body: String(_activeRawTemplate.body || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, function(_, key) {
-        return map[key] != null ? String(map[key]) : '';
-      })
-    };
-  }
+  /* ── Field visibility ────────────────────────────── */
 
-  /* ── Quick-email missing-field detection ─────────────── */
-
-  function _computeQuickMissing() {
-    var missing = [];
-    var modal = document.getElementById('quick-email-modal');
-    if (!modal) return missing;
-    var toEl = modal.querySelector('#quick-email-to');
-    if (!toEl || !String(toEl.value || '').trim()) {
-      missing.push({ key: 'to', label: 'Officer email (needed for Outlook Web)' });
-    }
-    if (_activeRawTemplate && typeof window.listMissingQuickEmailPlaceholders === 'function') {
-      var map = _getPlaceholderMap();
-      var ph = window.listMissingQuickEmailPlaceholders(
-        _activeRawTemplate.subject || '',
-        _activeRawTemplate.body || '',
-        map
-      );
-      for (var i = 0; i < ph.length; i++) missing.push(ph[i]);
-    } else if (_activeRawTemplate) {
-      var mapLegacy = _getPlaceholderMap();
-      var mapLookup = typeof window.expandQuickEmailValueMap === 'function'
-        ? window.expandQuickEmailValueMap(mapLegacy)
-        : mapLegacy;
-      var rawText = (_activeRawTemplate.subject || '') + '\n' + (_activeRawTemplate.body || '');
-      var re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g;
-      var seen = {};
-      var m;
-      var qLabels = {
-        clientName: 'Client name', oicName: 'Officer name', station: 'Police station',
-        offenceType: 'Offence', date: 'Date', time: 'Time', feeEarnerName: 'Fee earner',
-        officerEmail: 'Officer email'
-      };
-      while ((m = re.exec(rawText)) !== null) {
-        var key = m[1];
-        if (seen[key]) continue;
-        seen[key] = true;
-        var ck = typeof window.canonicalPlaceholderKey === 'function'
-          ? window.canonicalPlaceholderKey(key) : key;
-        var val = mapLookup[key] != null ? mapLookup[key] : mapLookup[ck];
-        if (val == null || String(val).trim() === '') {
-          missing.push({ key: ck, label: qLabels[key] || qLabels[ck] || key });
+  function _fieldsToShow() {
+    /* Common 7 always shown. Optional fields appear only when the
+       chosen template references them. */
+    var shown = COMMON_FIELDS.slice();
+    if (_activeTemplate && typeof window.getFieldsUsedByTemplate === 'function') {
+      var used = window.getFieldsUsedByTemplate(_activeTemplate);
+      used.forEach(function(k) {
+        if (OPTIONAL_FIELDS.indexOf(k) !== -1 && shown.indexOf(k) === -1) {
+          shown.push(k);
         }
-      }
+      });
     }
-    return missing;
+    return shown;
   }
 
-  function _escAttrQ(str) {
-    return String(str || '')
-      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  function _requiredFields() {
+    if (!_activeTemplate || typeof window.getRequiredFieldsForTemplate !== 'function') return [];
+    return window.getRequiredFieldsForTemplate(_activeTemplate)
+      .filter(function(k) { return COMMON_FIELDS.indexOf(k) !== -1 || OPTIONAL_FIELDS.indexOf(k) !== -1; });
   }
 
-  function _updateQuickMissingWarn() {
-    var warnEl = document.getElementById('quick-email-missing-warn');
-    if (!warnEl) return;
-    var missing = _computeQuickMissing();
-    var openBtn = document.getElementById('quick-email-open-app');
-    var toOk = !!document.querySelector('#quick-email-to') &&
-      String(document.querySelector('#quick-email-to').value || '').trim();
-    if (openBtn) openBtn.disabled = !toOk;
+  /* ── Persistence ─────────────────────────────────── */
 
-    if (!missing.length) { warnEl.style.display = 'none'; return; }
-    var needTo = missing.some(function(f) { return f.key === 'to'; });
-    var tplGaps = missing.filter(function(f) { return f.key !== 'to'; });
-    var parts = [];
-    parts.push('<span class="quick-email-missing-intro">Complete required fields to send email</span>');
-    if (needTo) {
-      parts.push('<span class="quick-email-missing-detail">Add officer email for Outlook Web.</span>');
-    }
-    if (tplGaps.length) {
-      parts.push('<span class="quick-email-missing-tags">' +
-        tplGaps.map(function(f) {
-          return '<span class="email-oic-missing-tag">' + _escAttrQ(f.label) + '</span>';
-        }).join('') +
-      '</span>');
-    }
-    warnEl.innerHTML = parts.join('');
-    warnEl.style.display = '';
+  function _persistDraft() {
+    if (_draftSaveTimer) clearTimeout(_draftSaveTimer);
+    _draftSaveTimer = setTimeout(function() {
+      if (!window.api || !window.api.setSettings) return;
+      var payload = JSON.stringify({
+        templateId: _selectedId,
+        fields:     _fields,
+        savedAt:    new Date().toISOString()
+      });
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { lastQuickEmailDraftJson: payload });
+      window.api.setSettings({ lastQuickEmailDraftJson: payload }).catch(function(e) {
+        console.warn('[quick-email] draft save failed', e);
+      });
+    }, 600);
   }
 
-  var _QUICK_BUILTIN_TEMPLATES = [
-    {
-      id: 'builtin:disclosure',
-      name: 'Disclosure Request',
-      subject: '{{clientName}} - {{station}} - Disclosure Request',
-      body: 'Dear DC {{oicName}},\n\nI am writing in relation to {{clientName}}, who was detained at {{station}} on {{date}}.\n\nPlease could you provide disclosure in this matter.\n\nKind regards,\n{{feeEarnerName}}'
-    },
-    {
-      id: 'builtin:bail',
-      name: 'Bail Confirmation',
-      subject: '{{clientName}} - {{station}} - Bail Enquiry',
-      body: 'Dear DC {{oicName}},\n\nI am writing in relation to {{clientName}}, who was detained at {{station}} on {{date}}.\n\nWe understand they were released on police bail. Please confirm the bail return date, time, and any conditions.\n\nKind regards,\n{{feeEarnerName}}'
-    }
-  ];
-
-  var _activeRawTemplate = null;
-  /* true once the user has typed directly into subject or body;
-     prevents live field updates from overwriting their text.
-     Reset to false whenever a new template is selected. */
-  var _isManualMode = false;
-
-  /** Render the active template into subject + body using current field values.
-   *  Skipped when the user has entered manual mode, unless ignoreManual is true
-   *  (e.g. date/time/attendance changed — must refresh {{time}} etc.). */
-  function renderTemplate(ignoreManual) {
-    if (!_activeRawTemplate) return;
-    if (_isManualMode && !ignoreManual) return;
-    var modal = document.getElementById('quick-email-modal');
-    if (!modal) return;
-    modal._activeRawTemplate = _activeRawTemplate;
-    var subjectEl = modal.querySelector('#quick-email-subject');
-    var bodyEl = modal.querySelector('#quick-email-body');
-    if (!subjectEl || !bodyEl) return;
+  function _hydrateDraft() {
+    var raw = (window._appSettingsCache || {}).lastQuickEmailDraftJson;
+    if (!raw) return;
     try {
-      var rendered = _renderQuickEmailFieldsFromTemplate();
-      subjectEl.value = rendered.subject;
-      bodyEl.value    = rendered.body;
-    } catch (e) {
-      console.error('[QuickEmail] renderTemplate failed:', e);
-    }
-  }
-
-  /** @deprecated Use renderTemplate() instead. Kept for internal call-sites below. */
-  function _forceTemplateSync(modal) {
-    renderTemplate();
-  }
-
-  function _getCustomTemplateByIdQuick(templateId) {
-    if (!templateId || String(templateId).indexOf('custom:') !== 0) return null;
-    var idx = parseInt(String(templateId).slice(7), 10);
-    if (!Number.isFinite(idx) || idx < 0) return null;
-    var list = typeof window._getCustomEmailTemplates === 'function'
-      ? (window._getCustomEmailTemplates() || [])
-      : [];
-    var tpl = list[idx];
-    if (!tpl) return null;
-    var scope = tpl.scope || 'all';
-    return (scope === 'all' || scope === 'officer') ? tpl : null;
-  }
-
-  function _getBuiltinTemplateById(templateId) {
-    if (!templateId || String(templateId).indexOf('builtin:') !== 0) return null;
-    for (var i = 0; i < _QUICK_BUILTIN_TEMPLATES.length; i++) {
-      if (_QUICK_BUILTIN_TEMPLATES[i].id === templateId) return _QUICK_BUILTIN_TEMPLATES[i];
-    }
-    return null;
-  }
-
-  function _autoConvertLegacyTemplate(tpl, templateId) {
-    if (!tpl || (!tpl.body && !tpl.subject)) return tpl;
-    var hasPH = /\{\{\s*[a-zA-Z_]+\s*\}\}/.test(tpl.subject || '') ||
-                /\{\{\s*[a-zA-Z_]+\s*\}\}/.test(tpl.body || '');
-    if (hasPH) return tpl;
-
-    var detected = {};
-    var subj = String(tpl.subject || '');
-    var parts = subj.split(/\s+-\s+/);
-    if (parts.length >= 2) {
-      var last = parts[parts.length - 1].trim();
-      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(last)) {
-        detected.date = last;
-        parts.pop();
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.fields && typeof parsed.fields === 'object') _fields = parsed.fields;
+        if (parsed.templateId) _selectedId = parsed.templateId;
       }
-      if (parts.length >= 2) {
-        detected.clientName = parts[0].trim();
-        detected.station = parts.slice(1).join(' - ').trim();
-      } else if (parts.length === 1) {
-        detected.clientName = parts[0].trim();
-      }
-    }
-
-    var ranks = 'DC|DS|PC|DI|DCI|Sgt|Det\\.?\\s*Sgt|Inspector|Sergeant|Constable|Officer';
-    var bodyRe = new RegExp('Dear\\s+(?:' + ranks + ')\\s+([A-Z][a-zA-Z\\x27\\-]+(?:\\s+[A-Z][a-zA-Z\\x27\\-]+)*)');
-    var bm = String(tpl.body || '').match(bodyRe);
-    if (bm) detected.oicName = bm[1].trim();
-
-    var entries = [];
-    for (var key in detected) {
-      var val = detected[key];
-      if (val && val.length >= 2) entries.push({ key: key, value: val });
-    }
-    if (entries.length === 0) return tpl;
-
-    entries.sort(function(a, b) { return b.value.length - a.value.length; });
-    var newSubject = tpl.subject || '';
-    var newBody = tpl.body || '';
-    for (var i = 0; i < entries.length; i++) {
-      var escaped = entries[i].value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      var re = new RegExp(escaped, 'gi');
-      var ph = '{{' + entries[i].key + '}}';
-      newSubject = newSubject.replace(re, ph);
-      newBody = newBody.replace(re, ph);
-    }
-    if (newSubject === (tpl.subject || '') && newBody === (tpl.body || '')) return tpl;
-
-    var converted = { name: tpl.name, subject: newSubject, body: newBody, scope: tpl.scope };
-
-    if (String(templateId).indexOf('custom:') === 0) {
-      var idx = parseInt(String(templateId).slice(7), 10);
-      try {
-        var list = typeof window._getCustomEmailTemplates === 'function'
-          ? (window._getCustomEmailTemplates() || []).slice()
-          : [];
-        if (list[idx]) {
-          list[idx].subject = newSubject;
-          list[idx].body = newBody;
-          if (typeof window._saveCustomEmailTemplates === 'function') {
-            window._saveCustomEmailTemplates(list);
-          }
-        }
-      } catch (_) {}
-    }
-    return converted;
+    } catch (_) {}
   }
 
-  function _applyCustomTemplate(templateId) {
-    var tpl = _getBuiltinTemplateById(templateId) || _getCustomTemplateByIdQuick(templateId);
-    if (!tpl) return;
-    if (String(templateId).indexOf('custom:') === 0) {
-      tpl = _autoConvertLegacyTemplate(tpl, templateId);
-    }
-    _activeRawTemplate = tpl;
-    _isManualMode = false;
-    var modal = document.getElementById('quick-email-modal');
-    if (modal) modal._activeRawTemplate = tpl;
-    renderTemplate();
-  }
+  /* ── Rendering preview ───────────────────────────── */
 
-  function _refreshTemplateFields() {
-    renderTemplate();
-  }
+  function _renderPreview() {
+    var subjEl = document.getElementById('quick-email-subject');
+    var bodyEl = document.getElementById('quick-email-body');
+    if (!subjEl || !bodyEl) return;
 
-  function _autoSubject() {
-    var modal = document.getElementById('quick-email-modal');
-    if (!modal) return '';
-    var clientName = (modal.querySelector('#quick-email-client-name') || {}).value || '';
-    var station = (modal.querySelector('#quick-email-station') || {}).value || '';
-    var map = _getPlaceholderMap();
-    var datePart = map.date || new Date().toLocaleDateString('en-GB');
-    var parts = [clientName, station, datePart].filter(Boolean);
-    return parts.join(' - ');
-  }
+    if (_manualSubject !== null) subjEl.value = _manualSubject;
+    if (_manualBody    !== null) bodyEl.value = _manualBody;
 
-  function _renderQuickModal() {
-    var stale2 = document.getElementById('quick-email-modal');
-    if (stale2) stale2.remove();
-
-    var customTemplates = _getCustomTemplatesForQuick();
-
-    var builtinOptionsHtml = _QUICK_BUILTIN_TEMPLATES.map(function(tpl) {
-      return '<option value="' + _escAttr(tpl.id) + '">' + _escAttr(tpl.name) + '</option>';
-    }).join('');
-
-    var customOptionsHtml = customTemplates.map(function(entry) {
-      var tpl = entry.template || {};
-      return '<option value="' + _escAttr(entry.id) + '">' +
-        _escAttr(tpl.name || 'Custom template') + '</option>';
-    }).join('');
-
-    var templateSelectInner =
-      '<option value="">— None (compose freely) —</option>' +
-      '<optgroup label="Built-in">' + builtinOptionsHtml + '</optgroup>' +
-      (customTemplates.length
-        ? '<optgroup label="Saved templates">' + customOptionsHtml + '</optgroup>'
-        : '');
-
-    var html =
-      '<div id="quick-email-modal" class="email-oic-overlay" role="dialog" aria-modal="true" aria-label="Quick Email">' +
-        '<div class="email-oic-box quick-email-box">' +
-          '<div class="email-oic-header">' +
-            '<h3 class="email-oic-title">&#9993; Quick Email to Officer</h3>' +
-            '<button type="button" class="email-oic-close" aria-label="Close modal">&times;</button>' +
-          '</div>' +
-          '<div class="email-oic-fields quick-email-fields">' +
-            '<section class="quick-email-section" aria-labelledby="quick-email-h-case">' +
-              '<h4 id="quick-email-h-case" class="quick-email-section-title">Case details</h4>' +
-              '<p class="quick-email-section-lead">Enter matter details first — they drive the email below.</p>' +
-              '<label class="email-oic-label" for="quick-email-to">Officer email <span class="quick-email-req">*</span></label>' +
-              '<input type="email" id="quick-email-to" class="email-oic-input" placeholder="officer@police.uk">' +
-              '<div class="quick-email-grid-2">' +
-                '<div>' +
-                  '<label class="email-oic-label" for="quick-email-officer-name">Officer name</label>' +
-                  '<input type="text" id="quick-email-officer-name" class="email-oic-input" placeholder="e.g. DC Smith">' +
-                '</div>' +
-                '<div>' +
-                  '<label class="email-oic-label" for="quick-email-client-name">Client name</label>' +
-                  '<input type="text" id="quick-email-client-name" class="email-oic-input" placeholder="e.g. John Doe">' +
-                '</div>' +
-              '</div>' +
-              '<div class="quick-email-grid-2">' +
-                '<div>' +
-                  '<label class="email-oic-label" for="quick-email-station">Police station</label>' +
-                  '<input type="text" id="quick-email-station" class="email-oic-input" placeholder="e.g. Holborn">' +
-                '</div>' +
-                '<div>' +
-                  '<label class="email-oic-label" for="quick-email-offence">Offence / case</label>' +
-                  '<input type="text" id="quick-email-offence" class="email-oic-input" placeholder="e.g. ABH">' +
-                '</div>' +
-              '</div>' +
-              '<div class="quick-email-grid-3">' +
-                '<div>' +
-                  '<label class="email-oic-label" for="quick-email-attendance-type">Type of attendance</label>' +
-                  '<select id="quick-email-attendance-type" class="email-oic-input">' +
-                    '<option value="">—</option>' +
-                    '<option value="custody">Custody</option>' +
-                    '<option value="voluntary">Voluntary</option>' +
-                    '<option value="telephone">Telephone advice</option>' +
-                  '</select>' +
-                '</div>' +
-                '<div>' +
-                  '<label class="email-oic-label" for="quick-email-date">Date</label>' +
-                  '<input type="date" id="quick-email-date" class="email-oic-input">' +
-                '</div>' +
-                '<div>' +
-                  '<label class="email-oic-label" for="quick-email-time">Time</label>' +
-                  '<input type="time" id="quick-email-time" class="email-oic-input">' +
-                '</div>' +
-              '</div>' +
-            '</section>' +
-
-            '<section class="quick-email-section quick-email-section-template" aria-labelledby="quick-email-h-tpl">' +
-              '<h4 id="quick-email-h-tpl" class="quick-email-section-title">Email template</h4>' +
-              '<p class="quick-email-section-lead">Choose a template, then review subject and message.</p>' +
-              '<div class="quick-email-template-toolbar">' +
-                '<label class="email-oic-label" for="quick-email-custom-template">Template</label>' +
-                '<div class="quick-email-template-select-row">' +
-                  '<select id="quick-email-custom-template" class="email-oic-input quick-email-template-select">' +
-                    templateSelectInner +
-                  '</select>' +
-                  '<div class="quick-email-help-anchor">' +
-                    '<button type="button" id="quick-email-template-help" class="quick-email-help-btn" ' +
-                      'aria-label="How templates work" aria-expanded="false" aria-controls="quick-email-help-popover" title="Help">?</button>' +
-                    '<div id="quick-email-help-popover" class="quick-email-help-popover" role="tooltip" hidden>' +
-                      '<p class="quick-email-help-heading">How templates work</p>' +
-                      '<ol class="quick-email-help-steps">' +
-                        '<li>Select a template</li>' +
-                        '<li>Fill in the fields above</li>' +
-                        '<li>The email auto-fills with your details</li>' +
-                        '<li>Edit before sending if you need to</li>' +
-                      '</ol>' +
-                      '<p class="quick-email-help-note">Missing fields are highlighted below — you can still pick a template.</p>' +
-                    '</div>' +
-                  '</div>' +
-                '</div>' +
-              '</div>' +
-              '<p id="quick-email-template-applied-hint" class="quick-email-applied-hint" hidden>' +
-                'Template applied — update details above if needed' +
-              '</p>' +
-              '<label class="email-oic-label" for="quick-email-subject">Subject</label>' +
-              '<input type="text" id="quick-email-subject" class="email-oic-input quick-email-subject-input" value="" placeholder="Filled from template or type your own">' +
-              '<label class="email-oic-label" for="quick-email-body">Message</label>' +
-              '<textarea id="quick-email-body" class="email-oic-textarea quick-email-message-textarea" rows="10" ' +
-                'placeholder="Template will appear here — you can edit before sending"></textarea>' +
-              '<label class="email-oic-label" for="quick-email-insert-token">Insert placeholder</label>' +
-              '<select id="quick-email-insert-token" class="email-oic-input quick-email-insert-select">' +
-                '<option value="">— Choose token to append —</option>' +
-                '<option value="{{clientName}}">{{clientName}}</option>' +
-                '<option value="{{oicName}}">{{oicName}} (officer surname / name)</option>' +
-                '<option value="{{officerName}}">{{officerName}} (alias)</option>' +
-                '<option value="{{station}}">{{station}}</option>' +
-                '<option value="{{policeStation}}">{{policeStation}} (alias)</option>' +
-                '<option value="{{offenceType}}">{{offenceType}}</option>' +
-                '<option value="{{offence}}">{{offence}} (alias)</option>' +
-                '<option value="{{date}}">{{date}}</option>' +
-                '<option value="{{time}}">{{time}}</option>' +
-                '<option value="{{time24}}">{{time24}}</option>' +
-                '<option value="{{attendanceType}}">{{attendanceType}}</option>' +
-                '<option value="{{feeEarnerName}}">{{feeEarnerName}}</option>' +
-                '<option value="{{officerEmail}}">{{officerEmail}}</option>' +
-              '</select>' +
-              '<p class="quick-email-save-hint">Saving a template stores <code class="quick-email-code">{{tokens}}</code> so you can reuse wording next time.</p>' +
-            '</section>' +
-
-            '<div id="quick-email-missing-warn" class="quick-email-missing-strip email-oic-missing-warn" style="display:none" role="status"></div>' +
-          '</div>' +
-
-          '<div class="email-oic-actions quick-email-actions quick-email-actions-bar">' +
-            '<button type="button" id="quick-email-open-app" class="btn btn-primary">Open in Outlook Web</button>' +
-            '<button type="button" id="quick-email-copy" class="btn btn-secondary">Copy Email</button>' +
-            '<button type="button" id="quick-email-save-tpl" class="btn btn-secondary">Save as Template</button>' +
-            '<button type="button" id="quick-email-cancel" class="btn btn-tertiary quick-email-btn-cancel">Cancel</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
-
-    document.body.insertAdjacentHTML('beforeend', html);
-    _bindQuickEvents();
-  }
-
-  function _bindQuickEvents() {
-    var modal = document.getElementById('quick-email-modal');
-    if (!modal) return;
-
-    modal.getPlaceholderMap = _getPlaceholderMap;
-
-    var dateInput = modal.querySelector('#quick-email-date');
-    if (dateInput && !dateInput.value) {
-      var today = new Date();
-      dateInput.value = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
-    }
-
-    function _close() {
-      var m = document.getElementById('quick-email-modal');
-      if (!m) return;
-      if (m._hintTimer) clearTimeout(m._hintTimer);
-      if (m._escHandler) document.removeEventListener('keydown', m._escHandler);
-      if (m._helpOutside) document.removeEventListener('click', m._helpOutside);
-      m.remove();
-    }
-
-    function _setHelpPopoverOpen(open) {
-      var btn = document.getElementById('quick-email-template-help');
-      var pop = document.getElementById('quick-email-help-popover');
-      if (!pop) return;
-      if (open) {
-        pop.removeAttribute('hidden');
-        if (btn) { btn.setAttribute('aria-expanded', 'true'); }
-      } else {
-        pop.setAttribute('hidden', '');
-        if (btn) { btn.setAttribute('aria-expanded', 'false'); }
-      }
-    }
-
-    function _flashTemplateAppliedUI() {
-      var hint = document.getElementById('quick-email-template-applied-hint');
-      var sub = document.getElementById('quick-email-subject');
-      var body = document.getElementById('quick-email-body');
-      if (hint) {
-        hint.removeAttribute('hidden');
-        hint.setAttribute('aria-live', 'polite');
-      }
-      if (sub) {
-        sub.classList.remove('quick-email-field-flash');
-        void sub.offsetWidth;
-        sub.classList.add('quick-email-field-flash');
-      }
-      if (body) {
-        body.classList.remove('quick-email-field-flash');
-        void body.offsetWidth;
-        body.classList.add('quick-email-field-flash');
-      }
-      if (modal._hintTimer) clearTimeout(modal._hintTimer);
-      modal._hintTimer = setTimeout(function() {
-        if (hint) hint.setAttribute('hidden', '');
-        if (sub) sub.classList.remove('quick-email-field-flash');
-        if (body) body.classList.remove('quick-email-field-flash');
-      }, 4200);
-    }
-
-    function _onKey(e) {
-      if (e.key === 'Escape') _close();
-    }
-    document.addEventListener('keydown', _onKey);
-    modal._escHandler = _onKey;
-
-    modal.querySelector('.email-oic-close').addEventListener('click', _close);
-    modal.querySelector('#quick-email-cancel').addEventListener('click', _close);
-    modal.addEventListener('click', function(e) { if (e.target === modal) _close(); });
-
-    var helpBtn = document.getElementById('quick-email-template-help');
-    if (helpBtn) {
-      helpBtn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        var pop = document.getElementById('quick-email-help-popover');
-        if (!pop) return;
-        var willOpen = pop.hasAttribute('hidden');
-        _setHelpPopoverOpen(willOpen);
-      });
-    }
-    modal._helpOutside = function(e) {
-      var pop = document.getElementById('quick-email-help-popover');
-      var btn = document.getElementById('quick-email-template-help');
-      if (!pop || pop.hasAttribute('hidden')) return;
-      if (pop.contains(e.target) || (btn && btn.contains(e.target))) return;
-      _setHelpPopoverOpen(false);
-    };
-    document.addEventListener('click', modal._helpOutside);
-
-    /* — Context fields: update template live (unless in manual mode) — */
-    var templateFields = [
-      'quick-email-officer-name', 'quick-email-client-name',
-      'quick-email-station', 'quick-email-offence',
-      'quick-email-attendance-type', 'quick-email-date', 'quick-email-time'
-    ];
-    function onContextChange(ev) {
-      var id = ev && ev.target && ev.target.id;
-      /* Re-apply template when these fields change even if the user edited subject/body,
-         so {{time}} / {{date}} / {{attendanceType}} stay in sync with the form. */
-      var forceFromScheduleFields = id && (
-        id === 'quick-email-time' ||
-        id === 'quick-email-date' ||
-        id === 'quick-email-attendance-type'
+    if (_manualSubject === null && _manualBody === null && _activeTemplate &&
+        typeof window.renderQuickEmailFromTemplates === 'function') {
+      var rendered = window.renderQuickEmailFromTemplates(
+        _activeTemplate.subjectTemplate || '',
+        _activeTemplate.bodyTemplate    || '',
+        _buildRenderMap()
       );
-      if (forceFromScheduleFields && _activeRawTemplate) {
-        renderTemplate(true);
-      } else if (!_isManualMode) {
-        renderTemplate();
-      }
-      _updateQuickMissingWarn();
+      subjEl.value = rendered.subject;
+      bodyEl.value = rendered.body;
+    } else if (_manualSubject === null && _manualBody === null && !_activeTemplate) {
+      subjEl.value = '';
+      bodyEl.value = '';
+    } else if (_activeTemplate && typeof window.renderQuickEmailFromTemplates === 'function') {
+      // Manual-edit mode: re-render only the side the user has NOT touched.
+      var r = window.renderQuickEmailFromTemplates(
+        _activeTemplate.subjectTemplate || '',
+        _activeTemplate.bodyTemplate    || '',
+        _buildRenderMap()
+      );
+      if (_manualSubject === null) subjEl.value = r.subject;
+      if (_manualBody    === null) bodyEl.value = r.body;
     }
-    templateFields.forEach(function(fieldId) {
-      var el = modal.querySelector('#' + fieldId);
-      if (el) {
-        el.addEventListener('input',  onContextChange);
-        el.addEventListener('change', onContextChange);
-        if (['quick-email-client-name', 'quick-email-station', 'quick-email-date'].indexOf(fieldId) !== -1) {
-          el.addEventListener('blur', function() {
-            if (!_activeRawTemplate && !_isManualMode) {
-              var subjectEl = document.getElementById('quick-email-subject');
-              if (subjectEl) subjectEl.value = _autoSubject();
-            }
-          });
-        }
-      }
+
+    _renderMissingStrip();
+  }
+
+  function _renderMissingStrip() {
+    var stripEl = document.getElementById('quick-email-missing-strip');
+    if (!stripEl) return;
+    var req = _requiredFields();
+    var missing = req.filter(function(k) {
+      var v = _fields[k];
+      return v == null || String(v).trim() === '';
     });
-
-    /* — Subject / body: entering text triggers manual mode — */
-    var subjectField = document.getElementById('quick-email-subject');
-    if (subjectField) {
-      subjectField.addEventListener('input', function() {
-        _isManualMode = true;
-      });
+    if (!missing.length) {
+      stripEl.style.display = 'none';
+      stripEl.textContent = '';
+      return;
     }
-
-    var bodyField = document.getElementById('quick-email-body');
-    if (bodyField) {
-      bodyField.addEventListener('input', function() {
-        _isManualMode = true;
-      });
-    }
-
-    /* — Template selector — */
-    var customSelect = modal.querySelector('#quick-email-custom-template');
-    if (customSelect) {
-      customSelect.addEventListener('change', function(e) {
-        currentCustomTpl = e.target.value || '';
-        var appliedHint = document.getElementById('quick-email-template-applied-hint');
-        if (appliedHint) appliedHint.setAttribute('hidden', '');
-        if (currentCustomTpl) {
-          _applyCustomTemplate(currentCustomTpl);   /* resets _isManualMode internally */
-          _flashTemplateAppliedUI();
-        } else {
-          _activeRawTemplate = null;
-          _isManualMode = false;
-          modal._activeRawTemplate = null;
-          var subjectEl = document.getElementById('quick-email-subject');
-          if (subjectEl) subjectEl.value = _autoSubject();
-          var bodyEl = document.getElementById('quick-email-body');
-          if (bodyEl) bodyEl.value = '';
-        }
-        _updateQuickMissingWarn();
-      });
-    }
-
-    /* To-field: validation + refresh {{officerEmail}} in template */
-    var _qToEl = modal.querySelector('#quick-email-to');
-    if (_qToEl) {
-      _qToEl.addEventListener('input', function() {
-        if (_activeRawTemplate) renderTemplate(true);
-        _updateQuickMissingWarn();
-      });
-    }
-
-    var insertSel = modal.querySelector('#quick-email-insert-token');
-    if (insertSel) {
-      insertSel.addEventListener('change', function() {
-        var v = insertSel.value;
-        if (!v) return;
-        var bodyEl = document.getElementById('quick-email-body');
-        if (bodyEl) {
-          bodyEl.value = (bodyEl.value || '') + (bodyEl.value && !/\n$/.test(bodyEl.value) ? ' ' : '') + v;
-          _isManualMode = true;
-        }
-        insertSel.value = '';
-      });
-    }
-    _updateQuickMissingWarn();
-    setTimeout(renderTemplate, 50);
-
-    modal.querySelector('#quick-email-open-app').addEventListener('click', function() {
-      var to = ((modal.querySelector('#quick-email-to') || {}).value || '').trim();
-      if (!to) { showToast('Please enter an officer email address', 'error'); return; }
-      var subject = ((modal.querySelector('#quick-email-subject') || {}).value || '').trim() || _autoSubject();
-      var body = (modal.querySelector('#quick-email-body') || {}).value || '';
-      _openUrl(to, subject, body);
+    var labels = missing.map(function(k) {
+      var def = QUICK_EMAIL_FIELD_DEFS[k];
+      return def ? def.label.toLowerCase() : k;
     });
+    var msg;
+    if (labels.length === 1) msg = 'Add the ' + labels[0] + ' to finish this email.';
+    else if (labels.length === 2) msg = 'Add the ' + labels[0] + ' and ' + labels[1] + ' to finish this email.';
+    else msg = 'Still need: ' + labels.slice(0, -1).join(', ') + ' and ' + labels[labels.length - 1] + '.';
+    stripEl.textContent = msg;
+    stripEl.style.display = '';
+  }
 
-    modal.querySelector('#quick-email-copy').addEventListener('click', function() {
-      var body = (modal.querySelector('#quick-email-body') || {}).value;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(body).then(function() {
-          showToast('Email copied to clipboard', 'success');
-        }).catch(function() { _qFallbackCopy(body); });
-      } else {
-        _qFallbackCopy(body);
-      }
-    });
+  /* ── Form HTML ───────────────────────────────────── */
 
-    modal.querySelector('#quick-email-save-tpl').addEventListener('click', function() {
-      _saveAsTemplate('quick-email-modal');
+  function _fieldHtml(key) {
+    var def = QUICK_EMAIL_FIELD_DEFS[key];
+    if (!def) return '';
+    var req  = _requiredFields().indexOf(key) !== -1;
+    var val  = _fields[key] || '';
+    var star = req ? ' <span class="qe-req" aria-hidden="true">*</span>' : '';
+    var ph   = def.placeholder ? ' placeholder="' + _escAttr(def.placeholder) + '"' : '';
+    var inputId = 'qe-field-' + key;
+    var inputHtml = '';
+    if (def.type === 'select') {
+      inputHtml = '<select id="' + inputId + '" data-qe-field="' + key + '" class="qe-input">' +
+        def.options.map(function(o) {
+          var sel = String(val) === String(o.value) ? ' selected' : '';
+          return '<option value="' + _escAttr(o.value) + '"' + sel + '>' + _escAttr(o.label) + '</option>';
+        }).join('') +
+        '</select>';
+    } else if (def.type === 'textarea') {
+      inputHtml = '<textarea id="' + inputId + '" data-qe-field="' + key + '" class="qe-input qe-textarea" rows="2"' + ph + '>' + _escAttr(val) + '</textarea>';
+    } else {
+      inputHtml = '<input type="' + def.type + '" id="' + inputId + '" data-qe-field="' + key + '" class="qe-input" value="' + _escAttr(val) + '"' + ph + '>';
+    }
+    return '<div class="qe-field qe-field-' + key + (req ? ' qe-field-required' : '') + '">' +
+             '<label class="qe-label" for="' + inputId + '">' + _escAttr(def.label) + star + '</label>' +
+             inputHtml +
+           '</div>';
+  }
+
+  function _renderForm() {
+    var formEl = document.getElementById('quick-email-form');
+    if (!formEl) return;
+    var keys = _fieldsToShow();
+    formEl.innerHTML = keys.map(_fieldHtml).join('');
+    /* Bind change/input on the freshly-rendered inputs */
+    formEl.querySelectorAll('[data-qe-field]').forEach(function(el) {
+      var key = el.getAttribute('data-qe-field');
+      var ev  = (el.tagName === 'SELECT') ? 'change' : 'input';
+      el.addEventListener(ev, function() {
+        _fields[key] = el.value;
+        if (key === 'oicName' || key === 'clientName' || key === 'station' ||
+            key === 'date'    || key === 'time'       || key === 'attendanceType') {
+          // Reset manual-mode when context changes — user expects refreshed preview.
+          // (For other free-text optional fields we DO respect manual edits.)
+        }
+        _renderPreview();
+        _persistDraft();
+      });
     });
   }
 
-  function _qFallbackCopy(text) {
+  /* ── Picker / description ────────────────────────── */
+
+  function _renderPicker() {
+    var pickerEl = document.getElementById('quick-email-picker');
+    var descEl   = document.getElementById('quick-email-description');
+    var editLink = document.getElementById('quick-email-edit-link');
+    if (!pickerEl) return;
+
+    var groups = {};
+    _catalog.system.forEach(function(t) {
+      var c = t.category || 'Other';
+      (groups[c] = groups[c] || []).push(t);
+    });
+
+    var systemHtml = Object.keys(groups).map(function(cat) {
+      return '<optgroup label="' + _escAttr(cat) + '">' +
+        groups[cat].map(function(t) {
+          var sel = (_selectedId === t.id) ? ' selected' : '';
+          return '<option value="' + _escAttr(t.id) + '"' + sel + '>' + _escAttr(t.name) + '</option>';
+        }).join('') +
+      '</optgroup>';
+    }).join('');
+
+    var userHtml = _catalog.user.length
+      ? '<optgroup label="Your saved templates">' +
+          _catalog.user.map(function(t) {
+            var sel = (_selectedId === t.id) ? ' selected' : '';
+            return '<option value="' + _escAttr(t.id) + '"' + sel + '>' + _escAttr(t.name) + '</option>';
+          }).join('') +
+        '</optgroup>'
+      : '';
+
+    pickerEl.innerHTML = '<option value="">— Pick a template —</option>' + systemHtml + userHtml;
+
+    if (descEl) {
+      descEl.textContent = _activeTemplate ? (_activeTemplate.description || '') : 'Pick the email you want to send. The form below adapts to what\'s needed.';
+    }
+    if (editLink) {
+      editLink.style.display = (_activeTemplate && !_activeTemplate.isSystemTemplate) ? '' : 'none';
+    }
+  }
+
+  /* ── Template selection ──────────────────────────── */
+
+  function _selectTemplate(id) {
+    _selectedId = id || '';
+    _activeTemplate = _selectedId
+      ? (typeof window.getQuickEmailTemplateById === 'function' ? window.getQuickEmailTemplateById(_selectedId) : null)
+      : null;
+    /* New template = fresh preview, drop manual edits. */
+    _manualSubject = null;
+    _manualBody    = null;
+    _renderPicker();
+    _renderForm();
+    _renderPreview();
+    _persistDraft();
+  }
+
+  /* ── Save as new template (one-input) ────────────── */
+
+  function _openSavePanel() {
+    var existing = document.getElementById('qe-save-panel');
+    if (existing) { existing.remove(); return; }
+
+    var actionsBar = document.querySelector('#quick-email-modal .qe-actions');
+    if (!actionsBar) return;
+
+    var subj = (document.getElementById('quick-email-subject') || {}).value || '';
+    var body = (document.getElementById('quick-email-body') || {}).value    || '';
+    if (!subj.trim() && !body.trim()) {
+      showToast('Type a message first, then save it as a template', 'warning');
+      return;
+    }
+
+    var panel = document.createElement('div');
+    panel.id = 'qe-save-panel';
+    panel.className = 'qe-save-panel';
+    panel.innerHTML =
+      '<div class="qe-save-row">' +
+        '<label class="qe-label" for="qe-save-name">Name this template</label>' +
+        '<input type="text" id="qe-save-name" class="qe-input" placeholder="e.g. Disclosure request" autocomplete="off">' +
+      '</div>' +
+      '<div class="qe-save-row">' +
+        '<label class="qe-label" for="qe-save-cat">Category</label>' +
+        '<select id="qe-save-cat" class="qe-input">' +
+          QUICK_EMAIL_CATEGORIES.map(function(c) {
+            return '<option value="' + _escAttr(c) + '">' + _escAttr(c) + '</option>';
+          }).join('') +
+        '</select>' +
+      '</div>' +
+      '<div class="qe-save-actions">' +
+        '<button type="button" class="btn btn-primary" id="qe-save-confirm">Save template</button>' +
+        '<button type="button" class="btn btn-secondary" id="qe-save-cancel">Cancel</button>' +
+      '</div>';
+    actionsBar.parentNode.insertBefore(panel, actionsBar);
+    var nameEl = document.getElementById('qe-save-name');
+    if (nameEl) nameEl.focus();
+
+    document.getElementById('qe-save-cancel').addEventListener('click', function() { panel.remove(); });
+    document.getElementById('qe-save-confirm').addEventListener('click', function() {
+      var name = (document.getElementById('qe-save-name').value || '').trim();
+      if (!name) { showToast('Please give the template a name', 'error'); return; }
+      var category = document.getElementById('qe-save-cat').value || 'Other';
+
+      // Convert literal values back into placeholders so the template is reusable.
+      var map = _buildRenderMap();
+      var subjTpl = (typeof _valuesToPlaceholders === 'function') ? _valuesToPlaceholders(subj, map) : subj;
+      var bodyTpl = (typeof _valuesToPlaceholders === 'function') ? _valuesToPlaceholders(body, map) : body;
+
+      var existingTpls = (typeof window._getCustomEmailTemplates === 'function')
+        ? (window._getCustomEmailTemplates() || []).slice()
+        : [];
+      var nowIso = new Date().toISOString();
+      var newId = (function() {
+        try { if (typeof crypto !== 'undefined' && crypto.randomUUID) return 'cn-etpl-' + crypto.randomUUID(); } catch (_) {}
+        return 'cn-etpl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
+      })();
+      var reqFields = (typeof window.extractQuickEmailPlaceholderKeys === 'function')
+        ? window.extractQuickEmailPlaceholderKeys(subjTpl, bodyTpl)
+        : [];
+      existingTpls.push({
+        id:             newId,
+        name:           name,
+        category:       category,
+        description:    '',
+        subject:        subjTpl,
+        body:           bodyTpl,
+        scope:          'officer',
+        requiredFields: reqFields,
+        createdAt:      nowIso,
+        updatedAt:      nowIso
+      });
+      if (typeof window._saveCustomEmailTemplates === 'function') {
+        window._saveCustomEmailTemplates(existingTpls);
+      }
+      showToast('Template saved', 'success');
+      panel.remove();
+
+      // Refresh catalog + picker, then select the new template.
+      if (typeof window.getQuickEmailCatalog === 'function') {
+        _catalog = window.getQuickEmailCatalog();
+      }
+      _selectTemplate(newId);
+    });
+  }
+
+  /* ── Edit user template ──────────────────────────── */
+
+  function _openEditPanel() {
+    if (!_activeTemplate || _activeTemplate.isSystemTemplate) return;
+    var existing = document.getElementById('qe-edit-panel');
+    if (existing) { existing.remove(); return; }
+
+    var actionsBar = document.querySelector('#quick-email-modal .qe-actions');
+    if (!actionsBar) return;
+
+    var friendlySubject = (typeof window.tokensToFriendlyLabels === 'function')
+      ? window.tokensToFriendlyLabels(_activeTemplate.subjectTemplate || '')
+      : (_activeTemplate.subjectTemplate || '');
+    var friendlyBody = (typeof window.tokensToFriendlyLabels === 'function')
+      ? window.tokensToFriendlyLabels(_activeTemplate.bodyTemplate || '')
+      : (_activeTemplate.bodyTemplate || '');
+
+    var panel = document.createElement('div');
+    panel.id = 'qe-edit-panel';
+    panel.className = 'qe-save-panel qe-edit-panel';
+    panel.innerHTML =
+      '<h4 class="qe-section-title">Edit template</h4>' +
+      '<p class="qe-help">Words in <code>[BRACKETS]</code> get replaced with the matter details when you use the template.</p>' +
+      '<div class="qe-save-row"><label class="qe-label" for="qe-edit-name">Name</label>' +
+        '<input type="text" id="qe-edit-name" class="qe-input" value="' + _escAttr(_activeTemplate.name || '') + '"></div>' +
+      '<div class="qe-save-row"><label class="qe-label" for="qe-edit-cat">Category</label>' +
+        '<select id="qe-edit-cat" class="qe-input">' +
+          QUICK_EMAIL_CATEGORIES.map(function(c) {
+            var sel = (_activeTemplate.category === c) ? ' selected' : '';
+            return '<option value="' + _escAttr(c) + '"' + sel + '>' + _escAttr(c) + '</option>';
+          }).join('') +
+        '</select></div>' +
+      '<div class="qe-save-row"><label class="qe-label" for="qe-edit-subject">Subject</label>' +
+        '<input type="text" id="qe-edit-subject" class="qe-input" value="' + _escAttr(friendlySubject) + '"></div>' +
+      '<div class="qe-save-row"><label class="qe-label" for="qe-edit-body">Message</label>' +
+        '<textarea id="qe-edit-body" class="qe-input qe-textarea" rows="10">' + _escAttr(friendlyBody) + '</textarea></div>' +
+      '<div class="qe-save-actions">' +
+        '<button type="button" class="btn btn-primary" id="qe-edit-save">Save changes</button>' +
+        '<button type="button" class="btn btn-danger qe-edit-delete" id="qe-edit-delete">Delete template</button>' +
+        '<button type="button" class="btn btn-secondary" id="qe-edit-cancel">Cancel</button>' +
+      '</div>';
+    actionsBar.parentNode.insertBefore(panel, actionsBar);
+
+    document.getElementById('qe-edit-cancel').addEventListener('click', function() { panel.remove(); });
+
+    document.getElementById('qe-edit-save').addEventListener('click', function() {
+      var name = (document.getElementById('qe-edit-name').value || '').trim();
+      if (!name) { showToast('Template needs a name', 'error'); return; }
+      var category = document.getElementById('qe-edit-cat').value || 'Other';
+      var rawSubj  = document.getElementById('qe-edit-subject').value || '';
+      var rawBody  = document.getElementById('qe-edit-body').value    || '';
+      var subjTpl  = (typeof window.friendlyLabelsToTokens === 'function') ? window.friendlyLabelsToTokens(rawSubj) : rawSubj;
+      var bodyTpl  = (typeof window.friendlyLabelsToTokens === 'function') ? window.friendlyLabelsToTokens(rawBody) : rawBody;
+
+      var allTpls = (typeof window._getCustomEmailTemplates === 'function')
+        ? (window._getCustomEmailTemplates() || []).slice()
+        : [];
+      var idx = -1;
+      for (var i = 0; i < allTpls.length; i++) {
+        if (allTpls[i].id === _activeTemplate.id) { idx = i; break; }
+      }
+      if (idx === -1) { showToast('Template not found', 'error'); return; }
+
+      var reqFields = (typeof window.extractQuickEmailPlaceholderKeys === 'function')
+        ? window.extractQuickEmailPlaceholderKeys(subjTpl, bodyTpl)
+        : [];
+
+      allTpls[idx] = Object.assign({}, allTpls[idx], {
+        name:           name,
+        category:       category,
+        subject:        subjTpl,
+        body:           bodyTpl,
+        requiredFields: reqFields,
+        updatedAt:      new Date().toISOString()
+      });
+      if (typeof window._saveCustomEmailTemplates === 'function') {
+        window._saveCustomEmailTemplates(allTpls);
+      }
+      showToast('Template updated', 'success');
+      panel.remove();
+
+      if (typeof window.getQuickEmailCatalog === 'function') _catalog = window.getQuickEmailCatalog();
+      _selectTemplate(_activeTemplate.id);
+    });
+
+    document.getElementById('qe-edit-delete').addEventListener('click', function() {
+      if (typeof showConfirm === 'function') {
+        showConfirm('Delete the template "' + (_activeTemplate.name || 'this template') + '"? This cannot be undone.', 'Delete template').then(function(ok) {
+          if (!ok) return;
+          _deleteActiveTemplate(panel);
+        });
+      } else if (confirm('Delete the template "' + (_activeTemplate.name || 'this template') + '"?')) {
+        _deleteActiveTemplate(panel);
+      }
+    });
+  }
+
+  function _deleteActiveTemplate(panel) {
+    var allTpls = (typeof window._getCustomEmailTemplates === 'function')
+      ? (window._getCustomEmailTemplates() || []).slice()
+      : [];
+    var filtered = allTpls.filter(function(t) { return t.id !== _activeTemplate.id; });
+    if (typeof window._saveCustomEmailTemplates === 'function') {
+      window._saveCustomEmailTemplates(filtered);
+    }
+    showToast('Template deleted', 'success');
+    if (panel) panel.remove();
+    if (typeof window.getQuickEmailCatalog === 'function') _catalog = window.getQuickEmailCatalog();
+    _selectTemplate('');
+  }
+
+  /* ── Send / Copy ─────────────────────────────────── */
+
+  function _sendViaOutlook() {
+    var to      = (_fields.officerEmail || '').trim();
+    var subject = ((document.getElementById('quick-email-subject') || {}).value || '').trim();
+    var body    = ((document.getElementById('quick-email-body')    || {}).value || '');
+
+    if (!to) {
+      var officerEl = document.getElementById('qe-field-officerEmail');
+      if (officerEl) officerEl.focus();
+      showToast('Add the officer email address first', 'warning');
+      return;
+    }
+
+    var req = _requiredFields().filter(function(k) { return k !== 'officerEmail'; });
+    var firstMissing = req.find(function(k) {
+      var v = _fields[k];
+      return v == null || String(v).trim() === '';
+    });
+    if (firstMissing) {
+      var el = document.getElementById('qe-field-' + firstMissing);
+      if (el) el.focus();
+      _renderMissingStrip();
+      // Don't block — strip is shown, user can carry on or fill the field.
+    }
+
+    return _invokeOutlookEmail({
+      to:      to,
+      cc:      '',
+      bcc:     '',
+      subject: subject,
+      body:    _truncateBodyForOutlook(body)
+    });
+  }
+
+  function _copy() {
+    var body = ((document.getElementById('quick-email-body') || {}).value || '');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(body).then(function() {
+        showToast('Email copied to clipboard', 'success');
+      }).catch(function() { _fallbackCopyQuick(body); });
+    } else {
+      _fallbackCopyQuick(body);
+    }
+  }
+
+  function _fallbackCopyQuick(text) {
     try {
       var ta = document.createElement('textarea');
       ta.value = text;
@@ -1252,5 +1117,96 @@ function openQuickEmailModal() {
     }
   }
 
-  _renderQuickModal();
+  /* ── Modal HTML ──────────────────────────────────── */
+
+  function _renderModal() {
+    if (!_fields.date) _fields.date = _todayIsoDate();
+    var html =
+      '<div id="quick-email-modal" class="email-oic-overlay qe-overlay" role="dialog" aria-modal="true" aria-label="Quick Email to Officer">' +
+        '<div class="email-oic-box qe-box">' +
+          '<div class="email-oic-header">' +
+            '<h3 class="email-oic-title">Quick Email to Officer</h3>' +
+            '<button type="button" class="email-oic-close qe-close" aria-label="Close">&times;</button>' +
+          '</div>' +
+          '<div class="qe-body">' +
+            '<div class="qe-picker-row">' +
+              '<label class="qe-label" for="quick-email-picker">Pick the email you want to send</label>' +
+              '<select id="quick-email-picker" class="qe-input"></select>' +
+              '<a href="#" id="quick-email-edit-link" class="qe-edit-link" style="display:none;">Edit this template</a>' +
+            '</div>' +
+            '<p id="quick-email-description" class="qe-description"></p>' +
+
+            '<div id="quick-email-form" class="qe-form"></div>' +
+
+            '<div id="quick-email-missing-strip" class="qe-missing-strip" style="display:none;" role="status"></div>' +
+
+            '<div class="qe-preview">' +
+              '<label class="qe-label" for="quick-email-subject">Subject</label>' +
+              '<input type="text" id="quick-email-subject" class="qe-input qe-subject">' +
+              '<label class="qe-label" for="quick-email-body">Message</label>' +
+              '<textarea id="quick-email-body" class="qe-input qe-message" rows="10"></textarea>' +
+              '<p class="qe-help">You can edit the email before sending.</p>' +
+            '</div>' +
+          '</div>' +
+
+          '<div class="email-oic-actions qe-actions">' +
+            '<button type="button" id="qe-send"   class="btn btn-primary">Send via Outlook Web</button>' +
+            '<button type="button" id="qe-copy"   class="btn btn-secondary">Copy</button>' +
+            '<button type="button" id="qe-save"   class="btn btn-secondary">Save as new template</button>' +
+            '<button type="button" id="qe-cancel" class="btn btn-tertiary">Cancel</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
+
+  function _bindEvents() {
+    var modal = document.getElementById('quick-email-modal');
+    if (!modal) return;
+
+    function _close() {
+      if (modal._escHandler) document.removeEventListener('keydown', modal._escHandler);
+      modal.remove();
+    }
+    function _onKey(e) { if (e.key === 'Escape') _close(); }
+    document.addEventListener('keydown', _onKey);
+    modal._escHandler = _onKey;
+
+    modal.querySelector('.qe-close').addEventListener('click', _close);
+    document.getElementById('qe-cancel').addEventListener('click', _close);
+    modal.addEventListener('click', function(e) { if (e.target === modal) _close(); });
+
+    document.getElementById('quick-email-picker').addEventListener('change', function(e) {
+      _selectTemplate(e.target.value || '');
+    });
+    document.getElementById('quick-email-edit-link').addEventListener('click', function(e) {
+      e.preventDefault();
+      _openEditPanel();
+    });
+
+    var subjEl = document.getElementById('quick-email-subject');
+    var bodyEl = document.getElementById('quick-email-body');
+    if (subjEl) subjEl.addEventListener('input', function() { _manualSubject = subjEl.value; });
+    if (bodyEl) bodyEl.addEventListener('input', function() { _manualBody    = bodyEl.value; });
+
+    document.getElementById('qe-send').addEventListener('click', _sendViaOutlook);
+    document.getElementById('qe-copy').addEventListener('click', _copy);
+    document.getElementById('qe-save').addEventListener('click', _openSavePanel);
+  }
+
+  /* ── Boot ────────────────────────────────────────── */
+
+  _hydrateDraft();
+  if (_selectedId && typeof window.getQuickEmailTemplateById === 'function') {
+    _activeTemplate = window.getQuickEmailTemplateById(_selectedId) || null;
+    if (!_activeTemplate) _selectedId = '';
+  }
+
+  _renderModal();
+  _bindEvents();
+  _renderPicker();
+  _renderForm();
+  _renderPreview();
 }
+

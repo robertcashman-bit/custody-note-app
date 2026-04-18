@@ -1,13 +1,16 @@
 /**
- * Quick Email integration tests — full DOM simulation
- * Uses jsdom to simulate the browser environment and exercises:
- *   1. Selecting a built-in template fills subject + body with field values
- *   2. Changing field values after template selection live-updates subject + body
- *   3. Saving a template converts values → {{placeholders}}
- *   4. Loading a saved template fills new values correctly
- *   5. Subject line is properly filled from template
- *   6. Manual edits prevent automatic overwrites
- *   7. Switching back to "None" resets template state
+ * Quick Email integration tests — full DOM simulation against the new
+ * template-first single-screen modal. Uses jsdom and exercises:
+ *   1. Modal renders with template picker + form + preview
+ *   2. Picking a system template auto-fills subject + body from the catalog
+ *   3. Editing a matter-detail field live-updates the preview
+ *   4. Hand-edits to the message preview survive subsequent field changes
+ *   5. Switching to a different template throws away manual edits and
+ *      re-renders from the new template
+ *   6. Switching to "no template" clears the preview
+ *   7. Saving the current preview as a new template converts literal
+ *      values back into placeholders silently
+ *   8. A user-saved custom template appears in the picker and renders
  */
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert');
@@ -19,428 +22,334 @@ const renderSrc = fs.readFileSync(
   path.join(__dirname, '..', 'renderer', 'quick-email-template-render.js'),
   'utf8'
 );
+const catalogSrc = fs.readFileSync(
+  path.join(__dirname, '..', 'renderer', 'quickEmailTemplateCatalog.js'),
+  'utf8'
+);
 const modalSrc = fs.readFileSync(
   path.join(__dirname, '..', 'renderer', 'views', 'email-modal.js'),
   'utf8'
 );
+const systemTemplatesJson = fs.readFileSync(
+  path.join(__dirname, '..', 'data', 'quick-email-templates.json'),
+  'utf8'
+);
 
-function createEnv() {
+function createEnv(opts) {
+  opts = opts || {};
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>', {
     url: 'http://localhost',
     pretendToBeVisual: true,
     runScripts: 'dangerously',
   });
   const { window } = dom;
-  const { document } = window;
 
   window._appSettingsCache = { feeEarnerNameDefault: 'Robert Cashman' };
   window.api = {
-    getSettings: function() { return Promise.resolve({}); },
-    setSettings: function() { return Promise.resolve(); },
-    openExternal: function() {},
-    attendanceSave: function() { return Promise.resolve({}); },
+    getSettings: () => Promise.resolve({}),
+    setSettings: () => Promise.resolve(),
+    openExternal: () => {},
+    attendanceSave: () => Promise.resolve({}),
   };
-  window.emailAPI = {
-    open: function() { return Promise.resolve(); },
+  window.emailAPI = { open: () => Promise.resolve() };
+  window.invokeOutlookWebCompose = (payload) => window.emailAPI.open(payload);
+
+  /* In-memory custom-template store the modal can read/write. */
+  let _customStore = (opts.customTemplates || []).slice();
+  window._getCustomEmailTemplates = () => _customStore.slice();
+  window._saveCustomEmailTemplates = (tpls) => { _customStore = (tpls || []).slice(); };
+
+  /* The catalog tries to load the JSON file via XMLHttpRequest. jsdom's
+     XHR can't read disk paths, so we patch it with a synchronous stub
+     that returns the bundled JSON for that one URL. */
+  const RealXHR = window.XMLHttpRequest;
+  function StubXHR() {
+    this.status = 0;
+    this.responseText = '';
+    this._url = '';
+  }
+  StubXHR.prototype.open = function(_method, url) { this._url = String(url || ''); };
+  StubXHR.prototype.send = function() {
+    if (this._url.indexOf('quick-email-templates.json') !== -1) {
+      this.status = 200;
+      this.responseText = systemTemplatesJson;
+    } else {
+      this.status = 404;
+      this.responseText = '';
+    }
   };
-  window.invokeOutlookWebCompose = function(payload) {
-    return window.emailAPI.open(payload);
-  };
-  window._getCustomEmailTemplates = function() { return []; };
+  window.XMLHttpRequest = StubXHR;
 
   const globals = `
     var showToast = function(){};
+    var showConfirm = function(){ return Promise.resolve(true); };
     var refreshList = function(){};
-    var esc = function(s){return s;};
     function _oicClean(v){return v==null?'':String(v).trim();}
-    function _oicFmtDate(v){return v||'';}
-    function buildEmailSubject(tpl,data){return 'built-in subject';}
-    function buildEmailBody(tpl,data,fe){return 'built-in body';}
   `;
+  const scriptEl = window.document.createElement('script');
+  scriptEl.textContent = globals + '\n' + renderSrc + '\n' + catalogSrc + '\n' + modalSrc;
+  window.document.body.appendChild(scriptEl);
 
-  const scriptEl = document.createElement('script');
-  scriptEl.textContent = globals + '\n' + renderSrc + '\n' + modalSrc;
-  document.body.appendChild(scriptEl);
-
-  return { dom, window, document };
+  return { dom, window, document: window.document, restoreXHR: () => { window.XMLHttpRequest = RealXHR; } };
 }
 
-function openModal(env) {
-  env.window.openQuickEmailModal();
-}
+function openModal(env) { env.window.openQuickEmailModal(); }
 
-function getField(doc, id) {
-  return doc.getElementById(id);
-}
-
-function setFieldValue(doc, id, value) {
-  const el = doc.getElementById(id);
-  if (!el) throw new Error('Element not found: ' + id);
+function setField(doc, key, value) {
+  const el = doc.getElementById('qe-field-' + key);
+  if (!el) throw new Error('Field not found: qe-field-' + key);
   el.value = value;
+  const Event = el.ownerDocument.defaultView.Event;
+  el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true }));
   return el;
 }
 
-function fireEvent(el, eventName) {
-  const Event = el.ownerDocument.defaultView.Event;
-  el.dispatchEvent(new Event(eventName, { bubbles: true }));
+function pickTemplate(doc, id) {
+  const sel = doc.getElementById('quick-email-picker');
+  if (!sel) throw new Error('Template picker not found');
+  sel.value = id;
+  const Event = sel.ownerDocument.defaultView.Event;
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-function selectTemplate(doc, templateId) {
-  const sel = doc.getElementById('quick-email-custom-template');
-  if (!sel) throw new Error('Template dropdown not found');
-  sel.value = templateId;
-  fireEvent(sel, 'change');
-}
-
-describe('Quick Email integration — template application', () => {
+describe('Quick Email modal — template-first DOM', () => {
   let env;
+  beforeEach(() => { env = createEnv(); openModal(env); });
 
-  beforeEach(() => {
-    env = createEnv();
-    openModal(env);
+  it('renders picker, form, preview, and action buttons', () => {
+    assert.ok(env.document.getElementById('quick-email-picker'),  'picker missing');
+    assert.ok(env.document.getElementById('quick-email-form'),    'form container missing');
+    assert.ok(env.document.getElementById('quick-email-subject'), 'subject preview missing');
+    assert.ok(env.document.getElementById('quick-email-body'),    'body preview missing');
+    assert.ok(env.document.getElementById('qe-send'),             'send button missing');
+    assert.ok(env.document.getElementById('qe-save'),             'save button missing');
   });
 
-  it('modal renders with template dropdown', () => {
-    const dropdown = getField(env.document, 'quick-email-custom-template');
-    assert.ok(dropdown, 'Template dropdown should exist');
-    const options = Array.from(dropdown.querySelectorAll('option'));
-    assert.ok(options.length >= 3, 'Should have None + 2 built-in options, got ' + options.length);
+  it('picker contains all 5 system templates grouped by category', () => {
+    const picker = env.document.getElementById('quick-email-picker');
+    const opts = Array.from(picker.querySelectorAll('option')).map(o => o.value).filter(v => v);
+    assert.ok(opts.includes('system:bail-details'),        'bail template missing');
+    assert.ok(opts.includes('system:representation'),      'representation template missing');
+    assert.ok(opts.includes('system:disclosure'),          'disclosure template missing');
+    assert.ok(opts.includes('system:follow-up'),           'follow-up template missing');
+    assert.ok(opts.includes('system:voluntary-attendance'),'voluntary template missing');
+    assert.ok(picker.querySelector('optgroup[label="Bail"]'), 'Bail optgroup missing');
   });
 
-  it('selecting Disclosure template fills subject with field values', () => {
-    setFieldValue(env.document, 'quick-email-client-name', 'John Doe');
-    setFieldValue(env.document, 'quick-email-station', 'Holborn');
-    setFieldValue(env.document, 'quick-email-officer-name', 'Smith');
-    setFieldValue(env.document, 'quick-email-date', '2026-03-18');
-
-    selectTemplate(env.document, 'builtin:disclosure');
-
-    const subject = getField(env.document, 'quick-email-subject').value;
-    assert.ok(subject.includes('John Doe'), 'Subject should contain client name, got: ' + subject);
-    assert.ok(subject.includes('Holborn'), 'Subject should contain station, got: ' + subject);
-    assert.ok(subject.includes('Disclosure Request'), 'Subject should contain template label, got: ' + subject);
-  });
-
-  it('selecting Disclosure template fills body with field values', () => {
-    setFieldValue(env.document, 'quick-email-client-name', 'John Doe');
-    setFieldValue(env.document, 'quick-email-station', 'Holborn');
-    setFieldValue(env.document, 'quick-email-officer-name', 'Smith');
-    setFieldValue(env.document, 'quick-email-date', '2026-03-18');
-
-    selectTemplate(env.document, 'builtin:disclosure');
-
-    const body = getField(env.document, 'quick-email-body').value;
-    assert.ok(body.includes('Dear DC Smith'), 'Body should contain officer name, got: ' + body);
-    assert.ok(body.includes('John Doe'), 'Body should contain client name, got: ' + body);
-    assert.ok(body.includes('Holborn'), 'Body should contain station, got: ' + body);
-    assert.ok(body.includes('18/03/2026'), 'Body should contain formatted date, got: ' + body);
-    assert.ok(body.includes('Robert Cashman'), 'Body should contain fee earner, got: ' + body);
-  });
-
-  it('selecting Bail template fills subject and body', () => {
-    setFieldValue(env.document, 'quick-email-client-name', 'Jane Smith');
-    setFieldValue(env.document, 'quick-email-station', 'Paddington');
-    setFieldValue(env.document, 'quick-email-officer-name', 'Jones');
-
-    selectTemplate(env.document, 'builtin:bail');
-
-    const subject = getField(env.document, 'quick-email-subject').value;
-    const body = getField(env.document, 'quick-email-body').value;
-    assert.ok(subject.includes('Jane Smith'), 'Subject should contain client name');
-    assert.ok(subject.includes('Paddington'), 'Subject should contain station');
-    assert.ok(body.includes('Dear DC Jones'), 'Body should contain officer name');
-    assert.ok(body.includes('police bail'), 'Body should mention bail');
-  });
-
-  it('changing officer name after template selection updates body', () => {
-    setFieldValue(env.document, 'quick-email-officer-name', 'Smith');
-    selectTemplate(env.document, 'builtin:disclosure');
-
-    let body = getField(env.document, 'quick-email-body').value;
-    assert.ok(body.includes('Dear DC Smith'), 'Initial body should have Smith');
-
-    const officerEl = setFieldValue(env.document, 'quick-email-officer-name', 'Williams');
-    fireEvent(officerEl, 'input');
-
-    body = getField(env.document, 'quick-email-body').value;
-    assert.ok(body.includes('Dear DC Williams'), 'Body should update to Williams after field change, got: ' + body);
-    assert.ok(!body.includes('Dear DC Smith'), 'Body should no longer contain Smith');
-  });
-
-  it('changing client name after template selection updates subject and body', () => {
-    setFieldValue(env.document, 'quick-email-client-name', 'Alice');
-    selectTemplate(env.document, 'builtin:disclosure');
-
-    let subject = getField(env.document, 'quick-email-subject').value;
-    assert.ok(subject.includes('Alice'), 'Initial subject should have Alice');
-
-    const clientEl = setFieldValue(env.document, 'quick-email-client-name', 'Bob');
-    fireEvent(clientEl, 'input');
-
-    subject = getField(env.document, 'quick-email-subject').value;
-    assert.ok(subject.includes('Bob'), 'Subject should update to Bob, got: ' + subject);
-    assert.ok(!subject.includes('Alice'), 'Subject should no longer have Alice');
-  });
-
-  it('changing station after template selection updates subject and body', () => {
-    setFieldValue(env.document, 'quick-email-station', 'Brixton');
-    selectTemplate(env.document, 'builtin:disclosure');
-
-    let subject = getField(env.document, 'quick-email-subject').value;
-    assert.ok(subject.includes('Brixton'), 'Initial subject should have Brixton');
-
-    const stationEl = setFieldValue(env.document, 'quick-email-station', 'Camden');
-    fireEvent(stationEl, 'input');
-
-    subject = getField(env.document, 'quick-email-subject').value;
-    assert.ok(subject.includes('Camden'), 'Subject should update to Camden, got: ' + subject);
-  });
-
-  it('changing attendance type updates body when template active', () => {
-    selectTemplate(env.document, 'builtin:disclosure');
-
-    const typeEl = setFieldValue(env.document, 'quick-email-attendance-type', 'voluntary');
-    fireEvent(typeEl, 'change');
-
-    const body = getField(env.document, 'quick-email-body').value;
-    assert.ok(typeof body === 'string' && body.length > 0, 'Body should be non-empty after type change');
+  it('common form fields are always visible', () => {
+    ['officerEmail','oicName','clientName','station','offenceType','attendanceType','date','time'].forEach(k => {
+      assert.ok(env.document.getElementById('qe-field-' + k), 'expected common field qe-field-' + k);
+    });
   });
 });
 
-describe('Quick Email integration — manual edit protection', () => {
+describe('Quick Email modal — template selection auto-fills preview', () => {
   let env;
+  beforeEach(() => { env = createEnv(); openModal(env); });
 
-  beforeEach(() => {
-    env = createEnv();
-    openModal(env);
+  it('selecting Disclosure renders subject + body with the field values', () => {
+    setField(env.document, 'clientName', 'John Doe');
+    setField(env.document, 'station',    'Holborn');
+    setField(env.document, 'oicName',    'Smith');
+    setField(env.document, 'date',       '2026-04-18');
+
+    pickTemplate(env.document, 'system:disclosure');
+
+    const subj = env.document.getElementById('quick-email-subject').value;
+    const body = env.document.getElementById('quick-email-body').value;
+
+    assert.ok(subj.includes('John Doe'),       'subject missing client, got: ' + subj);
+    assert.ok(subj.includes('Holborn'),        'subject missing station, got: ' + subj);
+    assert.ok(/disclosure/i.test(subj),        'subject missing template label');
+    assert.ok(body.includes('Dear DC Smith'),  'body missing officer name, got: ' + body);
+    assert.ok(body.includes('John Doe'),       'body missing client name');
+    assert.ok(body.includes('Holborn'),        'body missing station');
+    assert.ok(body.includes('18/04/2026'),     'body missing UK-formatted date, got: ' + body);
+    assert.ok(body.includes('Robert Cashman'), 'body missing fee earner');
+    assert.ok(!body.includes('{{'),            'unrendered tokens in body');
   });
 
-  it('manually editing subject prevents template from overwriting it', () => {
-    selectTemplate(env.document, 'builtin:disclosure');
+  it('selecting Bail uses "Dear Officer," when oicName is blank (conditional fallback)', () => {
+    setField(env.document, 'clientName', 'Jane Smith');
+    setField(env.document, 'station',    'Paddington');
 
-    const subjectEl = getField(env.document, 'quick-email-subject');
-    subjectEl.value = 'My custom subject';
-    fireEvent(subjectEl, 'input');
+    pickTemplate(env.document, 'system:bail-details');
 
-    const officerEl = setFieldValue(env.document, 'quick-email-officer-name', 'NewOfficer');
-    fireEvent(officerEl, 'input');
-
-    assert.strictEqual(subjectEl.value, 'My custom subject',
-      'Subject should remain as user typed after field change');
+    const body = env.document.getElementById('quick-email-body').value;
+    assert.ok(body.startsWith('Dear Officer,'), 'expected Dear Officer fallback, got: ' + body.slice(0, 40));
+    assert.ok(body.includes('Jane Smith'));
+    assert.ok(body.includes('Paddington'));
   });
 
-  it('manually editing body prevents template from overwriting it', () => {
-    selectTemplate(env.document, 'builtin:disclosure');
+  it('changing oicName after picking a template live-updates the body', () => {
+    setField(env.document, 'oicName', 'Smith');
+    pickTemplate(env.document, 'system:disclosure');
 
-    const bodyEl = getField(env.document, 'quick-email-body');
+    setField(env.document, 'oicName', 'Williams');
+    const body = env.document.getElementById('quick-email-body').value;
+    assert.ok(body.includes('Dear DC Williams'), 'live update missing, got: ' + body);
+    assert.ok(!body.includes('Dear DC Smith'),   'old officer name should be gone');
+  });
+
+  it('changing clientName live-updates the subject', () => {
+    setField(env.document, 'clientName', 'Alice');
+    pickTemplate(env.document, 'system:disclosure');
+    setField(env.document, 'clientName', 'Bob');
+
+    const subj = env.document.getElementById('quick-email-subject').value;
+    assert.ok(subj.includes('Bob'),    'subject not updated, got: ' + subj);
+    assert.ok(!subj.includes('Alice'), 'old client should be gone');
+  });
+});
+
+describe('Quick Email modal — manual edit protection', () => {
+  let env;
+  beforeEach(() => { env = createEnv(); openModal(env); });
+
+  it('hand-edited subject is preserved across field changes', () => {
+    pickTemplate(env.document, 'system:disclosure');
+
+    const subjEl = env.document.getElementById('quick-email-subject');
+    subjEl.value = 'My custom subject';
+    const Event = env.window.Event;
+    subjEl.dispatchEvent(new Event('input', { bubbles: true }));
+
+    setField(env.document, 'oicName', 'NewOfficer');
+    assert.strictEqual(subjEl.value, 'My custom subject');
+  });
+
+  it('hand-edited body is preserved across field changes', () => {
+    pickTemplate(env.document, 'system:disclosure');
+    const bodyEl = env.document.getElementById('quick-email-body');
     bodyEl.value = 'My custom body text';
-    fireEvent(bodyEl, 'input');
+    const Event = env.window.Event;
+    bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
 
-    const officerEl = setFieldValue(env.document, 'quick-email-officer-name', 'NewOfficer');
-    fireEvent(officerEl, 'input');
-
-    assert.strictEqual(bodyEl.value, 'My custom body text',
-      'Body should remain as user typed after field change');
+    setField(env.document, 'oicName', 'NewOfficer');
+    assert.strictEqual(bodyEl.value, 'My custom body text');
   });
 
-  it('selecting a new template resets manual edit protection', () => {
-    selectTemplate(env.document, 'builtin:disclosure');
+  it('switching to a different template discards manual edits and re-renders', () => {
+    pickTemplate(env.document, 'system:disclosure');
+    const bodyEl = env.document.getElementById('quick-email-body');
+    bodyEl.value = 'Custom body, ignore me';
+    const Event = env.window.Event;
+    bodyEl.dispatchEvent(new Event('input', { bubbles: true }));
 
-    const bodyEl = getField(env.document, 'quick-email-body');
-    bodyEl.value = 'My custom body';
-    fireEvent(bodyEl, 'input');
+    setField(env.document, 'clientName', 'Test');
+    pickTemplate(env.document, 'system:bail-details');
 
-    setFieldValue(env.document, 'quick-email-officer-name', 'TestOfficer');
-
-    selectTemplate(env.document, 'builtin:bail');
-
-    const newBody = getField(env.document, 'quick-email-body').value;
-    assert.ok(newBody.includes('police bail'),
-      'After selecting new template, body should be from new template, got: ' + newBody);
-  });
-});
-
-describe('Quick Email integration — None (compose freely)', () => {
-  let env;
-
-  beforeEach(() => {
-    env = createEnv();
-    openModal(env);
+    const newBody = env.document.getElementById('quick-email-body').value;
+    assert.ok(/bail/i.test(newBody), 'new template body should mention bail, got: ' + newBody);
+    assert.ok(!newBody.includes('Custom body, ignore me'), 'manual edits should be discarded');
   });
 
-  it('switching to None clears body and resets template state', () => {
-    setFieldValue(env.document, 'quick-email-client-name', 'Alice');
-    selectTemplate(env.document, 'builtin:disclosure');
+  it('switching to "no template" clears the preview', () => {
+    pickTemplate(env.document, 'system:disclosure');
+    setField(env.document, 'clientName', 'Alice');
 
-    const body = getField(env.document, 'quick-email-body').value;
-    assert.ok(body.includes('Alice'), 'Body should have Alice before reset');
+    const beforeBody = env.document.getElementById('quick-email-body').value;
+    assert.ok(beforeBody.includes('Alice'));
 
-    selectTemplate(env.document, '');
-
-    const clearedBody = getField(env.document, 'quick-email-body').value;
-    assert.strictEqual(clearedBody, '', 'Body should be empty after selecting None');
-  });
-
-  it('after None, auto-subject resumes on blur', () => {
-    selectTemplate(env.document, 'builtin:disclosure');
-    selectTemplate(env.document, '');
-
-    setFieldValue(env.document, 'quick-email-client-name', 'Bob');
-    const clientEl = getField(env.document, 'quick-email-client-name');
-    fireEvent(clientEl, 'blur');
-
-    const subject = getField(env.document, 'quick-email-subject').value;
-    assert.ok(subject.includes('Bob'), 'Auto-subject should fire after None, got: ' + subject);
-  });
-
-  it('field changes after None do NOT re-apply old template', () => {
-    selectTemplate(env.document, 'builtin:disclosure');
-    selectTemplate(env.document, '');
-
-    const officerEl = setFieldValue(env.document, 'quick-email-officer-name', 'Wilson');
-    fireEvent(officerEl, 'input');
-
-    const body = getField(env.document, 'quick-email-body').value;
-    assert.strictEqual(body, '', 'Body should stay empty — no template is active');
+    pickTemplate(env.document, '');
+    assert.strictEqual(env.document.getElementById('quick-email-subject').value, '');
+    assert.strictEqual(env.document.getElementById('quick-email-body').value,    '');
   });
 });
 
-describe('Quick Email integration — save as template round-trip', () => {
+describe('Quick Email modal — value-to-placeholder save flow', () => {
   let env;
+  beforeEach(() => { env = createEnv(); openModal(env); });
 
-  beforeEach(() => {
-    env = createEnv();
-    openModal(env);
-  });
-
-  it('_valuesToPlaceholders converts field values to placeholders', () => {
+  it('_valuesToPlaceholders converts field values back into placeholders', () => {
     const fn = env.window._valuesToPlaceholders;
     const map = {
-      clientName: 'John Doe',
-      oicName: 'Smith',
-      station: 'Holborn',
-      date: '18/03/2026',
+      clientName:    'John Doe',
+      oicName:       'Smith',
+      station:       'Holborn',
+      date:          '18/04/2026',
       feeEarnerName: 'Robert Cashman'
     };
-    const text = 'Dear DC Smith,\n\nRe: John Doe at Holborn on 18/03/2026.\n\nRobert Cashman';
+    const text   = 'Dear DC Smith,\n\nRe: John Doe at Holborn on 18/04/2026.\n\nRobert Cashman';
     const result = fn(text, map);
-
-    assert.ok(result.includes('{{oicName}}'), 'Should replace Smith with {{oicName}}, got: ' + result);
-    assert.ok(result.includes('{{clientName}}'), 'Should replace John Doe with {{clientName}}, got: ' + result);
-    assert.ok(result.includes('{{station}}'), 'Should replace Holborn with {{station}}, got: ' + result);
-    assert.ok(result.includes('{{date}}'), 'Should replace date with {{date}}, got: ' + result);
-    assert.ok(result.includes('{{feeEarnerName}}'), 'Should replace Robert Cashman with {{feeEarnerName}}, got: ' + result);
-  });
-
-  it('round-trip: apply → save → re-apply with new values', () => {
-    const fn_v2p = env.window._valuesToPlaceholders;
-    const originalMap = {
-      clientName: 'John Doe',
-      oicName: 'Smith',
-      station: 'Holborn',
-      feeEarnerName: 'Robert Cashman'
-    };
-    const composedBody = 'Dear DC Smith,\n\nClient John Doe at Holborn.\n\nRobert Cashman';
-    const templateBody = fn_v2p(composedBody, originalMap);
-
-    assert.ok(templateBody.includes('{{oicName}}'), 'Template should have oicName placeholder');
-    assert.ok(templateBody.includes('{{clientName}}'), 'Template should have clientName placeholder');
-
-    const newMap = {
-      clientName: 'Jane Adams',
-      oicName: 'Williams',
-      station: 'Paddington',
-      feeEarnerName: 'Robert Cashman'
-    };
-    const reapplied = templateBody.replace(
-      /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
-      function (_, key) { return newMap[key] != null ? String(newMap[key]) : ''; }
-    );
-
-    assert.ok(reapplied.includes('Dear DC Williams'), 'Re-applied should have new officer, got: ' + reapplied);
-    assert.ok(reapplied.includes('Jane Adams'), 'Re-applied should have new client, got: ' + reapplied);
-    assert.ok(reapplied.includes('Paddington'), 'Re-applied should have new station, got: ' + reapplied);
-    assert.ok(!reapplied.includes('{{'), 'No unfilled placeholders, got: ' + reapplied);
+    assert.ok(result.includes('{{oicName}}'),       result);
+    assert.ok(result.includes('{{clientName}}'),    result);
+    assert.ok(result.includes('{{station}}'),       result);
+    assert.ok(result.includes('{{date}}'),          result);
+    assert.ok(result.includes('{{feeEarnerName}}'), result);
   });
 
   it('_valuesToPlaceholders is case-insensitive', () => {
     const fn = env.window._valuesToPlaceholders;
-    const map = { station: 'holborn' };
-    const text = 'Station: HOLBORN and holborn and Holborn';
-    const result = fn(text, map);
-    assert.ok(!result.includes('HOLBORN'), 'Should replace HOLBORN');
-    assert.ok(!result.includes('Holborn'), 'Should replace Holborn');
-    assert.strictEqual(result, 'Station: {{station}} and {{station}} and {{station}}');
+    const out = fn('Station: HOLBORN and holborn and Holborn', { station: 'holborn' });
+    assert.strictEqual(out, 'Station: {{station}} and {{station}} and {{station}}');
   });
 
-  it('_valuesToPlaceholders ignores short values (< 2 chars)', () => {
+  it('_valuesToPlaceholders ignores values shorter than 2 chars', () => {
     const fn = env.window._valuesToPlaceholders;
-    const map = { clientName: 'A', station: 'Holborn' };
-    const text = 'A client at Holborn';
-    const result = fn(text, map);
-    assert.ok(result.includes('A client'), 'Should not replace single-char value');
-    assert.ok(result.includes('{{station}}'), 'Should replace longer value');
+    const out = fn('A client at Holborn', { clientName: 'A', station: 'Holborn' });
+    assert.ok(out.includes('A client'));
+    assert.ok(out.includes('{{station}}'));
   });
 });
 
-describe('Quick Email integration — custom saved template with placeholders', () => {
+describe('Quick Email modal — user-saved custom template', () => {
   let env;
-
   beforeEach(() => {
-    env = createEnv();
-    env.window.localStorage.setItem('cn-custom-email-templates', JSON.stringify([
-      {
-        name: 'My Test Template',
-        subject: '{{clientName}} - {{station}} - Custom Subject',
-        body: 'Hi {{oicName}},\n\nRegarding {{clientName}} at {{station}}.\n\nBest,\n{{feeEarnerName}}',
-        scope: 'officer'
-      }
-    ]));
-    env.window._getCustomEmailTemplates = function () {
-      try {
-        return JSON.parse(env.window.localStorage.getItem('cn-custom-email-templates') || '[]');
-      } catch (_) { return []; }
-    };
+    env = createEnv({ customTemplates: [{
+      id:       'cn-etpl-test-1',
+      name:     'My Test Template',
+      category: 'Other',
+      subject:  '{{clientName}} - {{station}} - Custom Subject',
+      body:     'Hi {{oicName}},\n\nRegarding {{clientName}} at {{station}}.\n\nBest,\n{{feeEarnerName}}',
+      scope:    'officer'
+    }]});
     openModal(env);
   });
 
-  it('saved custom template appears in dropdown', () => {
-    const dropdown = getField(env.document, 'quick-email-custom-template');
-    const options = Array.from(dropdown.querySelectorAll('option'));
-    const customOpt = options.find(o => o.value === 'custom:0');
-    assert.ok(customOpt, 'Custom template should appear in dropdown');
-    assert.ok(customOpt.textContent.includes('My Test Template'), 'Option label should match');
+  it('appears in the picker under "Your saved templates"', () => {
+    const picker = env.document.getElementById('quick-email-picker');
+    const opt = Array.from(picker.querySelectorAll('option')).find(o => o.value === 'cn-etpl-test-1');
+    assert.ok(opt, 'custom template missing from picker');
+    assert.ok(opt.textContent.includes('My Test Template'));
+    assert.ok(picker.querySelector('optgroup[label="Your saved templates"]'));
   });
 
-  it('selecting custom template fills subject and body with field values', () => {
-    setFieldValue(env.document, 'quick-email-client-name', 'Alice Brown');
-    setFieldValue(env.document, 'quick-email-station', 'Camden');
-    setFieldValue(env.document, 'quick-email-officer-name', 'Taylor');
+  it('renders correctly when selected', () => {
+    setField(env.document, 'clientName', 'Alice Brown');
+    setField(env.document, 'station',    'Camden');
+    setField(env.document, 'oicName',    'Taylor');
 
-    selectTemplate(env.document, 'custom:0');
+    pickTemplate(env.document, 'cn-etpl-test-1');
 
-    const subject = getField(env.document, 'quick-email-subject').value;
-    const body = getField(env.document, 'quick-email-body').value;
-
-    assert.ok(subject.includes('Alice Brown'), 'Subject should have client name, got: ' + subject);
-    assert.ok(subject.includes('Camden'), 'Subject should have station, got: ' + subject);
-    assert.ok(body.includes('Hi Taylor'), 'Body should have officer name, got: ' + body);
-    assert.ok(body.includes('Alice Brown'), 'Body should have client name');
-    assert.ok(body.includes('Camden'), 'Body should have station');
-    assert.ok(body.includes('Robert Cashman'), 'Body should have fee earner');
+    const subj = env.document.getElementById('quick-email-subject').value;
+    const body = env.document.getElementById('quick-email-body').value;
+    assert.ok(subj.includes('Alice Brown'),    'subject missing client, got: ' + subj);
+    assert.ok(subj.includes('Camden'),         'subject missing station');
+    assert.ok(body.includes('Hi Taylor'),      'body missing officer name, got: ' + body);
+    assert.ok(body.includes('Alice Brown'));
+    assert.ok(body.includes('Camden'));
+    assert.ok(body.includes('Robert Cashman'));
   });
 
-  it('changing fields after custom template updates output', () => {
-    setFieldValue(env.document, 'quick-email-officer-name', 'Taylor');
-    selectTemplate(env.document, 'custom:0');
+  it('field changes after selecting a custom template live-update the body', () => {
+    setField(env.document, 'oicName', 'Taylor');
+    pickTemplate(env.document, 'cn-etpl-test-1');
 
-    let body = getField(env.document, 'quick-email-body').value;
-    assert.ok(body.includes('Hi Taylor'), 'Initial body should have Taylor');
+    setField(env.document, 'oicName', 'Morgan');
+    const body = env.document.getElementById('quick-email-body').value;
+    assert.ok(body.includes('Hi Morgan'), 'live update missing, got: ' + body);
+  });
 
-    const el = setFieldValue(env.document, 'quick-email-officer-name', 'Morgan');
-    fireEvent(el, 'input');
+  it('exposes Edit link only for user templates', () => {
+    const link = env.document.getElementById('quick-email-edit-link');
+    /* No template chosen yet → link hidden. */
+    assert.strictEqual(link.style.display, 'none');
 
-    body = getField(env.document, 'quick-email-body').value;
-    assert.ok(body.includes('Hi Morgan'), 'Updated body should have Morgan, got: ' + body);
+    pickTemplate(env.document, 'system:disclosure');
+    assert.strictEqual(link.style.display, 'none', 'system templates should not be editable');
+
+    pickTemplate(env.document, 'cn-etpl-test-1');
+    assert.notStrictEqual(link.style.display, 'none', 'user templates should be editable');
   });
 });

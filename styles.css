@@ -6738,3 +6738,131 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   border-left-width: 3px;
   border-left-color: var(--primary);
 }
+
+/* ═══ QUICK EMAIL — template-first single-screen modal ═══ */
+.qe-overlay { padding: 1rem; }
+.qe-box {
+  width: min(720px, 100%);
+  max-height: 92vh;
+  display: flex; flex-direction: column;
+}
+.qe-body {
+  padding: 0 1rem 0.5rem;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0.85rem;
+}
+
+.qe-picker-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 0.5rem 0.75rem;
+}
+.qe-picker-row .qe-label { grid-column: 1 / -1; }
+.qe-picker-row .qe-input { grid-column: 1; }
+.qe-picker-row .qe-edit-link { grid-column: 2; align-self: end; padding-bottom: 0.55rem; }
+.qe-edit-link {
+  font-size: 0.82rem; color: #2563eb; text-decoration: none; white-space: nowrap;
+}
+.qe-edit-link:hover { text-decoration: underline; }
+
+.qe-description {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #475569;
+  font-style: italic;
+  min-height: 1.1em;
+}
+
+.qe-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+.qe-field { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; }
+.qe-field-bailConditions,
+.qe-field-allegationSummary { grid-column: 1 / -1; }
+
+.qe-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: 0.01em;
+}
+.qe-req { color: #dc2626; font-weight: 700; }
+
+.qe-input {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  background: #fff;
+  color: #0f172a;
+  font-family: inherit;
+}
+.qe-input:focus {
+  outline: none;
+  border-color: var(--primary, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+.qe-textarea { resize: vertical; min-height: 2.4em; }
+.qe-message  { resize: vertical; min-height: 12em; line-height: 1.45; font-family: inherit; }
+
+.qe-preview {
+  display: flex; flex-direction: column; gap: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid #e2e8f0;
+}
+.qe-help { margin: 0; font-size: 0.75rem; color: #64748b; font-style: italic; }
+
+.qe-missing-strip {
+  background: #fef9c3;
+  border: 1px solid #facc15;
+  color: #713f12;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.qe-actions {
+  padding: 0.8rem 1rem 1rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end;
+  background: #fafafa;
+}
+.qe-actions .btn-primary { margin-right: auto; }
+
+/* Save / edit inline panels */
+.qe-save-panel {
+  margin: 0 1rem 0.5rem;
+  padding: 0.85rem 1rem;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 10px;
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+.qe-save-row { display: flex; flex-direction: column; gap: 0.2rem; }
+.qe-save-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.qe-edit-panel { background: #f5f3ff; border-color: #ddd6fe; }
+.qe-edit-panel .qe-edit-delete { margin-left: auto; }
+.qe-section-title { margin: 0; font-size: 0.95rem; color: #4338ca; }
+.qe-edit-panel code {
+  background: #ede9fe;
+  color: #4338ca;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+
+/* Compact stack on small screens */
+@media (max-width: 560px) {
+  .qe-form { grid-template-columns: 1fr; }
+  .qe-picker-row { grid-template-columns: 1fr; }
+  .qe-picker-row .qe-edit-link { grid-column: 1; padding-bottom: 0; }
+}

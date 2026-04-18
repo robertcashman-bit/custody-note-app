@@ -1,159 +1,131 @@
 /**
- * Quick Email built-in templates – unit tests
- * Verifies that the disclosure and bail templates exist in email-modal.js,
- * use the correct placeholder tokens, and produce expected output
- * when placeholders are substituted.
+ * Quick Email built-in templates – unit tests.
+ * Templates now ship in data/quick-email-templates.json. We render each
+ * template using only its declared required fields and assert the output
+ * is clean (no unfilled tokens, no dangling punctuation, no orphan blank
+ * paragraphs).
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
-const modalSrc = fs.readFileSync(
-  path.join(__dirname, '..', 'renderer', 'views', 'email-modal.js'),
+/* Load the template engine (sandboxed, no DOM). */
+const engineSrc = fs.readFileSync(
+  path.join(__dirname, '..', 'renderer', 'quick-email-template-render.js'),
   'utf8'
 );
+const sandbox = { window: {} };
+vm.runInNewContext(engineSrc, sandbox);
+const engine = sandbox.window;
 
-// Extract the _QUICK_BUILTIN_TEMPLATES array from source via regex so we can
-// test it without needing a DOM / Electron runtime.
-function extractBuiltinTemplates(src) {
-  var match = src.match(
-    /var _QUICK_BUILTIN_TEMPLATES\s*=\s*(\[[\s\S]*?\n\s*\]);/
-  );
-  if (!match) return null;
-  // The array uses single-quoted strings with \n escapes – eval is safe here
-  // because we control the source and it's a static array literal.
-  return eval('(' + match[1] + ')');
+const catalogPath = path.join(__dirname, '..', 'data', 'quick-email-templates.json');
+const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+const templates = catalog.templates;
+
+const FIXTURE = {
+  feeEarnerName: 'Robert Cashman',
+  oicName:       'Jones',
+  clientName:    'John Doe',
+  station:       'Holborn',
+  offenceType:   'ABH',
+  date:          '18/04/2026',
+  time:          '2 p.m.'
+};
+
+function renderWithRequiredOnly(tpl, extra) {
+  const map = Object.assign({}, extra || {});
+  /* Always include fee-earner so the sign-off is clean. */
+  map.feeEarnerName = FIXTURE.feeEarnerName;
+  /* Provide every declared required field from the fixture. */
+  (tpl.requiredFields || []).forEach((k) => {
+    if (FIXTURE[k] != null) map[k] = FIXTURE[k];
+  });
+  return engine.renderQuickEmailFromTemplates(tpl.subjectTemplate, tpl.bodyTemplate, map);
 }
 
-function applyPlaceholders(text, map) {
-  return String(text || '').replace(
-    /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
-    function (_, key) {
-      return map[key] != null ? String(map[key]) : '';
-    }
-  );
-}
-
-const templates = extractBuiltinTemplates(modalSrc);
-
-describe('Quick Email built-in templates', () => {
-  it('_QUICK_BUILTIN_TEMPLATES array is present in source', () => {
-    assert.ok(templates, '_QUICK_BUILTIN_TEMPLATES not found in email-modal.js');
-    assert.ok(Array.isArray(templates));
+describe('Quick Email system templates (data/quick-email-templates.json)', () => {
+  it('ships the expected 5 templates', () => {
+    assert.ok(Array.isArray(templates), 'templates array missing');
+    assert.strictEqual(templates.length, 5);
+    const ids = templates.map((t) => t.id).sort();
+    assert.deepStrictEqual(
+      ids,
+      [
+        'system:bail-details',
+        'system:disclosure',
+        'system:follow-up',
+        'system:representation',
+        'system:voluntary-attendance'
+      ]
+    );
   });
 
-  it('contains exactly 2 built-in templates (disclosure, bail)', () => {
-    assert.strictEqual(templates.length, 2);
-    const ids = templates.map((t) => t.id);
-    assert.ok(ids.includes('builtin:disclosure'));
-    assert.ok(ids.includes('builtin:bail'));
-  });
-
-  it('each template has id, name, subject, and body', () => {
+  it('every template has id, name, category, description, subject, body, requiredFields', () => {
     for (const tpl of templates) {
       assert.ok(tpl.id, 'missing id');
       assert.ok(tpl.name, 'missing name');
-      assert.ok(tpl.subject, 'missing subject');
-      assert.ok(tpl.body, 'missing body');
+      assert.ok(tpl.category, tpl.id + ' missing category');
+      assert.ok(typeof tpl.description === 'string' && tpl.description.length, tpl.id + ' missing description');
+      assert.ok(tpl.subjectTemplate, tpl.id + ' missing subjectTemplate');
+      assert.ok(tpl.bodyTemplate, tpl.id + ' missing bodyTemplate');
+      assert.ok(Array.isArray(tpl.requiredFields), tpl.id + ' requiredFields not array');
     }
   });
 
-  it('templates do NOT reference {{crn}} or {{dsccRef}}', () => {
+  it('renders cleanly with only required fields populated (no dangling tokens / punctuation)', () => {
     for (const tpl of templates) {
-      assert.ok(!tpl.body.includes('{{crn}}'), tpl.name + ' body still references {{crn}}');
-      assert.ok(!tpl.body.includes('{{dsccRef}}'), tpl.name + ' body still references {{dsccRef}}');
-      assert.ok(!tpl.subject.includes('{{crn}}'), tpl.name + ' subject still references {{crn}}');
-      assert.ok(!tpl.subject.includes('{{dsccRef}}'), tpl.name + ' subject still references {{dsccRef}}');
+      const out = renderWithRequiredOnly(tpl);
+      const ctx = '\n--- ' + tpl.id + ' subject:\n' + out.subject + '\n--- body:\n' + out.body + '\n---';
+      assert.ok(!out.body.includes('{{'),       tpl.id + ' body has raw token' + ctx);
+      assert.ok(!out.subject.includes('{{'),    tpl.id + ' subject has raw token' + ctx);
+      assert.ok(!/\n{3,}/.test(out.body),       tpl.id + ' body has 3+ blank lines' + ctx);
+      assert.ok(!/Dear DC ,/.test(out.body),    tpl.id + ' body has dangling "Dear DC ,"' + ctx);
+      assert.ok(!/ on \./.test(out.body),       tpl.id + ' body has dangling " on ."' + ctx);
+      assert.ok(!/regarding \./.test(out.body), tpl.id + ' body has dangling "regarding ."' + ctx);
     }
   });
 
-  it('templates use only valid placeholder tokens', () => {
-    const validKeys = [
-      'clientName', 'oicName', 'station', 'offenceType',
-      'feeEarnerName', 'date', 'time', 'contactName',
-      'firmName', 'outcome', 'nextStep', 'followUp',
-      'attendanceType', 'ourFileNumber', 'ufn'
-    ];
-    for (const tpl of templates) {
-      const used = [];
-      (tpl.subject + tpl.body).replace(
-        /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g,
-        (_, key) => { used.push(key); }
-      );
-      for (const key of used) {
-        assert.ok(
-          validKeys.includes(key),
-          tpl.name + ' uses unknown placeholder: {{' + key + '}}'
-        );
-      }
-    }
+  it('falls back to "Dear Officer" when oicName is empty', () => {
+    const tpl = templates.find((t) => t.id === 'system:bail-details');
+    const out = engine.renderQuickEmailFromTemplates(
+      tpl.subjectTemplate,
+      tpl.bodyTemplate,
+      { clientName: 'Jane', station: 'Paddington', feeEarnerName: 'RC' }
+    );
+    assert.ok(out.body.startsWith('Dear Officer,'), 'expected "Dear Officer," fallback, got: ' + out.body.slice(0, 40));
   });
 
-  it('disclosure template produces expected output', () => {
-    const tpl = templates.find((t) => t.id === 'builtin:disclosure');
-    const map = {
-      oicName: 'Smith',
-      clientName: 'John Doe',
-      station: 'Holborn',
-      date: '18/03/2026',
-      feeEarnerName: 'Robert Cashman'
-    };
-    const body = applyPlaceholders(tpl.body, map);
-    assert.ok(body.includes('Dear DC Smith'));
-    assert.ok(body.includes('John Doe'));
-    assert.ok(body.includes('Holborn'));
-    assert.ok(body.includes('18/03/2026'));
-    assert.ok(body.includes('provide disclosure'));
-    assert.ok(body.includes('Robert Cashman'));
-    assert.ok(!body.includes('{{'), 'unfilled placeholder in output');
+  it('uses "Dear DC <name>" when oicName is provided', () => {
+    const tpl = templates.find((t) => t.id === 'system:bail-details');
+    const out = renderWithRequiredOnly(tpl, { oicName: 'Jones' });
+    assert.ok(out.body.startsWith('Dear DC Jones,'), 'expected "Dear DC Jones," got: ' + out.body.slice(0, 40));
   });
 
-  it('bail template produces expected output', () => {
-    const tpl = templates.find((t) => t.id === 'builtin:bail');
-    const map = {
-      oicName: 'Jones',
-      clientName: 'Jane Smith',
-      station: 'Paddington',
-      date: '18/03/2026',
-      feeEarnerName: 'Robert Cashman'
-    };
-    const body = applyPlaceholders(tpl.body, map);
-    assert.ok(body.includes('Dear DC Jones'));
-    assert.ok(body.includes('Jane Smith'));
-    assert.ok(body.includes('Paddington'));
-    assert.ok(body.includes('18/03/2026'));
-    assert.ok(body.includes('police bail'));
-    assert.ok(body.includes('Robert Cashman'));
-    assert.ok(!body.includes('{{'), 'unfilled placeholder in output');
-  });
-
-  it('subject lines fill placeholders correctly', () => {
-    const map = { clientName: 'Alice', station: 'Camden' };
-    for (const tpl of templates) {
-      const subject = applyPlaceholders(tpl.subject, map);
-      assert.ok(subject.includes('Alice'), tpl.name + ' subject missing clientName');
-      assert.ok(subject.includes('Camden'), tpl.name + ' subject missing station');
-      assert.ok(!subject.includes('{{'), tpl.name + ' subject has unfilled placeholder');
-    }
+  it('disclosure template subject contains client + station', () => {
+    const tpl = templates.find((t) => t.id === 'system:disclosure');
+    const out = renderWithRequiredOnly(tpl);
+    assert.ok(out.subject.includes('John Doe'));
+    assert.ok(out.subject.includes('Holborn'));
+    assert.ok(out.subject.toLowerCase().includes('disclosure'));
   });
 });
 
-describe('Quick Email modal source integrity', () => {
-  it('template dropdown includes Built-in optgroup', () => {
-    assert.ok(modalSrc.includes("'<optgroup label=\"Built-in\">"));
+describe('Quick Email modal source integrity (template-first refactor)', () => {
+  const modalSrc = fs.readFileSync(
+    path.join(__dirname, '..', 'renderer', 'views', 'email-modal.js'),
+    'utf8'
+  );
+
+  it('uses the new catalog API (no _QUICK_BUILTIN_TEMPLATES, no quick-email-crn)', () => {
+    assert.ok(!modalSrc.includes('_QUICK_BUILTIN_TEMPLATES'), 'old built-in array still present');
+    assert.ok(!modalSrc.includes('quick-email-crn'),         'old crn input still present');
+    assert.ok(!modalSrc.includes('quick-email-dscc-ref'),    'old dscc-ref input still present');
   });
 
-  it('_getBuiltinTemplateById helper is defined', () => {
-    assert.ok(modalSrc.includes('function _getBuiltinTemplateById('));
-  });
-
-  it('_applyCustomTemplate tries built-in before custom', () => {
-    assert.ok(modalSrc.includes('_getBuiltinTemplateById(templateId) || _getCustomTemplateByIdQuick(templateId)'));
-  });
-
-  it('no references to crn or dsccRef input fields remain', () => {
-    assert.ok(!modalSrc.includes('quick-email-crn'), 'quick-email-crn input still present');
-    assert.ok(!modalSrc.includes('quick-email-dscc-ref'), 'quick-email-dscc-ref input still present');
+  it('relies on getQuickEmailCatalog and getFieldsUsedByTemplate', () => {
+    assert.ok(modalSrc.includes('getQuickEmailCatalog'));
+    assert.ok(modalSrc.includes('getFieldsUsedByTemplate'));
   });
 });
