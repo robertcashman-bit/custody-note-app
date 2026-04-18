@@ -1,9 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.4.218",
+      "date": "2026-04-18",
+      "latest": true,
+      "changes": [
+        "Quick Email to Officer: template-first redesign — pick the email you want to send and the form below adapts to show only the fields needed",
+        "5 built-in templates ship by default (bail details, representation, disclosure, follow-up, voluntary attendance)",
+        "optional sections vanish cleanly when fields are blank",
+        "Save as new template needs only a name",
+        "Edit panel uses [BRACKET LABELS] instead of {{tokens}}"
+      ]
+    },
+    {
       "version": "1.4.217",
       "date": "2026-04-17",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Open matters: new Uninvoiced revenue pill shows total projected revenue across all matters not yet invoiced (incl. VAT)",
         "Reports: removed duplicate Billable Attendances sub-report — its data, filters, and revenue total now live on the Open matters view",
