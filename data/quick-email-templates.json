@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "meta": {
+    "description": "Quick Email standard templates. Edit this file to add or change defaults.",
+    "syntax": [
+      "{{token}} - replaced with the matching matter-detail value (empty if missing)",
+      "{{#if token}}…{{/if}} - whole block disappears cleanly if the token is empty",
+      "{{#if token}}…{{else}}…{{/if}} - swap to the else branch when token is empty",
+      "Aliases: snake_case forms (officer_name, client_name, …) work too."
+    ]
+  },
+  "templates": [
+    {
+      "id": "system:bail-details",
+      "name": "Bail details request",
+      "category": "Bail",
+      "description": "Ask the OIC to confirm bail return date, time and conditions.",
+      "subjectTemplate": "{{clientName}} - {{station}} - bail details request",
+      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI write in relation to {{clientName}}, who was dealt with at {{station}}{{#if date}} on {{date}}{{/if}}.\n\n{{#if custodyNumber}}Custody record: {{custodyNumber}}.\n{{/if}}{{#if dsccRef}}DSCC reference: {{dsccRef}}.\n{{/if}}\nPlease confirm the bail return date, time, and any bail conditions imposed.\n\nKind regards,\n{{feeEarnerName}}",
+      "requiredFields": ["clientName", "station"]
+    },
+    {
+      "id": "system:representation",
+      "name": "Representation confirmation",
+      "category": "Representation",
+      "description": "Confirm to the OIC that you act for the client.",
+      "subjectTemplate": "{{clientName}} - representation confirmed",
+      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI confirm that I represent {{clientName}} in relation to this matter{{#if offenceType}} ({{offenceType}}){{/if}}.\n\nPlease ensure that any future correspondence is sent to me at this email address.\n\nKind regards,\n{{feeEarnerName}}",
+      "requiredFields": ["clientName"]
+    },
+    {
+      "id": "system:disclosure",
+      "name": "Disclosure request",
+      "category": "Disclosure",
+      "description": "Ask for disclosure ahead of interview or to take instructions.",
+      "subjectTemplate": "{{clientName}} - {{station}} - request for disclosure",
+      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI write on behalf of {{clientName}} in relation to the above matter{{#if offenceType}} ({{offenceType}}){{/if}}.\n\n{{#if date}}Interview / attendance is listed for {{date}}{{#if time}} at {{time}}{{/if}} at {{station}}.\n{{/if}}{{#if allegationSummary}}I understand the allegation is: {{allegationSummary}}.\n{{/if}}\nPlease provide any available disclosure to assist in taking instructions and advising my client. In particular, please confirm:\n\n- the nature of the allegation;\n- the circumstances relied upon; and\n- the key evidence said to support it.\n\n{{#if replyDeadline}}If at all possible, please reply by {{replyDeadline}}.\n{{/if}}Kind regards,\n{{feeEarnerName}}",
+      "requiredFields": ["clientName", "station"]
+    },
+    {
+      "id": "system:follow-up",
+      "name": "Follow-up / chase",
+      "category": "Follow-up",
+      "description": "Polite chaser when an officer hasn't replied.",
+      "subjectTemplate": "{{clientName}} - follow-up",
+      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI refer to my earlier email in relation to {{clientName}}{{#if station}} at {{station}}{{/if}}.\n\nI should be grateful for your response when convenient.\n\n{{#if replyDeadline}}If possible, please reply by {{replyDeadline}}.\n\n{{/if}}Kind regards,\n{{feeEarnerName}}",
+      "requiredFields": ["clientName"]
+    },
+    {
+      "id": "system:voluntary-attendance",
+      "name": "Voluntary attendance arrangement",
+      "category": "Voluntary attendance",
+      "description": "Arrange a voluntary attendance interview with the OIC.",
+      "subjectTemplate": "{{clientName}} - voluntary attendance",
+      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI write in relation to {{clientName}}{{#if offenceType}} regarding {{offenceType}}{{/if}}.\n\nPlease let me know the proposed arrangements for voluntary attendance, including the date, time, and station. {{#if date}}If {{date}}{{#if time}} at {{time}}{{/if}} at {{station}} is convenient, please confirm.\n{{/if}}\nDisclosure in advance of the interview would be appreciated so that I can advise my client properly.\n\nKind regards,\n{{feeEarnerName}}",
+      "requiredFields": ["clientName"]
+    }
+  ]
+}

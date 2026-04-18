@@ -13668,7 +13668,9 @@ PDF_CASENOTE_ADVERT +
         body: body,
         scope: _normalizeTemplateScope(tpl.scope),
         requiredFields: requiredFields,
-        category: typeof tpl.category === 'string' ? tpl.category : '',
+        category: typeof tpl.category === 'string' && tpl.category.trim() ? tpl.category.trim() : 'Other',
+        description: typeof tpl.description === 'string' ? tpl.description : '',
+        archived: tpl.archived === true,
         createdAt: createdAt,
         updatedAt: updatedAt
       };
