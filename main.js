@@ -6561,6 +6561,14 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
     if (msg === 'Invalid licence key') return { ok: false, error: 'Invalid licence key. Re-activate in Settings.' };
     if (msg === 'Licence key is required') return { ok: false, error: 'Licence key is required for postcode lookup.' };
     if (/subscription required/i.test(msg)) return { ok: false, error: 'Active subscription required for postcode lookup.' };
+    /* 402 Payment Required — upstream postcode quota / plan / billing on managed API */
+    if (code === 402) {
+      return {
+        ok: false,
+        error:
+          'Postcode lookup is not available right now (service billing or quota). Please try again later or enter the address manually. Contact support if this continues.',
+      };
+    }
     if (/not configured/i.test(msg)) return { ok: false, error: 'Postcode service is temporarily unavailable.' };
     if (e && e.code === 'ETIMEDOUT') return { ok: false, error: 'Postcode lookup timed out. Try again.' };
     return { ok: false, error: msg || 'Postcode lookup failed. Check your internet connection.' };
