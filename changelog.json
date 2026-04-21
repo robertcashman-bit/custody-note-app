@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.220",
+      "version": "1.4.221",
       "date": "2026-04-21",
       "latest": true,
+      "changes": [
+        "Duplicate attendance: stricter clear policy. New draft now keeps station, OIC, firm, fee earner, date, offences, disclosure officer, interviews, comms log and attending contacts",
+        "everything else (advice, disclosure narrative, custody/arrest, conflict/means, outcome, fees, photos, signatures, CRM14, billing/QuickFile links, officer email log and workflow timestamps) is reset for the new client. Encrypted photo files are no longer copied to the duplicate."
+      ]
+    },
+    {
+      "version": "1.4.220",
+      "date": "2026-04-21",
+      "latest": false,
       "changes": [
         "Duplicate attendance: DOB, address, and retainer DOB/address cleared for the new client",
         "retainer autofill waits until client details are entered",
