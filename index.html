@@ -469,7 +469,6 @@
                 <div class="add-firm-inline-wrap form-firm-add-section" id="qc-firm-add-section" style="display:none;">
                   <div class="add-firm-inline">
                     <input type="text" id="qc-new-firm-name" class="form-input" placeholder="Firm name *">
-                    <input type="text" id="qc-new-firm-laa" class="form-input" placeholder="LAA Account no.">
                     <input type="text" id="qc-new-firm-contact" class="form-input" placeholder="Contact name">
                     <input type="tel" id="qc-new-firm-phone" class="form-input" placeholder="Contact phone">
                     <input type="email" id="qc-new-firm-email" class="form-input" placeholder="Contact email">
@@ -588,6 +587,7 @@
           <span class="form-page-title" id="form-page-title">1. Case Reference & Arrival</span>
           <div class="header-right-group">
             <span id="autosave-indicator" class="autosave-indicator"></span>
+            <button type="button" id="form-duplicate-btn" class="btn btn-small" title="Duplicate for another client in the same session" style="display:none;">Duplicate</button>
             <button type="button" id="form-header-history-btn" class="btn btn-small" title="View change history for this record">&#128203; History</button>
             <button type="button" id="form-backup-now-btn" class="btn btn-small btn-backup-now" title="Save &amp; backup now">&#128190; Backup</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
@@ -1745,8 +1745,8 @@
                 <li><strong>Edit</strong> &mdash; Opens the record for editing. If the record is finalised, you will be asked to confirm; the status reverts to draft until you re-finalise.</li>
                 <li><strong>Print PDF</strong> &mdash; Opens an in-app print preview of the full attendance note with a Print dialog.</li>
                 <li><strong>Export PDF</strong> &mdash; Saves the attendance note as a PDF file to your Desktop.</li>
-                <li><strong>Duplicate</strong> &mdash; Creates a copy of the record for a further visit. Client details are carried over; attendance-specific details are cleared.</li>
-                <li><strong>New matter</strong> &mdash; Creates a new matter for the same client (same as duplicate but clearly a new matter).</li>
+                <li><strong>Duplicate</strong> &mdash; Saves a <strong>new draft</strong> with the same station/session context (advice, disclosure, interview notes, etc.). Client name, CRN, address, phone, DOB, and file references are cleared so you can enter another client from the same custody suite.</li>
+                <li><strong>New matter</strong> &mdash; Starts a new matter for the <strong>same client</strong>, carrying over personal details; you get a new file number on save.</li>
                 <li><strong>Delete</strong> &mdash; Deletes the record. Finalised records are soft-deleted (can be recovered). You will be asked for a reason.</li>
               </ul>
               <p>Click anywhere on the record row (not a button) to open it in view/edit mode.</p>
@@ -1882,7 +1882,7 @@
                 <li>Police station and court name fields have <strong>typeahead search</strong> &mdash; type the first few letters and pick from the list.</li>
                 <li>When a client is <strong>charged</strong>, the app offers to pre-fill charge details from the offences you recorded in Section 4.</li>
                 <li>The <strong>Scratchpad</strong> (bottom-right corner) is a floating notepad for temporary notes during an attendance.</li>
-                <li>Use <strong>Duplicate</strong> on an existing record to create a further attendance &mdash; client details carry over automatically.</li>
+                <li>Use <strong>Duplicate</strong> when another client arrives in the same suite: context is copied, client-specific fields are cleared, and the new draft opens for editing.</li>
                 <li>Toggle <strong>Dark Mode</strong> for night shifts using the moon icon in the top-right header.</li>
               </ul>
             </div>
@@ -2088,6 +2088,7 @@
   </div>
   <!-- Browser API layer: in Electron preload sets window.api so this no-ops; in browser it loads sql.js dynamically so the app never blocks on an external script when run from the desktop shortcut -->
   <script src="browser-api.js"></script>
+  <script src="renderer/lib/duplicate-attendance.js"></script>
   <!-- ── Module layer (load order matters) ─────────────────────
        1. toast.js     — UI feedback (no dependencies)
        2. app.js       — state vars + all functions + init()

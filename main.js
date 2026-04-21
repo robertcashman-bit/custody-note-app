@@ -5414,6 +5414,31 @@ ipcMain.handle('photo-delete', (_, { attendanceId, photoId }) => {
   }
 });
 
+ipcMain.handle('photos-duplicate-folder', (_, { fromId, toId }) => {
+  const safeFrom = sanitizePathSegment(String(fromId));
+  const safeTo = sanitizePathSegment(String(toId));
+  if (!safeFrom || !safeTo || safeFrom === safeTo) return { ok: false, error: 'invalid_ids' };
+  try {
+    const base = path.join(app.getPath('userData'), 'photos');
+    const srcDir = path.join(base, safeFrom);
+    const destDir = path.join(base, safeTo);
+    if (!fs.existsSync(srcDir)) return { ok: true, copied: 0 };
+    fs.mkdirSync(destDir, { recursive: true });
+    const files = fs.readdirSync(srcDir);
+    let copied = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (!f || !f.endsWith('.enc')) continue;
+      fs.copyFileSync(path.join(srcDir, f), path.join(destDir, f));
+      copied++;
+    }
+    return { ok: true, copied };
+  } catch (err) {
+    console.error('[photos-duplicate-folder]', err && err.message ? err.message : err);
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
 ipcMain.handle('open-outlook-email', async (event, payload) => {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Missing email payload');
