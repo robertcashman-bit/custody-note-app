@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.4.220",
+      "date": "2026-04-21",
+      "latest": true,
+      "changes": [
+        "Duplicate attendance: DOB, address, and retainer DOB/address cleared for the new client",
+        "retainer autofill waits until client details are entered",
+        "postcode lookup shows a clearer message when the service returns 402 (billing or quota)."
+      ]
+    },
+    {
       "version": "1.4.219",
       "date": "2026-04-18",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Quick Email: Delete template button next to Edit for your saved templates (same confirmation as the edit panel)"
       ]
