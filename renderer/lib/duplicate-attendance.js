@@ -288,6 +288,7 @@
       'timeFirstContactWithClient',
       'numSuspects',
       'numAttendances',
+      'stationVisits',
       'caseStage',
       'policeStationFinalisedDate',
       'policeStationFinalisedTime',
