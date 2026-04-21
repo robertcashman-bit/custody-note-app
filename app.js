@@ -530,8 +530,7 @@ var LAA = {
       fields: [
         { key: 'alreadyAtStation', label: 'Already at the station?', type: 'select', options: ['Yes','No'] },
         { key: 'travelOriginPostcode', label: 'Origin postcode', type: 'text', placeholder: 'e.g. ME1 1AA' },
-        { key: 'timeSetOff', label: 'Time set off', type: 'time' },
-        { key: 'timeArrival', label: 'Time you arrived at station', type: 'time' },
+        { key: '_stationVisits', label: 'Station attendances', type: 'multiStationVisit', cols: 2 },
       ],
     },
 
@@ -946,14 +945,7 @@ var LAA = {
       id: 'timeRecording', title: '9. Time Recording & Fees',
       keyFields: ['totalMinutes'],
       fields: [
-        { key: '_h_departure', label: 'Departure & Return', type: 'sectionHeading' },
-        { key: 'timeDeparture', label: 'Time of departure from station', type: 'time' },
-        { key: 'timeOfficeHome', label: 'Time of arrival office / home', type: 'time' },
-        { key: 'multipleJourneys', label: 'Multiple journeys?', type: 'select', options: ['Yes','No'] },
-        { key: '_h_waiting', label: 'Waiting Time', type: 'sectionHeading' },
-        { key: 'waitingTimeStart', label: 'Waiting time start', type: 'time' },
-        { key: 'waitingTimeEnd', label: 'Waiting time end', type: 'time' },
-        { key: 'waitingTimeNotes', label: 'Waiting time notes', type: 'textarea', placeholder: 'Optional notes', cols: 2 },
+        { key: '_note_visit_times', label: 'Travel, waiting, departure and return times for each station visit are recorded in section 2 (Station attendances).', type: 'sectionNote' },
         { key: '_heading_breakdown', label: 'Time breakdown (auto-calculated — type to override)', type: 'sectionHeading' },
         { key: '_note_6min', label: 'LAA times are recorded in 6-minute (0.1 hour) units. These fields auto-fill from clock times above but you can type your own values.', type: 'sectionNote' },
         { key: 'travelSocial', label: 'Travel – social (mins)', type: 'number', className: 'journey-auto-field' },
@@ -1388,8 +1380,7 @@ var LAA = {
       fields: [
         { key: 'alreadyAtStation', label: 'Already at the station?', type: 'select', options: ['Yes','No'] },
         { key: 'travelOriginPostcode', label: 'Origin postcode', type: 'text', placeholder: 'e.g. ME1 1AA' },
-        { key: 'timeSetOff', label: 'Time set off', type: 'time' },
-        { key: 'timeArrival', label: 'Time you arrived at station', type: 'time' },
+        { key: '_stationVisits', label: 'Station attendances', type: 'multiStationVisit', cols: 2 },
       ],
     },
 
@@ -1714,14 +1705,7 @@ var LAA = {
       id: 'timeRecording', title: '9. Time Recording & Fees',
       keyFields: ['totalMinutes'],
       fields: [
-        { key: '_h_departure', label: 'Departure & Return', type: 'sectionHeading' },
-        { key: 'timeDeparture', label: 'Time of departure from station', type: 'time' },
-        { key: 'timeOfficeHome', label: 'Time of arrival office / home', type: 'time' },
-        { key: 'multipleJourneys', label: 'Multiple journeys?', type: 'select', options: ['Yes','No'] },
-        { key: '_h_waiting', label: 'Waiting Time', type: 'sectionHeading' },
-        { key: 'waitingTimeStart', label: 'Waiting time start', type: 'time' },
-        { key: 'waitingTimeEnd', label: 'Waiting time end', type: 'time' },
-        { key: 'waitingTimeNotes', label: 'Waiting time notes', type: 'textarea', placeholder: 'Optional notes', cols: 2 },
+        { key: '_note_visit_times', label: 'Travel, waiting, departure and return times for each station visit are recorded in section 2 (Station attendances).', type: 'sectionNote' },
         { key: '_heading_breakdown', label: 'Time breakdown (auto-calculated — type to override)', type: 'sectionHeading' },
         { key: '_note_6min', label: 'LAA times are recorded in 6-minute (0.1 hour) units. These fields auto-fill from clock times above but you can type your own values.', type: 'sectionNote' },
         { key: 'travelSocial', label: 'Travel \u2013 social (mins)', type: 'number', className: 'journey-auto-field' },
@@ -2495,28 +2479,57 @@ var REQUIRED_FIELD_KEYS = [
       : 'Weekday rule: 09:30 to 17:30 is social; before 09:30 and from 17:30 onward is unsocial.';
     list.innerHTML = '';
     let hasItems = false;
-    if (d.timeSetOff && d.timeArrival) {
-      appendTimeBreakdownItem(list, 'Travel out', d.timeSetOff, d.timeArrival, splitSocialUnsocial(d.timeSetOff, d.timeArrival, isWBH));
-      hasItems = true;
-    }
-    if (d.timeArrival && d.timeDeparture) {
-      appendTimeBreakdownItem(list, 'Attendance at station', d.timeArrival, d.timeDeparture, splitSocialUnsocial(d.timeArrival, d.timeDeparture, isWBH));
-      hasItems = true;
-    }
-    if (d.waitingTimeStart && d.waitingTimeEnd) {
-      appendTimeBreakdownItem(list, 'Waiting', d.waitingTimeStart, d.waitingTimeEnd, splitSocialUnsocial(d.waitingTimeStart, d.waitingTimeEnd, isWBH));
-      hasItems = true;
-    }
-    if (d.timeArrival && d.timeDeparture) {
-      appendTimeBreakdownItem(list, 'Chargeable attendance & advice', '', '', {
-        social: parseInt(getFieldValue('adviceSocial'), 10) || 0,
-        unsocial: parseInt(getFieldValue('adviceUnsocial'), 10) || 0
+    if (window.StationVisits && d.stationVisits && d.stationVisits.length) {
+      window.StationVisits.ensureStationVisits(d);
+      d.stationVisits.forEach(function (v, vi) {
+        var tag = 'Visit ' + (vi + 1) + (v.label ? ' (' + v.label + ')' : '') + ' \u2014 ';
+        if (v.timeSetOff && v.timeArrival) {
+          appendTimeBreakdownItem(list, tag + 'Travel out', v.timeSetOff, v.timeArrival, splitSocialUnsocial(v.timeSetOff, v.timeArrival, isWBH));
+          hasItems = true;
+        }
+        if (v.timeArrival && v.timeDeparture) {
+          appendTimeBreakdownItem(list, tag + 'Attendance at station', v.timeArrival, v.timeDeparture, splitSocialUnsocial(v.timeArrival, v.timeDeparture, isWBH));
+          hasItems = true;
+        }
+        if (v.waitingTimeStart && v.waitingTimeEnd) {
+          appendTimeBreakdownItem(list, tag + 'Waiting', v.waitingTimeStart, v.waitingTimeEnd, splitSocialUnsocial(v.waitingTimeStart, v.waitingTimeEnd, isWBH));
+          hasItems = true;
+        }
+        if (v.timeDeparture && v.timeOfficeHome) {
+          appendTimeBreakdownItem(list, tag + 'Return travel', v.timeDeparture, v.timeOfficeHome, splitSocialUnsocial(v.timeDeparture, v.timeOfficeHome, isWBH));
+          hasItems = true;
+        }
       });
-      hasItems = true;
-    }
-    if (d.timeDeparture && d.timeOfficeHome) {
-      appendTimeBreakdownItem(list, 'Return travel', d.timeDeparture, d.timeOfficeHome, splitSocialUnsocial(d.timeDeparture, d.timeOfficeHome, isWBH));
-      hasItems = true;
+      if (hasItems) {
+        appendTimeBreakdownItem(list, 'All visits \u2014 chargeable attendance & advice (totals)', '', '', {
+          social: parseInt(getFieldValue('adviceSocial'), 10) || 0,
+          unsocial: parseInt(getFieldValue('adviceUnsocial'), 10) || 0
+        });
+      }
+    } else {
+      if (d.timeSetOff && d.timeArrival) {
+        appendTimeBreakdownItem(list, 'Travel out', d.timeSetOff, d.timeArrival, splitSocialUnsocial(d.timeSetOff, d.timeArrival, isWBH));
+        hasItems = true;
+      }
+      if (d.timeArrival && d.timeDeparture) {
+        appendTimeBreakdownItem(list, 'Attendance at station', d.timeArrival, d.timeDeparture, splitSocialUnsocial(d.timeArrival, d.timeDeparture, isWBH));
+        hasItems = true;
+      }
+      if (d.waitingTimeStart && d.waitingTimeEnd) {
+        appendTimeBreakdownItem(list, 'Waiting', d.waitingTimeStart, d.waitingTimeEnd, splitSocialUnsocial(d.waitingTimeStart, d.waitingTimeEnd, isWBH));
+        hasItems = true;
+      }
+      if (d.timeArrival && d.timeDeparture) {
+        appendTimeBreakdownItem(list, 'Chargeable attendance & advice', '', '', {
+          social: parseInt(getFieldValue('adviceSocial'), 10) || 0,
+          unsocial: parseInt(getFieldValue('adviceUnsocial'), 10) || 0
+        });
+        hasItems = true;
+      }
+      if (d.timeDeparture && d.timeOfficeHome) {
+        appendTimeBreakdownItem(list, 'Return travel', d.timeDeparture, d.timeOfficeHome, splitSocialUnsocial(d.timeDeparture, d.timeOfficeHome, isWBH));
+        hasItems = true;
+      }
     }
     if (!hasItems) {
       const empty = document.createElement('li');
@@ -2530,28 +2543,42 @@ var REQUIRED_FIELD_KEYS = [
     const d = formData;
     const isWBH = d.weekendBankHoliday === 'Yes';
 
-    if (d.timeSetOff && d.timeArrival) {
-      const t = splitSocialUnsocial(d.timeSetOff, d.timeArrival, isWBH);
-      setFieldValue('travelSocial', t.social);
-      setFieldValue('travelUnsocial', t.unsocial);
-    }
-    if (d.timeDeparture && d.timeOfficeHome) {
-      const prev = { social: parseInt(getFieldValue('travelSocial')) || 0, unsocial: parseInt(getFieldValue('travelUnsocial')) || 0 };
-      const ret = splitSocialUnsocial(d.timeDeparture, d.timeOfficeHome, isWBH);
-      setFieldValue('travelSocial', prev.social + ret.social);
-      setFieldValue('travelUnsocial', prev.unsocial + ret.unsocial);
-    }
-    if (d.waitingTimeStart && d.waitingTimeEnd) {
-      const w = splitSocialUnsocial(d.waitingTimeStart, d.waitingTimeEnd, isWBH);
-      setFieldValue('waitingSocial', w.social);
-      setFieldValue('waitingUnsocial', w.unsocial);
-    }
-    if (d.timeArrival && d.timeDeparture) {
-      const station = splitSocialUnsocial(d.timeArrival, d.timeDeparture, isWBH);
-      const wSoc = parseInt(getFieldValue('waitingSocial')) || 0;
-      const wUns = parseInt(getFieldValue('waitingUnsocial')) || 0;
-      setFieldValue('adviceSocial', Math.max(0, station.social - wSoc));
-      setFieldValue('adviceUnsocial', Math.max(0, station.unsocial - wUns));
+    if (window.StationVisits && d.stationVisits && d.stationVisits.length) {
+      window.StationVisits.ensureStationVisits(d);
+      const agg = window.StationVisits.aggregateMinuteBuckets(d.stationVisits, isWBH);
+      setFieldValue('travelSocial', agg.travelSocial);
+      setFieldValue('travelUnsocial', agg.travelUnsocial);
+      setFieldValue('waitingSocial', agg.waitingSocial);
+      setFieldValue('waitingUnsocial', agg.waitingUnsocial);
+      setFieldValue('adviceSocial', agg.adviceSocial);
+      setFieldValue('adviceUnsocial', agg.adviceUnsocial);
+      window.StationVisits.syncLegacyMirror(d);
+      setFieldValue('milesClaimable', d.milesClaimable != null && d.milesClaimable !== '' ? d.milesClaimable : '');
+      setFieldValue('parkingCost', d.parkingCost != null && d.parkingCost !== '' ? d.parkingCost : '');
+    } else {
+      if (d.timeSetOff && d.timeArrival) {
+        const t = splitSocialUnsocial(d.timeSetOff, d.timeArrival, isWBH);
+        setFieldValue('travelSocial', t.social);
+        setFieldValue('travelUnsocial', t.unsocial);
+      }
+      if (d.timeDeparture && d.timeOfficeHome) {
+        const prev = { social: parseInt(getFieldValue('travelSocial')) || 0, unsocial: parseInt(getFieldValue('travelUnsocial')) || 0 };
+        const ret = splitSocialUnsocial(d.timeDeparture, d.timeOfficeHome, isWBH);
+        setFieldValue('travelSocial', prev.social + ret.social);
+        setFieldValue('travelUnsocial', prev.unsocial + ret.unsocial);
+      }
+      if (d.waitingTimeStart && d.waitingTimeEnd) {
+        const w = splitSocialUnsocial(d.waitingTimeStart, d.waitingTimeEnd, isWBH);
+        setFieldValue('waitingSocial', w.social);
+        setFieldValue('waitingUnsocial', w.unsocial);
+      }
+      if (d.timeArrival && d.timeDeparture) {
+        const station = splitSocialUnsocial(d.timeArrival, d.timeDeparture, isWBH);
+        const wSoc = parseInt(getFieldValue('waitingSocial')) || 0;
+        const wUns = parseInt(getFieldValue('waitingUnsocial')) || 0;
+        setFieldValue('adviceSocial', Math.max(0, station.social - wSoc));
+        setFieldValue('adviceUnsocial', Math.max(0, station.unsocial - wUns));
+      }
     }
     recalcTotal();
   }
@@ -2585,12 +2612,24 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── Auto-fill mileage from station table ─── */
   function autoFillMileageFromStation(stationId) {
     if (!stationId || !window.api || !window.api.stationMileageGet) return;
-    var existing = parseFloat(formData.milesClaimable);
-    if (existing > 0) return;
+    if (window.StationVisits) {
+      window.StationVisits.ensureStationVisits(formData);
+      var v0 = formData.stationVisits[0];
+      if (parseFloat(v0.milesClaimable) > 0) return;
+    } else {
+      var existing = parseFloat(formData.milesClaimable);
+      if (existing > 0) return;
+    }
     window.api.stationMileageGet(stationId).then(function (r) {
       if (r && r.mileage_from_base != null && r.mileage_from_base > 0) {
-        formData.milesClaimable = String(r.mileage_from_base);
-        setFieldValue('milesClaimable', r.mileage_from_base);
+        if (window.StationVisits && formData.stationVisits && formData.stationVisits[0]) {
+          formData.stationVisits[0].milesClaimable = String(r.mileage_from_base);
+          window.StationVisits.syncLegacyMirror(formData);
+          setFieldValue('milesClaimable', formData.milesClaimable || r.mileage_from_base);
+        } else {
+          formData.milesClaimable = String(r.mileage_from_base);
+          setFieldValue('milesClaimable', r.mileage_from_base);
+        }
         recalcTotal();
       }
     }).catch(function () {});
@@ -2631,11 +2670,12 @@ var REQUIRED_FIELD_KEYS = [
         'Departure time missing'
       ).then(function (ok) {
         if (!ok) return;
-        var sec = activeFormSections.findIndex(function (s) { return s.id === 'timeRecording'; });
+        var sec = activeFormSections.findIndex(function (s) { return s.id === 'journeyTime'; });
         if (sec >= 0) {
           goToSection(sec);
           setTimeout(function () {
-            var el = document.querySelector('[data-field="timeDeparture"]');
+            var el = document.querySelector('.station-visit-block:last-child [data-sv-field="timeDeparture"]') ||
+              document.querySelector('[data-field="timeDeparture"]');
             if (el) el.focus();
           }, 200);
         }
@@ -4249,6 +4289,9 @@ var REQUIRED_FIELD_KEYS = [
     if (!formData.caseAssessment) formData.caseAssessment = 'N/A';
     if (!formData.conflictCheckDate) formData.conflictCheckDate = new Date().toISOString().slice(0, 10);
     if (!formData.paceSearches || !Array.isArray(formData.paceSearches)) formData.paceSearches = [{ searchType: '', whatFound: '' }];
+    if (window.StationVisits && formData._formType !== 'telephone') {
+      window.StationVisits.ensureStationVisits(formData);
+    }
     if (!formData.forensicSamples || !Array.isArray(formData.forensicSamples)) formData.forensicSamples = [{ sampleType: '', whatDone: '', notes: '' }];
     if (!formData.thirdPartyEntries || !Array.isArray(formData.thirdPartyEntries)) formData.thirdPartyEntries = [];
     if (!formData.commsLog || !Array.isArray(formData.commsLog)) formData.commsLog = [];
@@ -6700,6 +6743,11 @@ var REQUIRED_FIELD_KEYS = [
       }
     }
 
+    if (window.StationVisits && activeFormSections !== telFormSections && formData._formType !== 'telephone') {
+      window.StationVisits.ensureStationVisits(formData);
+      window.StationVisits.syncLegacyMirror(formData);
+    }
+
     /* Stand-alone section mode (Admin, Consents, Third Party, Authorities, Comms, Supervisor, LAA Declaration) */
     if (currentStandaloneSectionId && activeFormSections === formSections) {
       const sec = standaloneSections.find(s => s.id === currentStandaloneSectionId);
@@ -7398,18 +7446,48 @@ var REQUIRED_FIELD_KEYS = [
       const lbl = document.createElement('label'); lbl.textContent = f.label; lbl.style.fontWeight = '700'; wrap.appendChild(lbl);
       const container = document.createElement('div');
       container.id = 'multi-disbursement-container';
-      if (!formData.disbursements || !formData.disbursements.length) formData.disbursements = [{ description: '', amount: '', vatTreatment: 'No VAT' }];
+      if (!formData.disbursements || !formData.disbursements.length) formData.disbursements = [{ description: '', amount: '', vatTreatment: 'No VAT', visitIndex: '' }];
       function renderDisbursements() {
         container.innerHTML = '';
         formData.disbursements.forEach((dis, idx) => {
           const block = document.createElement('div');
           block.className = 'disbursement-block';
           block.innerHTML = '<div class="disbursement-heading"><span>Disbursement ' + (idx + 1) + '</span>' + (idx > 0 ? '<button type="button" class="btn-small iv-remove" data-didx="' + idx + '">Remove</button>' : '') + '</div>';
+          var nVisits = (formData.stationVisits && formData.stationVisits.length) || 1;
+          if (nVisits > 1) {
+            const vrow = document.createElement('div');
+            vrow.className = 'form-row-2col';
+            const vw = document.createElement('div');
+            vw.className = 'form-group';
+            vw.style.gridColumn = '1 / -1';
+            const vl = document.createElement('label');
+            vl.textContent = 'Link to visit (optional)';
+            const vs = document.createElement('select');
+            vs.className = 'form-input disbursement-visit-sel';
+            var vOpt0 = document.createElement('option');
+            vOpt0.value = '';
+            vOpt0.textContent = 'Whole attendance / not specific';
+            vs.appendChild(vOpt0);
+            for (var vi = 0; vi < nVisits; vi++) {
+              var vo = document.createElement('option');
+              vo.value = String(vi);
+              vo.textContent = 'Visit ' + (vi + 1);
+              vs.appendChild(vo);
+            }
+            var visSel = (dis.visitIndex !== undefined && dis.visitIndex !== null) ? String(dis.visitIndex) : '';
+            if (visSel !== '' && !vs.querySelector('option[value="' + visSel + '"]')) visSel = '';
+            vs.value = visSel;
+            vs.addEventListener('change', function () { formData.disbursements[idx].visitIndex = this.value; });
+            vw.appendChild(vl);
+            vw.appendChild(vs);
+            vrow.appendChild(vw);
+            block.appendChild(vrow);
+          }
           const row = document.createElement('div');
           row.className = 'form-row-2col';
           var descWrap = document.createElement('div'); descWrap.className = 'form-group';
           var descLbl = document.createElement('label'); descLbl.textContent = 'Category'; descWrap.appendChild(descLbl);
-          var descSel = document.createElement('select'); descSel.className = 'form-input';
+          var descSel = document.createElement('select'); descSel.className = 'form-input disbursement-category-sel';
           var disbCats = ['Interpreter','Medical Report','Mileage','Travel (public transport)','Photocopying','Telephone calls','Other'];
           var catOpt0 = document.createElement('option'); catOpt0.value = ''; catOpt0.textContent = '-- Select --'; descSel.appendChild(catOpt0);
           disbCats.forEach(function(c) { var o = document.createElement('option'); o.value = c; o.textContent = c; if (dis.description === c) o.selected = true; descSel.appendChild(o); });
@@ -7435,7 +7513,7 @@ var REQUIRED_FIELD_KEYS = [
           amtWrap.appendChild(amtInp); row.appendChild(amtWrap);
           var vatWrap = document.createElement('div'); vatWrap.className = 'form-group';
           var vatLbl = document.createElement('label'); vatLbl.textContent = 'VAT Treatment'; vatWrap.appendChild(vatLbl);
-          var vatSel = document.createElement('select'); vatSel.className = 'form-input';
+          var vatSel = document.createElement('select'); vatSel.className = 'form-input disbursement-vat-sel';
           ['Inclusive of VAT', 'Plus VAT', 'No VAT'].forEach(function (o) { var opt = document.createElement('option'); opt.value = o; opt.textContent = o; if (dis.vatTreatment === o) opt.selected = true; vatSel.appendChild(opt); });
           vatSel.addEventListener('change', function () { formData.disbursements[idx].vatTreatment = this.value; });
           vatWrap.appendChild(vatSel); row.appendChild(vatWrap);
@@ -7445,11 +7523,139 @@ var REQUIRED_FIELD_KEYS = [
         });
         var addBtn = document.createElement('button');
         addBtn.type = 'button'; addBtn.className = 'btn-add-disbursement'; addBtn.textContent = '+ Add Disbursement';
-        addBtn.addEventListener('click', function () { formData.disbursements.push({ description: '', amount: '', vatTreatment: 'No VAT' }); renderDisbursements(); });
+        addBtn.addEventListener('click', function () { formData.disbursements.push({ description: '', amount: '', vatTreatment: 'No VAT', visitIndex: '' }); renderDisbursements(); });
         container.appendChild(addBtn);
+        window.updateDisbursementVisitOptions = function () { renderDisbursements(); };
       }
       renderDisbursements();
       wrap.appendChild(container);
+      grid.appendChild(wrap);
+      return;
+    }
+    if (f.type === 'multiStationVisit') {
+      const SV = window.StationVisits;
+      const wrap = document.createElement('div');
+      wrap.className = 'form-group';
+      wrap.style.gridColumn = '1 / -1';
+      const lbl = document.createElement('label');
+      lbl.textContent = f.label || 'Station attendances';
+      lbl.style.fontWeight = '700';
+      wrap.appendChild(lbl);
+      const help = document.createElement('p');
+      help.className = 'section-help station-visits-help';
+      help.textContent = 'Add a row for each separate trip to the station today. Travel, waiting, return and per-visit miles are recorded per row; totals update section 9 and your PDF.';
+      wrap.appendChild(help);
+      const container = document.createElement('div');
+      container.id = 'multi-station-visits-container';
+      function visitTouch() {
+        if (!SV) return;
+        SV.syncLegacyMirror(formData);
+        ['timeSetOff', 'timeArrival', 'timeDeparture', 'timeOfficeHome', 'waitingTimeStart', 'waitingTimeEnd', 'waitingTimeNotes'].forEach(function (k) {
+          var el = document.querySelector('[data-field="' + k + '"]');
+          if (el && formData[k] != null) el.value = String(formData[k]);
+        });
+        if (typeof autoCalcTimes === 'function') autoCalcTimes();
+        if (typeof recalcTotal === 'function') recalcTotal();
+        if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
+        if (typeof window.updateDisbursementVisitOptions === 'function') window.updateDisbursementVisitOptions();
+        var nV = (formData.stationVisits && formData.stationVisits.length) || 0;
+        var mc = document.querySelector('[data-field="milesClaimable"]');
+        var pc = document.querySelector('[data-field="parkingCost"]');
+        if (mc) mc.readOnly = nV > 1;
+        if (pc) pc.readOnly = nV > 1;
+      }
+      function bindVisitInputs(block, idx) {
+        block.querySelectorAll('[data-sv-field]').forEach(function (inp) {
+          var key = inp.getAttribute('data-sv-field');
+          inp.addEventListener('input', function () {
+            if (!formData.stationVisits[idx]) return;
+            formData.stationVisits[idx][key] = inp.value;
+            visitTouch();
+          });
+          inp.addEventListener('change', function () {
+            if (!formData.stationVisits[idx]) return;
+            formData.stationVisits[idx][key] = inp.value;
+            visitTouch();
+            if (key === 'timeDeparture' && inp.value && typeof maybePromptDisbursements === 'function') {
+              maybePromptDisbursements();
+            }
+          });
+        });
+      }
+      function renderVisitBlocks() {
+        if (SV) SV.ensureStationVisits(formData);
+        container.innerHTML = '';
+        (formData.stationVisits || []).forEach(function (visit, idx) {
+          const block = document.createElement('div');
+          block.className = 'station-visit-block';
+          block.innerHTML =
+            '<div class="station-visit-head"><span class="station-visit-title">Station visit ' + (idx + 1) + '</span>' +
+            (idx > 0 ? '<button type="button" class="btn-small sv-remove" data-sv-idx="' + idx + '">Remove</button>' : '') +
+            '</div>' +
+            '<div class="form-row-2col">' +
+            '<div class="form-group"><label>Label (optional)</label><input type="text" class="form-input" data-sv-field="label" placeholder="e.g. Morning"></div>' +
+            '</div>' +
+            '<div class="form-row-2col">' +
+            '<div class="form-group"><label>Time set off</label><input type="time" class="form-input" data-sv-field="timeSetOff"></div>' +
+            '<div class="form-group"><label>Time arrived at station</label><input type="time" class="form-input" data-sv-field="timeArrival"></div>' +
+            '</div>' +
+            '<div class="form-row-2col">' +
+            '<div class="form-group"><label>Time left station</label><input type="time" class="form-input" data-sv-field="timeDeparture"></div>' +
+            '<div class="form-group"><label>Time arrived office / home</label><input type="time" class="form-input" data-sv-field="timeOfficeHome"></div>' +
+            '</div>' +
+            '<div class="form-row-2col">' +
+            '<div class="form-group"><label>Waiting time start</label><input type="time" class="form-input" data-sv-field="waitingTimeStart"></div>' +
+            '<div class="form-group"><label>Waiting time end</label><input type="time" class="form-input" data-sv-field="waitingTimeEnd"></div>' +
+            '</div>' +
+            '<div class="form-group"><label>Waiting notes</label><textarea class="form-input" rows="2" data-sv-field="waitingTimeNotes" placeholder="Optional"></textarea></div>' +
+            '<div class="form-row-2col">' +
+            '<div class="form-group"><label>Miles (this visit)</label><input type="number" class="form-input" step="0.1" data-sv-field="milesClaimable" placeholder="0"></div>' +
+            '<div class="form-group"><label>Parking (\u00a3, this visit)</label><input type="number" class="form-input" step="0.01" data-sv-field="parkingCost" placeholder="0.00"></div>' +
+            '</div>';
+          block.querySelectorAll('[data-sv-field]').forEach(function (inp) {
+            var key = inp.getAttribute('data-sv-field');
+            var v = visit[key];
+            inp.value = v != null && v !== '' ? String(v) : '';
+          });
+          bindVisitInputs(block, idx);
+          block.querySelector('.sv-remove')?.addEventListener('click', function () {
+            if ((formData.stationVisits || []).length < 2) return;
+            formData.stationVisits.splice(idx, 1);
+            renderVisitBlocks();
+            visitTouch();
+          });
+          container.appendChild(block);
+        });
+        var addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn-add-station-visit';
+        addBtn.textContent = '+ Add another station visit';
+        addBtn.addEventListener('click', function () {
+          if (!SV) return;
+          if (!formData.stationVisits) formData.stationVisits = [];
+          formData.stationVisits.push(SV.emptyVisit());
+          renderVisitBlocks();
+          visitTouch();
+        });
+        container.appendChild(addBtn);
+      }
+      renderVisitBlocks();
+      wrap.appendChild(container);
+      var mirror = document.createElement('div');
+      mirror.className = 'station-visits-mirror-hidden';
+      mirror.setAttribute('aria-hidden', 'true');
+      mirror.style.cssText = 'position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);';
+      ['timeSetOff', 'timeArrival', 'timeDeparture', 'timeOfficeHome', 'waitingTimeStart', 'waitingTimeEnd', 'waitingTimeNotes'].forEach(function (k) {
+        var inp = document.createElement('input');
+        inp.type = k === 'waitingTimeNotes' ? 'text' : 'time';
+        inp.className = 'form-input';
+        inp.dataset.field = k;
+        inp.tabIndex = -1;
+        inp.value = formData[k] != null ? String(formData[k]) : '';
+        mirror.appendChild(inp);
+      });
+      wrap.appendChild(mirror);
+      visitTouch();
       grid.appendChild(wrap);
       return;
     }
@@ -9593,6 +9799,7 @@ var REQUIRED_FIELD_KEYS = [
     });
     // Signatures are captured/stamped directly by initSignatureCanvas().
     collectInterviewData();
+    collectStationVisitData(form);
     collectDisbursementData(form);
     collectPaceSearchData(form);
     collectForensicSampleData(form);
@@ -9613,6 +9820,32 @@ var REQUIRED_FIELD_KEYS = [
         delete formData._duplicateFreshClient;
       }
     }
+  }
+
+  function collectStationVisitData(form) {
+    const container = form.querySelector('#multi-station-visits-container');
+    if (!container || !window.StationVisits) return;
+    const blocks = Array.from(container.querySelectorAll('.station-visit-block'));
+    if (!blocks.length) return;
+    formData.stationVisits = blocks.map(function (block) {
+      function val(field) {
+        const el = block.querySelector('[data-sv-field="' + field + '"]');
+        return el ? el.value : '';
+      }
+      return {
+        label: val('label'),
+        timeSetOff: val('timeSetOff'),
+        timeArrival: val('timeArrival'),
+        timeDeparture: val('timeDeparture'),
+        timeOfficeHome: val('timeOfficeHome'),
+        waitingTimeStart: val('waitingTimeStart'),
+        waitingTimeEnd: val('waitingTimeEnd'),
+        waitingTimeNotes: val('waitingTimeNotes'),
+        milesClaimable: val('milesClaimable'),
+        parkingCost: val('parkingCost')
+      };
+    });
+    window.StationVisits.syncLegacyMirror(formData);
   }
 
   function collectPaceSearchData(form) {
@@ -9672,13 +9905,25 @@ var REQUIRED_FIELD_KEYS = [
     const blocks = container.querySelectorAll('.disbursement-block');
     if (!blocks.length) return;
     formData.disbursements = Array.from(blocks).map(block => {
-      const desc = block.querySelector('input[type="text"]');
+      const catSel = block.querySelector('select.disbursement-category-sel');
+      const otherInps = block.querySelectorAll('input[type="text"].form-input');
+      var description = catSel ? catSel.value : '';
+      var descriptionOther = '';
+      if (otherInps.length) {
+        var oi = otherInps[otherInps.length - 1];
+        if (oi && oi.placeholder && String(oi.placeholder).indexOf('Describe') >= 0) {
+          descriptionOther = oi.value || '';
+        }
+      }
       const amt = block.querySelector('input[type="number"]');
-      const vat = block.querySelector('select');
+      const vat = block.querySelector('select.disbursement-vat-sel');
+      const visitSel = block.querySelector('select.disbursement-visit-sel');
       return {
-        description: desc ? desc.value : '',
+        description: description,
+        descriptionOther: descriptionOther,
         amount: amt ? amt.value : '',
         vatTreatment: vat ? vat.value : 'No VAT',
+        visitIndex: visitSel ? visitSel.value : ''
       };
     });
   }
@@ -10033,11 +10278,11 @@ var REQUIRED_FIELD_KEYS = [
     var workType = formData.workType || '';
     if (!isRelaxedPath && ['First Police Station Attendance', 'Further Police Station Attendance'].includes(workType)) {
       var fc = (formData.timeFirstContactWithClient || '').trim();
-      var ta = (formData.timeArrival || '').trim();
+      var ta = window.StationVisits ? window.StationVisits.getEffectiveTimeArrival(formData) : (formData.timeArrival || '').trim();
       if (!fc && !ta) m.push({ key: 'timeArrival', label: 'Time of arrival / first contact (LAA 9.25)', section: 2 });
     } else if (!isRelaxedPath && !workType) {
       var fc2 = (formData.timeFirstContactWithClient || '').trim();
-      var ta2 = (formData.timeArrival || '').trim();
+      var ta2 = window.StationVisits ? window.StationVisits.getEffectiveTimeArrival(formData) : (formData.timeArrival || '').trim();
       if (!fc2 && !ta2) m.push({ key: 'timeArrival', label: 'Time of arrival / first contact (LAA 9.25)', section: 2 });
     }
     if (formData.firstContactWithin45Mins === 'No' && !(formData.firstContactOver45MinsReason || '').trim()) {
@@ -10091,7 +10336,7 @@ var REQUIRED_FIELD_KEYS = [
       }
     }
 
-    var arrTime = (formData.timeArrival || '').trim();
+    var arrTime = window.StationVisits ? window.StationVisits.getEarliestStationArrival(formData) : (formData.timeArrival || '').trim();
     var attDate = (formData.date || '').trim();
     (formData.interviews || []).forEach(function(iv, idx) {
       if (iv.startTime && arrTime && iv.startTime < arrTime) {
@@ -10522,7 +10767,21 @@ row('Time first contact (LAA 9.25)', d.timeFirstContactWithClient) + row('Within
 
 '<h2>2. Journey to Station</h2><table>' +
 row('Already at station?', d.alreadyAtStation) + row('Travel from', d.travelOriginPostcode) +
-row('Time set off', d.timeSetOff) + row('Time arrival at station', d.timeArrival) +
+(function () {
+  var sv = d.stationVisits;
+  if (window.StationVisits && sv && sv.length > 1) {
+    var h = '';
+    sv.forEach(function (v, vi) {
+      var lab = 'Visit ' + (vi + 1) + (v.label ? ' (' + v.label + ')' : '');
+      h += '<tr><td colspan="2"><strong>' + h(lab) + '</strong></td></tr>';
+      h += row('Time set off', v.timeSetOff) + row('Time arrival at station', v.timeArrival) + row('Time left station', v.timeDeparture) + row('Time arrival office/home', v.timeOfficeHome) +
+        row('Waiting time start', v.waitingTimeStart) + row('Waiting time end', v.waitingTimeEnd) + row('Waiting notes', v.waitingTimeNotes) +
+        row('Miles (this visit)', v.milesClaimable) + row('Parking (this visit)', v.parkingCost);
+    });
+    return h;
+  }
+  return row('Time set off', d.timeSetOff) + row('Time arrival at station', d.timeArrival);
+})() +
 '</table>' +
 
 '<h2>3. Custody Record</h2><table>' +
@@ -10661,13 +10920,18 @@ row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes'
 '</table>' +
 
 '<h2>9. Time Recording & Fees</h2><table>' +
-row('Time departure from station', d.timeDeparture) + row('Time arrival office/home', d.timeOfficeHome) +
-row('Multiple journeys', d.multipleJourneys) + row('Waiting time start', d.waitingTimeStart) + row('Waiting time end', d.waitingTimeEnd) + row('Waiting time notes', d.waitingTimeNotes) +
+(d.stationVisits && d.stationVisits.length > 1
+  ? row('Station visits (clock detail)', 'See section 2 — ' + d.stationVisits.length + ' visits')
+  : row('Time departure from station', d.timeDeparture) + row('Time arrival office/home', d.timeOfficeHome) +
+    row('Multiple journeys', d.multipleJourneys) + row('Waiting time start', d.waitingTimeStart) + row('Waiting time end', d.waitingTimeEnd) + row('Waiting time notes', d.waitingTimeNotes)) +
 row('Travel – social (mins)', d.travelSocial) + row('Travel – unsocial (mins)', d.travelUnsocial) +
 row('Waiting – social (mins)', d.waitingSocial) + row('Waiting – unsocial (mins)', d.waitingUnsocial) +
 row('Attendance & Advice – social (mins)', d.adviceSocial) + row('Attendance & Advice – unsocial (mins)', d.adviceUnsocial) +
 row('Total minutes', d.totalMinutes) + row('Miles claimable (45p)', d.milesClaimable) + row('Parking cost', d.parkingCost) +
-((d.disbursements && d.disbursements.length) ? d.disbursements.filter(function(dis) { return (dis.description || '').trim() || (parseFloat(dis.amount) > 0); }).map(function(dis, i) { return row('Disbursement ' + (i + 1), (dis.description || '') + ' \u2013 \u00A3' + (dis.amount || '0') + ' (' + (dis.vatTreatment || 'No VAT') + ')'); }).join('') || '' : '') +
+((d.disbursements && d.disbursements.length) ? d.disbursements.filter(function(dis) { return (dis.description || '').trim() || (parseFloat(dis.amount) > 0); }).map(function(dis, i) {
+  var vis = (dis.visitIndex !== undefined && dis.visitIndex !== null && String(dis.visitIndex).trim() !== '') ? (' [Visit ' + (parseInt(dis.visitIndex, 10) + 1) + ']') : '';
+  return row('Disbursement ' + (i + 1), (dis.description || '') + ' \u2013 \u00A3' + (dis.amount || '0') + ' (' + (dis.vatTreatment || 'No VAT') + ')' + vis);
+}).join('') || '' : '') +
 row('Number of suspects', d.numSuspects) + row('No. Attendances', d.numAttendances) + row('Case stage', d.caseStage) +
 row('Date police station finalised', fmtDate(d.policeStationFinalisedDate)) + row('Time police station finalised', d.policeStationFinalisedTime) +
 row('Invoice sent?', d.invoiceSent) + (d.invoiceSent === 'Yes' ? row('Invoice sent date', fmtDate(d.invoiceSentDate)) + row('Invoice sent time', d.invoiceSentTime) : '') +
@@ -10970,7 +11234,8 @@ PDF_CASENOTE_ADVERT +
       disbursementsHtml = d.disbursements.filter(function(dis) {
         return (dis.description || '').trim() || (parseFloat(dis.amount) > 0);
       }).map(function(dis, i) {
-        return row('Disbursement ' + (i + 1), (dis.description || '') + ' \u2013 \u00A3' + (dis.amount || '0') + ' (' + (dis.vatTreatment || 'No VAT') + ')');
+        var vis = (dis.visitIndex !== undefined && dis.visitIndex !== null && String(dis.visitIndex).trim() !== '') ? (' [Visit ' + (parseInt(dis.visitIndex, 10) + 1) + ']') : '';
+        return row('Disbursement ' + (i + 1), (dis.description || '') + ' \u2013 \u00A3' + (dis.amount || '0') + ' (' + (dis.vatTreatment || 'No VAT') + ')' + vis);
       }).join('');
     }
 
@@ -11051,7 +11316,21 @@ PDF_CASENOTE_ADVERT +
 
       '<h2>2. Journey to Station</h2><table>' +
       row('Already at station?', d.alreadyAtStation) + row('Origin postcode', d.travelOriginPostcode) +
-      row('Time set off', d.timeSetOff) + row('Time of arrival', d.timeArrival) +
+      (function () {
+        var sv = d.stationVisits;
+        if (window.StationVisits && sv && sv.length > 1) {
+          var h2 = '';
+          sv.forEach(function (v, vi) {
+            var lab = 'Visit ' + (vi + 1) + (v.label ? ' (' + v.label + ')' : '');
+            h2 += '<tr><td colspan="2"><strong>' + h(lab) + '</strong></td></tr>';
+            h2 += row('Time set off', v.timeSetOff) + row('Time of arrival', v.timeArrival) + row('Time left station', v.timeDeparture) + row('Time arrival office/home', v.timeOfficeHome) +
+              row('Waiting time start', v.waitingTimeStart) + row('Waiting time end', v.waitingTimeEnd) + (v.waitingTimeNotes ? row('Waiting notes', v.waitingTimeNotes) : '') +
+              row('Miles (this visit)', v.milesClaimable) + row('Parking (this visit)', v.parkingCost);
+          });
+          return h2;
+        }
+        return row('Time set off', d.timeSetOff) + row('Time of arrival', d.timeArrival);
+      })() +
       '</table>' +
 
       '<h2>3. Client Details &amp; Welfare</h2><table>' +
@@ -11178,9 +11457,11 @@ PDF_CASENOTE_ADVERT +
       '</table>' +
 
       '<h2>9. Time Recording &amp; Fees</h2><table>' +
-      row('Time departure from station', d.timeDeparture) + row('Time arrival office/home', d.timeOfficeHome) +
-      row('Multiple journeys?', d.multipleJourneys) +
-      row('Waiting time start', d.waitingTimeStart) + row('Waiting time end', d.waitingTimeEnd) + (d.waitingTimeNotes ? row('Waiting notes', d.waitingTimeNotes) : '') +
+      (d.stationVisits && d.stationVisits.length > 1
+        ? row('Station visits (clock detail)', 'See section 2 — ' + d.stationVisits.length + ' visits')
+        : row('Time departure from station', d.timeDeparture) + row('Time arrival office/home', d.timeOfficeHome) +
+          row('Multiple journeys?', d.multipleJourneys) +
+          row('Waiting time start', d.waitingTimeStart) + row('Waiting time end', d.waitingTimeEnd) + (d.waitingTimeNotes ? row('Waiting notes', d.waitingTimeNotes) : '')) +
       row('Travel \u2013 social (mins)', d.travelSocial) + row('Travel \u2013 unsocial (mins)', d.travelUnsocial) +
       row('Waiting \u2013 social (mins)', d.waitingSocial) + row('Waiting \u2013 unsocial (mins)', d.waitingUnsocial) +
       row('Attendance &amp; Advice \u2013 social (mins)', d.adviceSocial) + row('Attendance &amp; Advice \u2013 unsocial (mins)', d.adviceUnsocial) +

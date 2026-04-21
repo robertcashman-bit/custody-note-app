@@ -2091,6 +2091,7 @@
   <!-- Browser API layer: in Electron preload sets window.api so this no-ops; in browser it loads sql.js dynamically so the app never blocks on an external script when run from the desktop shortcut -->
   <script src="browser-api.js"></script>
   <script src="renderer/lib/duplicate-attendance.js"></script>
+  <script src="renderer/lib/station-visits.js"></script>
   <!-- ── Module layer (load order matters) ─────────────────────
        1. toast.js     — UI feedback (no dependencies)
        2. app.js       — state vars + all functions + init()
