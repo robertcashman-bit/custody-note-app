@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.4.221",
+      "version": "1.4.222",
       "date": "2026-04-21",
       "latest": true,
+      "changes": [
+        "Multi-visit station attendances on one record (per-visit travel, waiting, miles, parking, disbursements)",
+        "PDF and LAA validation updates"
+      ]
+    },
+    {
+      "version": "1.4.221",
+      "date": "2026-04-21",
+      "latest": false,
       "changes": [
         "Duplicate attendance: stricter clear policy. New draft now keeps station, OIC, firm, fee earner, date, offences, disclosure officer, interviews, comms log and attending contacts",
         "everything else (advice, disclosure narrative, custody/arrest, conflict/means, outcome, fees, photos, signatures, CRM14, billing/QuickFile links, officer email log and workflow timestamps) is reset for the new client. Encrypted photo files are no longer copied to the duplicate."
