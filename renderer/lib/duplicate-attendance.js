@@ -112,6 +112,32 @@
     ];
     emptyStringKeys(d, clientAndIdKeys);
 
+    /* Hard reset: delete then re-assign so nothing survives merge/odd JSON shapes */
+    var mustNotCopyIdentity = [
+      'title',
+      'forename',
+      'middleName',
+      'surname',
+      'laaClientFullName',
+      'custodyNumber',
+      'dob',
+      'address1',
+      'address2',
+      'address3',
+      'city',
+      'county',
+      'postCode',
+      'retainerDob',
+      'retainerAddress',
+    ];
+    mustNotCopyIdentity.forEach(function (k) {
+      delete d[k];
+      d[k] = '';
+    });
+
+    /* Skip declaration/retainer auto-fill from (empty) name until user enters new client */
+    d._duplicateFreshClient = true;
+
     SIGNATURE_DATA_KEYS.forEach(function (k) {
       clearKey(d, k);
     });

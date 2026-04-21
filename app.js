@@ -6206,6 +6206,8 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── AUTO-FILL DECLARATION & RETAINER FROM CLIENT (#4) ─── */
   function autoFillDeclarationFields() {
     if (!formData) return;
+    /* Duplicated record: do not rebuild declaration name from prior client */
+    if (formData._duplicateFreshClient) return;
     const dateSource = formData.date || (formData.instructionDateTime && formData.instructionDateTime.slice(0, 10));
     if (!formData.laaClientFullName && (formData.forename || formData.surname)) {
       const full = [formData.forename, formData.surname].filter(Boolean).join(' ').toUpperCase();
@@ -6229,16 +6231,16 @@ var REQUIRED_FIELD_KEYS = [
       autoFillDeclarationFields();
     }
     if (sec.id === 'consents') {
-      if (!formData.retainerClientName && (formData.forename || formData.surname)) {
+      if (!formData._duplicateFreshClient && !formData.retainerClientName && (formData.forename || formData.surname)) {
         const full = [formData.forename, formData.surname].filter(Boolean).join(' ');
         setFieldValue('retainerClientName', full);
         formData.retainerClientName = full;
       }
-      if (!formData.retainerDob && formData.dob) {
+      if (!formData._duplicateFreshClient && !formData.retainerDob && formData.dob) {
         setFieldValue('retainerDob', formData.dob);
         formData.retainerDob = formData.dob;
       }
-      if (!formData.retainerAddress && formData.address1) {
+      if (!formData._duplicateFreshClient && !formData.retainerAddress && formData.address1) {
         const addr = [formData.address1, formData.address2, formData.address3, formData.city, formData.county, formData.postCode].filter(Boolean).join('\n');
         setFieldValue('retainerAddress', addr);
         formData.retainerAddress = addr;
@@ -9595,6 +9597,22 @@ var REQUIRED_FIELD_KEYS = [
     collectPaceSearchData(form);
     collectForensicSampleData(form);
     collectAttendingContactData(form);
+    if (formData._duplicateFreshClient) {
+      var _fn = (formData.forename || '').trim();
+      var _sn = (formData.surname || '').trim();
+      var _mn = (formData.middleName || '').trim();
+      var _crn = (formData.custodyNumber || '').trim();
+      var _dob = (formData.dob || '').trim();
+      var _a1 = (formData.address1 || '').trim();
+      var _a2 = (formData.address2 || '').trim();
+      var _a3 = (formData.address3 || '').trim();
+      var _city = (formData.city || '').trim();
+      var _cty = (formData.county || '').trim();
+      var _pc = (formData.postCode || '').trim();
+      if (_fn || _sn || _mn || _crn || _dob || _a1 || _a2 || _a3 || _city || _cty || _pc) {
+        delete formData._duplicateFreshClient;
+      }
+    }
   }
 
   function collectPaceSearchData(form) {
