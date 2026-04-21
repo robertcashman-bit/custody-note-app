@@ -302,29 +302,18 @@ function duplicateAttendance(id) {
         showToast('Could not create duplicate record', 'error');
         return;
       }
-      var photoP = window.api.photosDuplicateFolder
-        ? window.api.photosDuplicateFolder({ fromId: id, toId: numericId })
-        : Promise.resolve({ ok: true });
-      photoP.then(function() {
-        try {
-          if (typeof window._recordCache !== 'undefined' && window._recordCache && window._recordCache.delete) {
-            window._recordCache.delete(numericId);
-          }
-        } catch (e) { /* ignore */ }
-        openAttendance(numericId);
-        showToast('Attendance duplicated – please complete client details.', 'success');
-        try { if (typeof refreshList === 'function') refreshList(); } catch (e2) { /* ignore */ }
-      }).catch(function(e) {
-        console.error('[duplicate photos]', e);
-        try {
-          if (typeof window._recordCache !== 'undefined' && window._recordCache && window._recordCache.delete) {
-            window._recordCache.delete(numericId);
-          }
-        } catch (e3) { /* ignore */ }
-        openAttendance(numericId);
-        showToast('Attendance duplicated – please complete client details.', 'success');
-        try { if (typeof refreshList === 'function') refreshList(); } catch (e4) { /* ignore */ }
-      });
+      /* Photos are NOT copied to the new draft (per duplicate policy):
+         the cloned `data` already has `photos` cleared, and the encrypted
+         files belong to the original client. New client starts with an
+         empty photo set. */
+      try {
+        if (typeof window._recordCache !== 'undefined' && window._recordCache && window._recordCache.delete) {
+          window._recordCache.delete(numericId);
+        }
+      } catch (e) { /* ignore */ }
+      openAttendance(numericId);
+      showToast('Attendance duplicated – please complete client details.', 'success');
+      try { if (typeof refreshList === 'function') refreshList(); } catch (e2) { /* ignore */ }
     }).catch(function() {
       showToast('Failed to duplicate record', 'error');
     });

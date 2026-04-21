@@ -1745,7 +1745,9 @@
                 <li><strong>Edit</strong> &mdash; Opens the record for editing. If the record is finalised, you will be asked to confirm; the status reverts to draft until you re-finalise.</li>
                 <li><strong>Print PDF</strong> &mdash; Opens an in-app print preview of the full attendance note with a Print dialog.</li>
                 <li><strong>Export PDF</strong> &mdash; Saves the attendance note as a PDF file to your Desktop.</li>
-                <li><strong>Duplicate</strong> &mdash; Saves a <strong>new draft</strong> with the same station/session context (advice, disclosure, interview notes, etc.). Client name, CRN, address, phone, DOB, and file references are cleared so you can enter another client from the same custody suite.</li>
+                <li><strong>Duplicate</strong> &mdash; Saves a <strong>new draft</strong> for another client in the same custody session.<br>
+                  <em>Kept</em>: station, OIC, attendance date, firm/fee earner, offences, disclosure officer, interviews, comms log, attending contacts.<br>
+                  <em>Cleared</em>: client identity (name, DOB, address, phone/email, NI/ARC, CRN, UFN/MAAT, file refs); custody &amp; arrest, PACE reviews, strip-search; supervisor / appropriate adult / interpreter; disclosure narrative, co-suspects, witnesses, CCTV, exhibits, devices, samples, special warnings; conflict check + means/financial; advice &amp; instructions; outcome &amp; bail; time recording, fees, mileage, parking, disbursements; consents/retainer; signatures; CRM14; QuickFile/billing links; officer email log; workflow timestamps and lock/archive flags. Photos and attached files are <strong>not</strong> copied across.</li>
                 <li><strong>New matter</strong> &mdash; Starts a new matter for the <strong>same client</strong>, carrying over personal details; you get a new file number on save.</li>
                 <li><strong>Delete</strong> &mdash; Deletes the record. Finalised records are soft-deleted (can be recovered). You will be asked for a reason.</li>
               </ul>
@@ -1882,7 +1884,7 @@
                 <li>Police station and court name fields have <strong>typeahead search</strong> &mdash; type the first few letters and pick from the list.</li>
                 <li>When a client is <strong>charged</strong>, the app offers to pre-fill charge details from the offences you recorded in Section 4.</li>
                 <li>The <strong>Scratchpad</strong> (bottom-right corner) is a floating notepad for temporary notes during an attendance.</li>
-                <li>Use <strong>Duplicate</strong> when another client arrives in the same suite: context is copied, client-specific fields are cleared, and the new draft opens for editing.</li>
+                <li>Use <strong>Duplicate</strong> when another client arrives in the same suite: station, offences, interviews and your comms log are kept; identity, advice, disclosure, outcome, fees, photos and signatures are cleared; the new draft opens for editing.</li>
                 <li>Toggle <strong>Dark Mode</strong> for night shifts using the moon icon in the top-right header.</li>
               </ul>
             </div>
