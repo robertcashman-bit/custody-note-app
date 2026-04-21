@@ -2939,6 +2939,9 @@ var REQUIRED_FIELD_KEYS = [
     if (typeof refreshCustomFormScrollbar === 'function') {
       requestAnimationFrame(function() { refreshCustomFormScrollbar(); });
     }
+    if (typeof window.syncFormDuplicateButtonVisibility === 'function') {
+      window.syncFormDuplicateButtonVisibility();
+    }
   }
 
   /* ─── HOME / COMMAND CENTER ─── */
@@ -3929,7 +3932,6 @@ var REQUIRED_FIELD_KEYS = [
       useSection.style.display = 'none';
       addSection.style.display = 'block';
       document.getElementById('qc-new-firm-name').value = '';
-      document.getElementById('qc-new-firm-laa').value = '';
       document.getElementById('qc-new-firm-contact').value = '';
       document.getElementById('qc-new-firm-phone').value = '';
       document.getElementById('qc-new-firm-email').value = '';
@@ -3950,7 +3952,7 @@ var REQUIRED_FIELD_KEYS = [
       if (btn) { btn.disabled = true; btn.textContent = 'Adding...'; }
       const newFirm = {
         name: name,
-        laa_account: (document.getElementById('qc-new-firm-laa') && document.getElementById('qc-new-firm-laa').value || '').trim(),
+        laa_account: '',
         contact_name: (document.getElementById('qc-new-firm-contact') && document.getElementById('qc-new-firm-contact').value || '').trim(),
         contact_phone: (document.getElementById('qc-new-firm-phone') && document.getElementById('qc-new-firm-phone').value || '').trim(),
         contact_email: (document.getElementById('qc-new-firm-email') && document.getElementById('qc-new-firm-email').value || '').trim(),
@@ -5720,7 +5722,7 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               '<button type="button" class="btn-list-action" data-action="amend" title="Open record to edit (amend)">Edit</button>' +
-              '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for further visit">Duplicate</button>' +
+              '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for another client (same session)">Duplicate</button>' +
               '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
               '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>' +
             '</div>' +
@@ -5770,55 +5772,7 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
-  /* ─── DUPLICATE ATTENDANCE (#8) ─── */
-  function duplicateAttendance(id) {
-    window.api.attendanceGet(id).then(row => {
-      if (!row || !row.data) return;
-      const src = safeJson(row.data);
-      const copyKeys = ['title','surname','forename','middleName','gender','dob','custodyNumber','clientPhone','clientEmail',
-        'clientEmailConsent','address1','address2','address3','city','county','postCode','accommodationStatus',
-        'accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber',
-        'benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes',
-        'clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason',
-        'nationality','nationalityOther','ethnicOriginCode','disabilityCode','riskAssessment',
-        'groundsForArrest','groundsForDetention','dateOfArrest','custodyRecordRead','custodyRecordIssues',
-        'medicationRequired','medication','psychiatricIssues','psychiatricNotes','literate','drugsTest','medicalExaminationOutcome',
-        'juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress',
-        'oicName','oicEmail','oicPhone','oicUnit',
-        'firmContactName','firmContactPhone','firmContactEmail','offenceSummary',
-        'nameOfComplainant','witnessIntimidation','coSuspectDetails','coSuspectConflict','coSuspectConflictNotes','cctvViewed','exhibitsInspected','exhibitsNotes','writtenEvidenceDetails','pncDisclosed','pncNotes','samplesDisclosed','paceSearches','forensicSamples','cautionAvailable','clothingShoesSeized',
-        'offence1Details','offence1Date','offence1ModeOfTrial','offence1Statute',
-        'offence2Details','offence2Date','offence2ModeOfTrial','offence2Statute',
-        'offence3Details','offence3Date','offence3ModeOfTrial','offence3Statute',
-        'offence4Details','offence4Date','offence4ModeOfTrial','offence4Statute','otherOffencesNotes',
-        'matterTypeCode','policeStationId','policeStationName','firmId','firmLaaAccount','firmName',
-        'multipleJourneys','waitingTimeStart','waitingTimeEnd','waitingTimeNotes',
-        'outcomeOffence3Details','outcomeOffence3Statute','outcomeOffence4Details','outcomeOffence4Statute',
-        'dsccRef','sourceOfReferral','fileReference','travelOriginPostcode','schemeId',
-        'instructionDateTime','weekendBankHoliday','otherLocation','dutySolicitor','clientStatus','telephoneAdviceGiven','feeEarnerTelephoneAdvice','arrivalNotes',
-        'attendanceMode','instructionSource','dsccNotificationStatus','locationType','attendanceSubType','voluntaryStatusConfirmed','constablePresent'];
-      formData = {};
-      copyKeys.forEach(k => { if (src[k]) formData[k] = src[k]; });
-      var isVoluntary = src.attendanceMode === 'voluntary';
-      formData.workType = isVoluntary ? 'Further Voluntary Attendance' : 'Further Police Station Attendance';
-      formData.caseStatus = 'Existing case';
-      formData.clientType = 'Existing';
-      currentAttendanceId = null;
-      currentSectionIdx = 0;
-      activeFormSections = isVoluntary ? voluntaryFormSections : formSections;
-      if (isVoluntary) formData.attendanceMode = 'voluntary';
-      prefillDefaults();
-      setTimeout(() => {
-        copyKeys.forEach(k => { if (src[k]) formData[k] = src[k]; });
-        formData.workType = isVoluntary ? 'Further Voluntary Attendance' : 'Further Police Station Attendance';
-        formData.caseStatus = 'Existing case';
-        formData.clientType = 'Existing';
-        if (isVoluntary) formData.attendanceMode = 'voluntary';
-        renderForm(formData);
-        showView('new');
-      }, 200);
-    }).catch(function(e) { showToast('Failed to load record', 'error'); console.error('[duplicateAttendance]', e); });
-  }
+  /* ─── DUPLICATE ATTENDANCE: implemented globally in renderer/views/list.js (duplicateAttendance) ─── */
 
   /* ─── NEW MATTER (SAME CLIENT) ─── Copy only client personal details; new file number on save */
   var clientPersonalKeys = ['title','forename','middleName','surname','dob','gender','address1','address2','address3','city','county','postCode','clientPhone','clientEmail','clientEmailConsent','nationality','nationalityOther','accommodationStatus','accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber','benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes','clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason','ethnicOriginCode','disabilityCode','riskAssessment','juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress','interpreterName','interpreterLanguage','languageIssues'];
@@ -5882,6 +5836,7 @@ var REQUIRED_FIELD_KEYS = [
       currentSectionIdx = 0;
       renderForm(formData);
       showView('new');
+      if (typeof window.syncFormDuplicateButtonVisibility === 'function') window.syncFormDuplicateButtonVisibility();
       maybeDepartureNudge();
       return;
     }
@@ -5920,6 +5875,7 @@ var REQUIRED_FIELD_KEYS = [
       currentSectionIdx = 0;
       renderForm(formData);
       showView('new');
+      if (typeof window.syncFormDuplicateButtonVisibility === 'function') window.syncFormDuplicateButtonVisibility();
       maybeDepartureNudge();
     }).catch(function(err) {
       if (requestToken !== _openAttendanceToken || currentAttendanceId !== id) return;
@@ -8125,7 +8081,6 @@ var REQUIRED_FIELD_KEYS = [
       addRow.style.display = 'none';
       var firmFields = [
         { id: 'afn', placeholder: 'Firm name *', type: 'text' },
-        { id: 'afl', placeholder: 'LAA Account no.', type: 'text' },
         { id: 'afc', placeholder: 'Contact name (person instructed)', type: 'text' },
         { id: 'afp', placeholder: 'Contact phone', type: 'tel' },
         { id: 'afe', placeholder: 'Contact email', type: 'email' },
@@ -8319,7 +8274,7 @@ var REQUIRED_FIELD_KEYS = [
         firmInps.afn.classList.remove('input-error');
         var newFirm = {
           name: name,
-          laa_account: firmInps.afl.value.trim(),
+          laa_account: '',
           contact_name: firmInps.afc.value.trim(),
           contact_phone: firmInps.afp.value.trim(),
           contact_email: firmInps.afe.value.trim(),
@@ -12559,6 +12514,14 @@ PDF_CASENOTE_ADVERT +
       return;
     }
 
+    window.syncFormDuplicateButtonVisibility = function () {
+      var btn = document.getElementById('form-duplicate-btn');
+      if (!btn) return;
+      var vf = document.getElementById('view-form');
+      var onForm = vf && vf.classList.contains('active');
+      btn.style.display = onForm && currentAttendanceId ? '' : 'none';
+    };
+
     var _customEmailTemplatesCache = null;
 
     document.addEventListener('licence-activated', function () {
@@ -13267,6 +13230,14 @@ PDF_CASENOTE_ADVERT +
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('billing-panel-btn')?.addEventListener('click', () => { promptBeforeOpeningBilling(); });
     document.getElementById('kb-help-btn')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
+    document.getElementById('form-duplicate-btn')?.addEventListener('click', function() {
+      if (!currentAttendanceId) { showToast('Save the record first', 'info'); return; }
+      if (typeof duplicateAttendance !== 'function') {
+        showToast('Duplicate is not available. Please refresh the app.', 'error');
+        return;
+      }
+      duplicateAttendance(currentAttendanceId);
+    });
     document.getElementById('form-header-history-btn')?.addEventListener('click', function() {
       if (!currentAttendanceId) { showToast('Save the record first to view history', 'info'); return; }
       window.api.auditLogGetHistory(currentAttendanceId).then(function(entries) {

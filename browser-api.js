@@ -235,6 +235,10 @@
       return Promise.resolve(true);
     },
 
+    photosDuplicateFolder: function () {
+      return Promise.resolve({ ok: true, copied: 0 });
+    },
+
     /* ── Stations ── */
     stationsList: function () {
       return Promise.resolve(

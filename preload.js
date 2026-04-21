@@ -87,6 +87,7 @@ contextBridge.exposeInMainWorld('api', {
   photoSave: (params) => ipcRenderer.invoke('photo-save', params),
   photoLoad: (params) => ipcRenderer.invoke('photo-load', params),
   photoDelete: (params) => ipcRenderer.invoke('photo-delete', params),
+  photosDuplicateFolder: (params) => ipcRenderer.invoke('photos-duplicate-folder', params),
   /* LAA Official PDF forms */
   laaGenerateOfficialPdf: (params) => ipcRenderer.invoke('laa-generate-official-pdf', params),
   laaOpenOfficialTemplate: (formType) => ipcRenderer.invoke('laa-open-official-template', formType),

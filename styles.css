@@ -2007,8 +2007,13 @@ html.dark .station-code { color: var(--primary); }
 
 /* Form first page: Add new firm / Use existing firm */
 .form-firm-wrap { margin-top: 0.25rem; }
-.form-firm-choice-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
-.form-firm-choice-btn { min-width: 120px; }
+.form-firm-choice-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; align-items: center; }
+.form-firm-choice-btn { min-width: 120px; min-height: 2.75rem; }
+/* Quick Capture + full form: keep instructing-firm actions easy to find and tap */
+#view-quickcapture .form-firm-wrap,
+#attendance-form .form-firm-wrap {
+  scroll-margin-top: 0.75rem;
+}
 .form-firm-selected { margin-bottom: 0.5rem; padding: 0.4rem 0; }
 .form-firm-selected-meta {
   display: block;

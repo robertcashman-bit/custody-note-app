@@ -142,7 +142,7 @@ function refreshList() {
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               archiveBtn +
               '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + r.id + '">Edit</button>' +
-              '<button type="button" class="btn-list-action dup-btn" title="Duplicate for further visit" data-id="' + r.id + '">Duplicate</button>' +
+              '<button type="button" class="btn-list-action dup-btn" title="Duplicate for another client (same session)" data-id="' + r.id + '">Duplicate</button>' +
               '<button type="button" class="btn-list-action pdf-btn" title="Export PDF to Desktop" data-id="' + r.id + '">PDF</button>' +
               '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + r.id + '">Delete</button>' +
               emailOicBtn +
@@ -275,48 +275,61 @@ function restoreDeletedAttendance(id, title) {
 }
 
 function duplicateAttendance(id) {
+  if (!window.api || !window.api.attendanceGet || !window.api.attendanceSave) return;
+  if (typeof duplicateAttendanceData !== 'function') {
+    showToast('Duplicate is not available. Please refresh the app.', 'error');
+    return;
+  }
   window.api.attendanceGet(id).then(function(row) {
     if (!row || !row.data) { showToast('Could not load record to duplicate', 'error'); return; }
     var src = safeJson(row.data);
-    /* Time-sensitive fields intentionally excluded: instructionDateTime, waitingTimeStart,
-       waitingTimeEnd, waitingTimeNotes, arrivalNotes — must be re-entered for the new visit */
-    var copyKeys = ['title','surname','forename','middleName','gender','dob','custodyNumber','clientPhone','clientEmail',
-      'clientEmailConsent','address1','address2','address3','postCode','accommodationStatus',
-      'accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber',
-      'benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','incomeNotes',
-      'nationality','nationalityOther','ethnicOriginCode','disabilityCode','riskAssessment',
-      'groundsForArrest','groundsForDetention','dateOfArrest','custodyRecordRead','custodyRecordIssues',
-      'medication','psychiatricIssues','psychiatricNotes','literate','drugsTest','medicalExaminationOutcome',
-      'juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress',
-      'oicName','oicEmail','oicPhone','oicUnit',
-      'firmContactName','firmContactPhone','firmContactEmail','offenceSummary',
-      'nameOfComplainant','witnessIntimidation','coSuspectDetails','coSuspectConflict','coSuspectConflictNotes','cctvViewed','exhibitsInspected','exhibitsNotes','writtenEvidenceDetails','pncDisclosed','pncNotes','s18Searches','samplesDisclosed','paceSearches','forensicSamples','cautionAvailable','clothingShoesSeized',
-      'offence1Details','offence1Date','offence1ModeOfTrial','offence1Statute',
-      'offence2Details','offence2Date','offence2ModeOfTrial','offence2Statute',
-      'offence3Details','offence3Date','offence3ModeOfTrial','offence3Statute',
-      'offence4Details','offence4Date','offence4ModeOfTrial','offence4Statute','otherOffencesNotes',
-      'matterTypeCode','policeStationId','policeStationName','firmId','firmLaaAccount','firmName',
-      'multipleJourneys',
-      'dsccRef','sourceOfReferral','fileReference','travelOriginPostcode','schemeId',
-      'weekendBankHoliday','otherLocation','dutySolicitor','clientStatus','telephoneAdviceGiven'];
-    formData = {};
-    copyKeys.forEach(function(k) { if (src[k]) formData[k] = src[k]; });
-    formData.workType = 'Further Police Station Attendance';
-    formData.caseStatus = 'Existing case';
-    formData.clientType = 'Existing';
-    currentAttendanceId = null;
-    currentSectionIdx = 0;
-    prefillDefaults();
-    setTimeout(function() {
-      copyKeys.forEach(function(k) { if (src[k]) formData[k] = src[k]; });
-      formData.workType = 'Further Police Station Attendance';
-      formData.caseStatus = 'Existing case';
-      formData.clientType = 'Existing';
-      renderForm(formData);
-      if (typeof navigateTo === 'function') navigateTo('new'); else showView('new');
-    }, 200);
+    if (src._formType === 'telephone') {
+      showToast('Duplicate is for station attendance notes. Use New attendance for telephone advice.', 'info', 6000);
+      return;
+    }
+    var newData = duplicateAttendanceData(src, id);
+    window.api.attendanceSave({ id: null, data: newData, status: 'draft' }).then(function(result) {
+      if (result && typeof result === 'object' && result.error) {
+        showToast((result.message || result.error) ? String(result.message || result.error) : 'Could not save duplicate', 'error');
+        return;
+      }
+      if (result == null) {
+        showToast('Could not create duplicate record', 'error');
+        return;
+      }
+      var numericId = typeof result === 'number' ? result : parseInt(result, 10);
+      if (isNaN(numericId)) {
+        showToast('Could not create duplicate record', 'error');
+        return;
+      }
+      var photoP = window.api.photosDuplicateFolder
+        ? window.api.photosDuplicateFolder({ fromId: id, toId: numericId })
+        : Promise.resolve({ ok: true });
+      photoP.then(function() {
+        try {
+          if (typeof window._recordCache !== 'undefined' && window._recordCache && window._recordCache.delete) {
+            window._recordCache.delete(numericId);
+          }
+        } catch (e) { /* ignore */ }
+        openAttendance(numericId);
+        showToast('Attendance duplicated – please complete client details.', 'success');
+        try { if (typeof refreshList === 'function') refreshList(); } catch (e2) { /* ignore */ }
+      }).catch(function(e) {
+        console.error('[duplicate photos]', e);
+        try {
+          if (typeof window._recordCache !== 'undefined' && window._recordCache && window._recordCache.delete) {
+            window._recordCache.delete(numericId);
+          }
+        } catch (e3) { /* ignore */ }
+        openAttendance(numericId);
+        showToast('Attendance duplicated – please complete client details.', 'success');
+        try { if (typeof refreshList === 'function') refreshList(); } catch (e4) { /* ignore */ }
+      });
+    }).catch(function() {
+      showToast('Failed to duplicate record', 'error');
+    });
   }).catch(function() {
-    showToast('Failed to duplicate record', 'error');
+    showToast('Failed to load record to duplicate', 'error');
   });
 }
 
@@ -329,6 +342,7 @@ function openAttendance(id) {
     currentSectionIdx = 0;
     renderForm(formData);
     if (typeof navigateTo === 'function') navigateTo('new'); else showView('new');
+    if (typeof window.syncFormDuplicateButtonVisibility === 'function') window.syncFormDuplicateButtonVisibility();
   }).catch(function() {
     showToast('Failed to open record', 'error');
   });
