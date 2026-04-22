@@ -14,9 +14,10 @@
  *  - releases are sorted descending by semver
  *  - website releases.json (if present) matches
  */
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { spawnSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
@@ -137,6 +138,45 @@ if (existsSync(websiteReleasesPath)) {
   }
 } else {
   warn('Website releases.json not found (expected at: ' + websiteReleasesPath + ').');
+}
+
+// --- Critical main-process file integrity ---
+//
+// Hard-block release if any critical main-process JS file fails to parse,
+// is suspiciously small, or no longer starts with its expected first line.
+// This catches the v1.5.0 incident where `updater.js` shipped with a chunk
+// of test-file content concatenated in front of it, breaking app launch
+// with `SyntaxError: Unexpected identifier 'Optimiz'` at line 1.
+
+const CRITICAL_FILES = [
+  { file: 'main.js',         firstLineStartsWith: 'const { app, BrowserWindow', minBytes: 10000 },
+  { file: 'preload.js',      firstLineStartsWith: 'const { contextBridge',      minBytes: 1000  },
+  { file: 'updater.js',      firstLineStartsWith: "const path = require('path')", minBytes: 10000 },
+  { file: 'updateState.js',  firstLineStartsWith: "const fs = require('fs')",     minBytes: 200   },
+];
+
+for (const spec of CRITICAL_FILES) {
+  const abs = join(APP_ROOT, spec.file);
+  if (!existsSync(abs)) {
+    error(`Critical file missing: ${spec.file}`);
+    continue;
+  }
+  const st = statSync(abs);
+  if (st.size < spec.minBytes) {
+    error(`Critical file too small: ${spec.file} is ${st.size} bytes (expected ≥ ${spec.minBytes}). Possible truncation.`);
+  }
+  const src = readFileSync(abs, 'utf8');
+  const firstLine = (src.split('\n')[0] || '').replace(/\r$/, '');
+  if (spec.firstLineStartsWith && !firstLine.startsWith(spec.firstLineStartsWith)) {
+    error(
+      `Critical file ${spec.file} first line is "${firstLine.slice(0, 80)}" — expected to start with "${spec.firstLineStartsWith}". ` +
+      `File may have been overwritten with foreign content.`
+    );
+  }
+  const check = spawnSync(process.execPath, ['--check', abs], { encoding: 'utf8' });
+  if (check.status !== 0) {
+    error(`Critical file ${spec.file} failed node --check:\n${(check.stderr || '').trim()}`);
+  }
 }
 
 // --- Output ---

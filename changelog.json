@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.5.0",
+      "version": "1.5.1",
       "date": "2026-04-22",
       "latest": true,
+      "changes": [
+        "Hotfix: rebuild after v1.5.0 shipped a corrupted updater.js that crashed the main process on launch (SyntaxError: Unexpected identifier 'Optimiz')",
+        "Build hardening: verify-release-consistency.mjs now runs node --check on main.js, preload.js, updater.js and updateState.js, and refuses to build if any first line, size or parse check fails",
+        "Tests: new tests/criticalFilesIntegrity.test.js asserts the same guarantees in CI so silent file corruption can never ship undetected again"
+      ]
+    },
+    {
+      "version": "1.5.0",
+      "date": "2026-04-22",
+      "latest": false,
       "changes": [
         "UX audit batches 2 & 3 \u2014 strong improvements + small wins",
         "Voluntary §1 now leads with Voluntary Status & Rights (attendance, free-to-leave, caution, notice of rights, legal advice, sub-type, constable-present), so the most decisive context is captured first",
