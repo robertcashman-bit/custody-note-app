@@ -317,24 +317,24 @@ describe('Step 2: Billing screen — QuickFile-configured path', () => {
     assert.ok(billingScreenJs.includes("QuickFile invoice"));
   });
 
-  it('shows "Generate Invoice" button only when QF is configured', () => {
+  it('shows "Send Bill to QuickFile" button only when QF is configured', () => {
     assert.ok(billingScreenJs.includes("qfConfigured"));
-    assert.ok(billingScreenJs.includes("Generate Invoice"));
+    assert.ok(billingScreenJs.includes("Send Bill to QuickFile"));
   });
 
-  it('"Generate Invoice" button is disabled until all 3 review checkboxes are checked', () => {
+  it('"Send Bill to QuickFile" button is disabled until all 3 review checkboxes are checked', () => {
     assert.ok(billingScreenJs.includes('createBtn.disabled = !allChecked'));
     assert.ok(billingScreenJs.includes('wf-check-attendance'));
     assert.ok(billingScreenJs.includes('wf-check-docs'));
     assert.ok(billingScreenJs.includes('wf-check-billing'));
   });
 
-  it('disabled Generate Invoice button explains WHY it is locked', () => {
+  it('disabled Send Bill to QuickFile button explains WHY it is locked', () => {
     assert.ok(billingScreenJs.includes('tick all 3 checkboxes first'));
   });
 
-  it('Generate Invoice button text changes when unlocked', () => {
-    assert.ok(billingScreenJs.includes("'&#10003; Generate Invoice'"));
+  it('Send Bill to QuickFile button text changes when unlocked', () => {
+    assert.ok(billingScreenJs.includes("'&#10003; Send Bill to QuickFile'"));
   });
 
   it('shows "Next: Review & complete" when invoice already exists or QF not configured', () => {
@@ -342,8 +342,8 @@ describe('Step 2: Billing screen — QuickFile-configured path', () => {
     assert.ok(billingScreenJs.includes('Next: Review &amp; complete'));
   });
 
-  it('shows "Create Another Invoice" label when existing invoice present', () => {
-    assert.ok(billingScreenJs.includes('Create Another Invoice'));
+  it('shows "Send Another Invoice to QuickFile" label when existing invoice present', () => {
+    assert.ok(billingScreenJs.includes('Send Another Invoice to QuickFile'));
   });
 
   it('detects existing invoice via quickfile_invoice_id in invoice status', () => {
@@ -398,10 +398,10 @@ describe('Step 2: Billing screen — action guide', () => {
     assert.ok(billingScreenJs.includes('What to do on this step'));
   });
 
-  it('tells user to check charges, tick boxes, then generate invoice', () => {
+  it('tells user to check charges, tick boxes, then send the bill to QuickFile', () => {
     assert.ok(billingScreenJs.includes('charges and amounts are correct'));
     assert.ok(billingScreenJs.includes('Review Confirmation'));
-    assert.ok(billingScreenJs.includes('Generate Invoice'));
+    assert.ok(billingScreenJs.includes('Send Bill to QuickFile'));
   });
 
   it('guide differs when invoice already exists', () => {
@@ -441,8 +441,8 @@ describe('Step 2: Billing screen — review confirmation UX', () => {
     assert.ok(billingScreenJs.includes('wf-review-confirmation-card'));
   });
 
-  it('explains that all 3 boxes must be ticked to unlock invoice', () => {
-    assert.ok(billingScreenJs.includes('tick all 3 to unlock invoice'));
+  it('explains that all 3 boxes must be ticked to unlock QuickFile send action', () => {
+    assert.ok(billingScreenJs.includes('tick all 3 to unlock QuickFile'));
     assert.ok(billingScreenJs.includes('wf-review-confirm-hint'));
   });
 
@@ -616,8 +616,8 @@ describe('Step 2: Billing screen — invoice creation', () => {
     assert.ok(billingScreenJs.includes('goToInstructingFirmSection'));
   });
 
-  it('disables button and shows "Creating invoice..." during API call', () => {
-    assert.ok(billingScreenJs.includes("createBtn.textContent = 'Creating invoice...'"));
+  it('disables button and shows "Sending to QuickFile..." during API call', () => {
+    assert.ok(billingScreenJs.includes("createBtn.textContent = 'Sending to QuickFile...'"));
   });
 
   it('re-enables button on success or failure (finally block)', () => {
@@ -630,7 +630,7 @@ describe('Step 2: Billing screen — invoice creation', () => {
     assert.ok(billingScreenJs.includes('formData.quickfileInvoiceNumber'));
     assert.ok(billingScreenJs.includes('quietSave'));
     assert.ok(billingScreenJs.includes('refreshQuickFileInvoiceRefDisplay'));
-    assert.ok(billingScreenJs.includes('created successfully'));
+    assert.ok(billingScreenJs.includes('sent successfully'));
   });
 
   it('on success: auto-advances to completion step', () => {
@@ -644,8 +644,8 @@ describe('Step 2: Billing screen — invoice creation', () => {
   });
 
   it('on failure: shows error toast', () => {
-    assert.ok(billingScreenJs.includes('Invoice failed:'));
-    assert.ok(billingScreenJs.includes('Invoice error:'));
+    assert.ok(billingScreenJs.includes('Send to QuickFile failed:'));
+    assert.ok(billingScreenJs.includes('Send to QuickFile error:'));
   });
 });
 

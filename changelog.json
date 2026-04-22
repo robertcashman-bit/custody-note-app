@@ -1,9 +1,31 @@
 {
   "releases": [
     {
-      "version": "1.5.1",
+      "version": "1.5.3",
       "date": "2026-04-22",
       "latest": true,
+      "changes": [
+        "Fix: workflow Step 2 \u2014 the QuickFile send button is now clearly labelled \u201cSend Bill to QuickFile\u201d (was \u201cGenerate Invoice\u201d, which users did not recognise as the QuickFile action). The locked, unlocked, in-flight, success and failure messages all use the same explicit wording so it is obvious which button uploads the bill to QuickFile",
+        "Fix: Archive guard \u2014 if QuickFile is configured and no invoice has been sent yet, clicking Archive (on Step 2 \u201cArchive & close\u201d or Step 3 \u201cArchive\u201d) now shows a 3-way choice: \u201cSend Bill to QuickFile first (recommended)\u201d, \u201cArchive without sending to QuickFile\u201d, or \u201cCancel\u201d. Stops a matter being silently archived without the bill ever reaching QuickFile",
+        "New: shared showChoice() helper in renderer/toast.js for stacked multi-option modals; exposed on window for any future workflow that needs more than yes/no",
+        "Tests: new tests/quickfileSendButtonAndArchiveGuard.test.js (17 assertions) plus updated billing-workflow regression tests so the v1.5.3 wording and archive guard cannot silently regress"
+      ]
+    },
+    {
+      "version": "1.5.2",
+      "date": "2026-04-22",
+      "latest": false,
+      "changes": [
+        "Fix: time-breakdown panel \u2014 \u201cAll visits \u2014 chargeable attendance & advice (totals)\u201d now reads from the recorded visit times via aggregateMinuteBuckets, not from the user-overrideable adviceSocial / adviceUnsocial fields in \u00a79. Stops the panel showing e.g. \u201cVisit 1 attendance = 78 mins, All visits totals = 36 mins\u201d when an old override flag is still in place",
+        "Fix: when a manual override on the \u00a79 attendance fields disagrees with the auto totals, the panel now shows an amber \u201cManual override active\u201d note explaining which figure will actually be billed and how to reset it",
+        "Fix: inline \u201cAdd new firm\u201d form on \u00a71 rebuilt as a labelled stacked layout (Firm name *, Contact name, Contact phone with grouped None / N/A / Not applicable quick-fills, Contact email, Source of referral). Each field is on its own row with a clear label that doesn\u2019t disappear when you start typing",
+        "Fix: \u201cAdd Firm\u201d button on the inline form is now solid primary (was outline-only and looked disabled in dark mode); \u201cCancel\u201d is plain secondary"
+      ]
+    },
+    {
+      "version": "1.5.1",
+      "date": "2026-04-22",
+      "latest": false,
       "changes": [
         "Hotfix: rebuild after v1.5.0 shipped a corrupted updater.js that crashed the main process on launch (SyntaxError: Unexpected identifier 'Optimiz')",
         "Build hardening: verify-release-consistency.mjs now runs node --check on main.js, preload.js, updater.js and updateState.js, and refuses to build if any first line, size or parse check fails",

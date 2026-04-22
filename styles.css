@@ -2059,6 +2059,42 @@ html.dark .station-code { color: var(--primary); }
 }
 .add-firm-inline input { flex: 1; min-width: 120px; }
 
+/* Stacked, labelled "Add new firm" form (v1.5.2+).
+ * Replaces the previous flex-wrapped row that left users with a sea of
+ * unlabelled inputs once they'd typed values in (placeholders disappear).
+ */
+.add-firm-stacked { display: flex; flex-direction: column; gap: 0.85rem; }
+.add-firm-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.add-firm-field__label {
+  font-size: 0.85rem; font-weight: 600; color: var(--text, #0f172a);
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.25rem;
+}
+.add-firm-field__required { color: #dc2626; font-weight: 700; }
+.add-firm-field__optional {
+  font-weight: 400; font-size: 0.78rem; color: var(--text-muted, #64748b);
+}
+.add-firm-field__input { width: 100%; box-sizing: border-box; }
+.add-firm-field__input-row {
+  display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;
+}
+.add-firm-field__input-row .add-firm-field__input {
+  flex: 1 1 220px; min-width: 0;
+}
+.add-firm-field__quickfill { white-space: nowrap; }
+
+.add-firm-actions {
+  display: flex; gap: 0.6rem; align-items: center; margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+.add-firm-actions__primary {
+  font-weight: 700; min-height: 2.5rem; padding-left: 1.1rem; padding-right: 1.1rem;
+}
+.add-firm-actions__cancel { min-height: 2.5rem; }
+
+html.dark .add-firm-field__label { color: #e5eefb; }
+html.dark .add-firm-field__optional { color: #94a3b8; }
+html.dark .add-firm-field__required { color: #f87171; }
+
 /* Form first page: Add new firm / Use existing firm */
 .form-firm-wrap { margin-top: 0.25rem; }
 .form-firm-choice-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; align-items: center; }
@@ -2554,6 +2590,27 @@ body.form-active .form-bottom-bar { display: flex; }
 }
 .time-breakdown-empty {
   color: var(--text-muted, #64748b);
+}
+.time-breakdown-override-note {
+  margin-top: 0.5rem !important;
+  padding: 0.4rem 0.55rem;
+  list-style: none;
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: var(--text, #0f172a);
+}
+.time-breakdown-override-note strong {
+  color: #b45309;
+  margin-right: 0.25rem;
+}
+html.dark .time-breakdown-override-note {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fde68a;
+}
+html.dark .time-breakdown-override-note strong {
+  color: #fbbf24;
 }
 
 .station-visits-help {
@@ -3885,6 +3942,14 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
   display: flex;
   gap: 0.6rem;
   justify-content: flex-end;
+}
+.cn-confirm-btns--stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+.cn-confirm-btns--stacked .btn {
+  width: 100%;
+  justify-content: center;
 }
 .cn-modal-body {
   font-size: 0.9rem;

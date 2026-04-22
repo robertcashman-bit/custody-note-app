@@ -150,8 +150,8 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
       gSteps.push({ text: 'Click <strong>Next: Review &amp; complete</strong> to continue.', done: false });
     } else {
       gSteps.push({ text: 'Check the charges and amounts are correct (edit if needed).', done: false });
-      gSteps.push({ text: 'Tick all 3 checkboxes under <strong>Review Confirmation</strong> below to unlock the invoice button.', done: false });
-      gSteps.push({ text: 'Click <strong>Generate Invoice</strong> to send to QuickFile.', done: false });
+      gSteps.push({ text: 'Tick all 3 checkboxes under <strong>Review Confirmation</strong> below to unlock the QuickFile button.', done: false });
+      gSteps.push({ text: 'Click <strong>Send Bill to QuickFile</strong> to upload this invoice to your QuickFile account.', done: false });
       gSteps.push({ text: 'Or click <strong>Next: complete without invoice</strong> if invoicing was handled separately.', done: false });
     }
     var archivedGuide = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
@@ -230,14 +230,14 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
       '</div>' +
 
       '<div class="wf-card wf-review-confirmation-card">' +
-        '<h4 class="wf-card-title">&#9888; Review Confirmation &mdash; tick all 3 to unlock invoice</h4>' +
-        '<p class="wf-review-confirm-hint">You must tick every box before the <strong>Generate Invoice</strong> button becomes active.</p>' +
+        '<h4 class="wf-card-title">&#9888; Review Confirmation &mdash; tick all 3 to unlock QuickFile</h4>' +
+        '<p class="wf-review-confirm-hint">You must tick every box before the <strong>Send Bill to QuickFile</strong> button becomes active.</p>' +
         '<div class="wf-checklist">' +
           '<label class="wf-check-item"><input type="checkbox" id="wf-check-attendance"> Attendance note reviewed</label>' +
           '<label class="wf-check-item"><input type="checkbox" id="wf-check-docs"> Documents reviewed &amp; named</label>' +
           '<label class="wf-check-item"><input type="checkbox" id="wf-check-billing"> Billing details confirmed</label>' +
         '</div>' +
-        '<p class="wf-review-confirm-status" id="wf-review-status">&#128274; Generate Invoice is locked &mdash; tick all 3 boxes above.</p>' +
+        '<p class="wf-review-confirm-status" id="wf-review-status">&#128274; Send Bill to QuickFile is locked &mdash; tick all 3 boxes above.</p>' +
       '</div>' +
 
       auditHtml +
@@ -335,12 +335,12 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   if (qfConfigured && !opts.hasExistingInvoice) {
     createBtnHtml =
       '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create wf-btn-next-action" disabled>' +
-        '&#128274; Generate Invoice &mdash; tick all 3 checkboxes first' +
+        '&#128274; Send Bill to QuickFile &mdash; tick all 3 checkboxes first' +
       '</button>';
   } else if (qfConfigured && opts.hasExistingInvoice) {
     createBtnHtml =
       '<button type="button" id="wf-bill-create" class="btn btn-secondary btn-billing-create" disabled>' +
-        '&#9888; Create Another Invoice' +
+        '&#9888; Send Another Invoice to QuickFile' +
       '</button>';
   }
   var archiveBtnHtml = canArchiveFromBilling
@@ -427,17 +427,17 @@ function _wfBindBillingEvents(meta, opts) {
     if (createBtn) {
       createBtn.disabled = !allChecked;
       if (allChecked) {
-        createBtn.innerHTML = '&#10003; Generate Invoice';
+        createBtn.innerHTML = '&#10003; Send Bill to QuickFile';
       } else {
-        createBtn.innerHTML = '&#128274; Generate Invoice &mdash; tick all 3 checkboxes first';
+        createBtn.innerHTML = '&#128274; Send Bill to QuickFile &mdash; tick all 3 checkboxes first';
       }
     }
     if (reviewStatusEl) {
       if (allChecked) {
-        reviewStatusEl.innerHTML = '&#128275; <strong>Generate Invoice is now unlocked</strong> &mdash; click it in the footer below.';
+        reviewStatusEl.innerHTML = '&#128275; <strong>Send Bill to QuickFile is now unlocked</strong> &mdash; click it in the footer below.';
         reviewStatusEl.className = 'wf-review-confirm-status wf-review-confirm-status--unlocked';
       } else {
-        reviewStatusEl.innerHTML = '&#128274; Generate Invoice is locked &mdash; tick all 3 boxes above (' + checkedCount + '/3 done).';
+        reviewStatusEl.innerHTML = '&#128274; Send Bill to QuickFile is locked &mdash; tick all 3 boxes above (' + checkedCount + '/3 done).';
         reviewStatusEl.className = 'wf-review-confirm-status';
       }
     }
@@ -585,7 +585,7 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
   }
 
   var createBtn = document.getElementById('wf-bill-create');
-  if (createBtn) { createBtn.disabled = true; createBtn.textContent = 'Creating invoice...'; }
+  if (createBtn) { createBtn.disabled = true; createBtn.textContent = 'Sending to QuickFile...'; }
 
   var settings = window._appSettingsCache || {};
   var userName = settings.feeEarnerNameDefault || settings.feeEarnerName || '';
@@ -650,7 +650,7 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
       }
 
       console.log('[billing] Invoice created: #' + (result.invoiceNumber || result.invoiceId));
-      showToast('Invoice #' + (result.invoiceNumber || result.invoiceId) + ' created successfully' + attachSummary, 'success', 6000);
+      showToast('QuickFile invoice #' + (result.invoiceNumber || result.invoiceId) + ' sent successfully' + attachSummary, 'success', 6000);
       showToast('Next: review and mark office work complete (step 3).', 'info', 5000);
 
       if (typeof _wfAfterInvoiceCreatedGoToCompletion === 'function') {
@@ -659,12 +659,12 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
         _wfRenderCurrentStep();
       }
     } else {
-      showToast('Invoice failed: ' + (result.error || 'Unknown error'), 'error', 8000);
+      showToast('Send to QuickFile failed: ' + (result.error || 'Unknown error'), 'error', 8000);
     }
   } catch (err) {
     console.error('[billing] Invoice creation failed:', err);
-    showToast('Invoice error: ' + (err.message || String(err)), 'error', 8000);
+    showToast('Send to QuickFile error: ' + (err.message || String(err)), 'error', 8000);
   } finally {
-    if (createBtn) { createBtn.disabled = false; createBtn.textContent = opts.hasExistingInvoice ? '\u26A0 Create Another Invoice' : 'Generate Invoice'; }
+    if (createBtn) { createBtn.disabled = false; createBtn.textContent = opts.hasExistingInvoice ? '\u26A0 Send Another Invoice to QuickFile' : 'Send Bill to QuickFile'; }
   }
 }

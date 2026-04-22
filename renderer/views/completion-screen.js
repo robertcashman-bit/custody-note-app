@@ -140,42 +140,88 @@ function _wfRunArchiveFromWorkflow() {
     showToast('Save or archive is not available.', 'error');
     return;
   }
+
+  /* QuickFile guard: if QuickFile is configured but no invoice has been sent
+     yet, the user almost certainly forgot. Offer a clear 3-way choice so the
+     bill is never silently archived without ever reaching QuickFile.        */
+  var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+  var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
+  var hasInvoice = _wfCompletionHasInvoice(data);
+  var alreadyArchived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
+
+  if (qfConfigured && !hasInvoice && !alreadyArchived && typeof showChoice === 'function') {
+    showChoice(
+      'This bill has NOT been sent to QuickFile yet.\n\nDo you want to send it to QuickFile before archiving, or archive without sending?',
+      'Send bill to QuickFile?',
+      [
+        { id: 'send',    label: 'Send Bill to QuickFile first (recommended)', variant: 'primary' },
+        { id: 'archive', label: 'Archive without sending to QuickFile',       variant: 'secondary' },
+        { id: 'cancel',  label: 'Cancel',                                     variant: 'secondary' },
+      ]
+    ).then(function (choice) {
+      if (choice === 'send') {
+        if (typeof _wfGoToStep === 'function') {
+          _wfGoToStep(1); /* Step 2 (zero-indexed = 1): Billing review */
+          showToast('Tick the 3 review boxes, then click Send Bill to QuickFile.', 'info', 6000);
+        } else {
+          showToast('Open the Billing review step to send to QuickFile.', 'info', 6000);
+        }
+        return;
+      }
+      if (choice === 'archive') {
+        _wfArchiveConfirmedAndProceed();
+      }
+      /* cancel or null: do nothing */
+    });
+    return;
+  }
+
   showConfirm(
     'Archive this matter? Billing and office completion will be recorded if not already saved, then the file moves to Archived.',
     'Archive record'
   ).then(function (ok) {
     if (!ok) return;
-    var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
-    var iso = new Date().toISOString();
-    if (!data.billingProcessCompletedAt) {
-      data.billingProcessCompletedAt = iso;
-      if (typeof formData === 'object' && formData) formData.billingProcessCompletedAt = iso;
+    _wfArchiveConfirmedAndProceed();
+  });
+}
+
+function _wfArchiveConfirmedAndProceed() {
+  if (!currentAttendanceId) return;
+  if (!window.api || !window.api.attendanceSave || !window.api.attendanceArchive) {
+    showToast('Save or archive is not available.', 'error');
+    return;
+  }
+  var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+  var iso = new Date().toISOString();
+  if (!data.billingProcessCompletedAt) {
+    data.billingProcessCompletedAt = iso;
+    if (typeof formData === 'object' && formData) formData.billingProcessCompletedAt = iso;
+  }
+  if (!data.officeWorkCompletedAt) {
+    data.officeWorkCompletedAt = iso;
+    if (typeof formData === 'object' && formData) formData.officeWorkCompletedAt = iso;
+  }
+  window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'completed' }).then(function (result) {
+    if (result && typeof result === 'object' && result.error) {
+      showToast(result.message || result.error || 'Save failed', 'error', 7000);
+      return Promise.reject(new Error('save'));
     }
-    if (!data.officeWorkCompletedAt) {
-      data.officeWorkCompletedAt = iso;
-      if (typeof formData === 'object' && formData) formData.officeWorkCompletedAt = iso;
-    }
-    window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'completed' }).then(function (result) {
-      if (result && typeof result === 'object' && result.error) {
-        showToast(result.message || result.error || 'Save failed', 'error', 7000);
-        return Promise.reject(new Error('save'));
-      }
-      if (typeof currentRecordStatus !== 'undefined') currentRecordStatus = 'completed';
-      return window.api.attendanceArchive(currentAttendanceId);
-    }).then(function () {
-      if (typeof closeWorkflow === 'function') closeWorkflow();
-      showToast('Record archived', 'info');
-      if (typeof setListFilterAndShowList === 'function') setListFilterAndShowList('archived');
-      if (typeof updateFormBarVisibility === 'function') updateFormBarVisibility();
-      if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
-      if (typeof updateFormContextPanel === 'function') updateFormContextPanel();
-    }).catch(function (err) {
-      if (err && err.message === 'save') return;
-      showToast('Failed to archive record', 'error');
-    });
+    if (typeof currentRecordStatus !== 'undefined') currentRecordStatus = 'completed';
+    return window.api.attendanceArchive(currentAttendanceId);
+  }).then(function () {
+    if (typeof closeWorkflow === 'function') closeWorkflow();
+    showToast('Record archived', 'info');
+    if (typeof setListFilterAndShowList === 'function') setListFilterAndShowList('archived');
+    if (typeof updateFormBarVisibility === 'function') updateFormBarVisibility();
+    if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
+    if (typeof updateFormContextPanel === 'function') updateFormContextPanel();
+  }).catch(function (err) {
+    if (err && err.message === 'save') return;
+    showToast('Failed to archive record', 'error');
   });
 }
 window._wfRunArchiveFromWorkflow = _wfRunArchiveFromWorkflow;
+window._wfArchiveConfirmedAndProceed = _wfArchiveConfirmedAndProceed;
 
 function _wfAfterInvoiceCreatedGoToCompletion() {
   if (typeof _wfGoToStep !== 'function') return;

@@ -410,8 +410,8 @@ describe('Billing screen source', () => {
     assert.ok(billingScreenSrc.includes('wf-check-billing'));
   });
 
-  it('has Generate Invoice button gated by checkboxes', () => {
-    assert.ok(billingScreenSrc.includes('Generate Invoice'));
+  it('has Send Bill to QuickFile button gated by checkboxes', () => {
+    assert.ok(billingScreenSrc.includes('Send Bill to QuickFile'));
     assert.ok(billingScreenSrc.includes('disabled'));
   });
 
