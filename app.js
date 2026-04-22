@@ -494,8 +494,7 @@ var LAA = {
         { key: 'offenceSummary', label: 'Offence (summary)', type: 'offenceSummary', placeholder: 'Type to search offences...', cols: 2 },
         { key: 'policeStationId', label: 'Police Station', type: 'station', cols: 2 },
         { key: 'schemeId', label: 'Police Station Scheme ID', type: 'text', placeholder: 'Auto-filled from station', readonly: true },
-        { key: 'dsccPrivateMatter', label: 'Private matter (no DSCC number)', type: 'boolean', helpTitle: 'Tick if the instruction is private: you do not need a DSCC reference. Untick to enter a DSCC number.' },
-        { key: 'dsccRef', label: 'DSCC Number (10 chars)', type: 'text', placeholder: 'e.g. 110154321A', hideIf: { field: 'dsccPrivateMatter', value: 'Yes' } },
+        { key: 'dsccRef', label: 'DSCC Number (10 chars)', type: 'text', placeholder: 'e.g. 110154321A', cols: 2, helpTitle: 'If this is a private instruction with no DSCC, tick "Private" — the value will be stored as the word "private".' },
         { key: 'oicName', label: 'OIC Rank & Name', type: 'text', cols: 2 },
         { key: 'oicEmail', label: 'OIC Email address', type: 'email' },
         { key: 'oicPhone', label: "OIC Telephone", type: 'tel' },
@@ -1090,14 +1089,6 @@ var LAA = {
       { key: '_note_comms', label: 'Log telephone calls, emails, and text messages. Each entry records the type, direction, party, and summary.', type: 'sectionNote' },
       { key: '_commsLogEntries', label: 'Communications', type: 'multiCommsLog' },
     ]},
-    { id: 'supervisorReview', title: 'Supervisor Review', keyFields: ['supervisorName'], fields: [
-      { key: '_h_supervisor', label: 'Supervisor Review', type: 'sectionHeading' },
-      { key: 'supervisorName', label: 'Supervising Solicitor / Manager', type: 'text', cols: 2 },
-      { key: 'supervisorComments', label: 'Supervisor Comments', type: 'textarea', cols: 2, rows: 4 },
-      { key: 'supervisorDate', label: 'Date of Review (auto)', type: 'date', readonly: true },
-      { key: 'supervisorTime', label: 'Time of Review (auto)', type: 'time', readonly: true },
-      { key: 'supervisorSignature', label: 'Supervisor Signature', type: 'signature', sigKey: 'supervisorSig' },
-    ]},
     { id: 'laaDeclaration', title: 'LAA Declaration', keyFields: ['laaClientFullName', 'clientSig'], hasDeclarationText: true, fields: [
       { key: 'previousAdvice', label: 'Has client received advice on this matter before?', type: 'select', options: ['Yes','No'] },
       { key: 'previousAdviceDetails', label: 'Previous advice details', type: 'text', cols: 2, showIf: { field: 'previousAdvice', value: 'Yes' } },
@@ -1198,8 +1189,7 @@ var LAA = {
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
         { key: 'date', label: 'Date of telephone advice', type: 'date' },
         { key: 'sourceOfReferral', label: 'Source of Referral', type: 'select', options: ['Duty Rota','Duty panel','Own Legal Aid','Own private','Agency'] },
-        { key: 'dsccPrivateMatter', label: 'Private matter (no DSCC number)', type: 'boolean', helpTitle: 'Tick if you do not have a DSCC reference for this call.' },
-        { key: 'dsccRef', label: 'DSCC Number', type: 'text', placeholder: 'e.g. 110154321A', className: 'field-mandatory', hideIf: { field: 'dsccPrivateMatter', value: 'Yes' } },
+        { key: 'dsccRef', label: 'DSCC Number', type: 'text', placeholder: 'e.g. 110154321A', className: 'field-mandatory', cols: 2, helpTitle: 'If there is no DSCC for this call, tick "Private" — stored as the word "private".' },
         { key: 'policeStationId', label: 'Police Station', type: 'station', cols: 2 },
         { key: 'firmId', label: 'Instructing Firm', type: 'firm', cols: 2 },
         { key: 'feeEarnerName', label: 'Fee Earner Name', type: 'text', placeholder: 'Name of person giving advice', cols: 2 },
@@ -1346,8 +1336,7 @@ var LAA = {
         { key: 'policeStationId', label: 'Police Station', type: 'station', cols: 2 },
         { key: 'schemeId', label: 'Police Station Scheme ID', type: 'text', placeholder: 'Auto-filled from station', readonly: true },
         { key: 'locationType', label: 'Location Type', type: 'select', options: ['police_station','other_police_location','other'], cols: 2 },
-        { key: 'dsccPrivateMatter', label: 'Private matter (no DSCC number)', type: 'boolean', helpTitle: 'Tick if the instruction is private: you do not need a DSCC reference.' },
-        { key: 'dsccRef', label: 'DSCC Number (10 chars)', type: 'text', placeholder: 'e.g. 110154321A', hideIf: { field: 'dsccPrivateMatter', value: 'Yes' } },
+        { key: 'dsccRef', label: 'DSCC Number (10 chars)', type: 'text', placeholder: 'e.g. 110154321A', cols: 2, helpTitle: 'If this is a private instruction with no DSCC, tick "Private" — the value will be stored as the word "private".' },
         { key: 'dsccNotificationStatus', label: 'DSCC Notification Status', type: 'select', options: ['received_from_dscc','reported_within_48h','reported_before_attendance','not_applicable','missing'], cols: 2 },
         { key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', type: 'textarea', cols: 2, showIf: { field: 'dsccNotificationStatus', value: 'missing' } },
         { key: 'oicName', label: 'OIC Rank & Name', type: 'text', cols: 2 },
@@ -2357,9 +2346,6 @@ var REQUIRED_FIELD_KEYS = [
     } else if (sigKey === 'clientSig' || sigKey === 'feeEarnerSig') {
       setFieldValueSilent('laaSignatureDate', date);
       setFieldValueSilent('laaSignatureTime', time);
-    } else if (sigKey === 'supervisorSig') {
-      setFieldValueSilent('supervisorDate', date);
-      setFieldValueSilent('supervisorTime', time);
     } else if (sigKey === 'repConfirmationSig') {
       setFieldValueSilent('policeStationFinalisedDate', date);
       setFieldValueSilent('policeStationFinalisedTime', time);
@@ -3858,20 +3844,21 @@ var REQUIRED_FIELD_KEYS = [
   }
   window.updateHomeBillingWidget = updateHomeBillingWidget;
 
-  function isSupervisorSectionEnabled() {
-    const s = window._appSettingsCache || {};
-    return s.showSupervisorReview === 'true';
-  }
-
   function openQuickCapture() {
     showView('quickcapture');
     (function initQcDsccPrivateToggle() {
       if (window._qcDsccInited) return;
       const qcp = document.getElementById('qc-dscc-private');
-      if (qcp) {
+      const qci = document.getElementById('qc-dscc');
+      if (qcp && qci) {
         qcp.addEventListener('change', function () {
-          const w = document.getElementById('qc-dscc-field-wrap');
-          if (w) w.style.display = qcp.checked ? 'none' : '';
+          if (qcp.checked) {
+            qci.value = 'private';
+            qci.readOnly = true;
+          } else {
+            qci.readOnly = false;
+            if ((qci.value || '').toLowerCase() === 'private') qci.value = '';
+          }
         });
         window._qcDsccInited = true;
       }
@@ -3883,10 +3870,12 @@ var REQUIRED_FIELD_KEYS = [
     document.getElementById('qc-surname').value = '';
     document.getElementById('qc-offence').value = '';
     const qcpR = document.getElementById('qc-dscc-private');
-    const qcwR = document.getElementById('qc-dscc-field-wrap');
+    const qciR = document.getElementById('qc-dscc');
     if (qcpR) qcpR.checked = false;
-    if (qcwR) qcwR.style.display = '';
-    document.getElementById('qc-dscc').value = '';
+    if (qciR) {
+      qciR.value = '';
+      qciR.readOnly = false;
+    }
     document.getElementById('qc-setoff').value = '';
     document.getElementById('qc-arrived').value = '';
     const qcClientArrived = document.getElementById('qc-client-arrived');
@@ -4291,7 +4280,7 @@ var REQUIRED_FIELD_KEYS = [
     const qcpS = document.getElementById('qc-dscc-private');
     if (qcpS && qcpS.checked) {
       data.dsccPrivateMatter = 'Yes';
-      data.dsccRef = '';
+      data.dsccRef = 'private';
     } else {
       data.dsccPrivateMatter = '';
       data.dsccRef = document.getElementById('qc-dscc').value.trim();
@@ -5021,8 +5010,6 @@ var REQUIRED_FIELD_KEYS = [
 
       var forumUrlEl = document.getElementById('suggestions-forum-url');
       if (forumUrlEl) forumUrlEl.value = s.suggestionsForumUrl || '';
-      var sup = document.getElementById('setting-show-supervisor-review');
-      if (sup) sup.checked = s.showSupervisorReview === 'true';
 
       var ai = document.getElementById('setting-auto-import-enabled');
       if (ai) ai.checked = s.autoImportEnabled === 'true';
@@ -5959,8 +5946,8 @@ var REQUIRED_FIELD_KEYS = [
           if (parts.length === 3) dateLabel = parts[2] + '/' + parts[1] + '/' + parts[0];
         }
         const stationLabel = d.policeStationName || r.station_name || '';
-        const dsccLabel = (d.dsccPrivateMatter === 'Yes' && !(d.dsccRef || '').trim())
-          ? 'Private'
+        const dsccLabel = d.dsccPrivateMatter === 'Yes'
+          ? ((d.dsccRef || '').trim() || 'private')
           : (d.dsccRef || r.dscc_ref || '');
         const fileNumLabel = d.ourFileNumber ? '#' + d.ourFileNumber : '';
         const meta = [fileNumLabel, dateLabel, stationLabel, dsccLabel].filter(Boolean).join(' \u00B7 ');
@@ -8130,7 +8117,7 @@ var REQUIRED_FIELD_KEYS = [
                 '<div class="form-group"><label>Time arrived office / home</label><input type="time" class="form-input" data-sv-field="timeOfficeHome"></div>' +
               '</div>' +
               '<div class="form-group sv-multiclient-question">' +
-                '<label class="form-checkbox-label"><input type="checkbox" class="form-input" data-sv-field="multiClient" value="Yes"> Did you deal with more than one client during this visit?</label>' +
+                '<label class="form-checkbox-label"><input type="checkbox" data-sv-field="multiClient" value="Yes" aria-label="Dealt with more than one client during this visit"> Did you deal with more than one client during this visit?</label>' +
               '</div>' +
               '<div class="form-row-2col sv-client-time-window" style="display:none">' +
                 '<div class="form-group"><label>Time started with this client</label><input type="time" class="form-input" data-sv-field="clientStartTime" autocomplete="off"></div>' +
@@ -8821,6 +8808,165 @@ var REQUIRED_FIELD_KEYS = [
       grid.appendChild(wrap);
       return;
     }
+    /* DSCC + inline "Private" checkbox: small control, value `private` when ticked */
+    if (f.key === 'dsccRef' && f.type === 'text') {
+      const bwrap = document.createElement('div');
+      bwrap.className = 'form-group form-dscc-ref-row';
+      if (f.className) bwrap.classList.add(f.className);
+      if (f.cols === 2) bwrap.style.gridColumn = '1 / -1';
+      if (f.showIf) {
+        bwrap.dataset.showIfField = f.showIf.field;
+        bwrap.dataset.showIfValue = f.showIf.value || '';
+        bwrap.dataset.showIfValues = (f.showIf.values || []).join(',');
+        if (f.showIf.notValue) bwrap.dataset.showIfNotValue = f.showIf.notValue;
+      }
+      if (f.showIfOr) {
+        bwrap.dataset.showIfOrField = f.showIfOr.field;
+        bwrap.dataset.showIfOrValue = f.showIfOr.value || '';
+      }
+      if (f.hideIf) {
+        bwrap.dataset.hideIfField = f.hideIf.field;
+        bwrap.dataset.hideIfValue = f.hideIf.value || '';
+      }
+      const label = document.createElement('label');
+      label.textContent = f.label;
+      if (REQUIRED_FIELD_KEYS.includes(f.key)) {
+        const req = document.createElement('span');
+        req.className = 'required-asterisk';
+        req.textContent = ' *';
+        req.title = 'Required before finalising';
+        label.appendChild(req);
+      }
+      if (f.helpTitle) {
+        const helpBtn = document.createElement('span');
+        helpBtn.className = 'field-help-icon';
+        helpBtn.setAttribute('role', 'button');
+        helpBtn.setAttribute('tabindex', '0');
+        helpBtn.title = f.helpTitle;
+        helpBtn.textContent = ' [?]';
+        helpBtn.style.cursor = 'help';
+        helpBtn.style.marginLeft = '0.25rem';
+        label.appendChild(helpBtn);
+      }
+      bwrap.appendChild(label);
+      var refRaw = (data.dsccRef != null ? String(data.dsccRef) : '').trim();
+      var isPrivate = data.dsccPrivateMatter === 'Yes' || refRaw.toLowerCase() === 'private';
+      if (isPrivate && refRaw && refRaw.toLowerCase() !== 'private') {
+        isPrivate = false;
+        data.dsccPrivateMatter = '';
+        formData.dsccPrivateMatter = '';
+      }
+      if (isPrivate && !refRaw) {
+        data.dsccRef = 'private';
+        formData.dsccRef = 'private';
+        refRaw = 'private';
+      }
+      if (isPrivate) {
+        data.dsccPrivateMatter = 'Yes';
+        formData.dsccPrivateMatter = 'Yes';
+        data.dsccRef = 'private';
+        formData.dsccRef = 'private';
+      }
+      const inputRow = document.createElement('div');
+      inputRow.className = 'form-dscc-input-row';
+      const textInput = document.createElement('input');
+      textInput.type = 'text';
+      textInput.className = 'form-input';
+      textInput.name = 'dsccRef';
+      textInput.dataset.field = 'dsccRef';
+      if (f.placeholder) textInput.placeholder = f.placeholder;
+      if (isPrivate) {
+        textInput.value = 'private';
+        textInput.readOnly = true;
+      } else if (data.dsccRef != null && data.dsccRef !== '') {
+        textInput.value = data.dsccRef;
+      }
+      const hiddenPriv = document.createElement('input');
+      hiddenPriv.type = 'hidden';
+      hiddenPriv.name = 'dsccPrivateMatter';
+      hiddenPriv.value = isPrivate ? 'Yes' : '';
+      const privLbl = document.createElement('label');
+      privLbl.className = 'form-dscc-private-matter';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = isPrivate;
+      const privSpan = document.createElement('span');
+      privSpan.textContent = ' Private (no DSCC) ';
+      privLbl.appendChild(cb);
+      privLbl.appendChild(privSpan);
+      const dsccErr = document.createElement('span');
+      dsccErr.className = 'field-error';
+      dsccErr.style.display = 'none';
+      function syncPrivateFromCheckbox() {
+        const on = cb.checked;
+        hiddenPriv.value = on ? 'Yes' : '';
+        data.dsccPrivateMatter = on ? 'Yes' : '';
+        formData.dsccPrivateMatter = on ? 'Yes' : '';
+        if (on) {
+          textInput.value = 'private';
+          textInput.readOnly = true;
+          data.dsccRef = 'private';
+          formData.dsccRef = 'private';
+        } else {
+          textInput.readOnly = false;
+          if ((textInput.value || '').toLowerCase() === 'private') {
+            textInput.value = '';
+            data.dsccRef = '';
+            formData.dsccRef = '';
+          }
+        }
+        dsccErr.style.display = 'none';
+        textInput.classList.remove('input-error');
+        if (typeof applyConditionalVisibility === 'function') applyConditionalVisibility();
+        if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
+      }
+      cb.addEventListener('change', function () { syncPrivateFromCheckbox(); });
+      textInput.addEventListener('input', function () {
+        if (textInput.readOnly) return;
+        data.dsccRef = this.value;
+        formData.dsccRef = this.value;
+        if (cb.checked) {
+          cb.checked = false;
+          hiddenPriv.value = '';
+          data.dsccPrivateMatter = '';
+          formData.dsccPrivateMatter = '';
+        }
+      });
+      textInput.addEventListener('focus', function () {
+        dsccErr.style.display = 'none';
+        textInput.classList.remove('input-error');
+      });
+      textInput.addEventListener('blur', function () {
+        if (textInput.readOnly) {
+          dsccErr.style.display = 'none';
+          return;
+        }
+        const v = (textInput.value || '').trim().toUpperCase();
+        if (!v) {
+          dsccErr.style.display = 'none';
+          textInput.classList.remove('input-error');
+          return;
+        }
+        if (v.length !== 10 || v.charAt(9) !== 'A') {
+          dsccErr.textContent = 'DSCC must be exactly 10 characters ending in A (e.g. 110154321A)';
+          dsccErr.style.display = 'block';
+          textInput.classList.add('input-error');
+        } else {
+          dsccErr.style.display = 'none';
+          textInput.classList.remove('input-error');
+          textInput.value = v;
+          data.dsccRef = v;
+          formData.dsccRef = v;
+        }
+      });
+      inputRow.appendChild(textInput);
+      inputRow.appendChild(privLbl);
+      bwrap.appendChild(inputRow);
+      bwrap.appendChild(dsccErr);
+      bwrap.appendChild(hiddenPriv);
+      grid.appendChild(bwrap);
+      return;
+    }
     if (f.type === 'boolean') {
       const bwrap = document.createElement('div');
       bwrap.className = 'form-group form-boolean-field';
@@ -8859,19 +9005,6 @@ var REQUIRED_FIELD_KEYS = [
       bwrap.appendChild(lbl);
       cb.addEventListener('change', function () {
         formData[f.key] = cb.checked ? 'Yes' : '';
-        if (f.key === 'dsccPrivateMatter' && cb.checked) {
-          formData.dsccRef = '';
-          var dsEl = document.querySelector('[data-field="dsccRef"]');
-          if (dsEl) {
-            dsEl.value = '';
-            dsEl.classList.remove('input-error');
-            var fg = dsEl.closest('.form-group');
-            if (fg) {
-              var errEl = fg.querySelector('.field-error');
-              if (errEl) errEl.style.display = 'none';
-            }
-          }
-        }
         if (typeof applyConditionalVisibility === 'function') applyConditionalVisibility();
         if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
       });
@@ -9487,30 +9620,6 @@ var REQUIRED_FIELD_KEYS = [
             ta.dispatchEvent(new Event('input', { bubbles: true }));
             formData.reasonsForAdvice = ta.value;
           }
-        }
-      });
-    }
-
-    if (f.key === 'dsccRef') {
-      const dsccErr = document.createElement('span');
-      dsccErr.className = 'field-error';
-      dsccErr.style.display = 'none';
-      wrap.appendChild(dsccErr);
-      input.addEventListener('focus', () => {
-        dsccErr.style.display = 'none';
-        input.classList.remove('input-error');
-      });
-      input.addEventListener('blur', () => {
-        const v = (input.value || '').trim().toUpperCase();
-        if (!v) { dsccErr.style.display = 'none'; input.classList.remove('input-error'); return; }
-        if (v.length !== 10 || v.charAt(9) !== 'A') {
-          dsccErr.textContent = 'DSCC must be exactly 10 characters ending in A (e.g. 110154321A)';
-          dsccErr.style.display = 'block';
-          input.classList.add('input-error');
-        } else {
-          dsccErr.style.display = 'none';
-          input.classList.remove('input-error');
-          input.value = v; /* auto-uppercase on valid entry */
         }
       });
     }
@@ -11364,7 +11473,12 @@ var REQUIRED_FIELD_KEYS = [
     return s;
   }
   function formatDsccForPdf(d) {
-    if (d.dsccPrivateMatter === 'Yes' && !(d.dsccRef || '').trim()) return 'Private matter';
+    if (d.dsccPrivateMatter === 'Yes') {
+      var pr = (d.dsccRef || '').trim();
+      if (!pr) return 'private';
+      if (pr.toLowerCase() === 'private') return 'private';
+      return pr;
+    }
     var t = (d.dsccRef || '').trim();
     return t || '\u2014';
   }
@@ -14305,6 +14419,8 @@ PDF_CASENOTE_ADVERT +
           } else {
             showView('new');
           }
+        } else if (nav === 'update') {
+          triggerUpdateCheck();
         } else if (nav === 'home' || nav === 'list' || nav === 'firms' || nav === 'billing' || nav === 'settings') {
           _guardedNav(nav);
         }
@@ -15256,6 +15372,8 @@ PDF_CASENOTE_ADVERT +
         _lastUpdateToastPct = -1;
       }
       var homeBtn = document.getElementById('home-check-update-btn');
+      var bottomNavU = document.getElementById('bottom-nav-update');
+      var bottomNavULbl = document.getElementById('bottom-nav-update-label');
       if (homeBtn) {
         if (data.status === 'installing') {
           homeBtn.textContent = '\u21BB Restarting\u2026';
@@ -15284,6 +15402,29 @@ PDF_CASENOTE_ADVERT +
           homeBtn.onclick = null;
         }
       }
+      if (bottomNavU && bottomNavULbl) {
+        if (data.status === 'installing') {
+          bottomNavULbl.textContent = '\u2026';
+          bottomNavU.disabled = true;
+        } else if (data.status === 'ready') {
+          bottomNavULbl.textContent = '\u2B06';
+          bottomNavU.classList.add('has-update-pending');
+          bottomNavU.disabled = false;
+        } else if (data.status === 'downloading') {
+          bottomNavULbl.textContent = 'DL\u2026';
+          bottomNavU.disabled = true;
+        } else if (data.status === 'loop-blocked') {
+          bottomNavULbl.textContent = '!';
+          bottomNavU.classList.add('has-update-pending');
+          bottomNavU.disabled = false;
+        } else if (data.status === 'up-to-date') {
+          bottomNavULbl.textContent = 'OK';
+          bottomNavU.classList.remove('has-update-pending');
+          bottomNavU.disabled = false;
+        } else if (data.status === 'error') {
+          bottomNavU.classList.remove('has-update-pending');
+        }
+      }
     }
     // Auto-update status listener
     if (window.api.onAppUpdateStatus) {
@@ -15306,28 +15447,36 @@ PDF_CASENOTE_ADVERT +
         return;
       }
       var gearBtn = document.getElementById('gear-check-updates');
+      var bottomUp = document.getElementById('bottom-nav-update');
+      var bottomUpLbl = document.getElementById('bottom-nav-update-label');
       if (gearBtn) { gearBtn.textContent = '\u21BB Checking\u2026'; gearBtn.disabled = true; }
+      if (bottomUpLbl) bottomUpLbl.textContent = '\u2026';
+      if (bottomUp) bottomUp.disabled = true;
       showToast('Checking for updates\u2026', 'info', 2000);
       window.api.appCheckUpdates().then(function(res) {
         var statusEl = document.getElementById('check-updates-status');
         if (res.status === 'up-to-date') {
           showToast('You\'re up to date (v' + (res.version || '') + ')', 'success');
           if (gearBtn) gearBtn.textContent = '\u2713 Up to date';
+          if (bottomUpLbl) bottomUpLbl.textContent = 'OK';
           if (statusEl) statusEl.textContent = '\u2713 You\'re up to date (v' + (res.version || '') + ')';
         } else if (res.status === 'checking') {
           if (statusEl) statusEl.textContent = 'Checking for updates\u2026';
         } else if (res.status === 'downloading') {
           showToast('Downloading update\u2026', 'info');
           if (gearBtn) gearBtn.textContent = '\u21BB Downloading\u2026';
+          if (bottomUpLbl) bottomUpLbl.textContent = 'DL\u2026';
           if (statusEl) statusEl.textContent = 'Downloading update\u2026';
         } else if (res.status === 'ready' || res.status === 'installing') {
           showToast('Update v' + (res.version || '') + ' downloaded. Install from the footer or banner when you are ready.', 'success', 5000);
           if (gearBtn) { gearBtn.textContent = '\u2B06 Install v' + (res.version || ''); gearBtn.style.color = '#059669'; gearBtn.dataset.action = 'install-update'; }
+          if (bottomUpLbl) bottomUpLbl.textContent = '\u2B06';
           if (statusEl) statusEl.textContent = 'Update v' + (res.version || '') + ' ready. Close app to install, or click Install Now.';
           applyAppUpdateStatusPayload({ status: 'ready', version: res.version });
         } else if (res.status === 'available') {
           showToast('Update found \u2014 downloading\u2026', 'success');
           if (gearBtn) gearBtn.textContent = '\u21BB Downloading\u2026';
+          if (bottomUpLbl) bottomUpLbl.textContent = 'DL\u2026';
           if (statusEl) statusEl.textContent = 'Downloading update\u2026';
         } else if (res.status === 'dev') {
           showToast('Updates only apply to the installed app', 'info');
@@ -15343,7 +15492,11 @@ PDF_CASENOTE_ADVERT +
         showToast('Update check failed', 'error');
       }).finally(function() {
         if (gearBtn) { gearBtn.disabled = false; }
-        setTimeout(function() { if (gearBtn && gearBtn.textContent.indexOf('Install') === -1) { gearBtn.textContent = '\u21BB Check for updates'; gearBtn.style.color = ''; } }, 5000);
+        if (bottomUp) { bottomUp.disabled = false; }
+        setTimeout(function() {
+          if (gearBtn && gearBtn.textContent.indexOf('Install') === -1) { gearBtn.textContent = '\u21BB Check for updates'; gearBtn.style.color = ''; }
+          if (bottomUpLbl && (bottomUpLbl.textContent || '').indexOf('\u2B06') === -1) { bottomUpLbl.textContent = 'Update'; }
+        }, 5000);
       });
     }
     document.getElementById('check-updates-btn')?.addEventListener('click', function() {
