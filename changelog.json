@@ -1,9 +1,23 @@
 {
   "releases": [
     {
-      "version": "1.4.224",
+      "version": "1.4.225",
       "date": "2026-04-22",
       "latest": true,
+      "changes": [
+        "UX audit batch 1 \u2014 essentials",
+        "Validation: voluntary form section indices remapped, broken adviceGiven requirement removed, date auto-populated from instructionDateTime when missing",
+        "Bottom bar: dynamic Finish pill (Finalise / Finish matter / Archive) reachable from any section instead of only Section 9",
+        "Bottom bar: removed duplicate progress-dot row",
+        "Outcome chip in form context bar; outcome surfaced on records list and added to search haystack",
+        "PDF: audit footer (fee earner, finalised at, last edit, app version) on every page in custody, telephone and voluntary builders",
+        "Telephone PDF: LAA declaration prose now rendered before the signatures, matching custody/voluntary"
+      ]
+    },
+    {
+      "version": "1.4.224",
+      "date": "2026-04-22",
+      "latest": false,
       "changes": [
         "Sequential multi-visit flow: sorted, collapsible visit cards with per-visit disbursements, notes, miles and parking",
         "section 9 per-visit breakdown table with auto-fill and manual overrides",

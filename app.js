@@ -5900,7 +5900,9 @@ var REQUIRED_FIELD_KEYS = [
         const d = getParsed(r);
         const hay = [
           r.client_name, r.station_name, r.dscc_ref, r.attendance_date, r.status,
-          d.forename, d.middleName, d.surname, d.custodyNumber, d.ufn, d.date, d.policeStationName, d.fileReference, d.dsccRef, d.ourFileNumber
+          d.forename, d.middleName, d.surname, d.custodyNumber, d.ufn, d.date, d.policeStationName, d.fileReference, d.dsccRef, d.ourFileNumber,
+          // C3: Outcome on records list — also searchable.
+          d.outcomeDecision, d.outcomeCode, d.bailReturnStationName, d.courtName, d.bailDate, d.nextDate, d.outcomeNotes
         ].filter(Boolean).join(' ').toLowerCase();
         return hay.includes(q);
       }) : rows.slice();
@@ -5950,7 +5952,20 @@ var REQUIRED_FIELD_KEYS = [
           ? ((d.dsccRef || '').trim() || 'private')
           : (d.dsccRef || r.dscc_ref || '');
         const fileNumLabel = d.ourFileNumber ? '#' + d.ourFileNumber : '';
-        const meta = [fileNumLabel, dateLabel, stationLabel, dsccLabel].filter(Boolean).join(' \u00B7 ');
+        // C3: surface the outcome on the records list — the most-asked-for value
+        // for any later question (counsel, supervisor, billing, audit).
+        var outcomeLabel = '';
+        var od = (d.outcomeDecision || '').trim();
+        if (od) {
+          if (od === 'Bail without charge' && (d.bailDate || '').trim()) {
+            outcomeLabel = 'Bail \u2014 return ' + formatDateGB(d.bailDate);
+          } else if (od === 'Charged' || od === 'Charged with bail' || od === 'Charged with court bail') {
+            outcomeLabel = od + ((d.courtName || '').trim() ? ' \u2014 ' + d.courtName : '');
+          } else {
+            outcomeLabel = od;
+          }
+        }
+        const meta = [fileNumLabel, dateLabel, stationLabel, dsccLabel, outcomeLabel].filter(Boolean).join(' \u00B7 ');
         const formTypeBadge = d._formType === 'telephone' ? '<span class="badge badge-tel">TEL</span>' : (d.attendanceMode === 'voluntary' ? '<span class="badge badge-vol">VOL</span>' : '<span class="badge badge-att">ATT</span>');
         const hasDecl = !!(d.clientSig);
         const declBadge = hasDecl ? '<span class="badge badge-decl" title="Applicant declaration signed">Declared</span>' : '';
@@ -6336,7 +6351,65 @@ var REQUIRED_FIELD_KEYS = [
       unarchiveBtn.style.display = 'none';
     }
     updateBillingReadinessPanel();
+    updateBottomBarFinishPill();
   }
+
+  // C1: Mirror Finalise / Finish matter / Archive into the bottom bar so the
+  // duty solicitor never has to scroll to Section 9 to finish the case.
+  function updateBottomBarFinishPill() {
+    var pill = document.getElementById('bottom-bar-finish-pill');
+    if (!pill) return;
+    var label = '';
+    var action = '';
+    var cls = 'bottom-btn finish-pill';
+    if (!currentAttendanceId) {
+      pill.style.display = 'none';
+      return;
+    }
+    if (currentRecordArchived) {
+      label = 'Archived';
+      action = 'unarchive';
+      cls += ' state-archived';
+    } else if (currentRecordStatus === 'completed') {
+      label = 'Archive';
+      action = 'archive';
+      cls += ' state-complete';
+    } else if (currentRecordStatus === 'finalised') {
+      label = 'Finish matter';
+      action = 'finishMatter';
+      cls += ' state-finalised';
+    } else {
+      label = 'Finalise';
+      action = 'finalise';
+      cls += ' state-draft';
+    }
+    pill.style.display = '';
+    pill.textContent = label;
+    pill.className = cls;
+    pill.dataset.pillAction = action;
+    pill.title = 'Quick access — equivalent to the button in Section 9 (' + label + ')';
+  }
+  window.updateBottomBarFinishPill = updateBottomBarFinishPill;
+
+  document.addEventListener('click', function (ev) {
+    var pill = ev.target && ev.target.closest && ev.target.closest('#bottom-bar-finish-pill');
+    if (!pill) return;
+    var action = pill.dataset.pillAction;
+    if (action === 'finalise') {
+      var fb = document.getElementById('form-finalise-bar');
+      if (fb) { fb.click(); return; }
+      if (typeof validateBeforeFinalise === 'function') validateBeforeFinalise();
+    } else if (action === 'finishMatter') {
+      var eb = document.getElementById('form-end-billing-btn');
+      if (eb) eb.click();
+    } else if (action === 'archive') {
+      var ab = document.getElementById('form-archive-btn');
+      if (ab) ab.click();
+    } else if (action === 'unarchive') {
+      var ub = document.getElementById('form-unarchive-btn');
+      if (ub) ub.click();
+    }
+  });
 
   window.goToInstructingFirmSection = function () {
     if (typeof closeWorkflow === 'function') closeWorkflow();
@@ -6632,7 +6705,27 @@ var REQUIRED_FIELD_KEYS = [
     }
     const paceHtml = getPaceClockHtml();
     if (paceHtml) leftParts.push(paceHtml);
-    const rightHtml = '<span class="context-right">' + esc(poshDateTime(dateStr, timeStr)) + '</span>';
+    // C3: Outcome chip in the form context bar so the chosen outcome is visible
+    // throughout the form, not buried in Section 8.
+    var outcomeChipHtml = '';
+    var od = (formData.outcomeDecision || '').trim();
+    if (od) {
+      var chipText = od;
+      if (od === 'Bail without charge' && (formData.bailDate || '').trim()) {
+        chipText = 'Bail \u2014 return ' + esc(formatDateGB(formData.bailDate));
+      } else if (od === 'Charged with bail' && (formData.courtName || '').trim()) {
+        chipText = 'Charged \u2014 ' + esc(formData.courtName);
+      } else {
+        chipText = esc(od);
+      }
+      var chipClass = 'outcome-chip';
+      if (/charge/i.test(od)) chipClass += ' outcome-chip--charge';
+      else if (/bail/i.test(od)) chipClass += ' outcome-chip--bail';
+      else if (/nfa|no further action/i.test(od)) chipClass += ' outcome-chip--nfa';
+      else if (/rui|released under investigation/i.test(od)) chipClass += ' outcome-chip--rui';
+      outcomeChipHtml = '<span class="' + chipClass + '" title="Outcome">' + chipText + '</span>';
+    }
+    const rightHtml = '<span class="context-right">' + outcomeChipHtml + esc(poshDateTime(dateStr, timeStr)) + '</span>';
     bar.innerHTML = '<span class="context-left">' + leftParts.join('') + '</span>' + rightHtml;
   }
 
@@ -7012,11 +7105,11 @@ var REQUIRED_FIELD_KEYS = [
         const backBar = document.getElementById('standalone-back-bar');
         const idxBar = document.getElementById('section-index-bar');
         const progBar = document.getElementById('section-progress-bar');
-        const progBar2 = document.getElementById('section-progress-bar-2');
         if (backBar) backBar.classList.remove('hidden');
         if (idxBar) idxBar.style.display = 'none';
         if (progBar) progBar.style.display = 'none';
-        if (progBar2) progBar2.style.display = 'none';
+        var finishPillStandalone = document.getElementById('bottom-bar-finish-pill');
+        if (finishPillStandalone) finishPillStandalone.style.display = 'none';
         document.getElementById('form-prev')?.classList.add('hidden');
         document.getElementById('form-next')?.classList.add('hidden');
         setFormTitle(sec.title);
@@ -7124,8 +7217,6 @@ var REQUIRED_FIELD_KEYS = [
     document.getElementById('standalone-back-bar')?.classList.add('hidden');
     document.getElementById('section-index-bar').style.display = '';
     document.getElementById('section-progress-bar').style.display = '';
-    var pb2 = document.getElementById('section-progress-bar-2');
-    if (pb2) pb2.style.display = '';
     document.getElementById('form-prev')?.classList.remove('hidden');
     document.getElementById('form-next')?.classList.remove('hidden');
 
@@ -10993,7 +11084,16 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── VALIDATION: VOLUNTARY ATTENDANCE FORM ─── */
   function validateVoluntaryForm() {
+    // Voluntary section indices (0-based) — keep in sync with `voluntaryFormSections`:
+    //   0 §1 Case Reference & Arrival       1 §2 Journey to Station
+    //   2 §3 Client Details & Welfare       3 §4 Offences
+    //   4 §5 Disclosure & Evidence          5 §6 Consultation (Attend on Client)
+    //   6 §7 Interview                      7 §8 Outcome
+    //   8 §9 Time Recording & Fees
     var m = [];
+    if (!(formData.date || '').trim() && (formData.instructionDateTime || '').trim()) {
+      formData.date = formData.instructionDateTime.slice(0, 10);
+    }
     var od = (formData.outcomeDecision || '').trim();
     var volCaseConcluded = od && od !== 'Ongoing / Unknown';
     var required = [
@@ -11002,10 +11102,10 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'surname', label: 'Surname', section: 0 },
       { key: 'forename', label: 'Forename', section: 0 },
       { key: 'offenceSummary', label: 'Allegation / Offence', section: 0 },
-      { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', section: 1 },
+      { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', section: 2 },
     ];
     if (volCaseConcluded) {
-      required.push({ key: 'outcomeDecision', label: 'Outcome', section: 5 });
+      required.push({ key: 'outcomeDecision', label: 'Outcome', section: 7 });
     }
     if (!(formData.policeStationId || '').trim() && !(formData.otherLocation || '').trim()) {
       m.push({ key: 'policeStationId', label: 'Location (police station or other)', section: 0 });
@@ -11015,22 +11115,23 @@ var REQUIRED_FIELD_KEYS = [
       if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
     });
     if (volCaseConcluded && !(formData.outcomeCode || '').trim()) {
-      m.push({ key: 'outcomeCode', label: 'Outcome code', section: 5 });
+      m.push({ key: 'outcomeCode', label: 'Outcome code', section: 7 });
     }
     if (formData.instructionSource === 'dscc' && !(formData.dsccRef || '').trim() && formData.dsccNotificationStatus === 'missing' && !(formData.dsccReferenceMissingReason || '').trim() && formData.dsccPrivateMatter !== 'Yes') {
       m.push({ key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', section: 0 });
     }
     if (formData.attendanceSubType === 'voluntary_non_police_body' && !formData.constablePresent) {
-      m.push({ key: 'constablePresent', label: 'Constable present? (required for non-police body)', section: 1 });
+      m.push({ key: 'constablePresent', label: 'Constable present? (required for non-police body)', section: 2 });
     }
     if (formData.arrestedDuringAttendance === 'Yes') {
-      if (!(formData.arrestTimeIfConverted || '').trim()) m.push({ key: 'arrestTimeIfConverted', label: 'Arrest time (required when converted)', section: 4 });
-      if (!(formData.conversionNotes || '').trim()) m.push({ key: 'conversionNotes', label: 'Conversion notes', section: 4 });
+      if (!(formData.arrestTimeIfConverted || '').trim()) m.push({ key: 'arrestTimeIfConverted', label: 'Arrest time (required when converted)', section: 7 });
+      if (!(formData.conversionNotes || '').trim()) m.push({ key: 'conversionNotes', label: 'Conversion notes', section: 7 });
     }
-    if (!(formData.adviceGiven || '').trim()) m.push({ key: 'adviceGiven', label: 'Advice given', section: 3 });
-    if (!(formData.reasonsForAdvice || '').trim() && !(formData.reasonsForAdviceSelect || '').trim()) m.push({ key: 'reasonsForAdvice', label: 'Reasons for advice', section: 3 });
-    if (!(formData.clientInstructions || '').trim()) m.push({ key: 'clientInstructions', label: 'Summary of client instructions', section: 3 });
-    if (!(formData.disclosureNarrative || '').trim()) m.push({ key: 'disclosureNarrative', label: 'Disclosure summary', section: 3 });
+    // Advice/instruction/disclosure narrative — relax to one combined check so a sensible note can satisfy either field.
+    var adviceLike = (formData.reasonsForAdvice || formData.reasonsForAdviceSelect || formData.adviceGiven || '').toString().trim();
+    if (!adviceLike) m.push({ key: 'reasonsForAdvice', label: 'Reasons for advice / advice given', section: 5 });
+    if (!(formData.clientInstructions || '').trim()) m.push({ key: 'clientInstructions', label: 'Summary of client instructions', section: 5 });
+    if (!(formData.disclosureNarrative || '').trim()) m.push({ key: 'disclosureNarrative', label: 'Disclosure summary', section: 4 });
     if (formData.juvenileVulnerable === 'Juvenile' || formData.juvenileVulnerable === 'Vulnerable Adult') {
       if (!(formData.appropriateAdultName || '').trim()) m.push({ key: 'appropriateAdultName', label: 'Appropriate adult name', section: 2 });
       if (!(formData.appropriateAdultRelation || '').trim()) m.push({ key: 'appropriateAdultRelation', label: 'AA relationship', section: 2 });
@@ -11039,7 +11140,7 @@ var REQUIRED_FIELD_KEYS = [
 
     var niVol = (formData.niNumber || '').trim().replace(/\s/g, '').toUpperCase();
     if (niVol && !/^[A-Z]{2}\d{6}[A-Z]$/.test(niVol)) {
-      m.push({ key: 'niNumber', label: 'NI Number format invalid (expected AB123456C)', section: 3 });
+      m.push({ key: 'niNumber', label: 'NI Number format invalid (expected AB123456C)', section: 5 });
     }
     var dobVol = (formData.dob || '').trim();
     if (dobVol) {
@@ -11056,6 +11157,9 @@ var REQUIRED_FIELD_KEYS = [
   function validateAttendanceForm() {
     var SV = (typeof window !== 'undefined') ? window.StationVisits : null;
     var m = [];
+    if (!(formData.date || '').trim() && (formData.instructionDateTime || '').trim()) {
+      formData.date = formData.instructionDateTime.slice(0, 10);
+    }
     var isHandedBack = formData.outcomeDecision === 'Handed back to DSCC';
     var isNonAttendance = formData.outcomeDecision === 'Did not attend (exceptional circumstances)';
     var isRelaxedPath = isHandedBack || isNonAttendance;
@@ -11405,7 +11509,7 @@ var REQUIRED_FIELD_KEYS = [
 
   var _progressBarBuilt = false;
   function updateProgressBar() {
-    var bars = [document.getElementById('section-progress-bar'), document.getElementById('section-progress-bar-2')];
+    var bars = [document.getElementById('section-progress-bar')];
     var visCount = 0;
     forEachVisibleSection(function() { visCount++; });
     var needsRebuild = !_progressBarBuilt || !bars[0] || bars[0].children.length === 0 ||
@@ -11482,6 +11586,48 @@ var REQUIRED_FIELD_KEYS = [
     var t = (d.dsccRef || '').trim();
     return t || '\u2014';
   }
+
+  /* C8a: Audit footer for every PDF page — fee earner, finalised at, last edited at, app version. */
+  function fmtPdfTimestamp(val) {
+    if (!val) return '';
+    try {
+      var dt = new Date(val);
+      if (isNaN(dt.getTime())) return String(val);
+      var pad = function(n) { return n < 10 ? '0' + n : '' + n; };
+      return pad(dt.getDate()) + '/' + pad(dt.getMonth() + 1) + '/' + dt.getFullYear() +
+        ' ' + pad(dt.getHours()) + ':' + pad(dt.getMinutes());
+    } catch (_) { return String(val); }
+  }
+  function pdfAuditFooterCss() {
+    return '.pdf-audit-footer{position:fixed;bottom:4mm;left:14mm;right:14mm;border-top:1px solid #cbd5e1;' +
+      'padding:2px 0 0;font-size:7.5px;color:#64748b;display:flex;justify-content:space-between;' +
+      'gap:8px;font-family:inherit;print-color-adjust:exact;}' +
+      '.pdf-audit-footer span{white-space:nowrap;}' +
+      '.pdf-audit-footer .audit-mid{flex:1 1 auto;text-align:center;font-style:italic;}';
+  }
+  function pdfAuditFooterHtml(d, settings) {
+    var feeEarner = (d.feeEarnerName || (settings && settings.feeEarnerName) || '\u2014').toString();
+    var finalisedAt = d.finalisedAt || d.finalised_at || '';
+    var updatedAt = d.updated_at || d.updatedAt || d.lastEditedAt || '';
+    var appVer = (settings && settings.appVersion) ||
+      (typeof window !== 'undefined' && window.__appVersion) ||
+      (typeof window !== 'undefined' && document.getElementById && document.getElementById('version') && document.getElementById('version').textContent) ||
+      '';
+    var fileRef = (d.ourFileNumber || d.fileReference || '').toString();
+    var leftBits = ['Fee earner: ' + esc(feeEarner)];
+    if (fileRef) leftBits.push('Ref: ' + esc(fileRef));
+    var midBits = [];
+    if (finalisedAt) midBits.push('Finalised ' + esc(fmtPdfTimestamp(finalisedAt)));
+    if (updatedAt && updatedAt !== finalisedAt) midBits.push('Last edit ' + esc(fmtPdfTimestamp(updatedAt)));
+    var rightBits = [];
+    if (appVer) rightBits.push('CustodyNote v' + esc(appVer));
+    return '<div class="pdf-audit-footer">' +
+      '<span>' + leftBits.join(' &middot; ') + '</span>' +
+      '<span class="audit-mid">' + midBits.join(' &middot; ') + '</span>' +
+      '<span>' + rightBits.join(' &middot; ') + '</span>' +
+    '</div>';
+  }
+
   function buildPdfHtml(d, settings) {
     const h = esc;
     const row = (l, v) => v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : '';
@@ -11514,6 +11660,7 @@ var REQUIRED_FIELD_KEYS = [
 '.pdf-break-before{page-break-before:always;}' +
 'h1{font-size:14px;font-weight:700;color:#2563eb;margin:0 0 5px;letter-spacing:-0.02em;}' +
 'h2{font-size:9.5px;font-weight:700;margin:12px 0 4px;padding:4px 8px;background:#eef2ff;color:#1e40af;border-radius:3px;border-left:3px solid #2563eb;print-color-adjust:exact;}' +
+pdfAuditFooterCss() +
 '.pdf-section{page-break-inside:avoid;}' +
 'table{width:100%;border-collapse:collapse;margin-bottom:4px;}' +
 'td{padding:3px 7px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
@@ -11902,6 +12049,7 @@ row('Invoice notes', d.invoiceNotes) +
 })() +
 
 PDF_CASENOTE_ADVERT +
+pdfAuditFooterHtml(d, settings) +
 '</body></html>';
   }
 
@@ -11922,6 +12070,7 @@ PDF_CASENOTE_ADVERT +
       '<style>' +
       '@page{margin:15mm;size:A4;}' +
       'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 48px;color:#111;line-height:1.45;}' +
+      pdfAuditFooterCss() +
       'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
       'h2{font-size:12px;font-weight:700;margin:24px 0 8px;padding:8px 10px;background:#f0fdfa;color:#0f766e;border-radius:4px;border-left:4px solid #0f766e;border-top:1px solid #e2e8f0;padding-top:16px;print-color-adjust:exact;}' +
       'table{width:100%;border-collapse:collapse;margin-bottom:8px;}td{padding:6px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
@@ -12006,14 +12155,16 @@ PDF_CASENOTE_ADVERT +
       row('Previous advice?', d.previousAdvice) + (d.previousAdviceDetails ? row('Details', d.previousAdviceDetails) : '') +
       row('Client Name', d.laaClientFullName) +
       '</table>' +
+      // C8a: LAA declaration prose BEFORE signatures, matching custody/voluntary order.
+      '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
       (d.clientSig ? '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' : '') +
       (getEffectiveFeeEarnerSig(d) ? '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>' : '') +
       '<table>' + row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification) +
       row('UFN', d.ufn) + row('Firm LAA Account', d.firmLaaAccount) +
       row('Ethnic Origin', d.ethnicOriginCode) + row('Disability', d.disabilityCode) +
       '</table>' +
-      '<div class="decl-box">' + h(refData.laaDeclarationText || '') + '</div>' +
       PDF_CASENOTE_ADVERT +
+      pdfAuditFooterHtml(d, settings) +
       '</body></html>';
   }
 
@@ -12069,6 +12220,7 @@ PDF_CASENOTE_ADVERT +
       '<style>' +
       '@page{margin:15mm;size:A4;}' +
       'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 56px;color:#111;line-height:1.45;max-width:100%;}' +
+      pdfAuditFooterCss() +
       '@media print{.pdf-section,.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.pdf-break-before{page-break-before:always;}.watermark{print-color-adjust:exact;}}' +
       '.pdf-break-before{page-break-before:always;}' +
       'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
@@ -12333,6 +12485,7 @@ PDF_CASENOTE_ADVERT +
       })() +
 
       PDF_CASENOTE_ADVERT +
+      pdfAuditFooterHtml(d, settings) +
       '</body></html>';
   }
 
