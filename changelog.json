@@ -1,9 +1,24 @@
 {
   "releases": [
     {
-      "version": "1.4.225",
+      "version": "1.5.0",
       "date": "2026-04-22",
       "latest": true,
+      "changes": [
+        "UX audit batches 2 & 3 \u2014 strong improvements + small wins",
+        "Voluntary §1 now leads with Voluntary Status & Rights (attendance, free-to-leave, caution, notice of rights, legal advice, sub-type, constable-present), so the most decisive context is captured first",
+        "Quick Capture: trimmed to the 8 essentials (attendance type, client name, station, offence, DSCC, instruction received, first-contact time, instructing firm, notes); referral / OIC / times / custody # collapsed under \"More fields\" to keep the screen one-glance",
+        "45-min reason converted to a structured select (already engaged, travelling, in court, awaiting interpreter / AA, awaiting booking, etc.) with an \"Other (specify)\" details box \u2014 validators updated for all three forms",
+        "Density default = compact for new installs (existing user choice respected); textareas capped at ~5 rows and grow on focus; global search hidden while a form is active to stop stray custody numbers triggering record searches",
+        "PDFs: page-1 \"Defence summary\" panel (outcome, outcome code, next date, next venue, interview position, headline advice, outcome notes) added to custody, telephone and voluntary builders",
+        "PDFs: Appendix A/B renamed to \"Annex A \u2014 Video Capture\" and \"Annex B \u2014 Video Identification Parade\"",
+        "Inline DSCC private toggle on the full custody / voluntary / telephone forms (matches the Quick Capture pattern); checkbox sizing fixed throughout"
+      ]
+    },
+    {
+      "version": "1.4.225",
+      "date": "2026-04-22",
+      "latest": false,
       "changes": [
         "UX audit batch 1 \u2014 essentials",
         "Validation: voluntary form section indices remapped, broken adviceGiven requirement removed, date auto-populated from instructionDateTime when missing",

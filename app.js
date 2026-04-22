@@ -480,7 +480,8 @@ var LAA = {
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
         { key: 'firstContactWithin45Mins', label: 'Within 45 mins of duty call?', type: 'select', options: ['Yes','No','N/A'], helpTitle: 'LAA requires first contact within 45 mins in 80% of matters. If No, reason must be noted.' },
-        { key: 'firstContactOver45MinsReason', label: 'Reason first contact exceeded 45 mins', type: 'textarea', placeholder: 'Required if first contact was more than 45 mins after instruction received (Spec 9.25)', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
+        { key: 'firstContactOver45MinsReasonCode', label: 'Reason for delay', type: 'select', options: ['','Already engaged on another matter','Travelling from home / out of area','In court','In another police station','Awaiting interpreter / AA','Awaiting client to be booked in','Police did not call back promptly','Other'], showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
+        { key: 'firstContactOver45MinsReason', label: 'Reason — details', type: 'textarea', placeholder: 'Add specifics (required if "Other" is selected)', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
         { key: 'firmId', label: 'Instructing Firm', type: 'firm', cols: 2 },
         { key: 'firmContactName', label: 'Contact at Firm', type: 'text', placeholder: 'e.g. Richard Chamberlain' },
         { key: 'firmContactPhone', label: 'Contact phone', type: 'tel' },
@@ -1219,7 +1220,8 @@ var LAA = {
         { key: '_h_contact_timing', label: 'First Contact', type: 'sectionHeading' },
         { key: 'timeFirstContactWithClient', label: 'Time of first contact with client', type: 'time' },
         { key: 'firstContactWithin45Mins', label: 'Within 45 mins of duty call?', type: 'select', options: ['Yes','No','N/A'] },
-        { key: 'firstContactOver45MinsReason', label: 'Reason >45 mins', type: 'textarea', placeholder: 'Required if first contact exceeded 45 mins', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
+        { key: 'firstContactOver45MinsReasonCode', label: 'Reason for delay', type: 'select', options: ['','Already engaged on another matter','Travelling from home / out of area','In court','In another police station','Awaiting interpreter / AA','Awaiting client to be booked in','Police did not call back promptly','Other'], showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
+        { key: 'firstContactOver45MinsReason', label: 'Reason — details', type: 'textarea', placeholder: 'Add specifics (required if "Other" is selected)', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
         { key: 'conflictCheckResult', label: 'Conflict check', type: 'select', options: ['Negative','Positive','N/A'] },
         { key: 'conflictCheckDate', label: 'Date of conflict check', type: 'date' },
         { key: 'conflictCheckNotes', label: 'Conflict notes', type: 'textarea', placeholder: 'Required if positive', cols: 2, showIf: { field: 'conflictCheckResult', value: 'Positive' } },
@@ -1316,12 +1318,23 @@ var LAA = {
       fields: [
         { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'voluntary', label: 'Voluntary' }, { value: 'custody', label: 'Custody' }], cols: 2, helpTitle: 'Voluntary = client attending voluntarily (free to leave). Custody = client under arrest.' },
         { key: '_note_voluntary', label: 'This is a voluntary attendance. Client is free to leave unless arrested.', type: 'sectionNote' },
+
+        { key: '_h_vol_status_top', label: 'Voluntary Status & Rights', type: 'sectionHeading' },
+        { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', type: 'select', options: ['Yes','No','Not confirmed'], cols: 2 },
+        { key: 'freeToLeaveExplained', label: 'Free to leave explained to client?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
+        { key: 'cautionGiven', label: 'Caution given?', type: 'select', options: ['Yes','No','Not yet','Not applicable'], cols: 2 },
+        { key: 'noticeOfRightsExplained', label: 'Notice of rights (legal advice) explained?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
+        { key: 'legalAdviceRequested', label: 'Legal advice requested?', type: 'select', options: ['Yes','No'], cols: 2 },
+        { key: 'attendanceSubType', label: 'Attendance Sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
+        { key: 'constablePresent', label: 'Constable present?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'For non-police body interviews, record whether a constable was present', showIf: { field: 'attendanceSubType', value: 'voluntary_non_police_body' } },
+
         { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'e.g. internal file or matter ref' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
         { key: 'firstContactWithin45Mins', label: 'Within 45 mins of duty call?', type: 'select', options: ['Yes','No','N/A'], helpTitle: 'LAA requires first contact within 45 mins in 80% of matters. If No, reason must be noted.' },
-        { key: 'firstContactOver45MinsReason', label: 'Reason first contact exceeded 45 mins', type: 'textarea', placeholder: 'Required if first contact was more than 45 mins after instruction received (Spec 9.25)', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
+        { key: 'firstContactOver45MinsReasonCode', label: 'Reason for delay', type: 'select', options: ['','Already engaged on another matter','Travelling from home / out of area','In court','In another police station','Awaiting interpreter / AA','Awaiting client to be booked in','Police did not call back promptly','Other'], showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
+        { key: 'firstContactOver45MinsReason', label: 'Reason — details', type: 'textarea', placeholder: 'Add specifics (required if "Other" is selected)', cols: 2, showIf: { field: 'firstContactWithin45Mins', value: 'No' } },
         { key: 'firmId', label: 'Instructing Firm', type: 'firm', cols: 2 },
         { key: 'firmContactName', label: 'Contact at Firm', type: 'text', placeholder: 'e.g. Richard Chamberlain' },
         { key: 'firmContactPhone', label: 'Contact phone', type: 'tel' },
@@ -1381,15 +1394,6 @@ var LAA = {
       id: 'custody', title: '3. Client Details & Welfare',
       keyFields: ['forename', 'surname', 'dob'],
       fields: [
-        { key: '_h_vol_status', label: 'Voluntary Status & Rights', type: 'sectionHeading' },
-        { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', type: 'select', options: ['Yes','No','Not confirmed'], cols: 2 },
-        { key: 'freeToLeaveExplained', label: 'Free to leave explained to client?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
-        { key: 'cautionGiven', label: 'Caution given?', type: 'select', options: ['Yes','No','Not yet','Not applicable'], cols: 2 },
-        { key: 'noticeOfRightsExplained', label: 'Notice of rights (legal advice) explained?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
-        { key: 'legalAdviceRequested', label: 'Legal advice requested?', type: 'select', options: ['Yes','No'], cols: 2 },
-        { key: 'constablePresent', label: 'Constable present?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'For non-police body interviews, record whether a constable was present' },
-        { key: 'attendanceSubType', label: 'Attendance Sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
-
         { key: '_h_client_details', label: 'Client Details (provided by client)', type: 'sectionHeading' },
         { key: 'title', label: 'Title', type: 'select', options: ['Mr','Mrs','Miss','Ms','Mx','Dr','Other'] },
         { type: 'nameRow', label: 'Name', fields: [
@@ -4974,7 +4978,7 @@ var REQUIRED_FIELD_KEYS = [
       if (sbs && s.scrollbarScale) { sbs.value = s.scrollbarScale; }
       var sbv = document.getElementById('scrollbar-size-val');
       if (sbv) { sbv.textContent = (s.scrollbarScale || '1') + 'x'; }
-      applyDensity(s.displayDensity || 'default');
+      applyDensity(s.displayDensity || 'compact');
       var layoutMode = document.getElementById('setting-layout-mode');
       if (layoutMode) layoutMode.value = s.layoutMode || 'standard';
       var navMode = document.getElementById('setting-nav-mode');
@@ -11072,8 +11076,12 @@ var REQUIRED_FIELD_KEYS = [
       if (!(formData.outcomeCode || '').trim()) m.push({ key: 'outcomeCode', label: 'Outcome Code', section: 2 });
       if (!(formData.caseConcludedDate || '').trim()) m.push({ key: 'caseConcludedDate', label: 'Case concluded date', section: 2 });
     }
-    if (formData.firstContactWithin45Mins === 'No' && !(formData.firstContactOver45MinsReason || '').trim()) {
-      m.push({ key: 'firstContactOver45MinsReason', label: 'Reason first contact exceeded 45 mins', section: 1 });
+    if (formData.firstContactWithin45Mins === 'No') {
+      var c45t = (formData.firstContactOver45MinsReasonCode || '').trim();
+      if (!c45t) m.push({ key: 'firstContactOver45MinsReasonCode', label: 'Reason for delay (>45 mins)', section: 1 });
+      else if (c45t === 'Other' && !(formData.firstContactOver45MinsReason || '').trim()) {
+        m.push({ key: 'firstContactOver45MinsReason', label: 'Reason — details (required when "Other")', section: 1 });
+      }
     }
     if (formData.conflictCheckResult === 'Positive' && !(formData.conflictCheckNotes || '').trim()) {
       m.push({ key: 'conflictCheckNotes', label: 'Conflict check notes', section: 1 });
@@ -11102,7 +11110,7 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'surname', label: 'Surname', section: 0 },
       { key: 'forename', label: 'Forename', section: 0 },
       { key: 'offenceSummary', label: 'Allegation / Offence', section: 0 },
-      { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', section: 2 },
+      { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', section: 0 },
     ];
     if (volCaseConcluded) {
       required.push({ key: 'outcomeDecision', label: 'Outcome', section: 7 });
@@ -11121,7 +11129,7 @@ var REQUIRED_FIELD_KEYS = [
       m.push({ key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', section: 0 });
     }
     if (formData.attendanceSubType === 'voluntary_non_police_body' && !formData.constablePresent) {
-      m.push({ key: 'constablePresent', label: 'Constable present? (required for non-police body)', section: 2 });
+      m.push({ key: 'constablePresent', label: 'Constable present? (required for non-police body)', section: 0 });
     }
     if (formData.arrestedDuringAttendance === 'Yes') {
       if (!(formData.arrestTimeIfConverted || '').trim()) m.push({ key: 'arrestTimeIfConverted', label: 'Arrest time (required when converted)', section: 7 });
@@ -11191,8 +11199,12 @@ var REQUIRED_FIELD_KEYS = [
       var ta2 = SV ? SV.getEffectiveTimeArrival(formData) : (formData.timeArrival || '').trim();
       if (!fc2 && !ta2) m.push({ key: 'timeArrival', label: 'Time of arrival / first contact (LAA 9.25)', section: 2 });
     }
-    if (formData.firstContactWithin45Mins === 'No' && !(formData.firstContactOver45MinsReason || '').trim()) {
-      m.push({ key: 'firstContactOver45MinsReason', label: 'Reason first contact exceeded 45 mins', section: 0 });
+    if (formData.firstContactWithin45Mins === 'No') {
+      var c45a = (formData.firstContactOver45MinsReasonCode || '').trim();
+      if (!c45a) m.push({ key: 'firstContactOver45MinsReasonCode', label: 'Reason for delay (>45 mins)', section: 0 });
+      else if (c45a === 'Other' && !(formData.firstContactOver45MinsReason || '').trim()) {
+        m.push({ key: 'firstContactOver45MinsReason', label: 'Reason — details (required when "Other")', section: 0 });
+      }
     }
     if (isHandedBack && !(formData.handedBackToDSCCReason || '').trim()) m.push({ key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', section: 7 });
     if (isNonAttendance && !(formData.nonAttendanceReason || '').trim()) m.push({ key: 'nonAttendanceReason', label: 'Reason for non-attendance', section: 7 });
@@ -11598,6 +11610,44 @@ var REQUIRED_FIELD_KEYS = [
         ' ' + pad(dt.getHours()) + ':' + pad(dt.getMinutes());
     } catch (_) { return String(val); }
   }
+  // C8b: Defence summary panel — a compact, page-1 "what happened" block
+  // visible to the case lawyer without skim-reading the whole note.
+  function pdfDefenceSummaryCss() {
+    return '.def-summary{margin:6px 0 8px;border:1px solid #c7d2fe;border-radius:6px;background:#fafbff;padding:6px 10px;print-color-adjust:exact;}' +
+      '.def-summary h3{margin:0 0 4px;font-size:9px;letter-spacing:0.06em;text-transform:uppercase;color:#1e40af;font-weight:700;}' +
+      '.def-summary .ds-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;}' +
+      '.def-summary .ds-item{font-size:9px;line-height:1.4;}' +
+      '.def-summary .ds-item strong{color:#1e3a8a;}' +
+      '.def-summary .ds-item.ds-wide{grid-column:1 / -1;}' +
+      '.def-summary .ds-empty{color:#94a3b8;font-style:italic;}';
+  }
+  function pdfDefenceSummaryHtml(d) {
+    function it(label, val, wide) {
+      var v = (val == null || val === '') ? '<span class="ds-empty">not recorded</span>' : esc(String(val));
+      return '<div class="ds-item' + (wide ? ' ds-wide' : '') + '"><strong>' + esc(label) + ':</strong> ' + v + '</div>';
+    }
+    var outcome = d.outcomeDecision || '';
+    var outcomeCode = d.outcomeCode || '';
+    var nextDate = d.bailDate || d.nextDate || d.caseConcludedDate || '';
+    var nextVenue = d.bailReturnStationName || d.courtName || '';
+    var headlineAdvice = (function() {
+      var s = (d.adviceGivenSummary || d.reasonsForAdvice || d.adviceGiven || d.adviceSummary || '').toString().trim();
+      if (!s) return '';
+      var firstLine = s.split(/\n|\.[\s]/)[0].trim();
+      return firstLine.length > 220 ? firstLine.slice(0, 217) + '\u2026' : firstLine;
+    })();
+    var interviewPosition = (d.interviewApproachSummary || d.interviewApproach || '').toString().trim();
+    return '<div class="def-summary"><h3>Defence summary</h3><div class="ds-grid">' +
+      it('Outcome', outcome) +
+      it('Outcome code', outcomeCode) +
+      it('Next date', nextDate ? fmtDate(nextDate) || nextDate : '') +
+      it('Next venue', nextVenue) +
+      it('Interview position', interviewPosition) +
+      it('Headline advice', headlineAdvice, true) +
+      (d.outcomeNotes ? it('Outcome notes', d.outcomeNotes, true) : '') +
+    '</div></div>';
+  }
+
   function pdfAuditFooterCss() {
     return '.pdf-audit-footer{position:fixed;bottom:4mm;left:14mm;right:14mm;border-top:1px solid #cbd5e1;' +
       'padding:2px 0 0;font-size:7.5px;color:#64748b;display:flex;justify-content:space-between;' +
@@ -11661,6 +11711,7 @@ var REQUIRED_FIELD_KEYS = [
 'h1{font-size:14px;font-weight:700;color:#2563eb;margin:0 0 5px;letter-spacing:-0.02em;}' +
 'h2{font-size:9.5px;font-weight:700;margin:12px 0 4px;padding:4px 8px;background:#eef2ff;color:#1e40af;border-radius:3px;border-left:3px solid #2563eb;print-color-adjust:exact;}' +
 pdfAuditFooterCss() +
+pdfDefenceSummaryCss() +
 '.pdf-section{page-break-inside:avoid;}' +
 'table{width:100%;border-collapse:collapse;margin-bottom:4px;}' +
 'td{padding:3px 7px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
@@ -11711,6 +11762,7 @@ pdfAuditFooterCss() +
 '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
 '</div>' +
+pdfDefenceSummaryHtml(d) +
 (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">CUSTODY NOTE</div>' : '') +
 
 '<h2>1. Case Reference & Arrival</h2><table>' +
@@ -11725,7 +11777,7 @@ row('Scheme ID', d.schemeId) + row('Duty Solicitor', d.dutySolicitor) +
 row('Fee Earner', d.feeEarnerName) +
 row('Client Status', d.clientStatus) + row('Case Status', d.caseStatus) +
 row('Previous advice on this matter?', d.previousAdvice) + (d.previousAdvice === 'Yes' ? row('Previous advice details', d.previousAdviceDetails) : '') +
-row('Time first contact (LAA 9.25)', d.timeFirstContactWithClient) + row('Within 45 mins of duty call?', d.firstContactWithin45Mins) + (d.firstContactOver45MinsReason ? row('Reason first contact >45 mins', d.firstContactOver45MinsReason) : '') +
+row('Time first contact (LAA 9.25)', d.timeFirstContactWithClient) + row('Within 45 mins of duty call?', d.firstContactWithin45Mins) + (d.firstContactOver45MinsReasonCode ? row('Reason for delay (>45 mins)', d.firstContactOver45MinsReasonCode) : '') + (d.firstContactOver45MinsReason ? row('Reason — details', d.firstContactOver45MinsReason) : '') +
 (d.telephoneAdviceSummary ? row('Summary of advice given (telephone)', d.telephoneAdviceSummary) : '') +
 '</table>' +
 (d.arrivalNotes ? '<div class="nar">' + h(d.arrivalNotes) + '</div>' : '') +
@@ -11932,7 +11984,7 @@ row('Invoice notes', d.invoiceNotes) +
   var out = '';
   if (capHas) {
     var capType = d.vidCapRecordingType === 'Other' ? (d.vidCapRecordingTypeOther || 'Other') : d.vidCapRecordingType;
-    out += '<h2 class="pdf-break-before">Appendix A: Video Capture</h2>' +
+    out += '<h2 class="pdf-break-before">Annex A — Video Capture</h2>' +
       '<table>' +
         row('Recording type', capType) +
         row('Start time', d.vidCapStartTime) + row('End time', d.vidCapEndTime) +
@@ -11956,7 +12008,7 @@ row('Invoice notes', d.invoiceNotes) +
 
   if (paradeHas) {
     var pType = d.vidParadeType === 'Other' ? (d.vidParadeTypeOther || 'Other') : d.vidParadeType;
-    out += '<h2 class="pdf-break-before">Appendix B: Video Identification Parade</h2>' +
+    out += '<h2 class="pdf-break-before">Annex B — Video Identification Parade</h2>' +
       '<table>' +
         row('Parade type', pType) +
         row('Date', fmtDate(d.vidParadeDate)) + row('Time', d.vidParadeTime) +
@@ -12071,6 +12123,7 @@ pdfAuditFooterHtml(d, settings) +
       '@page{margin:15mm;size:A4;}' +
       'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 48px;color:#111;line-height:1.45;}' +
       pdfAuditFooterCss() +
+      pdfDefenceSummaryCss() +
       'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
       'h2{font-size:12px;font-weight:700;margin:24px 0 8px;padding:8px 10px;background:#f0fdfa;color:#0f766e;border-radius:4px;border-left:4px solid #0f766e;border-top:1px solid #e2e8f0;padding-top:16px;print-color-adjust:exact;}' +
       'table{width:100%;border-collapse:collapse;margin-bottom:8px;}td{padding:6px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
@@ -12106,6 +12159,7 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>DSCC:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
       '</div>' +
+      pdfDefenceSummaryHtml(d) +
       (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">TELEPHONE ADVICE</div>' : '') +
 
       '<h2>1. Call Details</h2><table>' +
@@ -12131,7 +12185,7 @@ pdfAuditFooterHtml(d, settings) +
       row('Telephone', d.clientPhone) +
       row('First contact', d.timeFirstContactWithClient) +
       row('Within 45 mins of duty call?', d.firstContactWithin45Mins) +
-      (d.firstContactOver45MinsReason ? row('Reason >45 mins', d.firstContactOver45MinsReason) : '') +
+      (d.firstContactOver45MinsReasonCode ? row('Reason for delay (>45 mins)', d.firstContactOver45MinsReasonCode) : '') + (d.firstContactOver45MinsReason ? row('Reason — details', d.firstContactOver45MinsReason) : '') +
       row('Conflict check', d.conflictCheckResult) +
       row('Date of conflict check', d.conflictCheckDate ? formatDateGB(d.conflictCheckDate) : '') +
       (d.conflictCheckNotes ? row('Conflict notes', d.conflictCheckNotes) : '') +
@@ -12221,6 +12275,7 @@ pdfAuditFooterHtml(d, settings) +
       '@page{margin:15mm;size:A4;}' +
       'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 56px;color:#111;line-height:1.45;max-width:100%;}' +
       pdfAuditFooterCss() +
+      pdfDefenceSummaryCss() +
       '@media print{.pdf-section,.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.pdf-break-before{page-break-before:always;}.watermark{print-color-adjust:exact;}}' +
       '.pdf-break-before{page-break-before:always;}' +
       'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
@@ -12257,12 +12312,13 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="cover-item"><strong>File No.:</strong> ' + h(myRefForTitle) + '</div>' +
       '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || settings.feeEarnerNameDefault || '\u2014') + '</div>' +
       '</div>' +
+      pdfDefenceSummaryHtml(d) +
       (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">VOLUNTARY</div>' : '') +
 
       '<h2>1. Case Reference &amp; Arrival</h2><table>' +
       row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) +
       row('Within 45 mins of duty call?', d.firstContactWithin45Mins) +
-      (d.firstContactOver45MinsReason ? row('Reason (over 45 mins)', d.firstContactOver45MinsReason) : '') +
+      (d.firstContactOver45MinsReasonCode ? row('Reason for delay (>45 mins)', d.firstContactOver45MinsReasonCode) : '') + (d.firstContactOver45MinsReason ? row('Reason — details', d.firstContactOver45MinsReason) : '') +
       row('Firm', firmName) + row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
       row('Fee Earner / Rep', d.feeEarnerName) +
       row('Client', clientNameForTitle) +
@@ -13413,7 +13469,12 @@ pdfAuditFooterHtml(d, settings) +
 
   function initDensity() {
     window.api.getSettings().then(s => {
-      applyDensity(s.displayDensity || 'default');
+      // C9: Default new installs to compact density (laptop-friendly).
+      // Existing users who explicitly chose 'default' or 'comfortable' have
+      // it stored and are respected.
+      var stored = s && s.displayDensity;
+      var density = (stored && stored !== '') ? stored : 'compact';
+      applyDensity(density);
     });
   }
 
