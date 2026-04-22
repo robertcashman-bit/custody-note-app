@@ -216,9 +216,67 @@
     });
   }
 
+  /* ── Choice modal (multi-option) ──
+     options: [{ id: 'a', label: 'Do A', variant: 'primary'|'secondary'|'danger' }, ...]
+     Resolves with the id of the chosen option, or null if dismissed.            */
+  function showChoice(message, title, options) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'cn-confirm-overlay';
+
+      var box = document.createElement('div');
+      box.className = 'cn-confirm-box';
+
+      if (title) {
+        var h = document.createElement('h3');
+        h.className = 'cn-confirm-title';
+        h.textContent = title;
+        box.appendChild(h);
+      }
+
+      var p = document.createElement('p');
+      p.className = 'cn-confirm-msg';
+      p.style.whiteSpace = 'pre-line';
+      p.textContent = message;
+      box.appendChild(p);
+
+      var btns = document.createElement('div');
+      btns.className = 'cn-confirm-btns cn-confirm-btns--stacked';
+
+      function done(result) {
+        document.removeEventListener('keydown', esc);
+        if (overlay.parentNode) document.body.removeChild(overlay);
+        resolve(result);
+      }
+      function esc(e) { if (e.key === 'Escape') done(null); }
+
+      var safeOptions = Array.isArray(options) ? options : [];
+      safeOptions.forEach(function (opt, i) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        var variant = opt.variant === 'danger' ? 'btn btn-danger'
+          : opt.variant === 'secondary' ? 'btn btn-secondary'
+          : 'btn btn-primary';
+        b.className = variant;
+        b.textContent = opt.label;
+        b.addEventListener('click', function () { done(opt.id); });
+        btns.appendChild(b);
+        if (i === 0) setTimeout(function () { try { b.focus(); } catch (e) {} }, 0);
+      });
+
+      box.appendChild(btns);
+      overlay.appendChild(box);
+      document.body.appendChild(overlay);
+
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) done(null); });
+      document.addEventListener('keydown', esc);
+    });
+  }
+
   /* Export to global scope */
   window.showToast = showToast;
   window.showConfirm = showConfirm;
   window.showPrompt = showPrompt;
   window.showModal = showModal;
+  window.showChoice = showChoice;
 })();

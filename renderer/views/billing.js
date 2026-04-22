@@ -314,7 +314,7 @@ function _renderBillingPanel(data, recordId, opts) {
 
         '<div class="billing-panel-footer billing-panel-footer--flow">' +
           '<button type="button" id="billing-create-invoice" class="btn btn-primary btn-billing-create" disabled>' +
-            (opts.hasExistingInvoice ? '&#9888; Create Another Invoice' : 'Create QuickFile Invoice') +
+            (opts.hasExistingInvoice ? '&#9888; Send Another Invoice to QuickFile' : 'Send Bill to QuickFile') +
           '</button>' +
           '<button type="button" id="billing-cancel" class="btn btn-secondary">Close</button>' +
         '</div>' +
@@ -495,12 +495,12 @@ async function _handleCreateInvoice(recordId, opts) {
       _showInvoiceSuccessModal(result, opts);
     } else {
       showToast('Invoice creation failed: ' + (result.error || 'Unknown error'), 'error');
-      if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Create QuickFile Invoice'; }
+      if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Send Bill to QuickFile'; }
     }
   }).catch(function (err) {
     _invoiceInFlight = false;
     showToast('Invoice creation failed: ' + (err.message || String(err)), 'error');
-    if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Create QuickFile Invoice'; }
+    if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Send Bill to QuickFile'; }
   });
 }
 

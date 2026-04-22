@@ -2459,6 +2459,65 @@ var REQUIRED_FIELD_KEYS = [
     list.appendChild(li);
   }
 
+  /**
+   * Compute the chargeable attendance & advice split *directly from the recorded
+   * times*, not from the `adviceSocial` / `adviceUnsocial` form fields.
+   *
+   * The form fields are user-overrideable: once the user types into them in §9
+   * they get a "Manual" flag and `autoCalcTimes()` stops touching them. The
+   * breakdown panel sits next to the per-visit times the user just entered, so
+   * the totals row must be derived from those same times — otherwise you get
+   * panels saying "Visit 1 attendance = 78 mins, All visits totals = 36 mins"
+   * (the bug v1.5.2 fixes).
+   *
+   * Returns null if there is no recorded attendance time to split.
+   */
+  function _computeChargeableSplitFromVisits(d, isWBH) {
+    if (window.StationVisits && d.stationVisits && d.stationVisits.length) {
+      var agg = window.StationVisits.aggregateMinuteBuckets(d.stationVisits, isWBH);
+      return { social: agg.adviceSocial || 0, unsocial: agg.adviceUnsocial || 0 };
+    }
+    if (d.timeArrival && d.timeDeparture) {
+      var station = splitSocialUnsocial(d.timeArrival, d.timeDeparture, isWBH);
+      var wSoc = 0, wUns = 0;
+      if (d.waitingTimeStart && d.waitingTimeEnd) {
+        var w = splitSocialUnsocial(d.waitingTimeStart, d.waitingTimeEnd, isWBH);
+        wSoc = w.social;
+        wUns = w.unsocial;
+      }
+      return {
+        social: Math.max(0, station.social - wSoc),
+        unsocial: Math.max(0, station.unsocial - wUns)
+      };
+    }
+    return null;
+  }
+
+  function _appendChargeableAttendanceRow(list, label, autoSplit) {
+    if (!list || !autoSplit) return;
+    appendTimeBreakdownItem(list, label, '', '', autoSplit);
+    var manualSocial = parseInt(getFieldValue('adviceSocial'), 10) || 0;
+    var manualUnsocial = parseInt(getFieldValue('adviceUnsocial'), 10) || 0;
+    var autoTotal = (autoSplit.social || 0) + (autoSplit.unsocial || 0);
+    var manualTotal = manualSocial + manualUnsocial;
+    var sOver = _isTimeOverridden && _isTimeOverridden('adviceSocial');
+    var uOver = _isTimeOverridden && _isTimeOverridden('adviceUnsocial');
+    if ((sOver || uOver) && manualTotal !== autoTotal) {
+      var li = document.createElement('li');
+      li.className = 'time-breakdown-override-note';
+      var strong = document.createElement('strong');
+      strong.textContent = 'Manual override active: ';
+      var span = document.createElement('span');
+      span.textContent =
+        'Section 9 attendance fields are set to ' + manualTotal + ' mins ' +
+        '(social ' + manualSocial + ', unsocial ' + manualUnsocial + ') — that figure will be billed. ' +
+        'Click "Reset to auto" on the §9 fields to use ' + autoTotal + ' mins computed from the recorded times above.';
+      li.appendChild(strong);
+      li.appendChild(span);
+      list.appendChild(li);
+    }
+  }
+
   function updateTimeBreakdownPanel() {
     const panel = document.getElementById('time-breakdown-panel');
     const list = document.getElementById('time-breakdown-list');
@@ -2494,10 +2553,11 @@ var REQUIRED_FIELD_KEYS = [
         }
       });
       if (hasItems) {
-        appendTimeBreakdownItem(list, 'All visits \u2014 chargeable attendance & advice (totals)', '', '', {
-          social: parseInt(getFieldValue('adviceSocial'), 10) || 0,
-          unsocial: parseInt(getFieldValue('adviceUnsocial'), 10) || 0
-        });
+        _appendChargeableAttendanceRow(
+          list,
+          'All visits \u2014 chargeable attendance & advice (totals)',
+          _computeChargeableSplitFromVisits(d, isWBH)
+        );
       }
     } else {
       if (d.timeSetOff && d.timeArrival) {
@@ -2513,10 +2573,11 @@ var REQUIRED_FIELD_KEYS = [
         hasItems = true;
       }
       if (d.timeArrival && d.timeDeparture) {
-        appendTimeBreakdownItem(list, 'Chargeable attendance & advice', '', '', {
-          social: parseInt(getFieldValue('adviceSocial'), 10) || 0,
-          unsocial: parseInt(getFieldValue('adviceUnsocial'), 10) || 0
-        });
+        _appendChargeableAttendanceRow(
+          list,
+          'Chargeable attendance & advice',
+          _computeChargeableSplitFromVisits(d, isWBH)
+        );
         hasItems = true;
       }
       if (d.timeDeparture && d.timeOfficeHome) {
@@ -9196,74 +9257,99 @@ var REQUIRED_FIELD_KEYS = [
       selectedLine.style.display = 'none';
       firmContainer.appendChild(selectedLine);
 
+      /* Inline "Add new firm" form. Each field gets its own labelled row so
+       * once the placeholders disappear the user can still tell which input
+       * is which. The phone field's "None / N/A / Not applicable" quick-fill
+       * buttons are grouped tightly with the phone input so they're visually
+       * unmistakable as belonging to phone (and not to the email below it).
+       * Add Firm is solid primary, Cancel is plain secondary, so the visual
+       * hierarchy matches the actions' importance.
+       */
       var addRow = document.createElement('div');
-      addRow.className = 'add-firm-inline-wrap form-firm-add-section';
+      addRow.className = 'add-firm-inline-wrap form-firm-add-section add-firm-stacked';
       addRow.style.display = 'none';
       var firmFields = [
-        { id: 'afn', placeholder: 'Firm name *', type: 'text' },
-        { id: 'afc', placeholder: 'Contact name (person instructed)', type: 'text' },
-        { id: 'afp', placeholder: 'Contact phone', type: 'tel' },
-        { id: 'afe', placeholder: 'Contact email', type: 'email' },
-        { id: 'afs', placeholder: 'Source of referral', type: 'select', options: ['', 'Duty Rota', 'Duty panel', 'Own Legal Aid', 'Own private', 'Agency'] },
+        { id: 'afn', label: 'Firm name', required: true,  placeholder: 'e.g. Stephen Fidler & Co', type: 'text' },
+        { id: 'afc', label: 'Contact name (person instructed)', placeholder: 'e.g. Lilly Chespy', type: 'text' },
+        { id: 'afp', label: 'Contact phone',  placeholder: 'e.g. 020 7946 0000',         type: 'tel' },
+        { id: 'afe', label: 'Contact email',  placeholder: 'e.g. lilly@example.co.uk',   type: 'email' },
+        { id: 'afs', label: 'Source of referral', placeholder: '', type: 'select', options: ['', 'Duty Rota', 'Duty panel', 'Own Legal Aid', 'Own private', 'Agency'] },
       ];
       var firmInps = {};
-      var addRowInputs = document.createElement('div');
-      addRowInputs.className = 'add-firm-inline';
       firmFields.forEach(function(ff) {
+        var group = document.createElement('div');
+        group.className = 'add-firm-field';
+
+        var lab = document.createElement('label');
+        lab.className = 'add-firm-field__label';
+        lab.textContent = ff.label;
+        if (ff.required) {
+          var req = document.createElement('span');
+          req.className = 'add-firm-field__required';
+          req.textContent = ' *';
+          lab.appendChild(req);
+        } else {
+          var opt = document.createElement('span');
+          opt.className = 'add-firm-field__optional';
+          opt.textContent = ' (optional)';
+          lab.appendChild(opt);
+        }
+        group.appendChild(lab);
+
         var inp;
         if (ff.type === 'select') {
           inp = document.createElement('select');
-          inp.className = 'form-input';
+          inp.className = 'form-input add-firm-field__input';
           (ff.options || []).forEach(function(opt) {
             var o = document.createElement('option');
             o.value = opt;
-            o.textContent = opt || '—';
+            o.textContent = opt || '— Select —';
             inp.appendChild(o);
           });
         } else {
           inp = document.createElement('input');
           inp.type = ff.type;
-          inp.className = 'form-input';
-          inp.placeholder = ff.placeholder;
+          inp.className = 'form-input add-firm-field__input';
+          inp.placeholder = ff.placeholder || '';
           if (ff.type === 'tel') attachPhoneValidation(inp);
           if (ff.type === 'email') attachEmailValidation(inp);
         }
         firmInps[ff.id] = inp;
+
         if (ff.type === 'tel') {
-          var _telRow = document.createElement('div');
-          _telRow.className = 'tel-field-wrap tel-field-wrap--inline';
-          _telRow.style.flex = '1';
-          _telRow.style.minWidth = '120px';
-          _telRow.appendChild(inp);
-          ['None', 'N/A', 'Not applicable'].forEach(function (opt) {
-            var _tb = document.createElement('button');
-            _tb.type = 'button';
-            _tb.className = 'btn-small btn-email-option';
-            _tb.textContent = opt;
-            _tb.addEventListener('click', function () {
-              inp.value = opt;
+          var inputRow = document.createElement('div');
+          inputRow.className = 'add-firm-field__input-row';
+          inputRow.appendChild(inp);
+          ['None', 'N/A', 'Not applicable'].forEach(function (val) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'btn-small btn-email-option add-firm-field__quickfill';
+            b.textContent = val;
+            b.addEventListener('click', function () {
+              inp.value = val;
               inp.dispatchEvent(new Event('input', { bubbles: true }));
             });
-            _telRow.appendChild(_tb);
+            inputRow.appendChild(b);
           });
-          addRowInputs.appendChild(_telRow);
+          group.appendChild(inputRow);
         } else {
-          addRowInputs.appendChild(inp);
+          group.appendChild(inp);
         }
+        addRow.appendChild(group);
       });
+
       var addBtnRow = document.createElement('div');
-      addBtnRow.className = 'add-firm-inline';
+      addBtnRow.className = 'add-firm-actions';
       var addBtn = document.createElement('button');
       addBtn.type = 'button';
-      addBtn.className = 'btn-now';
+      addBtn.className = 'btn btn-primary add-firm-actions__primary';
       addBtn.textContent = 'Add Firm';
       var cancelBtn = document.createElement('button');
       cancelBtn.type = 'button';
-      cancelBtn.className = 'btn-small';
+      cancelBtn.className = 'btn btn-secondary add-firm-actions__cancel';
       cancelBtn.textContent = 'Cancel';
       addBtnRow.appendChild(addBtn);
       addBtnRow.appendChild(cancelBtn);
-      addRow.appendChild(addRowInputs);
       addRow.appendChild(addBtnRow);
       firmContainer.appendChild(addRow);
 
