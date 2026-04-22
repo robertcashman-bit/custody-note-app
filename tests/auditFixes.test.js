@@ -26,8 +26,8 @@ const laaForms = fs.readFileSync(path.join(root, 'renderer', 'laa-forms.js'), 'u
 const stylesCss = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 
 describe('C2 — Voluntary PDF uses correct signature keys', () => {
-  const volPdfStart = appJs.indexOf('buildVoluntaryPdfHtml');
-  const volPdfEnd = appJs.indexOf('function ', volPdfStart + 30);
+  const volPdfStart = appJs.indexOf('function buildVoluntaryPdfHtml');
+  const volPdfEnd = appJs.indexOf('function getActivePdfBuilder', volPdfStart);
   const volPdfBlock = appJs.substring(volPdfStart, volPdfEnd);
 
   it('voluntary PDF checks repInstructionsSig (sigKey), not repInstructionsSignature (field key)', () => {
@@ -54,7 +54,7 @@ describe('C2 — Voluntary PDF uses correct signature keys', () => {
 
   it('custody PDF and voluntary PDF use the same signature keys for instructions', () => {
     const custPdfStart = appJs.indexOf('function buildPdfHtml');
-    const custPdfEnd = appJs.indexOf('function buildTelephonePdfHtml');
+    const custPdfEnd = appJs.indexOf('function buildTelephonePdfHtml', custPdfStart);
     const custPdfBlock = appJs.substring(custPdfStart, custPdfEnd);
 
     assert.ok(custPdfBlock.includes("sig('repInstructionsSig')"), 'custody PDF must use repInstructionsSig');
@@ -137,7 +137,7 @@ describe('H3 — Billing uses showConfirm() not native confirm()', () => {
 describe('M1 — No duplicate Sufficient Benefit Test in custody PDF', () => {
   it('Sufficient Benefit Test appears only in consultation section, not in case reference section', () => {
     const custPdfStart = appJs.indexOf('function buildPdfHtml');
-    const custPdfEnd = appJs.indexOf('function buildTelephonePdfHtml');
+    const custPdfEnd = appJs.indexOf('function buildTelephonePdfHtml', custPdfStart);
     const custPdfBlock = appJs.substring(custPdfStart, custPdfEnd);
 
     const sbtMatches = custPdfBlock.match(/Sufficient Benefit Test/g) || [];
@@ -179,8 +179,8 @@ describe('M2 — Telephone PDF title includes ourFileNumber fallback', () => {
 
 describe('M3 — Voluntary PDF section numbering has no collision', () => {
   it('LAA Declaration in voluntary PDF is numbered 11, not 10', () => {
-    const volPdfStart = appJs.indexOf('buildVoluntaryPdfHtml');
-    const volPdfEnd = appJs.indexOf('function ', volPdfStart + 30);
+    const volPdfStart = appJs.indexOf('function buildVoluntaryPdfHtml');
+    const volPdfEnd = appJs.indexOf('function getActivePdfBuilder', volPdfStart);
     const volPdfBlock = appJs.substring(volPdfStart, volPdfEnd);
 
     assert.ok(
