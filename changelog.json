@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.4.223",
+      "version": "1.4.224",
       "date": "2026-04-22",
       "latest": true,
+      "changes": [
+        "Sequential multi-visit flow: sorted, collapsible visit cards with per-visit disbursements, notes, miles and parking",
+        "section 9 per-visit breakdown table with auto-fill and manual overrides",
+        "chronology warnings",
+        "CI test fixes",
+        "multi-client per-visit time window for on-station billing"
+      ]
+    },
+    {
+      "version": "1.4.223",
+      "date": "2026-04-22",
+      "latest": false,
       "changes": [
         "Quick Email - clears the form and saved draft after sending so the next email starts fresh"
       ]
