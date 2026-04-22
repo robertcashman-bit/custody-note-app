@@ -2743,14 +2743,11 @@ var REQUIRED_FIELD_KEYS = [
       '</tr></thead><tbody>';
     var totMins = 0, totMiles = 0, totPark = 0, totDisb = 0;
     visits.forEach(function (v, idx) {
-      var travel = SV.splitSocialUnsocial(v.timeSetOff, v.timeArrival, isWBH);
-      var ret = SV.splitSocialUnsocial(v.timeDeparture, v.timeOfficeHome, isWBH);
-      var travelMins = (travel.social + travel.unsocial) + (ret.social + ret.unsocial);
-      var wait = SV.splitSocialUnsocial(v.waitingTimeStart, v.waitingTimeEnd, isWBH);
-      var waitMins = wait.social + wait.unsocial;
-      var station = SV.splitSocialUnsocial(v.timeArrival, v.timeDeparture, isWBH);
-      var adviceMins = Math.max(0, (station.social + station.unsocial) - waitMins);
-      var onSite = (v.timeArrival && v.timeDeparture) ? _hm(v.timeArrival, v.timeDeparture) : 0;
+      var c = SV.getVisitBucketContribution(v, isWBH);
+      var travelMins = c.travelMins;
+      var waitMins = c.waitMins;
+      var adviceMins = c.adviceMins;
+      var onSite = c.onSiteSpanMins;
       var visitMi = parseFloat(v.milesClaimable) || 0;
       var visitPk = parseFloat(v.parkingCost) || 0;
       var visitDisbs = (d.disbursements || []).filter(function (x) { return String(x.visitIndex || '') === String(idx); });
@@ -6430,6 +6427,17 @@ var REQUIRED_FIELD_KEYS = [
         }
       });
     }
+    visits.forEach(function (v, i) {
+      if (v.multiClient !== 'Yes') return;
+      var label = 'Visit ' + (i + 1);
+      if (!v.clientStartTime || !v.clientEndTime) {
+        w.push(label + ': with more than one client, enter time started and time finished with this client');
+        return;
+      }
+      if (v.clientEndTime < v.clientStartTime) w.push(label + ': client finish time is before time started with this client');
+      if (v.timeArrival && v.clientStartTime < v.timeArrival) w.push(label + ': client time started before you arrived at the station');
+      if (v.timeDeparture && v.clientEndTime > v.timeDeparture) w.push(label + ': client time finished after you left the station');
+    });
     return w;
   }
 
@@ -7919,6 +7927,9 @@ var REQUIRED_FIELD_KEYS = [
         var span = (visit.timeSetOff || visit.timeOfficeHome)
           ? (fmtTimeShort(visit.timeSetOff) + ' \u2192 ' + fmtTimeShort(visit.timeOfficeHome))
           : '(times not set)';
+        if (visit.multiClient === 'Yes' && (visit.clientStartTime || visit.clientEndTime)) {
+          span += ' \u00b7 this client ' + fmtTimeShort(visit.clientStartTime) + '\u2013' + fmtTimeShort(visit.clientEndTime);
+        }
         var mi = parseFloat(visit.milesClaimable);
         var pk = parseFloat(visit.parkingCost);
         var miStr = (!isNaN(mi) && mi > 0) ? (mi + ' mi') : '';
@@ -8031,19 +8042,39 @@ var REQUIRED_FIELD_KEYS = [
         });
       }
 
+      function setMultiClientPanelVisible(block, on) {
+        var row = block && block.querySelector('.sv-client-time-window');
+        if (row) row.style.display = on ? '' : 'none';
+      }
+
       function bindVisitInputs(block, idx) {
         block.querySelectorAll('[data-sv-field]').forEach(function (inp) {
           var key = inp.getAttribute('data-sv-field');
-          var isTime = key.indexOf('time') === 0 || key.indexOf('waitingTime') === 0;
-          inp.addEventListener('input', function () {
+          var isTime = (key.indexOf('time') === 0 || key.indexOf('waitingTime') === 0) && inp.type === 'time';
+          function syncFromField() {
             if (!formData.stationVisits[idx]) return;
-            formData.stationVisits[idx][key] = inp.value;
+            if (inp.type === 'checkbox' && key === 'multiClient') {
+              formData.stationVisits[idx][key] = inp.checked ? 'Yes' : '';
+            } else {
+              formData.stationVisits[idx][key] = inp.value;
+            }
+          }
+          inp.addEventListener('input', function () {
+            syncFromField();
+            if (key === 'multiClient') setMultiClientPanelVisible(block, inp.checked);
             refreshVisitHeaderSummary(idx);
             visitTouch();
           });
           inp.addEventListener('change', function () {
-            if (!formData.stationVisits[idx]) return;
-            formData.stationVisits[idx][key] = inp.value;
+            syncFromField();
+            if (key === 'multiClient') {
+              if (!inp.checked) {
+                formData.stationVisits[idx].clientStartTime = '';
+                formData.stationVisits[idx].clientEndTime = '';
+                block.querySelectorAll('[data-sv-field="clientStartTime"], [data-sv-field="clientEndTime"]').forEach(function (el) { el.value = ''; });
+              }
+              setMultiClientPanelVisible(block, inp.checked);
+            }
             refreshVisitHeaderSummary(idx);
             visitTouch();
             if (key === 'timeDeparture' && inp.value && typeof maybePromptDisbursements === 'function') {
@@ -8098,6 +8129,13 @@ var REQUIRED_FIELD_KEYS = [
                 '<div class="form-group"><label>Time left station</label><input type="time" class="form-input" data-sv-field="timeDeparture"></div>' +
                 '<div class="form-group"><label>Time arrived office / home</label><input type="time" class="form-input" data-sv-field="timeOfficeHome"></div>' +
               '</div>' +
+              '<div class="form-group sv-multiclient-question">' +
+                '<label class="form-checkbox-label"><input type="checkbox" class="form-input" data-sv-field="multiClient" value="Yes"> Did you deal with more than one client during this visit?</label>' +
+              '</div>' +
+              '<div class="form-row-2col sv-client-time-window" style="display:none">' +
+                '<div class="form-group"><label>Time started with this client</label><input type="time" class="form-input" data-sv-field="clientStartTime" autocomplete="off"></div>' +
+                '<div class="form-group"><label>Time finished with this client</label><input type="time" class="form-input" data-sv-field="clientEndTime" autocomplete="off"></div>' +
+              '</div>' +
               '<div class="form-row-2col">' +
                 '<div class="form-group"><label>Waiting time start</label><input type="time" class="form-input" data-sv-field="waitingTimeStart"></div>' +
                 '<div class="form-group"><label>Waiting time end</label><input type="time" class="form-input" data-sv-field="waitingTimeEnd"></div>' +
@@ -8117,8 +8155,13 @@ var REQUIRED_FIELD_KEYS = [
           block.querySelectorAll('[data-sv-field]').forEach(function (inp) {
             var key = inp.getAttribute('data-sv-field');
             var v = visit[key];
-            inp.value = v != null && v !== '' ? String(v) : '';
+            if (inp.type === 'checkbox' && key === 'multiClient') {
+              inp.checked = String(visit.multiClient) === 'Yes';
+            } else {
+              inp.value = v != null && v !== '' ? String(v) : '';
+            }
           });
+          setMultiClientPanelVisible(block, String(visit.multiClient) === 'Yes');
           bindVisitInputs(block, idx);
           var toggleBtn = block.querySelector('.station-visit-toggle');
           if (toggleBtn) {
@@ -10473,7 +10516,11 @@ var REQUIRED_FIELD_KEYS = [
     formData.stationVisits = blocks.map(function (block) {
       function val(field) {
         const el = block.querySelector('[data-sv-field="' + field + '"]');
-        return el ? el.value : '';
+        if (!el) return '';
+        if (el.type === 'checkbox' && field === 'multiClient') {
+          return el.checked ? 'Yes' : '';
+        }
+        return el.value;
       }
       return {
         label: val('label'),
@@ -10481,11 +10528,15 @@ var REQUIRED_FIELD_KEYS = [
         timeArrival: val('timeArrival'),
         timeDeparture: val('timeDeparture'),
         timeOfficeHome: val('timeOfficeHome'),
+        multiClient: val('multiClient'),
+        clientStartTime: val('clientStartTime'),
+        clientEndTime: val('clientEndTime'),
         waitingTimeStart: val('waitingTimeStart'),
         waitingTimeEnd: val('waitingTimeEnd'),
         waitingTimeNotes: val('waitingTimeNotes'),
         milesClaimable: val('milesClaimable'),
-        parkingCost: val('parkingCost')
+        parkingCost: val('parkingCost'),
+        notes: val('notes')
       };
     });
     window.StationVisits.syncLegacyMirror(formData);
