@@ -561,6 +561,23 @@ body.form-active .autosave-indicator {
 }
 .global-search::placeholder { color: rgba(255,255,255,0.5); }
 .global-search:focus { outline: none; background: rgba(255,255,255,0.15); border-color: var(--corporate-accent); max-width: 480px; }
+/* C9: Hide global search while a form is active so a stray custody number
+   doesn't accidentally search records. Re-shows on Home / Records / etc. */
+body.form-active .global-search { display: none !important; }
+
+/* C9: Cap textareas at ~5 rows by default; auto-grow to ~8 on focus. */
+.form-group textarea {
+  min-height: 96px;
+  max-height: 8.5em;
+  transition: max-height 0.18s ease;
+}
+.form-group textarea:focus {
+  max-height: 14em;
+}
+html.larger-textareas .form-group textarea {
+  min-height: 130px;
+  max-height: none;
+}
 .header-right { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
 .header-clock-group {
   display: flex; flex-direction: column; align-items: flex-end; gap: 0;
@@ -3574,6 +3591,25 @@ html.dark .quick-iv-select:hover { background: #92400e; }
 
 /* ═══ QUICK CAPTURE ═══ */
 .btn-quick-capture { font-weight: 700; white-space: nowrap; }
+.qc-more-fields {
+  margin-top: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  background: color-mix(in srgb, var(--surface-alt) 60%, transparent);
+}
+.qc-more-fields > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  padding: 0.25rem 0;
+  list-style: revert;
+}
+.qc-more-fields[open] > summary {
+  margin-bottom: 0.4rem;
+  color: var(--on-surface);
+}
 .qc-form {
   flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem;
   padding-bottom: var(--view-pad-bottom);

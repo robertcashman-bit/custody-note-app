@@ -490,30 +490,35 @@
                 </div>
               </div>
             </div>
-            <div class="form-group"><label>Name of person who instructed</label><input type="text" id="qc-referral-name" placeholder="e.g. Richard Chamberlain"></div>
-            <div class="form-group"><label>Contact number</label><input type="tel" id="qc-referral-phone" placeholder="e.g. 07700 900123"></div>
-            <div class="form-group"><label>Contact email</label><input type="email" id="qc-referral-email" placeholder="e.g. name@firm.co.uk"></div>
-            <div class="form-group"><label>Source of Referral</label>
-              <select id="qc-source"><option value="">--</option><option>Duty Rota</option><option>Duty panel</option><option>Own Legal Aid</option><option>Own private</option><option>Agency</option></select>
-            </div>
-            <div class="form-group"><label>Work Type</label>
-              <select id="qc-work-type"><option value="">--</option><option>First Police Station Attendance</option><option>Police Station Telephone Attendance</option><option>Further Police Station Attendance</option><option>Other</option></select>
-            </div>
-            <div class="form-group"><label>OIC Rank &amp; Name</label><input type="text" id="qc-oic-name" placeholder="e.g. DC Smith"></div>
-            <div class="form-group"><label>OIC Telephone</label><input type="tel" id="qc-oic-phone" placeholder="e.g. 07700 900123"></div>
-            <div class="form-group"><label>OIC Email address</label><input type="email" id="qc-oic-email" placeholder="e.g. officer@police.uk"></div>
-            <div class="form-group"><label>Custody Number</label><input type="text" id="qc-custody-number" placeholder="e.g. CU/12345"></div>
-            <div class="form-group"><label>Client Status</label>
-              <select id="qc-client-status"><option value="">--</option><option>Under Arrest</option><option>Voluntary Attendance</option><option>Other</option></select>
-            </div>
-            <div class="form-group"><label>Weekend / Bank Holiday?</label>
-              <select id="qc-weekend-bh"><option value="">--</option><option>Yes</option><option>No</option></select>
-            </div>
-            <div class="form-group"><label>Time set off</label><div class="time-input-wrap"><input type="time" id="qc-setoff"><button type="button" class="btn-now" id="qc-setoff-now">Now</button></div></div>
-            <div class="form-group"><label>Time arrived (you)</label><div class="time-input-wrap"><input type="time" id="qc-arrived" title="Time YOU arrived at the police station"><button type="button" class="btn-now" id="qc-arrived-now">Now</button></div></div>
-            <div class="form-group"><label>Client arrived at station</label><div class="time-input-wrap"><input type="time" id="qc-client-arrived" title="Time the client arrived / was brought to the station (from custody record)"><button type="button" class="btn-now" id="qc-client-arrived-now">Now</button></div></div>
             <div class="form-group" style="grid-column:1/-1;"><label>General Notes</label><textarea id="qc-notes" rows="3" placeholder="General notes about the case or attendance"></textarea></div>
           </div>
+          <details class="qc-more-fields">
+            <summary>More fields (referral, OIC, times, custody #) &mdash; optional at this stage</summary>
+            <div class="form-row-2col" style="margin-top:0.75rem;">
+              <div class="form-group"><label>Name of person who instructed</label><input type="text" id="qc-referral-name" placeholder="e.g. Richard Chamberlain"></div>
+              <div class="form-group"><label>Contact number</label><input type="tel" id="qc-referral-phone" placeholder="e.g. 07700 900123"></div>
+              <div class="form-group"><label>Contact email</label><input type="email" id="qc-referral-email" placeholder="e.g. name@firm.co.uk"></div>
+              <div class="form-group"><label>Source of Referral</label>
+                <select id="qc-source"><option value="">--</option><option>Duty Rota</option><option>Duty panel</option><option>Own Legal Aid</option><option>Own private</option><option>Agency</option></select>
+              </div>
+              <div class="form-group"><label>Work Type</label>
+                <select id="qc-work-type"><option value="">--</option><option>First Police Station Attendance</option><option>Police Station Telephone Attendance</option><option>Further Police Station Attendance</option><option>Other</option></select>
+              </div>
+              <div class="form-group"><label>OIC Rank &amp; Name</label><input type="text" id="qc-oic-name" placeholder="e.g. DC Smith"></div>
+              <div class="form-group"><label>OIC Telephone</label><input type="tel" id="qc-oic-phone" placeholder="e.g. 07700 900123"></div>
+              <div class="form-group"><label>OIC Email address</label><input type="email" id="qc-oic-email" placeholder="e.g. officer@police.uk"></div>
+              <div class="form-group"><label>Custody Number</label><input type="text" id="qc-custody-number" placeholder="e.g. CU/12345"></div>
+              <div class="form-group"><label>Client Status</label>
+                <select id="qc-client-status"><option value="">--</option><option>Under Arrest</option><option>Voluntary Attendance</option><option>Other</option></select>
+              </div>
+              <div class="form-group"><label>Weekend / Bank Holiday?</label>
+                <select id="qc-weekend-bh"><option value="">--</option><option>Yes</option><option>No</option></select>
+              </div>
+              <div class="form-group"><label>Time set off</label><div class="time-input-wrap"><input type="time" id="qc-setoff"><button type="button" class="btn-now" id="qc-setoff-now">Now</button></div></div>
+              <div class="form-group"><label>Time arrived (you)</label><div class="time-input-wrap"><input type="time" id="qc-arrived" title="Time YOU arrived at the police station"><button type="button" class="btn-now" id="qc-arrived-now">Now</button></div></div>
+              <div class="form-group"><label>Client arrived at station</label><div class="time-input-wrap"><input type="time" id="qc-client-arrived" title="Time the client arrived / was brought to the station (from custody record)"><button type="button" class="btn-now" id="qc-client-arrived-now">Now</button></div></div>
+            </div>
+          </details>
           <div style="display:flex;gap:0.75rem;margin-top:1.25rem;">
             <button type="button" id="qc-save" class="btn btn-primary" style="flex:1;padding:0.85rem;">Save as Draft</button>
             <button type="button" id="qc-expand" class="btn btn-accent" style="flex:1;padding:0.85rem;">Expand to Full Form</button>
