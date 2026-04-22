@@ -31,6 +31,7 @@ function _invokeOutlookEmail(payload) {
   }).catch(function(err) {
     console.error('[email-modal]', err);
     showToast(err && err.message ? err.message : 'Could not open email', 'error');
+    return Promise.reject(err);
   });
 }
 
@@ -1075,6 +1076,20 @@ function openQuickEmailModal() {
 
   /* ── Send / Copy ─────────────────────────────────── */
 
+  function _resetFormAfterSend() {
+    _fields = { date: _todayIsoDate() };
+    _manualSubject = null;
+    _manualBody    = null;
+    if (window.api && window.api.setSettings) {
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { lastQuickEmailDraftJson: '' });
+      window.api.setSettings({ lastQuickEmailDraftJson: '' }).catch(function(e) {
+        console.warn('[quick-email] could not clear draft', e);
+      });
+    }
+    _renderForm();
+    _renderPreview();
+  }
+
   function _sendViaOutlook() {
     var to      = (_fields.officerEmail || '').trim();
     var subject = ((document.getElementById('quick-email-subject') || {}).value || '').trim();
@@ -1105,6 +1120,8 @@ function openQuickEmailModal() {
       bcc:     '',
       subject: subject,
       body:    _truncateBodyForOutlook(body)
+    }).then(function() {
+      _resetFormAfterSend();
     });
   }
 
