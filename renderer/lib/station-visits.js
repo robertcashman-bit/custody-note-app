@@ -42,6 +42,42 @@
     return v.timeDeparture ? String(v.timeDeparture) : '';
   }
 
+  function _timeToMins(t) {
+    if (!t || typeof t !== 'string') return NaN;
+    var p = t.split(':');
+    if (p.length < 2) return NaN;
+    var h = parseInt(p[0], 10);
+    var m = parseInt(p[1], 10);
+    if (isNaN(h) || isNaN(m)) return NaN;
+    return h * 60 + m;
+  }
+  function _minsToHHMM(m) {
+    var x = m % 1440;
+    if (x < 0) x += 1440;
+    var hh = Math.floor(x / 60);
+    var mm = x % 60;
+    return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+  }
+
+  /**
+   * Intersect [ws,we] with the on-station client window [winStart,winEnd] for waiting minutes.
+   * When multiClient, winStart/End are client start/finish; otherwise they match arrival/departure.
+   */
+  function clipWaitingToOnSite(ws, we, winStart, winEnd) {
+    if (!ws || !we || !winStart || !winEnd) return { start: '', end: '' };
+    var w1 = _timeToMins(ws);
+    var w2 = _timeToMins(we);
+    var a = _timeToMins(winStart);
+    var b = _timeToMins(winEnd);
+    if ([w1, w2, a, b].some(isNaN)) return { start: ws, end: we };
+    if (w2 < w1) w2 += 1440;
+    if (b < a) b += 1440;
+    var lo = Math.max(w1, a);
+    var hi = Math.min(w2, b);
+    if (hi <= lo) return { start: '', end: '' };
+    return { start: _minsToHHMM(lo), end: _minsToHHMM(hi) };
+  }
+
   /**
    * Returns a fresh array sorted by timeSetOff ascending; blank set-off times go last.
    * Stable: preserves original index order on ties so the user-facing visit numbering
@@ -204,6 +240,78 @@
   }
 
   /**
+   * Per-visit buckets (travel, waiting, advice) using client window for on-site + clipped waiting
+   * when "more than one client" (multiClient) is set. Travel out/back always use real journey times.
+   */
+  function getVisitBucketContribution(v, isWBH) {
+    if (!v) {
+      return {
+        travelSocial: 0, travelUnsocial: 0, waitingSocial: 0, waitingUnsocial: 0,
+        adviceSocial: 0, adviceUnsocial: 0, onSiteSpanMins: 0, travelMins: 0, waitMins: 0, adviceMins: 0
+      };
+    }
+    var travelSocial = 0;
+    var travelUnsocial = 0;
+    if (v.timeSetOff && v.timeArrival) {
+      var o = splitSocialUnsocial(v.timeSetOff, v.timeArrival, isWBH);
+      travelSocial += o.social;
+      travelUnsocial += o.unsocial;
+    }
+    if (v.timeDeparture && v.timeOfficeHome) {
+      var r = splitSocialUnsocial(v.timeDeparture, v.timeOfficeHome, isWBH);
+      travelSocial += r.social;
+      travelUnsocial += r.unsocial;
+    }
+    var onArr = getVisitOnSiteArrival(v);
+    var onDep = getVisitOnSiteDeparture(v);
+    var effWS = v.waitingTimeStart;
+    var effWE = v.waitingTimeEnd;
+    if (v.waitingTimeStart && v.waitingTimeEnd && onArr && onDep) {
+      var clip = clipWaitingToOnSite(v.waitingTimeStart, v.waitingTimeEnd, onArr, onDep);
+      effWS = clip.start;
+      effWE = clip.end;
+    }
+    var waitingSocial = 0;
+    var waitingUnsocial = 0;
+    if (effWS && effWE) {
+      var wk = splitSocialUnsocial(effWS, effWE, isWBH);
+      waitingSocial = wk.social;
+      waitingUnsocial = wk.unsocial;
+    }
+    var adviceSocial = 0;
+    var adviceUnsocial = 0;
+    if (onArr && onDep) {
+      var station = splitSocialUnsocial(onArr, onDep, isWBH);
+      var wSoc = 0;
+      var wUns = 0;
+      if (effWS && effWE) {
+        var wPart = splitSocialUnsocial(effWS, effWE, isWBH);
+        wSoc = wPart.social;
+        wUns = wPart.unsocial;
+      }
+      adviceSocial = Math.max(0, station.social - wSoc);
+      adviceUnsocial = Math.max(0, station.unsocial - wUns);
+    }
+    var onSiteSpanMins = 0;
+    if (onArr && onDep) {
+      var st = splitSocialUnsocial(onArr, onDep, isWBH);
+      onSiteSpanMins = st.social + st.unsocial;
+    }
+    return {
+      travelSocial: travelSocial,
+      travelUnsocial: travelUnsocial,
+      waitingSocial: waitingSocial,
+      waitingUnsocial: waitingUnsocial,
+      adviceSocial: adviceSocial,
+      adviceUnsocial: adviceUnsocial,
+      onSiteSpanMins: onSiteSpanMins,
+      travelMins: travelSocial + travelUnsocial,
+      waitMins: waitingSocial + waitingUnsocial,
+      adviceMins: adviceSocial + adviceUnsocial
+    };
+  }
+
+  /**
    * Returns aggregate minute buckets matching app.js autoCalcTimes semantics (summed across visits).
    */
   function aggregateMinuteBuckets(visits, isWBH) {
@@ -213,37 +321,15 @@
     var waitingUnsocial = 0;
     var adviceSocial = 0;
     var adviceUnsocial = 0;
-
     (visits || []).forEach(function (v) {
-      if (!v) return;
-      if (v.timeSetOff && v.timeArrival) {
-        var o = splitSocialUnsocial(v.timeSetOff, v.timeArrival, isWBH);
-        travelSocial += o.social;
-        travelUnsocial += o.unsocial;
-      }
-      if (v.timeDeparture && v.timeOfficeHome) {
-        var r = splitSocialUnsocial(v.timeDeparture, v.timeOfficeHome, isWBH);
-        travelSocial += r.social;
-        travelUnsocial += r.unsocial;
-      }
-      var onArr = getVisitOnSiteArrival(v);
-      var onDep = getVisitOnSiteDeparture(v);
-      if (v.waitingTimeStart && v.waitingTimeEnd) {
-        var w = splitSocialUnsocial(v.waitingTimeStart, v.waitingTimeEnd, isWBH);
-        waitingSocial += w.social;
-        waitingUnsocial += w.unsocial;
-      }
-      if (onArr && onDep) {
-        var station = splitSocialUnsocial(onArr, onDep, isWBH);
-        var wSoc = v.waitingTimeStart && v.waitingTimeEnd
-          ? splitSocialUnsocial(v.waitingTimeStart, v.waitingTimeEnd, isWBH).social : 0;
-        var wUns = v.waitingTimeStart && v.waitingTimeEnd
-          ? splitSocialUnsocial(v.waitingTimeStart, v.waitingTimeEnd, isWBH).unsocial : 0;
-        adviceSocial += Math.max(0, station.social - wSoc);
-        adviceUnsocial += Math.max(0, station.unsocial - wUns);
-      }
+      var c = getVisitBucketContribution(v, isWBH);
+      travelSocial += c.travelSocial;
+      travelUnsocial += c.travelUnsocial;
+      waitingSocial += c.waitingSocial;
+      waitingUnsocial += c.waitingUnsocial;
+      adviceSocial += c.adviceSocial;
+      adviceUnsocial += c.adviceUnsocial;
     });
-
     return {
       travelSocial: travelSocial,
       travelUnsocial: travelUnsocial,
@@ -267,6 +353,8 @@
     aggregateMinuteBuckets: aggregateMinuteBuckets,
     sortVisitsChronologically: sortVisitsChronologically,
     getVisitOnSiteArrival: getVisitOnSiteArrival,
-    getVisitOnSiteDeparture: getVisitOnSiteDeparture
+    getVisitOnSiteDeparture: getVisitOnSiteDeparture,
+    getVisitBucketContribution: getVisitBucketContribution,
+    clipWaitingToOnSite: clipWaitingToOnSite
   };
 })(typeof window !== 'undefined' ? window : globalThis);

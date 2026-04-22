@@ -82,4 +82,38 @@ describe('station-visits', () => {
     };
     assert.equal(SV.getEarliestStationArrival(d), '09:30');
   });
+
+  it('multiClient uses client start/finish for on-site and clips waiting to that window', () => {
+    const v = {
+      timeSetOff: '09:00',
+      timeArrival: '10:00',
+      timeDeparture: '12:00',
+      timeOfficeHome: '12:30',
+      multiClient: 'Yes',
+      clientStartTime: '10:15',
+      clientEndTime: '11:00',
+      waitingTimeStart: '10:20',
+      waitingTimeEnd: '10:50',
+    };
+    const c = SV.getVisitBucketContribution(v, false);
+    // Client window 45m; waiting fully inside 30m; advice 15m. Travel unchanged (set off → arrival, dep → home).
+    assert.equal(c.onSiteSpanMins, 45);
+    assert.equal(c.waitMins, 30);
+    assert.equal(c.adviceMins, 15);
+  });
+
+  it('without multiClient, waiting is clipped to station arrival/departure span', () => {
+    const v = {
+      timeSetOff: '09:00',
+      timeArrival: '10:00',
+      timeDeparture: '12:00',
+      timeOfficeHome: '12:30',
+      waitingTimeStart: '10:00',
+      waitingTimeEnd: '12:00',
+    };
+    const c = SV.getVisitBucketContribution(v, false);
+    assert.equal(c.onSiteSpanMins, 120);
+    assert.equal(c.waitMins, 120);
+    assert.equal(c.adviceMins, 0);
+  });
 });
