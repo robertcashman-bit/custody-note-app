@@ -10894,6 +10894,7 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── VALIDATION: ATTENDANCE FORM (INVC) ─── */
   function validateAttendanceForm() {
+    var SV = (typeof window !== 'undefined') ? window.StationVisits : null;
     var m = [];
     var isHandedBack = formData.outcomeDecision === 'Handed back to DSCC';
     var isNonAttendance = formData.outcomeDecision === 'Did not attend (exceptional circumstances)';
@@ -10919,11 +10920,11 @@ var REQUIRED_FIELD_KEYS = [
     var workType = formData.workType || '';
     if (!isRelaxedPath && ['First Police Station Attendance', 'Further Police Station Attendance'].includes(workType)) {
       var fc = (formData.timeFirstContactWithClient || '').trim();
-      var ta = window.StationVisits ? window.StationVisits.getEffectiveTimeArrival(formData) : (formData.timeArrival || '').trim();
+      var ta = SV ? SV.getEffectiveTimeArrival(formData) : (formData.timeArrival || '').trim();
       if (!fc && !ta) m.push({ key: 'timeArrival', label: 'Time of arrival / first contact (LAA 9.25)', section: 2 });
     } else if (!isRelaxedPath && !workType) {
       var fc2 = (formData.timeFirstContactWithClient || '').trim();
-      var ta2 = window.StationVisits ? window.StationVisits.getEffectiveTimeArrival(formData) : (formData.timeArrival || '').trim();
+      var ta2 = SV ? SV.getEffectiveTimeArrival(formData) : (formData.timeArrival || '').trim();
       if (!fc2 && !ta2) m.push({ key: 'timeArrival', label: 'Time of arrival / first contact (LAA 9.25)', section: 2 });
     }
     if (formData.firstContactWithin45Mins === 'No' && !(formData.firstContactOver45MinsReason || '').trim()) {
@@ -10977,7 +10978,7 @@ var REQUIRED_FIELD_KEYS = [
       }
     }
 
-    var arrTime = window.StationVisits ? window.StationVisits.getEarliestStationArrival(formData) : (formData.timeArrival || '').trim();
+    var arrTime = SV ? SV.getEarliestStationArrival(formData) : (formData.timeArrival || '').trim();
     var attDate = (formData.date || '').trim();
     (formData.interviews || []).forEach(function(iv, idx) {
       if (iv.startTime && arrTime && iv.startTime < arrTime) {
