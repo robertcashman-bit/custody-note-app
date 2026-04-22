@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.4.223",
+      "date": "2026-04-22",
+      "latest": true,
+      "changes": [
+        "Quick Email - clears the form and saved draft after sending so the next email starts fresh"
+      ]
+    },
+    {
       "version": "1.4.222",
       "date": "2026-04-21",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Multi-visit station attendances on one record (per-visit travel, waiting, miles, parking, disbursements)",
         "PDF and LAA validation updates"
