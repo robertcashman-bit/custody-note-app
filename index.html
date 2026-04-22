@@ -455,12 +455,10 @@
             </div>
             <div class="form-group" style="grid-column:1/-1;"><label>Offence (summary)</label><input type="text" id="qc-offence" placeholder="e.g. Theft, Assault occasioning ABH, Possession with intent to supply"></div>
             <div class="form-group" id="qc-dscc-block" style="grid-column:1/-1;">
-              <label class="qc-dscc-private-label" style="display:flex;align-items:center;gap:0.5rem;font-weight:600;margin-bottom:0.35rem;">
-                <input type="checkbox" id="qc-dscc-private"> Private matter (no DSCC number)
-              </label>
-              <div id="qc-dscc-field-wrap">
-                <label>DSCC Number</label>
-                <input type="text" id="qc-dscc" placeholder="e.g. 110154321A" autocomplete="off">
+              <label>DSCC Number</label>
+              <div class="form-dscc-input-row" id="qc-dscc-field-wrap">
+                <input type="text" id="qc-dscc" class="form-input" placeholder="e.g. 110154321A" autocomplete="off">
+                <label class="form-dscc-private-matter" for="qc-dscc-private"><input type="checkbox" id="qc-dscc-private"> Private (no DSCC)</label>
               </div>
             </div>
             <div class="form-group"><label>Instruction received</label><input type="datetime-local" id="qc-instruction"></div>
@@ -1946,6 +1944,10 @@
       <button type="button" class="bottom-nav-btn" data-nav="settings" title="Settings">
         <span class="bottom-nav-icon">&#9881;</span>
         <span class="bottom-nav-label">Settings</span>
+      </button>
+      <button type="button" class="bottom-nav-btn bottom-nav-update" id="bottom-nav-update" data-nav="update" title="Check for app updates">
+        <span class="bottom-nav-icon">&#8635;</span>
+        <span class="bottom-nav-label" id="bottom-nav-update-label">Update</span>
       </button>
     </nav>
     <!-- First-launch setup (multi-step wizard) -->
