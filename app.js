@@ -494,7 +494,8 @@ var LAA = {
         { key: 'offenceSummary', label: 'Offence (summary)', type: 'offenceSummary', placeholder: 'Type to search offences...', cols: 2 },
         { key: 'policeStationId', label: 'Police Station', type: 'station', cols: 2 },
         { key: 'schemeId', label: 'Police Station Scheme ID', type: 'text', placeholder: 'Auto-filled from station', readonly: true },
-        { key: 'dsccRef', label: 'DSCC Number (10 chars)', type: 'text', placeholder: 'e.g. 110154321A' },
+        { key: 'dsccPrivateMatter', label: 'Private matter (no DSCC number)', type: 'boolean', helpTitle: 'Tick if the instruction is private: you do not need a DSCC reference. Untick to enter a DSCC number.' },
+        { key: 'dsccRef', label: 'DSCC Number (10 chars)', type: 'text', placeholder: 'e.g. 110154321A', hideIf: { field: 'dsccPrivateMatter', value: 'Yes' } },
         { key: 'oicName', label: 'OIC Rank & Name', type: 'text', cols: 2 },
         { key: 'oicEmail', label: 'OIC Email address', type: 'email' },
         { key: 'oicPhone', label: "OIC Telephone", type: 'tel' },
@@ -1197,7 +1198,8 @@ var LAA = {
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
         { key: 'date', label: 'Date of telephone advice', type: 'date' },
         { key: 'sourceOfReferral', label: 'Source of Referral', type: 'select', options: ['Duty Rota','Duty panel','Own Legal Aid','Own private','Agency'] },
-        { key: 'dsccRef', label: 'DSCC Number', type: 'text', placeholder: 'e.g. 110154321A', className: 'field-mandatory' },
+        { key: 'dsccPrivateMatter', label: 'Private matter (no DSCC number)', type: 'boolean', helpTitle: 'Tick if you do not have a DSCC reference for this call.' },
+        { key: 'dsccRef', label: 'DSCC Number', type: 'text', placeholder: 'e.g. 110154321A', className: 'field-mandatory', hideIf: { field: 'dsccPrivateMatter', value: 'Yes' } },
         { key: 'policeStationId', label: 'Police Station', type: 'station', cols: 2 },
         { key: 'firmId', label: 'Instructing Firm', type: 'firm', cols: 2 },
         { key: 'feeEarnerName', label: 'Fee Earner Name', type: 'text', placeholder: 'Name of person giving advice', cols: 2 },
@@ -1344,7 +1346,8 @@ var LAA = {
         { key: 'policeStationId', label: 'Police Station', type: 'station', cols: 2 },
         { key: 'schemeId', label: 'Police Station Scheme ID', type: 'text', placeholder: 'Auto-filled from station', readonly: true },
         { key: 'locationType', label: 'Location Type', type: 'select', options: ['police_station','other_police_location','other'], cols: 2 },
-        { key: 'dsccRef', label: 'DSCC Number (10 chars)', type: 'text', placeholder: 'e.g. 110154321A' },
+        { key: 'dsccPrivateMatter', label: 'Private matter (no DSCC number)', type: 'boolean', helpTitle: 'Tick if the instruction is private: you do not need a DSCC reference.' },
+        { key: 'dsccRef', label: 'DSCC Number (10 chars)', type: 'text', placeholder: 'e.g. 110154321A', hideIf: { field: 'dsccPrivateMatter', value: 'Yes' } },
         { key: 'dsccNotificationStatus', label: 'DSCC Notification Status', type: 'select', options: ['received_from_dscc','reported_within_48h','reported_before_attendance','not_applicable','missing'], cols: 2 },
         { key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', type: 'textarea', cols: 2, showIf: { field: 'dsccNotificationStatus', value: 'missing' } },
         { key: 'oicName', label: 'OIC Rank & Name', type: 'text', cols: 2 },
@@ -2539,6 +2542,14 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
+  function _isTimeOverridden(key) {
+    return !!(formData && formData._timeOverrides && formData._timeOverrides[key]);
+  }
+  function _setIfNotOverridden(key, val) {
+    if (_isTimeOverridden(key)) return;
+    setFieldValue(key, val);
+  }
+
   function autoCalcTimes() {
     const d = formData;
     const isWBH = d.weekendBankHoliday === 'Yes';
@@ -2546,42 +2557,143 @@ var REQUIRED_FIELD_KEYS = [
     if (window.StationVisits && d.stationVisits && d.stationVisits.length) {
       window.StationVisits.ensureStationVisits(d);
       const agg = window.StationVisits.aggregateMinuteBuckets(d.stationVisits, isWBH);
-      setFieldValue('travelSocial', agg.travelSocial);
-      setFieldValue('travelUnsocial', agg.travelUnsocial);
-      setFieldValue('waitingSocial', agg.waitingSocial);
-      setFieldValue('waitingUnsocial', agg.waitingUnsocial);
-      setFieldValue('adviceSocial', agg.adviceSocial);
-      setFieldValue('adviceUnsocial', agg.adviceUnsocial);
+      _setIfNotOverridden('travelSocial', agg.travelSocial);
+      _setIfNotOverridden('travelUnsocial', agg.travelUnsocial);
+      _setIfNotOverridden('waitingSocial', agg.waitingSocial);
+      _setIfNotOverridden('waitingUnsocial', agg.waitingUnsocial);
+      _setIfNotOverridden('adviceSocial', agg.adviceSocial);
+      _setIfNotOverridden('adviceUnsocial', agg.adviceUnsocial);
       window.StationVisits.syncLegacyMirror(d);
-      setFieldValue('milesClaimable', d.milesClaimable != null && d.milesClaimable !== '' ? d.milesClaimable : '');
-      setFieldValue('parkingCost', d.parkingCost != null && d.parkingCost !== '' ? d.parkingCost : '');
+      if (!_isTimeOverridden('milesClaimable')) {
+        setFieldValue('milesClaimable', d.milesClaimable != null && d.milesClaimable !== '' ? d.milesClaimable : '');
+      }
+      if (!_isTimeOverridden('parkingCost')) {
+        setFieldValue('parkingCost', d.parkingCost != null && d.parkingCost !== '' ? d.parkingCost : '');
+      }
     } else {
       if (d.timeSetOff && d.timeArrival) {
         const t = splitSocialUnsocial(d.timeSetOff, d.timeArrival, isWBH);
-        setFieldValue('travelSocial', t.social);
-        setFieldValue('travelUnsocial', t.unsocial);
+        _setIfNotOverridden('travelSocial', t.social);
+        _setIfNotOverridden('travelUnsocial', t.unsocial);
       }
       if (d.timeDeparture && d.timeOfficeHome) {
         const prev = { social: parseInt(getFieldValue('travelSocial')) || 0, unsocial: parseInt(getFieldValue('travelUnsocial')) || 0 };
         const ret = splitSocialUnsocial(d.timeDeparture, d.timeOfficeHome, isWBH);
-        setFieldValue('travelSocial', prev.social + ret.social);
-        setFieldValue('travelUnsocial', prev.unsocial + ret.unsocial);
+        _setIfNotOverridden('travelSocial', prev.social + ret.social);
+        _setIfNotOverridden('travelUnsocial', prev.unsocial + ret.unsocial);
       }
       if (d.waitingTimeStart && d.waitingTimeEnd) {
         const w = splitSocialUnsocial(d.waitingTimeStart, d.waitingTimeEnd, isWBH);
-        setFieldValue('waitingSocial', w.social);
-        setFieldValue('waitingUnsocial', w.unsocial);
+        _setIfNotOverridden('waitingSocial', w.social);
+        _setIfNotOverridden('waitingUnsocial', w.unsocial);
       }
       if (d.timeArrival && d.timeDeparture) {
         const station = splitSocialUnsocial(d.timeArrival, d.timeDeparture, isWBH);
         const wSoc = parseInt(getFieldValue('waitingSocial')) || 0;
         const wUns = parseInt(getFieldValue('waitingUnsocial')) || 0;
-        setFieldValue('adviceSocial', Math.max(0, station.social - wSoc));
-        setFieldValue('adviceUnsocial', Math.max(0, station.unsocial - wUns));
+        _setIfNotOverridden('adviceSocial', Math.max(0, station.social - wSoc));
+        _setIfNotOverridden('adviceUnsocial', Math.max(0, station.unsocial - wUns));
       }
     }
     recalcTotal();
+    if (typeof refreshTimeOverrideAffordances === 'function') refreshTimeOverrideAffordances();
   }
+
+  /**
+   * In section 9, mark each auto-fillable time / cost field with an override badge and a
+   * "Reset to auto" link. When the user types into one of these fields the override flag
+   * is set so autoCalcTimes() leaves it alone; clicking the link clears the flag and
+   * restores the auto value.
+   */
+  var TIME_OVERRIDE_KEYS = ['travelSocial', 'travelUnsocial', 'waitingSocial', 'waitingUnsocial', 'adviceSocial', 'adviceUnsocial'];
+  function refreshTimeOverrideAffordances() {
+    if (!formData) return;
+    var overrides = formData._timeOverrides = formData._timeOverrides || {};
+    var nVisits = (formData.stationVisits && formData.stationVisits.length) || 0;
+    var allKeys = TIME_OVERRIDE_KEYS.slice();
+    if (nVisits > 1) { allKeys.push('milesClaimable'); allKeys.push('parkingCost'); }
+    allKeys.forEach(function (key) {
+      var inp = document.querySelector('[data-field="' + key + '"]');
+      if (!inp) return;
+      var group = inp.closest('.form-group');
+      if (!group) return;
+      var label = group.querySelector('label');
+      if (!label) return;
+      var isMP = key === 'milesClaimable' || key === 'parkingCost';
+      var overridden = !!overrides[key];
+
+      var resetBtn = group.querySelector('.field-reset-auto[data-reset-key="' + key + '"]');
+      if (!resetBtn) {
+        resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.className = 'field-reset-auto';
+        resetBtn.setAttribute('data-reset-key', key);
+        resetBtn.title = 'Recalculate from section 2 / station visits';
+        resetBtn.textContent = 'Reset to auto';
+        label.appendChild(resetBtn);
+        resetBtn.addEventListener('click', function (ev) {
+          ev.preventDefault();
+          if (formData._timeOverrides) delete formData._timeOverrides[key];
+          if (isMP) formData._milesParkingOverride = false;
+          autoCalcTimes();
+          if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
+        });
+      }
+
+      var ovrBtn = group.querySelector('.field-reset-auto[data-override-key="' + key + '"]');
+      if (isMP && !overridden && nVisits > 1) {
+        if (!ovrBtn) {
+          ovrBtn = document.createElement('button');
+          ovrBtn.type = 'button';
+          ovrBtn.className = 'field-reset-auto';
+          ovrBtn.setAttribute('data-override-key', key);
+          ovrBtn.title = 'Type a custom value instead of the per-visit sum';
+          ovrBtn.textContent = 'Override';
+          label.appendChild(ovrBtn);
+          ovrBtn.addEventListener('click', function (ev) {
+            ev.preventDefault();
+            formData._timeOverrides = formData._timeOverrides || {};
+            formData._timeOverrides[key] = true;
+            formData._milesParkingOverride = true;
+            inp.readOnly = false;
+            refreshTimeOverrideAffordances();
+            inp.focus();
+          });
+        }
+      } else if (ovrBtn) {
+        ovrBtn.remove();
+      }
+
+      var badge = label.querySelector('.field-override-badge[data-badge-key="' + key + '"]');
+      if (overridden) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'field-override-badge';
+          badge.setAttribute('data-badge-key', key);
+          badge.textContent = 'Manual';
+          label.insertBefore(badge, resetBtn);
+        }
+        resetBtn.style.display = '';
+      } else {
+        if (badge) badge.remove();
+        if (isMP) resetBtn.style.display = nVisits > 1 ? '' : 'none';
+        else resetBtn.style.display = '';
+      }
+
+      if (!inp._overrideBound) {
+        inp._overrideBound = true;
+        inp.addEventListener('input', function () {
+          if (_suppressChangeHandlers) return;
+          if (inp.readOnly) return;
+          formData._timeOverrides = formData._timeOverrides || {};
+          formData._timeOverrides[key] = true;
+          if (isMP) formData._milesParkingOverride = true;
+          refreshTimeOverrideAffordances();
+        });
+      }
+    });
+  }
+  window.refreshTimeOverrideAffordances = refreshTimeOverrideAffordances;
 
   function recalcTotal() {
     const fields = ['travelSocial','travelUnsocial','waitingSocial','waitingUnsocial','adviceSocial','adviceUnsocial'];
@@ -2590,7 +2702,107 @@ var REQUIRED_FIELD_KEYS = [
     setFieldValue('totalMinutes', total);
     updateCalcPanel();
     updateTimeBreakdownPanel();
+    updateVisitBreakdownTable();
   }
+
+  function _hm(start, end) {
+    if (!start || !end) return 0;
+    var a = start.split(':').map(Number);
+    var b = end.split(':').map(Number);
+    var diff = (b[0] * 60 + b[1]) - (a[0] * 60 + a[1]);
+    if (diff < 0) diff += 1440;
+    return diff;
+  }
+  function _fmtMins(m) {
+    m = Math.max(0, parseInt(m, 10) || 0);
+    if (!m) return '\u2014';
+    var h = Math.floor(m / 60);
+    var mm = m % 60;
+    if (!h) return mm + 'm';
+    return h + 'h ' + (mm < 10 ? '0' : '') + mm + 'm';
+  }
+  function _fmtTime(t) { return t || '\u2014'; }
+  function _fmtMoney(v) { var n = parseFloat(v); return isNaN(n) ? '\u00a30.00' : ('\u00a3' + n.toFixed(2)); }
+
+  function updateVisitBreakdownTable() {
+    var panel = document.getElementById('visit-breakdown-panel');
+    var wrap = document.getElementById('visit-breakdown-table-wrap');
+    if (!panel || !wrap) return;
+    var d = formData || {};
+    var SV = window.StationVisits;
+    var visits = (SV && d.stationVisits) ? d.stationVisits : [];
+    if (!visits || visits.length < 2) {
+      panel.style.display = 'none';
+      wrap.innerHTML = '';
+      return;
+    }
+    var isWBH = d.weekendBankHoliday === 'Yes';
+    panel.style.display = '';
+    var tbl = '<table class="visit-breakdown-table"><thead><tr>' +
+      '<th>Visit</th><th>Window</th><th>On site</th><th>Travel</th><th>Wait</th><th>Advice</th><th>Miles</th><th>Parking</th><th>Disbs</th>' +
+      '</tr></thead><tbody>';
+    var totMins = 0, totMiles = 0, totPark = 0, totDisb = 0;
+    visits.forEach(function (v, idx) {
+      var travel = SV.splitSocialUnsocial(v.timeSetOff, v.timeArrival, isWBH);
+      var ret = SV.splitSocialUnsocial(v.timeDeparture, v.timeOfficeHome, isWBH);
+      var travelMins = (travel.social + travel.unsocial) + (ret.social + ret.unsocial);
+      var wait = SV.splitSocialUnsocial(v.waitingTimeStart, v.waitingTimeEnd, isWBH);
+      var waitMins = wait.social + wait.unsocial;
+      var station = SV.splitSocialUnsocial(v.timeArrival, v.timeDeparture, isWBH);
+      var adviceMins = Math.max(0, (station.social + station.unsocial) - waitMins);
+      var onSite = (v.timeArrival && v.timeDeparture) ? _hm(v.timeArrival, v.timeDeparture) : 0;
+      var visitMi = parseFloat(v.milesClaimable) || 0;
+      var visitPk = parseFloat(v.parkingCost) || 0;
+      var visitDisbs = (d.disbursements || []).filter(function (x) { return String(x.visitIndex || '') === String(idx); });
+      var visitDisbsAmt = visitDisbs.reduce(function (s, x) { return s + (parseFloat(x.amount) || 0); }, 0);
+      totMins += travelMins + waitMins + adviceMins;
+      totMiles += visitMi;
+      totPark += visitPk;
+      totDisb += visitDisbsAmt;
+      var label = 'Visit ' + (idx + 1) + (v.label ? ' (' + esc(v.label) + ')' : '');
+      tbl +=
+        '<tr>' +
+          '<td><button type="button" class="visit-breakdown-link" data-vbk-idx="' + idx + '">' + label + '</button></td>' +
+          '<td>' + _fmtTime(v.timeSetOff) + ' \u2192 ' + _fmtTime(v.timeOfficeHome) + '</td>' +
+          '<td>' + (onSite ? _fmtMins(onSite) : '\u2014') + '</td>' +
+          '<td>' + _fmtMins(travelMins) + '</td>' +
+          '<td>' + _fmtMins(waitMins) + '</td>' +
+          '<td>' + _fmtMins(adviceMins) + '</td>' +
+          '<td>' + (visitMi > 0 ? visitMi.toFixed(1) : '\u2014') + '</td>' +
+          '<td>' + (visitPk > 0 ? _fmtMoney(visitPk) : '\u2014') + '</td>' +
+          '<td>' + (visitDisbsAmt > 0 ? _fmtMoney(visitDisbsAmt) + ' (' + visitDisbs.length + ')' : '\u2014') + '</td>' +
+        '</tr>';
+    });
+    var generalDisbs = (d.disbursements || []).filter(function (x) { return !x.visitIndex || String(x.visitIndex).trim() === ''; });
+    var generalAmt = generalDisbs.reduce(function (s, x) { return s + (parseFloat(x.amount) || 0); }, 0);
+    if (generalDisbs.length) {
+      tbl +=
+        '<tr>' +
+          '<td colspan="8" style="text-align:right;color:var(--text-muted,#64748b);">General disbursements (not tied to a visit)</td>' +
+          '<td>' + _fmtMoney(generalAmt) + ' (' + generalDisbs.length + ')</td>' +
+        '</tr>';
+      totDisb += generalAmt;
+    }
+    tbl +=
+      '<tr class="totals">' +
+        '<td colspan="2">All visits</td>' +
+        '<td>\u2014</td>' +
+        '<td colspan="3">' + _fmtMins(totMins) + ' total</td>' +
+        '<td>' + (totMiles > 0 ? totMiles.toFixed(1) : '\u2014') + '</td>' +
+        '<td>' + (totPark > 0 ? _fmtMoney(totPark) : '\u2014') + '</td>' +
+        '<td>' + (totDisb > 0 ? _fmtMoney(totDisb) : '\u2014') + '</td>' +
+      '</tr>';
+    tbl += '</tbody></table>';
+    wrap.innerHTML = tbl;
+    wrap.querySelectorAll('.visit-breakdown-link').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var i = parseInt(btn.getAttribute('data-vbk-idx'), 10);
+        if (isNaN(i)) return;
+        if (typeof window._scrollToStationVisit === 'function') window._scrollToStationVisit(i);
+      });
+    });
+  }
+  window.updateVisitBreakdownTable = updateVisitBreakdownTable;
 
   function minsBetween(start, end) {
     if (!start || !end || !/^\d{1,2}:\d{2}$/.test(start) || !/^\d{1,2}:\d{2}$/.test(end)) return 0;
@@ -3656,12 +3868,27 @@ var REQUIRED_FIELD_KEYS = [
 
   function openQuickCapture() {
     showView('quickcapture');
+    (function initQcDsccPrivateToggle() {
+      if (window._qcDsccInited) return;
+      const qcp = document.getElementById('qc-dscc-private');
+      if (qcp) {
+        qcp.addEventListener('change', function () {
+          const w = document.getElementById('qc-dscc-field-wrap');
+          if (w) w.style.display = qcp.checked ? 'none' : '';
+        });
+        window._qcDsccInited = true;
+      }
+    })();
     const now = new Date();
     const dtVal = now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-' + pad2(now.getDate()) + 'T' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
     document.getElementById('qc-instruction').value = dtVal;
     document.getElementById('qc-forename').value = '';
     document.getElementById('qc-surname').value = '';
     document.getElementById('qc-offence').value = '';
+    const qcpR = document.getElementById('qc-dscc-private');
+    const qcwR = document.getElementById('qc-dscc-field-wrap');
+    if (qcpR) qcpR.checked = false;
+    if (qcwR) qcwR.style.display = '';
     document.getElementById('qc-dscc').value = '';
     document.getElementById('qc-setoff').value = '';
     document.getElementById('qc-arrived').value = '';
@@ -4064,7 +4291,14 @@ var REQUIRED_FIELD_KEYS = [
     data.forename = document.getElementById('qc-forename').value.trim();
     data.surname = document.getElementById('qc-surname').value.trim();
     data.offenceSummary = document.getElementById('qc-offence').value.trim();
-    data.dsccRef = document.getElementById('qc-dscc').value.trim();
+    const qcpS = document.getElementById('qc-dscc-private');
+    if (qcpS && qcpS.checked) {
+      data.dsccPrivateMatter = 'Yes';
+      data.dsccRef = '';
+    } else {
+      data.dsccPrivateMatter = '';
+      data.dsccRef = document.getElementById('qc-dscc').value.trim();
+    }
     data.instructionDateTime = document.getElementById('qc-instruction').value;
     if (data.instructionDateTime) data.date = data.instructionDateTime.slice(0, 10);
     data.sourceOfReferral = document.getElementById('qc-source').value;
@@ -5728,7 +5962,9 @@ var REQUIRED_FIELD_KEYS = [
           if (parts.length === 3) dateLabel = parts[2] + '/' + parts[1] + '/' + parts[0];
         }
         const stationLabel = d.policeStationName || r.station_name || '';
-        const dsccLabel = d.dsccRef || r.dscc_ref || '';
+        const dsccLabel = (d.dsccPrivateMatter === 'Yes' && !(d.dsccRef || '').trim())
+          ? 'Private'
+          : (d.dsccRef || r.dscc_ref || '');
         const fileNumLabel = d.ourFileNumber ? '#' + d.ourFileNumber : '';
         const meta = [fileNumLabel, dateLabel, stationLabel, dsccLabel].filter(Boolean).join(' \u00B7 ');
         const formTypeBadge = d._formType === 'telephone' ? '<span class="badge badge-tel">TEL</span>' : (d.attendanceMode === 'voluntary' ? '<span class="badge badge-vol">VOL</span>' : '<span class="badge badge-att">ATT</span>');
@@ -6161,13 +6397,39 @@ var REQUIRED_FIELD_KEYS = [
     if (!hasOutcomeDecision) w.push('Outcome missing');
     if (voluntaryConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code missing (matter concluded)');
     if (d.attendanceMode === 'voluntary') {
-      if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim()) w.push('DSCC reference or reason missing');
+      if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim() && d.dsccPrivateMatter !== 'Yes') w.push('DSCC reference or reason missing');
       if (d.attendanceSubType === 'voluntary_non_police_body' && !d.constablePresent) w.push('Constable present? required for non-police body');
     } else {
-      if (!(d.dsccRef || '').trim() && (d.sourceOfReferral || '').toLowerCase().indexOf('duty') >= 0) w.push('DSCC number missing (duty route)');
+      if (!(d.dsccRef || '').trim() && (d.sourceOfReferral || '').toLowerCase().indexOf('duty') >= 0 && d.dsccPrivateMatter !== 'Yes') w.push('DSCC number missing (duty route)');
     }
     var mins = parseInt((d.totalMinutes || '').toString(), 10);
     if (isNaN(mins) || mins <= 0) w.push('Time record incomplete');
+    var visits = Array.isArray(d.stationVisits) ? d.stationVisits : [];
+    if (visits.length > 1) {
+      visits.forEach(function (v, i) {
+        var label = 'Visit ' + (i + 1);
+        if (v.timeSetOff && v.timeArrival && v.timeArrival < v.timeSetOff) {
+          w.push(label + ': arrival is before set-off time');
+        }
+        if (v.timeArrival && v.timeDeparture && v.timeDeparture < v.timeArrival) {
+          w.push(label + ': left station before arrival');
+        }
+        if (v.timeDeparture && v.timeOfficeHome && v.timeOfficeHome < v.timeDeparture) {
+          w.push(label + ': returned to office/home before leaving station');
+        }
+        if (v.waitingTimeStart && v.waitingTimeEnd) {
+          if (v.timeArrival && v.waitingTimeStart < v.timeArrival) w.push(label + ': waiting started before arrival');
+          if (v.timeDeparture && v.waitingTimeEnd > v.timeDeparture) w.push(label + ': waiting ended after leaving station');
+          if (v.waitingTimeEnd < v.waitingTimeStart) w.push(label + ': waiting end is before waiting start');
+        }
+        if (i > 0) {
+          var prev = visits[i - 1];
+          if (prev && prev.timeOfficeHome && v.timeSetOff && v.timeSetOff < prev.timeOfficeHome) {
+            w.push(label + ': starts before previous visit returned home');
+          }
+        }
+      });
+    }
     return w;
   }
 
@@ -7174,6 +7436,18 @@ var REQUIRED_FIELD_KEYS = [
       }
 
       if (sec.id === 'timeRecording') {
+        const visitBreakdownPanel = document.createElement('div');
+        visitBreakdownPanel.id = 'visit-breakdown-panel';
+        visitBreakdownPanel.className = 'visit-breakdown-panel';
+        visitBreakdownPanel.style.display = 'none';
+        visitBreakdownPanel.innerHTML =
+          '<div class="visit-breakdown-head">' +
+            '<h4 class="visit-breakdown-title">Per-visit breakdown</h4>' +
+            '<span class="time-breakdown-badge">Auto from section 2</span>' +
+          '</div>' +
+          '<p class="visit-breakdown-help">Click a visit to jump to that card in section 2 (journey to station). Totals below feed your time entries automatically.</p>' +
+          '<div id="visit-breakdown-table-wrap"></div>';
+        section.insertBefore(visitBreakdownPanel, section.firstChild);
         const timeBreakdownPanel = document.createElement('div');
         timeBreakdownPanel.id = 'time-breakdown-panel';
         timeBreakdownPanel.className = 'time-breakdown-panel';
@@ -7236,6 +7510,8 @@ var REQUIRED_FIELD_KEYS = [
           }
         }
         updateTimeBreakdownPanel();
+        updateVisitBreakdownTable();
+        refreshTimeOverrideAffordances();
       }
 
       if (sec.id === 'supervisorReview') {
@@ -7318,6 +7594,122 @@ var REQUIRED_FIELD_KEYS = [
       sib = sib.nextElementSibling;
     }
     return count;
+  }
+
+  /**
+   * Shared editable disbursement row, used by both the section 9 general list and the per-visit
+   * disbursement lists in section 2 visit cards. Updates formData.disbursements[idx] in place.
+   * opts.ondelete: callback after splice from formData.disbursements.
+   * opts.ondescChanged: callback after the category select changes (e.g. to re-render for the
+   *   "Other" textbox toggle).
+   */
+  function buildDisbursementBlockEl(idx, opts) {
+    opts = opts || {};
+    var dis = formData.disbursements[idx];
+    if (!dis) return document.createElement('div');
+    var block = document.createElement('div');
+    block.className = 'disbursement-block';
+    block.setAttribute('data-disb-idx', String(idx));
+    var heading = document.createElement('div');
+    heading.className = 'disbursement-heading';
+    var title = document.createElement('span');
+    title.textContent = opts.title || 'Disbursement';
+    heading.appendChild(title);
+    var rmBtn = document.createElement('button');
+    rmBtn.type = 'button';
+    rmBtn.className = 'btn-small iv-remove';
+    rmBtn.textContent = 'Remove';
+    heading.appendChild(rmBtn);
+    block.appendChild(heading);
+
+    var row = document.createElement('div');
+    row.className = 'form-row-2col';
+
+    var descWrap = document.createElement('div');
+    descWrap.className = 'form-group';
+    var descLbl = document.createElement('label');
+    descLbl.textContent = 'Category';
+    descWrap.appendChild(descLbl);
+    var descSel = document.createElement('select');
+    descSel.className = 'form-input disbursement-category-sel';
+    var disbCats = ['Interpreter', 'Medical Report', 'Mileage', 'Travel (public transport)', 'Photocopying', 'Telephone calls', 'Other'];
+    var catOpt0 = document.createElement('option');
+    catOpt0.value = '';
+    catOpt0.textContent = '-- Select --';
+    descSel.appendChild(catOpt0);
+    disbCats.forEach(function (c) {
+      var o = document.createElement('option');
+      o.value = c;
+      o.textContent = c;
+      if (dis.description === c) o.selected = true;
+      descSel.appendChild(o);
+    });
+    if (dis.description && !disbCats.includes(dis.description)) descSel.value = 'Other';
+    descSel.addEventListener('change', function () {
+      formData.disbursements[idx].description = this.value;
+      if (typeof opts.ondescChanged === 'function') opts.ondescChanged();
+    });
+    descWrap.appendChild(descSel);
+    if (dis.description === 'Other' || (dis.description && !disbCats.includes(dis.description))) {
+      var otherInp = document.createElement('input');
+      otherInp.type = 'text';
+      otherInp.className = 'form-input';
+      otherInp.placeholder = 'Describe...';
+      otherInp.value = dis.descriptionOther || (disbCats.includes(dis.description) ? '' : dis.description);
+      otherInp.style.marginTop = '0.3rem';
+      otherInp.addEventListener('input', function () {
+        formData.disbursements[idx].descriptionOther = this.value;
+      });
+      descWrap.appendChild(otherInp);
+    }
+    row.appendChild(descWrap);
+
+    var amtWrap = document.createElement('div');
+    amtWrap.className = 'form-group';
+    var amtLbl = document.createElement('label');
+    amtLbl.textContent = 'Amount (\u00A3)';
+    amtWrap.appendChild(amtLbl);
+    var amtInp = document.createElement('input');
+    amtInp.type = 'number';
+    amtInp.className = 'form-input';
+    amtInp.value = dis.amount || '';
+    amtInp.placeholder = '0.00';
+    amtInp.step = '0.01';
+    amtInp.addEventListener('input', function () {
+      formData.disbursements[idx].amount = this.value;
+      if (typeof opts.onAmountChanged === 'function') opts.onAmountChanged();
+    });
+    amtWrap.appendChild(amtInp);
+    row.appendChild(amtWrap);
+
+    var vatWrap = document.createElement('div');
+    vatWrap.className = 'form-group';
+    var vatLbl = document.createElement('label');
+    vatLbl.textContent = 'VAT Treatment';
+    vatWrap.appendChild(vatLbl);
+    var vatSel = document.createElement('select');
+    vatSel.className = 'form-input disbursement-vat-sel';
+    ['Inclusive of VAT', 'Plus VAT', 'No VAT'].forEach(function (o) {
+      var opt = document.createElement('option');
+      opt.value = o;
+      opt.textContent = o;
+      if (dis.vatTreatment === o) opt.selected = true;
+      vatSel.appendChild(opt);
+    });
+    vatSel.addEventListener('change', function () {
+      formData.disbursements[idx].vatTreatment = this.value;
+    });
+    vatWrap.appendChild(vatSel);
+    row.appendChild(vatWrap);
+
+    block.appendChild(row);
+
+    rmBtn.addEventListener('click', function () {
+      formData.disbursements.splice(idx, 1);
+      if (typeof opts.ondelete === 'function') opts.ondelete();
+    });
+
+    return block;
   }
 
   function renderField(f, data, grid) {
@@ -7444,90 +7836,58 @@ var REQUIRED_FIELD_KEYS = [
       wrap.className = 'form-group';
       wrap.style.gridColumn = '1 / -1';
       const lbl = document.createElement('label'); lbl.textContent = f.label; lbl.style.fontWeight = '700'; wrap.appendChild(lbl);
+      const headEl = document.createElement('p');
+      headEl.className = 'general-disb-help';
+      headEl.id = 'general-disb-help-' + Math.random().toString(36).slice(2, 8);
+      wrap.appendChild(headEl);
       const container = document.createElement('div');
       container.id = 'multi-disbursement-container';
-      if (!formData.disbursements || !formData.disbursements.length) formData.disbursements = [{ description: '', amount: '', vatTreatment: 'No VAT', visitIndex: '' }];
-      function renderDisbursements() {
+      if (!Array.isArray(formData.disbursements)) formData.disbursements = [];
+      function isVisitLinked(d) {
+        var v = d && d.visitIndex;
+        return v !== undefined && v !== null && String(v).trim() !== '';
+      }
+      function generalIndices() {
+        var out = [];
+        (formData.disbursements || []).forEach(function (d, i) { if (!isVisitLinked(d)) out.push(i); });
+        return out;
+      }
+      function renderGeneralDisbursements() {
         container.innerHTML = '';
-        formData.disbursements.forEach((dis, idx) => {
-          const block = document.createElement('div');
-          block.className = 'disbursement-block';
-          block.innerHTML = '<div class="disbursement-heading"><span>Disbursement ' + (idx + 1) + '</span>' + (idx > 0 ? '<button type="button" class="btn-small iv-remove" data-didx="' + idx + '">Remove</button>' : '') + '</div>';
-          var nVisits = (formData.stationVisits && formData.stationVisits.length) || 1;
-          if (nVisits > 1) {
-            const vrow = document.createElement('div');
-            vrow.className = 'form-row-2col';
-            const vw = document.createElement('div');
-            vw.className = 'form-group';
-            vw.style.gridColumn = '1 / -1';
-            const vl = document.createElement('label');
-            vl.textContent = 'Link to visit (optional)';
-            const vs = document.createElement('select');
-            vs.className = 'form-input disbursement-visit-sel';
-            var vOpt0 = document.createElement('option');
-            vOpt0.value = '';
-            vOpt0.textContent = 'Whole attendance / not specific';
-            vs.appendChild(vOpt0);
-            for (var vi = 0; vi < nVisits; vi++) {
-              var vo = document.createElement('option');
-              vo.value = String(vi);
-              vo.textContent = 'Visit ' + (vi + 1);
-              vs.appendChild(vo);
+        var nVisits = (formData.stationVisits && formData.stationVisits.length) || 1;
+        if (nVisits > 1) {
+          headEl.textContent = 'These disbursements are not tied to a specific station visit. Per-visit disbursements live inside each visit card in section 2.';
+        } else {
+          headEl.textContent = '';
+        }
+        var indices = generalIndices();
+        indices.forEach(function (i, displayIdx) {
+          var blk = buildDisbursementBlockEl(i, {
+            title: 'Disbursement ' + (displayIdx + 1),
+            ondelete: function () {
+              renderGeneralDisbursements();
+              if (typeof window._renderVisitDisbursementsAll === 'function') window._renderVisitDisbursementsAll();
+              if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
+            },
+            ondescChanged: function () { renderGeneralDisbursements(); },
+            onAmountChanged: function () {
+              if (typeof window._renderVisitDisbursementsAll === 'function') window._renderVisitDisbursementsAll();
             }
-            var visSel = (dis.visitIndex !== undefined && dis.visitIndex !== null) ? String(dis.visitIndex) : '';
-            if (visSel !== '' && !vs.querySelector('option[value="' + visSel + '"]')) visSel = '';
-            vs.value = visSel;
-            vs.addEventListener('change', function () { formData.disbursements[idx].visitIndex = this.value; });
-            vw.appendChild(vl);
-            vw.appendChild(vs);
-            vrow.appendChild(vw);
-            block.appendChild(vrow);
-          }
-          const row = document.createElement('div');
-          row.className = 'form-row-2col';
-          var descWrap = document.createElement('div'); descWrap.className = 'form-group';
-          var descLbl = document.createElement('label'); descLbl.textContent = 'Category'; descWrap.appendChild(descLbl);
-          var descSel = document.createElement('select'); descSel.className = 'form-input disbursement-category-sel';
-          var disbCats = ['Interpreter','Medical Report','Mileage','Travel (public transport)','Photocopying','Telephone calls','Other'];
-          var catOpt0 = document.createElement('option'); catOpt0.value = ''; catOpt0.textContent = '-- Select --'; descSel.appendChild(catOpt0);
-          disbCats.forEach(function(c) { var o = document.createElement('option'); o.value = c; o.textContent = c; if (dis.description === c) o.selected = true; descSel.appendChild(o); });
-          if (dis.description && !disbCats.includes(dis.description)) { descSel.value = 'Other'; }
-          descSel.addEventListener('change', function () { formData.disbursements[idx].description = this.value; });
-          descWrap.appendChild(descSel);
-          if (dis.description === 'Other' || (dis.description && !disbCats.includes(dis.description))) {
-            var otherInp = document.createElement('input'); otherInp.type = 'text'; otherInp.className = 'form-input'; otherInp.placeholder = 'Describe...';
-            otherInp.value = dis.descriptionOther || (disbCats.includes(dis.description) ? '' : dis.description);
-            otherInp.style.marginTop = '0.3rem';
-            otherInp.addEventListener('input', function () { formData.disbursements[idx].descriptionOther = this.value; });
-            descWrap.appendChild(otherInp);
-          }
-          descSel.addEventListener('change', function () {
-            formData.disbursements[idx].description = this.value;
-            renderDisbursements();
           });
-          row.appendChild(descWrap);
-          var amtWrap = document.createElement('div'); amtWrap.className = 'form-group';
-          var amtLbl = document.createElement('label'); amtLbl.textContent = 'Amount (\u00A3)'; amtWrap.appendChild(amtLbl);
-          var amtInp = document.createElement('input'); amtInp.type = 'number'; amtInp.className = 'form-input'; amtInp.value = dis.amount || ''; amtInp.placeholder = '0.00'; amtInp.step = '0.01';
-          amtInp.addEventListener('input', function () { formData.disbursements[idx].amount = this.value; });
-          amtWrap.appendChild(amtInp); row.appendChild(amtWrap);
-          var vatWrap = document.createElement('div'); vatWrap.className = 'form-group';
-          var vatLbl = document.createElement('label'); vatLbl.textContent = 'VAT Treatment'; vatWrap.appendChild(vatLbl);
-          var vatSel = document.createElement('select'); vatSel.className = 'form-input disbursement-vat-sel';
-          ['Inclusive of VAT', 'Plus VAT', 'No VAT'].forEach(function (o) { var opt = document.createElement('option'); opt.value = o; opt.textContent = o; if (dis.vatTreatment === o) opt.selected = true; vatSel.appendChild(opt); });
-          vatSel.addEventListener('change', function () { formData.disbursements[idx].vatTreatment = this.value; });
-          vatWrap.appendChild(vatSel); row.appendChild(vatWrap);
-          block.appendChild(row);
-          block.querySelector('.iv-remove')?.addEventListener('click', function () { formData.disbursements.splice(idx, 1); renderDisbursements(); });
-          container.appendChild(block);
+          container.appendChild(blk);
         });
         var addBtn = document.createElement('button');
-        addBtn.type = 'button'; addBtn.className = 'btn-add-disbursement'; addBtn.textContent = '+ Add Disbursement';
-        addBtn.addEventListener('click', function () { formData.disbursements.push({ description: '', amount: '', vatTreatment: 'No VAT', visitIndex: '' }); renderDisbursements(); });
+        addBtn.type = 'button'; addBtn.className = 'btn-add-disbursement';
+        addBtn.textContent = nVisits > 1 ? '+ Add general disbursement (not tied to a visit)' : '+ Add Disbursement';
+        addBtn.addEventListener('click', function () {
+          formData.disbursements.push({ description: '', amount: '', vatTreatment: 'No VAT', visitIndex: '' });
+          renderGeneralDisbursements();
+        });
         container.appendChild(addBtn);
-        window.updateDisbursementVisitOptions = function () { renderDisbursements(); };
       }
-      renderDisbursements();
+      window._renderGeneralDisbursements = renderGeneralDisbursements;
+      window.updateDisbursementVisitOptions = function () { renderGeneralDisbursements(); };
+      renderGeneralDisbursements();
       wrap.appendChild(container);
       grid.appendChild(wrap);
       return;
@@ -7543,10 +7903,76 @@ var REQUIRED_FIELD_KEYS = [
       wrap.appendChild(lbl);
       const help = document.createElement('p');
       help.className = 'section-help station-visits-help';
-      help.textContent = 'Add a row for each separate trip to the station today. Travel, waiting, return and per-visit miles are recorded per row; totals update section 9 and your PDF.';
+      help.textContent = 'Add a card for each separate trip to the station today. Each card groups its own travel, waiting, miles, parking, notes and disbursements; section 9 totals these automatically.';
       wrap.appendChild(help);
       const container = document.createElement('div');
       container.id = 'multi-station-visits-container';
+
+      function fmtTimeShort(t) { return t || '\u2014'; }
+      function fmtMoneyShort(v) { var n = parseFloat(v); return isNaN(n) ? '\u00a30.00' : ('\u00a3' + n.toFixed(2)); }
+      function visitDisbCount(idx) {
+        return (formData.disbursements || []).filter(function (d) {
+          return String(d.visitIndex || '') === String(idx);
+        }).length;
+      }
+      function summariseVisit(visit, idx) {
+        var span = (visit.timeSetOff || visit.timeOfficeHome)
+          ? (fmtTimeShort(visit.timeSetOff) + ' \u2192 ' + fmtTimeShort(visit.timeOfficeHome))
+          : '(times not set)';
+        var mi = parseFloat(visit.milesClaimable);
+        var pk = parseFloat(visit.parkingCost);
+        var miStr = (!isNaN(mi) && mi > 0) ? (mi + ' mi') : '';
+        var pkStr = (!isNaN(pk) && pk > 0) ? fmtMoneyShort(pk) : '';
+        var dn = visitDisbCount(idx);
+        var dStr = dn > 0 ? (dn + ' disb' + (dn === 1 ? '' : 's')) : '';
+        return [span, miStr, pkStr, dStr].filter(Boolean).join(' \u00b7 ');
+      }
+      function isVisitComplete(v) {
+        return !!(v && v.timeSetOff && v.timeArrival && v.timeDeparture && v.timeOfficeHome);
+      }
+      function ensureVisitOpenState(idx) {
+        formData._visitCardOpen = formData._visitCardOpen || {};
+        if (formData._visitCardOpen[idx] === undefined) {
+          formData._visitCardOpen[idx] = !isVisitComplete(formData.stationVisits[idx]);
+        }
+        return formData._visitCardOpen[idx];
+      }
+
+      function applySortToStorage() {
+        var visits = formData.stationVisits || [];
+        if (visits.length < 2) return false;
+        var indexed = visits.map(function (v, i) { return { v: v, i: i }; });
+        indexed.sort(function (a, b) {
+          var at = (a.v && a.v.timeSetOff) ? String(a.v.timeSetOff).trim() : '';
+          var bt = (b.v && b.v.timeSetOff) ? String(b.v.timeSetOff).trim() : '';
+          if (!at && !bt) return a.i - b.i;
+          if (!at) return 1;
+          if (!bt) return -1;
+          if (at === bt) return a.i - b.i;
+          return at < bt ? -1 : 1;
+        });
+        var changed = indexed.some(function (e, newIdx) { return e.i !== newIdx; });
+        if (!changed) return false;
+        var indexMap = {};
+        indexed.forEach(function (e, newIdx) { indexMap[e.i] = newIdx; });
+        formData.stationVisits = indexed.map(function (e) { return e.v; });
+        (formData.disbursements || []).forEach(function (d) {
+          var v = d.visitIndex;
+          if (v == null || v === '') return;
+          var oi = parseInt(v, 10);
+          if (!isNaN(oi) && indexMap.hasOwnProperty(oi)) d.visitIndex = String(indexMap[oi]);
+        });
+        if (formData._visitCardOpen) {
+          var rebuiltOpen = {};
+          Object.keys(formData._visitCardOpen).forEach(function (k) {
+            var ki = parseInt(k, 10);
+            if (!isNaN(ki) && indexMap.hasOwnProperty(ki)) rebuiltOpen[indexMap[ki]] = formData._visitCardOpen[k];
+          });
+          formData._visitCardOpen = rebuiltOpen;
+        }
+        return true;
+      }
+
       function visitTouch() {
         if (!SV) return;
         SV.syncLegacyMirror(formData);
@@ -7558,59 +7984,135 @@ var REQUIRED_FIELD_KEYS = [
         if (typeof recalcTotal === 'function') recalcTotal();
         if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
         if (typeof window.updateDisbursementVisitOptions === 'function') window.updateDisbursementVisitOptions();
+        if (typeof window.updateVisitBreakdownTable === 'function') window.updateVisitBreakdownTable();
+        if (typeof window._renderGeneralDisbursements === 'function') window._renderGeneralDisbursements();
+        if (typeof window.refreshTimeOverrideAffordances === 'function') window.refreshTimeOverrideAffordances();
         var nV = (formData.stationVisits && formData.stationVisits.length) || 0;
         var mc = document.querySelector('[data-field="milesClaimable"]');
         var pc = document.querySelector('[data-field="parkingCost"]');
-        if (mc) mc.readOnly = nV > 1;
-        if (pc) pc.readOnly = nV > 1;
+        var lockMP = nV > 1 && !formData._milesParkingOverride;
+        if (mc) mc.readOnly = lockMP;
+        if (pc) pc.readOnly = lockMP;
       }
+
+      function refreshVisitHeaderSummary(idx) {
+        var head = container.querySelector('[data-sv-card-idx="' + idx + '"] .station-visit-summary');
+        if (!head) return;
+        head.textContent = summariseVisit(formData.stationVisits[idx] || {}, idx);
+      }
+
+      function renderVisitDisbursementList(listEl, visitIdx) {
+        if (!listEl) return;
+        listEl.innerHTML = '';
+        var indices = [];
+        (formData.disbursements || []).forEach(function (d, i) {
+          if (String(d.visitIndex || '') === String(visitIdx)) indices.push(i);
+        });
+        if (!indices.length) {
+          var empty = document.createElement('p');
+          empty.className = 'general-disb-help';
+          empty.style.margin = '0 0 0.4rem';
+          empty.textContent = 'No disbursements logged for this visit yet.';
+          listEl.appendChild(empty);
+        }
+        indices.forEach(function (i, displayIdx) {
+          var blk = buildDisbursementBlockEl(i, {
+            title: 'Disbursement ' + (displayIdx + 1),
+            ondelete: function () {
+              if (typeof window._renderVisitDisbursementsAll === 'function') window._renderVisitDisbursementsAll();
+              if (typeof window._renderGeneralDisbursements === 'function') window._renderGeneralDisbursements();
+              refreshVisitHeaderSummary(visitIdx);
+              if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
+            },
+            ondescChanged: function () { renderVisitDisbursementList(listEl, visitIdx); refreshVisitHeaderSummary(visitIdx); },
+            onAmountChanged: function () { refreshVisitHeaderSummary(visitIdx); }
+          });
+          listEl.appendChild(blk);
+        });
+      }
+
       function bindVisitInputs(block, idx) {
         block.querySelectorAll('[data-sv-field]').forEach(function (inp) {
           var key = inp.getAttribute('data-sv-field');
+          var isTime = key.indexOf('time') === 0 || key.indexOf('waitingTime') === 0;
           inp.addEventListener('input', function () {
             if (!formData.stationVisits[idx]) return;
             formData.stationVisits[idx][key] = inp.value;
+            refreshVisitHeaderSummary(idx);
             visitTouch();
           });
           inp.addEventListener('change', function () {
             if (!formData.stationVisits[idx]) return;
             formData.stationVisits[idx][key] = inp.value;
+            refreshVisitHeaderSummary(idx);
             visitTouch();
             if (key === 'timeDeparture' && inp.value && typeof maybePromptDisbursements === 'function') {
               maybePromptDisbursements();
             }
           });
+          if (isTime) {
+            inp.addEventListener('blur', function () {
+              if (applySortToStorage()) {
+                renderVisitBlocks();
+                visitTouch();
+              }
+            });
+          }
         });
       }
+
       function renderVisitBlocks() {
         if (SV) SV.ensureStationVisits(formData);
+        applySortToStorage();
         container.innerHTML = '';
-        (formData.stationVisits || []).forEach(function (visit, idx) {
-          const block = document.createElement('div');
-          block.className = 'station-visit-block';
+        var visits = formData.stationVisits || [];
+        if (visits.length === 1) {
+          formData._visitCardOpen = formData._visitCardOpen || {};
+          formData._visitCardOpen[0] = true;
+        }
+        visits.forEach(function (visit, idx) {
+          var open = ensureVisitOpenState(idx);
+          var block = document.createElement('div');
+          block.className = 'station-visit-block' + (visits.length > 1 ? ' has-multi' : '') + (open ? '' : ' is-collapsed');
+          block.id = 'station-visit-card-' + idx;
+          block.setAttribute('data-sv-card-idx', String(idx));
+          var titleHtml = 'Visit ' + (idx + 1) + (visit.label ? ' \u2014 ' + esc(visit.label) : '');
           block.innerHTML =
-            '<div class="station-visit-head"><span class="station-visit-title">Station visit ' + (idx + 1) + '</span>' +
-            (idx > 0 ? '<button type="button" class="btn-small sv-remove" data-sv-idx="' + idx + '">Remove</button>' : '') +
+            '<div class="station-visit-head">' +
+              '<button type="button" class="station-visit-toggle" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+                '<span class="station-visit-chev" aria-hidden="true">' + (open ? '\u25be' : '\u25b8') + '</span>' +
+                '<span class="station-visit-title">' + titleHtml + '</span>' +
+                '<span class="station-visit-summary">' + esc(summariseVisit(visit, idx)) + '</span>' +
+              '</button>' +
+              (idx > 0 ? '<button type="button" class="btn-small sv-remove" data-sv-idx="' + idx + '" title="Remove this visit">Remove</button>' : '') +
             '</div>' +
-            '<div class="form-row-2col">' +
-            '<div class="form-group"><label>Label (optional)</label><input type="text" class="form-input" data-sv-field="label" placeholder="e.g. Morning"></div>' +
-            '</div>' +
-            '<div class="form-row-2col">' +
-            '<div class="form-group"><label>Time set off</label><input type="time" class="form-input" data-sv-field="timeSetOff"></div>' +
-            '<div class="form-group"><label>Time arrived at station</label><input type="time" class="form-input" data-sv-field="timeArrival"></div>' +
-            '</div>' +
-            '<div class="form-row-2col">' +
-            '<div class="form-group"><label>Time left station</label><input type="time" class="form-input" data-sv-field="timeDeparture"></div>' +
-            '<div class="form-group"><label>Time arrived office / home</label><input type="time" class="form-input" data-sv-field="timeOfficeHome"></div>' +
-            '</div>' +
-            '<div class="form-row-2col">' +
-            '<div class="form-group"><label>Waiting time start</label><input type="time" class="form-input" data-sv-field="waitingTimeStart"></div>' +
-            '<div class="form-group"><label>Waiting time end</label><input type="time" class="form-input" data-sv-field="waitingTimeEnd"></div>' +
-            '</div>' +
-            '<div class="form-group"><label>Waiting notes</label><textarea class="form-input" rows="2" data-sv-field="waitingTimeNotes" placeholder="Optional"></textarea></div>' +
-            '<div class="form-row-2col">' +
-            '<div class="form-group"><label>Miles (this visit)</label><input type="number" class="form-input" step="0.1" data-sv-field="milesClaimable" placeholder="0"></div>' +
-            '<div class="form-group"><label>Parking (\u00a3, this visit)</label><input type="number" class="form-input" step="0.01" data-sv-field="parkingCost" placeholder="0.00"></div>' +
+            '<div class="station-visit-body">' +
+              '<div class="form-row-2col">' +
+                '<div class="form-group"><label>Label (optional)</label><input type="text" class="form-input" data-sv-field="label" placeholder="e.g. Morning"></div>' +
+              '</div>' +
+              '<div class="form-row-2col">' +
+                '<div class="form-group"><label>Time set off</label><input type="time" class="form-input" data-sv-field="timeSetOff"></div>' +
+                '<div class="form-group"><label>Time arrived at station</label><input type="time" class="form-input" data-sv-field="timeArrival"></div>' +
+              '</div>' +
+              '<div class="form-row-2col">' +
+                '<div class="form-group"><label>Time left station</label><input type="time" class="form-input" data-sv-field="timeDeparture"></div>' +
+                '<div class="form-group"><label>Time arrived office / home</label><input type="time" class="form-input" data-sv-field="timeOfficeHome"></div>' +
+              '</div>' +
+              '<div class="form-row-2col">' +
+                '<div class="form-group"><label>Waiting time start</label><input type="time" class="form-input" data-sv-field="waitingTimeStart"></div>' +
+                '<div class="form-group"><label>Waiting time end</label><input type="time" class="form-input" data-sv-field="waitingTimeEnd"></div>' +
+              '</div>' +
+              '<div class="form-group"><label>Waiting notes</label><textarea class="form-input" rows="2" data-sv-field="waitingTimeNotes" placeholder="Optional"></textarea></div>' +
+              '<div class="form-row-2col">' +
+                '<div class="form-group"><label>Miles (this visit)</label><input type="number" class="form-input" step="0.1" data-sv-field="milesClaimable" placeholder="0"></div>' +
+                '<div class="form-group"><label>Parking (\u00a3, this visit)</label><input type="number" class="form-input" step="0.01" data-sv-field="parkingCost" placeholder="0.00"></div>' +
+              '</div>' +
+              '<div class="form-group"><label>Notes for this visit</label><textarea class="form-input" rows="2" data-sv-field="notes" placeholder="What happened on this trip (e.g. DSCC accept, ID parade)"></textarea></div>' +
+              '<div class="visit-disbursements">' +
+                '<div class="visit-disb-head">Disbursements for this visit</div>' +
+                '<div class="visit-disb-list" data-sv-disbs-idx="' + idx + '"></div>' +
+                '<button type="button" class="btn-small visit-disb-add" data-sv-disb-add="' + idx + '">+ Add disbursement to this visit</button>' +
+              '</div>' +
             '</div>';
           block.querySelectorAll('[data-sv-field]').forEach(function (inp) {
             var key = inp.getAttribute('data-sv-field');
@@ -7618,12 +8120,53 @@ var REQUIRED_FIELD_KEYS = [
             inp.value = v != null && v !== '' ? String(v) : '';
           });
           bindVisitInputs(block, idx);
+          var toggleBtn = block.querySelector('.station-visit-toggle');
+          if (toggleBtn) {
+            toggleBtn.addEventListener('click', function () {
+              formData._visitCardOpen = formData._visitCardOpen || {};
+              var nowOpen = !formData._visitCardOpen[idx];
+              formData._visitCardOpen[idx] = nowOpen;
+              block.classList.toggle('is-collapsed', !nowOpen);
+              toggleBtn.setAttribute('aria-expanded', nowOpen ? 'true' : 'false');
+              var chev = toggleBtn.querySelector('.station-visit-chev');
+              if (chev) chev.textContent = nowOpen ? '\u25be' : '\u25b8';
+            });
+          }
           block.querySelector('.sv-remove')?.addEventListener('click', function () {
             if ((formData.stationVisits || []).length < 2) return;
-            formData.stationVisits.splice(idx, 1);
+            var removeIdx = idx;
+            formData.stationVisits.splice(removeIdx, 1);
+            formData.disbursements = (formData.disbursements || []).filter(function (d) {
+              return String(d.visitIndex || '') !== String(removeIdx);
+            }).map(function (d) {
+              var v = d.visitIndex;
+              if (v == null || v === '') return d;
+              var oi = parseInt(v, 10);
+              if (!isNaN(oi) && oi > removeIdx) d.visitIndex = String(oi - 1);
+              return d;
+            });
+            if (formData._visitCardOpen) {
+              var rebuilt = {};
+              Object.keys(formData._visitCardOpen).forEach(function (k) {
+                var ki = parseInt(k, 10);
+                if (isNaN(ki)) return;
+                if (ki < removeIdx) rebuilt[ki] = formData._visitCardOpen[k];
+                else if (ki > removeIdx) rebuilt[ki - 1] = formData._visitCardOpen[k];
+              });
+              formData._visitCardOpen = rebuilt;
+            }
             renderVisitBlocks();
             visitTouch();
+            if (typeof window._renderGeneralDisbursements === 'function') window._renderGeneralDisbursements();
           });
+          block.querySelector('.visit-disb-add')?.addEventListener('click', function () {
+            if (!Array.isArray(formData.disbursements)) formData.disbursements = [];
+            formData.disbursements.push({ description: '', amount: '', vatTreatment: 'No VAT', visitIndex: String(idx) });
+            renderVisitDisbursementList(block.querySelector('.visit-disb-list'), idx);
+            refreshVisitHeaderSummary(idx);
+            if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
+          });
+          renderVisitDisbursementList(block.querySelector('.visit-disb-list'), idx);
           container.appendChild(block);
         });
         var addBtn = document.createElement('button');
@@ -7633,12 +8176,53 @@ var REQUIRED_FIELD_KEYS = [
         addBtn.addEventListener('click', function () {
           if (!SV) return;
           if (!formData.stationVisits) formData.stationVisits = [];
+          var newIdx = formData.stationVisits.length;
           formData.stationVisits.push(SV.emptyVisit());
+          formData._visitCardOpen = formData._visitCardOpen || {};
+          formData._visitCardOpen[newIdx] = true;
+          Object.keys(formData._visitCardOpen).forEach(function (k) {
+            var ki = parseInt(k, 10);
+            if (ki !== newIdx && isVisitComplete(formData.stationVisits[ki])) {
+              formData._visitCardOpen[ki] = false;
+            }
+          });
           renderVisitBlocks();
           visitTouch();
         });
         container.appendChild(addBtn);
       }
+
+      window._renderVisitDisbursementsAll = function () {
+        container.querySelectorAll('.visit-disb-list').forEach(function (el) {
+          var vi = parseInt(el.getAttribute('data-sv-disbs-idx'), 10);
+          if (!isNaN(vi)) renderVisitDisbursementList(el, vi);
+        });
+        container.querySelectorAll('[data-sv-card-idx]').forEach(function (cardEl) {
+          var ci = parseInt(cardEl.getAttribute('data-sv-card-idx'), 10);
+          if (!isNaN(ci)) refreshVisitHeaderSummary(ci);
+        });
+      };
+
+      window._scrollToStationVisit = function (idx) {
+        var journeyIdx = activeFormSections.findIndex(function (s) { return s && s.id === 'journeyTime'; });
+        if (journeyIdx >= 0 && journeyIdx !== currentSectionIdx) {
+          showSection(journeyIdx);
+        }
+        setTimeout(function () {
+          var el = document.getElementById('station-visit-card-' + idx);
+          if (!el) return;
+          formData._visitCardOpen = formData._visitCardOpen || {};
+          if (!formData._visitCardOpen[idx]) {
+            var btn = el.querySelector('.station-visit-toggle');
+            if (btn) btn.click();
+          }
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.remove('is-flash');
+          void el.offsetWidth;
+          el.classList.add('is-flash');
+        }, 50);
+      };
+
       renderVisitBlocks();
       wrap.appendChild(container);
       var mirror = document.createElement('div');
@@ -8192,6 +8776,63 @@ var REQUIRED_FIELD_KEYS = [
       }
       wrap.appendChild(container);
       grid.appendChild(wrap);
+      return;
+    }
+    if (f.type === 'boolean') {
+      const bwrap = document.createElement('div');
+      bwrap.className = 'form-group form-boolean-field';
+      if (f.cols === 2) bwrap.style.gridColumn = '1 / -1';
+      if (f.className) bwrap.classList.add(f.className);
+      if (f.showIf) {
+        bwrap.dataset.showIfField = f.showIf.field;
+        bwrap.dataset.showIfValue = f.showIf.value || '';
+        bwrap.dataset.showIfValues = (f.showIf.values || []).join(',');
+        if (f.showIf.notValue) bwrap.dataset.showIfNotValue = f.showIf.notValue;
+      }
+      if (f.hideIf) { bwrap.dataset.hideIfField = f.hideIf.field; bwrap.dataset.hideIfValue = f.hideIf.value || ''; }
+      const lbl = document.createElement('label');
+      lbl.className = 'form-boolean-row';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.name = f.key;
+      cb.dataset.field = f.key;
+      cb.dataset.boolYesNo = '1';
+      const stored = data[f.key];
+      cb.checked = (stored === 'Yes' || stored === true);
+      if (cb.checked) formData[f.key] = 'Yes';
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' ' + f.label));
+      if (f.helpTitle) {
+        const helpBtn = document.createElement('span');
+        helpBtn.className = 'field-help-icon';
+        helpBtn.setAttribute('role', 'button');
+        helpBtn.setAttribute('tabindex', '0');
+        helpBtn.title = f.helpTitle;
+        helpBtn.textContent = ' [?]';
+        helpBtn.style.cursor = 'help';
+        helpBtn.style.marginLeft = '0.25rem';
+        lbl.appendChild(helpBtn);
+      }
+      bwrap.appendChild(lbl);
+      cb.addEventListener('change', function () {
+        formData[f.key] = cb.checked ? 'Yes' : '';
+        if (f.key === 'dsccPrivateMatter' && cb.checked) {
+          formData.dsccRef = '';
+          var dsEl = document.querySelector('[data-field="dsccRef"]');
+          if (dsEl) {
+            dsEl.value = '';
+            dsEl.classList.remove('input-error');
+            var fg = dsEl.closest('.form-group');
+            if (fg) {
+              var errEl = fg.querySelector('.field-error');
+              if (errEl) errEl.style.display = 'none';
+            }
+          }
+        }
+        if (typeof applyConditionalVisibility === 'function') applyConditionalVisibility();
+        if (typeof scheduleQuietSave === 'function') scheduleQuietSave();
+      });
+      grid.appendChild(bwrap);
       return;
     }
     const wrap = document.createElement('div');
@@ -9772,8 +10413,10 @@ var REQUIRED_FIELD_KEYS = [
       } else if (!formData.firmId) formData.firmName = '';
     }
     form.querySelectorAll('input[name], select[name], textarea[name]').forEach(el => {
-      if (el.type === 'checkbox') formData[el.name] = el.checked;
-      else if (el.name && !['policeStationId', 'firmId'].includes(el.dataset.field)) formData[el.name] = el.value;
+      if (el.type === 'checkbox') {
+        if (el.dataset.boolYesNo === '1') formData[el.name] = el.checked ? 'Yes' : '';
+        else formData[el.name] = el.checked;
+      } else if (el.name && !['policeStationId', 'firmId'].includes(el.dataset.field)) formData[el.name] = el.value;
     });
     form.querySelectorAll('.checkbox-group-wrap').forEach(wrap => {
       const firstCb = wrap.querySelector('input[type="checkbox"]');
@@ -9900,31 +10543,28 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function collectDisbursementData(form) {
-    const container = form.querySelector('#multi-disbursement-container');
-    if (!container) return;
-    const blocks = container.querySelectorAll('.disbursement-block');
+    if (!Array.isArray(formData.disbursements)) formData.disbursements = [];
+    var blocks = form.querySelectorAll('.disbursement-block[data-disb-idx]');
     if (!blocks.length) return;
-    formData.disbursements = Array.from(blocks).map(block => {
-      const catSel = block.querySelector('select.disbursement-category-sel');
-      const otherInps = block.querySelectorAll('input[type="text"].form-input');
-      var description = catSel ? catSel.value : '';
-      var descriptionOther = '';
+    blocks.forEach(function (block) {
+      var idx = parseInt(block.getAttribute('data-disb-idx'), 10);
+      if (isNaN(idx) || !formData.disbursements[idx]) return;
+      var catSel = block.querySelector('select.disbursement-category-sel');
+      var description = catSel ? catSel.value : (formData.disbursements[idx].description || '');
+      var descriptionOther = formData.disbursements[idx].descriptionOther || '';
+      var otherInps = block.querySelectorAll('input[type="text"].form-input');
       if (otherInps.length) {
         var oi = otherInps[otherInps.length - 1];
         if (oi && oi.placeholder && String(oi.placeholder).indexOf('Describe') >= 0) {
           descriptionOther = oi.value || '';
         }
       }
-      const amt = block.querySelector('input[type="number"]');
-      const vat = block.querySelector('select.disbursement-vat-sel');
-      const visitSel = block.querySelector('select.disbursement-visit-sel');
-      return {
-        description: description,
-        descriptionOther: descriptionOther,
-        amount: amt ? amt.value : '',
-        vatTreatment: vat ? vat.value : 'No VAT',
-        visitIndex: visitSel ? visitSel.value : ''
-      };
+      var amt = block.querySelector('input[type="number"]');
+      var vat = block.querySelector('select.disbursement-vat-sel');
+      formData.disbursements[idx].description = description;
+      formData.disbursements[idx].descriptionOther = descriptionOther;
+      if (amt) formData.disbursements[idx].amount = amt.value;
+      if (vat) formData.disbursements[idx].vatTreatment = vat.value;
     });
   }
 
@@ -10173,6 +10813,7 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'outcomeDecision', label: 'Outcome', section: 2 },
     ];
     required.forEach(function(r) {
+      if (r.key === 'dsccRef' && formData.dsccPrivateMatter === 'Yes') return;
       var val = formData[r.key];
       if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
     });
@@ -10216,7 +10857,7 @@ var REQUIRED_FIELD_KEYS = [
     if (volCaseConcluded && !(formData.outcomeCode || '').trim()) {
       m.push({ key: 'outcomeCode', label: 'Outcome code', section: 5 });
     }
-    if (formData.instructionSource === 'dscc' && !(formData.dsccRef || '').trim() && formData.dsccNotificationStatus === 'missing' && !(formData.dsccReferenceMissingReason || '').trim()) {
+    if (formData.instructionSource === 'dscc' && !(formData.dsccRef || '').trim() && formData.dsccNotificationStatus === 'missing' && !(formData.dsccReferenceMissingReason || '').trim() && formData.dsccPrivateMatter !== 'Yes') {
       m.push({ key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', section: 0 });
     }
     if (formData.attendanceSubType === 'voluntary_non_police_body' && !formData.constablePresent) {
@@ -10382,9 +11023,11 @@ var REQUIRED_FIELD_KEYS = [
       var isTelForm = formData._formType === 'telephone';
       var missing = isTelForm ? validateTelephoneForm() : (formData.attendanceMode === 'voluntary' ? validateVoluntaryForm() : validateAttendanceForm());
 
-      var dscc = (formData.dsccRef || '').trim().toUpperCase();
-      if (dscc && (dscc.length !== 10 || dscc.charAt(9) !== 'A')) {
-        missing.push({ key: 'dsccRef', label: 'DSCC Number (must be 10 chars ending in A)', section: 0 });
+      if (formData.dsccPrivateMatter !== 'Yes') {
+        var dscc = (formData.dsccRef || '').trim().toUpperCase();
+        if (dscc && (dscc.length !== 10 || dscc.charAt(9) !== 'A')) {
+          missing.push({ key: 'dsccRef', label: 'DSCC Number (must be 10 chars ending in A)', section: 0 });
+        }
       }
 
       console.log('[FINALISE] Validation: missing=' + missing.length);
@@ -10546,6 +11189,10 @@ var REQUIRED_FIELD_KEYS = [
     if (!allKeys.length) return 'empty';
     let filled = 0;
     allKeys.forEach(k => {
+      if (k === 'dsccRef' && formData.dsccPrivateMatter === 'Yes') {
+        filled++;
+        return;
+      }
       const val = formData[k];
       if (val && (typeof val !== 'string' || val.trim())) filled++;
     });
@@ -10664,6 +11311,11 @@ var REQUIRED_FIELD_KEYS = [
     if (m) return m[3] + '/' + m[2] + '/' + m[1];
     return s;
   }
+  function formatDsccForPdf(d) {
+    if (d.dsccPrivateMatter === 'Yes' && !(d.dsccRef || '').trim()) return 'Private matter';
+    var t = (d.dsccRef || '').trim();
+    return t || '\u2014';
+  }
   function buildPdfHtml(d, settings) {
     const h = esc;
     const row = (l, v) => v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : '';
@@ -10739,7 +11391,7 @@ var REQUIRED_FIELD_KEYS = [
 '<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Station:</strong> ' + h(sn || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
-'<div class="cover-item"><strong>DSCC number:</strong> ' + h(d.dsccRef || '\u2014') + '</div>' +
+'<div class="cover-item"><strong>DSCC number:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
 '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
 (d.attendanceMode !== 'voluntary' ? '<div class="cover-item"><strong>Custody no.:</strong> ' + h(d.custodyNumber || '\u2014') + '</div>' : '') +
 '<div class="cover-item"><strong>Firm:</strong> ' + h(firmName || '\u2014') + '</div>' +
@@ -10752,7 +11404,7 @@ var REQUIRED_FIELD_KEYS = [
 row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) + row('Firm', firmName) +
 row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
 row('Client first name', d.forename) + row('Client surname', d.surname) + row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) + row('Offence (summary)', d.offenceSummary) +
-row('Station', sn) + row('DSCC number', d.dsccRef) +
+row('Station', sn) + row('DSCC number', formatDsccForPdf(d)) +
 row('Officer in Charge', d.oicName) + row('Officer in Charge email', d.oicEmail) + row('Officer in Charge telephone', d.oicPhone) +
 row('Date', fmtDate(d.date)) + row('Weekend/Bank Holiday', d.weekendBankHoliday) + row('Other Location', d.otherLocation) +
 row('Referral', d.sourceOfReferral) + row('Work Type', d.workType) + row('Telephone advice given?', d.telephoneAdviceGiven) + row('Fee Earner (telephone advice)', d.feeEarnerTelephoneAdvice) +
@@ -11137,7 +11789,7 @@ PDF_CASENOTE_ADVERT +
       '<div class="cover-item"><strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Billing invoice no.:</strong> ' + h(pdfBillingInvoiceLine(d)) + '</div>' +
       '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
-      '<div class="cover-item"><strong>DSCC:</strong> ' + h(d.dsccRef || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>DSCC:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
       '</div>' +
       (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">TELEPHONE ADVICE</div>' : '') +
 
@@ -11145,7 +11797,7 @@ PDF_CASENOTE_ADVERT +
       row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) + row('Date', fmtDate(d.date)) +
       row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) +
       row('Source of Referral', d.sourceOfReferral) +
-      row('DSCC Number', d.dsccRef) +
+      row('DSCC Number', formatDsccForPdf(d)) +
       row('Police Station', sn) +
       row('Instructing Firm', firmName) +
       row('Fee Earner', d.feeEarnerName) +
@@ -11283,7 +11935,7 @@ PDF_CASENOTE_ADVERT +
       '<div class="cover-item"><strong>Client:</strong> ' + h(clientNameForTitle) + '</div>' +
       '<div class="cover-item"><strong>Location:</strong> ' + h(sn || d.otherLocation || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
-      '<div class="cover-item"><strong>DSCC:</strong> ' + h(d.dsccRef || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>DSCC:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
       '<div class="cover-item"><strong>File No.:</strong> ' + h(myRefForTitle) + '</div>' +
       '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || settings.feeEarnerNameDefault || '\u2014') + '</div>' +
       '</div>' +
@@ -11300,7 +11952,7 @@ PDF_CASENOTE_ADVERT +
       row('Offence (summary)', d.offenceSummary) +
       row('Station / Location', sn || d.otherLocation) + row('Location type', d.locationType) +
       row('Scheme ID', d.schemeId) +
-      row('DSCC number', d.dsccRef) + row('DSCC notification status', d.dsccNotificationStatus) +
+      row('DSCC number', formatDsccForPdf(d)) + row('DSCC notification status', d.dsccNotificationStatus) +
       (d.dsccReferenceMissingReason ? row('DSCC missing reason', d.dsccReferenceMissingReason) : '') +
       row('Officer in Charge', d.oicName) + row('OIC email', d.oicEmail) + row('OIC telephone', d.oicPhone) +
       row('Weekend / Bank Holiday?', d.weekendBankHoliday) + row('Instruction source', d.instructionSource) +
@@ -11659,7 +12311,7 @@ PDF_CASENOTE_ADVERT +
         '<dt>Client</dt><dd>' + esc((d.surname || '').toUpperCase() + ', ' + (d.forename || '')) + '</dd>' +
         '<dt>Station</dt><dd>' + esc(d.policeStationName || d.policeStationId || '') + '</dd>' +
         '<dt>Date</dt><dd>' + esc(fmtDate(d.date)) + '</dd>' +
-        '<dt>DSCC Ref</dt><dd>' + esc(d.dsccRef || '\u2014') + '</dd>' +
+        '<dt>DSCC Ref</dt><dd>' + esc(formatDsccForPdf(d)) + '</dd>' +
         '<dt>UFN</dt><dd>' + esc(d.ufn || '\u2014') + '</dd>' +
         '<dt>File Ref</dt><dd>' + esc(d.ourFileNumber || '\u2014') + '</dd>' +
         '<dt>Fee Earner</dt><dd>' + esc(d.feeEarnerName || '') + '</dd>' +

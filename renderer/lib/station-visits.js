@@ -16,8 +16,50 @@
       waitingTimeEnd: '',
       waitingTimeNotes: '',
       milesClaimable: '',
-      parkingCost: ''
+      parkingCost: '',
+      notes: '',
+      multiClient: '',
+      clientStartTime: '',
+      clientEndTime: ''
     };
+  }
+
+  /**
+   * For visits where the user dealt with more than one client during the same trip,
+   * the on-station window for THIS client's billing is clientStartTime..clientEndTime.
+   * Travel out and travel back are NOT substituted (the actual journey times still apply).
+   * Returns the effective on-site arrival / departure to use when computing the on-site
+   * (advice + waiting) buckets for this visit.
+   */
+  function getVisitOnSiteArrival(v) {
+    if (!v) return '';
+    if (v.multiClient === 'Yes' && v.clientStartTime) return String(v.clientStartTime);
+    return v.timeArrival ? String(v.timeArrival) : '';
+  }
+  function getVisitOnSiteDeparture(v) {
+    if (!v) return '';
+    if (v.multiClient === 'Yes' && v.clientEndTime) return String(v.clientEndTime);
+    return v.timeDeparture ? String(v.timeDeparture) : '';
+  }
+
+  /**
+   * Returns a fresh array sorted by timeSetOff ascending; blank set-off times go last.
+   * Stable: preserves original index order on ties so the user-facing visit numbering
+   * (which mirrors disbursements[].visitIndex) does not jump around for equal times.
+   */
+  function sortVisitsChronologically(visits) {
+    if (!Array.isArray(visits)) return [];
+    var indexed = visits.map(function (v, i) { return { v: v, i: i }; });
+    indexed.sort(function (a, b) {
+      var at = (a.v && a.v.timeSetOff) ? String(a.v.timeSetOff).trim() : '';
+      var bt = (b.v && b.v.timeSetOff) ? String(b.v.timeSetOff).trim() : '';
+      if (!at && !bt) return a.i - b.i;
+      if (!at) return 1;
+      if (!bt) return -1;
+      if (at === bt) return a.i - b.i;
+      return at < bt ? -1 : 1;
+    });
+    return indexed.map(function (x) { return x.v; });
   }
 
   /**
@@ -184,13 +226,15 @@
         travelSocial += r.social;
         travelUnsocial += r.unsocial;
       }
+      var onArr = getVisitOnSiteArrival(v);
+      var onDep = getVisitOnSiteDeparture(v);
       if (v.waitingTimeStart && v.waitingTimeEnd) {
         var w = splitSocialUnsocial(v.waitingTimeStart, v.waitingTimeEnd, isWBH);
         waitingSocial += w.social;
         waitingUnsocial += w.unsocial;
       }
-      if (v.timeArrival && v.timeDeparture) {
-        var station = splitSocialUnsocial(v.timeArrival, v.timeDeparture, isWBH);
+      if (onArr && onDep) {
+        var station = splitSocialUnsocial(onArr, onDep, isWBH);
         var wSoc = v.waitingTimeStart && v.waitingTimeEnd
           ? splitSocialUnsocial(v.waitingTimeStart, v.waitingTimeEnd, isWBH).social : 0;
         var wUns = v.waitingTimeStart && v.waitingTimeEnd
@@ -220,6 +264,9 @@
     sumVisitParking: sumVisitParking,
     getEarliestStationArrival: getEarliestStationArrival,
     getEffectiveTimeArrival: getEffectiveTimeArrival,
-    aggregateMinuteBuckets: aggregateMinuteBuckets
+    aggregateMinuteBuckets: aggregateMinuteBuckets,
+    sortVisitsChronologically: sortVisitsChronologically,
+    getVisitOnSiteArrival: getVisitOnSiteArrival,
+    getVisitOnSiteDeparture: getVisitOnSiteDeparture
   };
 })(typeof window !== 'undefined' ? window : globalThis);
