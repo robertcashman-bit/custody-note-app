@@ -22,6 +22,7 @@ function _wfRenderBillingStep(body, footer) {
   var fee = billingSettings.attendanceFee || BILLING_DEFAULTS.fixedFee;
   var mileageRate = billingSettings.mileageRate || BILLING_DEFAULTS.mileageRate;
   var vatRate = billingSettings.vatRate || BILLING_DEFAULTS.vatRate;
+  if (typeof vatRate === 'number' && vatRate > 1) vatRate = vatRate / 100;
   var parking = parseFloat(data.parkingCost) || 0;
   var miles = parseFloat(data.milesClaimable) || 0;
 
@@ -47,7 +48,10 @@ function _wfRenderBillingStep(body, footer) {
     if (hasExisting && invoiceStatus.invoice_mileage_miles != null) miles = invoiceStatus.invoice_mileage_miles;
     if (hasExisting && invoiceStatus.invoice_mileage_rate != null) mileageRate = invoiceStatus.invoice_mileage_rate;
     if (hasExisting && invoiceStatus.invoice_parking_amount != null) parking = invoiceStatus.invoice_parking_amount;
-    if (hasExisting && invoiceStatus.invoice_vat_rate != null) vatRate = invoiceStatus.invoice_vat_rate;
+    if (hasExisting && invoiceStatus.invoice_vat_rate != null) {
+      vatRate = invoiceStatus.invoice_vat_rate;
+      if (typeof vatRate === 'number' && vatRate > 1) vatRate = vatRate / 100;
+    }
 
     var invoiceTitle = formatInvoiceTitle(meta.clientName, meta.stationName);
     var narrative = (hasExisting && invoiceStatus.invoice_narrative)
@@ -193,7 +197,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
             '<div class="wf-charge-row"><label for="wf-miles">Mileage Miles</label><input type="number" id="wf-miles" class="form-input wf-calc" value="' + (opts.mileageMiles || 0) + '" step="0.1"></div>' +
             '<div class="wf-charge-row"><label for="wf-rate">Mileage Rate (&pound;/mile)</label><input type="number" id="wf-rate" class="form-input wf-calc" value="' + (opts.mileageRate || 0.45).toFixed(2) + '" step="0.01"></div>' +
             '<div class="wf-charge-row"><label for="wf-parking">Parking (&pound;)</label><input type="number" id="wf-parking" class="form-input wf-calc" value="' + (opts.parkingAmount || 0).toFixed(2) + '" step="0.01"></div>' +
-            '<div class="wf-charge-row"><label for="wf-vat">VAT %</label><input type="number" id="wf-vat" class="form-input wf-calc" value="' + ((opts.vatRate || 0.20) * 100).toFixed(0) + '" step="1"></div>' +
+            '<div class="wf-charge-row"><label for="wf-vat">VAT %</label><input type="number" id="wf-vat" class="form-input wf-calc" value="' + (function(){ var vr = (opts.vatRate || 0.20); if (vr > 1) vr = vr / 100; return (vr * 100).toFixed(0); })() + '" step="1"></div>' +
           '</div>' +
           '<div class="wf-line-preview">' +
             '<p class="wf-line-label">Line 1:</p>' +

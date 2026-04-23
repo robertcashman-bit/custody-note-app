@@ -213,7 +213,9 @@ function _renderBillingPanel(data, recordId, opts) {
 
   var mileageCost = (opts.mileageMiles || 0) * (opts.mileageRate || 0.45);
   var subtotal = (opts.attendanceFee || 0) + mileageCost + (opts.parkingAmount || 0);
-  var vatAmt = subtotal * (opts.vatRate || 0.20);
+  var _vatRateForCalc = (opts.vatRate || 0.20);
+  if (typeof _vatRateForCalc === 'number' && _vatRateForCalc > 1) _vatRateForCalc = _vatRateForCalc / 100;
+  var vatAmt = subtotal * _vatRateForCalc;
   var total = subtotal + vatAmt;
 
   var auditHtml = '';
@@ -289,7 +291,7 @@ function _renderBillingPanel(data, recordId, opts) {
               '</div>' +
               '<div class="billing-edit-row">' +
                 '<label for="billing-vat-rate">VAT Rate (%)</label>' +
-                '<input type="number" id="billing-vat-rate" class="form-input billing-calc-input" value="' + ((opts.vatRate || 0.20) * 100).toFixed(0) + '" step="1">' +
+                '<input type="number" id="billing-vat-rate" class="form-input billing-calc-input" value="' + (function(){ var vr = (opts.vatRate || 0.20); if (vr > 1) vr = vr / 100; return (vr * 100).toFixed(0); })() + '" step="1">' +
               '</div>' +
             '</div>' +
             '<div class="billing-totals">' +

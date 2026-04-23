@@ -452,6 +452,21 @@ var IV_TEMPLATES = {
     ],
   };
 
+  /* ─── VAT rate normaliser ───
+     Settings persists `billingVatRate` as a percentage string (e.g. "20").
+     The rest of the system expects a decimal fraction (e.g. 0.20).
+     Without normalisation, "20" → 20 → input shows (20*100)="2000". */
+  function _normaliseVatRate(raw, fallback) {
+    var fb = (typeof fallback === 'number' ? fallback : 0.20);
+    if (raw === null || raw === undefined || raw === '') return fb;
+    var n = parseFloat(raw);
+    if (!isFinite(n) || n < 0) return fb;
+    if (n > 1) n = n / 100;
+    if (n > 1) return fb;
+    return n;
+  }
+  if (typeof window !== 'undefined') window._normaliseVatRate = _normaliseVatRate;
+
   /* ─── LAA RATES (post 22 Dec 2025 harmonised) ─── */
 var LAA = {
     fixedFee: 320.00,
@@ -5398,7 +5413,7 @@ var REQUIRED_FIELD_KEYS = [
       window._billingDefaults = {
         attendanceFee: parseFloat(s.billingAttendanceFee) || 160.00,
         mileageRate: parseFloat(s.billingMileageRate) || 0.45,
-        vatRate: parseFloat(s.billingVatRate) || 0.20,
+        vatRate: _normaliseVatRate(s.billingVatRate, 0.20),
       };
       window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;
       if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
@@ -14474,7 +14489,7 @@ pdfAuditFooterHtml(d, settings) +
       window._billingDefaults = {
         attendanceFee: parseFloat(s.billingAttendanceFee) || 160.00,
         mileageRate: parseFloat(s.billingMileageRate) || 0.45,
-        vatRate: parseFloat(s.billingVatRate) || 0.20,
+        vatRate: _normaliseVatRate(s.billingVatRate, 0.20),
       };
       window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
       if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
