@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.5.5",
+      "version": "1.5.6",
       "date": "2026-04-22",
       "latest": true,
+      "changes": [
+        "Fix: \u201cBilling invoice no.\u201d (the synthetic CN-prefixed reference) is no longer shown anywhere \u2014 removed from all 6 PDF templates (custody summary, custody admin, voluntary cover, voluntary call details, voluntary admin) and from the in-app billing panel. It only ever confused users vs. the real QuickFile invoice number; the real QuickFile reference (\u201cInvoiced: #123\u201d) is unaffected and still appears on the form once the bill is sent",
+        "Fix: QuickFile no longer attaches the attendance-note PDF twice. When the workflow billing screen sends user-selected documents (extraAttachments[]), the legacy auto-rendered attendance-note PDF (attachAttendanceHtml) is now skipped \u2014 only the documents you tick in the billing screen go to QuickFile. The standalone billing panel (which never sends extraAttachments) keeps its single auto attachment, so neither path regresses",
+        "Fix: Voluntary attendance \u00a73 (Client Details & Welfare) no longer duplicates the forename / middle / surname inputs already entered in \u00a71. \u00a73 now shows a clear read-only sectionNote \u2014 \u201cName: from \u00a71 \u2014 \u2026 entered in Section 1 (Case Reference & Arrival)\u201d \u2014 with the actual saved name appended in green. Removes a long-standing source of inconsistent data entry",
+        "Renderer: sectionNote handler now supports an opt-in dynamicNameRefSection1 flag that appends the live name from data.forename / data.middleName / data.surname \u2014 keeps the message accurate without inventing a new field type",
+        "Tests: new tests/v1_5_6_fixes.test.js (13 assertions across 3 suites: PDF/panel cleanup, QF gate, voluntary \u00a73). Existing billingWorkflow + billingOverhaul tests inverted to assert the new absence of \u201cBilling invoice no.\u201d. Full unit suite now 1071 assertions, all green"
+      ]
+    },
+    {
+      "version": "1.5.5",
+      "date": "2026-04-22",
+      "latest": false,
       "changes": [
         "UX: \u201cAdd new firm\u201d inline form (\u00a71 instructing-firm picker) is much clearer \u2014 every field has an unambiguous label so you can always tell what goes where, even after typing has hidden the placeholder. Labels rewritten: \u201cFirm name\u201d \u2192 \u201cInstructing firm name\u201d, \u201cContact name (person instructed)\u201d \u2192 \u201cContact at firm (the person who instructed you)\u201d, \u201cContact phone\u201d \u2192 \u201cPhone number for that contact\u201d, \u201cContact email\u201d \u2192 \u201cEmail for that contact\u201d",
         "Fix: \u201cSource of referral\u201d field has been REMOVED from the inline Add-new-firm form. Source of referral (Duty Rota / agency / own private etc.) is a property of the matter, not of the firm \u2014 a firm can be your own private firm on one matter and act as agency on another. The matter form\u2019s \u00a71 already has its own Source of Referral field, so nothing is lost; you just answer it once, in the right place",
