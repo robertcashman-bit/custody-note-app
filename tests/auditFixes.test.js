@@ -64,6 +64,40 @@ describe('C2 — Voluntary PDF uses correct signature keys', () => {
   });
 });
 
+describe('Custody PDF includes extended section fields', () => {
+  it('buildPdfHtml outputs strip search, property, device, special warning, PACE 4/5, and DSCC instruction fields', () => {
+    const custPdfStart = appJs.indexOf('function buildPdfHtml');
+    const custPdfEnd = appJs.indexOf('function buildTelephonePdfHtml', custPdfStart);
+    const custPdfBlock = appJs.substring(custPdfStart, custPdfEnd);
+    assert.ok(custPdfBlock.includes("d.instructionSource") && custPdfBlock.includes("d.dsccNotificationStatus"), '§1: instruction/DSCC metadata');
+    assert.ok(custPdfBlock.includes('d.fourthReviewTime') && custPdfBlock.includes('d.additionalReviewNotes'), '§3: extended PACE reviews');
+    assert.ok(custPdfBlock.includes('d.interpreterMode') && custPdfBlock.includes('d.interpreterArrivalTime'), '§3: interpreter detail');
+    assert.ok(custPdfBlock.includes('d.stripSearchConducted') && custPdfBlock.includes('d.propertyTaken'), '§3: strip search and property');
+    assert.ok(custPdfBlock.includes('d.deviceSeized') && custPdfBlock.includes('d.specialWarningGiven'), '§5: device seizure and special warnings');
+    assert.ok(custPdfBlock.includes('d.clothingShoesSeizedWhat'), '§5: clothing/shoes detail');
+    assert.ok(custPdfBlock.includes('d.caseAssessmentWhy') && custPdfBlock.includes('d.capitalClient'), '§6: assessment reasoning and capital');
+  });
+});
+
+describe('Client instructions (full) on PDF', () => {
+  it('custody and voluntary PDFs include clientInstructionsDetail, not only clientInstructions summary', () => {
+    const custPdfStart = appJs.indexOf('function buildPdfHtml');
+    const custPdfEnd = appJs.indexOf('function buildTelephonePdfHtml', custPdfStart);
+    const custPdfBlock = appJs.substring(custPdfStart, custPdfEnd);
+    const volPdfStart = appJs.indexOf('function buildVoluntaryPdfHtml');
+    const volPdfEnd = appJs.indexOf('function getActivePdfBuilder', volPdfStart);
+    const volPdfBlock = appJs.substring(volPdfStart, volPdfEnd);
+    assert.ok(
+      custPdfBlock.includes('d.clientInstructionsDetail') && custPdfBlock.includes('>Client instructions</p>'),
+      'custody PDF must render the full client instructions field (clientInstructionsDetail)'
+    );
+    assert.ok(
+      volPdfBlock.includes('d.clientInstructionsDetail') && volPdfBlock.includes('>Client instructions</p>'),
+      'voluntary PDF must render the full client instructions field (clientInstructionsDetail)'
+    );
+  });
+});
+
 describe('H1 — Autosave failure shows warning toast', () => {
   it('quietSave catch block calls showToast, not just console.error', () => {
     const quietSaveStart = appJs.indexOf('function quietSave()');

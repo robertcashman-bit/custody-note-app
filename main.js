@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu } = require('electron');
+﻿const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu } = require('electron');
 const os = require('os');
 const path = require('path');
 /* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use). */
@@ -6165,7 +6165,8 @@ ipcMain.handle('export-docx', async (_, { data, settings, filename }) => {
   if (val(d.consultationNotes)) children.push(narrativePara(d.consultationNotes));
   const consRows = [
     fieldRow('Advice given', val(d.adviceGiven)),
-    fieldRow('Client instructions', val(d.clientInstructions)),
+    fieldRow('Client instructions (full)', val(d.clientInstructionsDetail)),
+    fieldRow('Summary of client instructions', val(d.clientInstructions)),
   ].filter(Boolean);
   if (consRows.length) children.push(new Table({ rows: consRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
 
