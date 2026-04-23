@@ -5682,14 +5682,17 @@ var REQUIRED_FIELD_KEYS = [
       showToast('QuickFile import is not available', 'error');
       return;
     }
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = overwriteExisting ? 'Re-syncing from QuickFile...' : 'Fetching from QuickFile...';
-    }
-    if (otherBtn) otherBtn.disabled = true;
-    if (testBtn) testBtn.disabled = true;
-    setQuickFileStatusMessage('');
-    window.api.quickfileFetchClients().then(function(res) {
+    // Main process reads account/API key/App ID from the database (getQuickFileAuth in main.js), not
+    // from the Settings form. Persist the form to SQLite first so re-sync and test use current values.
+    return saveQuickFileSettings(false).then(function() {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = overwriteExisting ? 'Re-syncing from QuickFile...' : 'Fetching from QuickFile...';
+      }
+      if (otherBtn) otherBtn.disabled = true;
+      if (testBtn) testBtn.disabled = true;
+      setQuickFileStatusMessage('');
+      return window.api.quickfileFetchClients().then(function(res) {
       const clients = Array.isArray(res && res.clients) ? res.clients : [];
       if (!clients.length) {
         showToast('No clients found in your QuickFile account', 'warning');
@@ -5762,17 +5765,22 @@ var REQUIRED_FIELD_KEYS = [
         setQuickFileStatusMessage('QuickFile sync complete: ' + msg);
         showToast(msg, 'success');
       });
-    }).catch(function(err) {
-      const message = err && err.message ? err.message : String(err);
-      setQuickFileStatusMessage(message);
-      showToast('QuickFile error: ' + message, 'error');
-    }).finally(function() {
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = overwriteExisting ? 'Re-sync existing firms' : 'Import firms from QuickFile';
-      }
-      if (otherBtn) otherBtn.disabled = false;
-      if (testBtn) testBtn.disabled = false;
+      }).catch(function(err) {
+        const message = err && err.message ? err.message : String(err);
+        setQuickFileStatusMessage(message);
+        showToast('QuickFile error: ' + message, 'error');
+      }).finally(function() {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = overwriteExisting ? 'Re-sync existing firms' : 'Import firms from QuickFile';
+        }
+        if (otherBtn) otherBtn.disabled = false;
+        if (testBtn) testBtn.disabled = false;
+      });
+    }).catch(function (saveErr) {
+      const m = (saveErr && saveErr.message) || String(saveErr);
+      setQuickFileStatusMessage('Could not save QuickFile settings: ' + m);
+      showToast('Save QuickFile settings first: ' + m, 'error');
     });
   }
 
@@ -5788,31 +5796,37 @@ var REQUIRED_FIELD_KEYS = [
       showToast('QuickFile test is not available', 'error');
       return;
     }
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Testing QuickFile...';
-    }
-    if (importBtn) importBtn.disabled = true;
-    if (resyncBtn) resyncBtn.disabled = true;
-    setQuickFileStatusMessage('');
-    window.api.quickfileTestConnection().then(function(result) {
-      var sampleCount = Number(result && result.sampleCount) || 0;
-      var msg = sampleCount > 0
-        ? 'QuickFile connection successful. Directory access is working.'
-        : 'QuickFile connection successful. The API responded, but no client rows were returned in the sample check.';
-      setQuickFileStatusMessage(msg);
-      showToast('QuickFile connection successful', 'success');
-    }).catch(function(err) {
-      var message = err && err.message ? err.message : String(err);
-      setQuickFileStatusMessage(message);
-      showToast('QuickFile connection failed: ' + message, 'error');
-    }).finally(function() {
+    return saveQuickFileSettings(false).then(function() {
       if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Test QuickFile connection';
+        btn.disabled = true;
+        btn.textContent = 'Testing QuickFile...';
       }
-      if (importBtn) importBtn.disabled = false;
-      if (resyncBtn) resyncBtn.disabled = false;
+      if (importBtn) importBtn.disabled = true;
+      if (resyncBtn) resyncBtn.disabled = true;
+      setQuickFileStatusMessage('');
+      return window.api.quickfileTestConnection().then(function(result) {
+        var sampleCount = Number(result && result.sampleCount) || 0;
+        var msg = sampleCount > 0
+          ? 'QuickFile connection successful. Directory access is working.'
+          : 'QuickFile connection successful. The API responded, but no client rows were returned in the sample check.';
+        setQuickFileStatusMessage(msg);
+        showToast('QuickFile connection successful', 'success');
+      }).catch(function(err) {
+        var message = err && err.message ? err.message : String(err);
+        setQuickFileStatusMessage(message);
+        showToast('QuickFile connection failed: ' + message, 'error');
+      }).finally(function() {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Test QuickFile connection';
+        }
+        if (importBtn) importBtn.disabled = false;
+        if (resyncBtn) resyncBtn.disabled = false;
+      });
+    }).catch(function (saveErr) {
+      var m = (saveErr && saveErr.message) || String(saveErr);
+      setQuickFileStatusMessage('Could not save QuickFile settings: ' + m);
+      showToast('Save QuickFile settings first: ' + m, 'error');
     });
   }
 
