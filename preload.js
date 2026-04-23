@@ -141,10 +141,14 @@ contextBridge.exposeInMainWorld('emailAPI', {
   open: (payload) => ipcRenderer.invoke('open-outlook-email', payload),
 });
 
-/* Playwright / automated tests: fresh userData has no licence — allow skipping the sign-in overlay when env is set */
-contextBridge.exposeInMainWorld('__CUSTODYNOTE_E2E__', {
-  skipLicenceGate: process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1',
-});
+/* Playwright / automated tests: fresh userData has no licence — allow skipping the sign-in overlay when env is set.
+   H27 — never expose the E2E hook in packaged installers, even if a user
+   sets the env var. Main.js sets CUSTODYNOTE_PACKAGED='1' when app.isPackaged. */
+if (process.env.CUSTODYNOTE_PACKAGED !== '1') {
+  contextBridge.exposeInMainWorld('__CUSTODYNOTE_E2E__', {
+    skipLicenceGate: process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1',
+  });
+}
 
 contextBridge.exposeInMainWorld('custodyNote', {
   requestLicenceEmail: (email) => ipcRenderer.invoke('custody:requestLicenceEmail', email),

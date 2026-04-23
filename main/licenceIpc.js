@@ -15,6 +15,43 @@ function validateEmail(email) {
   return typeof email === 'string' && EMAIL_REGEX.test(email.trim().toLowerCase());
 }
 
+// H28 — defence-in-depth: every privileged custody:* channel must come from
+// a local, app-controlled frame. Any arbitrary http(s) URL the renderer
+// might be tricked into loading must not be allowed to invoke admin IPC.
+// The app is always served from a file:// index.html inside the install
+// directory, and preload + contextIsolation already prevent cross-origin
+// script access; this just hardens the default against regressions.
+function _isTrustedFrame(event) {
+  try {
+    const frame = event && event.senderFrame;
+    if (!frame) return false;
+    const url = String(frame.url || '');
+    if (!url) return false;
+    // file:// from the app bundle is trusted. dev-server pages served over
+    // http://localhost are trusted only in dev builds (never in packaged).
+    if (url.startsWith('file://')) return true;
+    if (process.env.CUSTODYNOTE_PACKAGED !== '1' && /^http:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/.test(url)) {
+      return true;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+// H29 — per-channel rate limiter used by session-unlock / admin-login style
+// channels so credential stuffing over IPC doesn't get unbounded attempts.
+const _rateLimiters = new Map();
+function _checkChannelRateLimit(channel, max, windowMs) {
+  const now = Date.now();
+  let bucket = _rateLimiters.get(channel);
+  if (!bucket) { bucket = []; _rateLimiters.set(channel, bucket); }
+  while (bucket.length && (now - bucket[0]) > windowMs) bucket.shift();
+  if (bucket.length >= max) return false;
+  bucket.push(now);
+  return true;
+}
+
 function getServerBaseUrl() {
   try {
     const base = process.env.LICENCE_SERVER_BASE_URL;
@@ -78,19 +115,29 @@ function registerLicenceIpc(app) {
     return GENERIC_SUCCESS;
   });
 
-  ipcMain.handle('custody:adminLogin', async (_, password) => {
+  ipcMain.handle('custody:adminLogin', async (event, password) => {
+    if (!_isTrustedFrame(event)) return { success: false, error: 'Untrusted frame' };
+    if (!_checkChannelRateLimit('custody:adminLogin', 5, 60 * 1000)) {
+      return { success: false, error: 'Too many login attempts. Please wait a minute and try again.' };
+    }
     return adminAuth.login(app, password);
   });
 
-  ipcMain.handle('custody:adminSetPassword', async (_, { password, token }) => {
+  ipcMain.handle('custody:adminSetPassword', async (event, { password, token }) => {
+    if (!_isTrustedFrame(event)) return { success: false, error: 'Untrusted frame' };
+    if (!_checkChannelRateLimit('custody:adminSetPassword', 5, 60 * 1000)) {
+      return { success: false, error: 'Too many attempts. Please wait a minute and try again.' };
+    }
     return adminAuth.setAdminPassword(app, password, token);
   });
 
-  ipcMain.handle('custody:adminHasPassword', async () => {
+  ipcMain.handle('custody:adminHasPassword', async (event) => {
+    if (!_isTrustedFrame(event)) return false;
     return adminAuth.hasAdminPassword(app);
   });
 
-  ipcMain.handle('custody:adminSearch', async (_, emailQuery) => {
+  ipcMain.handle('custody:adminSearch', async (event, emailQuery) => {
+    if (!_isTrustedFrame(event)) return { items: [] };
     adminAuth.requireAdmin();
     const q = typeof emailQuery === 'string' ? emailQuery.trim().slice(0, QUERY_MAX_LEN) : '';
     const rows = q ? licenceStore.searchByEmailPrefix(q, 50) : licenceStore.listRecent(50);
@@ -106,7 +153,8 @@ function registerLicenceIpc(app) {
     };
   });
 
-  ipcMain.handle('custody:adminRevealLicence', async (_, id) => {
+  ipcMain.handle('custody:adminRevealLicence', async (event, id) => {
+    if (!_isTrustedFrame(event)) return { error: 'Untrusted frame' };
     adminAuth.requireAdmin();
     const rows = licenceStore.listRecent(1000);
     const r = rows.find((x) => x.id === id);
@@ -120,7 +168,8 @@ function registerLicenceIpc(app) {
     };
   });
 
-  ipcMain.handle('custody:adminResend', async (_, id) => {
+  ipcMain.handle('custody:adminResend', async (event, id) => {
+    if (!_isTrustedFrame(event)) return { success: false, message: 'Untrusted frame' };
     adminAuth.requireAdmin();
     const rows = licenceStore.listRecent(1000);
     const r = rows.find((x) => x.id === id);
@@ -136,7 +185,8 @@ function registerLicenceIpc(app) {
     return { success: true, message: 'Request sent.' };
   });
 
-  ipcMain.handle('custody:adminSync', async () => {
+  ipcMain.handle('custody:adminSync', async (event) => {
+    if (!_isTrustedFrame(event)) return { ok: false, reason: 'untrusted_frame', synced: 0 };
     adminAuth.requireAdmin();
     const baseUrl = getServerBaseUrl();
     const token = process.env.ADMIN_API_TOKEN || process.env.ADMIN_SECRET;
@@ -180,7 +230,8 @@ function registerLicenceIpc(app) {
     });
   });
 
-  ipcMain.handle('custody:adminDashboard', async () => {
+  ipcMain.handle('custody:adminDashboard', async (event) => {
+    if (!_isTrustedFrame(event)) return { ok: false, error: 'Untrusted frame' };
     adminAuth.requireAdmin();
     const baseUrl = getServerBaseUrl();
     const token = process.env.ADMIN_API_TOKEN || process.env.ADMIN_SECRET;
@@ -214,7 +265,8 @@ function registerLicenceIpc(app) {
     });
   });
 
-  ipcMain.handle('custody:adminResendToEmail', async (_, { email, licenceKey }) => {
+  ipcMain.handle('custody:adminResendToEmail', async (event, { email, licenceKey }) => {
+    if (!_isTrustedFrame(event)) return { success: false, message: 'Untrusted frame' };
     adminAuth.requireAdmin();
     const baseUrl = getServerBaseUrl();
     const token = process.env.ADMIN_API_TOKEN || process.env.ADMIN_SECRET;

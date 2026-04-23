@@ -27,19 +27,35 @@ describe('Database schema — billing columns', () => {
     'invoice_narrative', 'invoice_mileage_miles', 'invoice_mileage_rate',
     'invoice_parking_amount', 'invoice_attendance_fee', 'invoice_vat_rate',
   ];
+  // After H18 (audit) the schema migration was refactored to go through a
+  // single `_safeAddColumn(table, "col ...")` helper so that the only error
+  // we swallow is "duplicate column name" (everything else rethrows and logs).
+  // The test contract is now "the column is present in a schema migration",
+  // regardless of whether it's a literal ALTER TABLE or a _safeAddColumn call.
+  function hasColumnMigration(table, col) {
+    if (mainJs.includes(`ALTER TABLE ${table} ADD COLUMN ${col}`)) return true;
+    // _safeAddColumn('attendances', "col TYPE ...") — column name is
+    // always followed by a space + a type keyword, so match that shape.
+    const re = new RegExp(
+      `_safeAddColumn\\(\\s*['"\`]${table}['"\`]\\s*,\\s*['"\`]${col}\\b`,
+      'i'
+    );
+    return re.test(mainJs);
+  }
+
   expectedColumns.forEach(col => {
-    it(`attendances table has ALTER for ${col}`, () => {
-      assert.ok(mainJs.includes(`ALTER TABLE attendances ADD COLUMN ${col}`),
-        `Missing ALTER TABLE for ${col}`);
+    it(`attendances table has schema migration for ${col}`, () => {
+      assert.ok(hasColumnMigration('attendances', col),
+        `Missing schema migration for ${col} on attendances`);
     });
   });
 
   it('police_stations has mileage_from_base column', () => {
-    assert.ok(mainJs.includes('ALTER TABLE police_stations ADD COLUMN mileage_from_base'));
+    assert.ok(hasColumnMigration('police_stations', 'mileage_from_base'));
   });
 
   it('police_stations has postcode column', () => {
-    assert.ok(mainJs.includes('ALTER TABLE police_stations ADD COLUMN postcode'));
+    assert.ok(hasColumnMigration('police_stations', 'postcode'));
   });
 
   it('billing_audit_log table is created', () => {
