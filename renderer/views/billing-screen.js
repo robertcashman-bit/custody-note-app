@@ -233,16 +233,39 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
         '<textarea id="wf-narrative" class="form-input wf-narrative-input" rows="3">' + _wfEsc(opts.narrative) + '</textarea>' +
       '</div>' +
 
-      '<div class="wf-card wf-review-confirmation-card">' +
-        '<h4 class="wf-card-title">&#9888; Review Confirmation &mdash; tick all 3 to unlock QuickFile</h4>' +
-        '<p class="wf-review-confirm-hint">You must tick every box before the <strong>Send Bill to QuickFile</strong> button becomes active.</p>' +
-        '<div class="wf-checklist">' +
-          '<label class="wf-check-item"><input type="checkbox" id="wf-check-attendance"> Attendance note reviewed</label>' +
-          '<label class="wf-check-item"><input type="checkbox" id="wf-check-docs"> Documents reviewed &amp; named</label>' +
-          '<label class="wf-check-item"><input type="checkbox" id="wf-check-billing"> Billing details confirmed</label>' +
-        '</div>' +
-        '<p class="wf-review-confirm-status" id="wf-review-status">&#128274; Send Bill to QuickFile is locked &mdash; tick all 3 boxes above.</p>' +
-      '</div>' +
+      (qfConfigured && !opts.hasExistingInvoice
+        ? (
+          '<div class="wf-card wf-review-confirmation-card">' +
+            '<h4 class="wf-card-title">&#9888; Review Confirmation &mdash; tick all 3 to unlock QuickFile</h4>' +
+            '<p class="wf-review-confirm-hint">You must tick every box before the <strong>Send Bill to QuickFile</strong> button becomes active.</p>' +
+            '<div class="wf-checklist">' +
+              '<label class="wf-check-item"><input type="checkbox" id="wf-check-attendance"> Attendance note reviewed</label>' +
+              '<label class="wf-check-item"><input type="checkbox" id="wf-check-docs"> Documents reviewed &amp; named</label>' +
+              '<label class="wf-check-item"><input type="checkbox" id="wf-check-billing"> Billing details confirmed</label>' +
+            '</div>' +
+            '<p class="wf-review-confirm-status" id="wf-review-status">&#128274; Send Bill to QuickFile is locked &mdash; tick all 3 boxes above.</p>' +
+          '</div>'
+        )
+        : ''
+      ) +
+
+      (!qfConfigured
+        ? (
+          '<div class="wf-card wf-qf-not-configured-card">' +
+            '<h4 class="wf-card-title">&#9881; QuickFile not configured</h4>' +
+            '<p class="wf-qf-not-configured-text">' +
+              'Sending invoices to QuickFile is disabled because your QuickFile credentials ' +
+              '(Account Number, API Key and Application ID) are not set. You can still review ' +
+              'the billing details above and continue to <strong>Review &amp; complete</strong>; ' +
+              'invoicing for this matter will need to be handled outside the app.' +
+            '</p>' +
+            '<button type="button" id="wf-bill-open-qf-settings" class="btn btn-secondary btn-small">' +
+              'Open QuickFile settings' +
+            '</button>' +
+          '</div>'
+        )
+        : ''
+      ) +
 
       auditHtml +
     '</div>';
@@ -424,29 +447,43 @@ function _wfBindBillingEvents(meta, opts) {
   var checkboxes = overlay.querySelectorAll('.wf-checklist input[type="checkbox"]');
   var createBtn = document.getElementById('wf-bill-create');
   var reviewStatusEl = document.getElementById('wf-review-status');
-  function updateBtn() {
-    var allChecked = true;
-    var checkedCount = 0;
-    checkboxes.forEach(function (cb) { if (cb.checked) checkedCount++; else allChecked = false; });
-    if (createBtn) {
-      createBtn.disabled = !allChecked;
-      if (allChecked) {
-        createBtn.innerHTML = '&#10003; Send Bill to QuickFile';
-      } else {
-        createBtn.innerHTML = '&#128274; Send Bill to QuickFile &mdash; tick all 3 checkboxes first';
+  if (checkboxes && checkboxes.length) {
+    function updateBtn() {
+      var allChecked = true;
+      var checkedCount = 0;
+      checkboxes.forEach(function (cb) { if (cb.checked) checkedCount++; else allChecked = false; });
+      if (createBtn) {
+        createBtn.disabled = !allChecked;
+        if (allChecked) {
+          createBtn.innerHTML = '&#10003; Send Bill to QuickFile';
+        } else {
+          createBtn.innerHTML = '&#128274; Send Bill to QuickFile &mdash; tick all 3 checkboxes first';
+        }
+      }
+      if (reviewStatusEl) {
+        if (allChecked) {
+          reviewStatusEl.innerHTML = '&#128275; <strong>Send Bill to QuickFile is now unlocked</strong> &mdash; click it in the footer below.';
+          reviewStatusEl.className = 'wf-review-confirm-status wf-review-confirm-status--unlocked';
+        } else {
+          reviewStatusEl.innerHTML = '&#128274; Send Bill to QuickFile is locked &mdash; tick all 3 boxes above (' + checkedCount + '/3 done).';
+          reviewStatusEl.className = 'wf-review-confirm-status';
+        }
       }
     }
-    if (reviewStatusEl) {
-      if (allChecked) {
-        reviewStatusEl.innerHTML = '&#128275; <strong>Send Bill to QuickFile is now unlocked</strong> &mdash; click it in the footer below.';
-        reviewStatusEl.className = 'wf-review-confirm-status wf-review-confirm-status--unlocked';
-      } else {
-        reviewStatusEl.innerHTML = '&#128274; Send Bill to QuickFile is locked &mdash; tick all 3 boxes above (' + checkedCount + '/3 done).';
-        reviewStatusEl.className = 'wf-review-confirm-status';
-      }
-    }
+    checkboxes.forEach(function (cb) { cb.addEventListener('change', updateBtn); });
   }
-  checkboxes.forEach(function (cb) { cb.addEventListener('change', updateBtn); });
+
+  var openQfSettingsBtn = document.getElementById('wf-bill-open-qf-settings');
+  if (openQfSettingsBtn) {
+    openQfSettingsBtn.addEventListener('click', function () {
+      if (typeof window.openQuickFileSettings === 'function') {
+        if (typeof closeWorkflow === 'function') closeWorkflow();
+        window.openQuickFileSettings();
+      } else {
+        showToast('Open Settings to add your QuickFile Account Number, API Key and Application ID.', 'info', 6000);
+      }
+    });
+  }
 
   overlay.querySelectorAll('.wf-doc-sel-cb').forEach(function (cb) {
     cb.addEventListener('change', function () {

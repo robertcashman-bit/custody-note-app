@@ -7053,6 +7053,18 @@ html.dark .wf-review-confirm-status { background: #422006; color: #fde68a; borde
 html.dark .wf-review-confirm-status--unlocked { background: #064e3b; color: #6ee7b7; border-color: #10b981; }
 html.dark .wf-review-confirmation-card { border-color: #d97706 !important; background: linear-gradient(135deg, #422006, #1e293b) !important; }
 
+.wf-qf-not-configured-card {
+  border: 1px dashed #94a3b8;
+  background: #f8fafc;
+}
+.wf-qf-not-configured-text {
+  margin: 0.25rem 0 0.75rem;
+  color: #475569;
+  line-height: 1.45;
+}
+html.dark .wf-qf-not-configured-card { border-color: #475569 !important; background: #0f172a !important; }
+html.dark .wf-qf-not-configured-text { color: #cbd5e1; }
+
 /* ═══════════════════════════════════════════════════════
    BILLING VIEW
    ═══════════════════════════════════════════════════════ */

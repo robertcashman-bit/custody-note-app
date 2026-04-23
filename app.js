@@ -4808,6 +4808,7 @@ var REQUIRED_FIELD_KEYS = [
       }
     }, 120);
   }
+  window.openQuickFileSettings = openQuickFileSettings;
 
   function showQuickFileSetupRequired() {
     showToast('Add your QuickFile account number, API key and application ID first.', 'warning');
