@@ -115,17 +115,16 @@ describe('Inline Add Firm form — labelled stacked layout', () => {
     );
   });
 
-  it('each firm field has a label string in the spec', () => {
+  it('each firm field has a clear, unambiguous label string in the spec (v1.5.5)', () => {
     const block = APP_JS.slice(
       APP_JS.indexOf('var firmFields = ['),
       APP_JS.indexOf("var firmInps = {};")
     );
     for (const expected of [
-      "label: 'Firm name'",
-      "label: 'Contact name (person instructed)'",
-      "label: 'Contact phone'",
-      "label: 'Contact email'",
-      "label: 'Source of referral'",
+      "label: 'Instructing firm name'",
+      "label: 'Contact at firm (the person who instructed you)'",
+      "label: 'Phone number for that contact'",
+      "label: 'Email for that contact'",
     ]) {
       assert.ok(
         block.includes(expected),
@@ -133,6 +132,28 @@ describe('Inline Add Firm form — labelled stacked layout', () => {
       );
     }
     assert.ok(block.includes('required: true'), 'Firm name must be marked required');
+  });
+
+  it('v1.5.5 — Source of referral is REMOVED from the inline firm form (it is a per-matter property, not a firm property)', () => {
+    const block = APP_JS.slice(
+      APP_JS.indexOf('var firmFields = ['),
+      APP_JS.indexOf("var firmInps = {};")
+    );
+    assert.ok(
+      !block.includes("label: 'Source of referral'"),
+      'Source of referral must NOT appear in the inline firm-form fields list'
+    );
+    assert.ok(
+      !block.includes("id: 'afs'"),
+      'The afs (Source of referral) field must be gone from the inline firm form'
+    );
+  });
+
+  it('v1.5.5 — matter form still has its own Source of Referral field on §1', () => {
+    assert.ok(
+      APP_JS.match(/key:\s*['"]sourceOfReferral['"][^}]*label:\s*['"]Source of Referral['"]/),
+      'Matter form must still expose sourceOfReferral so users have somewhere to record it'
+    );
   });
 
   it('renders a <label> element per field via add-firm-field__label', () => {
@@ -168,6 +189,70 @@ describe('Inline Add Firm form — labelled stacked layout', () => {
     assert.ok(
       APP_JS.includes("cancelBtn.className = 'btn btn-secondary add-firm-actions__cancel'"),
       'Cancel must use btn-secondary'
+    );
+  });
+});
+
+describe('v1.5.5 — inline firm form: Back button + intro', () => {
+  it('renders a "Back" button at the top of the inline form', () => {
+    assert.ok(
+      APP_JS.includes("backBtn.className = 'btn-small add-firm-topbar__back'"),
+      'Back button must exist with class add-firm-topbar__back'
+    );
+    assert.ok(
+      APP_JS.includes("backBtn.innerHTML = '\\u2190 Back'"),
+      'Back button must show "← Back"'
+    );
+  });
+
+  it('Back button mirrors Cancel and clears the form', () => {
+    assert.ok(
+      APP_JS.includes('backBtn.addEventListener(\'click\', hideAddRow);'),
+      'Back button must call hideAddRow (same behaviour as Cancel)'
+    );
+  });
+
+  it('renders a top-bar title "Add new instructing firm" so the user knows where they are', () => {
+    assert.ok(
+      APP_JS.includes("topBarTitle.textContent = 'Add new instructing firm'"),
+      'Top bar must display "Add new instructing firm"'
+    );
+  });
+
+  it('renders a one-line intro explaining what the form is for', () => {
+    assert.ok(
+      APP_JS.includes("addRowIntro.className = 'add-firm-intro'"),
+      'Intro paragraph must exist with class add-firm-intro'
+    );
+    assert.ok(
+      APP_JS.includes("addRowIntro.textContent = 'Add the instructing solicitor"),
+      'Intro must explain the form is for the instructing solicitor\'s firm'
+    );
+  });
+
+  it('save handler no longer sends source_of_referral (since the field is gone)', () => {
+    const saveBlock = APP_JS.slice(
+      APP_JS.indexOf('var newFirm = {'),
+      APP_JS.indexOf('addBtn.disabled = true;')
+    );
+    assert.ok(
+      !saveBlock.includes('source_of_referral:'),
+      'newFirm payload must NOT include source_of_referral (field was removed in v1.5.5)'
+    );
+    assert.ok(
+      !saveBlock.includes('firmInps.afs'),
+      'Save handler must not reference firmInps.afs (field is gone)'
+    );
+  });
+
+  it('CSS defines styles for the new top-bar Back button and intro', () => {
+    const stylesCss = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
+    assert.ok(stylesCss.includes('.add-firm-topbar {'), 'styles.css must define .add-firm-topbar');
+    assert.ok(stylesCss.includes('.add-firm-topbar__back'), 'styles.css must define .add-firm-topbar__back');
+    assert.ok(stylesCss.includes('.add-firm-intro {'), 'styles.css must define .add-firm-intro');
+    assert.ok(
+      stylesCss.includes('html.dark .add-firm-topbar__back'),
+      'dark-mode rules must exist for the Back button'
     );
   });
 });

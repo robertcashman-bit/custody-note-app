@@ -9272,23 +9272,51 @@ var REQUIRED_FIELD_KEYS = [
       selectedLine.style.display = 'none';
       firmContainer.appendChild(selectedLine);
 
-      /* Inline "Add new firm" form. Each field gets its own labelled row so
-       * once the placeholders disappear the user can still tell which input
-       * is which. The phone field's "None / N/A / Not applicable" quick-fill
-       * buttons are grouped tightly with the phone input so they're visually
-       * unmistakable as belonging to phone (and not to the email below it).
-       * Add Firm is solid primary, Cancel is plain secondary, so the visual
-       * hierarchy matches the actions' importance.
+      /* Inline "Add new firm" form (v1.5.5).
+       *
+       * Design rules:
+       *  - Each field is a fully-labelled stacked row so the user can always
+       *    see which input is which, even after typing has hidden the
+       *    placeholder text.
+       *  - A short intro at the top sets context: this is the *instructing
+       *    solicitor's firm*, not the user's own firm.
+       *  - A clear "Back" button sits at the TOP-LEFT of the form (separate
+       *    from the bottom Cancel) so a user who opened the form by mistake
+       *    has an obvious escape hatch without having to scroll.
+       *  - Source-of-referral is intentionally NOT here. That's a per-matter
+       *    property (this case came via the duty rota / agency / own private
+       *    etc.) and lives on the matter form's §1, not on the firm record.
+       *  - Phone field's "None / N/A / Not applicable" quick-fills are tight
+       *    against the phone input so they can't be mistaken for email options.
        */
       var addRow = document.createElement('div');
       addRow.className = 'add-firm-inline-wrap form-firm-add-section add-firm-stacked';
       addRow.style.display = 'none';
+
+      var addRowTopBar = document.createElement('div');
+      addRowTopBar.className = 'add-firm-topbar';
+      var backBtn = document.createElement('button');
+      backBtn.type = 'button';
+      backBtn.className = 'btn-small add-firm-topbar__back';
+      backBtn.setAttribute('aria-label', 'Back to firm chooser (discards typed details)');
+      backBtn.innerHTML = '\u2190 Back';
+      var topBarTitle = document.createElement('span');
+      topBarTitle.className = 'add-firm-topbar__title';
+      topBarTitle.textContent = 'Add new instructing firm';
+      addRowTopBar.appendChild(backBtn);
+      addRowTopBar.appendChild(topBarTitle);
+      addRow.appendChild(addRowTopBar);
+
+      var addRowIntro = document.createElement('p');
+      addRowIntro.className = 'add-firm-intro';
+      addRowIntro.textContent = 'Add the instructing solicitor\u2019s firm \u2014 i.e. the firm that instructed you to attend the station. Only the firm name is required; everything else is optional and can be edited later under Manage Firms.';
+      addRow.appendChild(addRowIntro);
+
       var firmFields = [
-        { id: 'afn', label: 'Firm name', required: true,  placeholder: 'e.g. Stephen Fidler & Co', type: 'text' },
-        { id: 'afc', label: 'Contact name (person instructed)', placeholder: 'e.g. Lilly Chespy', type: 'text' },
-        { id: 'afp', label: 'Contact phone',  placeholder: 'e.g. 020 7946 0000',         type: 'tel' },
-        { id: 'afe', label: 'Contact email',  placeholder: 'e.g. lilly@example.co.uk',   type: 'email' },
-        { id: 'afs', label: 'Source of referral', placeholder: '', type: 'select', options: ['', 'Duty Rota', 'Duty panel', 'Own Legal Aid', 'Own private', 'Agency'] },
+        { id: 'afn', label: 'Instructing firm name', required: true,  placeholder: 'e.g. Stephen Fidler & Co', type: 'text' },
+        { id: 'afc', label: 'Contact at firm (the person who instructed you)', placeholder: 'e.g. Lilly Chespy', type: 'text' },
+        { id: 'afp', label: 'Phone number for that contact',  placeholder: 'e.g. 020 7946 0000',         type: 'tel' },
+        { id: 'afe', label: 'Email for that contact',  placeholder: 'e.g. lilly@example.co.uk',   type: 'email' },
       ];
       var firmInps = {};
       firmFields.forEach(function(ff) {
@@ -9487,6 +9515,7 @@ var REQUIRED_FIELD_KEYS = [
         choiceRow.style.display = 'flex';
       };
       cancelBtn.addEventListener('click', hideAddRow);
+      backBtn.addEventListener('click', hideAddRow);
       firmInps.afn.addEventListener('keydown', function(e) { if (e.key === 'Escape') hideAddRow(); });
 
       addBtn.addEventListener('click', function() {
@@ -9499,7 +9528,6 @@ var REQUIRED_FIELD_KEYS = [
           contact_name: firmInps.afc.value.trim(),
           contact_phone: firmInps.afp.value.trim(),
           contact_email: firmInps.afe.value.trim(),
-          source_of_referral: (firmInps.afs && firmInps.afs.value) ? String(firmInps.afs.value).trim() : '',
         };
         addBtn.disabled = true;
         addBtn.textContent = 'Saving…';
