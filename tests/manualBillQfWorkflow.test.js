@@ -431,6 +431,20 @@ describe('Step 2: Billing screen — archive from billing step', () => {
     assert.ok(billingScreenJs.includes('window._wfRunArchiveFromWorkflow'));
   });
 
+  /* User asked for an Archive button on EVERY finish-this-matter screen
+   * so a finalised matter can be filed away without forcing the next step.
+   * Step 1 (Documents) had no archive button; lock it in here. */
+  it('Step 1: documents footer builds wf-doc-archive when note finalised + not archived', () => {
+    assert.ok(documentsJs.includes('wf-doc-archive'),
+      'Documents step must show an Archive button so users can archive directly from step 1');
+    assert.ok(documentsJs.includes('_wfDocNoteFinalised'),
+      'Archive on documents step must gate on the note being finalised');
+    assert.ok(documentsJs.includes('currentRecordArchived'),
+      'Archive on documents step must hide when the record is already archived');
+    assert.ok(documentsJs.includes('window._wfRunArchiveFromWorkflow'),
+      'Documents archive must reuse the shared QuickFile-guarded archive flow');
+  });
+
   it('refreshes matter meta after async billing loads so firm name is not stale', () => {
     assert.ok(billingScreenJs.includes('meta = _wfMatterMeta()'));
   });

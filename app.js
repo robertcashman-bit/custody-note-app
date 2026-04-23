@@ -1,5 +1,5 @@
 /* ─── STATE ─── */
-var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', billing: 'view-billing' };
+var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', billing: 'view-billing', 'matter-billing': 'view-matter-billing' };
 var currentAttendanceId = null;
 var stations = [];
 var firms = [];
@@ -581,11 +581,12 @@ var LAA = {
         { key: '_h_client_contact', label: 'Client contact (if known)', type: 'sectionHeading' },
         { key: 'clientPhone', label: 'Client telephone', type: 'tel', placeholder: 'If known — syncs with consultation' },
         { key: 'clientEmail', label: 'Client email address', type: 'email', placeholder: 'If known — syncs with consultation' },
-        { key: 'custodyRecordIssues', label: 'Custody record issues', type: 'textarea', placeholder: 'Any issues or observations', cols: 2 },
-        { key: 'arrestingOfficerName', label: 'Arresting Officer Rank & Name', type: 'text', cols: 2 },
-        { key: 'arrestingOfficerNumber', label: 'Arresting Officer Collar / Badge No.', type: 'text' },
+        { key: 'custodyRecordIssues', label: 'Custody record issues', type: 'textarea', placeholder: 'Any issues or observations', cols: 2, showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'arrestingOfficerName', label: 'Arresting Officer Rank & Name', type: 'text', cols: 2, showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: 'arrestingOfficerNumber', label: 'Arresting Officer Collar / Badge No.', type: 'text', showIf: { field: 'voluntaryInterview', value: 'No' } },
 
-        { key: '_h_arrest', label: 'Arrest & Detention', type: 'sectionHeading' },
+        { key: '_h_arrest', label: 'Arrest & Detention', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: '_h_voluntary_interview', label: 'Voluntary Interview', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'Yes' } },
         { key: 'voluntaryInterview', label: 'Voluntary Interview?', type: 'select', options: ['Yes','No'] },
         { key: '_note_voluntary', label: 'If voluntary interview, arrest/detention grounds and PACE clock do not apply.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'Yes' } },
         { key: 'groundsForArrest', label: 'Grounds for Arrest (PACE s.24)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
@@ -787,9 +788,9 @@ var LAA = {
         { key: 'chkDontDiscuss', label: 'Advised not to discuss case with anyone', group: 'Advice to client' },
         { key: 'chkDontSign', label: 'Advised not to sign anything without legal advice', group: 'Advice to client' },
         { key: 'chkUnderstands', label: 'Client understands advice given', group: 'Client understanding' },
-        { key: 'chkPersonalData', label: 'Confirmed Personal Data on Custody Record', group: 'Custody record & disclosure' },
-        { key: 'chkReasonForArrest', label: 'Explained Reason for Arrest', group: 'Custody record & disclosure' },
-        { key: 'chkDisclosure', label: 'Explained Disclosure', group: 'Custody record & disclosure' },
+        { key: 'chkPersonalData', label: 'Confirmed Personal Data', group: 'Personal data & disclosure' },
+        { key: 'chkReasonForArrest', label: 'Explained Reason for Arrest / Attendance', group: 'Personal data & disclosure' },
+        { key: 'chkDisclosure', label: 'Explained Disclosure', group: 'Personal data & disclosure' },
       ],
       fields: [
         { key: '_h_laa_inline', label: 'Legal Aid Declaration', type: 'sectionHeading' },
@@ -805,7 +806,8 @@ var LAA = {
         { key: 'conflictCheckNotes', label: 'Conflict check notes', type: 'textarea', placeholder: 'Required if positive', cols: 2 },
         { key: '_btn_conflict_cert', label: '📄 Generate Conflict Check Certificate', type: 'actionButton', action: 'generateConflictCert' },
         { key: '_h_eligibility', label: 'Client Eligibility (from consultation)', type: 'sectionHeading' },
-        { key: '_note_eligibility', label: 'Client details (name, DOB, address) from custody record are in Section 3. Complete the fields below during your consultation with the client.', type: 'sectionNote' },
+        { key: '_note_eligibility', label: 'Client details (name, DOB, address) from custody record are in Section 3. Complete the fields below during your consultation with the client.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: '_note_eligibility_vol', label: 'Client details (name, DOB, address) were captured in Section 3. Complete the fields below during your consultation with the client.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'Yes' } },
         { key: 'clientType', label: 'Client Type', type: 'select', options: ['New','Existing'] },
         { key: '_h_id', label: 'Identification', type: 'sectionHeading' },
         { key: 'niNumber', label: 'National Insurance No.', type: 'text', placeholder: 'e.g. AB 12 34 56 C' },
@@ -3233,6 +3235,7 @@ var REQUIRED_FIELD_KEYS = [
     if (name === 'station-mileage') { if (typeof loadStationMileage === 'function') loadStationMileage(); }
     if (name === 'authorities') { if (typeof loadAuthorities === 'function') loadAuthorities(); }
     if (name === 'billing') { if (typeof loadBillingView === 'function') loadBillingView(); }
+    if (name === 'matter-billing') { if (typeof loadMatterBillingScreen === 'function') loadMatterBillingScreen(); }
     if (name === 'settings') {
       loadSettings();
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
@@ -6666,12 +6669,157 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function promptBeforeOpeningBilling() {
+    /* Finish-matter is now a full-page Billing screen instead of a modal
+     * overlay. Navigate there; the screen's own "Start billing process"
+     * button mounts the 3-step workflow inline. We auto-start the
+     * workflow when entering the screen if the note is already finalised
+     * so the user lands directly in step 1. */
+    if (typeof showView === 'function') {
+      showView('matter-billing');
+      return;
+    }
     if (typeof openWorkflow === 'function') {
       openWorkflow();
     } else if (typeof openBillingPanel === 'function') {
       openBillingPanel();
     }
   }
+  window.promptBeforeOpeningBilling = promptBeforeOpeningBilling;
+
+  function _matterBillingNoteFinalised() {
+    return currentRecordStatus === 'finalised' || currentRecordStatus === 'completed';
+  }
+
+  function _matterBillingFmtDate(val) {
+    if (!val) return '\u2014';
+    var s = String(val);
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? (m[3] + '/' + m[2] + '/' + m[1]) : s;
+  }
+
+  function _matterBillingResolveFirmName(d) {
+    var name = (d && d.firmName) ? String(d.firmName).trim() : '';
+    if (name) return name;
+    var fid = (d && d.firmId != null && d.firmId !== '') ? String(d.firmId) : '';
+    var list = (typeof firms !== 'undefined' && firms) ? firms : (window.firms || []);
+    if (fid && list && list.length) {
+      var match = list.find(function (f) { return String(f.id) === fid; });
+      if (match && match.name) return String(match.name).trim();
+    }
+    return '';
+  }
+
+  function _matterBillingMountWorkflow() {
+    var stage = document.getElementById('matter-billing-stage');
+    if (!stage) return;
+    if (!currentAttendanceId) {
+      showToast('Open or save a record first to start the billing process.', 'error');
+      return;
+    }
+    if (!_matterBillingNoteFinalised()) {
+      showToast('Finalise the attendance note before starting the billing process.', 'error');
+      return;
+    }
+    if (typeof window.mountWorkflowInline !== 'function') {
+      showToast('Billing workflow is not available on this build.', 'error');
+      return;
+    }
+    var startBtn = document.getElementById('matter-billing-start-btn');
+    if (startBtn) startBtn.textContent = 'Restart from step 1';
+    window.mountWorkflowInline(stage, undefined, function () {
+      /* onClose: workflow closed (e.g. step-1 Close, or after Archive).
+       * Reset the stage and the start button so the user can re-enter. */
+      var s = document.getElementById('matter-billing-stage');
+      if (s) s.innerHTML = '';
+      var b = document.getElementById('matter-billing-start-btn');
+      if (b) b.textContent = 'Start billing process';
+      loadMatterBillingScreen();
+    });
+  }
+
+  function loadMatterBillingScreen() {
+    var data = (typeof getFormData === 'function') ? getFormData() : (formData || {});
+    var clientName = [data.forename, data.surname].filter(Boolean).join(' ') || '\u2014';
+    var firmName = _matterBillingResolveFirmName(data) || '\u2014';
+    var stationName = data.policeStationName || '\u2014';
+    var dateStr = _matterBillingFmtDate(data.date || data.instructionDateTime || '');
+
+    var clientEl  = document.getElementById('matter-billing-client');
+    var firmEl    = document.getElementById('matter-billing-firm');
+    var stationEl = document.getElementById('matter-billing-station');
+    var dateEl    = document.getElementById('matter-billing-date');
+    var statusEl  = document.getElementById('matter-billing-status');
+    var helpEl    = document.getElementById('matter-billing-help');
+    var startBtn  = document.getElementById('matter-billing-start-btn');
+    var stage     = document.getElementById('matter-billing-stage');
+
+    if (clientEl) clientEl.textContent = clientName;
+    if (firmEl) firmEl.textContent = firmName;
+    if (stationEl) stationEl.textContent = stationName;
+    if (dateEl) dateEl.textContent = dateStr;
+
+    var statusText = '\u2014';
+    var statusVariant = '';
+    if (!currentAttendanceId) {
+      statusText = 'No record open';
+      statusVariant = 'state-review';
+    } else if (currentRecordArchived) {
+      statusText = 'Archived';
+      statusVariant = 'state-complete';
+    } else if (currentRecordStatus === 'completed') {
+      statusText = 'Office complete';
+      statusVariant = 'state-complete';
+    } else if (currentRecordStatus === 'finalised') {
+      statusText = 'Finalised — ready to bill';
+      statusVariant = 'state-ready';
+    } else {
+      statusText = 'Draft (finalise the note first)';
+      statusVariant = 'state-review';
+    }
+    if (statusEl) {
+      statusEl.textContent = statusText;
+      statusEl.className = 'billing-readiness-status ' + statusVariant;
+    }
+
+    var canStart = !!(currentAttendanceId && _matterBillingNoteFinalised() && !currentRecordArchived);
+    if (startBtn) {
+      startBtn.disabled = !canStart;
+      startBtn.title = canStart
+        ? 'Begin the 3-step billing process for this matter'
+        : (currentAttendanceId
+            ? (currentRecordArchived ? 'Record is archived' : 'Finalise the attendance note before billing')
+            : 'Open or save a record first');
+      if (!startBtn._mbBound) {
+        startBtn._mbBound = true;
+        startBtn.addEventListener('click', function (e) {
+          e.preventDefault();
+          _matterBillingMountWorkflow();
+        });
+      }
+    }
+    if (helpEl) {
+      if (!currentAttendanceId) {
+        helpEl.innerHTML = 'Open a record from the Records list, then return here to start the billing process.';
+      } else if (currentRecordArchived) {
+        helpEl.innerHTML = 'This record is already <strong>archived</strong>. Unarchive it from the form if you need to make billing changes.';
+      } else if (!_matterBillingNoteFinalised()) {
+        helpEl.innerHTML = 'Finalise the attendance note (Section 9 on the form) before starting the billing process.';
+      } else {
+        helpEl.innerHTML = 'Click <strong>Start billing process</strong> to step through documents, the QuickFile invoice, and review &amp; archive. Each step also has its own Archive button so you can file the matter away as soon as you are done.';
+      }
+    }
+
+    /* Auto-mount the workflow on screen entry when the matter is ready
+     * to bill, so users land directly in step 1 instead of having to
+     * click twice. The button stays at the top as an explicit re-entry
+     * point per the user's requested layout. */
+    if (canStart && stage && !stage.querySelector('#workflow-overlay')) {
+      _matterBillingMountWorkflow();
+    } else if (!canStart && stage) {
+      stage.innerHTML = '';
+    }
+  }
+  window.loadMatterBillingScreen = loadMatterBillingScreen;
 
   /* ─── AUTO-FILL DECLARATION & RETAINER FROM CLIENT (#4) ─── */
   function autoFillDeclarationFields() {
@@ -7455,7 +7603,7 @@ var REQUIRED_FIELD_KEYS = [
           if (!groups[g]) groups[g] = [];
           groups[g].push(c);
         });
-        const groupOrder = ['Conflict & independence', 'Advice to client', 'Client understanding', 'Custody record & disclosure', 'Data & disclosure', ''];
+        const groupOrder = ['Conflict & independence', 'Advice to client', 'Client understanding', 'Personal data & disclosure', 'Custody record & disclosure', 'Data & disclosure', ''];
         groupOrder.forEach(grpLabel => {
           const items = groups[grpLabel];
           if (!items || !items.length) return;
@@ -11395,8 +11543,9 @@ var REQUIRED_FIELD_KEYS = [
     if (formData.languageIssues === 'Yes' && !(formData.interpreterLanguage || '').trim()) m.push({ key: 'interpreterLanguage', label: 'Language required', section: 2 });
     if (formData.fmeNurse === 'Yes' && !(formData.medicalExaminationOutcome || '').trim()) m.push({ key: 'medicalExaminationOutcome', label: 'Outcome of medical examination', section: 2 });
     if (!isRelaxedPath && !(formData.disclosureType || '').trim()) m.push({ key: 'disclosureType', label: 'Disclosure Type', section: 4 });
-    if ((formData.custodyNumber || '').trim() && !formData.custodyRecordRead) m.push({ key: 'custodyRecordRead', label: 'Custody record read?', section: 2 });
-    if (formData.voluntaryInterview === 'No' && !(formData.groundsForArrest || '').trim()) m.push({ key: 'groundsForArrest', label: 'At least one ground for arrest', section: 2 });
+    var _isVolPath = formData.attendanceMode === 'voluntary' || formData.voluntaryInterview === 'Yes';
+    if (!_isVolPath && (formData.custodyNumber || '').trim() && !formData.custodyRecordRead) m.push({ key: 'custodyRecordRead', label: 'Custody record read?', section: 2 });
+    if (!_isVolPath && formData.voluntaryInterview === 'No' && !(formData.groundsForArrest || '').trim()) m.push({ key: 'groundsForArrest', label: 'At least one ground for arrest', section: 2 });
     (formData.interviews || []).forEach(function(iv, idx) {
       if (!iv.cautioned) m.push({ key: 'iv' + idx + '_cautioned', label: 'Interview ' + (idx + 1) + ' \u2013 Client cautioned?', section: 6 });
     });
@@ -14446,7 +14595,7 @@ pdfAuditFooterHtml(d, settings) +
           case 'qc-cancel': e.preventDefault(); goBack(); return;
           case 'qc-save': e.preventDefault(); saveQuickCapture(false); return;
           case 'qc-expand': e.preventDefault(); saveQuickCapture(true); return;
-          case 'firms-back-btn': case 'reports-back-btn': case 'authorities-back-btn': case 'settings-back-btn': case 'help-back-btn': case 'station-mileage-back-btn': e.preventDefault(); goBack(); return;
+          case 'firms-back-btn': case 'reports-back-btn': case 'authorities-back-btn': case 'settings-back-btn': case 'help-back-btn': case 'station-mileage-back-btn': case 'matter-billing-back-btn': e.preventDefault(); goBack(); return;
           default: break;
         }
       }, true);

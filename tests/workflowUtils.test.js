@@ -499,9 +499,57 @@ describe('Integration: index.html loads new scripts', () => {
 
 describe('Integration: app.js opens workflow', () => {
   const appJs = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+  const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const billingViewJs = fs.readFileSync(path.join(root, 'renderer/views/billing-view.js'), 'utf8');
 
-  it('promptBeforeOpeningBilling calls openWorkflow without forcing step 0', () => {
-    assert.ok(appJs.includes('openWorkflow'), 'app.js should reference openWorkflow');
-    assert.ok(/openWorkflow\s*\(\s*\)/.test(appJs) || appJs.includes('openWorkflow()'), 'resume-capable openWorkflow()');
+  it('promptBeforeOpeningBilling navigates to the new full-page Billing screen (with overlay fallback)', () => {
+    /* Primary path: showView('matter-billing'). Overlay openWorkflow()
+     * is kept only as a defensive fallback if the new view is not loaded. */
+    assert.ok(appJs.includes("showView('matter-billing')"),
+      'promptBeforeOpeningBilling must navigate to the dedicated Billing screen');
+    assert.ok(appJs.includes('openWorkflow'),
+      'overlay fallback should remain in place for legacy callers');
+  });
+
+  it('registers matter-billing view in the views map and showView routing', () => {
+    assert.ok(/['\"]matter-billing['\"]\s*:\s*['\"]view-matter-billing['\"]/.test(appJs),
+      'matter-billing must be registered in the views map');
+    assert.ok(appJs.includes("name === 'matter-billing'"),
+      'showView must dispatch to loadMatterBillingScreen');
+    assert.ok(appJs.includes('function loadMatterBillingScreen'),
+      'loadMatterBillingScreen function must exist');
+  });
+
+  it('index.html contains the new full-page Billing screen with a Start button', () => {
+    assert.ok(indexHtml.includes('id="view-matter-billing"'),
+      'view-matter-billing container missing from index.html');
+    assert.ok(indexHtml.includes('id="matter-billing-start-btn"'),
+      'Start billing process button missing from index.html');
+    assert.ok(indexHtml.includes('id="matter-billing-stage"'),
+      'Inline workflow stage container missing from index.html');
+    assert.ok(indexHtml.includes('id="matter-billing-back-btn"'),
+      'Back button missing from index.html');
+    /* User asked: top-section button labelled clearly. Lock the label
+     * so a future drive-by rename does not silently regress UX. */
+    assert.ok(indexHtml.includes('Start billing process'),
+      'Start billing process label missing from index.html');
+  });
+
+  it('workflow-stepper exposes mountWorkflowInline for the new screen', () => {
+    assert.ok(workflowStepperSrc.includes('function mountWorkflowInline'),
+      'mountWorkflowInline must exist so the workflow can render inline');
+    assert.ok(workflowStepperSrc.includes('window.mountWorkflowInline'),
+      'mountWorkflowInline must be exposed on window for app.js to call');
+    assert.ok(workflowStepperSrc.includes("_workflowMode = 'inline'"),
+      'inline mode flag must be set when mounting in-page');
+    assert.ok(workflowStepperSrc.includes('wf-inline'),
+      'inline panel needs its own wrapper class so styles do not apply backdrop');
+    assert.ok(workflowStepperSrc.includes("_workflowMode !== 'inline'"),
+      'overlay-only behaviour (Esc / backdrop click) must be suppressed inline');
+  });
+
+  it('Open matters list routes per-row Open into the new Billing screen', () => {
+    assert.ok(billingViewJs.includes("showView('matter-billing')"),
+      'bv-open-workflow must navigate to the new Billing screen');
   });
 });

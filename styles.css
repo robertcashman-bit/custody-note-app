@@ -6607,6 +6607,18 @@ html.dark .tpl-mgr-warn {
   display: flex; align-items: center; justify-content: center;
   animation: fadeIn 0.15s ease;
 }
+/* Inline mount used by the dedicated #view-matter-billing screen.
+ * No backdrop, no fixed positioning — flows in the page. */
+.wf-inline {
+  display: block;
+  width: 100%;
+}
+.wf-inline .wf-panel {
+  width: 100%;
+  max-height: none;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--border, #e2e8f0);
+}
 .wf-panel {
   background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
   border-radius: 16px; box-shadow: 0 24px 64px rgba(0,0,0,0.18);
@@ -6614,6 +6626,74 @@ html.dark .tpl-mgr-warn {
   display: flex; flex-direction: column;
   overflow: hidden;
 }
+
+/* Matter Billing screen — header card + start button + stage */
+.matter-billing-header-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+}
+.matter-billing-header-summary {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.matter-billing-client {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary, #1e3a5f);
+}
+.matter-billing-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  font-size: 0.9rem;
+  color: var(--text, #0f172a);
+}
+.matter-billing-meta-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.matter-billing-meta-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #64748b);
+}
+.matter-billing-header-actions {
+  display: flex;
+  align-items: center;
+}
+.matter-billing-start-btn {
+  font-size: 0.95rem;
+  padding: 0.6rem 1.1rem;
+  white-space: nowrap;
+}
+.matter-billing-start-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.matter-billing-stage {
+  min-height: 40px;
+}
+html.dark .matter-billing-header-card {
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+  border-color: #334155;
+}
+html.dark .matter-billing-client { color: #93c5fd; }
+html.dark .matter-billing-meta { color: #e5eefb; }
+html.dark .matter-billing-meta-label { color: #94a3b8; }
+html.dark .wf-inline .wf-panel { border-color: #334155; }
 .wf-panel-header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 1rem 1.5rem; border-bottom: 1px solid var(--border, #e2e8f0);

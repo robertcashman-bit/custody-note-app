@@ -240,16 +240,45 @@ function _wfBuildValidationPanel(attachments, meta) {
   return html;
 }
 
+function _wfDocNoteFinalised() {
+  var st = typeof currentRecordStatus !== 'undefined' ? currentRecordStatus : null;
+  return st === 'finalised' || st === 'completed';
+}
+
 function _wfBuildDocFooter(footer) {
   var genCount = Object.keys(_wfGeneratedDocs).length;
   var countBadge = genCount > 0 ? ' <span class="wf-gen-count-badge">' + genCount + ' form' + (genCount > 1 ? 's' : '') + ' ready</span>' : '';
+  var archived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
+  var canArchive = _wfDocNoteFinalised() && !archived;
+  /* Archive lives on every finish-matter screen so the user can file the
+   * matter away without being forced through the next workflow steps once
+   * the note is finalised. Same gating + same flow as steps 2 and 3 (the
+   * QuickFile guard, completion timestamps, save, and archive call all live
+   * inside _wfRunArchiveFromWorkflow). */
+  var archiveBtnHtml = canArchive
+    ? '<button type="button" id="wf-doc-archive" class="btn btn-primary wf-btn-next-action">Archive</button>'
+    : '';
+
   footer.innerHTML =
     '<button type="button" id="wf-doc-back" class="btn btn-secondary btn-small">Close</button>' +
     '<span class="wf-footer-info">' + countBadge + '</span>' +
+    '<span class="wf-footer-spacer"></span>' +
+    archiveBtnHtml +
     '<button type="button" id="wf-doc-next" class="btn btn-primary wf-btn-next-action">Next: QuickFile invoice &#9654;</button>';
 
   document.getElementById('wf-doc-back').addEventListener('click', closeWorkflow);
   document.getElementById('wf-doc-next').addEventListener('click', _wfGoNext);
+
+  var archBtn = document.getElementById('wf-doc-archive');
+  if (archBtn) {
+    archBtn.addEventListener('click', function () {
+      if (typeof window._wfRunArchiveFromWorkflow === 'function') {
+        window._wfRunArchiveFromWorkflow();
+      } else {
+        showToast('Archive is not available — open Review and complete step.', 'error');
+      }
+    });
+  }
 }
 
 function _wfBindDocEvents(meta) {
@@ -514,12 +543,13 @@ function _wfBuildFormHtml(formId, data, meta) {
       var psDate = _formatDateGB(data.date || new Date().toISOString().slice(0, 10));
       var custodyNo = data.custodyNumber || '';
       var oicName = data.oicName || '';
+      var _isVolAttendance = data.attendanceMode === 'voluntary' || data.voluntaryInterview === 'Yes';
       return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Prepared Statement</title>' + _docStyles() + '</head><body>' +
         '<h1>Prepared Statement</h1>' +
         '<table><tr><th>Field</th><th>Detail</th></tr>' +
         '<tr><td>Name</td><td>' + _esc(client) + '</td></tr>' +
         '<tr><td>Date</td><td>' + _esc(psDate) + '</td></tr>' +
-        '<tr><td>Custody No.</td><td>' + _esc(custodyNo) + '</td></tr>' +
+        (_isVolAttendance ? '<tr><td>Attendance type</td><td>Voluntary attendance</td></tr>' : '<tr><td>Custody No.</td><td>' + _esc(custodyNo) + '</td></tr>') +
         '<tr><td>Police station</td><td>' + _esc(station) + '</td></tr>' +
         (oicName ? '<tr><td>OIC</td><td>' + _esc(oicName) + '</td></tr>' : '') +
         '<tr><td>Alleged offence(s)</td><td>' + _esc(offence) + '</td></tr>' +

@@ -1,9 +1,49 @@
 {
   "releases": [
     {
-      "version": "1.5.11",
+      "version": "1.5.15",
       "date": "2026-04-23",
       "latest": true,
+      "changes": [
+        "Voluntary attendances no longer surface custody-record questions. When the custody form is being used in voluntary-interview mode (Voluntary Interview? = Yes), the leftover §3 fields — Custody record issues, Arresting Officer Rank & Name, Arresting Officer Collar / Badge No. and the Arrest & Detention sub-heading — now hide alongside the rest of the custody-record block.",
+        "Section 6 (Consultation) note 'Client details ... from custody record are in Section 3' now switches to a neutral wording when the matter is a voluntary interview. The §6 checklist labels 'Confirmed Personal Data on Custody Record' and 'Explained Reason for Arrest' have been re-labelled to 'Confirmed Personal Data' and 'Explained Reason for Arrest / Attendance' so they read correctly on both custody and voluntary interviews; the group label moves to 'Personal data & disclosure'.",
+        "Finalise validation: the 'Custody record read?' missing-field warning no longer fires for voluntary attendances or voluntary interviews (previously the check triggered any time a stale custodyNumber was on the record). The 'At least one ground for arrest' warning is now also gated on attendanceMode != voluntary.",
+        "Documents step: the Prepared Statement template substitutes 'Attendance type: Voluntary attendance' for the 'Custody No.' row when the record is a voluntary attendance / voluntary interview."
+      ]
+    },
+    {
+      "version": "1.5.14",
+      "date": "2026-04-23",
+      "latest": false,
+      "changes": [
+        "Finish matter is now a dedicated full-page Billing screen (#view-matter-billing) instead of a modal overlay. Top of the screen shows a header card with client / firm / station / date / status and a single Start billing process button.",
+        "When the attendance note is finalised, the 3-step workflow (Documents & attachments → Billing review → Review & complete) is mounted inline on the page below the header — no more popup, full keyboard and screen-reader access, easier to navigate to/from while drafting.",
+        "All previous entry points route to the new screen: form Finish matter / Prepare finish matter buttons, the bottom-bar Finalise/Finish-matter pill, the billing-readiness panel Open finish matter button, and the per-row Open button on the Open matters list.",
+        "Workflow stepper refactored to support both inline and overlay rendering. Overlay path retained as a defensive fallback for older callers and e2e tests; new mountWorkflowInline() is exposed for the dedicated screen."
+      ]
+    },
+    {
+      "version": "1.5.13",
+      "date": "2026-04-23",
+      "latest": false,
+      "changes": [
+        "Finish-this-matter workflow: Step 1 (Documents & attachments) now shows an Archive button in the footer — matching steps 2 (Billing review) and 3 (Review & complete). Once the attendance note is finalised the matter can be archived from any of the three workflow screens without forcing the user through the remaining steps.",
+        "Archive button on every step shares the same QuickFile guard (offer to send the bill first if QuickFile is configured but no invoice exists), automatically records billing and office completion timestamps, saves the record as completed, archives it, and switches the list view to the Archived filter."
+      ]
+    },
+    {
+      "version": "1.5.12",
+      "date": "2026-04-23",
+      "latest": false,
+      "changes": [
+        "CRM1 official PDF (v16, Feb 2025): UFN header combs (page 1) now populated from the record's UFN — DDMMYY/NNN distributed across the 9 boxes around the printed slash. Previously cleared and left blank even when the firm's UFN was on the matter.",
+        "CRM1 official PDF: removed incorrect dependants mapping. The dependants count was being written into FillText15, which sits on page 7 inside the \u201ccalculate the total allowable deductions\u201d block, not the page-8 dependants box. The page-8 dependants question has no AcroForm field on v16 (handwritten on the official form), so the page-7 deductions area is now correctly left blank when no deduction figures are captured."
+      ]
+    },
+    {
+      "version": "1.5.11",
+      "date": "2026-04-23",
+      "latest": false,
       "changes": [
         "PDF (custody & voluntary): §1 — client middle name row; cover and HTML title use full name including middle",
         "PDF — §2: single-visit journey shows visit label, multi-client on-site times, and visit notes (aligned with station visit card); voluntary multi-visit also exports visit notes and multi-client details",
