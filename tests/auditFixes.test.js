@@ -76,6 +76,15 @@ describe('Custody PDF includes extended section fields', () => {
     assert.ok(custPdfBlock.includes('d.deviceSeized') && custPdfBlock.includes('d.specialWarningGiven'), '§5: device seizure and special warnings');
     assert.ok(custPdfBlock.includes('d.clothingShoesSeizedWhat'), '§5: clothing/shoes detail');
     assert.ok(custPdfBlock.includes('d.caseAssessmentWhy') && custPdfBlock.includes('d.capitalClient'), '§6: assessment reasoning and capital');
+    assert.ok(custPdfBlock.includes("row('Client middle name(s)'") && custPdfBlock.includes('d.middleName'), '§1: middle name on PDF');
+    assert.ok(
+      custPdfBlock.includes('d.instructionsSignRequired') && custPdfBlock.includes('Instructions signature date'),
+      '§6: instruction confirmation signature metadata'
+    );
+    assert.ok(
+      custPdfBlock.includes('Visit notes') && custPdfBlock.includes('v0.notes'),
+      '§2: single-visit station card notes on PDF'
+    );
   });
 });
 
@@ -95,6 +104,14 @@ describe('Client instructions (full) on PDF', () => {
       volPdfBlock.includes('d.clientInstructionsDetail') && volPdfBlock.includes('>Client instructions</p>'),
       'voluntary PDF must render the full client instructions field (clientInstructionsDetail)'
     );
+  });
+
+  it('voluntary PDF includes means/capital fields, instruction signature metadata, and multi-visit journey notes', () => {
+    const volPdfStart = appJs.indexOf('function buildVoluntaryPdfHtml');
+    const volPdfEnd = appJs.indexOf('function getActivePdfBuilder', volPdfStart);
+    const volPdfBlock = appJs.substring(volPdfStart, volPdfEnd);
+    assert.ok(volPdfBlock.includes("row('Dependants'") && volPdfBlock.includes('d.capitalTotal'), 'vol §6: dependants and capital');
+    assert.ok(volPdfBlock.includes('d.instructionsSignRequired') && volPdfBlock.includes('Visit notes'), 'vol: instructions meta and visit notes');
   });
 });
 

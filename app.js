@@ -11897,7 +11897,7 @@ var REQUIRED_FIELD_KEYS = [
         '</table>' + (iv.notes ? '<div class="nar">' + h(iv.notes) + '</div>' : '');
     });
 
-    const clientNameForTitle = [d.forename, d.surname].filter(Boolean).join(' ') || '—';
+    const clientNameForTitle = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '—';
     const myRefForTitle = d.ourFileNumber || d.fileReference || '—';
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | ' + h(myRefForTitle) + '</title><style>' +
@@ -11949,7 +11949,7 @@ pdfDefenceSummaryCss() +
   (d.firmLaaAccount ? ' &middot; <strong>LAA Acct:</strong> ' + h(d.firmLaaAccount) : '') +
 '</p>' +
 '<div class="cover-block">' +
-'<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
+'<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Station:</strong> ' + h(sn || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>DSCC number:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
@@ -11965,7 +11965,7 @@ pdfDefenceSummaryHtml(d) +
 '<h2>1. Case Reference & Arrival</h2><table>' +
 row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) + row('Firm', firmName) +
 row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
-row('Client first name', d.forename) + row('Client surname', d.surname) + row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Offence (summary)', d.offenceSummary) +
+row('Client first name', d.forename) + row('Client middle name(s)', d.middleName) + row('Client surname', d.surname) + row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Offence (summary)', d.offenceSummary) +
 row('Station', sn) + row('DSCC number', formatDsccForPdf(d)) +
 row('Officer in Charge', d.oicName) + row('Officer in Charge email', d.oicEmail) + row('Officer in Charge telephone', d.oicPhone) +
 row('Date', fmtDate(d.date)) + row('Weekend/Bank Holiday', d.weekendBankHoliday) + row('Other Location', d.otherLocation) +
@@ -12000,7 +12000,12 @@ row('Already at station?', d.alreadyAtStation) + row('Travel from', d.travelOrig
     });
     return visitHtml;
   }
-  return row('Time set off', d.timeSetOff) + row('Time arrival at station', d.timeArrival);
+  var v0 = (sv && sv[0]) || {};
+  return row('Time set off', d.timeSetOff) + row('Time arrival at station', d.timeArrival) +
+    (v0.label ? row('Visit label', v0.label) : '') +
+    (v0.multiClient ? row('More than one client (this visit)?', v0.multiClient) : '') +
+    (v0.multiClient === 'Yes' ? row('Client on-site — start', v0.clientStartTime) + row('Client on-site — end', v0.clientEndTime) : '') +
+    (v0.notes ? row('Visit notes', v0.notes) : '');
 })() +
 '</table>' +
 
@@ -12096,6 +12101,11 @@ row('Dependants', d.dependants) + row('Capital (client) £', d.capitalClient) + 
 (d.lawElements ? '<div class="nar">' + h(d.lawElements) + '</div>' : '') +
     (d.clientInstructionsDetail ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Client instructions</p><div class="nar">' + h(d.clientInstructionsDetail) + '</div>' : '') +
     (d.clientInstructions ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Summary of client instructions</p><div class="nar">' + h(d.clientInstructions) + '</div>' : '') +
+    ((d.instructionsSignRequired != null && String(d.instructionsSignRequired).trim() !== '') || d.instructionsSignatureDate || d.instructionsSignatureTime
+      ? '<table>' + row('Signature required (confirm instructions)', d.instructionsSignRequired) +
+        (d.instructionsSignatureDate ? row('Instructions signature date', formatDateGB(d.instructionsSignatureDate)) : '') +
+        (d.instructionsSignatureTime ? row('Instructions signature time', d.instructionsSignatureTime) : '') + '</table>'
+      : '') +
 '<p style="font-size:9px;font-weight:600;">Advice:</p>' +
 '<ul class="chk-list">' +
 '<li>' + check('advSilence', 'Right to Silence & Inferences Explained') + '</li>' +
@@ -12342,7 +12352,7 @@ pdfAuditFooterHtml(d, settings) +
       } catch (_) { return code || ''; }
     };
 
-    var clientNameForTitle = [d.forename, d.surname].filter(Boolean).join(' ') || '—';
+    var clientNameForTitle = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '—';
     var myRefForTitle = d.ourFileNumber || d.fileReference || '—';
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | ' + h(myRefForTitle) + '</title>' +
@@ -12378,7 +12388,7 @@ pdfAuditFooterHtml(d, settings) +
       '<h1>Police Station Telephone Advice Note <span class="invb-badge">INVB</span></h1>' +
       '<p style="font-size:10px;color:#64748b;">' + h(brand) + ' | Generated ' + new Date().toLocaleString('en-GB') + '</p>' +
       '<div class="cover-block">' +
-      '<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
+      '<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Station:</strong> ' + h(sn || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
@@ -12462,7 +12472,7 @@ pdfAuditFooterHtml(d, settings) +
     var brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
     var codeLookup = function(key, code) { var arr = refData[key] || []; var item = arr.find(function(c) { return c.code === code; }); return item ? code + ' \u2013 ' + item.description : code || ''; };
 
-    var clientNameForTitle = [d.forename, d.surname].filter(Boolean).join(' ') || '\u2014';
+    var clientNameForTitle = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '\u2014';
     var myRefForTitle = d.ourFileNumber || d.fileReference || '\u2014';
 
     var offenceRows = '';
@@ -12579,11 +12589,19 @@ pdfAuditFooterHtml(d, settings) +
             h2 += '<tr><td colspan="2"><strong>' + h(lab) + '</strong></td></tr>';
             h2 += row('Time set off', v.timeSetOff) + row('Time of arrival', v.timeArrival) + row('Time left station', v.timeDeparture) + row('Time arrival office/home', v.timeOfficeHome) +
               row('Waiting time start', v.waitingTimeStart) + row('Waiting time end', v.waitingTimeEnd) + (v.waitingTimeNotes ? row('Waiting notes', v.waitingTimeNotes) : '') +
+              (v.multiClient ? row('More than one client (this visit)?', v.multiClient) : '') +
+              (v.multiClient === 'Yes' ? row('Client on-site — start', v.clientStartTime) + row('Client on-site — end', v.clientEndTime) : '') +
+              (v.notes ? row('Visit notes', v.notes) : '') +
               row('Miles (this visit)', v.milesClaimable) + row('Parking (this visit)', v.parkingCost);
           });
           return h2;
         }
-        return row('Time set off', d.timeSetOff) + row('Time of arrival', d.timeArrival);
+        var v0 = (sv && sv[0]) || {};
+        return row('Time set off', d.timeSetOff) + row('Time of arrival', d.timeArrival) +
+          (v0.label ? row('Visit label', v0.label) : '') +
+          (v0.multiClient ? row('More than one client (this visit)?', v0.multiClient) : '') +
+          (v0.multiClient === 'Yes' ? row('Client on-site — start', v0.clientStartTime) + row('Client on-site — end', v0.clientEndTime) : '') +
+          (v0.notes ? row('Visit notes', v0.notes) : '');
       })() +
       '</table>' +
 
@@ -12648,16 +12666,23 @@ pdfAuditFooterHtml(d, settings) +
       row('Benefits', d.benefits) + row('Benefit type', d.benefitType === 'Other' ? d.benefitOther : d.benefitType) + row('Benefit notes', d.benefitNotes) +
       row('Passported benefit', d.passportedBenefit) +
       (d.passportedBenefit === 'No' ? row('Gross income', d.grossIncome) + row('Partner income', d.partnerIncome) + row('Partner name', d.partnerName) + row('Income notes', d.incomeNotes) : '') +
+      row('Dependants', d.dependants) + row('Capital (client) £', d.capitalClient) + row('Capital (partner) £', d.capitalPartner) + row('Capital (total) £', d.capitalTotal) +
       row('Employment', d.employmentStatus) + row('Accommodation', d.accommodationStatus) + (d.accommodationDetails ? row('Accommodation notes', d.accommodationDetails) : '') +
-      row('Marital status', d.maritalStatus) +
+      row('Marital status', d.maritalStatus) + row('Consent to email', d.clientEmailConsent) +
       row('Ethnicity', codeLookup('ethnicCodes', d.ethnicOriginCode)) + row('Disability', codeLookup('disabilityCodes', d.disabilityCode)) +
       row('Risk assessment', d.riskAssessment) +
+      row('Gaps in evidence', d.gapsInEvidence) +
       row('Case assessment', d.caseAssessment) + (d.caseAssessmentWhy ? row('Assessment notes', d.caseAssessmentWhy) : '') +
       row('Likely sentence', d.likelySentence) +
       '</table>' +
       (d.lawElements ? '<div class="nar">' + h(d.lawElements) + '</div>' : '') +
       (d.clientInstructionsDetail ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Client instructions</p><div class="nar">' + h(d.clientInstructionsDetail) + '</div>' : '') +
       (d.clientInstructions ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Summary of client instructions</p><div class="nar">' + h(d.clientInstructions) + '</div>' : '') +
+      ((d.instructionsSignRequired != null && String(d.instructionsSignRequired).trim() !== '') || d.instructionsSignatureDate || d.instructionsSignatureTime
+        ? '<table>' + row('Signature required (confirm instructions)', d.instructionsSignRequired) +
+          (d.instructionsSignatureDate ? row('Instructions signature date', formatDateGB(d.instructionsSignatureDate)) : '') +
+          (d.instructionsSignatureTime ? row('Instructions signature time', d.instructionsSignatureTime) : '') + '</table>'
+        : '') +
       '<p style="font-size:9px;font-weight:600;">Advice given:</p>' +
       '<ul class="chk-list">' +
       '<li>' + check('advSilence', 'Right to Silence &amp; Inferences Explained') + '</li>' +
@@ -12676,6 +12701,8 @@ pdfAuditFooterHtml(d, settings) +
       '<table>' +
       row('Advice re interview', d.adviceReInterview) + row('Reason (quick)', d.reasonsForAdviceSelect) + row('Reasons (detail)', d.reasonsForAdvice) +
       row('Client decision', d.clientDecision) +
+      row('Advice followed in interview?', d.adviceFollowedInInterview) + (d.adviceFollowedExplanation ? row('If not followed – explanation', d.adviceFollowedExplanation) : '') +
+      row('Advice re complaint given?', d.adviceReComplaint) +
       row('Representations made?', d.representationsMade) +
       (d.representationsMade === 'Yes' ? row('Representations / challenge', d.representationsChallenge) + row('Police response', d.representationsResponse) : '') +
       '</table>' +
