@@ -2095,6 +2095,67 @@ html.dark .add-firm-field__label { color: #e5eefb; }
 html.dark .add-firm-field__optional { color: #94a3b8; }
 html.dark .add-firm-field__required { color: #f87171; }
 
+/* v1.5.5 — Add-new-firm topbar (Back button + title) and intro line.
+ * Gives a clear escape hatch at the TOP of the inline form so users who
+ * opened it by mistake (or made a typo and want to start over) don't have
+ * to scroll past every field to find the Cancel button. */
+.add-firm-topbar {
+  display: flex; align-items: center; gap: 0.6rem;
+  margin: -0.25rem -0.25rem 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.add-firm-topbar__back {
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--border, #cbd5e1);
+  background: #fff;
+  color: var(--primary, #1e3a5f);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.add-firm-topbar__back:hover {
+  background: var(--primary, #1e3a5f);
+  color: #fff;
+  border-color: var(--primary, #1e3a5f);
+}
+.add-firm-topbar__back:focus-visible {
+  outline: 2px solid var(--primary, #1e3a5f);
+  outline-offset: 2px;
+}
+.add-firm-topbar__title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--primary, #1e3a5f);
+}
+.add-firm-intro {
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--text, #334155);
+  background: #eef2ff;
+  border-left: 3px solid var(--primary, #1e3a5f);
+  border-radius: 4px;
+}
+html.dark .add-firm-topbar { border-bottom-color: #334155; }
+html.dark .add-firm-topbar__back {
+  background: #1e293b;
+  color: #e5eefb;
+  border-color: #475569;
+}
+html.dark .add-firm-topbar__back:hover {
+  background: #334155;
+  border-color: #94a3b8;
+}
+html.dark .add-firm-topbar__title { color: #e5eefb; }
+html.dark .add-firm-intro {
+  background: #1e2a3f;
+  color: #e5eefb;
+  border-left-color: #93c5fd;
+}
+
 /* Form first page: Add new firm / Use existing firm */
 .form-firm-wrap { margin-top: 0.25rem; }
 .form-firm-choice-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; align-items: center; }
