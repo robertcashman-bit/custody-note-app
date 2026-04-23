@@ -796,6 +796,30 @@
         <div id="billing-view-table-wrap" class="bv-table-wrap"></div>
       </div>
 
+      <!-- MATTER BILLING VIEW (per-record finish-this-matter, full screen) -->
+      <div id="view-matter-billing" class="view">
+        <div class="firms-page-header">
+          <button type="button" id="matter-billing-back-btn" class="btn btn-secondary">&larr; Back</button>
+          <h2 style="margin:0;color:var(--primary);">Billing</h2>
+        </div>
+        <div class="matter-billing-header-card" id="matter-billing-header-card">
+          <div class="matter-billing-header-summary">
+            <h3 class="matter-billing-client" id="matter-billing-client">&mdash;</h3>
+            <div class="matter-billing-meta">
+              <span class="matter-billing-meta-item"><span class="matter-billing-meta-label">Firm</span><span id="matter-billing-firm">&mdash;</span></span>
+              <span class="matter-billing-meta-item"><span class="matter-billing-meta-label">Station</span><span id="matter-billing-station">&mdash;</span></span>
+              <span class="matter-billing-meta-item"><span class="matter-billing-meta-label">Date</span><span id="matter-billing-date">&mdash;</span></span>
+              <span class="matter-billing-meta-item"><span class="matter-billing-meta-label">Status</span><span id="matter-billing-status">&mdash;</span></span>
+            </div>
+            <p class="settings-hint" id="matter-billing-help" style="margin:0.5rem 0 0;">Once the attendance note is finalised, click <strong>Start billing process</strong> to step through documents, the QuickFile invoice, and review &amp; archive.</p>
+          </div>
+          <div class="matter-billing-header-actions">
+            <button type="button" id="matter-billing-start-btn" class="btn btn-primary matter-billing-start-btn">Start billing process</button>
+          </div>
+        </div>
+        <div id="matter-billing-stage" class="matter-billing-stage"></div>
+      </div>
+
       <!-- AUTHORITIES VIEW -->
       <div id="view-authorities" class="view">
         <div class="firms-page-header">

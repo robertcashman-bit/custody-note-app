@@ -6477,9 +6477,19 @@ function fillCRM1(form, d) {
     safeSet(form, 'Date_of_birth1', parts[1] || '');
     safeSet(form, 'Date_of_birth2', parts[2] || '');
   }
-  /* CRM1 v16 header UFN combs (y=674 row) â€” leave blank for firm to complete */
+  /* CRM1 v16 header UFN combs (y=674 row, page 1).
+   * Layout left-to-right: Comb1, Comb11, Comb2, Comb3, Comb4, Comb5, [printed slash], Comb21, Comb6, Comb7
+   * UFN format is DDMMYY/NNN -> 6 chars + slash + 3 chars = 9 fillable boxes.
+   * Always clear first (defensive) then populate from the record when available.
+   * The firm IS the user, so when the record carries a UFN we MUST print it. */
   const CRM1_UFN_COMBS = ['Comb1','Comb11','Comb2','Comb3','Comb4','Comb5','Comb21','Comb6','Comb7'];
   CRM1_UFN_COMBS.forEach(c => safeClearText(form, c));
+  const ufnChars = String(d.ufn || '').replace(/\s+/g, '').replace('/', '').toUpperCase();
+  if (ufnChars) {
+    for (let i = 0; i < CRM1_UFN_COMBS.length; i++) {
+      if (ufnChars[i]) safeSet(form, CRM1_UFN_COMBS[i], ufnChars[i]);
+    }
+  }
 
   /* NI number: 9 individual comb boxes on the DOB row (y=627) */
   const ni = normalizeNiNumberForPdf(d.niNumber || d.crm14NiNumber || '');
@@ -6540,7 +6550,13 @@ function fillCRM1(form, d) {
     safeSet(form, 'Total1', String(Math.round((a + b) * 100) / 100));
   }
 
-  safeSet(form, 'FillText15', d.dependants);
+  /* NOTE: do NOT write d.dependants into FillText15.
+   * FillText15 is at page 7 (y=247) inside the "Calculate the total
+   * allowable deductions" block (Income tax / NI / other deductions),
+   * NOT the page-8 dependants box. CRM1 v16 has no AcroForm field for
+   * the page-8 dependants count (it is intentionally handwritten on the
+   * official form), so leaving every page-7 deductions field blank is
+   * the correct behaviour when we have no deduction figures captured. */
 
   const capC = d.capitalClient;
   const capP = d.capitalPartner;

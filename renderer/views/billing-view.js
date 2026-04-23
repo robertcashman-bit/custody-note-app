@@ -419,7 +419,25 @@ function _bvOpenWorkflowForRecord(recordId) {
       for (var k2 in d) { if (d.hasOwnProperty(k2)) formData[k2] = d[k2]; }
     }
     window.currentAttendanceId = parseInt(recordId, 10) || recordId;
+    /* Mirror onto local globals if app.js scope exposes them, so the
+     * Billing screen reads the right status/archived flags on entry. */
+    try {
+      if (typeof currentRecordStatus !== 'undefined') {
+        window.currentRecordStatus = record.status || null;
+      }
+      if (typeof currentRecordArchived !== 'undefined') {
+        window.currentRecordArchived = !!record.archived_at;
+      }
+    } catch (_e) { /* best-effort */ }
 
+    /* Per-row "Open" from the Open-matters list now lands on the new
+     * full-page Billing screen for that record (replaces the old modal
+     * workflow overlay). The screen auto-mounts the workflow when the
+     * matter is ready to bill. */
+    if (typeof showView === 'function') {
+      showView('matter-billing');
+      return;
+    }
     if (typeof openWorkflow === 'function') {
       openWorkflow(undefined, function () { loadBillingView(); });
     } else if (typeof openBillingPanel === 'function') {

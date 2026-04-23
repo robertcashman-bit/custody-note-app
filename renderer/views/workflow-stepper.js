@@ -9,6 +9,12 @@
 var _workflowOpen = false;
 var _workflowStep = 0;
 var _workflowOnClose = null;
+/* mode = 'overlay' (legacy modal launched by openWorkflow / e2e tests)
+ *      | 'inline'  (mounted inside the new full-page Billing screen)
+ * Inline mode skips the modal chrome (no backdrop, no Esc handler, no
+ * top-right close button) because the host screen owns the page header. */
+var _workflowMode = 'overlay';
+var _workflowInlineContainer = null;
 
 var _workflowSteps = [
   { id: 'documents', label: 'Documents &amp; attachments', icon: '&#128196;' },
@@ -128,6 +134,8 @@ function openWorkflow(startStep, onClose) {
   if (_workflowOpen) return;
   if (typeof getFormData === 'function') getFormData();
   _workflowOpen = true;
+  _workflowMode = 'overlay';
+  _workflowInlineContainer = null;
   if (typeof startStep === 'number' && Number.isFinite(startStep)) {
     _workflowStep = Math.max(0, Math.min(_workflowSteps.length - 1, startStep));
   } else {
@@ -144,18 +152,54 @@ function openWorkflow(startStep, onClose) {
   _renderWorkflowShell();
 }
 
+/* Inline mount used by the dedicated #view-matter-billing screen so the
+ * 3-step finish-matter flow lives on a real page instead of a modal.
+ * Container ownership is the caller's: closeWorkflow() will clear it. */
+function mountWorkflowInline(container, startStep, onClose) {
+  if (!container) return;
+  if (typeof getFormData === 'function') getFormData();
+  _workflowOpen = true;
+  _workflowMode = 'inline';
+  _workflowInlineContainer = container;
+  if (typeof startStep === 'number' && Number.isFinite(startStep)) {
+    _workflowStep = Math.max(0, Math.min(_workflowSteps.length - 1, startStep));
+  } else {
+    _workflowStep = _wfReadStoredStep();
+  }
+  _workflowOnClose = onClose || null;
+
+  _wfGeneratedDocs = {};
+  _wfSelectedDocs = {};
+
+  var existing = document.getElementById('workflow-overlay');
+  if (existing) existing.remove();
+
+  _renderWorkflowShell();
+}
+/* Expose for app.js / test harnesses; guarded so that source files can be
+ * evaluated under Node (e.g. tests using `new Function(src)` to extract
+ * helpers like _wfEsc) where `window` is not defined. */
+if (typeof window !== 'undefined') { window.mountWorkflowInline = mountWorkflowInline; }
+
 function _renderWorkflowShell() {
   var existing = document.getElementById('workflow-overlay');
   if (existing) existing.remove();
 
   var meta = _wfMatterMeta();
+  var inline = _workflowMode === 'inline' && _workflowInlineContainer;
+  var headerHtml = inline
+    ? ''
+    : '<div class="wf-panel-header">' +
+        '<h2 class="wf-panel-title">Finish this matter</h2>' +
+        '<button type="button" class="wf-panel-close" aria-label="Close">&times;</button>' +
+      '</div>';
+  var wrapperOpen = inline
+    ? '<div id="workflow-overlay" class="wf-inline" aria-label="Billing workflow">'
+    : '<div id="workflow-overlay" class="wf-overlay" role="dialog" aria-modal="true" aria-label="Finish this matter">';
   var html =
-    '<div id="workflow-overlay" class="wf-overlay" role="dialog" aria-modal="true" aria-label="Finish this matter">' +
+    wrapperOpen +
       '<div class="wf-panel">' +
-        '<div class="wf-panel-header">' +
-          '<h2 class="wf-panel-title">Finish this matter</h2>' +
-          '<button type="button" class="wf-panel-close" aria-label="Close">&times;</button>' +
-        '</div>' +
+        headerHtml +
         _wfBuildStepper() +
         _wfBuildSummaryStrip(meta, '') +
         '<div id="wf-body" class="wf-body"></div>' +
@@ -163,7 +207,11 @@ function _renderWorkflowShell() {
       '</div>' +
     '</div>';
 
-  document.body.insertAdjacentHTML('beforeend', html);
+  if (inline) {
+    _workflowInlineContainer.innerHTML = html;
+  } else {
+    document.body.insertAdjacentHTML('beforeend', html);
+  }
   _wfBindShellEvents();
   _wfPersistStep();
   _wfRenderCurrentStep();
@@ -172,11 +220,16 @@ function _renderWorkflowShell() {
 function _wfBindShellEvents() {
   var overlay = document.getElementById('workflow-overlay');
   if (!overlay) return;
-  overlay.querySelector('.wf-panel-close').addEventListener('click', closeWorkflow);
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeWorkflow(); });
-  function onEsc(e) { if (e.key === 'Escape') closeWorkflow(); }
-  document.addEventListener('keydown', onEsc);
-  overlay._wfEscHandler = onEsc;
+  /* Inline mode: no close button, no Esc handler, no backdrop click —
+   * the host #view-matter-billing screen owns navigation. */
+  if (_workflowMode !== 'inline') {
+    var closeBtn = overlay.querySelector('.wf-panel-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeWorkflow);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeWorkflow(); });
+    function onEsc(e) { if (e.key === 'Escape') closeWorkflow(); }
+    document.addEventListener('keydown', onEsc);
+    overlay._wfEscHandler = onEsc;
+  }
 
   overlay.querySelectorAll('.wf-step').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -243,10 +296,19 @@ function _wfGoToStep(idx) {
 function closeWorkflow() {
   _wfPersistStep();
   _workflowOpen = false;
+  var wasInline = _workflowMode === 'inline';
+  var inlineContainer = _workflowInlineContainer;
+  _workflowMode = 'overlay';
+  _workflowInlineContainer = null;
   var overlay = document.getElementById('workflow-overlay');
   if (overlay) {
     if (overlay._wfEscHandler) document.removeEventListener('keydown', overlay._wfEscHandler);
     overlay.remove();
+  }
+  /* Inline host owns the page chrome; clear the stage so a re-mount
+   * starts from the placeholder rather than a stale workflow. */
+  if (wasInline && inlineContainer) {
+    inlineContainer.innerHTML = '';
   }
   if (typeof _workflowOnClose === 'function') {
     var cb = _workflowOnClose;

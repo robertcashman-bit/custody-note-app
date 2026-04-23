@@ -10,12 +10,19 @@ const root = path.join(__dirname, '..');
 const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
 describe('CRM1 PDF fill (main.js)', () => {
-  it('clears UFN header combs and maps NI to correct comb fields', () => {
+  it('clears UFN header combs, populates them from d.ufn, and maps NI to correct comb fields', () => {
     assert.ok(mainSrc.includes("CRM1_UFN_COMBS"), 'UFN combs array expected');
-    assert.ok(mainSrc.includes("safeClearText(form, c)"), 'UFN combs must be cleared');
+    assert.ok(mainSrc.includes("safeClearText(form, c)"), 'UFN combs must be cleared first');
+    assert.ok(/ufnChars\s*=\s*String\(d\.ufn\b/.test(mainSrc), 'UFN combs must populate from d.ufn');
+    assert.ok(mainSrc.includes("safeSet(form, CRM1_UFN_COMBS[i], ufnChars[i])"), 'UFN combs filled char-by-char');
     assert.ok(mainSrc.includes("NI_COMBS"), 'NI combs array expected');
     assert.ok(mainSrc.includes("'National_insurance_number','National_insurance_number1','Comb10','Comb101','Comb8','Comb9','Comb12','Comb13','FillText644'"), 'NI mapped to correct 9 comb fields');
     assert.ok(!mainSrc.includes("safeSet(form, 'FillText644', d.ufn)"), 'UFN must not populate USN');
+  });
+
+  it('does NOT push d.dependants into FillText15 (page-7 deductions field, not page-8 dependants)', () => {
+    assert.ok(!/safeSet\(\s*form\s*,\s*'FillText15'\s*,\s*d\.dependants\s*\)/.test(mainSrc),
+      'FillText15 sits in the page-7 deductions block; writing dependants there overprints a deduction box');
   });
 
   it('maps main passporting question to CheckBox10 (Yes) and CheckBox9 (No)', () => {
