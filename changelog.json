@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.5.10",
+      "version": "1.5.11",
       "date": "2026-04-23",
       "latest": true,
+      "changes": [
+        "PDF (custody & voluntary): §1 — client middle name row; cover and HTML title use full name including middle",
+        "PDF — §2: single-visit journey shows visit label, multi-client on-site times, and visit notes (aligned with station visit card); voluntary multi-visit also exports visit notes and multi-client details",
+        "PDF — §6: instruction confirmation (signature required, auto date/time) before the advice block; voluntary §6 adds dependants, capital, gaps in evidence, email consent, advice-follow-up fields, and benefit \u201cOther\u201d text",
+        "PWA/telephone PDF cover: client name includes middle name for consistency"
+      ]
+    },
+    {
+      "version": "1.5.10",
+      "date": "2026-04-23",
+      "latest": false,
       "changes": [
         "Workflow Step 2: hide misleading 'Send Bill to QuickFile is now unlocked - click it in the footer' card when QuickFile credentials are not configured",
         "replace with a clear 'QuickFile not configured' notice and an 'Open QuickFile settings' shortcut so users are no longer told to click a button that does not exist."
