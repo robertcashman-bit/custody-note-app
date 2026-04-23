@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.5.9",
+      "version": "1.5.10",
       "date": "2026-04-23",
       "latest": true,
+      "changes": [
+        "Workflow Step 2: hide misleading 'Send Bill to QuickFile is now unlocked - click it in the footer' card when QuickFile credentials are not configured",
+        "replace with a clear 'QuickFile not configured' notice and an 'Open QuickFile settings' shortcut so users are no longer told to click a button that does not exist."
+      ]
+    },
+    {
+      "version": "1.5.9",
+      "date": "2026-04-23",
+      "latest": false,
       "changes": [
         "Fix: app no longer fails to launch with 'Custody Note could not load your saved data - no such table: firms'. initDb() called _safeAddColumn('firms', 'contact_name TEXT DEFAULT \" \\')"
       ]
