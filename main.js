@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu } = require('electron');
 const os = require('os');
 const path = require('path');
 /* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use). */
