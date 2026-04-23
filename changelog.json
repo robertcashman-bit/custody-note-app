@@ -1,22 +1,30 @@
 {
   "releases": [
     {
-      "version": "1.5.8",
+      "version": "1.5.9",
       "date": "2026-04-23",
       "latest": true,
       "changes": [
-        "Fix: \"Generate PDF\" on the police-station custody / voluntary attendance note now works for any record, regardless of size. Previously the renderer packed the entire HTML (including base64-encoded signature PNGs and long interview notes) into a `data:text/html;...` URL via `encodeURIComponent`, which silently exceeded Chromium's ~2 MB URL cap on records that contained signatures or substantial notes \u2014 the offscreen window would never fire `did-finish-load`, the 60 s timeout would eventually fire (long after the user gave up), and the toast displayed nothing useful. The renderer now writes the HTML to a temp file in `app.getPath('temp')` and uses `BrowserWindow.loadFile()`, which has no size limit",
-        "Fix: \"failed to generate police station attendance note \u2014 h is not a function\" is resolved. An IIFE inside `buildPdfHtml()` declared `var h = ''` to accumulate the multi-station-visit HTML, which shadowed the outer `const h = esc` HTML-escape helper and caused Chromium to throw `TypeError: h is not a function` whenever a record had more than one station visit. The accumulator is renamed to `visitHtml`, and a new regression test (`tests/policeStationAttendanceNotePdf.test.js`) locks the fix in by parsing app.js and asserting only one `h` declaration exists in `buildPdfHtml`",
+        "Fix: app no longer fails to launch with 'Custody Note could not load your saved data - no such table: firms'. initDb() called _safeAddColumn('firms', 'contact_name TEXT DEFAULT \" \\')"
+      ]
+    },
+    {
+      "version": "1.5.8",
+      "date": "2026-04-23",
+      "latest": false,
+      "changes": [
+        "Fix: \"Generate PDF\" on the police-station custody / voluntary attendance note now works for any record, regardless of size. Previously the renderer packed the entire HTML (including base64-encoded signature PNGs and long interview notes) into a `data:text/html;...` URL via `encodeURIComponent`, which silently exceeded Chromium's ~2 MB URL cap on records that contained signatures or substantial notes — the offscreen window would never fire `did-finish-load`, the 60 s timeout would eventually fire (long after the user gave up), and the toast displayed nothing useful. The renderer now writes the HTML to a temp file in `app.getPath('temp')` and uses `BrowserWindow.loadFile()`, which has no size limit",
+        "Fix: \"failed to generate police station attendance note — h is not a function\" is resolved. An IIFE inside `buildPdfHtml()` declared `var h = ''` to accumulate the multi-station-visit HTML, which shadowed the outer `const h = esc` HTML-escape helper and caused Chromium to throw `TypeError: h is not a function` whenever a record had more than one station visit. The accumulator is renamed to `visitHtml`, and a new regression test (`tests/policeStationAttendanceNotePdf.test.js`) locks the fix in by parsing app.js and asserting only one `h` declaration exists in `buildPdfHtml`",
         "Fix: PDF generation now surfaces real error messages instead of silently appearing to do nothing. Three new failure listeners on the offscreen `webContents` (`did-fail-load`, `render-process-gone`, plus the existing 60 s timeout) capture and reject the IPC call with a descriptive Error, which the renderer's `.catch` then shows in the failure toast. A new \"Desktop folder does not exist\" pre-flight error is emitted with OneDrive Known-Folder-Move guidance when the resolved desktop path is missing",
         "Fix: documents-screen.js now picks the correct PDF builder for each record via `window.getPdfBuilderForData(data)` instead of `getActivePdfBuilder()` (which read the currently-loaded `formData` global). Generating a custody-note PDF while looking at a telephone matter (or vice versa) used to silently use the wrong template; it now always renders the template that matches the record being generated. `buildPdfHtml`, `buildVoluntaryPdfHtml`, `buildTelephonePdfHtml`, and `getPdfBuilderForData` are now exposed on `window` so the workflow screens can reach them",
         "Security/integrity: the database write path now refuses to encrypt with no master key (throws `CN_NO_MASTER_KEY`) instead of silently writing plaintext, and a generation counter (`_dbWriteGeneration`) prevents async + sync writes from corrupting each other. Backup writes (manual, scheduled, latest) now go through a Promise-based atomic-write helper. Audit-log snapshots are deduplicated on write and pruned past a 90-day retention window on startup",
         "Security/integrity: licence-store key now refuses to fall back to plaintext-on-disk when `safeStorage` is unavailable (throws `CN_NO_SAFE_STORAGE`); E2E test hooks (`__CUSTODYNOTE_E2E__`) are no longer exposed in packaged builds; sensitive admin IPC channels (`custody:adminLogin`, `custody:adminSetPassword`) are rate-limited to 5 attempts per minute and verify the calling frame is a trusted file:// URL",
-        "Security/integrity: sandboxed `import-record-from-path`, `local-backup-restore`, `open-path`, and `print-pdf-file` IPC handlers \u2014 each now resolves real paths via `fs.realpathSync`, restricts to user-reachable roots, validates extension and size caps, and rejects path-traversal / symlink attacks. `set-settings` now validates URL-shaped settings (`cloudBackupUrl`, `syncApiUrl`, `cloudApiUrl`) before persisting. `renderHtmlToPdfBuffer` and `preview-pdf-base64` enforce 25 MB / 50 MB DoS caps",
+        "Security/integrity: sandboxed `import-record-from-path`, `local-backup-restore`, `open-path`, and `print-pdf-file` IPC handlers — each now resolves real paths via `fs.realpathSync`, restricts to user-reachable roots, validates extension and size caps, and rejects path-traversal / symlink attacks. `set-settings` now validates URL-shaped settings (`cloudBackupUrl`, `syncApiUrl`, `cloudApiUrl`) before persisting. `renderHtmlToPdfBuffer` and `preview-pdf-base64` enforce 25 MB / 50 MB DoS caps",
         "Database integrity: `PRAGMA foreign_keys = ON` is now set on every DB open; all 30+ schema migrations go through a single `_safeAddColumn(table, def)` helper that only swallows \"duplicate column name\" and re-throws / logs every other ALTER failure (previously a malformed migration could be silently lost); multi-step writes wrap their UPDATE + audit-log INSERT in `BEGIN`/`COMMIT`/`ROLLBACK` via a new `dbTx()` helper",
         "Sync: enqueue() no longer deletes a queue row that's currently mid-push (which used to lose the new local change after the in-flight push completed). On any push error, the 60 s health-check skip cache is invalidated immediately so the next cycle actually re-checks `/api/health` instead of pretending the API is reachable",
         "LAA forms: `safeSet` / `safeCheck` now report (not silently swallow) every form field that couldn't be set during CRM1/CRM2/CRM3/Declaration generation, and the resulting PDFs are flattened (`form.flatten()`) so AcroForm fields can no longer be edited after export. CRM2's CheckBox2 and CRM3's `Name_of_court` mappings are corrected (CheckBox2 only ticks for genuine criminal/attendance/police-station work types; Name_of_court no longer falls back to the police-station name)",
         "Outlook Web compose: very long URLs (over the practical Edge/Chrome ~6 KB cap) now have their body trimmed with a clear notice rather than silently failing in OWA, and CR/LF in the subject line is stripped to prevent header injection in clients that parse the deeplink. The compose URL is no longer logged to the support bundle (it can contain client PII)",
-        "Renderer hardening: `Save & Exit` and `Save Draft` re-collect form data inside their button handlers so edits made between opening the dialog and clicking the button are no longer lost; finalisation now requires `firmId`, `oicName`, and `ourFileNumber`; the interview-vs-arrival time check uses numeric minute comparison instead of string sort; `Ctrl+Enter` follows the proper validate \u2192 finalise flow; the empty-draft check is stricter so finished records aren't mistakenly soft-deleted; `JSON.parse` of stored record data is wrapped in try/catch with a user-visible toast on corrupt rows",
+        "Renderer hardening: `Save & Exit` and `Save Draft` re-collect form data inside their button handlers so edits made between opening the dialog and clicking the button are no longer lost; finalisation now requires `firmId`, `oicName`, and `ourFileNumber`; the interview-vs-arrival time check uses numeric minute comparison instead of string sort; `Ctrl+Enter` follows the proper validate → finalise flow; the empty-draft check is stricter so finished records aren't mistakenly soft-deleted; `JSON.parse` of stored record data is wrapped in try/catch with a user-visible toast on corrupt rows",
         "Telemetry: the main-process log now records every successful PDF write with its byte size, source HTML length, and target path; failures log all three plus the underlying error message, so future regressions can be diagnosed from one log line",
         "Tests: full unit suite is now 1078 assertions, all green (added `policeStationAttendanceNotePdf.test.js` for the variable-shadowing regression and updated `billingWorkflow.test.js` to accept either literal `ALTER TABLE` or `_safeAddColumn(...)` patterns post-refactor)"
       ]
@@ -38,11 +46,11 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "Fix: \u201cBilling invoice no.\u201d (the synthetic CN-prefixed reference) is no longer shown anywhere \u2014 removed from all 6 PDF templates (custody summary, custody admin, voluntary cover, voluntary call details, voluntary admin) and from the in-app billing panel. It only ever confused users vs. the real QuickFile invoice number; the real QuickFile reference (\u201cInvoiced: #123\u201d) is unaffected and still appears on the form once the bill is sent",
-        "Fix: QuickFile no longer attaches the attendance-note PDF twice. When the workflow billing screen sends user-selected documents (extraAttachments[]), the legacy auto-rendered attendance-note PDF (attachAttendanceHtml) is now skipped \u2014 only the documents you tick in the billing screen go to QuickFile. The standalone billing panel (which never sends extraAttachments) keeps its single auto attachment, so neither path regresses",
-        "Fix: Voluntary attendance \u00a73 (Client Details & Welfare) no longer duplicates the forename / middle / surname inputs already entered in \u00a71. \u00a73 now shows a clear read-only sectionNote \u2014 \u201cName: from \u00a71 \u2014 \u2026 entered in Section 1 (Case Reference & Arrival)\u201d \u2014 with the actual saved name appended in green. Removes a long-standing source of inconsistent data entry",
-        "Renderer: sectionNote handler now supports an opt-in dynamicNameRefSection1 flag that appends the live name from data.forename / data.middleName / data.surname \u2014 keeps the message accurate without inventing a new field type",
-        "Tests: new tests/v1_5_6_fixes.test.js (13 assertions across 3 suites: PDF/panel cleanup, QF gate, voluntary \u00a73). Existing billingWorkflow + billingOverhaul tests inverted to assert the new absence of \u201cBilling invoice no.\u201d. Full unit suite now 1071 assertions, all green"
+        "Fix: “Billing invoice no.” (the synthetic CN-prefixed reference) is no longer shown anywhere — removed from all 6 PDF templates (custody summary, custody admin, voluntary cover, voluntary call details, voluntary admin) and from the in-app billing panel. It only ever confused users vs. the real QuickFile invoice number; the real QuickFile reference (“Invoiced: #123”) is unaffected and still appears on the form once the bill is sent",
+        "Fix: QuickFile no longer attaches the attendance-note PDF twice. When the workflow billing screen sends user-selected documents (extraAttachments[]), the legacy auto-rendered attendance-note PDF (attachAttendanceHtml) is now skipped — only the documents you tick in the billing screen go to QuickFile. The standalone billing panel (which never sends extraAttachments) keeps its single auto attachment, so neither path regresses",
+        "Fix: Voluntary attendance §3 (Client Details & Welfare) no longer duplicates the forename / middle / surname inputs already entered in §1. §3 now shows a clear read-only sectionNote — “Name: from §1 — … entered in Section 1 (Case Reference & Arrival)” — with the actual saved name appended in green. Removes a long-standing source of inconsistent data entry",
+        "Renderer: sectionNote handler now supports an opt-in dynamicNameRefSection1 flag that appends the live name from data.forename / data.middleName / data.surname — keeps the message accurate without inventing a new field type",
+        "Tests: new tests/v1_5_6_fixes.test.js (13 assertions across 3 suites: PDF/panel cleanup, QF gate, voluntary §3). Existing billingWorkflow + billingOverhaul tests inverted to assert the new absence of “Billing invoice no.”. Full unit suite now 1071 assertions, all green"
       ]
     },
     {
@@ -50,10 +58,10 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "UX: \u201cAdd new firm\u201d inline form (\u00a71 instructing-firm picker) is much clearer \u2014 every field has an unambiguous label so you can always tell what goes where, even after typing has hidden the placeholder. Labels rewritten: \u201cFirm name\u201d \u2192 \u201cInstructing firm name\u201d, \u201cContact name (person instructed)\u201d \u2192 \u201cContact at firm (the person who instructed you)\u201d, \u201cContact phone\u201d \u2192 \u201cPhone number for that contact\u201d, \u201cContact email\u201d \u2192 \u201cEmail for that contact\u201d",
-        "Fix: \u201cSource of referral\u201d field has been REMOVED from the inline Add-new-firm form. Source of referral (Duty Rota / agency / own private etc.) is a property of the matter, not of the firm \u2014 a firm can be your own private firm on one matter and act as agency on another. The matter form\u2019s \u00a71 already has its own Source of Referral field, so nothing is lost; you just answer it once, in the right place",
-        "UX: A clear \u201c\u2190 Back\u201d button now sits at the TOP-LEFT of the inline Add-new-firm form (separate from the bottom Cancel) so a user who opened the form by mistake or made a typo and wants to start over has an obvious escape hatch without having to scroll past every field",
-        "UX: One-line intro at the top of the inline form (\u201cAdd the instructing solicitor\u2019s firm \u2014 i.e. the firm that instructed you to attend the station. Only the firm name is required; everything else is optional and can be edited later under Manage Firms.\u201d) makes it instantly obvious what the form is for",
+        "UX: “Add new firm” inline form (§1 instructing-firm picker) is much clearer — every field has an unambiguous label so you can always tell what goes where, even after typing has hidden the placeholder. Labels rewritten: “Firm name” → “Instructing firm name”, “Contact name (person instructed)” → “Contact at firm (the person who instructed you)”, “Contact phone” → “Phone number for that contact”, “Contact email” → “Email for that contact”",
+        "Fix: “Source of referral” field has been REMOVED from the inline Add-new-firm form. Source of referral (Duty Rota / agency / own private etc.) is a property of the matter, not of the firm — a firm can be your own private firm on one matter and act as agency on another. The matter form’s §1 already has its own Source of Referral field, so nothing is lost; you just answer it once, in the right place",
+        "UX: A clear “← Back” button now sits at the TOP-LEFT of the inline Add-new-firm form (separate from the bottom Cancel) so a user who opened the form by mistake or made a typo and wants to start over has an obvious escape hatch without having to scroll past every field",
+        "UX: One-line intro at the top of the inline form (“Add the instructing solicitor’s firm — i.e. the firm that instructed you to attend the station. Only the firm name is required; everything else is optional and can be edited later under Manage Firms.”) makes it instantly obvious what the form is for",
         "Tests: tests/timeBreakdownPanel.test.js extended with v1.5.5 assertions (Back button, intro, removal of Source-of-Referral, new label strings, new CSS classes including dark-mode rules); full unit suite is now 1058 assertions, all green"
       ]
     },
@@ -62,8 +70,8 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "Fix: VAT field on the Step 2 billing screen now defaults to 20 (i.e. 20%), not 2000. Settings stores VAT as a percentage string (\"20\") but the rest of the system expects a decimal fraction (0.20); without normalisation the value was being multiplied by 100 twice, so the VAT input rendered as \"2000\" and the live invoice preview showed an obviously wrong total. The fix normalises the value at the settings boundary and adds defence-in-depth guards in both billing renderers so any old cached value or legacy DB row can\u2019t resurrect the bug",
-        "New: shared _normaliseVatRate(raw, fallback) helper in app.js \u2014 always returns a decimal fraction in [0, 1], divides by 100 if raw > 1, and falls back gracefully on null/empty/NaN/negative input",
+        "Fix: VAT field on the Step 2 billing screen now defaults to 20 (i.e. 20%), not 2000. Settings stores VAT as a percentage string (\"20\") but the rest of the system expects a decimal fraction (0.20); without normalisation the value was being multiplied by 100 twice, so the VAT input rendered as \"2000\" and the live invoice preview showed an obviously wrong total. The fix normalises the value at the settings boundary and adds defence-in-depth guards in both billing renderers so any old cached value or legacy DB row can’t resurrect the bug",
+        "New: shared _normaliseVatRate(raw, fallback) helper in app.js — always returns a decimal fraction in [0, 1], divides by 100 if raw > 1, and falls back gracefully on null/empty/NaN/negative input",
         "Tests: new tests/vatRateNormalisation.test.js (18 assertions) covers settings parse, the helper itself across 11 input shapes, and both billing renderers; full unit suite is now 1050 assertions, all green"
       ]
     },
@@ -72,8 +80,8 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "Fix: workflow Step 2 \u2014 the QuickFile send button is now clearly labelled \u201cSend Bill to QuickFile\u201d (was \u201cGenerate Invoice\u201d, which users did not recognise as the QuickFile action). The locked, unlocked, in-flight, success and failure messages all use the same explicit wording so it is obvious which button uploads the bill to QuickFile",
-        "Fix: Archive guard \u2014 if QuickFile is configured and no invoice has been sent yet, clicking Archive (on Step 2 \u201cArchive & close\u201d or Step 3 \u201cArchive\u201d) now shows a 3-way choice: \u201cSend Bill to QuickFile first (recommended)\u201d, \u201cArchive without sending to QuickFile\u201d, or \u201cCancel\u201d. Stops a matter being silently archived without the bill ever reaching QuickFile",
+        "Fix: workflow Step 2 — the QuickFile send button is now clearly labelled “Send Bill to QuickFile” (was “Generate Invoice”, which users did not recognise as the QuickFile action). The locked, unlocked, in-flight, success and failure messages all use the same explicit wording so it is obvious which button uploads the bill to QuickFile",
+        "Fix: Archive guard — if QuickFile is configured and no invoice has been sent yet, clicking Archive (on Step 2 “Archive & close” or Step 3 “Archive”) now shows a 3-way choice: “Send Bill to QuickFile first (recommended)”, “Archive without sending to QuickFile”, or “Cancel”. Stops a matter being silently archived without the bill ever reaching QuickFile",
         "New: shared showChoice() helper in renderer/toast.js for stacked multi-option modals; exposed on window for any future workflow that needs more than yes/no",
         "Tests: new tests/quickfileSendButtonAndArchiveGuard.test.js (17 assertions) plus updated billing-workflow regression tests so the v1.5.3 wording and archive guard cannot silently regress"
       ]
@@ -83,10 +91,10 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "Fix: time-breakdown panel \u2014 \u201cAll visits \u2014 chargeable attendance & advice (totals)\u201d now reads from the recorded visit times via aggregateMinuteBuckets, not from the user-overrideable adviceSocial / adviceUnsocial fields in \u00a79. Stops the panel showing e.g. \u201cVisit 1 attendance = 78 mins, All visits totals = 36 mins\u201d when an old override flag is still in place",
-        "Fix: when a manual override on the \u00a79 attendance fields disagrees with the auto totals, the panel now shows an amber \u201cManual override active\u201d note explaining which figure will actually be billed and how to reset it",
-        "Fix: inline \u201cAdd new firm\u201d form on \u00a71 rebuilt as a labelled stacked layout (Firm name *, Contact name, Contact phone with grouped None / N/A / Not applicable quick-fills, Contact email, Source of referral). Each field is on its own row with a clear label that doesn\u2019t disappear when you start typing",
-        "Fix: \u201cAdd Firm\u201d button on the inline form is now solid primary (was outline-only and looked disabled in dark mode); \u201cCancel\u201d is plain secondary"
+        "Fix: time-breakdown panel — “All visits — chargeable attendance & advice (totals)” now reads from the recorded visit times via aggregateMinuteBuckets, not from the user-overrideable adviceSocial / adviceUnsocial fields in §9. Stops the panel showing e.g. “Visit 1 attendance = 78 mins, All visits totals = 36 mins” when an old override flag is still in place",
+        "Fix: when a manual override on the §9 attendance fields disagrees with the auto totals, the panel now shows an amber “Manual override active” note explaining which figure will actually be billed and how to reset it",
+        "Fix: inline “Add new firm” form on §1 rebuilt as a labelled stacked layout (Firm name *, Contact name, Contact phone with grouped None / N/A / Not applicable quick-fills, Contact email, Source of referral). Each field is on its own row with a clear label that doesn’t disappear when you start typing",
+        "Fix: “Add Firm” button on the inline form is now solid primary (was outline-only and looked disabled in dark mode); “Cancel” is plain secondary"
       ]
     },
     {
@@ -104,13 +112,13 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "UX audit batches 2 & 3 \u2014 strong improvements + small wins",
+        "UX audit batches 2 & 3 — strong improvements + small wins",
         "Voluntary §1 now leads with Voluntary Status & Rights (attendance, free-to-leave, caution, notice of rights, legal advice, sub-type, constable-present), so the most decisive context is captured first",
         "Quick Capture: trimmed to the 8 essentials (attendance type, client name, station, offence, DSCC, instruction received, first-contact time, instructing firm, notes); referral / OIC / times / custody # collapsed under \"More fields\" to keep the screen one-glance",
-        "45-min reason converted to a structured select (already engaged, travelling, in court, awaiting interpreter / AA, awaiting booking, etc.) with an \"Other (specify)\" details box \u2014 validators updated for all three forms",
+        "45-min reason converted to a structured select (already engaged, travelling, in court, awaiting interpreter / AA, awaiting booking, etc.) with an \"Other (specify)\" details box — validators updated for all three forms",
         "Density default = compact for new installs (existing user choice respected); textareas capped at ~5 rows and grow on focus; global search hidden while a form is active to stop stray custody numbers triggering record searches",
         "PDFs: page-1 \"Defence summary\" panel (outcome, outcome code, next date, next venue, interview position, headline advice, outcome notes) added to custody, telephone and voluntary builders",
-        "PDFs: Appendix A/B renamed to \"Annex A \u2014 Video Capture\" and \"Annex B \u2014 Video Identification Parade\"",
+        "PDFs: Appendix A/B renamed to \"Annex A — Video Capture\" and \"Annex B — Video Identification Parade\"",
         "Inline DSCC private toggle on the full custody / voluntary / telephone forms (matches the Quick Capture pattern); checkbox sizing fixed throughout"
       ]
     },
@@ -119,7 +127,7 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "UX audit batch 1 \u2014 essentials",
+        "UX audit batch 1 — essentials",
         "Validation: voluntary form section indices remapped, broken adviceGiven requirement removed, date auto-populated from instructionDateTime when missing",
         "Bottom bar: dynamic Finish pill (Finalise / Finish matter / Archive) reachable from any section instead of only Section 9",
         "Bottom bar: removed duplicate progress-dot row",
