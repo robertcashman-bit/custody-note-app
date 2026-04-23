@@ -130,14 +130,25 @@ function createSyncWorker(ctx) {
     }
   }
 
-  /** Enqueue a sync operation for a record. Replaces any existing entry for same record. */
+  /** Enqueue a sync operation for a record. Replaces any existing entry for
+   *  the same record UNLESS one is already mid-push. H31 — the v1 worker
+   *  deleted queue entries unconditionally, which could stomp on a row that
+   *  was in 'syncing' state and whose push is currently in flight (the push
+   *  would succeed, markSynced would fail to find the id, and the newer local
+   *  change would never be queued). We now skip entries in 'syncing' so the
+   *  in-flight push can complete, then enqueue the new version fresh.
+   */
   function enqueue(recordId, operation, payload) {
     if (!ctx.db) return null;
     const id = generateQueueId();
     const now = Date.now();
     const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload || {});
     try {
-      ctx.dbRun('DELETE FROM sync_queue WHERE record_id=?', [String(recordId)]);
+      // Leave syncing rows alone; delete every other prior entry for this record.
+      ctx.dbRun(
+        "DELETE FROM sync_queue WHERE record_id=? AND status IN ('pending','failed','blocked','synced')",
+        [String(recordId)]
+      );
       ctx.dbRun(
         'INSERT INTO sync_queue (id, record_id, operation, payload, created_at, retry_count, last_attempt, status, error) VALUES (?,?,?,?,?,0,?,?,?)',
         [id, String(recordId), operation || 'upsert', payloadStr, now, now, 'pending', null]
@@ -266,6 +277,10 @@ function createSyncWorker(ctx) {
         const retryable = isRetryableError(e);
         markFailed(id, e, retryable);
         _lastError = e && e.message ? e.message : String(e);
+        // H32 — invalidate the "recent successful push" cache on any error so
+        // the next cycle actually hits /api/health instead of blindly
+        // claiming api_available for up to 60 seconds.
+        _lastSuccessfulPushAt = 0;
         if (!retryable) setConnectivity('auth_required');
         else setConnectivity('internet_available_api_unreachable');
         notifyRenderer({ status: 'error', lastError: _lastError, retryable });

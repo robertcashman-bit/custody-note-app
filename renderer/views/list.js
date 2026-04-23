@@ -98,14 +98,14 @@ function refreshList() {
       var deletedBadge = r.deleted_at
         ? ' <span class="badge deleted" title="Deleted">Deleted</span>' : '';
       var archiveBtn = r.archived_at
-        ? '<button type="button" class="btn-list-action unarchive-btn" title="Restore from archive — record returns to the main Records list" data-id="' + r.id + '">Unarchive</button>'
-        : '<button type="button" class="btn-list-action archive-btn" title="Hide from main list — use Archived filter to find later" data-id="' + r.id + '">Archive</button>';
+        ? '<button type="button" class="btn-list-action unarchive-btn" title="Restore from archive — record returns to the main Records list" data-id="' + esc(String(r.id)) + '">Unarchive</button>'
+        : '<button type="button" class="btn-list-action archive-btn" title="Hide from main list — use Archived filter to find later" data-id="' + esc(String(r.id)) + '">Archive</button>';
 
       /* Officer Email Templates add-on — Email OIC button + Sent badge (gated on licence entitlement + user setting) */
       var emailOicBtn  = '';
       var oicSentBadge = '';
       if (emailAddonEntitled) {
-        emailOicBtn = '<button type="button" class="btn-list-action email-oic-btn" title="Email Officer in Charge" data-id="' + r.id + '">Email OIC</button>';
+        emailOicBtn = '<button type="button" class="btn-list-action email-oic-btn" title="Email Officer in Charge" data-id="' + esc(String(r.id)) + '">Email OIC</button>';
         if (d.officerEmailStatus === 'sent') {
           oicSentBadge = ' <span class="badge badge-oic-sent" title="OIC email sent on ' + esc(d.lastOfficerEmailSentDate ? new Date(d.lastOfficerEmailSentDate).toLocaleDateString('en-GB') : '') + '">&#9993; Sent</span>';
         }
@@ -123,7 +123,7 @@ function refreshList() {
               '<span class="badge deleted">Deleted</span>' +
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
-              '<button type="button" class="btn-list-action restore-btn" title="Restore this record" data-id="' + r.id + '">Restore</button>' +
+              '<button type="button" class="btn-list-action restore-btn" title="Restore this record" data-id="' + esc(String(r.id)) + '">Restore</button>' +
             '</div>' +
           '</div>';
       } else {
@@ -141,10 +141,10 @@ function refreshList() {
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               archiveBtn +
-              '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + r.id + '">Edit</button>' +
-              '<button type="button" class="btn-list-action dup-btn" title="Duplicate for another client (same session)" data-id="' + r.id + '">Duplicate</button>' +
-              '<button type="button" class="btn-list-action pdf-btn" title="Export PDF to Desktop" data-id="' + r.id + '">PDF</button>' +
-              '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + r.id + '">Delete</button>' +
+              '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + esc(String(r.id)) + '">Edit</button>' +
+              '<button type="button" class="btn-list-action dup-btn" title="Duplicate for another client (same session)" data-id="' + esc(String(r.id)) + '">Duplicate</button>' +
+              '<button type="button" class="btn-list-action pdf-btn" title="Export PDF to Desktop" data-id="' + esc(String(r.id)) + '">PDF</button>' +
+              '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + esc(String(r.id)) + '">Delete</button>' +
               emailOicBtn +
             '</div>' +
           '</div>';

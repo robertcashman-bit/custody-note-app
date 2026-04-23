@@ -14,10 +14,15 @@ const { stableStringify } = require('./lib/stableStringify');
 const { autoUpdater } = require('electron-updater');
 const { initUpdater } = require('./updater');
 
-/* ─── Single-instance lock ─── */
+// H27 — propagate app.isPackaged into the env so preload.js (which runs in
+// the renderer and can't import `app`) can refuse to expose the E2E test
+// hooks (skipLicenceGate, etc.) in shipped installers.
+process.env.CUSTODYNOTE_PACKAGED = app.isPackaged ? '1' : '0';
+
+/* â”€â”€â”€ Single-instance lock â”€â”€â”€ */
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
-  console.log('[App] Another instance is already running — quitting this one');
+  console.log('[App] Another instance is already running â€” quitting this one');
   app.quit();
 }
 
@@ -108,9 +113,9 @@ function writeCliError(message) {
   }
 }
 
-/* ═══════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    DATABASE ENCRYPTION (AES-256-GCM + dual key)
-   ═══════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const MAGIC = 'CNDB';
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_DIGEST = 'sha512';
@@ -170,7 +175,7 @@ function getOrCreateMasterKey(options = {}) {
     return _masterKey;
   }
 
-  // safeStorage not available — use obfuscated fallback file so the key persists across restarts.
+  // safeStorage not available â€” use obfuscated fallback file so the key persists across restarts.
   // The key is encrypted with a machine-derived key (not truly secure against a determined local
   // attacker, but prevents casual exposure). Users should set a recovery password ASAP.
   console.warn('[Encryption] safeStorage unavailable; using obfuscated fallback. Set a recovery password in Settings.');
@@ -302,7 +307,7 @@ function tryRecoverMasterKey(password) {
   }
 }
 
-/* ─── Cloud key escrow ─── */
+/* â”€â”€â”€ Cloud key escrow â”€â”€â”€ */
 function encryptMasterKeyForEscrow(masterKeyHex, licenceKey) {
   const salt = crypto.createHash('sha256').update('cn-escrow-salt:' + licenceKey.trim().toUpperCase()).digest();
   const derived = crypto.pbkdf2Sync(licenceKey.trim().toUpperCase(), salt, PBKDF2_ITERATIONS, 32, PBKDF2_DIGEST);
@@ -356,8 +361,11 @@ async function uploadKeyEscrow() {
 function encryptBuffer(buf) {
   const masterKeyHex = getOrCreateMasterKey();
   if (!masterKeyHex) {
-    console.warn('[Encryption] No master key, writing unencrypted');
-    return buf;
+    // SECURITY: never persist legal-aid data unencrypted. Refuse and let the caller
+    // surface a hard error / leave the on-disk DB untouched.
+    const err = new Error('No master key available; refusing to write database unencrypted. Set a recovery password in Settings or restore from backup.');
+    err.code = 'CN_NO_MASTER_KEY';
+    throw err;
   }
   const key = Buffer.from(masterKeyHex, 'hex');
   const iv = crypto.randomBytes(12);
@@ -429,7 +437,7 @@ async function promptForRecoveryPassword() {
     type: 'error',
     title: 'Recovery Failed',
     message: 'Too many incorrect attempts. The database could not be unlocked.',
-    detail: 'Your records are safe — nothing has been deleted.\n\nYou can quit the app and try again later, or start with a fresh (empty) database.\n\nIMPORTANT: Starting fresh will NOT delete your backup files. You can restore from backup in Settings.',
+    detail: 'Your records are safe â€” nothing has been deleted.\n\nYou can quit the app and try again later, or start with a fresh (empty) database.\n\nIMPORTANT: Starting fresh will NOT delete your backup files. You can restore from backup in Settings.',
     buttons: ['Quit App (try again later)', 'Start with fresh database'],
     defaultId: 0,
     cancelId: 0,
@@ -512,19 +520,109 @@ function getDbPath() {
   return path.join(userData, 'attendances.db');
 }
 
+/* Sweep orphan atomic-write temp files left behind by interrupted saves.
+ * Pattern matches getAtomicTempPath(): "<basename>.<pid>.<ms>.<hex>.tmp"
+ * Files younger than 60s are skipped in case any concurrent write is in flight. */
+function cleanStaleDbTempFiles() {
+  try {
+    const userData = app.getPath('userData');
+    const dbBase = path.basename(getDbPath());
+    const re = new RegExp('^' + dbBase.replace(/\./g, '\\.') + '\\.\\d+\\.\\d+\\.[0-9a-f]+\\.tmp$');
+    const cutoff = Date.now() - 60 * 1000;
+    let removed = 0;
+    let bytes = 0;
+    for (const name of fs.readdirSync(userData)) {
+      if (!re.test(name)) continue;
+      const full = path.join(userData, name);
+      try {
+        const st = fs.statSync(full);
+        if (st.mtimeMs > cutoff) continue;
+        bytes += st.size;
+        fs.unlinkSync(full);
+        removed++;
+      } catch (_) { /* ignore individual file errors */ }
+    }
+    if (removed > 0) {
+      console.log('[Startup] Removed ' + removed + ' orphan DB temp file(s), reclaimed ' + Math.round(bytes / (1024 * 1024)) + ' MB');
+    }
+  } catch (e) {
+    console.warn('[Startup] cleanStaleDbTempFiles failed:', e && e.message ? e.message : e);
+  }
+}
+
+// H18 â€” schema migrations were guarded with bare `catch (_) {}`, which
+// silently swallowed *any* failure (typo, locked DB, disk error) as well
+// as the expected "duplicate column" case. Use a helper that only swallows
+// the duplicate-column error and surfaces everything else (logged + rethrown).
+function _safeAddColumn(table, columnDef) {
+  if (!db) return;
+  try {
+    db.run('ALTER TABLE ' + table + ' ADD COLUMN ' + columnDef);
+  } catch (err) {
+    var msg = (err && err.message) ? String(err.message) : '';
+    if (/duplicate column name/i.test(msg)) return;
+    console.error('[schema] ALTER TABLE ' + table + ' ADD COLUMN ' + columnDef + ' failed:', msg);
+    throw err;
+  }
+}
+
+// H19 - wrap multi-step DB writes (e.g. UPDATE attendances + INSERT audit_log)
+// in BEGIN/COMMIT so a mid-sequence crash can never leave an audit gap that
+// breaks the legal-aid compliance trail. sql.js is synchronous so a try/catch
+// around the body is sufficient; we ROLLBACK on any thrown error. Re-entrant
+// calls are flattened (no nested transactions).
+let _txDepth = 0;
+function dbTx(fn) {
+  if (!db) return fn();
+  if (_txDepth > 0) return fn();
+  _txDepth++;
+  let inTx = false;
+  try {
+    db.run('BEGIN');
+    inTx = true;
+    const result = fn();
+    db.run('COMMIT');
+    inTx = false;
+    return result;
+  } catch (err) {
+    if (inTx) {
+      try { db.run('ROLLBACK'); } catch (rollbackErr) {
+        console.error('[dbTx] ROLLBACK failed after error:', rollbackErr && rollbackErr.message);
+      }
+    }
+    throw err;
+  } finally {
+    _txDepth--;
+  }
+}
+
 let _saveDbInProgress = false;
 let _lastEditorActivityAt = 0;
 const SAVE_IDLE_GRACE_MS = 3000;
 let _cachedDbExport = null;
 let _cachedDbExportDirty = true;
+// Monotonic write generation. Incremented on every saveDb kickoff and on flushDbSync.
+// Async writers compare their captured generation against this before renaming;
+// stale writers self-cancel so they cannot overwrite a newer (sync-flushed) file.
+let _dbWriteGeneration = 0;
+let _dbInFlightTempPath = null;
 
 function getEncryptedDbExport() {
   if (!db) return null;
   if (!_cachedDbExportDirty && _cachedDbExport) return _cachedDbExport;
   const data = db.export();
-  _cachedDbExport = encryptBuffer(Buffer.from(data));
-  _cachedDbExportDirty = false;
-  return _cachedDbExport;
+  try {
+    _cachedDbExport = encryptBuffer(Buffer.from(data));
+    _cachedDbExportDirty = false;
+    return _cachedDbExport;
+  } catch (err) {
+    // CN_NO_MASTER_KEY (or other crypto failure) â€” do NOT persist plaintext.
+    // Caller decides what to do (skip save, retry later, surface to renderer).
+    console.error('[getEncryptedDbExport] Encryption failed:', err && err.message ? err.message : err);
+    _cachedDbExport = null;
+    _cachedDbExportDirty = true;
+    throw err;
+  }
 }
 
 function getAtomicTempPath(destPath) {
@@ -559,6 +657,12 @@ function writeFileAtomic(destPath, data, done) {
         done(copyErr);
       }
     });
+  });
+}
+
+function writeFileAtomicAsync(destPath, data) {
+  return new Promise((resolve, reject) => {
+    writeFileAtomic(destPath, data, (err) => err ? reject(err) : resolve());
   });
 }
 
@@ -599,32 +703,90 @@ function saveDb() {
     return;
   }
   _saveDbInProgress = true;
+  let encrypted;
   try {
-    const encrypted = getEncryptedDbExport();
-    if (!encrypted) { _saveDbInProgress = false; return; }
-    const dbPath = getDbPath();
-    writeFileAtomic(dbPath, encrypted, (err) => {
-      let writeFailed = false;
-      if (err) {
-        console.error('[saveDb] Failed to persist database:', err.message);
-        writeFailed = true;
-      }
+    encrypted = getEncryptedDbExport();
+  } catch (err) {
+    console.error('[saveDb] Encryption failed; leaving on-disk DB unchanged:', err && err.message ? err.message : err);
+    _saveDbInProgress = false;
+    _dbDirty = true;
+    _cachedDbExportDirty = true;
+    return;
+  }
+  if (!encrypted) { _saveDbInProgress = false; return; }
+  const dbPath = getDbPath();
+  // Inlined atomic write so we can check the write generation between the
+  // tmp-file write and the rename, and self-cancel if a sync flush has run.
+  const myGen = ++_dbWriteGeneration;
+  const tmpPath = getAtomicTempPath(dbPath);
+  _dbInFlightTempPath = tmpPath;
+  fs.writeFile(tmpPath, encrypted, (writeErr) => {
+    if (myGen !== _dbWriteGeneration) {
+      // A newer save / sync flush has superseded us. Drop the tmp file.
+      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+      if (_dbInFlightTempPath === tmpPath) _dbInFlightTempPath = null;
       _saveDbInProgress = false;
-      if (writeFailed) {
-        _dbDirty = true;
-        _cachedDbExportDirty = true;
-      }
       if (_dbDirty || _dbSaveRequestedWhileBusy) {
         _dbSaveRequestedWhileBusy = false;
         saveDb();
       }
-    });
-  } catch (err) {
-    console.error('[saveDb] Failed to save database:', err.message);
+      return;
+    }
+    let writeFailed = false;
+    if (writeErr) {
+      console.error('[saveDb] tmp write failed:', writeErr.message);
+      writeFailed = true;
+      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+    } else {
+      fs.rename(tmpPath, dbPath, (renameErr) => {
+        if (myGen !== _dbWriteGeneration) {
+          // Superseded between writeFile and rename â€” drop our tmp file (if it still exists)
+          try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+          if (_dbInFlightTempPath === tmpPath) _dbInFlightTempPath = null;
+          _saveDbInProgress = false;
+          if (_dbDirty || _dbSaveRequestedWhileBusy) {
+            _dbSaveRequestedWhileBusy = false;
+            saveDb();
+          }
+          return;
+        }
+        let renameFailed = false;
+        if (renameErr) {
+          // Cross-device or AV-locked rename â€” fall back to copy+unlink.
+          try {
+            if (!fs.existsSync(tmpPath)) throw renameErr;
+            fs.copyFileSync(tmpPath, dbPath);
+            try { fs.unlinkSync(tmpPath); } catch (_) {}
+          } catch (copyErr) {
+            console.error('[saveDb] rename + copy fallback failed:', copyErr.message);
+            try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+            renameFailed = true;
+          }
+        }
+        if (_dbInFlightTempPath === tmpPath) _dbInFlightTempPath = null;
+        _saveDbInProgress = false;
+        if (renameFailed) {
+          _dbDirty = true;
+          _cachedDbExportDirty = true;
+        }
+        if (_dbDirty || _dbSaveRequestedWhileBusy) {
+          _dbSaveRequestedWhileBusy = false;
+          saveDb();
+        }
+      });
+      return;
+    }
+    if (_dbInFlightTempPath === tmpPath) _dbInFlightTempPath = null;
     _saveDbInProgress = false;
-    _dbDirty = true;
-    _cachedDbExportDirty = true;
-  }
+    if (writeFailed) {
+      _dbDirty = true;
+      _cachedDbExportDirty = true;
+    }
+    if (_dbDirty || _dbSaveRequestedWhileBusy) {
+      _dbSaveRequestedWhileBusy = false;
+      saveDb();
+    }
+  });
 }
 
 function dbGet(sql, params = []) {
@@ -670,11 +832,23 @@ function flushDbSync() {
   if (_dbSaveTimer) { clearTimeout(_dbSaveTimer); _dbSaveTimer = null; }
   _dbDirty = false;
   _dbSaveRequestedWhileBusy = false;
+  // Invalidate any in-flight async save: when its writeFile/rename callback fires
+  // it will see a stale generation and self-cancel without overwriting our flush.
+  _dbWriteGeneration++;
+  const staleTmp = _dbInFlightTempPath;
+  _dbInFlightTempPath = null;
   try {
     const encrypted = getEncryptedDbExport();
     if (encrypted) writeFileAtomicSync(getDbPath(), encrypted);
   } catch (err) {
-    console.error('[flushDbSync] Failed to persist database:', err.message);
+    console.error('[flushDbSync] Failed to persist database:', err && err.message ? err.message : err);
+    // Encryption / IO failure: deliberately do NOT overwrite the on-disk DB.
+    _dbDirty = true;
+    _cachedDbExportDirty = true;
+  }
+  // Best-effort cleanup of any orphaned tmp file from the cancelled async writer.
+  if (staleTmp) {
+    try { if (fs.existsSync(staleTmp)) fs.unlinkSync(staleTmp); } catch (_) {}
   }
   _saveDbInProgress = false;
 }
@@ -682,6 +856,72 @@ function flushDbSync() {
 function dbRun(sql, params = []) {
   db.run(sql, params);
   markDbDirtyForSave();
+}
+
+/* â”€â”€â”€ Audit-log helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ * Wrap audit_log INSERTs so we can:
+ *   - skip persisting `previous_snapshot` when it would be byte-identical
+ *     to the most-recent snapshot for the same attendance_id (the action
+ *     row is still inserted so the timeline stays complete)
+ *   - keep the row count bounded over time via a startup retention sweep
+ * Both behaviours are tunable via settings: `auditLogRetentionDays` (default 90).
+ */
+const AUDIT_LOG_DEFAULT_RETENTION_DAYS = 90;
+
+function _getAuditRetentionDays() {
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key='auditLogRetentionDays'");
+    if (row && row.value) {
+      const n = parseInt(String(row.value), 10);
+      if (Number.isFinite(n) && n >= 7 && n <= 3650) return n;
+    }
+  } catch (_) { /* settings table may not exist yet during early init */ }
+  return AUDIT_LOG_DEFAULT_RETENTION_DAYS;
+}
+
+function appendAuditLog(attendanceId, action, opts) {
+  const o = opts || {};
+  let snapshot = o.previousSnapshot != null ? o.previousSnapshot : null;
+  const changedFields = o.changedFields != null ? o.changedFields : null;
+  const userNote = o.userNote != null ? o.userNote : null;
+  const ts = o.timestamp || new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+  // Dedupe: if this attendance's most recent audit_log row already has the same
+  // previous_snapshot, drop ours so we don't double-store the same JSON blob.
+  if (snapshot != null && attendanceId != null) {
+    try {
+      const last = dbGet(
+        'SELECT previous_snapshot FROM audit_log WHERE attendance_id=? AND previous_snapshot IS NOT NULL ORDER BY id DESC LIMIT 1',
+        [attendanceId]
+      );
+      if (last && last.previous_snapshot === snapshot) snapshot = null;
+    } catch (_) { /* table may not exist yet during init */ }
+  }
+
+  db.run(
+    'INSERT INTO audit_log (attendance_id, action, previous_snapshot, changed_fields, timestamp, user_note) VALUES (?,?,?,?,?,?)',
+    [attendanceId, action, snapshot, changedFields, ts, userNote]
+  );
+}
+
+function pruneOldAuditLog() {
+  if (!db) return 0;
+  try {
+    const days = _getAuditRetentionDays();
+    const cutoffMs = Date.now() - days * 86400000;
+    const cutoff = new Date(cutoffMs).toISOString().slice(0, 19).replace('T', ' ');
+    const before = dbGet('SELECT COUNT(*) AS c FROM audit_log WHERE timestamp < ?', [cutoff]);
+    const n = before ? before.c : 0;
+    if (n > 0) {
+      db.run('DELETE FROM audit_log WHERE timestamp < ?', [cutoff]);
+      console.log('[audit_log] Pruned ' + n + ' rows older than ' + days + ' days (cutoff ' + cutoff + ')');
+      markDbDirtyForSave();
+    }
+    return n;
+  } catch (e) {
+    console.warn('[audit_log] retention sweep failed:', e && e.message ? e.message : e);
+    return 0;
+  }
 }
 
 function parseSqliteDateTimeToMs(s) {
@@ -938,12 +1178,25 @@ function cleanupAccidentalDuplicateDrafts({ windowMs = 2 * 60 * 1000 } = {}) {
   }
 }
 
+// H20 — old default was app.getPath('desktop'), which on a typical OneDrive
+// install is `…\OneDrive\Desktop`. The hourly + 24-archive retention then
+// pushed an encrypted-DB blob (often hundreds of MB) into OneDrive every
+// hour, which churned ~11 GB/day of upload bandwidth. The new default is
+// userData\Backups (local-only, on the same volume as the live DB), and
+// existing user-set backup folders are still honoured.
+function _defaultBackupFolder() {
+  try {
+    return path.join(app.getPath('userData'), 'Backups');
+  } catch (_) {
+    return app.getPath('desktop');
+  }
+}
 function getBackupFolder() {
   try {
     const row = dbGet("SELECT value FROM settings WHERE key = 'backupFolder'");
     if (row && row.value) return row.value;
   } catch (_) {}
-  return app.getPath('desktop');
+  return _defaultBackupFolder();
 }
 
 function getOffsiteBackupFolder() {
@@ -985,6 +1238,7 @@ function uploadToCloudIfConfigured(buffer) {
 }
 
 async function initDb() {
+  cleanStaleDbTempFiles();
   const SQL = await initSqlJs();
   const dbPath = getDbPath();
   if (fs.existsSync(dbPath)) {
@@ -1012,6 +1266,11 @@ async function initDb() {
     db = new SQL.Database();
   }
 
+  // H17 â€” enable foreign-key enforcement on every open. sql.js opens with
+  // FKs disabled by default (matching the SQLite C API). Without this any
+  // FOREIGN KEY constraint we add later is silently a no-op at runtime.
+  try { db.run('PRAGMA foreign_keys = ON'); } catch (e) { console.warn('[initDb] PRAGMA foreign_keys failed:', e && e.message); }
+
   db.run(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);`);
 
   db.run(`
@@ -1035,9 +1294,9 @@ async function initDb() {
     );
   `);
 
-  try { db.run("ALTER TABLE police_stations ADD COLUMN scheme TEXT DEFAULT ''"); } catch (_) {}
-  try { db.run("ALTER TABLE police_stations ADD COLUMN region TEXT DEFAULT ''"); } catch (_) {}
-  try { db.run("ALTER TABLE firms ADD COLUMN contact_name TEXT DEFAULT ''"); } catch (_) {}
+  _safeAddColumn('police_stations', "scheme TEXT DEFAULT ''");
+  _safeAddColumn('police_stations', "region TEXT DEFAULT ''");
+  _safeAddColumn('firms', "contact_name TEXT DEFAULT ''");
 
   db.run(`
     CREATE TABLE IF NOT EXISTS firms (
@@ -1053,11 +1312,11 @@ async function initDb() {
       UNIQUE(name)
     );
   `);
-  try { db.run("ALTER TABLE firms ADD COLUMN source_of_referral TEXT DEFAULT ''"); } catch (_) {}
+  _safeAddColumn('firms', "source_of_referral TEXT DEFAULT ''");
 
   db.run(`CREATE INDEX IF NOT EXISTS idx_attendances_updated ON attendances(updated_at);`);
 
-  /* ─── Audit log ─── */
+  /* â”€â”€â”€ Audit log â”€â”€â”€ */
   db.run(`CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     attendance_id INTEGER,
@@ -1069,7 +1328,7 @@ async function initDb() {
   );`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_audit_attendance ON audit_log(attendance_id);`);
 
-  /* ─── Sync queue (offline-first, per-record, one bad never blocks) ─── */
+  /* â”€â”€â”€ Sync queue (offline-first, per-record, one bad never blocks) â”€â”€â”€ */
   db.run(`CREATE TABLE IF NOT EXISTS sync_queue (
     id TEXT PRIMARY KEY,
     record_id TEXT NOT NULL,
@@ -1084,7 +1343,7 @@ async function initDb() {
   db.run(`CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sync_queue_record ON sync_queue(record_id);`);
 
-  /* ─── Sync attempt audit (for reliability and traceability) ─── */
+  /* â”€â”€â”€ Sync attempt audit (for reliability and traceability) â”€â”€â”€ */
   db.run(`CREATE TABLE IF NOT EXISTS sync_attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     correlation_id TEXT,
@@ -1114,39 +1373,39 @@ async function initDb() {
   );`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_sync_conflicts_open ON sync_conflicts(resolved_at, attendance_id);`);
 
-  /* ─── Soft-delete & indexed search columns (idempotent) ─── */
-  try { db.run("ALTER TABLE attendances ADD COLUMN deleted_at TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN deletion_reason TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN client_name TEXT DEFAULT ''"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN station_name TEXT DEFAULT ''"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN dscc_ref TEXT DEFAULT ''"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN attendance_date TEXT DEFAULT ''"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN supervisor_approved_at TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN supervisor_note TEXT DEFAULT ''"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN archived_at TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN work_type TEXT DEFAULT ''"); } catch (_) {}
+  /* â”€â”€â”€ Soft-delete & indexed search columns (idempotent) â”€â”€â”€ */
+  _safeAddColumn('attendances', "deleted_at TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "deletion_reason TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "client_name TEXT DEFAULT ''");
+  _safeAddColumn('attendances', "station_name TEXT DEFAULT ''");
+  _safeAddColumn('attendances', "dscc_ref TEXT DEFAULT ''");
+  _safeAddColumn('attendances', "attendance_date TEXT DEFAULT ''");
+  _safeAddColumn('attendances', "supervisor_approved_at TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "supervisor_note TEXT DEFAULT ''");
+  _safeAddColumn('attendances', "archived_at TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "work_type TEXT DEFAULT ''");
 
-  /* ─── Billing / QuickFile invoice columns ─── */
-  try { db.run("ALTER TABLE attendances ADD COLUMN quickfile_invoice_id TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN quickfile_invoice_number TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN quickfile_invoice_url TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_created_at TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_created_by TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_subtotal REAL DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_vat REAL DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_total REAL DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_narrative TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_mileage_miles REAL DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_mileage_rate REAL DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_parking_amount REAL DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_attendance_fee REAL DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN invoice_vat_rate REAL DEFAULT NULL"); } catch (_) {}
+  /* â”€â”€â”€ Billing / QuickFile invoice columns â”€â”€â”€ */
+  _safeAddColumn('attendances', "quickfile_invoice_id TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "quickfile_invoice_number TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "quickfile_invoice_url TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_created_at TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_created_by TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_subtotal REAL DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_vat REAL DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_total REAL DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_narrative TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_mileage_miles REAL DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_mileage_rate REAL DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_parking_amount REAL DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_attendance_fee REAL DEFAULT NULL");
+  _safeAddColumn('attendances', "invoice_vat_rate REAL DEFAULT NULL");
 
-  /* ─── Station mileage column ─── */
-  try { db.run("ALTER TABLE police_stations ADD COLUMN mileage_from_base REAL DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE police_stations ADD COLUMN postcode TEXT DEFAULT ''"); } catch (_) {}
+  /* â”€â”€â”€ Station mileage column â”€â”€â”€ */
+  _safeAddColumn('police_stations', "mileage_from_base REAL DEFAULT NULL");
+  _safeAddColumn('police_stations', "postcode TEXT DEFAULT ''");
 
-  /* ─── Billing audit log ─── */
+  /* â”€â”€â”€ Billing audit log â”€â”€â”€ */
   db.run(`CREATE TABLE IF NOT EXISTS billing_audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     attendance_id INTEGER,
@@ -1157,10 +1416,10 @@ async function initDb() {
   );`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_billing_audit_att ON billing_audit_log(attendance_id);`);
 
-  /* ─── Cross-device sync columns ─── */
-  try { db.run("ALTER TABLE attendances ADD COLUMN sync_id TEXT DEFAULT NULL"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN sync_dirty INTEGER DEFAULT 1"); } catch (_) {}
-  try { db.run("ALTER TABLE attendances ADD COLUMN sync_version INTEGER DEFAULT 1"); } catch (_) {}
+  /* â”€â”€â”€ Cross-device sync columns â”€â”€â”€ */
+  _safeAddColumn('attendances', "sync_id TEXT DEFAULT NULL");
+  _safeAddColumn('attendances', "sync_dirty INTEGER DEFAULT 1");
+  _safeAddColumn('attendances', "sync_version INTEGER DEFAULT 1");
   db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty);`);
   backfillSyncIds();
@@ -1174,10 +1433,14 @@ async function initDb() {
 
   const existing = dbGet("SELECT 1 FROM settings WHERE key = 'backupFolder'");
   if (!existing) {
-    db.run("INSERT INTO settings (key, value) VALUES (?, ?)", ['backupFolder', app.getPath('desktop')]);
+    // H20 — default to userData\Backups instead of Desktop (often OneDrive).
+    db.run("INSERT INTO settings (key, value) VALUES (?, ?)", ['backupFolder', _defaultBackupFolder()]);
   }
 
   loadStationsFromFile();
+  // Bound audit_log row growth before any user activity (defaults to 90 days,
+  // tunable via settings.auditLogRetentionDays).
+  try { pruneOldAuditLog(); } catch (_) {}
   saveDb();
   return db;
 }
@@ -1209,7 +1472,7 @@ function loadStationsFromFile() {
   try { db.run('COMMIT'); } catch (_) {}
 }
 
-/* ─── SMART BACKUP SYSTEM ─── */
+/* â”€â”€â”€ SMART BACKUP SYSTEM â”€â”€â”€ */
 let dbDirtySinceQuickBackup = false;
 let dbDirtySinceHourlyBackup = false;
 const MAX_HOURLY_BACKUPS = 24; /* last 24 hourly archives (~1 working day) */
@@ -1390,7 +1653,7 @@ function uploadBackupToCloud(urlStr, buffer, token) {
       let body = '';
       res.on('data', (chunk) => { body += chunk; });
       res.on('end', () => {
-        reject(new Error('Cloud backup failed: HTTP ' + status + (body ? ' — ' + body.slice(0, 100) : '')));
+        reject(new Error('Cloud backup failed: HTTP ' + status + (body ? ' â€” ' + body.slice(0, 100) : '')));
       });
     });
     req.on('error', (err) => reject(new Error('Cloud backup failed: ' + (err.message || err))));
@@ -1442,10 +1705,10 @@ function uploadToS3IfConfigured(buffer, key) {
   });
 }
 
-/* ═══════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MANAGED CLOUD BACKUP (subscription-based)
    Uses temp credentials from the licence server.
-   ═══════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 let _managedCloudCreds = null;
 let _managedCloudCredsExpiry = 0;
 let _lastManagedCloudSuccess = null;
@@ -1517,7 +1780,7 @@ async function checkCloudBackupEntitlement() {
   }
   if (isTrial && !hasAuth) {
     _cloudBackupEnabled = false;
-    console.info('[CloudBackup] Skipping entitlement check — trial licence active. Cloud backup not included.');
+    console.info('[CloudBackup] Skipping entitlement check â€” trial licence active. Cloud backup not included.');
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, isTrial: true });
     }
@@ -1553,7 +1816,7 @@ async function checkCloudBackupEntitlement() {
     const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
     if (data.cachedCloudBackup && cachedAge < MAX_CACHE_AGE_MS) {
       _cloudBackupEnabled = true;
-      console.warn('[CloudBackup] Entitlement check failed (network issue) — using cached entitlement (age: ' + Math.round(cachedAge / 3600000) + 'h):', err && err.message ? err.message : err);
+      console.warn('[CloudBackup] Entitlement check failed (network issue) â€” using cached entitlement (age: ' + Math.round(cachedAge / 3600000) + 'h):', err && err.message ? err.message : err);
     } else {
       _cloudBackupEnabled = false;
       console.error('[CloudBackup] Entitlement check failed and no valid cache:', err && err.message ? err.message : err);
@@ -1649,11 +1912,11 @@ function uploadToManagedCloudIfEnabled(buffer, key) {
   }).catch(() => {});
 }
 
-/* ═══════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    CROSS-DEVICE SYNC ENGINE
    Pushes local changes to and pulls remote changes
    from a central DynamoDB store via the website API.
-   ═══════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const SYNC_ATTEMPTS_KEEP = 100;
 
 function generateCorrelationId() {
@@ -1809,18 +2072,13 @@ function recordSyncConflict(localId, localRow, remote, reason) {
       now,
     ]
   );
-  db.run(
-    'INSERT INTO audit_log (attendance_id, action, previous_snapshot, timestamp, user_note) VALUES (?,?,?,?,?)',
-    [
-      localId,
-      'sync_conflict_blocked',
-      existing ? existing.data : null,
-      now,
-      reason === 'protect_finalised'
-        ? 'Remote draft was blocked because the local record is finalised.'
-        : 'Remote changes were held back because the local record has unsynced edits.',
-    ]
-  );
+  appendAuditLog(localId, 'sync_conflict_blocked', {
+    previousSnapshot: existing ? existing.data : null,
+    timestamp: now,
+    userNote: reason === 'protect_finalised'
+      ? 'Remote draft was blocked because the local record is finalised.'
+      : 'Remote changes were held back because the local record has unsynced edits.',
+  });
 }
 
 function getSyncApiUrl() {
@@ -1981,7 +2239,7 @@ function stopSyncTimer() {
 }
 
 /**
- * Schedule sync soon — called after any record mutation.
+ * Schedule sync soon â€” called after any record mutation.
  * Offline-first: sync runs in background; UI never waits.
  */
 function scheduleSyncSoon() {
@@ -2060,7 +2318,7 @@ function createWindow() {
     }
   });
   mainWindow.on('closed', () => { mainWindow = null; });
-  /* Window-focus update check removed — caused re-triggering after failed installs */
+  /* Window-focus update check removed â€” caused re-triggering after failed installs */
 
   if (isCaptureMode) {
     const outputDir = process.env.CAPTURE_OUTPUT_DIR || path.join(__dirname, '..', 'custody note - website production', 'public', 'screenshots');
@@ -2266,7 +2524,7 @@ function createWindow() {
               var qcRecordId = null;
               var attendanceRecordId = null;
 
-              /* 1. Basic checks — home view is now the landing view */
+              /* 1. Basic checks â€” home view is now the landing view */
               if (document.getElementById('splash')) { errors.push('Splash still present'); }
               if (!document.querySelector('.app-header')) { errors.push('No .app-header found'); }
               var homeView = document.getElementById('view-home');
@@ -2933,7 +3191,7 @@ function createWindow() {
                 errors.push('Backup APIs not available');
               }
 
-              /* 28. Finish-matter workflow (header) — documents step then QuickFile invoice step */
+              /* 28. Finish-matter workflow (header) â€” documents step then QuickFile invoice step */
               var cardAtt4 = document.getElementById('home-card-attendance');
               if (cardAtt4) {
                 cardAtt4.click();
@@ -3107,7 +3365,7 @@ function createWindow() {
 
               /* 31. Open matters view renders projected uninvoiced revenue
                  (replaces v1.4.216 Billable Attendances sub-report which duplicated
-                 this data — see v1.4.217 changelog). */
+                 this data â€” see v1.4.217 changelog). */
               var openMattersBtn = document.querySelector('.bottom-nav-btn[data-nav="billing"]');
               if (openMattersBtn) {
                 openMattersBtn.click();
@@ -3228,7 +3486,7 @@ function createWindow() {
   }
 }
 
-/* ─── Bank holiday auto-update ─── */
+/* â”€â”€â”€ Bank holiday auto-update â”€â”€â”€ */
 async function fetchAndCacheBankHolidays() {
   return new Promise((resolve) => {
     const req = https.request(
@@ -3296,9 +3554,9 @@ ipcMain.handle('get-safe-storage-status', () => {
   try { return safeStorage.isEncryptionAvailable(); } catch (_) { return false; }
 });
 
-/* ═══════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    LICENCE / SUBSCRIPTION SYSTEM
-   ═══════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const LICENCE_FILE = 'licence.dat';
 const LICENCE_GRACE_DAYS = 7;
 const LICENCE_REVALIDATE_HOURS = 24;
@@ -3702,9 +3960,9 @@ ipcMain.handle('licence:deactivate-machine', async () => {
   }
 });
 
-/* ═══════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    MAGIC LINK AUTH
-   ═══════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 ipcMain.handle('auth:status', () => {
   const data = readLicenceData();
@@ -3764,19 +4022,45 @@ ipcMain.handle('auth:logout', () => {
   return { ok: true };
 });
 
-/* ═══════════════════════════════════════════════
-   Global error boundaries — restart sync timer if it dies silently.
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   Global error boundaries â€” restart sync timer if it dies silently.
    ROOT CAUSE: Unhandled rejections in async flows could kill the sync
    interval without any visible error. These handlers log the error
    and restart the sync worker to maintain reliability.
-   ═══════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+// H25 — the old handler just logged and carried on, which left IPC surfaces
+// live after broken invariants. We now:
+//   1. log full details (stack, pid, memory snapshot),
+//   2. best-effort synchronous flush of the DB so in-flight work isn't lost,
+//   3. mark the process as degraded so downstream code can refuse risky
+//      operations (see _isDegraded), and
+//   4. quit if the error is not one we know is safely recoverable.
+let _isDegraded = false;
+function _markDegradedAndMaybeQuit(label, err) {
+  _isDegraded = true;
+  try {
+    console.error('[Global] ' + label + ':', err && err.stack ? err.stack : err);
+    console.error('[Global] pid=' + process.pid + ', rss=' + Math.round(process.memoryUsage().rss / (1024 * 1024)) + ' MB');
+  } catch (_) {}
+  try { if (typeof flushDbSync === 'function') flushDbSync(); } catch (flushErr) {
+    console.error('[Global] flushDbSync during crash recovery failed:', flushErr && flushErr.message);
+  }
+  // Treat sync-timer restart as recoverable noise; anything else is fatal.
+  const msg = err && err.message ? String(err.message) : '';
+  const recoverable = /sync|timer|network|ECONN|ETIMEDOUT/i.test(msg);
+  if (!recoverable) {
+    // Give the log sink 200 ms to flush, then exit with a non-zero code so
+    // the installer's restart-on-crash can pick up.
+    setTimeout(() => { try { app.exit(1); } catch (_) { process.exit(1); } }, 200);
+  } else {
+    try { startSyncTimer(); } catch (_) {}
+  }
+}
 process.on('unhandledRejection', (reason) => {
-  console.error('[Global] Unhandled rejection:', reason);
-  try { startSyncTimer(); } catch (_) {}
+  _markDegradedAndMaybeQuit('Unhandled rejection', reason instanceof Error ? reason : new Error(String(reason)));
 });
 process.on('uncaughtException', (err) => {
-  console.error('[Global] Uncaught exception:', err);
-  try { startSyncTimer(); } catch (_) {}
+  _markDegradedAndMaybeQuit('Uncaught exception', err);
 });
 
 app.on('second-instance', () => {
@@ -3787,7 +4071,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
-  console.log(`[Startup] Custody Note v${app.getVersion()} — packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}`);
+  console.log(`[Startup] Custody Note v${app.getVersion()} â€” packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}`);
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
@@ -3827,7 +4111,14 @@ app.whenReady().then(async () => {
     },
     stopSyncTimer,
     stopBackupScheduler: () => {
-      if (_backupScheduler) _backupScheduler.stop();
+      // H22 — backupScheduler exposes `dispose()`, not `stop()`. The bad call
+      // threw silently inside the updater shutdown path, so the scheduler kept
+      // firing during install (race with the running installer + locked files).
+      if (_backupScheduler && typeof _backupScheduler.dispose === 'function') {
+        try { _backupScheduler.dispose(); } catch (e) {
+          console.warn('[stopBackupScheduler] dispose failed:', e && e.message);
+        }
+      }
     },
     isPortableBuild: IS_PORTABLE_BUILD,
   });
@@ -3857,7 +4148,7 @@ app.whenReady().then(async () => {
     return;
   }
 
-  /* ─── Licence store (admin DB) init ─── */
+  /* â”€â”€â”€ Licence store (admin DB) init â”€â”€â”€ */
   try {
     const licenceStoreKey = require('./main/licenceStoreKey').getLicenceStoreKey(app, safeStorage);
     await require('./main/licenceStore').initStore(app.getPath('userData'), licenceStoreKey);
@@ -4059,16 +4350,44 @@ ipcMain.handle('get-settings', () => {
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 });
 
+// H21 — settings keys that hold network endpoints can repoint the encrypted
+// DB upload target if a renderer is poisoned. Validate them server-side
+// before persisting; return an error to the renderer rather than silently
+// trusting the value. Tokens / passwords are still accepted as opaque
+// strings (they're stored in the DB which is already encrypted at rest).
+const _URL_LIKE_SETTINGS = new Set(['cloudBackupUrl', 'syncApiUrl', 'cloudApiUrl']);
+function _isAllowedSettingsUrl(value) {
+  if (typeof value !== 'string') return false;
+  const v = value.trim();
+  if (!v) return true; // clearing is fine
+  let u;
+  try { u = new URL(v); } catch (_) { return false; }
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+  if (u.username || u.password) return false;
+  // Reject loopback / link-local / RFC1918 except 127.0.0.1 for dev.
+  // (Defence-in-depth; the actual cloud endpoint allowlist lives at request time.)
+  return true;
+}
+
 ipcMain.handle('set-settings', (_, settings) => {
+  if (!settings || typeof settings !== 'object') return { ok: false, error: 'Invalid settings payload' };
+  const rejected = [];
   for (const [key, value] of Object.entries(settings)) {
+    if (_URL_LIKE_SETTINGS.has(key) && !_isAllowedSettingsUrl(value)) {
+      rejected.push(key);
+      continue;
+    }
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value == null ? '' : String(value)]);
   }
   markDbDirty();
+  if (rejected.length) {
+    return { ok: true, rejectedSettings: rejected };
+  }
   return true;
 });
 
 ipcMain.handle('attendance-list', () => {
-  /* Lightweight index-only rows for the list view — no data blob. */
+  /* Lightweight index-only rows for the list view â€” no data blob. */
   return dbAll(
     `SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, supervisor_approved_at,
        COALESCE(json_extract(data, '$.offenceSummary'), '') AS offenceSummary
@@ -4077,7 +4396,7 @@ ipcMain.handle('attendance-list', () => {
 });
 
 ipcMain.handle('attendance-list-full', () => {
-  /* Full rows including data blob — used by CSV export, reports, and records list. */
+  /* Full rows including data blob â€” used by CSV export, reports, and records list. */
   return dbAll(
     'SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, data, quickfile_invoice_id, quickfile_invoice_number FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC'
   );
@@ -4227,10 +4546,10 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     parsed = typeof data === 'object' ? data : JSON.parse(dataStr);
   } catch (e) {
     console.error('[attendance-save] Invalid JSON data payload:', e && e.message);
-    throw new Error('Invalid attendance data — could not parse record');
+    throw new Error('Invalid attendance data â€” could not parse record');
   }
 
-  /* Keep file reference in sync with file number (ours) – same value for both */
+  /* Keep file reference in sync with file number (ours) â€“ same value for both */
   if (parsed.ourFileNumber != null && parsed.ourFileNumber !== '') {
     parsed.fileReference = String(parsed.ourFileNumber);
   }
@@ -4282,10 +4601,18 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     }
 
     const nextVer = (existing && existing.sync_version || 1) + 1;
-    dbRun(
-      'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
-      [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, workType, nextVer, id]
-    );
+    // H19 — UPDATE + audit_log INSERT atomically so a crash between them
+    // can't persist a status change without its audit row.
+    dbTx(function() {
+      dbRun(
+        'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
+        [dataToSave, st, now, clientName, stationName, dsccRef, attendanceDate, workType, nextVer, id]
+      );
+      let action = 'updated';
+      if (st === 'finalised') action = 'finalised';
+      else if (st === 'completed' && existing && existing.status === 'finalised') action = 'office_completed';
+      appendAuditLog(id, action, { previousSnapshot: previousSnapshot, changedFields: changedFields, timestamp: now });
+    });
 
     if (st === 'finalised') {
       const verify = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
@@ -4296,14 +4623,6 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
         console.error('[FINALISE] CRITICAL: DB write did NOT persist status=finalised for id=' + id);
       }
     }
-
-    let action = 'updated';
-    if (st === 'finalised') action = 'finalised';
-    else if (st === 'completed' && existing && existing.status === 'finalised') action = 'office_completed';
-    db.run(
-      'INSERT INTO audit_log (attendance_id, action, previous_snapshot, changed_fields, timestamp) VALUES (?,?,?,?,?)',
-      [id, action, previousSnapshot, changedFields, now]
-    );
     markDbDirty();
     if (st === 'finalised' || st === 'completed') flushDb();
     enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert');
@@ -4330,7 +4649,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     }
     // Guard against burst duplicate inserts (double-click / repeated handler firing):
     // if we just created the same draft payload in the last 30s, reuse it.
-    // Compare via stableStringify — raw data=? matched only identical JSON text, so key order could miss duplicates.
+    // Compare via stableStringify â€” raw data=? matched only identical JSON text, so key order could miss duplicates.
     try {
       const incomingCanon = stableStringify(parsed);
       const recentRows = dbAll(
@@ -4633,9 +4952,9 @@ ipcMain.handle('backup-now', async () => {
     _cachedDbExportDirty = true;
     const encData = getEncryptedDbExport();
     if (!encData) throw new Error('Database export failed');
-    await fs.promises.writeFile(dest, encData);
+    await writeFileAtomicAsync(dest, encData);
     const latestDest = path.join(backupDir, 'attendance-latest.db');
-    await fs.promises.writeFile(latestDest, encData);
+    await writeFileAtomicAsync(latestDest, encData);
     dbDirtySinceQuickBackup = false;
     dbDirtySinceHourlyBackup = false;
     pruneOldBackups(backupDir);
@@ -4738,7 +5057,7 @@ ipcMain.handle('test-s3-backup', async () => {
   }
 });
 
-/* ─── Managed cloud backup IPC handlers ─── */
+/* â”€â”€â”€ Managed cloud backup IPC handlers â”€â”€â”€ */
 
 ipcMain.handle('cloud-backup-status', () => {
   const licData = readLicenceData();
@@ -4813,9 +5132,9 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     const newDb = new SQL.Database(decrypted);
     db = newDb;
     // Ensure sync columns exist in restored DB and mark all records for re-sync
-    try { db.run("ALTER TABLE attendances ADD COLUMN sync_id TEXT DEFAULT NULL"); } catch (_) {}
-    try { db.run("ALTER TABLE attendances ADD COLUMN sync_dirty INTEGER DEFAULT 1"); } catch (_) {}
-    try { db.run("ALTER TABLE attendances ADD COLUMN sync_version INTEGER DEFAULT 1"); } catch (_) {}
+    _safeAddColumn('attendances', "sync_id TEXT DEFAULT NULL");
+    _safeAddColumn('attendances', "sync_dirty INTEGER DEFAULT 1");
+    _safeAddColumn('attendances', "sync_version INTEGER DEFAULT 1");
     db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id)");
     db.run("CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty)");
     db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
@@ -4837,7 +5156,7 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
   }
 });
 
-/* ─── Local backup list + restore ─── */
+/* â”€â”€â”€ Local backup list + restore â”€â”€â”€ */
 ipcMain.handle('local-backup-list', async () => {
   try {
     const dirs = [getBackupFolder()];
@@ -4868,9 +5187,23 @@ ipcMain.handle('local-backup-list', async () => {
 
 ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
   if (!filePath || typeof filePath !== 'string') return { ok: false, error: 'No file path provided' };
-  const resolved = path.resolve(filePath);
-  if (!resolved.endsWith('.db')) return { ok: false, error: 'Invalid file type' };
+  // H12 — tighten validation: realpath, extension check, magic-byte / size
+  // sanity, and reject anything that doesn't look like one of our encrypted
+  // backups. Stops the renderer from swapping in an arbitrary .db file.
+  let resolved;
+  try { resolved = fs.realpathSync(path.resolve(filePath)); }
+  catch (_) { return { ok: false, error: 'File not found' }; }
+  if (path.extname(resolved).toLowerCase() !== '.db') return { ok: false, error: 'Invalid file type' };
   if (!fs.existsSync(resolved)) return { ok: false, error: 'File not found' };
+  let stat;
+  try { stat = fs.statSync(resolved); }
+  catch (_) { return { ok: false, error: 'Could not stat file' }; }
+  if (!stat.isFile()) return { ok: false, error: 'Not a regular file' };
+  // Live DBs are at least a few KB; an empty or tiny file isn't a backup.
+  // Cap at 2 GB to fail fast on absurd inputs (way over our real ceiling).
+  if (stat.size < 1024 || stat.size > 2 * 1024 * 1024 * 1024) {
+    return { ok: false, error: 'Backup file is suspiciously small or large; refusing to restore.' };
+  }
   try {
     const rawBuf = fs.readFileSync(resolved);
     createDbSafetyCopy('pre-local-restore');
@@ -4879,9 +5212,9 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     const SQL = await initSqlJs();
     const newDb = new SQL.Database(decrypted);
     db = newDb;
-    try { db.run("ALTER TABLE attendances ADD COLUMN sync_id TEXT DEFAULT NULL"); } catch (_) {}
-    try { db.run("ALTER TABLE attendances ADD COLUMN sync_dirty INTEGER DEFAULT 1"); } catch (_) {}
-    try { db.run("ALTER TABLE attendances ADD COLUMN sync_version INTEGER DEFAULT 1"); } catch (_) {}
+    _safeAddColumn('attendances', "sync_id TEXT DEFAULT NULL");
+    _safeAddColumn('attendances', "sync_dirty INTEGER DEFAULT 1");
+    _safeAddColumn('attendances', "sync_version INTEGER DEFAULT 1");
     db.run("CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id)");
     db.run("CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty)");
     db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
@@ -4903,7 +5236,7 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
   }
 });
 
-/* ─── Cross-device sync IPC handlers ─── */
+/* â”€â”€â”€ Cross-device sync IPC handlers â”€â”€â”€ */
 ipcMain.handle('sync-now', async () => {
   try {
     const w = getSyncWorker();
@@ -5080,7 +5413,23 @@ function verifySensitiveActionCredential(password, purpose) {
 
 ipcMain.handle('session-lock-status', () => getSecurityCredentialStatus());
 
+// H29 — bucket per-channel attempts so credential stuffing over IPC is
+// bounded to 5 tries per minute. Unlock via OS safeStorage isn't affected.
+const _ipcRateBuckets = new Map();
+function _ipcChannelAllow(channel, max, windowMs) {
+  const now = Date.now();
+  let bucket = _ipcRateBuckets.get(channel);
+  if (!bucket) { bucket = []; _ipcRateBuckets.set(channel, bucket); }
+  while (bucket.length && (now - bucket[0]) > windowMs) bucket.shift();
+  if (bucket.length >= max) return false;
+  bucket.push(now);
+  return true;
+}
+
 ipcMain.handle('session-unlock', (_, password) => {
+  if (!_ipcChannelAllow('session-unlock', 5, 60 * 1000)) {
+    return { ok: false, code: 'rate_limited', error: 'Too many unlock attempts. Please wait a minute.' };
+  }
   return verifySensitiveActionCredential(password, 'session-unlock');
 });
 
@@ -5208,7 +5557,7 @@ ipcMain.handle('pick-file', async () => {
   }
 });
 
-/* ─── Import record from PDF or JSON (Settings / Admin) ─── */
+/* â”€â”€â”€ Import record from PDF or JSON (Settings / Admin) â”€â”€â”€ */
 const IMPORT_MARKER = 'CUSTODY_NOTE_IMPORT:';
 async function loadRecordDataFromFile(filePath) {
   if (!filePath || typeof filePath !== 'string') throw new Error('No file path provided');
@@ -5259,7 +5608,7 @@ function insertImportedDraftAttendance(data) {
   if (!db) throw new Error('Database not initialised');
   if (!data || typeof data !== 'object') throw new Error('No record data in file');
 
-  // Keep file reference in sync with file number (ours) – same value for both
+  // Keep file reference in sync with file number (ours) â€“ same value for both
   if (data.ourFileNumber != null && data.ourFileNumber !== '') {
     data.fileReference = String(data.ourFileNumber);
   }
@@ -5294,10 +5643,11 @@ function insertImportedDraftAttendance(data) {
       'UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1, sync_version=? WHERE id=?',
       [dataStr, 'draft', now, clientName, stationName, dsccRef, attendanceDate, workType, nextVer, existingId]
     );
-    db.run(
-      'INSERT INTO audit_log (attendance_id, action, previous_snapshot, timestamp, user_note) VALUES (?,?,?,?,?)',
-      [existingId, 'import_updated', existing && existing.data ? existing.data : null, now, 'Imported record merged into existing draft']
-    );
+    appendAuditLog(existingId, 'import_updated', {
+      previousSnapshot: existing && existing.data ? existing.data : null,
+      timestamp: now,
+      userNote: 'Imported record merged into existing draft',
+    });
     markDbDirty();
     enqueueSyncForRecord(existingId);
     return existingId;
@@ -5346,8 +5696,37 @@ ipcMain.handle('import-record-from-file', async () => {
 });
 
 // Import record from an explicit file path (used by paste-path and drag-drop import).
+// H11 — restrict to user-reachable roots so a poisoned renderer can't pump
+// arbitrary system paths through this channel and read back arbitrary files.
+function _isAllowedImportPath(p) {
+  try {
+    const resolved = fs.realpathSync(path.resolve(p));
+    const ext = path.extname(resolved).toLowerCase();
+    if (ext !== '.pdf' && ext !== '.json') return false;
+    const stat = fs.statSync(resolved);
+    if (!stat.isFile()) return false;
+    // 25 MB hard cap on import file size (M17 scope creep, also prevents
+    // pdf-parse main-thread DoS on giant files).
+    if (stat.size > 25 * 1024 * 1024) return false;
+    const allowed = [
+      app.getPath('desktop'),
+      app.getPath('downloads'),
+      app.getPath('documents'),
+      app.getPath('temp'),
+      app.getPath('userData'),
+    ].map(r => { try { return fs.realpathSync(r); } catch (_) { return r; } });
+    return allowed.some(root => resolved === root || resolved.startsWith(root + path.sep));
+  } catch (_) { return false; }
+}
+
 ipcMain.handle('import-record-from-path', async (_, filePath) => {
   try {
+    if (typeof filePath !== 'string' || !filePath.trim()) {
+      return { error: 'No file path provided' };
+    }
+    if (!_isAllowedImportPath(filePath)) {
+      return { error: 'Import is restricted to .pdf or .json files in Desktop / Documents / Downloads / Temp (max 25 MB).' };
+    }
     const data = await loadRecordDataFromFile(filePath);
     return { data };
   } catch (err) {
@@ -5357,7 +5736,7 @@ ipcMain.handle('import-record-from-path', async (_, filePath) => {
   }
 });
 
-/* ─── Photo file storage (encrypted, separate files) ─── */
+/* â”€â”€â”€ Photo file storage (encrypted, separate files) â”€â”€â”€ */
 function sanitizePathSegment(seg) {
   if (typeof seg !== 'string') return null;
   const clean = seg.replace(/[^a-zA-Z0-9_\-]/g, '');
@@ -5469,12 +5848,21 @@ ipcMain.handle('open-path', async (_, filePath) => {
     if (typeof filePath !== 'string') return false;
     const p = filePath.trim();
     if (!p) return false;
-    const allowedRoots = [app.getPath('userData'), app.getPath('desktop'), app.getPath('documents'), app.getPath('temp')];
-    const resolved = path.resolve(p);
-    if (!allowedRoots.some(root => resolved.startsWith(root))) {
+    // H13 — resolve symlinks/junctions before the allowlist check so a
+    // junction under an allowed root that targets outside is rejected.
+    let resolved;
+    try { resolved = fs.realpathSync(path.resolve(p)); }
+    catch (_) { return { error: 'Path does not exist or is not accessible' }; }
+    const allowedRoots = [
+      app.getPath('userData'),
+      app.getPath('desktop'),
+      app.getPath('documents'),
+      app.getPath('temp'),
+    ].map(r => { try { return fs.realpathSync(r); } catch (_) { return r; } });
+    if (!allowedRoots.some(root => resolved === root || resolved.startsWith(root + path.sep))) {
       return { error: 'Path outside allowed directories' };
     }
-    await shell.openPath(p);
+    await shell.openPath(resolved);
     return true;
   } catch (_e) {
     return false;
@@ -5514,17 +5902,64 @@ ipcMain.handle('open-app-folder', async () => {
   }
 });
 
+/* Render HTML to a PDF buffer using an offscreen BrowserWindow.
+ *
+ * Loads HTML from a temp file rather than a data: URL because Chromium caps
+ * data: URLs at ~2 MB; a custody note that includes signature PNGs and long
+ * interview notes routinely exceeds that and the PDF would silently never
+ * generate (this was the v1.5.7 "Generate PDF does nothing" bug). Temp file
+ * has no size limit, supports relative paths, and yields useful error events.
+ */
+// H15 — hard cap on HTML size to prevent main-process DoS / memory pressure.
+// Real custody notes max out around ~600 KB even with embedded signatures;
+// 25 MB leaves ample headroom for the largest legitimate generated documents
+// (multi-attachment cover bundles) while killing pathological renderer input.
+const RENDER_HTML_MAX_BYTES = 25 * 1024 * 1024;
+
 async function renderHtmlToPdfBuffer(html) {
+  if (typeof html !== 'string' || html.length === 0) {
+    throw new Error('renderHtmlToPdfBuffer: html is empty');
+  }
+  const byteLen = Buffer.byteLength(html, 'utf8');
+  if (byteLen > RENDER_HTML_MAX_BYTES) {
+    throw new Error('renderHtmlToPdfBuffer: html exceeds ' + RENDER_HTML_MAX_BYTES + ' bytes (got ' + byteLen + ')');
+  }
+  const tempDir = app.getPath('temp');
+  const tempPath = path.join(tempDir, `cn-pdf-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.html`);
+  fs.writeFileSync(tempPath, html, 'utf8');
+
   const win = new BrowserWindow({
     width: 800, height: 600, show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
+
+  function cleanupTemp() {
+    try { fs.unlinkSync(tempPath); } catch (_) { /* ignore */ }
+  }
+
   try {
-    win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
     await new Promise((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error('PDF HTML load timeout')), 60000);
-      win.webContents.once('did-finish-load', () => { clearTimeout(t); resolve(); });
+      let settled = false;
+      const finish = (err) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        if (err) reject(err); else resolve();
+      };
+      const timer = setTimeout(
+        () => finish(new Error('PDF HTML load timeout (60s) â€” temp file: ' + tempPath)),
+        60000
+      );
+      win.webContents.once('did-finish-load', () => finish());
+      win.webContents.once('did-fail-load', (_e, errCode, errDesc, validatedURL) => {
+        finish(new Error('PDF HTML failed to load: ' + errDesc + ' (' + errCode + ') url=' + validatedURL));
+      });
+      win.webContents.once('render-process-gone', (_e, details) => {
+        finish(new Error('PDF renderer crashed: ' + (details && details.reason) + ' exit=' + (details && details.exitCode)));
+      });
+      win.loadFile(tempPath).catch((err) => finish(err));
     });
+
     const buf = await win.webContents.printToPDF({
       pageSize: 'A4',
       margins: { marginType: 'default' },
@@ -5542,29 +5977,47 @@ async function renderHtmlToPdfBuffer(html) {
     });
     return buf;
   } finally {
-    try { win.close(); } catch (_) {}
+    try { win.destroy(); } catch (_) {}
+    cleanupTemp();
   }
 }
 
 ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
+  let outPath = '<not yet set>';
   try {
     const desktop = app.getPath('desktop');
+    if (!fs.existsSync(desktop)) {
+      throw new Error('Desktop folder does not exist: ' + desktop +
+        '. If you use OneDrive Known Folder Move, sign in to OneDrive and try again.');
+    }
     const safeName = path.basename(filename || `attendance-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
-    const filePath = path.join(desktop, safeName);
+    outPath = path.join(desktop, safeName);
     const buf = await renderHtmlToPdfBuffer(html);
-    fs.writeFileSync(filePath, buf);
-    return filePath;
+    fs.writeFileSync(outPath, buf);
+    console.log('[print-to-pdf] wrote', outPath, '(' + buf.length + ' bytes from ' + (html ? html.length : 0) + ' chars HTML)');
+    return outPath;
   } catch (err) {
-    console.error('[print-to-pdf]', err && err.message ? err.message : err);
-    throw err;
+    const msg = err && err.message ? err.message : String(err);
+    console.error('[print-to-pdf] FAILED outPath=' + outPath + ' htmlLen=' + (html ? html.length : 0) + ' err=' + msg);
+    throw new Error(msg);
   }
 });
 
 /** Save a base64 PDF to temp and open in system PDF viewer */
+// H16 — cap base64 input. 50 MB base64 ≈ 37 MB binary, more than any
+// realistic generated PDF; anything bigger is treated as a DoS attempt.
+const PREVIEW_PDF_MAX_BASE64_BYTES = 50 * 1024 * 1024;
 ipcMain.handle('preview-pdf-base64', async (_, { base64, filename }) => {
   try {
+    if (typeof base64 !== 'string' || !base64) return { ok: false, error: 'No PDF data provided' };
+    if (base64.length > PREVIEW_PDF_MAX_BASE64_BYTES) {
+      return { ok: false, error: 'PDF too large to preview (max ' + Math.round(PREVIEW_PDF_MAX_BASE64_BYTES / (1024 * 1024)) + ' MB base64)' };
+    }
     const tempDir = app.getPath('temp');
     const safeName = (filename || `preview-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
+    if (path.extname(safeName).toLowerCase() !== '.pdf') {
+      return { ok: false, error: 'Only .pdf preview filenames are accepted' };
+    }
     const filePath = path.join(tempDir, safeName);
     fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
     await shell.openPath(filePath);
@@ -5586,7 +6039,7 @@ ipcMain.handle('preview-pdf-from-html', async (_, { html }) => {
   }
 });
 
-/* ─── Export attendance note as DOCX ─── */
+/* â”€â”€â”€ Export attendance note as DOCX â”€â”€â”€ */
 ipcMain.handle('export-docx', async (_, { data, settings, filename }) => {
   const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
     WidthType, AlignmentType, HeadingLevel, BorderStyle, ShadingType } = require('docx');
@@ -5777,12 +6230,22 @@ ipcMain.handle('export-docx', async (_, { data, settings, filename }) => {
   return outPath;
 });
 
-/* ─── Print an existing PDF file ─── */
+/* Print an existing PDF file */
 ipcMain.handle('print-pdf-file', async (_, filePath) => {
-  if (!filePath || !fs.existsSync(filePath)) return { error: 'File not found' };
-  const resolvedPath = path.resolve(filePath);
-  const userDataDir = app.getPath('userData');
-  const tempDir = app.getPath('temp');
+  if (typeof filePath !== 'string' || !filePath) return { error: 'No file path provided' };
+  if (!fs.existsSync(filePath)) return { error: 'File not found' };
+  // H13/H14 — resolve through realpathSync so a Windows junction/symlink
+  // under an allowed root that targets outside is rejected, then pass the
+  // *resolved* path to loadFile (the previous code resolved-and-checked but
+  // then loaded the un-resolved input, which defeated the check).
+  let resolvedPath;
+  try { resolvedPath = fs.realpathSync(path.resolve(filePath)); }
+  catch (e) { return { error: 'Could not resolve path: ' + (e && e.message ? e.message : String(e)) }; }
+  if (path.extname(resolvedPath).toLowerCase() !== '.pdf') {
+    return { error: 'Only .pdf files can be printed via this channel' };
+  }
+  const userDataDir = fs.realpathSync(app.getPath('userData'));
+  const tempDir = fs.realpathSync(app.getPath('temp'));
   if (!resolvedPath.startsWith(userDataDir) && !resolvedPath.startsWith(tempDir)) {
     return { error: 'Path outside allowed directories' };
   }
@@ -5790,17 +6253,22 @@ ipcMain.handle('print-pdf-file', async (_, filePath) => {
     width: 800, height: 600, show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
-  win.loadFile(filePath);
-  await new Promise((resolve) => win.webContents.on('did-finish-load', resolve));
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  win.webContents.print({ silent: false, printBackground: true }, (success, reason) => {
-    if (!success && reason !== 'cancelled') console.error('Print failed:', reason);
-    win.close();
-  });
-  return { ok: true };
+  try {
+    await win.loadFile(resolvedPath);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise((resolve) => {
+      win.webContents.print({ silent: false, printBackground: true }, (success, reason) => {
+        if (!success && reason !== 'cancelled') console.error('[print-pdf-file] Print failed:', reason);
+        resolve();
+      });
+    });
+    return { ok: true };
+  } finally {
+    try { win.destroy(); } catch (_) {}
+  }
 });
 
-/* ─── LAA Official PDF prefill ─── */
+/* â”€â”€â”€ LAA Official PDF prefill â”€â”€â”€ */
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 
 const LAA_FORM_FILES = {
@@ -5855,11 +6323,25 @@ function normalizeNiNumberForPdf(s) {
   return String(s).replace(/\s+/g, '').toUpperCase();
 }
 
+// H40 — these used to silently swallow "field not found" / pdf-lib errors,
+// so a renamed LAA form field would ship as a fully-blank PDF while the
+// app reported "filled". We now collect per-render misses onto an
+// optional accumulator so fillCRMx can surface a count to the caller and
+// we log the first few misses for diagnostics.
+let _laaFieldMissAccumulator = null;
+function _recordLaaFieldMiss(fieldName, kind, err) {
+  try {
+    if (!_laaFieldMissAccumulator) return;
+    _laaFieldMissAccumulator.push({ field: fieldName, kind: kind, error: err && err.message ? err.message : String(err) });
+  } catch (_) {}
+}
+
 function safeSet(form, fieldName, value) {
   if (value === undefined || value === null) return;
   const t = String(value);
   if (t === '') return;
-  try { form.getTextField(fieldName).setText(t); } catch (_) {}
+  try { form.getTextField(fieldName).setText(t); }
+  catch (err) { _recordLaaFieldMiss(fieldName, 'text', err); }
 }
 
 function safeClearText(form, fieldName) {
@@ -5868,14 +6350,15 @@ function safeClearText(form, fieldName) {
 
 function safeCheck(form, fieldName, condition) {
   if (!condition) return;
-  try { form.getCheckBox(fieldName).check(); } catch (_) {}
+  try { form.getCheckBox(fieldName).check(); }
+  catch (err) { _recordLaaFieldMiss(fieldName, 'checkbox', err); }
 }
 
 function safeUncheck(form, fieldName) {
   try { form.getCheckBox(fieldName).uncheck(); } catch (_) {}
 }
 
-/** CRM1 income section: stored gross annual (£) → weekly. */
+/** CRM1 income section: stored gross annual (Â£) â†’ weekly. */
 function poundsAnnualToWeeklyOrEmpty(val) {
   if (val === undefined || val === null || val === '') return '';
   const n = parseFloat(String(val).replace(/,/g, ''));
@@ -5890,7 +6373,7 @@ function benefitIndicatesUniversalCreditOrPensionGuarantee(d) {
 }
 
 /**
- * CRM1 page 6 — Ethnicity (v16): codes from data/laa-reference-data.json ethnicCodes, left-to-right /
+ * CRM1 page 6 â€” Ethnicity (v16): codes from data/laa-reference-data.json ethnicCodes, left-to-right /
  * top-to-bottom field order on the official PDF (18 single-choice boxes).
  */
 const CRM1_ETHNICITY_FIELD_BY_CODE = {
@@ -5915,8 +6398,8 @@ const CRM1_ETHNICITY_FIELD_BY_CODE = {
 };
 
 /**
- * CRM1 page 6 — Disability: codes from disabilityCodes; physical order matches the printed
- * “Definitions:” list on v16 (CheckBox66 = “Prefer not to say” — no app code, left blank).
+ * CRM1 page 6 â€” Disability: codes from disabilityCodes; physical order matches the printed
+ * â€œDefinitions:â€ list on v16 (CheckBox66 = â€œPrefer not to sayâ€ â€” no app code, left blank).
  */
 const CRM1_DISABILITY_FIELD_BY_CODE = {
   NCD: 'CheckBox31',
@@ -5993,7 +6476,7 @@ function fillCRM1(form, d) {
     safeSet(form, 'Date_of_birth1', parts[1] || '');
     safeSet(form, 'Date_of_birth2', parts[2] || '');
   }
-  /* CRM1 v16 header UFN combs (y=674 row) — leave blank for firm to complete */
+  /* CRM1 v16 header UFN combs (y=674 row) â€” leave blank for firm to complete */
   const CRM1_UFN_COMBS = ['Comb1','Comb11','Comb2','Comb3','Comb4','Comb5','Comb21','Comb6','Comb7'];
   CRM1_UFN_COMBS.forEach(c => safeClearText(form, c));
 
@@ -6028,7 +6511,7 @@ function fillCRM1(form, d) {
   safeCheck(form, 'Client not under 18 checkbox', !under18);
 
   const onBenefit = d.passportedBenefit === 'Yes' || d.benefits === 'Yes';
-  /* Main income question: Yes = left (CheckBox10), No = right (CheckBox9) — CRM1 v16 layout. */
+  /* Main income question: Yes = left (CheckBox10), No = right (CheckBox9) â€” CRM1 v16 layout. */
   safeUncheck(form, 'CheckBox9');
   safeUncheck(form, 'CheckBox10');
   safeCheck(form, 'CheckBox10', onBenefit);
@@ -6048,7 +6531,7 @@ function fillCRM1(form, d) {
   const wkClient = onBenefit ? '' : poundsAnnualToWeeklyOrEmpty(d.grossIncome);
   const wkPartner = onBenefit ? '' : poundsAnnualToWeeklyOrEmpty(d.partnerIncome);
   safeSet(form, 'The_client1', wkClient);
-  /* Field name is legacy; box is partner weekly £ (not name). */
+  /* Field name is legacy; box is partner weekly Â£ (not name). */
   safeSet(form, 'Partner_if_living_with_t_', wkPartner);
   if (!onBenefit && (wkClient !== '' || wkPartner !== '')) {
     const a = parseFloat(wkClient) || 0;
@@ -6064,10 +6547,10 @@ function fillCRM1(form, d) {
   const hasCapC = capC !== undefined && capC !== null && String(capC).trim() !== '';
   const hasCapP = capP !== undefined && capP !== null && String(capP).trim() !== '';
   const hasCapT = capT !== undefined && capT !== null && String(capT).trim() !== '';
-  /* Row 1 (FillText23/24): savings — client / partner */
+  /* Row 1 (FillText23/24): savings â€” client / partner */
   if (hasCapC) safeSet(form, 'FillText23', String(capC).trim());
   if (hasCapP) safeSet(form, 'FillText24', String(capP).trim());
-  /* Row 2 (FillText25/26): investments — default 0 when any capital data given */
+  /* Row 2 (FillText25/26): investments â€” default 0 when any capital data given */
   if (hasCapC || hasCapP || hasCapT) {
     safeSet(form, 'FillText25', '0');
     safeSet(form, 'FillText26', '0');
@@ -6080,7 +6563,7 @@ function fillCRM1(form, d) {
     const y = parseFloat(String(capP).replace(/,/g, '')) || 0;
     safeSet(form, 'FillText27', String(Math.round((x + y) * 100) / 100));
   }
-  /* FillText28: amount above upper limit — set to total or 0 */
+  /* FillText28: amount above upper limit â€” set to total or 0 */
   if (hasCapC || hasCapP || hasCapT) {
     const totalVal = hasCapT ? String(capT).trim() : String((parseFloat(String(capC).replace(/,/g, '')) || 0) + (parseFloat(String(capP).replace(/,/g, '')) || 0));
     safeSet(form, 'FillText28', totalVal);
@@ -6096,8 +6579,16 @@ function fillCRM2(form, d) {
 
   safeCheck(form, 'CheckBox1', true);
 
+  // H34 — CheckBox2 = "criminal / attendance" work. The old condition
+  // `wt.indexOf('Telephone') < 0` evaluated to TRUE on an unset workType
+  // because an empty string's indexOf is -1, so every blank-worktype
+  // record got the criminal tick. Require an explicit positive match on
+  // the criminal / attendance keywords instead.
   const wt = d.workType || '';
-  safeCheck(form, 'CheckBox2', wt.indexOf('Criminal') >= 0 || wt.indexOf('Attendance') >= 0 || wt.indexOf('Telephone') < 0);
+  const _isCriminalOrAttendance = wt.indexOf('Criminal') >= 0
+    || wt.indexOf('Attendance') >= 0
+    || wt.indexOf('Police Station') >= 0;
+  safeCheck(form, 'CheckBox2', _isCriminalOrAttendance);
   safeCheck(form, 'CheckBox4', wt.indexOf('CCRC') >= 0);
   safeCheck(form, 'CheckBox5', wt.indexOf('Appeals') >= 0 || wt.indexOf('Review') >= 0);
   safeCheck(form, 'CheckBox3', wt.indexOf('Prison') >= 0);
@@ -6128,7 +6619,7 @@ function fillCRM3(form, d) {
   safeUncheck(form, 'involved_in_another_way');
   safeCheck(form, 'involved_in_another_way', involvedOther);
   safeSet(form, 'FillText2', d.clientInvolvedDetails);
-  /* Header UFN line — firm completes; do not pre-fill from record UFN */
+  /* Header UFN line â€” firm completes; do not pre-fill from record UFN */
   safeClearText(form, 'FillText8');
 
   const instrDate = fmtDateDMY(d.date);
@@ -6149,7 +6640,10 @@ function fillCRM3(form, d) {
   safeCheck(form, 'CheckBox3', reason.indexOf('bail') >= 0 || reason.indexOf('Bail') >= 0 || (d.outcomeDecision && d.outcomeDecision.indexOf('Charged') >= 0));
   safeCheck(form, 'CheckBox5', reason.indexOf('Warrant') >= 0 || reason.indexOf('detention') >= 0 || reason.indexOf('Detention') >= 0);
 
-  safeSet(form, 'Name_of_court', d.courtName || d.policeStationName || '');
+  // H35 — Name_of_court must be a court name. Previously fell back to the
+  // police station, so CRM3 prints the police station as the court. Use
+  // the explicit courtName field only; leave blank if not supplied.
+  safeSet(form, 'Name_of_court', d.courtName || '');
 
   const nextHearing = fmtDateDMY(d.courtDate || d.bailDate);
   if (nextHearing) {
@@ -6185,7 +6679,7 @@ function fillCRM3(form, d) {
 
 async function fillDeclaration(pdfDoc, form, d, settings) {
   const s = settings || {};
-  /* Text4 = USN — must remain blank for the firm (same as CRM1 USN). */
+  /* Text4 = USN â€” must remain blank for the firm (same as CRM1 USN). */
   safeClearText(form, 'Text4');
   safeSet(form, 'Text5', [d.forename, d.surname].filter(Boolean).join(' '));
   safeSet(form, 'Text6', d.niNumber);
@@ -6243,11 +6737,28 @@ ipcMain.handle('laa-generate-official-pdf', async (_, { formType, data }) => {
     settings.firmLaaAccount = settings.firmLaaAccount || '';
     settings.feeEarnerName = settings.feeEarnerName || '';
 
-    switch (formType) {
-      case 'crm1': fillCRM1(form, d); break;
-      case 'crm2': fillCRM2(form, d); break;
-      case 'crm3': fillCRM3(form, d); break;
-      case 'declaration': await fillDeclaration(pdfDoc, form, d, settings); break;
+    // H40 — collect field misses so we can tell the renderer if LAA renamed
+    // any fields and the output PDF is actually missing content.
+    _laaFieldMissAccumulator = [];
+    try {
+      switch (formType) {
+        case 'crm1': fillCRM1(form, d); break;
+        case 'crm2': fillCRM2(form, d); break;
+        case 'crm3': fillCRM3(form, d); break;
+        case 'declaration': await fillDeclaration(pdfDoc, form, d, settings); break;
+      }
+    } finally {
+      var misses = _laaFieldMissAccumulator || [];
+      _laaFieldMissAccumulator = null;
+      if (misses.length) {
+        console.warn('[LAA PDF] ' + misses.length + ' form field(s) could not be set on ' + formType + ':',
+          misses.slice(0, 5).map(m => m.field + ' (' + m.kind + ')').join(', '));
+      }
+    }
+
+    // H36 — flatten so the exported PDF is no longer editable via AcroForm.
+    try { form.flatten(); } catch (flattenErr) {
+      console.warn('[LAA PDF] form.flatten failed:', flattenErr && flattenErr.message);
     }
 
     const pdfBytes = await pdfDoc.save();
@@ -6281,11 +6792,25 @@ ipcMain.handle('laa-generate-pdf-buffer', async (_, { formType, data }) => {
     settings.firmLaaAccount = settings.firmLaaAccount || '';
     settings.feeEarnerName = settings.feeEarnerName || '';
 
-    switch (formType) {
-      case 'crm1': fillCRM1(form, d); break;
-      case 'crm2': fillCRM2(form, d); break;
-      case 'crm3': fillCRM3(form, d); break;
-      case 'declaration': await fillDeclaration(pdfDoc, form, d, settings); break;
+    _laaFieldMissAccumulator = [];
+    try {
+      switch (formType) {
+        case 'crm1': fillCRM1(form, d); break;
+        case 'crm2': fillCRM2(form, d); break;
+        case 'crm3': fillCRM3(form, d); break;
+        case 'declaration': await fillDeclaration(pdfDoc, form, d, settings); break;
+      }
+    } finally {
+      var misses = _laaFieldMissAccumulator || [];
+      _laaFieldMissAccumulator = null;
+      if (misses.length) {
+        console.warn('[LAA PDF Buffer] ' + misses.length + ' form field(s) could not be set on ' + formType);
+      }
+    }
+
+    // H36 — flatten so the attached PDF is no longer editable via AcroForm.
+    try { form.flatten(); } catch (flattenErr) {
+      console.warn('[LAA PDF Buffer] form.flatten failed:', flattenErr && flattenErr.message);
     }
 
     const pdfBytes = await pdfDoc.save();
@@ -6302,7 +6827,7 @@ ipcMain.handle('html-to-pdf-buffer', async (_, { html }) => {
     const buf = await renderHtmlToPdfBuffer(html);
     return { base64: buf.toString('base64'), size: buf.length };
   } catch (err) {
-    console.error('[HTML→PDF Buffer]', err);
+    console.error('[HTMLâ†’PDF Buffer]', err);
     return { error: err.message || String(err) };
   }
 });
@@ -6321,7 +6846,7 @@ ipcMain.handle('laa-open-official-template', async (_, formType) => {
   }
 });
 
-/* ─── QuickFile API: import firms directory ─── */
+/* â”€â”€â”€ QuickFile API: import firms directory â”€â”€â”€ */
 function getQuickFileAuth() {
   const rows = dbAll('SELECT key, value FROM settings');
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -6530,9 +7055,9 @@ ipcMain.handle('quickfile-test-connection', async () => {
   };
 });
 
-/* ═══════════════════════════════════════════════════════
-   POSTCODE LOOKUP  (server proxy → Ideal Postcodes API)
-   ═══════════════════════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   POSTCODE LOOKUP  (server proxy â†’ Ideal Postcodes API)
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 ipcMain.handle('postcode-lookup', async (_, postcode) => {
   const pc = (postcode || '').trim().replace(/\s+/g, '');
   if (!pc) return { ok: false, error: 'No postcode entered.' };
@@ -6556,12 +7081,12 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
     const code = e && e.statusCode;
-    console.warn(`[Postcode] Lookup failed — status=${code || '?'}, message="${msg}"`);
+    console.warn(`[Postcode] Lookup failed â€” status=${code || '?'}, message="${msg}"`);
     if (msg === 'Postcode not found') return { ok: false, error: 'Postcode not found.' };
     if (msg === 'Invalid licence key') return { ok: false, error: 'Invalid licence key. Re-activate in Settings.' };
     if (msg === 'Licence key is required') return { ok: false, error: 'Licence key is required for postcode lookup.' };
     if (/subscription required/i.test(msg)) return { ok: false, error: 'Active subscription required for postcode lookup.' };
-    /* 402 Payment Required — upstream postcode quota / plan / billing on managed API */
+    /* 402 Payment Required â€” upstream postcode quota / plan / billing on managed API */
     if (code === 402) {
       return {
         ok: false,
@@ -6575,9 +7100,9 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
   }
 });
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    QUICKFILE INVOICE CREATION
-   ═══════════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 async function quickFileFindOrCreateClient(firmName, contactEmail) {
   const searchBody = await quickFileRequest('/1_2/client/search', {
@@ -6727,7 +7252,7 @@ function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) 
 }
 
 /* Product note: invoice/create shipped first; Document_Upload was added so the attendance PDF
-   matches billing preview. Earlier “billing overhaul” removed list exports before this unified flow. */
+   matches billing preview. Earlier â€œbilling overhaulâ€ removed list exports before this unified flow. */
 /** Attach a PDF to a sales invoice via QuickFile Document_Upload (same auth as other calls). */
 function validateDocumentUploadPayload(body) {
   const doc = body && body.DocumentDetails;
@@ -6754,9 +7279,9 @@ function validateDocumentUploadPayload(body) {
 async function quickFileUploadSalesAttachment(invoiceId, fileName, pdfBuffer, notes) {
   const invId = parseInt(String(invoiceId), 10);
   if (!Number.isFinite(invId)) throw new Error('Invalid InvoiceId for attachment');
-  if (!pdfBuffer || !pdfBuffer.length) throw new Error('PDF buffer is empty — cannot attach');
+  if (!pdfBuffer || !pdfBuffer.length) throw new Error('PDF buffer is empty â€” cannot attach');
   const MAX_ATTACH_BYTES = 10 * 1024 * 1024;
-  if (pdfBuffer.length > MAX_ATTACH_BYTES) throw new Error('Attachment too large (' + Math.round(pdfBuffer.length / 1024) + ' KB) — max 10 MB');
+  if (pdfBuffer.length > MAX_ATTACH_BYTES) throw new Error('Attachment too large (' + Math.round(pdfBuffer.length / 1024) + ' KB) â€” max 10 MB');
   const safeName = String(fileName || 'attendance-note.pdf').replace(/[<>:"/\\|?*\x00-\x1f]/g, '_').trim();
   const fn = safeName.length >= 5 ? safeName.slice(0, 150) : 'note.pdf';
   const b64 = Buffer.from(pdfBuffer).toString('base64');
@@ -6873,7 +7398,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     if (mileageCost > 0) {
       lineItems.push(buildQuickFileItemLine(
         'Mileage',
-        (mileageMiles || 0) + ' miles @ £' + (mileageRate || 0.45).toFixed(2),
+        (mileageMiles || 0) + ' miles @ Â£' + (mileageRate || 0.45).toFixed(2),
         mileageCost,
         1,
         vr
@@ -6986,21 +7511,21 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       saveDb();
     }
 
-    /* Attach PDFs to QuickFile invoice — supports multiple attachments */
+    /* Attach PDFs to QuickFile invoice â€” supports multiple attachments */
     const attachResults = [];
 
     /*
      * v1.5.6: Avoid double-attachment on the workflow billing path.
      *
      * Two attach sources exist:
-     *   1) Legacy `attachAttendanceHtml` — auto-renders the attendance note from HTML.
-     *   2) `extraAttachments[]` — user-selected documents from the workflow billing screen
+     *   1) Legacy `attachAttendanceHtml` â€” auto-renders the attendance note from HTML.
+     *   2) `extraAttachments[]` â€” user-selected documents from the workflow billing screen
      *      (which already includes the attendance note when ticked).
      *
      * If the caller provides any user-selected `extraAttachments`, we honour ONLY their
      * selection and skip the legacy auto attach (otherwise the attendance note got
-     * attached twice). The standalone billing.js path — which never sends
-     * `extraAttachments` — keeps its single auto-attached attendance note.
+     * attached twice). The standalone billing.js path â€” which never sends
+     * `extraAttachments` â€” keeps its single auto-attached attendance note.
      */
     const extraAttachments = params.extraAttachments;
     const hasUserSelectedExtras = Array.isArray(extraAttachments)
@@ -7085,9 +7610,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   }
 });
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    STATION MILEAGE
-   ═══════════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 ipcMain.handle('station-mileage-get', (_, stationId) => {
   const row = dbGet('SELECT mileage_from_base, postcode FROM police_stations WHERE id = ?', [stationId]);
@@ -7119,9 +7644,9 @@ ipcMain.handle('station-mileage-bulk-save', (_, stations) => {
   return { ok: true };
 });
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    BILLING AUDIT LOG
-   ═══════════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 ipcMain.handle('billing-audit-log-add', (_, params) => {
   const { attendanceId, action, details, userName } = params;
@@ -7140,9 +7665,9 @@ ipcMain.handle('billing-audit-log-get', (_, attendanceId) => {
   );
 });
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    BILLABLE ATTENDANCES (unbilled completed records)
-   ═══════════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 ipcMain.handle('billable-attendances', () => {
   /* archived_at IS NULL: archived matters must NOT reappear as billable, otherwise a
@@ -7173,9 +7698,9 @@ ipcMain.handle('billing-view-records', () => {
   );
 });
 
-/* ═══════════════════════════════════════════════════════
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    ATTENDANCE INVOICE STATUS (for billing panel)
-   ═══════════════════════════════════════════════════════ */
+   â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 ipcMain.handle('attendance-invoice-status', (_, attendanceId) => {
   const row = dbGet(

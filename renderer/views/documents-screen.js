@@ -444,7 +444,12 @@ function _wfBuildFormHtml(formId, data, meta) {
   switch (formId) {
     case 'attendance_note': {
       var settings = window._appSettingsCache || {};
-      var builder = (typeof getActivePdfBuilder === 'function') ? getActivePdfBuilder() : (typeof buildPdfHtml === 'function' ? buildPdfHtml : null);
+      var builder = null;
+      if (typeof window !== 'undefined' && typeof window.getPdfBuilderForData === 'function') {
+        builder = window.getPdfBuilderForData(data);
+      } else if (typeof buildPdfHtml === 'function') {
+        builder = buildPdfHtml;
+      }
       if (!builder) return '';
       return builder(data, settings);
     }

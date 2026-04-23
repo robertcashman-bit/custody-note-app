@@ -37,21 +37,19 @@ function getLicenceStoreKey(app, safeStorage) {
     }
     return key;
   }
-  const fallbackPath = getKeyPath(app);
-  if (fs.existsSync(fallbackPath)) {
-    try {
-      const hex = fs.readFileSync(fallbackPath, 'utf8').trim();
-      const buf = Buffer.from(hex, 'hex');
-      if (buf.length === 32) return buf;
-    } catch (_) {}
-  }
-  const key = crypto.randomBytes(32);
-  try {
-    fs.writeFileSync(fallbackPath, key.toString('hex'), 'utf8');
-  } catch (e) {
-    console.error('[LicenceStore] Failed to write fallback key:', e.message);
-  }
-  return key;
+  // H30 — previous fallback wrote the 32-byte AES key as hex-plaintext into
+  // userData when safeStorage was unavailable, which effectively defeated
+  // the licence-store encryption. Refuse to run the admin store in that
+  // state and surface a clear error; operations can still work (safeStorage
+  // is available on Windows/macOS/most Linux keyrings out of the box) and
+  // admins running in an unusual session can enable the OS credential
+  // service or sign in interactively.
+  const err = new Error(
+    'Licence store requires an OS secure-storage service (safeStorage). ' +
+    'Sign in to the desktop session or enable the Credential Manager / Keychain / libsecret to use admin features.'
+  );
+  err.code = 'CN_NO_SAFE_STORAGE';
+  throw err;
 }
 
 module.exports = { getLicenceStoreKey };

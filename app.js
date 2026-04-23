@@ -4655,10 +4655,21 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function hasMeaningfulData(d) {
-    var hasIdentity = !!(d.surname || d.forename || d.ufn || d.custodyNumber);
+    if (!d || typeof d !== 'object') return false;
+    // H9 — treat whitespace-only as empty so the "discardable empty draft"
+    // logic doesn't keep records that only ever held a stray space.
+    var v = function(k) {
+      var x = d[k];
+      return typeof x === 'string' ? x.trim() : (x != null && x !== '' ? String(x).trim() : '');
+    };
+    var hasIdentity = !!(v('surname') || v('forename') || v('ufn') || v('custodyNumber'));
     if (hasIdentity) return true;
-    var hasSubstantive = !!(d.offenceSummary || d.ourFileNumber);
-    return hasSubstantive;
+    var hasSubstantive = !!(v('offenceSummary') || v('ourFileNumber') || v('fileReference') ||
+      v('dsccRef') || v('dscc_ref') || v('dob') || v('telephoneAdviceSummary') || v('arrivalNotes'));
+    if (hasSubstantive) return true;
+    if (Array.isArray(d.interviews) && d.interviews.some(function(iv) { return iv && (iv.startTime || iv.notes); })) return true;
+    if (Array.isArray(d.stationVisits) && d.stationVisits.some(function(sv) { return sv && (sv.timeArrival || sv.timeSetOff || sv.waitingTimeNotes); })) return true;
+    return false;
   }
 
   var _quietSaveDebounceTimer = null;
@@ -11139,8 +11150,11 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function saveAndExit() {
-    const data = getFormData();
-    if (!hasMeaningfulData(data)) {
+    // Snapshot once for the meaningful-data check, but re-collect inside each
+    // click handler so any edits the user makes between opening the dialog and
+    // clicking Save/Finalise are not lost (H1).
+    const initialData = getFormData();
+    if (!hasMeaningfulData(initialData)) {
       if (currentAttendanceId) window.api.attendanceDelete({ id: currentAttendanceId, reason: 'Discarded empty form' });
       currentAttendanceId = null;
       stopAutoSave();
@@ -11163,7 +11177,8 @@ var REQUIRED_FIELD_KEYS = [
     function close() { try { document.body.removeChild(overlay); } catch (_) {} }
     document.getElementById('save-exit-draft').addEventListener('click', function() {
       close();
-      window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(function() {
+      var freshData = getFormData();
+      window.api.attendanceSave({ id: currentAttendanceId, data: freshData, status: 'draft' }).then(function() {
         currentAttendanceId = null;
         stopAutoSave();
         goBack();
@@ -11326,6 +11341,12 @@ var REQUIRED_FIELD_KEYS = [
       required.push({ key: 'niNumber', label: 'NI Number', section: 5 });
       required.push({ key: 'matterTypeCode', label: 'Matter Type', section: 3 });
       required.push({ key: 'offence1Details', label: 'Offence 1 Details', section: 3 });
+      // H3 — these are described as "key fields" in the section UI and are
+      // needed for billing / LAA submissions; require them on the standard
+      // (non handed-back / non non-attendance) path before finalising.
+      required.push({ key: 'firmId', label: 'Firm', section: 0 });
+      required.push({ key: 'oicName', label: 'Officer in Charge name', section: 0 });
+      required.push({ key: 'ourFileNumber', label: 'File / matter reference (UFN)', section: 0 });
     }
     m = required.filter(function(r) { var val = formData[r.key]; return !val || (typeof val === 'string' && !val.trim()); });
     var workType = formData.workType || '';
@@ -11395,8 +11416,22 @@ var REQUIRED_FIELD_KEYS = [
 
     var arrTime = SV ? SV.getEarliestStationArrival(formData) : (formData.timeArrival || '').trim();
     var attDate = (formData.date || '').trim();
+    // H4 — compare HH:mm by minutes, not by string. "9:30" < "10:00" is true
+    // by string compare but "9:30" > "10:00" is also true ("9" > "1"), so the
+    // missing leading zero used to silently allow before-arrival interviews.
+    function _hhmmToMin(s) {
+      if (!s || typeof s !== 'string') return null;
+      var mm = s.trim().match(/^(\d{1,2}):(\d{2})$/);
+      if (!mm) return null;
+      var hh = parseInt(mm[1], 10);
+      var mn = parseInt(mm[2], 10);
+      if (isNaN(hh) || isNaN(mn) || hh < 0 || hh > 23 || mn < 0 || mn > 59) return null;
+      return hh * 60 + mn;
+    }
+    var arrMin = _hhmmToMin(arrTime);
     (formData.interviews || []).forEach(function(iv, idx) {
-      if (iv.startTime && arrTime && iv.startTime < arrTime) {
+      var ivMin = _hhmmToMin(iv && iv.startTime);
+      if (ivMin != null && arrMin != null && ivMin < arrMin) {
         m.push({ key: 'iv' + idx + '_startTime', label: 'Interview ' + (idx + 1) + ' start time is before station arrival', section: 6 });
       }
     });
@@ -11819,8 +11854,14 @@ var REQUIRED_FIELD_KEYS = [
 
   function buildPdfHtml(d, settings) {
     const h = esc;
-    const row = (l, v) => v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : '';
-    const check = (k, l) => d[k] ? '<span class="chk">\u2611 ' + h(l) + '</span>' : '<span class="chk unc">\u2610 ' + h(l) + '</span>';
+    // H5 — allow explicit zero / false through (e.g. mileage 0, "Did you X" = false)
+    // but still hide null/undefined/empty cells. Previously `v ? …` dropped 0.
+    const row = (l, v) => (v != null && v !== '') ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : '';
+    // H5 — only tick on explicit true / "Yes" / "Y" (and the numeric 1 sometimes
+    // produced by older saves). Anything else renders as unchecked.
+    const _isTicked = (val) => val === true || val === 1 || val === '1' ||
+      (typeof val === 'string' && /^(yes|y|true|on|checked|ticked)$/i.test(val.trim()));
+    const check = (k, l) => _isTicked(d[k]) ? '<span class="chk">\u2611 ' + h(l) + '</span>' : '<span class="chk unc">\u2610 ' + h(l) + '</span>';
     const sigUri = function(k) { return k === 'feeEarnerSig' ? getEffectiveFeeEarnerSig(d) : (d[k] || ''); };
     const sig = k => sigUri(k) ? '<img src="' + sigUri(k) + '" class="sig-img" alt="">' : '<em class="sig-unsigned">Not signed</em>';
     const sn = d.policeStationName || '';
@@ -11926,15 +11967,18 @@ row('Already at station?', d.alreadyAtStation) + row('Travel from', d.travelOrig
 (function () {
   var sv = d.stationVisits;
   if (window.StationVisits && sv && sv.length > 1) {
-    var h = '';
+    // NOTE: do not name this `h` — the outer scope's `h` is the HTML-escape
+    // function used below for `h(lab)`. Shadowing it broke PDF generation
+    // for multi-visit attendance notes ("h is not a function").
+    var visitHtml = '';
     sv.forEach(function (v, vi) {
       var lab = 'Visit ' + (vi + 1) + (v.label ? ' (' + v.label + ')' : '');
-      h += '<tr><td colspan="2"><strong>' + h(lab) + '</strong></td></tr>';
-      h += row('Time set off', v.timeSetOff) + row('Time arrival at station', v.timeArrival) + row('Time left station', v.timeDeparture) + row('Time arrival office/home', v.timeOfficeHome) +
+      visitHtml += '<tr><td colspan="2"><strong>' + h(lab) + '</strong></td></tr>';
+      visitHtml += row('Time set off', v.timeSetOff) + row('Time arrival at station', v.timeArrival) + row('Time left station', v.timeDeparture) + row('Time arrival office/home', v.timeOfficeHome) +
         row('Waiting time start', v.waitingTimeStart) + row('Waiting time end', v.waitingTimeEnd) + row('Waiting notes', v.waitingTimeNotes) +
         row('Miles (this visit)', v.milesClaimable) + row('Parking (this visit)', v.parkingCost);
     });
-    return h;
+    return visitHtml;
   }
   return row('Time set off', d.timeSetOff) + row('Time arrival at station', d.timeArrival);
 })() +
@@ -12245,13 +12289,23 @@ pdfAuditFooterHtml(d, settings) +
 
   /* ─── TELEPHONE ADVICE PDF (INVB) ─── */
   function buildTelephonePdfHtml(d, settings) {
-    var h = function(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
-    var row = function(l, v) { return v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : ''; };
+    var h = function(s) { return String(s != null ? s : '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    // H5 — preserve explicit zero / false (same fix as buildPdfHtml).
+    var row = function(l, v) { return (v != null && v !== '') ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : ''; };
     var sigUri = function(k) { return k === 'feeEarnerSig' ? getEffectiveFeeEarnerSig(d) : (d[k] || ''); };
     var sig = function(k) { return sigUri(k) ? '<img src="' + sigUri(k) + '" class="sig-img" alt="">' : '<em class="sig-unsigned">(not signed)</em>'; };
     var sn = d.policeStationName || d.policeStationId || '';
     var firmName = d.firmName || d.firmId || '';
     var brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
+    // H7 — render coded fields as "code – description" like the custody/voluntary
+    // builders, instead of opaque LAA codes.
+    var codeLookup = function(key, code) {
+      try {
+        var arr = (typeof refData !== 'undefined' && refData[key]) || [];
+        var item = arr.find(function(c) { return c.code === code; });
+        return item ? code + ' \u2013 ' + item.description : (code || '');
+      } catch (_) { return code || ''; }
+    };
 
     var clientNameForTitle = [d.forename, d.surname].filter(Boolean).join(' ') || '—';
     var myRefForTitle = d.ourFileNumber || d.fileReference || '—';
@@ -12310,7 +12364,7 @@ pdfAuditFooterHtml(d, settings) +
       row('Duty Solicitor', d.dutySolicitor) +
       row('Not CDD Matter', d.notCddMatter) +
       (d.cddDeclinedReason ? row('CDD Reason', d.cddDeclinedReason) : '') +
-      row('Matter Type', d.matterTypeCode) +
+      row('Matter Type', codeLookup('matterTypeCodes', d.matterTypeCode)) +
       row('Offence', d.offenceSummary) +
       row('Fee Code', d.feeCode) +
       '</table>' +
@@ -12361,9 +12415,11 @@ pdfAuditFooterHtml(d, settings) +
 
   /* ─── VOLUNTARY ATTENDANCE PDF ─── */
   function buildVoluntaryPdfHtml(d, settings) {
-    var h = function(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
-    var row = function(l, v) { return v ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : ''; };
-    var check = function(k, l) { return d[k] ? '<span class="chk">\u2611 ' + h(l) + '</span>' : '<span class="chk unc">\u2610 ' + h(l) + '</span>'; };
+    var h = function(s) { return String(s != null ? s : '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    // H5 — preserve explicit zero / false (same fix as buildPdfHtml).
+    var row = function(l, v) { return (v != null && v !== '') ? '<tr><td class="l">' + h(l) + '</td><td>' + h(String(v)) + '</td></tr>' : ''; };
+    var _isTicked = function(val) { return val === true || val === 1 || val === '1' || (typeof val === 'string' && /^(yes|y|true|on|checked|ticked)$/i.test(val.trim())); };
+    var check = function(k, l) { return _isTicked(d[k]) ? '<span class="chk">\u2611 ' + h(l) + '</span>' : '<span class="chk unc">\u2610 ' + h(l) + '</span>'; };
     var sigUri = function(k) { return k === 'feeEarnerSig' ? getEffectiveFeeEarnerSig(d) : (d[k] || ''); };
     var sig = function(k) { return sigUri(k) ? '<img src="' + sigUri(k) + '" class="sig-img" alt="">' : '<em class="sig-unsigned">Not signed</em>'; };
     var sn = d.policeStationName || d.policeStationId || '';
@@ -12694,7 +12750,10 @@ pdfAuditFooterHtml(d, settings) +
     return buildPdfHtml;
   }
   window.getActivePdfBuilder = getActivePdfBuilder;
+  window.getPdfBuilderForData = getPdfBuilderForData;
   window.buildPdfHtml = buildPdfHtml;
+  window.buildVoluntaryPdfHtml = buildVoluntaryPdfHtml;
+  window.buildTelephonePdfHtml = buildTelephonePdfHtml;
 
   var CONFIDENTIALITY_REMINDER = 'Only share with authorised recipients. Client confidentiality and SRA standards apply.';
 
@@ -12745,7 +12804,13 @@ pdfAuditFooterHtml(d, settings) +
     window.api.attendanceGet(recordId).then(function(row) {
       if (!row) { showToast('Record not found', 'error'); return; }
       var data = {};
-      try { data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {}); } catch (_) {}
+      try {
+        data = typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {});
+      } catch (parseErr) {
+        console.error('[exportPdfById] failed to parse record data', recordId, parseErr);
+        showToast('Cannot generate PDF \u2014 record data is corrupt. Please open the record and re-save before exporting.', 'error');
+        return;
+      }
       ensureBillingDisplayInvoiceNumber({ data: data, skipSave: true });
       window.api.getSettings().then(function(settings) {
         var builder = getPdfBuilderForData(data);
@@ -13143,12 +13208,26 @@ pdfAuditFooterHtml(d, settings) +
      ═══════════════════════════════════════════════ */
 
   function printGeneratedDoc(html) {
-    const w = window.open('', '_blank', 'width=900,height=700');
+    // H2 — route through the main process's preview-pdf-from-html channel,
+    // which uses BrowserWindow.loadFile() on a temp HTML file. Avoids the
+    // window.open() + document.write() data-URL/size pitfalls and works for
+    // large cover letters / authority letters / generated forms.
+    if (window.api && typeof window.api.previewPdfFromHtml === 'function') {
+      window.api.previewPdfFromHtml({ html: html }).catch(function(err) {
+        console.warn('[printGeneratedDoc] preview-pdf-from-html failed, falling back to popup', err);
+        _printGeneratedDocPopupFallback(html);
+      });
+      return;
+    }
+    _printGeneratedDocPopupFallback(html);
+  }
+  function _printGeneratedDocPopupFallback(html) {
+    var w = window.open('', '_blank', 'width=900,height=700');
     if (!w) { showToast('Please allow pop-ups for this app to print documents', 'error'); return; }
     w.document.write(html);
     w.document.close();
     w.focus();
-    setTimeout(() => { w.print(); }, 400);
+    setTimeout(function() { try { w.print(); } catch (_) {} }, 400);
   }
 
   /** Billing / LAA: open HTML in a window without forcing the print dialog. */
@@ -13534,7 +13613,15 @@ pdfAuditFooterHtml(d, settings) +
       if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
         if (currentAttendanceId && !isNoteLockedForEditing()) {
-          saveForm(true);
+          // H8 — saveForm expects a string status; passing boolean `true` was
+          // silently treated as draft because `true === 'finalised'` is false.
+          // Route through validateBeforeFinalise so the user gets the same
+          // pre-flight checks as clicking the on-screen Finalise button.
+          if (typeof validateBeforeFinalise === 'function') {
+            validateBeforeFinalise();
+          } else {
+            saveForm('finalised');
+          }
         }
         return;
       }
