@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.5.4",
+      "version": "1.5.5",
       "date": "2026-04-22",
       "latest": true,
+      "changes": [
+        "UX: \u201cAdd new firm\u201d inline form (\u00a71 instructing-firm picker) is much clearer \u2014 every field has an unambiguous label so you can always tell what goes where, even after typing has hidden the placeholder. Labels rewritten: \u201cFirm name\u201d \u2192 \u201cInstructing firm name\u201d, \u201cContact name (person instructed)\u201d \u2192 \u201cContact at firm (the person who instructed you)\u201d, \u201cContact phone\u201d \u2192 \u201cPhone number for that contact\u201d, \u201cContact email\u201d \u2192 \u201cEmail for that contact\u201d",
+        "Fix: \u201cSource of referral\u201d field has been REMOVED from the inline Add-new-firm form. Source of referral (Duty Rota / agency / own private etc.) is a property of the matter, not of the firm \u2014 a firm can be your own private firm on one matter and act as agency on another. The matter form\u2019s \u00a71 already has its own Source of Referral field, so nothing is lost; you just answer it once, in the right place",
+        "UX: A clear \u201c\u2190 Back\u201d button now sits at the TOP-LEFT of the inline Add-new-firm form (separate from the bottom Cancel) so a user who opened the form by mistake or made a typo and wants to start over has an obvious escape hatch without having to scroll past every field",
+        "UX: One-line intro at the top of the inline form (\u201cAdd the instructing solicitor\u2019s firm \u2014 i.e. the firm that instructed you to attend the station. Only the firm name is required; everything else is optional and can be edited later under Manage Firms.\u201d) makes it instantly obvious what the form is for",
+        "Tests: tests/timeBreakdownPanel.test.js extended with v1.5.5 assertions (Back button, intro, removal of Source-of-Referral, new label strings, new CSS classes including dark-mode rules); full unit suite is now 1058 assertions, all green"
+      ]
+    },
+    {
+      "version": "1.5.4",
+      "date": "2026-04-22",
+      "latest": false,
       "changes": [
         "Fix: VAT field on the Step 2 billing screen now defaults to 20 (i.e. 20%), not 2000. Settings stores VAT as a percentage string (\"20\") but the rest of the system expects a decimal fraction (0.20); without normalisation the value was being multiplied by 100 twice, so the VAT input rendered as \"2000\" and the live invoice preview showed an obviously wrong total. The fix normalises the value at the settings boundary and adds defence-in-depth guards in both billing renderers so any old cached value or legacy DB row can\u2019t resurrect the bug",
         "New: shared _normaliseVatRate(raw, fallback) helper in app.js \u2014 always returns a decimal fraction in [0, 1], divides by 100 if raw > 1, and falls back gracefully on null/empty/NaN/negative input",
