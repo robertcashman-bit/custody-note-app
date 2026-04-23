@@ -486,7 +486,7 @@ function _wfBuildFormHtml(formId, data, meta) {
     case 'client_instructions': {
       var ciDate = _formatDateGB(data.instructionsSignatureDate || data.date || new Date().toISOString().slice(0, 10));
       var ciTime = data.instructionsSignatureTime || '';
-      var instructions = data.clientInstructions || '(no instructions recorded)';
+      var instructions = (String(data.clientInstructionsDetail || '').trim() || String(data.clientInstructions || '').trim() || '(no instructions recorded)');
       var adviceRe = data.adviceReInterview || '';
       var decision = data.clientDecision || '';
       return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Client Instructions</title>' + _docStyles() + '</head><body>' +

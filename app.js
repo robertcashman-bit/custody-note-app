@@ -10110,7 +10110,7 @@ var REQUIRED_FIELD_KEYS = [
       renderTemplateButton(wrap, input, TEMPLATE_PHRASES[f.key]);
     }
 
-    if (f.type === 'textarea' && ['disclosureNarrative','clientInstructions','reasonsForAdvice','firstContactOver45MinsReason'].includes(f.key)) {
+    if (f.type === 'textarea' && ['disclosureNarrative','clientInstructions','clientInstructionsDetail','reasonsForAdvice','firstContactOver45MinsReason'].includes(f.key)) {
       const tsBtn = document.createElement('button');
       tsBtn.type = 'button';
       tsBtn.className = 'btn-small btn-timestamp';
@@ -11307,7 +11307,9 @@ var REQUIRED_FIELD_KEYS = [
     // Advice/instruction/disclosure narrative — relax to one combined check so a sensible note can satisfy either field.
     var adviceLike = (formData.reasonsForAdvice || formData.reasonsForAdviceSelect || formData.adviceGiven || '').toString().trim();
     if (!adviceLike) m.push({ key: 'reasonsForAdvice', label: 'Reasons for advice / advice given', section: 5 });
-    if (!(formData.clientInstructions || '').trim()) m.push({ key: 'clientInstructions', label: 'Summary of client instructions', section: 5 });
+    if (!(formData.clientInstructions || '').trim() && !(formData.clientInstructionsDetail || '').trim()) {
+      m.push({ key: 'clientInstructions', label: 'Client instructions (full) or summary of client instructions', section: 5 });
+    }
     if (!(formData.disclosureNarrative || '').trim()) m.push({ key: 'disclosureNarrative', label: 'Disclosure summary', section: 4 });
     if (formData.juvenileVulnerable === 'Juvenile' || formData.juvenileVulnerable === 'Vulnerable Adult') {
       if (!(formData.appropriateAdultName || '').trim()) m.push({ key: 'appropriateAdultName', label: 'Appropriate adult name', section: 2 });
@@ -11967,6 +11969,9 @@ row('Client first name', d.forename) + row('Client surname', d.surname) + row('F
 row('Station', sn) + row('DSCC number', formatDsccForPdf(d)) +
 row('Officer in Charge', d.oicName) + row('Officer in Charge email', d.oicEmail) + row('Officer in Charge telephone', d.oicPhone) +
 row('Date', fmtDate(d.date)) + row('Weekend/Bank Holiday', d.weekendBankHoliday) + row('Other Location', d.otherLocation) +
+row('Attendance type', d.attendanceMode) + row('Instruction source', d.instructionSource) +
+row('DSCC notification status', d.dsccNotificationStatus) + row('DSCC private matter', d.dsccPrivateMatter) +
+row('DSCC reference missing reason', d.dsccReferenceMissingReason) +
 row('Referral', d.sourceOfReferral) + row('Work Type', d.workType) + row('Telephone advice given?', d.telephoneAdviceGiven) + row('Fee Earner (telephone advice)', d.feeEarnerTelephoneAdvice) +
 row('Scheme ID', d.schemeId) + row('Duty Solicitor', d.dutySolicitor) +
 row('Fee Earner', d.feeEarnerName) +
@@ -11991,7 +11996,7 @@ row('Already at station?', d.alreadyAtStation) + row('Travel from', d.travelOrig
       visitHtml += '<tr><td colspan="2"><strong>' + h(lab) + '</strong></td></tr>';
       visitHtml += row('Time set off', v.timeSetOff) + row('Time arrival at station', v.timeArrival) + row('Time left station', v.timeDeparture) + row('Time arrival office/home', v.timeOfficeHome) +
         row('Waiting time start', v.waitingTimeStart) + row('Waiting time end', v.waitingTimeEnd) + row('Waiting notes', v.waitingTimeNotes) +
-        row('Miles (this visit)', v.milesClaimable) + row('Parking (this visit)', v.parkingCost);
+        row('Miles (this visit)', v.milesClaimable) + row('Parking (this visit)', v.parkingCost) + row('Visit notes', v.notes);
     });
     return visitHtml;
   }
@@ -12013,7 +12018,11 @@ row('Relevant Time', d.relevantTime) + row('Detention authorised (time)', d.time
 row('First review due', d.firstReviewDue) + row('First review actual', d.firstReviewActual) + row('First review notes', d.firstReviewNotes) +
 row('Second review due', d.secondReviewDue) + row('Second review actual', d.secondReviewActual) + row('Second review notes', d.secondReviewNotes) +
 row('Third review due', d.thirdReviewDue) + row('Third review actual', d.thirdReviewActual) + row('Third review notes', d.thirdReviewNotes) +
+row('4th review time', d.fourthReviewTime) + row('4th review notes', d.fourthReviewNotes) +
+row('5th review time', d.fifthReviewTime) + row('5th review notes', d.fifthReviewNotes) +
+row('Further PACE review notes (6+)', d.additionalReviewNotes) +
 row('Language Issues', d.languageIssues) + row('Interpreter', d.interpreterName) + row('Language', d.interpreterLanguage) +
+row('Interpreter mode', d.interpreterMode) + row('Interpreter agency', d.interpreterAgency) + row('Interpreter phone', d.interpreterPhone) + row('Interpreter arrival time', d.interpreterArrivalTime) +
 row('Juvenile / Vulnerable', d.juvenileVulnerable) + row('Appropriate adult', d.appropriateAdultName) + row('Appropriate adult relationship', d.appropriateAdultRelation) +
 row('Appropriate adult telephone', d.appropriateAdultPhone) + row('Appropriate adult email', d.appropriateAdultEmail) +
 row('Appropriate adult organisation', d.appropriateAdultOrganisation) + (d.appropriateAdultAddress ? row('Appropriate adult address', d.appropriateAdultAddress) : '') +
@@ -12021,6 +12030,10 @@ row('Injuries', d.injuriesToClient) + row('Injury Details', d.injuryDetails) + r
 row('Medication', d.medicationRequired === 'Yes' ? (d.medication || 'Yes') : (d.medicationRequired || d.medication || '')) + row('Psychiatric/mental health issues?', d.psychiatricIssues) + row('Psychiatric notes', d.psychiatricNotes) +
 row('Literate/can read?', d.literate) + row('Drugs test', d.drugsTest) + row('FME / Nurse / Doctor', d.fmeNurse) + (d.medicalExaminationOutcome ? row('Medical examination outcome', d.medicalExaminationOutcome) : '') +
 row('Fit to be detained?', d.fitToBeDetained) + row('Fit to be interviewed?', d.fitToBeInterviewed) +
+row('Strip search conducted', d.stripSearchConducted) + row('Strip / intimate search type', d.stripSearchType) + row('Strip search grounds', d.stripSearchGrounds) +
+row('Strip search authorised by', d.stripSearchAuthorisedBy) + row('Strip search officers', d.stripSearchOfficers) + row('Strip search — AA present', d.stripSearchAAPresent) +
+row('Strip search — client response', d.stripSearchClientResponse) + row('Strip search — result / items', d.stripSearchResult) + row('Strip search — representations', d.stripSearchRepresentations) +
+row('Property taken on arrival', d.propertyTaken) + row('Property list', d.propertyList) + row('Property returned on release', d.propertyReturned) + row('Property notes', d.propertyNotes) +
 '</table>' +
 
 '<h2>4. Offences</h2><table>' +
@@ -12048,6 +12061,10 @@ row('PNC/pre-cons disclosed?', d.pncDisclosed) + (d.pncNotes ? row('Previous con
     row('Samples (disclosed)?', d.samplesDisclosed) +
     ((d.forensicSamples && d.forensicSamples.length) ? d.forensicSamples.map(function(fs, i) { return row('Forensic sample ' + (i + 1), (fs.sampleType || '') + (fs.whatDone ? ' \u2013 ' + fs.whatDone : '') + (fs.notes ? ' (' + fs.notes + ')' : '')); }).join('') : '') +
 row('Caution/out-of-court offered?', d.cautionAvailable) + row('Clothing/shoes/phone seized?', d.clothingShoesSeized) +
+row('Clothing/shoes/phone — what was seized', d.clothingShoesSeizedWhat) + row('Clothing/shoes/phone — seizure notes', d.clothingShoesSeizedNotes) +
+row('Electronic device(s) seized', d.deviceSeized) + row('Device type(s)', d.deviceType) + row('Device PIN requested', d.devicePinRequested) + row('Device PIN provided', d.devicePinProvided) +
+row('Device data extraction consent', d.deviceExtractionConsent) + row('Device RIPA / s.49', d.deviceRIPAAuthority) + row('Device seizure notes', d.deviceNotes) +
+row('Special warning given', d.specialWarningGiven) + row('Special warning type', (d.specialWarningType || '').replace(/\|/g, ', ')) + row('Special warning details', d.specialWarningDetails) + row('Special warning — advice to client', d.specialWarningAdvice) +
 row('Injuries (disclosure)', d.disclosureReInjuries) +
 ((d.attendingContacts && d.attendingContacts.length) ? d.attendingContacts.filter(function(c) { return (c.contactType || c.time || c.outcome || c.notes); }).map(function(c, i) { return row('Contact ' + (i + 1) + ' (who)', c.contactType || '—') + row('Contact ' + (i + 1) + ' (time)', c.time || '—') + row('Contact ' + (i + 1) + ' (outcome)', c.outcome || '—') + (c.notes ? row('Contact ' + (i + 1) + ' (notes)', c.notes) : ''); }).join('') : (d.attendingContactType ? row('Who contacted', d.attendingContactType) + row('Time of contact', d.attendingContactTime) + row('Outcome', d.attendingContactOutcome) : '')) +
 '</table>' + (d.disclosureNarrative ? '<div class="nar">' + h(d.disclosureNarrative) + '</div>' : '') +
@@ -12074,8 +12091,11 @@ row('Passported Benefit', d.passportedBenefit) + row('Gross Income', d.grossInco
 row('Employment', d.employmentStatus) + row('Accommodation', d.accommodationStatus) + (d.accommodationDetails ? row('Accommodation notes', d.accommodationDetails) : '') + row('Marital status', d.maritalStatus) +
 row('Phone', d.clientPhone) + row('Email', d.clientEmail) +
 row('Ethnicity', codeLookup('ethnicCodes', d.ethnicOriginCode)) + row('Disability', codeLookup('disabilityCodes', d.disabilityCode)) + row('Risk', d.riskAssessment) +
-row('Sufficient Benefit Test (LAA)', (d.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ')) + row('Sufficient Benefit Test notes', d.sufficientBenefitNotes) + row('Gaps', d.gapsInEvidence) + row('Case assessment (police case)', d.caseAssessment) + row('Sentence', d.likelySentence) + '</table>' +
-(d.lawElements ? '<div class="nar">' + h(d.lawElements) + '</div>' : '') + (d.clientInstructions ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Summary of client instructions</p><div class="nar">' + h(d.clientInstructions) + '</div>' : '') +
+row('Sufficient Benefit Test (LAA)', (d.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ')) + row('Sufficient Benefit Test notes', d.sufficientBenefitNotes) + row('Gaps', d.gapsInEvidence) + row('Case assessment (police case)', d.caseAssessment) + row('Case assessment — reasoning', d.caseAssessmentWhy) + row('Sentence', d.likelySentence) +
+row('Dependants', d.dependants) + row('Capital (client) £', d.capitalClient) + row('Capital (partner) £', d.capitalPartner) + row('Capital (total) £', d.capitalTotal) + row('Consent to email', d.clientEmailConsent) + '</table>' +
+(d.lawElements ? '<div class="nar">' + h(d.lawElements) + '</div>' : '') +
+    (d.clientInstructionsDetail ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Client instructions</p><div class="nar">' + h(d.clientInstructionsDetail) + '</div>' : '') +
+    (d.clientInstructions ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Summary of client instructions</p><div class="nar">' + h(d.clientInstructions) + '</div>' : '') +
 '<p style="font-size:9px;font-weight:600;">Advice:</p>' +
 '<ul class="chk-list">' +
 '<li>' + check('advSilence', 'Right to Silence & Inferences Explained') + '</li>' +
@@ -12636,6 +12656,7 @@ pdfAuditFooterHtml(d, settings) +
       row('Likely sentence', d.likelySentence) +
       '</table>' +
       (d.lawElements ? '<div class="nar">' + h(d.lawElements) + '</div>' : '') +
+      (d.clientInstructionsDetail ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Client instructions</p><div class="nar">' + h(d.clientInstructionsDetail) + '</div>' : '') +
       (d.clientInstructions ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Summary of client instructions</p><div class="nar">' + h(d.clientInstructions) + '</div>' : '') +
       '<p style="font-size:9px;font-weight:600;">Advice given:</p>' +
       '<ul class="chk-list">' +
@@ -13317,7 +13338,8 @@ pdfAuditFooterHtml(d, settings) +
     const fee = d.feeEarnerName || d.laaFeeEarnerFullName || '';
     const date = formatDateGB(d.instructionsSignatureDate || d.date || new Date().toISOString().slice(0, 10));
     const time = d.instructionsSignatureTime || '';
-    const instructions = d.clientInstructions || '(no instructions recorded)';
+    const instructions = (d.clientInstructionsDetail && String(d.clientInstructionsDetail).trim()) ||
+      (d.clientInstructions && String(d.clientInstructions).trim()) || '(no instructions recorded)';
     const adviceRe = d.adviceReInterview || '';
     const decision = d.clientDecision || '';
     const offence = d.offenceSummary || d.offence1Details || '';
