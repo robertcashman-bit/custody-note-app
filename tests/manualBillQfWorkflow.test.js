@@ -516,8 +516,14 @@ describe('Step 2: Billing screen — charges form & live preview', () => {
     assert.ok(billingScreenJs.includes('Parking/disbursements'));
   });
 
-  it('VAT input is expressed as percentage (multiplied by 100)', () => {
-    assert.ok(billingScreenJs.includes('opts.vatRate || 0.20) * 100'));
+  it('VAT input is expressed as percentage (multiplied by 100, normalised against >1 values)', () => {
+    // v1.5.4: the value is now wrapped in a normaliser IIFE that divides by 100
+    // first if opts.vatRate accidentally arrives as the percentage form (>1).
+    // This protects against the "shows 2000 instead of 20" bug.
+    assert.ok(
+      billingScreenJs.includes('var vr = (opts.vatRate || 0.20); if (vr > 1) vr = vr / 100; return (vr * 100).toFixed(0);'),
+      'wf-vat input must use the normaliser IIFE so 20 → "20" (not "2000") and 0.20 → "20"'
+    );
   });
 
   it('recalc divides VAT percentage by 100 before passing to calculateInvoiceTotals', () => {
