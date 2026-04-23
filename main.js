@@ -1296,7 +1296,6 @@ async function initDb() {
 
   _safeAddColumn('police_stations', "scheme TEXT DEFAULT ''");
   _safeAddColumn('police_stations', "region TEXT DEFAULT ''");
-  _safeAddColumn('firms', "contact_name TEXT DEFAULT ''");
 
   db.run(`
     CREATE TABLE IF NOT EXISTS firms (
@@ -1312,6 +1311,7 @@ async function initDb() {
       UNIQUE(name)
     );
   `);
+  _safeAddColumn('firms', "contact_name TEXT DEFAULT ''");
   _safeAddColumn('firms', "source_of_referral TEXT DEFAULT ''");
 
   db.run(`CREATE INDEX IF NOT EXISTS idx_attendances_updated ON attendances(updated_at);`);
