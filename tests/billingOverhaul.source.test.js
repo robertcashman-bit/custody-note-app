@@ -73,8 +73,10 @@ describe('Auto invoice number wiring', () => {
     assert.ok(appJs.includes('function sanitizeBillingInvoiceNumber'));
     assert.ok(appJs.includes('ensureBillingDisplayInvoiceNumber'));
   });
-  it('billing panel shows read-only invoice ref, not an input', () => {
-    assert.ok(billingJs.includes('billing-invoice-ref-display'));
+  it('billing panel does NOT expose the internal "Billing invoice no." line (v1.5.6)', () => {
+    // v1.5.6: removed both the read-only display element and the (long-removed) input
+    assert.ok(!billingJs.includes('billing-invoice-ref-display'),
+      'v1.5.6: billing-invoice-ref-display must not appear in the billing panel');
     assert.ok(!billingJs.includes('id="billing-invoice-number-input"'));
     assert.ok(!billingJs.includes("name=\"billingInvoiceNumber\""));
   });

@@ -232,13 +232,6 @@ function _renderBillingPanel(data, recordId, opts) {
     auditHtml += '</div></details>';
   }
 
-  var invDisp = '';
-  try {
-    invDisp = String((data && data.billingDisplayInvoiceNumber) || '').trim().replace(/^\.+/, '');
-    invDisp = invDisp.replace(/[<>:"/\\|?*\x00-\x1f]/g, '').trim().slice(0, 20);
-  } catch (e) { invDisp = ''; }
-  if (!invDisp) invDisp = '\u2014 (assigned when invoice is created)';
-
   var html =
     '<div id="billing-panel-overlay" class="billing-overlay" role="dialog" aria-modal="true" aria-label="Billing &amp; Documents">' +
       '<div class="billing-panel billing-panel--flow">' +
@@ -255,7 +248,6 @@ function _renderBillingPanel(data, recordId, opts) {
               '<div><span class="billing-label">Client</span><span class="billing-value">' + _escHtml(opts.clientName) + '</span></div>' +
               '<div><span class="billing-label">Police Station</span><span class="billing-value">' + _escHtml(opts.stationName) + '</span></div>' +
               '<div><span class="billing-label">Attendance Date</span><span class="billing-value">' + _escHtml(_billingFmtDate(opts.attendanceDate)) + '</span></div>' +
-              '<div style="grid-column:1/-1;"><span class="billing-label">Billing invoice no. (auto)</span><span id="billing-invoice-ref-display" class="billing-value">' + _escHtml(invDisp) + '</span></div>' +
               '<div style="grid-column:1/-1;"><span class="billing-label">Offence Summary</span><span class="billing-value">' + _escHtml(opts.offenceSummary) + '</span></div>' +
             '</div>' +
           '</div>' +

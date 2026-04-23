@@ -1407,15 +1407,13 @@ var LAA = {
     /* ─────── 3. CLIENT DETAILS & WELFARE ─────── */
     {
       id: 'custody', title: '3. Client Details & Welfare',
-      keyFields: ['forename', 'surname', 'dob'],
+      keyFields: ['dob'],
       fields: [
         { key: '_h_client_details', label: 'Client Details (provided by client)', type: 'sectionHeading' },
+        /* v1.5.6: name was already captured in §1 — show a read-only reference here
+           instead of a duplicate forename / middle / surname row. */
+        { key: '_note_name_from_section_1', label: "Name: from \u00a71 \u2014 client first / middle / surname were entered in Section 1 (Case Reference & Arrival). Edit there if any details need to change.", type: 'sectionNote', dynamicNameRefSection1: true },
         { key: 'title', label: 'Title', type: 'select', options: ['Mr','Mrs','Miss','Ms','Mx','Dr','Other'] },
-        { type: 'nameRow', label: 'Name', fields: [
-            { key: 'forename', label: 'First name' },
-            { key: 'middleName', label: 'Middle name(s)' },
-            { key: 'surname', label: 'Surname' }
-          ], cols: 2 },
         { key: 'dob', label: 'Date of Birth', type: 'date' },
         { key: 'gender', label: 'Gender', type: 'select', options: ['Male','Female','Other','Prefer not to say'] },
         { key: 'nationality', label: 'Nationality', type: 'select', options: [
@@ -1886,13 +1884,6 @@ var REQUIRED_FIELD_KEYS = [
     d.billingDisplayInvoiceNumber = generated;
     if (!opts.skipSave && typeof quietSave === 'function' && d === formData) quietSave();
     return d.billingDisplayInvoiceNumber;
-  }
-
-  function pdfBillingInvoiceLine(d) {
-    d = d || {};
-    var inv = sanitizeBillingInvoiceNumber(d.billingDisplayInvoiceNumber);
-    if (inv) return inv;
-    return '\u2014';
   }
 
   window.sanitizeBillingInvoiceNumber = sanitizeBillingInvoiceNumber;
@@ -7931,6 +7922,25 @@ var REQUIRED_FIELD_KEYS = [
       const p = document.createElement('p');
       p.className = 'section-note' + (f.className ? ' ' + f.className : '');
       p.textContent = f.label;
+      /* v1.5.6: voluntary §3 — if the note opts in via dynamicNameRefSection1,
+         append the actual name captured in §1 so the user can see what is on file
+         without exposing duplicate editable fields. */
+      if (f.dynamicNameRefSection1) {
+        try {
+          const nm = [data.forename, data.middleName, data.surname].filter(function (s) { return s && String(s).trim(); }).join(' ').trim();
+          if (nm) {
+            const strong = document.createElement('strong');
+            strong.textContent = ' \u2014 ' + nm;
+            strong.style.color = '#0f766e';
+            p.appendChild(strong);
+          } else {
+            const em = document.createElement('em');
+            em.textContent = ' \u2014 (no name on file yet)';
+            em.style.color = '#94a3b8';
+            p.appendChild(em);
+          }
+        } catch (e) { /* non-fatal: fall back to static text */ }
+      }
       const wrap = f.showIf ? document.createElement('div') : null;
       if (wrap) { wrap.style.gridColumn = '1 / -1'; wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); wrap.appendChild(p); grid.appendChild(wrap); } else grid.appendChild(p);
       return;
@@ -11876,7 +11886,7 @@ pdfDefenceSummaryCss() +
 '</div>' +
 '<h1>Custody Note</h1>' +
 '<p style="font-size:10px;color:#475569;">' +
-'  <strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '') + ' &middot; <strong>Billing invoice no.:</strong> ' + h(pdfBillingInvoiceLine(d)) + ' &middot; <strong>Date:</strong> ' + h(fmtDate(d.date)||'') + ' &middot; <strong>DSCC PIN:</strong> ' + h(settings.dsccPin||'') +
+'  <strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '') + ' &middot; <strong>Date:</strong> ' + h(fmtDate(d.date)||'') + ' &middot; <strong>DSCC PIN:</strong> ' + h(settings.dsccPin||'') +
   (firmName ? ' &middot; <strong>Firm:</strong> ' + h(firmName) : '') +
   (d.firmLaaAccount ? ' &middot; <strong>LAA Acct:</strong> ' + h(d.firmLaaAccount) : '') +
 '</p>' +
@@ -11897,7 +11907,7 @@ pdfDefenceSummaryHtml(d) +
 '<h2>1. Case Reference & Arrival</h2><table>' +
 row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) + row('Firm', firmName) +
 row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
-row('Client first name', d.forename) + row('Client surname', d.surname) + row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) + row('Offence (summary)', d.offenceSummary) +
+row('Client first name', d.forename) + row('Client surname', d.surname) + row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Offence (summary)', d.offenceSummary) +
 row('Station', sn) + row('DSCC number', formatDsccForPdf(d)) +
 row('Officer in Charge', d.oicName) + row('Officer in Charge email', d.oicEmail) + row('Officer in Charge telephone', d.oicPhone) +
 row('Date', fmtDate(d.date)) + row('Weekend/Bank Holiday', d.weekendBankHoliday) + row('Other Location', d.otherLocation) +
@@ -12175,7 +12185,6 @@ row('Invoice notes', d.invoiceNotes) +
 
 (function() {
   var adminRows = row('File / matter reference', d.ourFileNumber || d.fileReference) +
-    row('Billing invoice no.', pdfBillingInvoiceLine(d)) +
     row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
   if (!adminRows) return '';
   return '<h2>12. Admin & Billing</h2><table>' + adminRows + '</table>';
@@ -12284,7 +12293,6 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="cover-item"><strong>Station:</strong> ' + h(sn || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
-      '<div class="cover-item"><strong>Billing invoice no.:</strong> ' + h(pdfBillingInvoiceLine(d)) + '</div>' +
       '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>DSCC:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
       '</div>' +
@@ -12292,7 +12300,7 @@ pdfAuditFooterHtml(d, settings) +
       (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">TELEPHONE ADVICE</div>' : '') +
 
       '<h2>1. Call Details</h2><table>' +
-      row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) + row('Date', fmtDate(d.date)) +
+      row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Date', fmtDate(d.date)) +
       row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) +
       row('Source of Referral', d.sourceOfReferral) +
       row('DSCC Number', formatDsccForPdf(d)) +
@@ -12451,7 +12459,7 @@ pdfAuditFooterHtml(d, settings) +
       row('Firm', firmName) + row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
       row('Fee Earner / Rep', d.feeEarnerName) +
       row('Client', clientNameForTitle) +
-      row('File / matter reference', myRefForTitle) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) +
+      row('File / matter reference', myRefForTitle) +
       row('Offence (summary)', d.offenceSummary) +
       row('Station / Location', sn || d.otherLocation) + row('Location type', d.locationType) +
       row('Scheme ID', d.schemeId) +
@@ -12649,7 +12657,7 @@ pdfAuditFooterHtml(d, settings) +
       })() +
 
       (function() {
-        var adminRows = row('File / matter reference', myRefForTitle) + row('Billing invoice no.', pdfBillingInvoiceLine(d)) + row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
+        var adminRows = row('File / matter reference', myRefForTitle) + row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
         if (!adminRows) return '';
         return '<h2>12. Admin &amp; Billing</h2><table>' + adminRows + '</table>';
       })() +

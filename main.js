@@ -6989,8 +6989,24 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     /* Attach PDFs to QuickFile invoice — supports multiple attachments */
     const attachResults = [];
 
-    /* Legacy single HTML attachment (attendance note) */
-    if (invoiceId && attachAttendanceHtml && String(attachAttendanceHtml).trim()) {
+    /*
+     * v1.5.6: Avoid double-attachment on the workflow billing path.
+     *
+     * Two attach sources exist:
+     *   1) Legacy `attachAttendanceHtml` — auto-renders the attendance note from HTML.
+     *   2) `extraAttachments[]` — user-selected documents from the workflow billing screen
+     *      (which already includes the attendance note when ticked).
+     *
+     * If the caller provides any user-selected `extraAttachments`, we honour ONLY their
+     * selection and skip the legacy auto attach (otherwise the attendance note got
+     * attached twice). The standalone billing.js path — which never sends
+     * `extraAttachments` — keeps its single auto-attached attendance note.
+     */
+    const extraAttachments = params.extraAttachments;
+    const hasUserSelectedExtras = Array.isArray(extraAttachments)
+      && extraAttachments.some(a => a && a.base64 && a.filename);
+
+    if (invoiceId && attachAttendanceHtml && String(attachAttendanceHtml).trim() && !hasUserSelectedExtras) {
       try {
         const pdfBuf = await renderHtmlToPdfBuffer(String(attachAttendanceHtml));
         const fn = (attachPdfFileName && String(attachPdfFileName).trim()) || 'attendance-note.pdf';
@@ -7016,8 +7032,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       }
     }
 
-    /* Additional base64 PDF attachments (CRM forms, conflict cert, etc.) */
-    const extraAttachments = params.extraAttachments;
+    /* User-selected base64 PDF attachments (CRM forms, attendance note, conflict cert, etc.) */
     if (invoiceId && Array.isArray(extraAttachments)) {
       for (const att of extraAttachments) {
         if (!att || !att.base64 || !att.filename) continue;

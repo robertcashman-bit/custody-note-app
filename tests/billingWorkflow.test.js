@@ -319,14 +319,17 @@ describe('billing.js — core functions', () => {
     assert.ok(billingJs.includes('attachAttendanceHtml'));
   });
 
-  it('shows billing summary (firm, client, station, date, offence, auto invoice ref)', () => {
+  it('shows billing summary (firm, client, station, date, offence) without internal billing invoice ref', () => {
     assert.ok(billingJs.includes('Billing &amp; documents') || billingJs.includes('Billing & documents'));
     assert.ok(billingJs.includes('firmName'));
     assert.ok(billingJs.includes('clientName'));
     assert.ok(billingJs.includes('stationName'));
     assert.ok(billingJs.includes('attendanceDate'));
-    assert.ok(billingJs.includes('billing-invoice-ref-display'));
-    assert.ok(billingJs.includes('Billing invoice no. (auto)'));
+    // v1.5.6: the internal "Billing invoice no. (auto)" line was removed from the panel
+    assert.ok(!billingJs.includes('billing-invoice-ref-display'),
+      'v1.5.6: billing-invoice-ref-display element must not appear in the billing panel');
+    assert.ok(!billingJs.includes('Billing invoice no.'),
+      'v1.5.6: "Billing invoice no." label must not appear in the billing panel');
   });
 
   it('has QuickFile status display', () => {
