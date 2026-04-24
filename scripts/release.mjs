@@ -134,6 +134,7 @@ async function main() {
     // Update package.json
     pkg.version = newVersion;
     pkg.lastUpdated = today;
+    pkg.buildTime = new Date().toISOString();
     writeJson(pkgPath, pkg);
     console.log(`Version bumped to ${newVersion}`);
 
