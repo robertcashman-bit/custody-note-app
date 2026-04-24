@@ -3267,6 +3267,31 @@ var REQUIRED_FIELD_KEYS = [
   function formatAppCheckTimeUk() {
     return new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   }
+  /**
+   * Updater `res.version` is this install; `res.remoteVersion` is the feed’s published version (if reported).
+   * Wording must not read the install string as "the world’s latest".
+   */
+  function upToDateUserCopy(res, checkedAt) {
+    var inst = res && res.version != null && res.version !== '' ? String(res.version) : '';
+    var rem = res && res.remoteVersion != null && res.remoteVersion !== '' ? String(res.remoteVersion) : '';
+    var t = checkedAt != null && checkedAt !== '' ? String(checkedAt) : '';
+    if (rem && inst && rem !== inst) {
+      return {
+        toast: 'This install is v' + inst + ', but the update service reports the current published release is v' + rem + '. If the app will not update, get the installer from custodynote.com/download' + (t ? ' · ' + t : '') + '.',
+        status: '\u2713 v' + inst + ' (this PC) / v' + rem + ' (update feed)' + (t ? ' — ' + t : '')
+      };
+    }
+    if (rem) {
+      return {
+        toast: 'You are on the current published release: v' + rem + (t ? ' \u00B7 checked ' + t : ''),
+        status: '\u2713 current release v' + rem + (t ? ' (checked ' + t + ')' : '')
+      };
+    }
+    return {
+      toast: 'This install: v' + inst + (t ? ' \u00B7 checked ' + t : ''),
+      status: '\u2713 v' + inst + (t ? ' (checked ' + t + ')' : '')
+    };
+  }
 
   /* ─── HOME / COMMAND CENTER ─── */
   var _homeGreetingTimer = null;
@@ -3308,7 +3333,8 @@ var REQUIRED_FIELD_KEYS = [
           btn.textContent = '\u2713 Up to date';
           btn.style.color = '#059669';
           var tNow = formatAppCheckTimeUk();
-          showToast('You\u2019re on the latest version (v' + (res.version || '') + ' \u00B7 checked ' + tNow + ')', 'success');
+          var _utc = upToDateUserCopy(res, tNow);
+          showToast(_utc.toast, 'success');
         } else if (res.status === 'checking') {
           btn.textContent = '\u21BB Checking\u2026';
           btn.style.color = '#d97706';
@@ -16045,7 +16071,8 @@ pdfAuditFooterHtml(d, settings) +
         hideHomeUpdateBanner();
         var statusEl = document.getElementById('check-updates-status');
         var atStr = formatAppCheckTimeUk();
-        if (statusEl) statusEl.textContent = '\u2713 v' + (data.version || '') + ' (checked ' + atStr + ')';
+        var _uad = upToDateUserCopy(data, atStr);
+        if (statusEl) statusEl.textContent = _uad.status;
         if (gearBtn) { gearBtn.textContent = '\u2713 Up to date'; gearBtn.style.color = '#059669'; setTimeout(function() { if (gearBtn) { gearBtn.textContent = '\u21BB Check for updates'; gearBtn.style.color = ''; } }, 5000); }
         _lastUpdateToastPct = -1;
         _updateToastShown = {};
@@ -16162,10 +16189,11 @@ pdfAuditFooterHtml(d, settings) +
         var statusEl = document.getElementById('check-updates-status');
         if (res.status === 'up-to-date') {
           var chkAt = formatAppCheckTimeUk();
-          showToast('You\'re up to date (v' + (res.version || '') + ' \u00B7 ' + chkAt + ')', 'success');
+          var _utc2 = upToDateUserCopy(res, chkAt);
+          showToast(_utc2.toast, 'success');
           if (gearBtn) gearBtn.textContent = '\u2713 Up to date';
           if (bottomUpLbl) bottomUpLbl.textContent = 'Update';
-          if (statusEl) statusEl.textContent = '\u2713 v' + (res.version || '') + ' (checked ' + chkAt + ')';
+          if (statusEl) statusEl.textContent = _utc2.status;
         } else if (res.status === 'checking') {
           if (statusEl) statusEl.textContent = 'Checking for updates\u2026';
         } else if (res.status === 'downloading') {
@@ -16487,7 +16515,8 @@ pdfAuditFooterHtml(d, settings) +
           return;
         }
         if (data.status === 'up-to-date') {
-          setBlock('sysstat-update-icon','✅','#059669','sysstat-update-line1','Up to date' + (currentVersion ? ' — v' + currentVersion : ''),'sysstat-update-line2','');
+          var relV = (data.remoteVersion && String(data.remoteVersion).trim()) || currentVersion;
+          setBlock('sysstat-update-icon','✅','#059669','sysstat-update-line1','Up to date' + (relV ? ' — current release v' + relV : ''),'sysstat-update-line2','');
           if (l2El) l2El.textContent = 'Auto-update enabled · Checks every 6 hours while the app is running';
         } else if (data.status === 'downloading') {
           setBlock('sysstat-update-icon','⬇️','#2563eb','sysstat-update-line1','Downloading update v' + data.version + '…','sysstat-update-line2','');
