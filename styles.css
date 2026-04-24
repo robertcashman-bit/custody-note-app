@@ -3027,6 +3027,37 @@ html.dark .billing-readiness-list li.billing-readiness-note {
   color: #94a3b8;
 }
 
+/* Dark-mode override for the file-completion (billing-readiness) panel.
+   The light-mode CSS uses color-mix(... white ...) for the panel background,
+   which renders as a near-white surface even in dark mode. Combined with
+   the dark-mode --text being a near-white slate (#e2e8f0), the title,
+   summary copy and 4-step list became light-on-light and were essentially
+   invisible (user reported the section as ghosted/illegible). Re-skin the
+   panel for dark mode with a true dark background and bright text. */
+html.dark .billing-readiness-panel {
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--primary) 22%, #0f172a 78%),
+    color-mix(in srgb, var(--surface-alt, #1e293b) 88%, #0f172a 12%));
+  border-color: color-mix(in srgb, var(--primary) 55%, var(--border, #334155) 45%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+html.dark .billing-readiness-title,
+html.dark .billing-readiness-summary,
+html.dark .billing-readiness-steps,
+html.dark .billing-readiness-steps li {
+  color: var(--text-light, #f1f5f9);
+}
+html.dark .billing-readiness-copy {
+  color: var(--text-muted, #cbd5e1);
+}
+/* Keep the warning callout legible against the new dark surface. */
+html.dark .billing-readiness-warnings {
+  background: color-mix(in srgb, #78350f 60%, #0f172a 40%);
+  border-color: #f59e0b;
+}
+html.dark .billing-readiness-warning-title { color: #fde68a; }
+html.dark .billing-readiness-list { color: #fde68a; }
+
 html.dark .time-breakdown-panel {
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.94), rgba(30, 41, 59, 0.94));
   border-color: #334155;
