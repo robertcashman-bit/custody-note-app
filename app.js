@@ -3253,6 +3253,27 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
+  /** UK local date+time for ISO timestamps (e.g. when this app version was first run on this PC). */
+  function formatUkDateTimeFromIso(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+  /** `lastUpdated` from package.json (YYYY-MM-DD) → e.g. "24 Apr 2026". */
+  function formatUkDateFromYmd(ymd) {
+    if (!ymd || typeof ymd !== 'string') return '';
+    var p = ymd.split('-');
+    if (p.length !== 3) return ymd;
+    var d = new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+    if (isNaN(d.getTime())) return ymd;
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  /** Current time for "checked at" in update toasts. */
+  function formatAppCheckTimeUk() {
+    return new Date().toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
   /* ─── HOME / COMMAND CENTER ─── */
   var _homeGreetingTimer = null;
 
@@ -3292,7 +3313,8 @@ var REQUIRED_FIELD_KEYS = [
         if (res.status === 'up-to-date') {
           btn.textContent = '\u2713 Up to date';
           btn.style.color = '#059669';
-          showToast('You\u2019re on the latest version', 'success');
+          var tNow = formatAppCheckTimeUk();
+          showToast('You\u2019re on the latest version (v' + (res.version || '') + ' \u00B7 checked ' + tNow + ')', 'success');
         } else if (res.status === 'checking') {
           btn.textContent = '\u21BB Checking\u2026';
           btn.style.color = '#d97706';
@@ -14817,15 +14839,35 @@ pdfAuditFooterHtml(d, settings) +
     if (window.api && window.api.onBackupStatusChanged) {
       window.api.onBackupStatusChanged(function(data) { updateBackupStatus(data); });
     }
-    /* App version and update date from package.json */
+    /* App version, build date (from package) and when this build first ran on this computer */
     if (window.api.getAppVersion) {
       window.api.getAppVersion().then(function(info) {
         var vEl = document.getElementById('app-version');
         var uEl = document.getElementById('app-updated');
+        var vSub = document.getElementById('app-version-sub');
+        var vWrap = document.getElementById('app-version-wrap');
         var ssVer = document.getElementById('ss-app-version');
         if (vEl && info.version) vEl.textContent = info.version;
         if (ssVer && info.version) ssVer.textContent = info.version;
-        if (uEl && info.lastUpdated) uEl.textContent = info.lastUpdated;
+        if (uEl) uEl.textContent = '';
+        var relPretty = formatUkDateFromYmd(info.lastUpdated);
+        var instPretty = formatUkDateTimeFromIso(info.versionAppliedAt);
+        if (vSub) {
+          if (instPretty) {
+            vSub.textContent = ' \u00B7 ' + instPretty;
+          } else if (relPretty) {
+            vSub.textContent = ' \u00B7 build ' + relPretty;
+          } else {
+            vSub.textContent = '';
+          }
+        }
+        if (vWrap) {
+          var ttip = 'Custody Note v' + (info.version || '');
+          if (relPretty) ttip += '. Build (from installer): ' + relPretty + '.';
+          if (instPretty) ttip += ' This version first ran on this computer: ' + instPretty + '.';
+          vWrap.title = ttip;
+          vWrap.setAttribute('aria-label', ttip);
+        }
         if (info.version) window.__appVersion = info.version;
         if (info.platform && info.platform !== 'win32') {
           var scBtn = document.getElementById('btn-create-desktop-shortcut');
@@ -16062,7 +16104,8 @@ pdfAuditFooterHtml(d, settings) +
       } else if (data.status === 'up-to-date') {
         if (banner) banner.style.display = 'none';
         var statusEl = document.getElementById('check-updates-status');
-        if (statusEl) statusEl.textContent = '\u2713 You\'re up to date';
+        var atStr = formatAppCheckTimeUk();
+        if (statusEl) statusEl.textContent = '\u2713 v' + (data.version || '') + ' (checked ' + atStr + ')';
         if (gearBtn) { gearBtn.textContent = '\u2713 Up to date'; gearBtn.style.color = '#059669'; setTimeout(function() { if (gearBtn) { gearBtn.textContent = '\u21BB Check for updates'; gearBtn.style.color = ''; } }, 5000); }
         _lastUpdateToastPct = -1;
         _updateToastShown = {};
@@ -16171,10 +16214,11 @@ pdfAuditFooterHtml(d, settings) +
       window.api.appCheckUpdates().then(function(res) {
         var statusEl = document.getElementById('check-updates-status');
         if (res.status === 'up-to-date') {
-          showToast('You\'re up to date (v' + (res.version || '') + ')', 'success');
+          var chkAt = formatAppCheckTimeUk();
+          showToast('You\'re up to date (v' + (res.version || '') + ' \u00B7 ' + chkAt + ')', 'success');
           if (gearBtn) gearBtn.textContent = '\u2713 Up to date';
           if (bottomUpLbl) bottomUpLbl.textContent = 'OK';
-          if (statusEl) statusEl.textContent = '\u2713 You\'re up to date (v' + (res.version || '') + ')';
+          if (statusEl) statusEl.textContent = '\u2713 v' + (res.version || '') + ' (checked ' + chkAt + ')';
         } else if (res.status === 'checking') {
           if (statusEl) statusEl.textContent = 'Checking for updates\u2026';
         } else if (res.status === 'downloading') {

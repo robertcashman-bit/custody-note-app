@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.5.17",
+      "version": "1.5.18",
       "date": "2026-04-24",
       "latest": true,
+      "changes": [
+        "About this build: the footer now shows the version together with a local date and time — the moment this build was first run on this computer (after install or auto-update), stored in app-version-state.json under userData. Tooltip on the version chip also lists the installer's build date from package.json (release).",
+        "Check for updates: toasts and the settings update status line now include the app version and the current date and time when the check reports you are up to date, so you can see at a glance that the check was recent."
+      ]
+    },
+    {
+      "version": "1.5.17",
+      "date": "2026-04-24",
+      "latest": false,
       "changes": [
         "Section 9 / Finalise visibility: fixed three real bugs that left users with no Finalise button anywhere on a draft. (1) The bottom-bar Finalise pill (#bottom-bar-finish-pill) is a global element in index.html, but its update was gated behind in-section buttons that only exist after the user has navigated to Section 9 — so the pill stayed display:none on sections 1-8. Now the pill + readiness panel are updated unconditionally, before the in-section button block. (2) When the user navigates to Section 9 for the first time, populateSectionContent() lazily mounts #form-finalise-bar / #form-end-billing-btn / #form-post-finalise-bar with their initial inline display:none, but showSection() never re-ran updateFormBarVisibility() — so they stayed hidden. Now we re-run it after lazy section render on timeRecording.",
         "Section 9 file-completion (billing-readiness) panel: the panel background used color-mix() with a literal `white`, so it rendered as a near-white surface even in dark mode. Combined with --text being near-white in dark mode, the title, summary copy and 4-step checklist were essentially invisible (rendered as ghosted/strikethrough-looking text). Added an html.dark override that gives the panel a true dark background, and explicit dark-mode text colours for the title, copy, summary, steps and warning callout.",
