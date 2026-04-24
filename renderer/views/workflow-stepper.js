@@ -145,6 +145,7 @@ function openWorkflow(startStep, onClose) {
 
   _wfGeneratedDocs = {};
   _wfSelectedDocs = {};
+  if (typeof window !== 'undefined') window._wfBillingSnapshot = null;
 
   var existing = document.getElementById('workflow-overlay');
   if (existing) existing.remove();
@@ -170,6 +171,7 @@ function mountWorkflowInline(container, startStep, onClose) {
 
   _wfGeneratedDocs = {};
   _wfSelectedDocs = {};
+  if (typeof window !== 'undefined') window._wfBillingSnapshot = null;
 
   var existing = document.getElementById('workflow-overlay');
   if (existing) existing.remove();
@@ -269,6 +271,9 @@ function _wfRenderCurrentStep() {
 
 function _wfGoNext() {
   if (_workflowStep < _workflowSteps.length - 1) {
+    if (_workflowSteps[_workflowStep].id === 'invoice' && typeof window._wfCaptureBillingSnapshotIfPresent === 'function') {
+      window._wfCaptureBillingSnapshotIfPresent();
+    }
     _workflowStep++;
     _wfUpdateStepper();
     _wfPersistStep();

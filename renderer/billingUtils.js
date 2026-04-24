@@ -143,3 +143,50 @@ function getInvoiceStatusClass(status) {
     default: return 'wf-status--draft';
   }
 }
+
+/**
+ * Same totals as Step 2 (QuickFile preview): priority (1) snapshot from when
+ * the user left the billing step, (2) live wf-* inputs if still on that step,
+ * (3) _billingDefaults + form miles/parking. Does not use LAA notional time rates.
+ */
+function resolveWorkflowBillingTotals() {
+  var d = (typeof getFormData === 'function') ? getFormData() : ((typeof window !== 'undefined' && window.formData) || {});
+  var B = (typeof BILLING_DEFAULTS !== 'undefined') ? BILLING_DEFAULTS : { fixedFee: 160, mileageRate: 0.45, vatRate: 0.2 };
+  if (typeof window !== 'undefined' && window._wfBillingSnapshot && window._wfBillingSnapshot.fixedFee != null) {
+    var s = window._wfBillingSnapshot;
+    return calculateInvoiceTotals({
+      fixedFee: s.fixedFee,
+      mileageMiles: s.mileageMiles,
+      mileageRate: s.mileageRate,
+      parkingAmount: s.parkingAmount,
+      vatRate: s.vatRate,
+    });
+  }
+  if (typeof document !== 'undefined') {
+    var feeEl = document.getElementById('wf-fee');
+    if (feeEl) {
+      var vatRaw = parseFloat((document.getElementById('wf-vat') || {}).value);
+      if (!Number.isFinite(vatRaw) || vatRaw < 0) vatRaw = 20;
+      return calculateInvoiceTotals({
+        fixedFee: parseFloat(feeEl.value) || 0,
+        mileageMiles: parseFloat((document.getElementById('wf-miles') || {}).value) || 0,
+        mileageRate: parseFloat((document.getElementById('wf-rate') || {}).value) || B.mileageRate,
+        parkingAmount: parseFloat((document.getElementById('wf-parking') || {}).value) || 0,
+        vatRate: vatRaw / 100,
+      });
+    }
+  }
+  var billingSettings = (typeof window !== 'undefined' && window._billingDefaults) ? window._billingDefaults : {};
+  var fee = billingSettings.attendanceFee != null ? billingSettings.attendanceFee : B.fixedFee;
+  var mileageRate = billingSettings.mileageRate != null ? billingSettings.mileageRate : B.mileageRate;
+  var vatRate = billingSettings.vatRate != null ? billingSettings.vatRate : B.vatRate;
+  if (typeof vatRate === 'number' && vatRate > 1) vatRate = vatRate / 100;
+  return calculateInvoiceTotals({
+    fixedFee: fee,
+    mileageMiles: parseFloat(d.milesClaimable) || 0,
+    mileageRate: mileageRate,
+    parkingAmount: parseFloat(d.parkingCost) || 0,
+    vatRate: vatRate,
+  });
+}
+if (typeof window !== 'undefined') window.resolveWorkflowBillingTotals = resolveWorkflowBillingTotals;

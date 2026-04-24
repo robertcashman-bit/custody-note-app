@@ -709,3 +709,24 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
     if (createBtn) { createBtn.disabled = false; createBtn.textContent = opts.hasExistingInvoice ? '\u26A0 Send Another Invoice to QuickFile' : 'Send Bill to QuickFile'; }
   }
 }
+
+/**
+ * Call when leaving Step 2 so the completion / PDF summary can use the same
+ * figures as the billing form (getElementById('wf-fee') is not on the DOM on step 3).
+ */
+function _wfCaptureBillingSnapshotIfPresent() {
+  var feeEl = document.getElementById('wf-fee');
+  if (!feeEl) return;
+  var vatRaw = parseFloat((document.getElementById('wf-vat') || {}).value);
+  if (!Number.isFinite(vatRaw) || vatRaw < 0) vatRaw = 20;
+  if (typeof window !== 'undefined') {
+    window._wfBillingSnapshot = {
+      fixedFee: parseFloat(feeEl.value) || 0,
+      mileageMiles: parseFloat((document.getElementById('wf-miles') || {}).value) || 0,
+      mileageRate: parseFloat((document.getElementById('wf-rate') || {}).value) || (BILLING_DEFAULTS.mileageRate != null ? BILLING_DEFAULTS.mileageRate : 0.45),
+      parkingAmount: parseFloat((document.getElementById('wf-parking') || {}).value) || 0,
+      vatRate: vatRaw / 100,
+    };
+  }
+}
+if (typeof window !== 'undefined') window._wfCaptureBillingSnapshotIfPresent = _wfCaptureBillingSnapshotIfPresent;

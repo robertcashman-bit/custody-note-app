@@ -225,73 +225,59 @@ window._wfArchiveConfirmedAndProceed = _wfArchiveConfirmedAndProceed;
 
 function _wfAfterInvoiceCreatedGoToCompletion() {
   if (typeof _wfGoToStep !== 'function') return;
+  /* Invoice success skips _wfGoNext, so capture billing fields before leaving step 2 */
+  if (typeof window._wfCaptureBillingSnapshotIfPresent === 'function') {
+    window._wfCaptureBillingSnapshotIfPresent();
+  }
   _wfGoToStep(2);
 }
 
 function _wfBuildBillingSummaryCard(d) {
   if (!d) return '';
-  var travelSoc = parseInt(d.travelSocial) || 0;
-  var travelUns = parseInt(d.travelUnsocial) || 0;
-  var waitSoc = parseInt(d.waitingSocial) || 0;
-  var waitUns = parseInt(d.waitingUnsocial) || 0;
-  var advSoc = parseInt(d.adviceSocial) || 0;
-  var advUns = parseInt(d.adviceUnsocial) || 0;
-  var totalMins = parseInt(d.totalMinutes) || 0;
-  var miles = parseFloat(d.milesClaimable) || 0;
-  var parking = parseFloat(d.parkingCost) || 0;
-  var disbTotal = 0;
-  if (d.disbursements && Array.isArray(d.disbursements)) {
-    d.disbursements.forEach(function (x) { disbTotal += parseFloat(x && x.amount) || 0; });
+  var totals = (typeof resolveWorkflowBillingTotals === 'function') ? resolveWorkflowBillingTotals() : null;
+  if (!totals && typeof calculateInvoiceTotals === 'function') {
+    totals = calculateInvoiceTotals({ fixedFee: 0, mileageMiles: 0, mileageRate: 0.45, parkingAmount: 0, vatRate: 0.2 });
   }
-
-  var LAA = (typeof window !== 'undefined' && window.LAA) ? window.LAA : { fixedFee: 320, escapeThreshold: 650, mileageRate: 0.45, vatRate: 0.20, national: { attendance: { social: 54.57, unsocial: 72.46 }, travel: { social: 27.29, unsocial: 27.29 }, waiting: { social: 27.29, unsocial: 27.29 } } };
-  var rates = LAA.national || {};
-
-  function laaVal(mins, rate) { return (mins / 60) * rate; }
-  var travelVal = laaVal(travelSoc, (rates.travel || {}).social || 27.29) + laaVal(travelUns, (rates.travel || {}).unsocial || 27.29);
-  var waitVal = laaVal(waitSoc, (rates.waiting || {}).social || 27.29) + laaVal(waitUns, (rates.waiting || {}).unsocial || 27.29);
-  var advVal = laaVal(advSoc, (rates.attendance || {}).social || 54.57) + laaVal(advUns, (rates.attendance || {}).unsocial || 72.46);
-  var mileVal = miles * (LAA.mileageRate || 0.45);
-  var net = travelVal + waitVal + advVal + mileVal + parking + disbTotal;
-  var vat = net * (LAA.vatRate || 0.20);
-  var total = net + vat;
-  var isEscape = net > (LAA.escapeThreshold || 650);
-  var feeType = isEscape
-    ? '<span style="color:#b91c1c;font-weight:600;">ESCAPE FEE \u2014 claim exceeds \u00A3' + (LAA.escapeThreshold || 650).toFixed(0) + '</span>'
-    : '<span style="color:#059669;">FIXED FEE (\u00A3' + (LAA.fixedFee || 320).toFixed(0) + ' inc. VAT)</span>';
+  if (!totals) return '';
 
   function fmtCurr(v) { return '\u00A3' + (v || 0).toFixed(2); }
-  function timeRow(label, soc, uns, rate) {
-    var tot = soc + uns;
-    if (tot === 0) return '';
-    var val = laaVal(soc, rate) + laaVal(uns, rate);
-    return '<tr><td>' + label + '</td><td style="text-align:right;">' + soc + '</td><td style="text-align:right;">' + uns + '</td><td style="text-align:right;">' + tot + '</td><td style="text-align:right;">' + fmtCurr(val) + '</td></tr>';
+  var vatPct = (totals.vatRate != null) ? (Math.round(totals.vatRate * 1000) / 10) : 20;
+  if (Math.abs(vatPct - Math.round(vatPct)) < 0.01) vatPct = Math.round(vatPct);
+
+  var line1 = (typeof buildLine1Description === 'function')
+    ? buildLine1Description({
+        clientName: [d.forename, d.surname].filter(Boolean).join(' '),
+        policeStation: d.policeStationName,
+        attendanceDate: d.date,
+      })
+    : 'Police station attendance';
+
+  var rowHtml = [];
+  if (totals.fixedFee > 0) {
+    rowHtml.push('<tr><td>' + _wfEsc(line1) + '</td><td style="text-align:right;">' + fmtCurr(totals.fixedFee) + '</td></tr>');
+  }
+  if (totals.mileageAmount > 0) {
+    var mlab = 'Mileage';
+    if (totals.mileageMiles > 0) {
+      mlab += ' (' + totals.mileageMiles + ' mi \u00D7 ' + fmtCurr(totals.mileageRate) + ' /mi)';
+    }
+    rowHtml.push('<tr><td>' + mlab + '</td><td style="text-align:right;">' + fmtCurr(totals.mileageAmount) + '</td></tr>');
+  }
+  if (totals.parkingAmount > 0) {
+    rowHtml.push('<tr><td>Parking / disbursements</td><td style="text-align:right;">' + fmtCurr(totals.parkingAmount) + '</td></tr>');
+  }
+  if (rowHtml.length === 0) {
+    rowHtml.push('<tr><td colspan="2" style="color:var(--text-muted,#94a3b8);">No charge lines \u2014 set fees in Step 2 (Billing review).</td></tr>');
   }
 
-  var html = '<div class="wf-card">' +
-    '<h4 class="wf-card-title">Billing Summary (LAA rates)</h4>' +
+  return '<div class="wf-card">' +
+    '<h4 class="wf-card-title">Billing summary (this matter)</h4>' +
+    '<p style="margin:0 0 0.5rem;font-size:0.88rem;color:var(--text-muted,#64748b);">Same line items and totals as the billing review / QuickFile preview in Step 2, not LAA notional time rates from Section 9.</p>' +
     '<table class="wf-billing-summary-table" style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
-    '<thead><tr style="border-bottom:2px solid var(--border-color,#e2e8f0);"><th style="text-align:left;">Category</th><th style="text-align:right;">Social</th><th style="text-align:right;">Unsocial</th><th style="text-align:right;">Total</th><th style="text-align:right;">Value</th></tr></thead>' +
-    '<tbody>' +
-    timeRow('Travel', travelSoc, travelUns, (rates.travel || {}).social || 27.29) +
-    timeRow('Waiting', waitSoc, waitUns, (rates.waiting || {}).social || 27.29) +
-    timeRow('Attendance & Advice', advSoc, advUns, (rates.attendance || {}).social || 54.57);
-
-  if (advSoc > 0 && advUns > 0) {
-    html += '<tr style="font-size:0.78rem;color:var(--text-muted,#94a3b8);"><td colspan="4" style="text-align:right;">Advice social: ' + advSoc + ' min \u00D7 \u00A3' + ((rates.attendance || {}).social || 54.57).toFixed(2) + '/hr + unsocial: ' + advUns + ' min \u00D7 \u00A3' + ((rates.attendance || {}).unsocial || 72.46).toFixed(2) + '/hr</td><td></td></tr>';
-  }
-
-  html += '<tr style="border-top:1px solid var(--border-color,#e2e8f0);font-weight:600;"><td>Total time</td><td></td><td></td><td style="text-align:right;">' + totalMins + ' min</td><td style="text-align:right;">' + fmtCurr(travelVal + waitVal + advVal) + '</td></tr>';
-
-  if (miles > 0) html += '<tr><td>Mileage (' + miles + ' mi \u00D7 \u00A3' + (LAA.mileageRate || 0.45).toFixed(2) + ')</td><td></td><td></td><td></td><td style="text-align:right;">' + fmtCurr(mileVal) + '</td></tr>';
-  if (parking > 0) html += '<tr><td>Parking</td><td></td><td></td><td></td><td style="text-align:right;">' + fmtCurr(parking) + '</td></tr>';
-  if (disbTotal > 0) html += '<tr><td>Disbursements</td><td></td><td></td><td></td><td style="text-align:right;">' + fmtCurr(disbTotal) + '</td></tr>';
-
-  html += '<tr style="border-top:2px solid var(--border-color,#e2e8f0);"><td><strong>Net</strong></td><td></td><td></td><td></td><td style="text-align:right;"><strong>' + fmtCurr(net) + '</strong></td></tr>';
-  html += '<tr><td>VAT (20%)</td><td></td><td></td><td></td><td style="text-align:right;">' + fmtCurr(vat) + '</td></tr>';
-  html += '<tr style="font-weight:700;font-size:1rem;"><td>Total (inc. VAT)</td><td></td><td></td><td></td><td style="text-align:right;">' + fmtCurr(total) + '</td></tr>';
-  html += '</tbody></table>';
-  html += '<p style="margin:0.75rem 0 0;font-size:0.85rem;">' + feeType + '</p>';
-  html += '</div>';
-  return html;
+    '<thead><tr style="border-bottom:2px solid var(--border-color,#e2e8f0);"><th style="text-align:left;">Item</th><th style="text-align:right;">Amount</th></tr></thead><tbody>' +
+    rowHtml.join('') +
+    '<tr style="border-top:1px solid var(--border-color,#e2e8f0);font-weight:600;"><td>Subtotal (ex VAT)</td><td style="text-align:right;">' + fmtCurr(totals.subTotal) + '</td></tr>' +
+    '<tr><td>VAT (' + vatPct + '%)</td><td style="text-align:right;">' + fmtCurr(totals.vatTotal) + '</td></tr>' +
+    '<tr style="font-weight:700;border-top:2px solid var(--border-color,#e2e8f0);font-size:1rem;"><td>Total (inc. VAT)</td><td style="text-align:right;">' + fmtCurr(totals.grandTotal) + '</td></tr>' +
+    '</tbody></table></div>';
 }

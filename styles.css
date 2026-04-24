@@ -509,6 +509,59 @@ textarea.settings-input {
 
 #app { display: flex; flex-direction: column; height: 100vh; width: 100vw; min-width: 100%; }
 
+/* App update: full-width strip under header on every view (footer update is hidden on the attendance form). */
+.global-app-update-banner {
+  flex-shrink: 0;
+  width: 100%;
+  display: none;
+  box-sizing: border-box;
+  border-bottom: 1px solid #10b981;
+  background: linear-gradient(135deg, #d1fae5, #ecfdf5);
+  z-index: 8;
+}
+html.dark .global-app-update-banner {
+  background: linear-gradient(135deg, #064e3b, #022c22);
+  border-bottom-color: #10b981;
+}
+.global-app-update-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  max-width: 100%;
+  flex-wrap: wrap;
+}
+.global-app-update-icon { font-size: 1.2rem; line-height: 1; flex-shrink: 0; }
+.global-app-update-text {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #065f46;
+  line-height: 1.35;
+}
+html.dark .global-app-update-text { color: #a7f3d0; }
+.global-app-update-actions { flex-shrink: 0; display: flex; align-items: center; gap: 0.4rem; }
+.global-app-update-banner--warn {
+  border-bottom-color: #f59e0b;
+  background: linear-gradient(135deg, #fef3c7, #fffbeb);
+}
+html.dark .global-app-update-banner--warn {
+  background: linear-gradient(135deg, #422006, #1c1917);
+  border-bottom-color: #d97706;
+}
+html.dark .global-app-update-banner--warn .global-app-update-text { color: #fde68a; }
+.global-app-update-banner--progress {
+  border-bottom-color: #0ea5e9;
+  background: linear-gradient(135deg, #e0f2fe, #f0f9ff);
+}
+html.dark .global-app-update-banner--progress {
+  background: linear-gradient(135deg, #0c4a6e, #0f172a);
+  border-bottom-color: #38bdf8;
+}
+html.dark .global-app-update-banner--progress .global-app-update-text { color: #bae6fd; }
+
 /* ═══ HEADER (corporate app bar) ═══ */
 .app-header {
   background: var(--header-bg, #0f172a);
@@ -696,6 +749,27 @@ html.dark .gear-section-label { color: var(--text-muted); }
 }
 .bottom-nav-new .bottom-nav-icon { font-size: 2rem; font-weight: 700; color: #60a5fa; }
 .bottom-nav-new:hover { background: rgba(29,78,216,0.5); }
+/* Billing: two actions in one visual group (practice list + current file) */
+.bottom-nav-billing {
+  display: flex;
+  flex: 1.4;
+  min-width: 0;
+  align-items: stretch;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.14);
+}
+.bottom-nav-billing .bottom-nav-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.12rem;
+}
+.bottom-nav-billing .bottom-nav-label {
+  font-size: 0.72rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* bottom nav clearance handled per-view */
 .footer-row {
   display: flex; justify-content: space-between; align-items: center; width: 100%;
