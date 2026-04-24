@@ -1932,7 +1932,9 @@
     <footer class="app-footer">
       <div class="footer-row">
         <div class="footer-status-group">
-          <span class="footer-chip footer-meta-chip">v<span id="app-version">...</span></span>
+          <span class="footer-chip footer-meta-chip" id="app-version-wrap" title="">
+            v<span id="app-version">...</span><span id="app-version-sub" class="app-version-sub" aria-hidden="true"></span>
+          </span>
           <span id="app-updated" style="display:none;"></span>
           <span id="licence-footer-badge" class="footer-chip footer-licence-chip" style="cursor:pointer;" title="Click to open Licence settings"></span>
           <span id="net-status-text" class="footer-indicator footer-chip connected">Checking&hellip;</span>

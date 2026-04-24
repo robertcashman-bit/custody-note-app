@@ -3517,6 +3517,25 @@ async function fetchAndCacheBankHolidays() {
   });
 }
 
+/** When the running build first ran on this computer (set when app version in userData changes). ISO string. */
+function readAndRefreshVersionState() {
+  let st = { lastRunVersion: null, versionAppliedAt: null };
+  try {
+    const statePath = path.join(app.getPath('userData'), 'app-version-state.json');
+    const current = app.getVersion();
+    try {
+      st = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+    } catch (_) {}
+    if (st.lastRunVersion !== current) {
+      st = { lastRunVersion: current, versionAppliedAt: new Date().toISOString() };
+      try {
+        fs.writeFileSync(statePath, JSON.stringify(st), 'utf8');
+      } catch (e) { /* ignore */ }
+    }
+  } catch (_) {}
+  return st;
+}
+
 ipcMain.handle('get-app-version', () => {
   try {
     const version = app.getVersion();
@@ -3527,8 +3546,15 @@ ipcMain.handle('get-app-version', () => {
       const stat = fs.statSync(pkgPath);
       lastUpdated = new Date(stat.mtimeMs).toISOString().slice(0, 10);
     }
-    return { version: version || '0.0.0', lastUpdated, platform: process.platform };
-  } catch (_) { return { version: '0.0.0', lastUpdated: '', platform: process.platform }; }
+    const vs = readAndRefreshVersionState();
+    return {
+      version: version || '0.0.0',
+      lastUpdated,
+      /* First time this semver ran on this machine (after install or auto-update). */
+      versionAppliedAt: vs.versionAppliedAt || null,
+      platform: process.platform,
+    };
+  } catch (_) { return { version: '0.0.0', lastUpdated: '', versionAppliedAt: null, platform: process.platform }; }
 });
 
 ipcMain.handle('app-update-install', () => {
