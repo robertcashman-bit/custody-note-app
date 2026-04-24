@@ -67,6 +67,16 @@ describe('Voluntary attendance — custody-record questions stay hidden', () => 
     });
   });
 
+  it('checkboxGroup fields (e.g. grounds for arrest) wire showIf so applyConditionalVisibility can hide them', () => {
+    const start = appJs.indexOf("if (f.type === 'checkboxGroup')");
+    assert.ok(start >= 0, 'renderField must implement checkboxGroup');
+    const block = appJs.slice(start, start + 2500);
+    assert.ok(
+      block.includes('wrap.dataset.showIfField = f.showIf.field'),
+      'checkboxGroup must set data-show-if on the wrapper; otherwise PACE grounds stay visible when Voluntary Interview? = Yes'
+    );
+  });
+
   it('custody form §3 shows a Voluntary Interview heading when voluntaryInterview === Yes', () => {
     assert.ok(
       appJs.includes("{ key: '_h_voluntary_interview', label: 'Voluntary Interview', type: 'sectionHeading', showIf: { field: 'voluntaryInterview', value: 'Yes' } }"),
@@ -103,8 +113,8 @@ describe('Voluntary attendance — custody-record questions stay hidden', () => 
 
   it('validateAttendanceForm skips Custody-record-read warning when on voluntary path', () => {
     assert.ok(
-      appJs.includes("var _isVolPath = formData.attendanceMode === 'voluntary' || formData.voluntaryInterview === 'Yes';"),
-      'validateAttendanceForm must compute a voluntary-path flag'
+      appJs.includes("var _isVolPath = formData.attendanceMode === 'voluntary' || formData.voluntaryInterview === 'Yes' || (activeFormSections === voluntaryFormSections);"),
+      'validateAttendanceForm must treat voluntary form UI as off the custody INVC path'
     );
     assert.ok(
       appJs.includes("if (!_isVolPath && (formData.custodyNumber || '').trim() && !formData.custodyRecordRead)"),
@@ -113,6 +123,31 @@ describe('Voluntary attendance — custody-record questions stay hidden', () => 
     assert.ok(
       appJs.includes("if (!_isVolPath && formData.voluntaryInterview === 'No' && !(formData.groundsForArrest || '').trim())"),
       'At-least-one-ground-for-arrest warning must also be gated on _isVolPath being false'
+    );
+  });
+
+  it('validateBeforeFinalise uses voluntary validation when on voluntary form or attendanceMode', () => {
+    assert.ok(
+      appJs.includes("var isVoluntaryMatter = formData.attendanceMode === 'voluntary' || (activeFormSections === voluntaryFormSections);"),
+      'Finalise must not run INVC validateAttendanceForm when the open form is voluntary'
+    );
+    assert.ok(
+      appJs.includes('isVoluntaryMatter ? validateVoluntaryForm() : validateAttendanceForm()'),
+      'Finalise must route to validateVoluntaryForm for voluntary matters'
+    );
+    var idx = appJs.indexOf("if (activeFormSections === voluntaryFormSections)");
+    assert.ok(
+      idx >= 0 && appJs.indexOf("formData.attendanceMode = 'voluntary'", idx) > idx,
+      'Finalise must set attendanceMode to voluntary when the voluntary form is open'
+    );
+  });
+
+  it('inferAttendanceModeIfMissing recovers voluntary rows without attendanceMode', () => {
+    assert.ok(
+      appJs.includes("function inferAttendanceModeIfMissing()") &&
+        appJs.includes("Voluntary Police Station Attendance") &&
+        appJs.indexOf("voluntary_") >= 0,
+      'Loaded records must infer attendanceMode from voluntary workType / attendanceSubType before defaulting to custody'
     );
   });
 

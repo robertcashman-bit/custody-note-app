@@ -4535,9 +4535,32 @@ var REQUIRED_FIELD_KEYS = [
     setFieldValueSilent('bailConditions', '');
   }
 
+  /**
+   * When attendanceMode was never stored (legacy rows, sync glitches, imports), infer
+   * voluntary vs custody from fields that only exist / are set on voluntary matters
+   * so we never run custody INVC rules (e.g. custody record read) on voluntary work.
+   */
+  function inferAttendanceModeIfMissing() {
+    if (formData._formType === 'telephone') return;
+    if (formData.attendanceMode && String(formData.attendanceMode).trim() !== '') return;
+    var w = (formData.workType || '').trim();
+    var sub = (formData.attendanceSubType || '').trim();
+    if (w === 'Voluntary Police Station Attendance' || (sub && sub.indexOf('voluntary_') === 0)) {
+      formData.attendanceMode = 'voluntary';
+    } else {
+      formData.attendanceMode = 'custody';
+    }
+  }
+
   function prefillDefaults() {
     if (!formData._formType) formData._formType = (activeFormSections === telFormSections) ? 'telephone' : 'attendance';
-    if (formData._formType === 'attendance' && !formData.attendanceMode) formData.attendanceMode = 'custody';
+    if (formData._formType === 'attendance' && !formData.attendanceMode) {
+      if (activeFormSections === voluntaryFormSections) {
+        formData.attendanceMode = 'voluntary';
+      } else {
+        inferAttendanceModeIfMissing();
+      }
+    }
     if (formData.attendanceMode === 'voluntary') {
       if (!formData.locationType) formData.locationType = 'police_station';
       if (!formData.voluntaryStatusConfirmed) formData.voluntaryStatusConfirmed = 'Yes';
@@ -6203,7 +6226,7 @@ var REQUIRED_FIELD_KEYS = [
       _recordCache.set(id, { row, timestamp: Date.now() });
       
       /* Apply form sections based on type */
-      if (!formData.attendanceMode && formData._formType !== 'telephone') formData.attendanceMode = 'custody';
+      if (formData._formType !== 'telephone' && !formData.attendanceMode) inferAttendanceModeIfMissing();
       if (formData._formType === 'telephone') {
         activeFormSections = telFormSections;
       } else if (formData.attendanceMode === 'voluntary') {
@@ -6241,8 +6264,7 @@ var REQUIRED_FIELD_KEYS = [
         _recordCache.delete(firstKey);
       }
       
-      /* Legacy records: default to custody */
-      if (!formData.attendanceMode && formData._formType !== 'telephone') formData.attendanceMode = 'custody';
+      if (formData._formType !== 'telephone' && !formData.attendanceMode) inferAttendanceModeIfMissing();
       if (formData._formType === 'telephone') {
         activeFormSections = telFormSections;
       } else if (formData.attendanceMode === 'voluntary') {
@@ -6717,7 +6739,7 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     if (!_matterBillingNoteFinalised()) {
-      showToast('Finalise the attendance note before starting the billing process.', 'error');
+      showToast('Finalise the attendance note (Section 9 on the form) before starting the billing process.', 'error');
       return;
     }
     if (typeof window.mountWorkflowInline !== 'function') {
@@ -9122,6 +9144,20 @@ var REQUIRED_FIELD_KEYS = [
       const isGrounds = (f.key === 'groundsForArrest' || f.key === 'groundsForDetention');
       if (isGrounds) wrap.classList.add('grounds-card');
       else if (f.cols === 2) wrap.style.gridColumn = '1 / -1';
+      if (f.showIf) {
+        wrap.dataset.showIfField = f.showIf.field;
+        wrap.dataset.showIfValue = f.showIf.value || '';
+        wrap.dataset.showIfValues = (f.showIf.values || []).join(',');
+        if (f.showIf.notValue) wrap.dataset.showIfNotValue = f.showIf.notValue;
+      }
+      if (f.showIfOr) {
+        wrap.dataset.showIfOrField = f.showIfOr.field;
+        wrap.dataset.showIfOrValue = f.showIfOr.value || '';
+      }
+      if (f.hideIf) {
+        wrap.dataset.hideIfField = f.hideIf.field;
+        wrap.dataset.hideIfValue = f.hideIf.value || '';
+      }
       const lbl = document.createElement('label'); lbl.textContent = f.label;
       if (REQUIRED_FIELD_KEYS.includes(f.key)) { const req = document.createElement('span'); req.className = 'required-asterisk'; req.textContent = ' *'; req.title = 'Required before finalising'; lbl.appendChild(req); }
       wrap.appendChild(lbl);
@@ -10754,6 +10790,13 @@ var REQUIRED_FIELD_KEYS = [
         const orMatchVal = wrap.dataset.showIfOrValue;
         if (orMatchVal && (orVal === orMatchVal || (orVal && orVal.split('|').indexOf(orMatchVal) >= 0))) visible = true;
       }
+      /* Voluntary attendance (LAA): not the same as "voluntary interview" in custody. Fields gated on
+       * voluntaryInterview === 'No' are in-custody / PACE; they must stay hidden when attendanceMode is voluntary. */
+      if (visible && field === 'voluntaryInterview' && formData.attendanceMode === 'voluntary' && !notVal) {
+        if (matchVal === 'No' || (matchVals.length && matchVals.indexOf('No') >= 0)) {
+          visible = false;
+        }
+      }
       wrap.style.display = visible ? '' : 'none';
     });
     scope.querySelectorAll('[data-hide-if-field]').forEach(wrap => {
@@ -11543,7 +11586,7 @@ var REQUIRED_FIELD_KEYS = [
     if (formData.languageIssues === 'Yes' && !(formData.interpreterLanguage || '').trim()) m.push({ key: 'interpreterLanguage', label: 'Language required', section: 2 });
     if (formData.fmeNurse === 'Yes' && !(formData.medicalExaminationOutcome || '').trim()) m.push({ key: 'medicalExaminationOutcome', label: 'Outcome of medical examination', section: 2 });
     if (!isRelaxedPath && !(formData.disclosureType || '').trim()) m.push({ key: 'disclosureType', label: 'Disclosure Type', section: 4 });
-    var _isVolPath = formData.attendanceMode === 'voluntary' || formData.voluntaryInterview === 'Yes';
+    var _isVolPath = formData.attendanceMode === 'voluntary' || formData.voluntaryInterview === 'Yes' || (activeFormSections === voluntaryFormSections);
     if (!_isVolPath && (formData.custodyNumber || '').trim() && !formData.custodyRecordRead) m.push({ key: 'custodyRecordRead', label: 'Custody record read?', section: 2 });
     if (!_isVolPath && formData.voluntaryInterview === 'No' && !(formData.groundsForArrest || '').trim()) m.push({ key: 'groundsForArrest', label: 'At least one ground for arrest', section: 2 });
     (formData.interviews || []).forEach(function(iv, idx) {
@@ -11637,8 +11680,12 @@ var REQUIRED_FIELD_KEYS = [
       _draftSaveQueued = false;
 
       collectCurrentData();
+      if (activeFormSections === voluntaryFormSections) {
+        formData.attendanceMode = 'voluntary';
+      }
       var isTelForm = formData._formType === 'telephone';
-      var missing = isTelForm ? validateTelephoneForm() : (formData.attendanceMode === 'voluntary' ? validateVoluntaryForm() : validateAttendanceForm());
+      var isVoluntaryMatter = formData.attendanceMode === 'voluntary' || (activeFormSections === voluntaryFormSections);
+      var missing = isTelForm ? validateTelephoneForm() : (isVoluntaryMatter ? validateVoluntaryForm() : validateAttendanceForm());
 
       if (formData.dsccPrivateMatter !== 'Yes') {
         var dscc = (formData.dsccRef || '').trim().toUpperCase();
