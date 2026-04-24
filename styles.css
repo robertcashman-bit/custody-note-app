@@ -6189,8 +6189,10 @@ body.panel-resizing .form-context-panel { transition: none; }
   html.nav-mode-sidebar #section-index-bar { display: none; }
 }
 
+/* Auto: do not force-hide the left section sidebar here. The min-width: 1200px
+   block above already shows it on wide enough viewports; the old rule below hid
+   it for 1200–1279px, so "Auto" never showed the side list on common laptop widths. */
 @media (max-width: 1279px) {
-  html.nav-mode-auto .form-section-sidebar { display: none !important; }
   .form-context-panel { display: none !important; }
 }
 

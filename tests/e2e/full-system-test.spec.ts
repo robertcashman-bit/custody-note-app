@@ -243,16 +243,7 @@ test('settings page has key sections', async () => {
 });
 
 // ================================================================
-// 11. Discord link exists in support section
-// ================================================================
-test('Discord community link is present', async () => {
-  const discordLink = page.locator('a[href*="discord"], button[data-url*="discord"]');
-  const count = await discordLink.count();
-  expect(count).toBeGreaterThan(0);
-});
-
-// ================================================================
-// 12. Dark mode toggle works
+// 11. Dark mode toggle works
 // ================================================================
 test('dark mode can be toggled without crash', async () => {
   const html = page.locator('html');
@@ -274,7 +265,7 @@ test('dark mode can be toggled without crash', async () => {
 });
 
 // ================================================================
-// 13. No console errors or page crashes
+// 12. No console errors or page crashes
 // ================================================================
 test('no critical console errors or page crashes', async () => {
   // Filter out known non-critical warnings
@@ -292,7 +283,7 @@ test('no critical console errors or page crashes', async () => {
 });
 
 // ================================================================
-// 14. Window title is correct
+// 13. Window title is correct
 // ================================================================
 test('window title is Custody Note', async () => {
   const title = await page.title();

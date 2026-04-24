@@ -930,12 +930,6 @@
           <h2>Your Details</h2>
           <label>DSCC PIN/Number</label>
           <input type="text" id="setting-dscc-pin" class="settings-input" placeholder="Your DSCC PIN/number" maxlength="10" style="max-width:200px;">
-          <label style="margin-top:0.75rem;">Supervisor review</label>
-          <label class="toggle-row">
-            <span>Show supervisor review section (only if a firm requires it)</span>
-            <input type="checkbox" id="setting-show-supervisor-review">
-          </label>
-          <p class="settings-hint" style="margin-top:4px;">Freelance reps can usually leave this off.</p>
           <label style="margin-top:0.75rem;">Fee Earner Name</label>
           <input type="text" id="setting-fee-earner-name" class="settings-input" placeholder="e.g. Robert Smith">
           <p class="settings-hint" style="margin-top:4px;">Auto-fills fee earner name in conflict certificates and LAA declarations.</p>
@@ -1068,6 +1062,7 @@
                 <option value="sidebar">Sidebar first</option>
                 <option value="topbar">Top bar first</option>
               </select>
+              <p class="settings-hint" style="margin:0.35rem 0 0 0;font-size:0.78rem;">Auto uses the <strong>left section list</strong> when the window is wide enough (and hides the horizontal section bar to avoid duplicate navigation). If you prefer the strip under the header, choose <strong>Top bar first</strong>.</p>
               <label class="toggle-row" style="margin-top:0.9rem;">
                 <span>Show right context panel by default</span>
                 <input type="checkbox" id="setting-show-context-panel">
@@ -1424,7 +1419,7 @@
             <summary style="padding:0.75rem 1rem;cursor:pointer;font-weight:600;user-select:none;">What do you do if you need support?</summary>
             <div style="padding:0 1rem 1rem;border-top:1px solid var(--border,#eee);">
               <ul style="margin:0.5rem 0 0 0;padding-left:1.25rem;line-height:1.7;">
-                <li><strong>Support forum</strong> — Post questions, get help from the team and other users. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/support">Open forum</button> <button type="button" class="btn btn-small support-faq-link" data-url="https://discord.gg/XcEeUe6q" style="background:#5865F2;color:#fff;">Discord</button></li>
+                <li><strong>Support forum</strong> — Post questions, get help from the team and other users. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/support">Open forum</button></li>
                 <li><strong>Forgot licence key?</strong> — Enter your email and we&apos;ll send it if we have it on file.
                   <div class="forgot-licence-row" style="margin-top:0.35rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
                     <input type="email" id="forgot-licence-email" placeholder="you@example.com" class="forgot-licence-input settings-input" style="min-width:180px;font-size:0.85rem;" />
@@ -1500,7 +1495,6 @@
             <a href="https://www.custodynote.com/support" class="useful-link-btn" data-ext-url="https://www.custodynote.com/support">Support</a>
             <a href="https://www.custodynote.com/changelog" class="useful-link-btn" data-ext-url="https://www.custodynote.com/changelog">Changelog</a>
             <a href="https://www.custodynote.com/contact" class="useful-link-btn" data-ext-url="https://www.custodynote.com/contact">Contact</a>
-            <a href="https://discord.gg/XcEeUe6q" class="useful-link-btn" data-ext-url="https://discord.gg/XcEeUe6q" style="background:#5865F2;color:#fff;">Community (Discord)</a>
           </div>
 
           <h3 class="useful-links-category">PSR Connect &amp; Tools</h3>
@@ -1711,7 +1705,7 @@
                 <li><strong>Third Party Authority</strong> &mdash; Record authority from the client to contact third parties. Each entry captures name, relationship, contact details, what information is authorised to disclose, and outcome. Use <strong>+ Add third party</strong> for multiple entries.</li>
                 <li><strong>Authorities</strong> &mdash; Appointed Solicitor (reference, contact details), Medical Authorities (per provider), Other Professional Authority (social services, housing, education, etc.).</li>
                 <li><strong>Communications Log</strong> &mdash; Log telephone calls, emails, and text messages. Each entry: type, direction, date, time, party, summary. Use <strong>+ Add entry</strong> for each.</li>
-                <li><strong>Supervisor Review</strong> &mdash; Only shown if enabled in Settings. For firms that require supervisor sign-off.</li>
+                <li><strong>Supervisor Review</strong> &mdash; For firms that require supervisor sign-off.</li>
                 <li><strong>LAA Declaration</strong> &mdash; Declaration text, client and fee earner names (fee earner auto-fills from Settings), signatures (pads or full-screen canvas).</li>
                 <li><strong>Admin &amp; Billing</strong> &mdash; File number (ours) / invoice number, UFN, LAA account, MAAT ID.</li>
               </ul>
@@ -1849,7 +1843,7 @@
                 <li><strong>DSCC PIN/Number</strong> &mdash; appears on PDF headers and is used for billing.</li>
                 <li><strong>Fee Earner Name</strong> &mdash; auto-fills into conflict certificates and LAA declarations on every new record.</li>
                 <li><strong>Email</strong> &mdash; PDFs can be sent here for checking.</li>
-                <li><strong>Supervisor Review</strong> &mdash; toggle on only if a firm requires supervisor sign-off.</li>
+                <li><strong>Supervisor Review</strong> &mdash; for firms that require supervisor sign-off.</li>
               </ul>
               <h4>Appearance</h4>
               <ul>
