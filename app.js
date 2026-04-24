@@ -993,7 +993,7 @@ var LAA = {
     },
   ];
 
-  /* Stand-alone options (opened from first page / home): Consents, Third Party, Authorities, Comms, Supervisor, LAA Declaration, Admin & Billing last */
+  /* Stand-alone options (opened from first page / home): Consents, Third Party, Authorities, Comms, LAA Declaration, Admin & Billing last */
   const standaloneSections = [
     { id: 'videoCaptureStandalone', title: 'Video Capture', keyFields: ['vidCapRecordingType', 'vidCapMediaRef'], fields: [
       { key: '_h_vidcap', label: 'Video Capture (PACE Code E / F)', type: 'sectionHeading' },
@@ -1774,10 +1774,9 @@ var REQUIRED_FIELD_KEYS = [
       var results = [];
       rows.forEach(function (r) {
         var d = safeJson(r.data);
-        var ref = (d.ourFileNumber || d.fileReference || '').toLowerCase();
         var sn = (d.surname || '').toLowerCase();
         var fn = (d.forename || '').toLowerCase();
-        if (ref.indexOf(q) < 0 && sn.indexOf(q) < 0 && fn.indexOf(q) < 0) return;
+        if (sn.indexOf(q) < 0 && fn.indexOf(q) < 0) return;
         if (!d.surname && !d.forename) return;
         var dedup = (d.surname || '').trim() + '|' + (d.forename || '').trim() + '|' + (d.dob || '');
         if (seen[dedup]) return;
@@ -1807,7 +1806,6 @@ var REQUIRED_FIELD_KEYS = [
       var item = document.createElement('div');
       item.className = 'client-lookup-item';
       var label = [d.surname, d.forename].filter(Boolean).join(', ');
-      if (d.ourFileNumber || d.fileReference) label += ' \u00B7 #' + (d.ourFileNumber || d.fileReference);
       if (d.dob) label += ' \u00B7 DOB: ' + d.dob;
       item.textContent = label;
       item.addEventListener('mousedown', function (e) {
@@ -3893,9 +3891,7 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function updateHomeBillingWidget() {
-    var widget = document.getElementById('home-billing-widget');
-    if (!widget || !window.api) return;
-
+    if (!window.api) return;
     var fetchFn = window.api.billingViewRecords || window.api.billableAttendances;
     if (!fetchFn) return;
 
@@ -3912,27 +3908,12 @@ var REQUIRED_FIELD_KEYS = [
       });
 
       var actionCount = needsDocs + needsInvoice;
-      if (relevant.length === 0) { widget.style.display = 'none'; return; }
-
-      widget.style.display = '';
-      widget.innerHTML =
-        '<div class="home-billing-widget-title">Open matters (office tasks)</div>' +
-        '<div class="home-billing-widget-sub">Across your practice — not only the file you have open</div>' +
-        '<div class="home-billing-widget-stats">' +
-          (needsDocs > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsDocs + '</span> need documents</span>' : '') +
-          (needsInvoice > 0 ? '<span class="home-billing-widget-stat home-billing-widget-warn"><span class="home-billing-widget-num">' + needsInvoice + '</span> need invoice</span>' : '') +
-          (invoiced > 0 ? '<span class="home-billing-widget-stat"><span class="home-billing-widget-num">' + invoiced + '</span> invoiced</span>' : '') +
-          (actionCount === 0 ? '<span class="home-billing-widget-stat">All up to date</span>' : '') +
-        '</div>';
-
-      widget.onclick = function () { showView('billing'); };
-
       var badge = document.getElementById('billing-nav-badge');
       if (badge) {
         if (actionCount > 0) { badge.textContent = String(actionCount); badge.style.display = ''; }
         else { badge.style.display = 'none'; }
       }
-    }).catch(function () { widget.style.display = 'none'; });
+    }).catch(function () {});
   }
   window.updateHomeBillingWidget = updateHomeBillingWidget;
 
@@ -5449,7 +5430,6 @@ var REQUIRED_FIELD_KEYS = [
       largeControls: document.getElementById('setting-large-controls')?.checked ? 'true' : 'false',
       reducedMotion: document.getElementById('setting-reduced-motion')?.checked ? 'true' : 'false',
       suggestionsForumUrl: document.getElementById('suggestions-forum-url')?.value?.trim() || '',
-      showSupervisorReview: document.getElementById('setting-show-supervisor-review')?.checked ? 'true' : 'false',
       autoImportEnabled: document.getElementById('setting-auto-import-enabled')?.checked ? 'true' : 'false',
       autoImportFolder: document.getElementById('setting-auto-import-folder')?.value?.trim() || '',
       officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
@@ -6041,7 +6021,7 @@ var REQUIRED_FIELD_KEYS = [
         const d = getParsed(r);
         const hay = [
           r.client_name, r.station_name, r.dscc_ref, r.attendance_date, r.status,
-          d.forename, d.middleName, d.surname, d.custodyNumber, d.ufn, d.date, d.policeStationName, d.fileReference, d.dsccRef, d.ourFileNumber,
+          d.forename, d.middleName, d.surname, d.custodyNumber, d.ufn, d.date, d.policeStationName, d.dsccRef,
           // C3: Outcome on records list — also searchable.
           d.outcomeDecision, d.outcomeCode, d.bailReturnStationName, d.courtName, d.bailDate, d.nextDate, d.outcomeNotes
         ].filter(Boolean).join(' ').toLowerCase();
@@ -6092,9 +6072,8 @@ var REQUIRED_FIELD_KEYS = [
         const dsccLabel = d.dsccPrivateMatter === 'Yes'
           ? ((d.dsccRef || '').trim() || 'private')
           : (d.dsccRef || r.dscc_ref || '');
-        const fileNumLabel = d.ourFileNumber ? '#' + d.ourFileNumber : '';
         // C3: surface the outcome on the records list — the most-asked-for value
-        // for any later question (counsel, supervisor, billing, audit).
+        // for any later question (counsel, billing, audit).
         var outcomeLabel = '';
         var od = (d.outcomeDecision || '').trim();
         if (od) {
@@ -6106,7 +6085,7 @@ var REQUIRED_FIELD_KEYS = [
             outcomeLabel = od;
           }
         }
-        const meta = [fileNumLabel, dateLabel, stationLabel, dsccLabel, outcomeLabel].filter(Boolean).join(' \u00B7 ');
+        const meta = [dateLabel, stationLabel, dsccLabel, outcomeLabel].filter(Boolean).join(' \u00B7 ');
         const formTypeBadge = d._formType === 'telephone' ? '<span class="badge badge-tel">TEL</span>' : (d.attendanceMode === 'voluntary' ? '<span class="badge badge-vol">VOL</span>' : '<span class="badge badge-att">ATT</span>');
         const hasDecl = !!(d.clientSig);
         const declBadge = hasDecl ? '<span class="badge badge-decl" title="Applicant declaration signed">Declared</span>' : '';
@@ -6312,7 +6291,7 @@ var REQUIRED_FIELD_KEYS = [
       'ethnicOriginCode','disabilityCode',
       'policeStationId','policeStationName','schemeId','firmId','firmName','firmLaaAccount',
       'firmContactName','firmContactPhone','firmContactEmail','feeEarnerName',
-      'dsccRef','sourceOfReferral','fileReference','instructionDateTime',
+      'dsccRef','sourceOfReferral','instructionDateTime',
       'dutySolicitor','weekendBankHoliday',
       'matterTypeCode','offenceSummary','offence1Details','offence1Date','offence1ModeOfTrial','offence1Statute',
       'offence2Details','offence2Date','offence2ModeOfTrial','offence2Statute',
@@ -7441,9 +7420,7 @@ var REQUIRED_FIELD_KEYS = [
               if (!d) { showToast('Set a date first (section 1)', 'error'); return; }
               const parts = d.split('-');
               const ddmmyy = parts[2] + parts[1] + parts[0].slice(2);
-              const ref = formData.ourFileNumber || formData.fileReference || '001';
-              const nnn = String(ref).replace(/\D/g, '').slice(-3).padStart(3, '0');
-              ufnInp.value = ddmmyy + '/' + nnn;
+              ufnInp.value = ddmmyy + '/001';
               formData.ufn = ufnInp.value;
               ufnInp.dispatchEvent(new Event('change'));
             });
@@ -7455,17 +7432,6 @@ var REQUIRED_FIELD_KEYS = [
           actions.className = 'form-actions';
           actions.innerHTML = '<button type="button" class="btn btn-finalise" id="form-finalise">Finalise</button><button type="button" class="btn btn-audit" id="form-audit-log" title="View full audit trail for this record">Audit Trail</button>';
           section.appendChild(actions);
-        }
-        if (sec.id === 'supervisorReview') {
-          const supActions = document.createElement('div');
-          supActions.className = 'form-actions';
-          const supBtn = document.createElement('button');
-          supBtn.type = 'button';
-          supBtn.className = 'btn btn-primary';
-          supBtn.id = 'form-supervisor-approve';
-          supBtn.textContent = 'Record Supervisor Approval';
-          supActions.appendChild(supBtn);
-          section.appendChild(supActions);
         }
         form.appendChild(section);
         if (sec.id === 'laaDeclaration') {
@@ -7767,9 +7733,7 @@ var REQUIRED_FIELD_KEYS = [
             if (!d) { showToast('Set a date first (section 1)', 'error'); return; }
             const parts = d.split('-');
             const ddmmyy = parts[2] + parts[1] + parts[0].slice(2);
-            const ref = formData.ourFileNumber || formData.fileReference || '001';
-            const nnn = String(ref).replace(/\D/g, '').slice(-3).padStart(3, '0');
-            const suggestedUfn = ddmmyy + '/' + nnn;
+            const suggestedUfn = ddmmyy + '/001';
             ufnInp.value = suggestedUfn;
             formData.ufn = suggestedUfn;
             ufnInp.dispatchEvent(new Event('change'));
@@ -7900,18 +7864,6 @@ var REQUIRED_FIELD_KEYS = [
         refreshTimeOverrideAffordances();
       }
 
-      if (sec.id === 'supervisorReview') {
-        const supActions = document.createElement('div');
-        supActions.className = 'form-actions';
-        const supBtn = document.createElement('button');
-        supBtn.type = 'button';
-        supBtn.className = 'btn btn-primary';
-        supBtn.id = 'form-supervisor-approve';
-        supBtn.textContent = 'Record Supervisor Approval';
-        supActions.appendChild(supBtn);
-        section.appendChild(supActions);
-      }
-
       if ((sec.fields || []).some(function(ff) { return ff.key === 'invoiceNumberRef'; })) {
         setTimeout(function() { refreshQuickFileInvoiceRefDisplay(); }, 0);
       }
@@ -7935,9 +7887,6 @@ var REQUIRED_FIELD_KEYS = [
       section.className = 'form-section ' + getSectionAccentClass(secIdx) + (secIdx === currentSectionIdx ? ' active' : '');
       section.dataset.secIdx = secIdx;
       section.dataset.sectionId = sec.id || '';
-      if (sec.id === 'supervisorReview' && !isSupervisorSectionEnabled()) {
-        section.style.display = 'none';
-      }
 
       if (secIdx === currentSectionIdx) {
         populateSectionContent(section, sec, secIdx);
@@ -11826,7 +11775,6 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── SECTIONS INDEX WITH PROGRESS (#7) ─── */
   function forEachVisibleSection(cb) {
     activeFormSections.forEach((sec, i) => {
-      if (sec.id === 'supervisorReview' && !isSupervisorSectionEnabled()) return;
       cb(sec, i, getSectionCompletionStatus(sec));
     });
   }
@@ -14088,7 +14036,6 @@ pdfAuditFooterHtml(d, settings) +
     }
     var visibleStatuses = [];
     activeFormSections.forEach(function(sec, idx) {
-      if (sec.id === 'supervisorReview' && !isSupervisorSectionEnabled()) return;
       var section = sectionElByIdx[idx];
       if (section && section.style.display === 'none') return;
       visibleStatuses.push({
@@ -14630,10 +14577,6 @@ pdfAuditFooterHtml(d, settings) +
             e.preventDefault();
             if (typeof openQuickEmailModal === 'function') openQuickEmailModal();
             return;
-          case 'home-card-billing':
-            e.preventDefault();
-            showView('billing');
-            return;
           case 'home-focus-open':
             e.preventDefault();
             if (t.dataset.id) {
@@ -14744,20 +14687,11 @@ pdfAuditFooterHtml(d, settings) +
           var qLower = q.toLowerCase();
           var filtered = rows.filter(function(r) {
             var d = safeJson(r.data);
-            var hay = [r.client_name, r.station_name, r.dscc_ref, r.attendance_date, r.status, d.forename, d.middleName, d.surname, d.custodyNumber, d.ufn, d.date, d.policeStationName, d.fileReference, d.dsccRef, d.ourFileNumber].filter(Boolean).join(' ').toLowerCase();
+            var hay = [r.client_name, r.station_name, r.dscc_ref, r.attendance_date, r.status, d.forename, d.middleName, d.surname, d.custodyNumber, d.ufn, d.date, d.policeStationName, d.dsccRef].filter(Boolean).join(' ').toLowerCase();
             return hay.includes(qLower);
           });
           if (listStatusFilter === 'draft') filtered = filtered.filter(function(r) { return (r.status || 'draft') === 'draft'; });
           else if (listStatusFilter === 'finalised') filtered = filtered.filter(function(r) { return r.status === 'finalised'; });
-          if (filtered.length === 1) {
-            var fileNum = String((safeJson(filtered[0].data).ourFileNumber || '')).trim();
-            var qNorm = q.replace(/^#/, '').trim();
-            if (fileNum && fileNum === qNorm) {
-              openAttendance(filtered[0].id);
-              showView('new');
-              return;
-            }
-          }
           showView('list');
           refreshList();
         });
@@ -14837,18 +14771,20 @@ pdfAuditFooterHtml(d, settings) +
         if (uEl) uEl.textContent = '';
         var relPretty = formatUkDateFromYmd(info.lastUpdated);
         var instPretty = formatUkDateTimeFromIso(info.versionAppliedAt);
+        var buildPretty = formatUkDateTimeFromIso(info.buildTime);
         if (vSub) {
-          if (instPretty) {
-            vSub.textContent = ' \u00B7 ' + instPretty;
+          if (buildPretty) {
+            vSub.textContent = ' \u00B7 ' + buildPretty;
           } else if (relPretty) {
-            vSub.textContent = ' \u00B7 build ' + relPretty;
+            vSub.textContent = ' \u00B7 ' + relPretty;
           } else {
             vSub.textContent = '';
           }
         }
         if (vWrap) {
           var ttip = 'Custody Note v' + (info.version || '');
-          if (relPretty) ttip += '. Build (from installer): ' + relPretty + '.';
+          if (buildPretty) ttip += '. Release (build) time: ' + buildPretty + '.';
+          else if (relPretty) ttip += '. Release date: ' + relPretty + '.';
           if (instPretty) ttip += ' This version first ran on this computer: ' + instPretty + '.';
           vWrap.title = ttip;
           vWrap.setAttribute('aria-label', ttip);
@@ -14976,23 +14912,6 @@ pdfAuditFooterHtml(d, settings) +
       switch (btn.id) {
         case 'form-finalise': validateBeforeFinalise(); break;
         case 'form-audit-log': showAuditLog(currentAttendanceId); break;
-        case 'form-supervisor-approve':
-          if (!currentAttendanceId) { showToast('Save the record first before recording supervisor approval', 'error'); return; }
-          var note = (document.querySelector('[data-field="supervisorComments"]')?.value || '').trim();
-          var name = (document.querySelector('[data-field="supervisorName"]')?.value || '').trim();
-          if (!name) { showToast('Enter the supervising solicitor/manager name first', 'error'); return; }
-          showConfirm('Record supervisor approval by ' + name + '?\n\nThis will be logged to the audit trail.', 'Supervisor Approval').then(function(ok) {
-            if (!ok) return;
-            promptForSensitiveCredential('Supervisor Approval', 'Re-enter your recovery password or admin password to record supervisor approval.', 'Password').then(function(credential) {
-              if (!credential) return;
-              window.api.supervisorApprove({ id: currentAttendanceId, note: note, credential: credential }).then(function() {
-                showToast('Supervisor approval recorded and logged', 'success');
-              }).catch(function(err) {
-                showToast('Failed to record approval: ' + (err && err.message || err), 'error');
-              });
-            });
-          });
-          break;
         case 'form-finalise-bar': validateBeforeFinalise(); break;
         case 'form-end-billing-btn':
           e.preventDefault();
@@ -15630,11 +15549,6 @@ pdfAuditFooterHtml(d, settings) +
       if (window.api) window.api.setSettings({ darkMode: isDark ? 'true' : 'false' }).catch(function(e) { console.error('[setSettings]', e); });
     });
     /* settings-back-btn already attached above */
-    document.getElementById('setting-show-supervisor-review')?.addEventListener('change', (e) => {
-      const val = e.target && e.target.checked ? 'true' : 'false';
-      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { showSupervisorReview: val });
-      if (window.api) window.api.setSettings({ showSupervisorReview: val }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
-    });
     document.getElementById('setting-backup-browse')?.addEventListener('click', () => {
       window.api.chooseFolder().then(p => {
         if (p) {
@@ -16209,7 +16123,7 @@ pdfAuditFooterHtml(d, settings) +
           bottomNavU.classList.add('has-update-pending');
           bottomNavU.disabled = false;
         } else if (data.status === 'up-to-date') {
-          bottomNavULbl.textContent = 'OK';
+          bottomNavULbl.textContent = 'Update';
           bottomNavU.classList.remove('has-update-pending');
           bottomNavU.disabled = false;
         } else if (data.status === 'error') {
@@ -16250,7 +16164,7 @@ pdfAuditFooterHtml(d, settings) +
           var chkAt = formatAppCheckTimeUk();
           showToast('You\'re up to date (v' + (res.version || '') + ' \u00B7 ' + chkAt + ')', 'success');
           if (gearBtn) gearBtn.textContent = '\u2713 Up to date';
-          if (bottomUpLbl) bottomUpLbl.textContent = 'OK';
+          if (bottomUpLbl) bottomUpLbl.textContent = 'Update';
           if (statusEl) statusEl.textContent = '\u2713 v' + (res.version || '') + ' (checked ' + chkAt + ')';
         } else if (res.status === 'checking') {
           if (statusEl) statusEl.textContent = 'Checking for updates\u2026';

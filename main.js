@@ -3539,22 +3539,37 @@ function readAndRefreshVersionState() {
 ipcMain.handle('get-app-version', () => {
   try {
     const version = app.getVersion();
+    const pkgPath = path.join(__dirname, 'package.json');
     let lastUpdated = '';
-    try { lastUpdated = require('./package.json').lastUpdated || ''; } catch (_) {}
+    let buildTime = '';
+    try {
+      const pkg = require('./package.json');
+      lastUpdated = pkg.lastUpdated || '';
+      if (pkg.buildTime) buildTime = pkg.buildTime;
+    } catch (_) {}
+    if (!buildTime) {
+      try {
+        const stat = fs.statSync(pkgPath);
+        buildTime = new Date(stat.mtimeMs).toISOString();
+      } catch (_) {}
+    }
     if (!lastUpdated) {
-      const pkgPath = path.join(__dirname, 'package.json');
-      const stat = fs.statSync(pkgPath);
-      lastUpdated = new Date(stat.mtimeMs).toISOString().slice(0, 10);
+      try {
+        const stat = fs.statSync(pkgPath);
+        lastUpdated = new Date(stat.mtimeMs).toISOString().slice(0, 10);
+      } catch (_) {}
     }
     const vs = readAndRefreshVersionState();
     return {
       version: version || '0.0.0',
       lastUpdated,
+      /* ISO: when this build was released (set at release; else package.json mtime). */
+      buildTime: buildTime || null,
       /* First time this semver ran on this machine (after install or auto-update). */
       versionAppliedAt: vs.versionAppliedAt || null,
       platform: process.platform,
     };
-  } catch (_) { return { version: '0.0.0', lastUpdated: '', versionAppliedAt: null, platform: process.platform }; }
+  } catch (_) { return { version: '0.0.0', lastUpdated: '', buildTime: null, versionAppliedAt: null, platform: process.platform }; }
 });
 
 ipcMain.handle('app-update-install', () => {
