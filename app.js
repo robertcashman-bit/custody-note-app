@@ -5708,7 +5708,7 @@ var REQUIRED_FIELD_KEYS = [
       showToast('QuickFile import is not available', 'error');
       return;
     }
-    // Main process reads account/API key/App ID from the database (getQuickFileAuth in main.js), not
+    // Main process reads account/API key/App ID from the database (auth helper lives in main.js), not
     // from the Settings form. Persist the form to SQLite first so re-sync and test use current values.
     return saveQuickFileSettings(false).then(function() {
       if (btn) {
@@ -11586,7 +11586,9 @@ var REQUIRED_FIELD_KEYS = [
     if (formData.languageIssues === 'Yes' && !(formData.interpreterLanguage || '').trim()) m.push({ key: 'interpreterLanguage', label: 'Language required', section: 2 });
     if (formData.fmeNurse === 'Yes' && !(formData.medicalExaminationOutcome || '').trim()) m.push({ key: 'medicalExaminationOutcome', label: 'Outcome of medical examination', section: 2 });
     if (!isRelaxedPath && !(formData.disclosureType || '').trim()) m.push({ key: 'disclosureType', label: 'Disclosure Type', section: 4 });
-    var _isVolPath = formData.attendanceMode === 'voluntary' || formData.voluntaryInterview === 'Yes' || (activeFormSections === voluntaryFormSections);
+    var _activeFormSections = (typeof activeFormSections !== 'undefined') ? activeFormSections : null;
+    var _voluntaryFormSections = (typeof voluntaryFormSections !== 'undefined') ? voluntaryFormSections : null;
+    var _isVolPath = formData.attendanceMode === 'voluntary' || formData.voluntaryInterview === 'Yes' || (_activeFormSections && _voluntaryFormSections && _activeFormSections === _voluntaryFormSections);
     if (!_isVolPath && (formData.custodyNumber || '').trim() && !formData.custodyRecordRead) m.push({ key: 'custodyRecordRead', label: 'Custody record read?', section: 2 });
     if (!_isVolPath && formData.voluntaryInterview === 'No' && !(formData.groundsForArrest || '').trim()) m.push({ key: 'groundsForArrest', label: 'At least one ground for arrest', section: 2 });
     (formData.interviews || []).forEach(function(iv, idx) {
