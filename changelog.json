@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.5.18",
+      "version": "1.5.19",
       "date": "2026-04-24",
       "latest": true,
+      "changes": [
+        "Remove file/matter reference from police station, voluntary, and INVB forms and PDFs",
+        "billing summary PDF header",
+        "workflow and completion UI"
+      ]
+    },
+    {
+      "version": "1.5.18",
+      "date": "2026-04-24",
+      "latest": false,
       "changes": [
         "About this build: the footer now shows the version together with a local date and time — the moment this build was first run on this computer (after install or auto-update), stored in app-version-state.json under userData. Tooltip on the version chip also lists the installer's build date from package.json (release).",
         "Check for updates: toasts and the settings update status line now include the app version and the current date and time when the check reports you are up to date, so you can see at a glance that the check was recent."
@@ -65,7 +75,7 @@
       "latest": false,
       "changes": [
         "CRM1 official PDF (v16, Feb 2025): UFN header combs (page 1) now populated from the record's UFN — DDMMYY/NNN distributed across the 9 boxes around the printed slash. Previously cleared and left blank even when the firm's UFN was on the matter.",
-        "CRM1 official PDF: removed incorrect dependants mapping. The dependants count was being written into FillText15, which sits on page 7 inside the \u201ccalculate the total allowable deductions\u201d block, not the page-8 dependants box. The page-8 dependants question has no AcroForm field on v16 (handwritten on the official form), so the page-7 deductions area is now correctly left blank when no deduction figures are captured."
+        "CRM1 official PDF: removed incorrect dependants mapping. The dependants count was being written into FillText15, which sits on page 7 inside the “calculate the total allowable deductions” block, not the page-8 dependants box. The page-8 dependants question has no AcroForm field on v16 (handwritten on the official form), so the page-7 deductions area is now correctly left blank when no deduction figures are captured."
       ]
     },
     {
@@ -75,7 +85,7 @@
       "changes": [
         "PDF (custody & voluntary): §1 — client middle name row; cover and HTML title use full name including middle",
         "PDF — §2: single-visit journey shows visit label, multi-client on-site times, and visit notes (aligned with station visit card); voluntary multi-visit also exports visit notes and multi-client details",
-        "PDF — §6: instruction confirmation (signature required, auto date/time) before the advice block; voluntary §6 adds dependants, capital, gaps in evidence, email consent, advice-follow-up fields, and benefit \u201cOther\u201d text",
+        "PDF — §6: instruction confirmation (signature required, auto date/time) before the advice block; voluntary §6 adds dependants, capital, gaps in evidence, email consent, advice-follow-up fields, and benefit “Other” text",
         "PWA/telephone PDF cover: client name includes middle name for consistency"
       ]
     },
