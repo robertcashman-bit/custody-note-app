@@ -709,41 +709,21 @@ describe('Step 3: Completion screen — progress checklist', () => {
   });
 });
 
-describe('Step 3: Completion screen — billing summary card (LAA rates)', () => {
-  it('builds LAA billing summary with social/unsocial breakdown', () => {
+describe('Step 3: Completion screen — billing summary (actual bill / Step 2 figures)', () => {
+  it('builds summary from resolveWorkflowBillingTotals (same as billing review, not LAA time rates)', () => {
     assert.ok(completionJs.includes('_wfBuildBillingSummaryCard'));
-    assert.ok(completionJs.includes('travelSocial'));
-    assert.ok(completionJs.includes('travelUnsocial'));
-    assert.ok(completionJs.includes('waitingSocial'));
-    assert.ok(completionJs.includes('waitingUnsocial'));
-    assert.ok(completionJs.includes('adviceSocial'));
-    assert.ok(completionJs.includes('adviceUnsocial'));
+    assert.ok(completionJs.includes('resolveWorkflowBillingTotals'));
+    assert.ok(completionJs.includes('Billing summary (this matter)'));
   });
 
-  it('uses correct LAA national rates defaults', () => {
-    assert.ok(completionJs.includes('54.57'));  // attendance social
-    assert.ok(completionJs.includes('72.46'));  // attendance unsocial
-    assert.ok(completionJs.includes('27.29'));  // travel/waiting rates
+  it('does not show LAA notional time breakdown (Section 9 six-minute style)', () => {
+    assert.ok(!completionJs.includes('travelSocial'));
+    assert.ok(!completionJs.includes('adviceUnsocial'));
   });
 
-  it('calculates escape fee threshold', () => {
-    assert.ok(completionJs.includes('escapeThreshold'));
-    assert.ok(completionJs.includes('ESCAPE FEE'));
-  });
-
-  it('shows FIXED FEE label when under threshold', () => {
-    assert.ok(completionJs.includes('FIXED FEE'));
-  });
-
-  it('includes mileage, parking, and disbursement rows', () => {
+  it('includes fixed line, optional mileage and parking, subtotal, VAT, total', () => {
     assert.ok(completionJs.includes('Mileage'));
-    assert.ok(completionJs.includes('Parking'));
-    assert.ok(completionJs.includes('Disbursements'));
-  });
-
-  it('shows Net, VAT (20%), and Total', () => {
-    assert.ok(completionJs.includes('Net'));
-    assert.ok(completionJs.includes('VAT (20%)'));
+    assert.ok(completionJs.includes('Subtotal (ex VAT)'));
     assert.ok(completionJs.includes('Total (inc. VAT)'));
   });
 });
@@ -1110,6 +1090,14 @@ describe('billingUtils — calculateInvoiceTotals source', () => {
   it('rounds all monetary values to 2 decimal places', () => {
     const matches = billingUtilsJs.match(/\.toFixed\(2\)/g);
     assert.ok(matches.length >= 6, 'Expected at least 6 .toFixed(2) calls');
+  });
+});
+
+describe('billingUtils — resolveWorkflowBillingTotals', () => {
+  it('uses snapshot, live wf-* fields, or defaults (not LAA section-9 time rates)', () => {
+    assert.ok(billingUtilsJs.includes('function resolveWorkflowBillingTotals'));
+    assert.ok(billingUtilsJs.includes('window._wfBillingSnapshot'));
+    assert.ok(billingUtilsJs.includes('LAA notional time rates'));
   });
 });
 

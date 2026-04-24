@@ -215,15 +215,19 @@ describe('M1 — No duplicate Sufficient Benefit Test in custody PDF', () => {
   });
 });
 
-describe('M2 — Telephone PDF title includes ourFileNumber fallback', () => {
-  it('telephone PDF myRefForTitle checks ourFileNumber before fileReference', () => {
+describe('M2 — Telephone PDF title uses client and date (not file ref)', () => {
+  it('telephone PDF myRefForTitle is built from name and date', () => {
     const telPdfStart = appJs.indexOf('function buildTelephonePdfHtml');
     const telPdfEnd = appJs.indexOf('function ', telPdfStart + 30);
     const telPdfBlock = appJs.substring(telPdfStart, telPdfEnd);
 
     assert.ok(
-      telPdfBlock.includes("d.ourFileNumber || d.fileReference"),
-      'telephone PDF myRefForTitle must try ourFileNumber before fileReference'
+      telPdfBlock.includes('dateForTitle') && telPdfBlock.includes('var myRefForTitle'),
+      'telephone PDF must derive myRefForTitle from client and date'
+    );
+    assert.ok(
+      !telPdfBlock.match(/d\.ourFileNumber\s*\|\|\s*d\.fileReference/),
+      'telephone PDF title must not use file / matter ref'
     );
   });
 });

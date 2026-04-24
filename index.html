@@ -130,6 +130,17 @@
       </div>
     </header>
 
+    <!-- App update: shown on every screen. Footer update chip is hidden while editing a form. -->
+    <div id="global-app-update-banner" class="global-app-update-banner" style="display:none;" role="status" aria-live="polite" aria-atomic="true">
+      <div class="global-app-update-inner">
+        <span class="global-app-update-icon" aria-hidden="true">&#128260;</span>
+        <p id="global-app-update-text" class="global-app-update-text"></p>
+        <div class="global-app-update-actions">
+          <button type="button" id="global-app-update-btn" class="btn btn-primary btn-small" style="display:none;">Restart &amp; update</button>
+        </div>
+      </div>
+    </div>
+
     <main class="app-main">
 
       <!-- HOME / COMMAND CENTER -->
@@ -1967,11 +1978,17 @@
         <span class="bottom-nav-icon">&#127970;</span>
         <span class="bottom-nav-label">Firms</span>
       </button>
-      <button type="button" class="bottom-nav-btn" data-nav="billing" title="Open matters needing invoice or documents">
-        <span class="bottom-nav-icon">&#163;</span>
-        <span class="bottom-nav-label">Open matters</span>
-        <span id="billing-nav-badge" class="bottom-nav-badge" style="display:none;"></span>
-      </button>
+      <div class="bottom-nav-billing" role="group" aria-label="Billing">
+        <button type="button" class="bottom-nav-btn bottom-nav-bill-open" data-nav="billing" title="Open matters &mdash; practice-wide list: documents, invoices, and office tasks">
+          <span class="bottom-nav-icon">&#163;</span>
+          <span class="bottom-nav-label">All open</span>
+          <span id="billing-nav-badge" class="bottom-nav-badge" style="display:none;"></span>
+        </button>
+        <button type="button" class="bottom-nav-btn bottom-nav-bill-matter" data-nav="matter-billing" title="This file &mdash; finish matter, QuickFile invoice, and archive (current record)">
+          <span class="bottom-nav-icon">&#128203;</span>
+          <span class="bottom-nav-label">This matter</span>
+        </button>
+      </div>
       <button type="button" class="bottom-nav-btn" data-nav="settings" title="Settings">
         <span class="bottom-nav-icon">&#9881;</span>
         <span class="bottom-nav-label">Settings</span>

@@ -487,10 +487,9 @@ var LAA = {
     /* ─────── 1. CASE REFERENCE & ARRIVAL ─────── */
     {
       id: 'caseArrival', title: '1. Case Reference & Arrival',
-      keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'ourFileNumber', 'sufficientBenefitTest'],
+      keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'sufficientBenefitTest'],
       fields: [
         { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'custody', label: 'Custody' }, { value: 'voluntary', label: 'Voluntary' }], cols: 2, helpTitle: 'Custody = client under arrest. Voluntary = client attending voluntarily (free to leave).' },
-        { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'e.g. internal file or matter ref' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
@@ -1129,9 +1128,8 @@ var LAA = {
       { key: 'laaFeeEarnerFullName', label: 'Fee Earner Full Name', type: 'text', placeholder: 'Your full name', cols: 2 },
       { key: 'feeEarnerCertification', label: 'Certification', type: 'select', options: ['Draft','Finalised'] },
     ]},
-    { id: 'adminBilling', title: 'Admin & Billing', keyFields: ['ourFileNumber', 'ufn'], fields: [
+    { id: 'adminBilling', title: 'Admin & Billing', keyFields: ['ufn'], fields: [
       { key: '_h_admin', label: 'Administration', type: 'sectionHeading' },
-      { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'Internal reference', cols: 2 },
       { key: 'ufn', label: 'UFN (Unique File Number)', type: 'text', placeholder: 'Firm provides this', cols: 2, firmCompletes: true },
       { key: 'firmLaaAccount', label: 'Firm LAA Account No.', type: 'text', placeholder: 'Firm provides this', firmCompletes: true },
       { key: 'maatId', label: 'MAAT ID', type: 'text', placeholder: 'Firm provides after charge', firmCompletes: true },
@@ -1203,7 +1201,6 @@ var LAA = {
       id: 'telCallDetails', title: '1. Call Details',
       keyFields: ['date', 'policeStationId', 'dsccRef', 'matterTypeCode', 'feeCode'],
       fields: [
-        { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'e.g. internal file or matter ref' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
         { key: 'date', label: 'Date of telephone advice', type: 'date' },
         { key: 'sourceOfReferral', label: 'Source of Referral', type: 'select', options: ['Duty Rota','Duty panel','Own Legal Aid','Own private','Agency'] },
@@ -1331,7 +1328,7 @@ var LAA = {
     /* ─────── 1. CASE REFERENCE & ARRIVAL ─────── */
     {
       id: 'caseArrival', title: '1. Case Reference & Arrival',
-      keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'ourFileNumber', 'sufficientBenefitTest'],
+      keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'sufficientBenefitTest'],
       fields: [
         { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'voluntary', label: 'Voluntary' }, { value: 'custody', label: 'Custody' }], cols: 2, helpTitle: 'Voluntary = client attending voluntarily (free to leave). Custody = client under arrest.' },
         { key: '_note_voluntary', label: 'This is a voluntary attendance. Client is free to leave unless arrested.', type: 'sectionNote' },
@@ -1345,7 +1342,6 @@ var LAA = {
         { key: 'attendanceSubType', label: 'Attendance Sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
         { key: 'constablePresent', label: 'Constable present?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'For non-police body interviews, record whether a constable was present', showIf: { field: 'attendanceSubType', value: 'voluntary_non_police_body' } },
 
-        { key: 'ourFileNumber', label: 'File / matter reference (ours)', type: 'text', placeholder: 'e.g. internal file or matter ref' },
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
         { key: 'instructionDateTime', label: 'Date & time instruction received', type: 'datetime-local' },
@@ -3241,7 +3237,7 @@ var REQUIRED_FIELD_KEYS = [
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     }
     if (name === 'new' && !currentAttendanceId && !Object.keys(formData).length) { activeFormSections = formSections; formData = {}; currentSectionIdx = 0; prefillDefaults(); renderForm(formData); }
-    var navMap = { home: 'home', list: 'list', new: 'new-attendance', firms: 'firms', billing: 'billing', settings: 'settings' };
+    var navMap = { home: 'home', list: 'list', new: 'new-attendance', firms: 'firms', billing: 'billing', 'matter-billing': 'matter-billing', settings: 'settings' };
     document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
       btn.classList.toggle('active', btn.dataset.nav === (navMap[name] || name));
     });
@@ -4712,7 +4708,7 @@ var REQUIRED_FIELD_KEYS = [
     };
     var hasIdentity = !!(v('surname') || v('forename') || v('ufn') || v('custodyNumber'));
     if (hasIdentity) return true;
-    var hasSubstantive = !!(v('offenceSummary') || v('ourFileNumber') || v('fileReference') ||
+    var hasSubstantive = !!(v('offenceSummary') ||
       v('dsccRef') || v('dscc_ref') || v('dob') || v('telephoneAdviceSummary') || v('arrivalNotes'));
     if (hasSubstantive) return true;
     if (Array.isArray(d.interviews) && d.interviews.some(function(iv) { return iv && (iv.startTime || iv.notes); })) return true;
@@ -10079,12 +10075,6 @@ var REQUIRED_FIELD_KEYS = [
       wrap.appendChild(input);
     }
 
-    if (f.key === 'ourFileNumber' && currentSectionIdx === 0) {
-      input.addEventListener('input', function () { triggerClientLookup(this); });
-      input.addEventListener('blur', function () { setTimeout(hideClientDropdown, 150); });
-      input.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideClientDropdown(); });
-    }
-
     if (f.key === 'sufficientBenefitTest') {
       const sbtHint = document.createElement('p');
       sbtHint.className = 'field-hint sbt-hint';
@@ -11591,7 +11581,6 @@ var REQUIRED_FIELD_KEYS = [
       // (non handed-back / non non-attendance) path before finalising.
       required.push({ key: 'firmId', label: 'Firm', section: 0 });
       required.push({ key: 'oicName', label: 'Officer in Charge name', section: 0 });
-      required.push({ key: 'ourFileNumber', label: 'File / matter reference (UFN)', section: 0 });
     }
     m = required.filter(function(r) { var val = formData[r.key]; return !val || (typeof val === 'string' && !val.trim()); });
     var workType = formData.workType || '';
@@ -12089,9 +12078,7 @@ var REQUIRED_FIELD_KEYS = [
       (typeof window !== 'undefined' && window.__appVersion) ||
       (typeof window !== 'undefined' && document.getElementById && document.getElementById('version') && document.getElementById('version').textContent) ||
       '';
-    var fileRef = (d.ourFileNumber || d.fileReference || '').toString();
     var leftBits = ['Fee earner: ' + esc(feeEarner)];
-    if (fileRef) leftBits.push('Ref: ' + esc(fileRef));
     var midBits = [];
     if (finalisedAt) midBits.push('Finalised ' + esc(fmtPdfTimestamp(finalisedAt)));
     if (updatedAt && updatedAt !== finalisedAt) midBits.push('Last edit ' + esc(fmtPdfTimestamp(updatedAt)));
@@ -12133,7 +12120,8 @@ var REQUIRED_FIELD_KEYS = [
     });
 
     const clientNameForTitle = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '—';
-    const myRefForTitle = d.ourFileNumber || d.fileReference || '—';
+    const dateLine = fmtDate(d.date) || '';
+    const myRefForTitle = (dateLine && clientNameForTitle !== '\u2014') ? (clientNameForTitle + ' | ' + dateLine) : (clientNameForTitle !== '\u2014' ? clientNameForTitle : (dateLine || 'Custody note'));
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | ' + h(myRefForTitle) + '</title><style>' +
 '@page{margin:12mm 14mm;size:A4;}' +
@@ -12175,11 +12163,11 @@ pdfDefenceSummaryCss() +
 '<div class="letterhead">' +
 '<div class="lh-left">' + h(brand) + '</div>' +
 '<div class="lh-center">Custody Note</div>' +
-'<div class="lh-right">Ref ' + h(d.ourFileNumber || d.fileReference || '\u2014') + (d.date ? (' \u00B7 ' + h(fmtDate(d.date))) : '') + '</div>' +
+'<div class="lh-right">' + (d.date ? h(fmtDate(d.date)) : '\u2014') + '</div>' +
 '</div>' +
 '<h1>Custody Note</h1>' +
 '<p style="font-size:10px;color:#475569;">' +
-'  <strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '') + ' &middot; <strong>Date:</strong> ' + h(fmtDate(d.date)||'') + ' &middot; <strong>DSCC PIN:</strong> ' + h(settings.dsccPin||'') +
+'  <strong>Date:</strong> ' + h(fmtDate(d.date)||'') + ' &middot; <strong>DSCC PIN:</strong> ' + h(settings.dsccPin||'') +
   (firmName ? ' &middot; <strong>Firm:</strong> ' + h(firmName) : '') +
   (d.firmLaaAccount ? ' &middot; <strong>LAA Acct:</strong> ' + h(d.firmLaaAccount) : '') +
 '</p>' +
@@ -12192,7 +12180,6 @@ pdfDefenceSummaryCss() +
 (d.attendanceMode !== 'voluntary' ? '<div class="cover-item"><strong>Custody no.:</strong> ' + h(d.custodyNumber || '\u2014') + '</div>' : '') +
 '<div class="cover-item"><strong>Firm:</strong> ' + h(firmName || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || '\u2014') + '</div>' +
-'<div class="cover-item"><strong>Ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
 '</div>' +
 pdfDefenceSummaryHtml(d) +
 (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">CUSTODY NOTE</div>' : '') +
@@ -12200,7 +12187,7 @@ pdfDefenceSummaryHtml(d) +
 '<h2>1. Case Reference & Arrival</h2><table>' +
 row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) + row('Firm', firmName) +
 row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
-row('Client first name', d.forename) + row('Client middle name(s)', d.middleName) + row('Client surname', d.surname) + row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Offence (summary)', d.offenceSummary) +
+row('Client first name', d.forename) + row('Client middle name(s)', d.middleName) + row('Client surname', d.surname) + row('Offence (summary)', d.offenceSummary) +
 row('Station', sn) + row('DSCC number', formatDsccForPdf(d)) +
 row('Officer in Charge', d.oicName) + row('Officer in Charge email', d.oicEmail) + row('Officer in Charge telephone', d.oicPhone) +
 row('Date', fmtDate(d.date)) + row('Weekend/Bank Holiday', d.weekendBankHoliday) + row('Other Location', d.otherLocation) +
@@ -12508,8 +12495,7 @@ row('Invoice notes', d.invoiceNotes) +
 })() +
 
 (function() {
-  var adminRows = row('File / matter reference', d.ourFileNumber || d.fileReference) +
-    row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
+  var adminRows = row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
   if (!adminRows) return '';
   return '<h2>12. Admin & Billing</h2><table>' + adminRows + '</table>';
 })() +
@@ -12588,7 +12574,8 @@ pdfAuditFooterHtml(d, settings) +
     };
 
     var clientNameForTitle = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '—';
-    var myRefForTitle = d.ourFileNumber || d.fileReference || '—';
+    var dateForTitle = fmtDate(d.date) || '';
+    var myRefForTitle = (dateForTitle && clientNameForTitle !== '—') ? (clientNameForTitle + ' | ' + dateForTitle) : (clientNameForTitle !== '—' ? clientNameForTitle : (dateForTitle || 'Telephone advice'));
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | ' + h(myRefForTitle) + '</title>' +
       '<style>' +
@@ -12618,7 +12605,7 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="letterhead">' +
       '<div class="lh-left">' + h(brand) + '</div>' +
       '<div class="lh-center">Telephone Advice</div>' +
-      '<div class="lh-right">Ref ' + h(d.ourFileNumber || d.fileReference || '\u2014') + (d.date ? (' \u00B7 ' + h(fmtDate(d.date))) : '') + '</div>' +
+      '<div class="lh-right">' + (d.date ? h(fmtDate(d.date)) : '\u2014') + '</div>' +
       '</div>' +
       '<h1>Police Station Telephone Advice Note <span class="invb-badge">INVB</span></h1>' +
       '<p style="font-size:10px;color:#64748b;">' + h(brand) + ' | Generated ' + new Date().toLocaleString('en-GB') + '</p>' +
@@ -12626,7 +12613,6 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="cover-item"><strong>Client:</strong> ' + h([d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Station:</strong> ' + h(sn || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
-      '<div class="cover-item"><strong>File / matter ref:</strong> ' + h(d.ourFileNumber || d.fileReference || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>DSCC:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
       '</div>' +
@@ -12634,7 +12620,7 @@ pdfAuditFooterHtml(d, settings) +
       (d.feeEarnerCertification !== 'Finalised' ? '<div class="watermark">TELEPHONE ADVICE</div>' : '') +
 
       '<h2>1. Call Details</h2><table>' +
-      row('File / matter reference', d.ourFileNumber || d.fileReference) + row('Date', fmtDate(d.date)) +
+      row('Date', fmtDate(d.date)) +
       row('Instruction received', formatInstructionDateTime(d.instructionDateTime)) +
       row('Source of Referral', d.sourceOfReferral) +
       row('DSCC Number', formatDsccForPdf(d)) +
@@ -12708,7 +12694,8 @@ pdfAuditFooterHtml(d, settings) +
     var codeLookup = function(key, code) { var arr = refData[key] || []; var item = arr.find(function(c) { return c.code === code; }); return item ? code + ' \u2013 ' + item.description : code || ''; };
 
     var clientNameForTitle = [d.forename, d.middleName, d.surname].filter(Boolean).join(' ') || '\u2014';
-    var myRefForTitle = d.ourFileNumber || d.fileReference || '\u2014';
+    var dateForTitle = fmtDate(d.date) || '';
+    var myRefForTitle = (dateForTitle && clientNameForTitle !== '\u2014') ? (clientNameForTitle + ' | ' + dateForTitle) : (clientNameForTitle !== '\u2014' ? clientNameForTitle : (dateForTitle || 'Voluntary attendance'));
 
     var offenceRows = '';
     for (var oi = 1; oi <= 4; oi++) {
@@ -12774,7 +12761,7 @@ pdfAuditFooterHtml(d, settings) +
       '.sig-img{max-width:320px;max-height:90px;display:block;} .sig-unsigned{font-style:italic;color:#64748b;}' +
       '.decl-box{font-size:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:10px 12px;margin:10px 0;white-space:pre-wrap;print-color-adjust:exact;}' +
       '</style></head><body>' +
-      '<div class="letterhead"><div class="lh-left">' + h(brand) + '</div><div class="lh-center">Voluntary Attendance Note</div><div class="lh-right">Ref ' + h(myRefForTitle) + (d.date ? (' \u00B7 ' + h(fmtDate(d.date))) : '') + '</div></div>' +
+      '<div class="letterhead"><div class="lh-left">' + h(brand) + '</div><div class="lh-center">Voluntary Attendance Note</div><div class="lh-right">' + (d.date ? h(fmtDate(d.date)) : '\u2014') + '</div></div>' +
       '<h1>Voluntary Interview Attendance Note <span class="vol-badge">Voluntary</span></h1>' +
       '<p style="font-size:10px;color:#64748b;"><strong>Client attending voluntarily. Client free to leave unless arrested. Not under arrest or detention.</strong></p>' +
       '<div class="cover-block">' +
@@ -12782,7 +12769,6 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="cover-item"><strong>Location:</strong> ' + h(sn || d.otherLocation || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>Date:</strong> ' + h(fmtDate(d.date) || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>DSCC:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
-      '<div class="cover-item"><strong>File No.:</strong> ' + h(myRefForTitle) + '</div>' +
       '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || settings.feeEarnerNameDefault || '\u2014') + '</div>' +
       '</div>' +
       pdfDefenceSummaryHtml(d) +
@@ -12795,7 +12781,6 @@ pdfAuditFooterHtml(d, settings) +
       row('Firm', firmName) + row('Firm contact', d.firmContactName) + row('Contact phone', d.firmContactPhone) + row('Contact email', d.firmContactEmail) +
       row('Fee Earner / Rep', d.feeEarnerName) +
       row('Client', clientNameForTitle) +
-      row('File / matter reference', myRefForTitle) +
       row('Offence (summary)', d.offenceSummary) +
       row('Station / Location', sn || d.otherLocation) + row('Location type', d.locationType) +
       row('Scheme ID', d.schemeId) +
@@ -13011,7 +12996,7 @@ pdfAuditFooterHtml(d, settings) +
       })() +
 
       (function() {
-        var adminRows = row('File / matter reference', myRefForTitle) + row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
+        var adminRows = row('UFN', d.ufn) + row('Firm', firmName) + row('LAA Account', d.firmLaaAccount) + row('MAAT ID', d.maatId);
         if (!adminRows) return '';
         return '<h2>12. Admin &amp; Billing</h2><table>' + adminRows + '</table>';
       })() +
@@ -13141,54 +13126,64 @@ pdfAuditFooterHtml(d, settings) +
   window.exportBillingSummaryPdf = exportBillingSummaryPdf;
 
   function buildBillingSummaryHtml(d) {
-    var tS = parseInt(d.travelSocial) || 0, tU = parseInt(d.travelUnsocial) || 0;
-    var wS = parseInt(d.waitingSocial) || 0, wU = parseInt(d.waitingUnsocial) || 0;
-    var aS = parseInt(d.adviceSocial) || 0, aU = parseInt(d.adviceUnsocial) || 0;
-    var tot = parseInt(d.totalMinutes) || 0;
-    var miles = parseFloat(d.milesClaimable) || 0;
-    var parking = parseFloat(d.parkingCost) || 0;
-    var disbTotal = 0;
-    if (d.disbursements && Array.isArray(d.disbursements)) d.disbursements.forEach(function(x) { disbTotal += parseFloat(x && x.amount) || 0; });
-
-    var r = LAA.national;
-    function lv(m, rate) { return (m / 60) * rate; }
-    var tvl = lv(tS, r.travel.social) + lv(tU, r.travel.unsocial);
-    var wvl = lv(wS, r.waiting.social) + lv(wU, r.waiting.unsocial);
-    var avl = lv(aS, r.attendance.social) + lv(aU, r.attendance.unsocial);
-    var mvl = miles * LAA.mileageRate;
-    var net = tvl + wvl + avl + mvl + parking + disbTotal;
-    var vat = net * LAA.vatRate;
-    var total = net + vat;
-    var isEscape = net > LAA.escapeThreshold;
+    d = d || {};
+    var totals = (typeof resolveWorkflowBillingTotals === 'function') ? resolveWorkflowBillingTotals() : null;
+    if (!totals && typeof calculateInvoiceTotals === 'function') {
+      totals = calculateInvoiceTotals({ fixedFee: 0, mileageMiles: 0, mileageRate: 0.45, parkingAmount: 0, vatRate: 0.2 });
+    }
+    if (!totals) {
+      totals = { fixedFee: 0, mileageAmount: 0, parkingAmount: 0, subTotal: 0, vatTotal: 0, grandTotal: 0, vatRate: 0.2, mileageMiles: 0, mileageRate: 0.45 };
+    }
     function fc(v) { return '\u00A3' + (v || 0).toFixed(2); }
     function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
     function fmtDate(v) { if (!v) return ''; var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : v; }
-
+    var vatPct = (totals.vatRate != null) ? (Math.round(totals.vatRate * 1000) / 10) : 20;
+    if (Math.abs(vatPct - Math.round(vatPct)) < 0.01) vatPct = Math.round(vatPct);
+    var line1 = (typeof buildLine1Description === 'function')
+      ? buildLine1Description({
+          clientName: [d.forename, d.surname].filter(Boolean).join(' '),
+          policeStation: d.policeStationName,
+          attendanceDate: d.date,
+        })
+      : 'Police station attendance';
     var statusLabel = isNoteLockedForEditing() ? (currentRecordStatus === 'completed' ? 'OFFICE COMPLETE' : 'FINALISED') : 'DRAFT';
-    if (isEscape) statusLabel += ' \u2014 ESCAPE FEE';
+    var bodyRows = '';
+    if (totals.fixedFee > 0) {
+      bodyRows += '<tr><td>' + esc(line1) + '</td><td class="right">' + fc(totals.fixedFee) + '</td></tr>';
+    }
+    if (totals.mileageAmount > 0) {
+      var ml = 'Mileage';
+      if (totals.mileageMiles > 0) { ml += ' (' + totals.mileageMiles + ' mi \u00D7 ' + fc(totals.mileageRate) + ' /mi)'; }
+      bodyRows += '<tr><td>' + ml + '</td><td class="right">' + fc(totals.mileageAmount) + '</td></tr>';
+    }
+    if (totals.parkingAmount > 0) {
+      bodyRows += '<tr><td>Parking / disbursements</td><td class="right">' + fc(totals.parkingAmount) + '</td></tr>';
+    }
+    if (!bodyRows) {
+      bodyRows = '<tr><td colspan="2" style="color:#64748b;">No charge lines (set fees in Step 2 — Billing review).</td></tr>';
+    }
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><style>' +
       'body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;margin:20mm 15mm;color:#1e293b;}' +
-      'h1{font-size:16pt;margin:0 0 4px;} .status{font-size:10pt;padding:3px 10px;border-radius:4px;display:inline-block;margin-bottom:12px;background:#e2e8f0;font-weight:600;}' +
-      '.status-escape{background:#fee2e2;color:#991b1b;} .status-ready{background:#d1fae5;color:#065f46;}' +
+      'h1{font-size:16pt;margin:0 0 4px;} .blurb{font-size:10pt;color:#64748b;margin:0 0 8px;}' +
+      ' .status{font-size:10pt;padding:3px 10px;border-radius:4px;display:inline-block;margin-bottom:12px;background:#e2e8f0;font-weight:600;}' +
+      ' .status-ready{background:#d1fae5;color:#065f46;}' +
       'table{width:100%;border-collapse:collapse;margin:10px 0;} th,td{padding:5px 8px;text-align:left;border-bottom:1px solid #e2e8f0;} th{background:#f8fafc;font-weight:600;font-size:10pt;}' +
       '.right{text-align:right;} .total-row{font-weight:700;border-top:2px solid #1e293b;} .grand{font-size:13pt;}' +
       '.header-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:12px 0;font-size:10pt;}' +
       '.header-grid dt{font-weight:600;color:#64748b;} .header-grid dd{margin:0;}' +
-      '.fee-type{margin:8px 0;padding:6px 12px;border-radius:4px;font-weight:600;font-size:10pt;}' +
-      '.fee-fixed{background:#d1fae5;color:#065f46;} .fee-escape{background:#fee2e2;color:#991b1b;}' +
       '.footer{margin-top:20px;font-size:9pt;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px;}' +
       '@media print{body{margin:10mm;}}' +
       '</style></head><body>' +
       '<h1>Billing Summary</h1>' +
-      '<span class="status ' + (isEscape ? 'status-escape' : 'status-ready') + '">' + statusLabel + '</span>' +
+      '<p class="blurb">Reflects the same charge lines as the billing review and QuickFile preview, not LAA notional time rates from Section 9.</p>' +
+      '<span class="status status-ready">' + statusLabel + '</span>' +
       '<dl class="header-grid">' +
         '<dt>Client</dt><dd>' + esc((d.surname || '').toUpperCase() + ', ' + (d.forename || '')) + '</dd>' +
         '<dt>Station</dt><dd>' + esc(d.policeStationName || d.policeStationId || '') + '</dd>' +
         '<dt>Date</dt><dd>' + esc(fmtDate(d.date)) + '</dd>' +
         '<dt>DSCC Ref</dt><dd>' + esc(formatDsccForPdf(d)) + '</dd>' +
         '<dt>UFN</dt><dd>' + esc(d.ufn || '\u2014') + '</dd>' +
-        '<dt>File Ref</dt><dd>' + esc(d.ourFileNumber || '\u2014') + '</dd>' +
         '<dt>Fee Earner</dt><dd>' + esc(d.feeEarnerName || '') + '</dd>' +
         '<dt>Firm</dt><dd>' + esc(d.firmName || '') + '</dd>' +
         '<dt>Matter Type</dt><dd>' + esc(d.matterTypeCode || '\u2014') + '</dd>' +
@@ -13197,22 +13192,12 @@ pdfAuditFooterHtml(d, settings) +
         '<dt>Departure</dt><dd>' + esc(d.timeDeparture || '\u2014') + '</dd>' +
       '</dl>' +
       '<table>' +
-        '<thead><tr><th>Category</th><th class="right">Social (min)</th><th class="right">Unsocial (min)</th><th class="right">Total (min)</th><th class="right">Value</th></tr></thead>' +
-        '<tbody>' +
-        (tS + tU > 0 ? '<tr><td>Travel</td><td class="right">' + tS + '</td><td class="right">' + tU + '</td><td class="right">' + (tS + tU) + '</td><td class="right">' + fc(tvl) + '</td></tr>' : '') +
-        (wS + wU > 0 ? '<tr><td>Waiting</td><td class="right">' + wS + '</td><td class="right">' + wU + '</td><td class="right">' + (wS + wU) + '</td><td class="right">' + fc(wvl) + '</td></tr>' : '') +
-        '<tr><td>Attendance &amp; Advice</td><td class="right">' + aS + '</td><td class="right">' + aU + '</td><td class="right">' + (aS + aU) + '</td><td class="right">' + fc(avl) + '</td></tr>' +
-        '<tr class="total-row"><td>Total time</td><td></td><td></td><td class="right">' + tot + ' min</td><td class="right">' + fc(tvl + wvl + avl) + '</td></tr>' +
-        (miles > 0 ? '<tr><td>Mileage (' + miles + ' mi \u00D7 \u00A3' + LAA.mileageRate.toFixed(2) + ')</td><td></td><td></td><td></td><td class="right">' + fc(mvl) + '</td></tr>' : '') +
-        (parking > 0 ? '<tr><td>Parking</td><td></td><td></td><td></td><td class="right">' + fc(parking) + '</td></tr>' : '') +
-        (disbTotal > 0 ? '<tr><td>Disbursements</td><td></td><td></td><td></td><td class="right">' + fc(disbTotal) + '</td></tr>' : '') +
-        '<tr class="total-row"><td>Net</td><td></td><td></td><td></td><td class="right">' + fc(net) + '</td></tr>' +
-        '<tr><td>VAT (20%)</td><td></td><td></td><td></td><td class="right">' + fc(vat) + '</td></tr>' +
-        '<tr class="total-row grand"><td>Total (inc. VAT)</td><td></td><td></td><td></td><td class="right">' + fc(total) + '</td></tr>' +
+        '<thead><tr><th>Item</th><th class="right">Amount</th></tr></thead><tbody>' +
+        bodyRows +
+        '<tr class="total-row"><td>Subtotal (ex VAT)</td><td class="right">' + fc(totals.subTotal) + '</td></tr>' +
+        '<tr><td>VAT (' + vatPct + '%)</td><td class="right">' + fc(totals.vatTotal) + '</td></tr>' +
+        '<tr class="total-row grand"><td>Total (inc. VAT)</td><td class="right">' + fc(totals.grandTotal) + '</td></tr>' +
         '</tbody></table>' +
-      '<div class="fee-type ' + (isEscape ? 'fee-escape' : 'fee-fixed') + '">' +
-        (isEscape ? 'ESCAPE FEE \u2014 net exceeds \u00A3' + LAA.escapeThreshold.toFixed(0) + ' threshold. CRM18 required.' : 'FIXED FEE (\u00A3' + LAA.fixedFee.toFixed(0) + ' inc. VAT) \u2014 claim does not exceed escape threshold.') +
-      '</div>' +
       '<div class="footer">Generated: ' + new Date().toLocaleString('en-GB') + ' | CustodyNote Billing Summary</div>' +
       '</body></html>';
   }
@@ -15178,7 +15163,7 @@ pdfAuditFooterHtml(d, settings) +
           }
         } else if (nav === 'update') {
           triggerUpdateCheck();
-        } else if (nav === 'home' || nav === 'list' || nav === 'firms' || nav === 'billing' || nav === 'settings') {
+        } else if (nav === 'home' || nav === 'list' || nav === 'firms' || nav === 'billing' || nav === 'matter-billing' || nav === 'settings') {
           _guardedNav(nav);
         }
       });
@@ -16066,15 +16051,50 @@ pdfAuditFooterHtml(d, settings) +
       var banner = document.getElementById('home-update-banner');
       var bannerText = document.getElementById('home-update-banner-text');
       var restartBtn = document.getElementById('home-update-restart-btn');
+      var gBanner = document.getElementById('global-app-update-banner');
+      var gText = document.getElementById('global-app-update-text');
+      var gBtn = document.getElementById('global-app-update-btn');
       var gearBtn = document.getElementById('gear-check-updates');
+      function hideHomeUpdateBanner() {
+        if (banner) banner.style.display = 'none';
+        if (restartBtn) restartBtn.style.display = 'none';
+      }
+      function hideGlobalUpdateBanner() {
+        if (gBanner) {
+          gBanner.style.display = 'none';
+          gBanner.classList.remove('global-app-update-banner--warn', 'global-app-update-banner--progress');
+        }
+        if (gText) gText.textContent = '';
+        if (gBtn) { gBtn.style.display = 'none'; gBtn.onclick = null; gBtn.disabled = false; }
+      }
+      function showGlobalUpdateBanner(msg, mod, showAction, actionLabel, actionFn) {
+        if (gText) gText.textContent = msg || '';
+        if (gBanner) {
+          gBanner.classList.remove('global-app-update-banner--warn', 'global-app-update-banner--progress');
+          if (mod === 'warn') gBanner.classList.add('global-app-update-banner--warn');
+          else if (mod === 'progress') gBanner.classList.add('global-app-update-banner--progress');
+          gBanner.style.display = '';
+        }
+        if (gBtn) {
+          if (showAction) {
+            gBtn.style.display = '';
+            gBtn.textContent = actionLabel || 'Restart & update';
+            gBtn.disabled = false;
+            gBtn.onclick = actionFn || null;
+          } else {
+            gBtn.style.display = 'none';
+            gBtn.onclick = null;
+          }
+        }
+        hideHomeUpdateBanner();
+      }
       if (data.status === 'downloading') {
         var pctInt = typeof data.percent === 'number' ? Math.round(data.percent) : null;
         var pctStr = pctInt !== null ? pctInt + '%' : '';
         var vStr = data.version ? 'v' + data.version : '';
         if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Updating\u2026 ' + pctStr, 'backup-active'); el.onclick = null; }
-        if (banner) banner.style.display = '';
+        showGlobalUpdateBanner('Downloading ' + vStr + '\u2026 ' + pctStr, 'progress', false);
         if (bannerText) bannerText.textContent = 'Downloading ' + vStr + '\u2026 ' + pctStr;
-        if (restartBtn) restartBtn.style.display = 'none';
         if (gearBtn) { gearBtn.textContent = '\u21BB Updating ' + pctStr; gearBtn.style.color = '#d97706'; }
         if (pctInt !== null && pctInt !== _lastUpdateToastPct && (pctInt === 0 || pctInt >= (_lastUpdateToastPct + 25))) {
           _lastUpdateToastPct = pctInt;
@@ -16082,9 +16102,8 @@ pdfAuditFooterHtml(d, settings) +
         }
       } else if (data.status === 'installing') {
         if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Installing update\u2026', 'synced'); el.onclick = null; }
-        if (banner) banner.style.display = '';
+        showGlobalUpdateBanner('Installing ' + (data.version ? 'v' + data.version : 'update') + '\u2026 the app will restart momentarily.', 'progress', false);
         if (bannerText) bannerText.textContent = 'Installing v' + (data.version || '') + '\u2026 the app will restart momentarily.';
-        if (restartBtn) restartBtn.style.display = 'none';
         if (gearBtn) { gearBtn.textContent = '\u21BB Restarting\u2026'; gearBtn.style.color = '#059669'; gearBtn.disabled = true; }
         if (typeof showToast === 'function' && !_updateToastShown.installing) {
           _updateToastShown.installing = true;
@@ -16094,15 +16113,22 @@ pdfAuditFooterHtml(d, settings) +
       } else if (data.status === 'ready') {
         var vLabel = data.version ? 'v' + data.version : '';
         if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, 'Update ' + vLabel + ' ready \u2014 click to install', 'synced'); el.onclick = function() { _confirmAndInstallUpdate(vLabel); }; }
-        if (banner) banner.style.display = '';
         if (bannerText) {
           bannerText.textContent = 'Update ' + vLabel + ' is downloaded. Finish your note, then use Restart & Update or the footer when you are ready.';
         }
-        if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Restart & Update'; restartBtn.onclick = function() { _confirmAndInstallUpdate(vLabel); }; }
+        showGlobalUpdateBanner(
+          'Update ' + vLabel + ' is downloaded. Finish your note, then install when you are ready.',
+          null,
+          true,
+          'Restart & update',
+          function() { _confirmAndInstallUpdate(vLabel); }
+        );
+        if (restartBtn) { restartBtn.style.display = 'none'; restartBtn.textContent = 'Restart & Update'; restartBtn.onclick = function() { _confirmAndInstallUpdate(vLabel); }; }
         if (gearBtn) { gearBtn.textContent = '\u2B06 Install ' + vLabel; gearBtn.style.color = '#059669'; gearBtn.dataset.action = 'install-update'; }
         _lastUpdateToastPct = -1;
       } else if (data.status === 'up-to-date') {
-        if (banner) banner.style.display = 'none';
+        hideGlobalUpdateBanner();
+        hideHomeUpdateBanner();
         var statusEl = document.getElementById('check-updates-status');
         var atStr = formatAppCheckTimeUk();
         if (statusEl) statusEl.textContent = '\u2713 v' + (data.version || '') + ' (checked ' + atStr + ')';
@@ -16111,16 +16137,23 @@ pdfAuditFooterHtml(d, settings) +
         _updateToastShown = {};
       } else if (data.status === 'loop-blocked') {
         if (wrap && el) { wrap.style.display = ''; setFooterIndicator(el, '\u26A0 Update failed repeatedly \u2014 click for options', 'error'); el.onclick = function() { _showLoopRecoveryDialog(); }; }
-        if (banner) banner.style.display = '';
         if (bannerText) bannerText.textContent = 'Auto-update paused \u2014 the last update could not be installed. Download manually or retry.';
-        if (restartBtn) { restartBtn.style.display = ''; restartBtn.textContent = 'Retry Update'; restartBtn.onclick = function() { _resetLoopAndRetry(); }; }
+        showGlobalUpdateBanner(
+          'Auto-update paused \u2014 the last install could not complete. You can retry or install manually from custodynote.com/download',
+          'warn',
+          true,
+          'Retry update',
+          function() { _resetLoopAndRetry(); }
+        );
+        if (restartBtn) { restartBtn.style.display = 'none'; restartBtn.textContent = 'Retry Update'; restartBtn.onclick = function() { _resetLoopAndRetry(); }; }
         if (gearBtn) { gearBtn.textContent = '\u26A0 Update Issue'; gearBtn.style.color = '#dc2626'; }
         if (typeof showToast === 'function' && !_updateToastShown.loopBlocked) {
           _updateToastShown.loopBlocked = true;
-          showToast('Auto-update paused \u2014 previous install failed. Use the banner to retry or download manually.', 'warning', 8000);
+          showToast('Auto-update paused \u2014 previous install failed. Use the strip at the top to retry or download manually.', 'warning', 8000);
         }
         _lastUpdateToastPct = -1;
       } else if (data.status === 'error') {
+        hideGlobalUpdateBanner();
         if (banner) banner.style.display = 'none';
         if (typeof showToast === 'function' && data.message && !_updateToastShown.error) {
           _updateToastShown.error = true;
@@ -17715,7 +17748,8 @@ pdfAuditFooterHtml(d, settings) +
       li.addEventListener('mouseleave', function() { this.style.background = ''; });
       li.addEventListener('click', function() {
         overlay.remove();
-        openLaaForm(this.dataset.form);
+        var fd = (typeof getFormData === 'function') ? getFormData() : formData;
+        openLaaForm(this.dataset.form, fd || {});
       });
     });
     overlay.querySelector('#laa-nav-popup-close').addEventListener('click', function() { overlay.remove(); });

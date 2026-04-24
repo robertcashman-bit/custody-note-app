@@ -6510,7 +6510,9 @@ function fillCRM1(form, d) {
    * The firm IS the user, so when the record carries a UFN we MUST print it. */
   const CRM1_UFN_COMBS = ['Comb1','Comb11','Comb2','Comb3','Comb4','Comb5','Comb21','Comb6','Comb7'];
   CRM1_UFN_COMBS.forEach(c => safeClearText(form, c));
-  const ufnChars = String(d.ufn || '').replace(/\s+/g, '').replace('/', '').toUpperCase();
+  /* UFN field is optional; firms often only enter File / matter ref — use the same 9 combs. */
+  const ufnRaw = d.ufn || d.ourFileNumber || d.fileReference || '';
+  const ufnChars = String(ufnRaw).replace(/\s+/g, '').replace(/\//g, '').toUpperCase();
   if (ufnChars) {
     for (let i = 0; i < CRM1_UFN_COMBS.length; i++) {
       if (ufnChars[i]) safeSet(form, CRM1_UFN_COMBS[i], ufnChars[i]);

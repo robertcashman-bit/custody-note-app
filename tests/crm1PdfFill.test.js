@@ -10,10 +10,15 @@ const root = path.join(__dirname, '..');
 const mainSrc = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
 describe('CRM1 PDF fill (main.js)', () => {
-  it('clears UFN header combs, populates them from d.ufn, and maps NI to correct comb fields', () => {
+  it('clears UFN header combs, populates from UFN or file / matter ref, and maps NI to correct comb fields', () => {
     assert.ok(mainSrc.includes("CRM1_UFN_COMBS"), 'UFN combs array expected');
     assert.ok(mainSrc.includes("safeClearText(form, c)"), 'UFN combs must be cleared first');
-    assert.ok(/ufnChars\s*=\s*String\(d\.ufn\b/.test(mainSrc), 'UFN combs must populate from d.ufn');
+    assert.ok(/d\.ufn\s*\|\|\s*d\.ourFileNumber\s*\|\|\s*d\.fileReference/.test(mainSrc),
+      'UFN combs must use dedicated UFN or the same ref as the attendance File / matter reference');
+    const _fillStart = mainSrc.indexOf('function fillCRM1');
+    const _ufnDecl = mainSrc.indexOf('const ufnRaw', _fillStart);
+    const _ufnBlock = _ufnDecl > 0 ? mainSrc.slice(_ufnDecl, _ufnDecl + 140) : '';
+    assert.ok(_ufnBlock.split('.replace(').length >= 3, 'chained .replace(…, …).replace(…, …) including global / strip for combs');
     assert.ok(mainSrc.includes("safeSet(form, CRM1_UFN_COMBS[i], ufnChars[i])"), 'UFN combs filled char-by-char');
     assert.ok(mainSrc.includes("NI_COMBS"), 'NI combs array expected');
     assert.ok(mainSrc.includes("'National_insurance_number','National_insurance_number1','Comb10','Comb101','Comb8','Comb9','Comb12','Comb13','FillText644'"), 'NI mapped to correct 9 comb fields');
