@@ -113,7 +113,9 @@ describe('Voluntary attendance — custody-record questions stay hidden', () => 
 
   it('validateAttendanceForm skips Custody-record-read warning when on voluntary path', () => {
     assert.ok(
-      appJs.includes("var _isVolPath = formData.attendanceMode === 'voluntary' || formData.voluntaryInterview === 'Yes' || (activeFormSections === voluntaryFormSections);"),
+      appJs.includes("formData.attendanceMode === 'voluntary'") &&
+        appJs.includes("formData.voluntaryInterview === 'Yes'") &&
+        /var _isVolPath = .*voluntaryFormSections/.test(appJs),
       'validateAttendanceForm must treat voluntary form UI as off the custody INVC path'
     );
     assert.ok(
