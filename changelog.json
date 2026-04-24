@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.5.19",
+      "version": "1.5.20",
       "date": "2026-04-24",
       "latest": true,
+      "changes": [
+        "Footer: release build date/time",
+        "get-app-version returns buildTime",
+        "release script sets buildTime",
+        "UI and home billing widget updates"
+      ]
+    },
+    {
+      "version": "1.5.19",
+      "date": "2026-04-24",
+      "latest": false,
       "changes": [
         "Remove file/matter reference from police station, voluntary, and INVB forms and PDFs",
         "billing summary PDF header",
