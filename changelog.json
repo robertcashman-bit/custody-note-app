@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.5.20",
+      "version": "1.5.21",
       "date": "2026-04-24",
       "latest": true,
+      "changes": [
+        "Auto nav: section sidebar shows at 1200-1279px",
+        "Section navigation hint",
+        "Remove Discord e2e",
+        "help/settings copy"
+      ]
+    },
+    {
+      "version": "1.5.20",
+      "date": "2026-04-24",
+      "latest": false,
       "changes": [
         "Footer: release build date/time",
         "get-app-version returns buildTime",
