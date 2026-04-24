@@ -552,4 +552,26 @@ describe('Integration: app.js opens workflow', () => {
     assert.ok(billingViewJs.includes("showView('matter-billing')"),
       'bv-open-workflow must navigate to the new Billing screen');
   });
+
+  it('Finish matter / billing workflow is gated on a finalised note (Section 9)', () => {
+    /* UX copy + enforcement live in app.js next to loadMatterBillingScreen / _matterBillingMountWorkflow */
+    assert.ok(
+      appJs.includes('Finalise the attendance note (Section 9 on the form) before starting the billing process.'),
+      'help + toast should reference Section 9 so users know where to finalise'
+    );
+    assert.ok(
+      appJs.includes('function _matterBillingNoteFinalised()') &&
+        appJs.includes("return currentRecordStatus === 'finalised' || currentRecordStatus === 'completed'"),
+      '_matterBillingNoteFinalised must return true only for finalised or completed'
+    );
+    assert.ok(
+      appJs.includes("if (!_matterBillingNoteFinalised())") && appJs.includes("showToast('Finalise the attendance note (Section 9 on the form) before starting the billing process.'"),
+      'clicking through to the workflow must toast when the note is still draft'
+    );
+    assert.ok(
+      appJs.includes('var canStart = !!(currentAttendanceId && _matterBillingNoteFinalised() && !currentRecordArchived)') &&
+        appJs.includes('startBtn.disabled = !canStart'),
+      'Start billing process must stay disabled until the record is finalised (or office-complete)'
+    );
+  });
 });

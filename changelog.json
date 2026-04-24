@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.5.15",
+      "version": "1.5.16",
       "date": "2026-04-23",
       "latest": true,
+      "changes": [
+        "Voluntary: fixed cases where 'Custody record read?' still appeared on finalise. If attendanceMode was missing in saved JSON, the app used to default it to custody before choosing the form — voluntary matters then ran INVC (custody) validation. Now we infer voluntary from workType === 'Voluntary Police Station Attendance' or attendanceSubType starting with voluntary_ before defaulting to custody, and we align prefill when the open form is the voluntary form.",
+        "validateBeforeFinalise: if the active form is voluntaryFormSections, we set attendanceMode to voluntary and always run validateVoluntaryForm (not validateAttendanceForm). validateAttendanceForm also treats activeFormSections === voluntaryFormSections as off the custody path for custody-record / grounds-for-arrest checks (defence in depth)."
+      ]
+    },
+    {
+      "version": "1.5.15",
+      "date": "2026-04-23",
+      "latest": false,
       "changes": [
         "Voluntary attendances no longer surface custody-record questions. When the custody form is being used in voluntary-interview mode (Voluntary Interview? = Yes), the leftover §3 fields — Custody record issues, Arresting Officer Rank & Name, Arresting Officer Collar / Badge No. and the Arrest & Detention sub-heading — now hide alongside the rest of the custody-record block.",
         "Section 6 (Consultation) note 'Client details ... from custody record are in Section 3' now switches to a neutral wording when the matter is a voluntary interview. The §6 checklist labels 'Confirmed Personal Data on Custody Record' and 'Explained Reason for Arrest' have been re-labelled to 'Confirmed Personal Data' and 'Explained Reason for Arrest / Attendance' so they read correctly on both custody and voluntary interviews; the group label moves to 'Personal data & disclosure'.",
