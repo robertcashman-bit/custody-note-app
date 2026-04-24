@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.5.17",
+      "date": "2026-04-24",
+      "latest": true,
+      "changes": [
+        "Section 9 / Finalise visibility: fixed three real bugs that left users with no Finalise button anywhere on a draft. (1) The bottom-bar Finalise pill (#bottom-bar-finish-pill) is a global element in index.html, but its update was gated behind in-section buttons that only exist after the user has navigated to Section 9 — so the pill stayed display:none on sections 1-8. Now the pill + readiness panel are updated unconditionally, before the in-section button block. (2) When the user navigates to Section 9 for the first time, populateSectionContent() lazily mounts #form-finalise-bar / #form-end-billing-btn / #form-post-finalise-bar with their initial inline display:none, but showSection() never re-ran updateFormBarVisibility() — so they stayed hidden. Now we re-run it after lazy section render on timeRecording.",
+        "Section 9 file-completion (billing-readiness) panel: the panel background used color-mix() with a literal `white`, so it rendered as a near-white surface even in dark mode. Combined with --text being near-white in dark mode, the title, summary copy and 4-step checklist were essentially invisible (rendered as ghosted/strikethrough-looking text). Added an html.dark override that gives the panel a true dark background, and explicit dark-mode text colours for the title, copy, summary, steps and warning callout.",
+        "Tests: new e2e regression spec finalise-button-visibility.spec.ts seeds a draft (custody and voluntary), opens it from the Records list, and asserts the bottom-bar Finalise pill is visible on Section 1 and BOTH the in-section bar and the pill are visible on Section 9, in both light and dark themes."
+      ]
+    },
+    {
       "version": "1.5.16",
       "date": "2026-04-23",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Voluntary: fixed cases where 'Custody record read?' still appeared on finalise. If attendanceMode was missing in saved JSON, the app used to default it to custody before choosing the form — voluntary matters then ran INVC (custody) validation. Now we infer voluntary from workType === 'Voluntary Police Station Attendance' or attendanceSubType starting with voluntary_ before defaulting to custody, and we align prefill when the open form is the voluntary form.",
         "validateBeforeFinalise: if the active form is voluntaryFormSections, we set attendanceMode to voluntary and always run validateVoluntaryForm (not validateAttendanceForm). validateAttendanceForm also treats activeFormSections === voluntaryFormSections as off the custody path for custody-record / grounds-for-arrest checks (defence in depth)."

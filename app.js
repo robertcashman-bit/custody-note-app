@@ -6413,7 +6413,13 @@ var REQUIRED_FIELD_KEYS = [
     if (activeFormSections[currentSectionIdx].id === 'timeRecording') { autoCalcTimes(); updateCalcPanel(); }
     if (activeFormSections[currentSectionIdx].id === 'journeyTime') { autoCalcTimes(); }
     if (activeFormSections[currentSectionIdx].id === 'timeRecording' && formData.attendanceMode === 'voluntary') { autoCalcVoluntaryTimes(); }
-    if (activeFormSections[currentSectionIdx].id === 'timeRecording') { updateBillingReadinessPanel(); }
+    /* When the user lands on Section 9 for the first time, the
+       form-finalise-bar / form-end-billing-btn / form-post-finalise-bar
+       have just been added to the DOM by populateSectionContent() with
+       their initial inline display:none. Re-run updateFormBarVisibility()
+       so they pick up the right state for this record (also refreshes
+       the bottom-bar pill + readiness panel). */
+    if (activeFormSections[currentSectionIdx].id === 'timeRecording') { updateFormBarVisibility(); }
     if (activeFormSections[currentSectionIdx].id === 'offences') { prefillOffence1FromSummary(); }
     var _secInvRef = activeFormSections[currentSectionIdx];
     if (_secInvRef && (_secInvRef.fields || []).some(function(f) { return f.key === 'invoiceNumberRef'; })) {
@@ -6443,6 +6449,17 @@ var REQUIRED_FIELD_KEYS = [
     const postFinaliseBar = document.getElementById('form-post-finalise-bar');
     const archiveBtn = document.getElementById('form-archive-btn');
     const unarchiveBtn = document.getElementById('form-unarchive-btn');
+    /* The in-section buttons (#form-finalise-bar etc.) live inside the
+       Section 9 (timeRecording) populateSectionContent() output and are
+       therefore absent from the DOM until the user has navigated to
+       Section 9 at least once. The bottom-bar finalise pill, however,
+       is a global element in index.html and MUST be updated regardless
+       — otherwise the user has no Finalise button anywhere from sections
+       1-8. (Bug repro: open a draft, stay on §1, no Finalise button.)
+       Render the pill + readiness panel first; then update the in-section
+       buttons only if they exist. */
+    if (typeof updateBillingReadinessPanel === 'function') updateBillingReadinessPanel();
+    updateBottomBarFinishPill();
     if (!finaliseBar || !archiveBtn || !unarchiveBtn) return;
     if (!isNoteLockedForEditing() && !currentRecordArchived) {
       finaliseBar.style.display = '';
@@ -6472,8 +6489,6 @@ var REQUIRED_FIELD_KEYS = [
       archiveBtn.style.display = 'none';
       unarchiveBtn.style.display = 'none';
     }
-    updateBillingReadinessPanel();
-    updateBottomBarFinishPill();
   }
 
   // C1: Mirror Finalise / Finish matter / Archive into the bottom bar so the
