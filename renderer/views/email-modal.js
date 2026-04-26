@@ -545,13 +545,9 @@ var QUICK_EMAIL_FIELD_DEFS = {
                         ] },
   date:               { label: 'Date',               type: 'date' },
   time:               { label: 'Time',               type: 'time' },
-  custodyNumber:      { label: 'Custody number',     type: 'text',     placeholder: 'e.g. CRN12345' },
-  dsccRef:            { label: 'DSCC reference',     type: 'text',     placeholder: 'e.g. DSCC123456' },
   bailDate:           { label: 'Bail return date',   type: 'date' },
   bailTime:           { label: 'Bail return time',   type: 'time' },
   bailConditions:     { label: 'Bail conditions',    type: 'textarea', placeholder: 'e.g. No contact with complainant' },
-  allegationSummary:  { label: 'Allegation summary', type: 'textarea', placeholder: 'Brief summary of the allegation' },
-  replyDeadline:      { label: 'Reply by',           type: 'text',     placeholder: 'e.g. Friday 24/04/2026' },
   ourFileNumber:      { label: 'File number',        type: 'text',     placeholder: 'Internal file ref' },
   ufn:                { label: 'UFN',                type: 'text',     placeholder: 'Unique file number' }
 };
@@ -569,7 +565,7 @@ function openQuickEmailModal() {
   var feeEarnerPhone = _oicClean(settings.feeEarnerPhone || settings.solicitorPhone) || '';
 
   var COMMON_FIELDS  = (typeof window.QUICK_EMAIL_COMMON_FIELDS  === 'object' && window.QUICK_EMAIL_COMMON_FIELDS)  ? window.QUICK_EMAIL_COMMON_FIELDS.slice()  : ['officerEmail','oicName','clientName','station','offenceType','attendanceType','date','time'];
-  var OPTIONAL_FIELDS = (typeof window.QUICK_EMAIL_OPTIONAL_FIELDS === 'object' && window.QUICK_EMAIL_OPTIONAL_FIELDS) ? window.QUICK_EMAIL_OPTIONAL_FIELDS.slice() : ['custodyNumber','dsccRef','bailDate','bailTime','bailConditions','allegationSummary','replyDeadline','ourFileNumber','ufn'];
+  var OPTIONAL_FIELDS = (typeof window.QUICK_EMAIL_OPTIONAL_FIELDS === 'object' && window.QUICK_EMAIL_OPTIONAL_FIELDS) ? window.QUICK_EMAIL_OPTIONAL_FIELDS.slice() : ['bailDate','bailTime','bailConditions','ourFileNumber','ufn'];
 
   /* ── State ──────────────────────────────────────────── */
   var _catalog        = (typeof window.getQuickEmailCatalog === 'function') ? window.getQuickEmailCatalog() : { system: [], user: [], all: [] };
@@ -631,13 +627,9 @@ function openQuickEmailModal() {
       date:              _isoToUk(_fields.date || ''),
       time:              _hhmmTo12h(_fields.time || ''),
       time24:            (_fields.time || '').slice(0, 5),
-      custodyNumber:     _fields.custodyNumber || '',
-      dsccRef:           _fields.dsccRef || '',
       bailDate:          _isoToUk(_fields.bailDate || ''),
       bailTime:          _hhmmTo12h(_fields.bailTime || ''),
       bailConditions:    _fields.bailConditions || '',
-      allegationSummary: _fields.allegationSummary || '',
-      replyDeadline:     _fields.replyDeadline || '',
       ourFileNumber:     _fields.ourFileNumber || '',
       ufn:               _fields.ufn || '',
       feeEarnerName:     feeEarnerName,
@@ -851,12 +843,27 @@ function openQuickEmailModal() {
     if (descEl) {
       descEl.textContent = _activeTemplate ? (_activeTemplate.description || '') : 'Pick the email you want to send. The form below adapts to what\'s needed.';
     }
-    var showUserTpl = _activeTemplate && !_activeTemplate.isSystemTemplate;
+    /* Edit and Delete are now allowed on every template (built-in or
+       user-saved). Built-in changes are stored as overrides so the
+       user can always restore the defaults. */
     if (editLink) {
-      editLink.style.display = showUserTpl ? '' : 'none';
+      editLink.style.display = _activeTemplate ? '' : 'none';
     }
     if (deleteBtn) {
-      deleteBtn.style.display = showUserTpl ? '' : 'none';
+      deleteBtn.style.display = _activeTemplate ? '' : 'none';
+      deleteBtn.textContent = (_activeTemplate && _activeTemplate.isSystemTemplate)
+        ? 'Hide template'
+        : 'Delete template';
+      deleteBtn.title = (_activeTemplate && _activeTemplate.isSystemTemplate)
+        ? 'Hide this built-in template (you can restore defaults at any time)'
+        : 'Remove this saved template';
+    }
+    var restoreLink = document.getElementById('quick-email-restore-defaults');
+    if (restoreLink) {
+      var hasCustomizations = (typeof window.hasSystemEmailCustomizations === 'function')
+        ? window.hasSystemEmailCustomizations()
+        : false;
+      restoreLink.style.display = hasCustomizations ? '' : 'none';
     }
   }
 
@@ -967,7 +974,7 @@ function openQuickEmailModal() {
   /* ── Edit user template ──────────────────────────── */
 
   function _openEditPanel() {
-    if (!_activeTemplate || _activeTemplate.isSystemTemplate) return;
+    if (!_activeTemplate) return;
     var existing = document.getElementById('qe-edit-panel');
     if (existing) { existing.remove(); return; }
 
@@ -981,12 +988,22 @@ function openQuickEmailModal() {
       ? window.tokensToFriendlyLabels(_activeTemplate.bodyTemplate || '')
       : (_activeTemplate.bodyTemplate || '');
 
+    var isSystem = !!_activeTemplate.isSystemTemplate;
+    var isCustomizedSystem = isSystem && !!_activeTemplate.isCustomized;
+    var deleteLabel = isSystem ? 'Hide template' : 'Delete template';
+    var titleText = isSystem
+      ? (isCustomizedSystem ? 'Edit built-in template (customized)' : 'Edit built-in template')
+      : 'Edit template';
+    var helpText = isSystem
+      ? 'This is a built-in template. Your changes are saved as overrides and can be reverted with "Restore default" at any time.'
+      : 'Words in <code>[BRACKETS]</code> get replaced with the matter details when you use the template.';
+
     var panel = document.createElement('div');
     panel.id = 'qe-edit-panel';
     panel.className = 'qe-save-panel qe-edit-panel';
     panel.innerHTML =
-      '<h4 class="qe-section-title">Edit template</h4>' +
-      '<p class="qe-help">Words in <code>[BRACKETS]</code> get replaced with the matter details when you use the template.</p>' +
+      '<h4 class="qe-section-title">' + _escAttr(titleText) + '</h4>' +
+      '<p class="qe-help">' + helpText + '</p>' +
       '<div class="qe-save-row"><label class="qe-label" for="qe-edit-name">Name</label>' +
         '<input type="text" id="qe-edit-name" class="qe-input" value="' + _escAttr(_activeTemplate.name || '') + '"></div>' +
       '<div class="qe-save-row"><label class="qe-label" for="qe-edit-cat">Category</label>' +
@@ -1002,7 +1019,8 @@ function openQuickEmailModal() {
         '<textarea id="qe-edit-body" class="qe-input qe-textarea" rows="10">' + _escAttr(friendlyBody) + '</textarea></div>' +
       '<div class="qe-save-actions">' +
         '<button type="button" class="btn btn-primary" id="qe-edit-save">Save changes</button>' +
-        '<button type="button" class="btn btn-danger qe-edit-delete" id="qe-edit-delete">Delete template</button>' +
+        (isCustomizedSystem ? '<button type="button" class="btn btn-secondary" id="qe-edit-restore">Restore default</button>' : '') +
+        '<button type="button" class="btn btn-danger qe-edit-delete" id="qe-edit-delete">' + _escAttr(deleteLabel) + '</button>' +
         '<button type="button" class="btn btn-secondary" id="qe-edit-cancel">Cancel</button>' +
       '</div>';
     actionsBar.parentNode.insertBefore(panel, actionsBar);
@@ -1017,30 +1035,46 @@ function openQuickEmailModal() {
       var rawBody  = document.getElementById('qe-edit-body').value    || '';
       var subjTpl  = (typeof window.friendlyLabelsToTokens === 'function') ? window.friendlyLabelsToTokens(rawSubj) : rawSubj;
       var bodyTpl  = (typeof window.friendlyLabelsToTokens === 'function') ? window.friendlyLabelsToTokens(rawBody) : rawBody;
-
-      var allTpls = (typeof window._getCustomEmailTemplates === 'function')
-        ? (window._getCustomEmailTemplates() || []).slice()
-        : [];
-      var idx = -1;
-      for (var i = 0; i < allTpls.length; i++) {
-        if (allTpls[i].id === _activeTemplate.id) { idx = i; break; }
-      }
-      if (idx === -1) { showToast('Template not found', 'error'); return; }
-
       var reqFields = (typeof window.extractQuickEmailPlaceholderKeys === 'function')
         ? window.extractQuickEmailPlaceholderKeys(subjTpl, bodyTpl)
         : [];
 
-      allTpls[idx] = Object.assign({}, allTpls[idx], {
-        name:           name,
-        category:       category,
-        subject:        subjTpl,
-        body:           bodyTpl,
-        requiredFields: reqFields,
-        updatedAt:      new Date().toISOString()
-      });
-      if (typeof window._saveCustomEmailTemplates === 'function') {
-        window._saveCustomEmailTemplates(allTpls);
+      if (isSystem) {
+        var overrides = (typeof window._getSystemEmailOverrides === 'function')
+          ? Object.assign({}, window._getSystemEmailOverrides() || {})
+          : {};
+        overrides[_activeTemplate.id] = {
+          name:            name,
+          category:        category,
+          description:     _activeTemplate.description || '',
+          subjectTemplate: subjTpl,
+          bodyTemplate:    bodyTpl,
+          requiredFields:  reqFields,
+          updatedAt:       new Date().toISOString()
+        };
+        if (typeof window._saveSystemEmailOverrides === 'function') {
+          window._saveSystemEmailOverrides(overrides);
+        }
+      } else {
+        var allTpls = (typeof window._getCustomEmailTemplates === 'function')
+          ? (window._getCustomEmailTemplates() || []).slice()
+          : [];
+        var idx = -1;
+        for (var i = 0; i < allTpls.length; i++) {
+          if (allTpls[i].id === _activeTemplate.id) { idx = i; break; }
+        }
+        if (idx === -1) { showToast('Template not found', 'error'); return; }
+        allTpls[idx] = Object.assign({}, allTpls[idx], {
+          name:           name,
+          category:       category,
+          subject:        subjTpl,
+          body:           bodyTpl,
+          requiredFields: reqFields,
+          updatedAt:      new Date().toISOString()
+        });
+        if (typeof window._saveCustomEmailTemplates === 'function') {
+          window._saveCustomEmailTemplates(allTpls);
+        }
       }
       showToast('Template updated', 'success');
       panel.remove();
@@ -1052,14 +1086,36 @@ function openQuickEmailModal() {
     document.getElementById('qe-edit-delete').addEventListener('click', function() {
       _confirmDeleteTemplate(function() { _deleteActiveTemplate(panel); });
     });
+
+    var restoreBtn = document.getElementById('qe-edit-restore');
+    if (restoreBtn) {
+      restoreBtn.addEventListener('click', function() {
+        if (typeof window._getSystemEmailOverrides !== 'function') return;
+        var overrides = Object.assign({}, window._getSystemEmailOverrides() || {});
+        if (overrides[_activeTemplate.id]) {
+          delete overrides[_activeTemplate.id];
+          if (typeof window._saveSystemEmailOverrides === 'function') {
+            window._saveSystemEmailOverrides(overrides);
+          }
+        }
+        showToast('Default restored', 'success');
+        panel.remove();
+        if (typeof window.getQuickEmailCatalog === 'function') _catalog = window.getQuickEmailCatalog();
+        _selectTemplate(_activeTemplate.id);
+      });
+    }
   }
 
   function _confirmDeleteTemplate(onConfirm) {
-    if (!_activeTemplate || _activeTemplate.isSystemTemplate) return;
+    if (!_activeTemplate) return;
     var label = _activeTemplate.name || 'this template';
-    var msg = 'Delete the template "' + label + '"? This cannot be undone.';
+    var isSystem = !!_activeTemplate.isSystemTemplate;
+    var msg = isSystem
+      ? 'Hide the built-in template "' + label + '"? You can restore it later via "Restore defaults".'
+      : 'Delete the template "' + label + '"? This cannot be undone.';
+    var title = isSystem ? 'Hide template' : 'Delete template';
     if (typeof showConfirm === 'function') {
-      showConfirm(msg, 'Delete template').then(function(ok) {
+      showConfirm(msg, title).then(function(ok) {
         if (ok) onConfirm();
       });
     } else if (confirm(msg)) {
@@ -1068,14 +1124,26 @@ function openQuickEmailModal() {
   }
 
   function _deleteActiveTemplate(panel) {
-    var allTpls = (typeof window._getCustomEmailTemplates === 'function')
-      ? (window._getCustomEmailTemplates() || []).slice()
-      : [];
-    var filtered = allTpls.filter(function(t) { return t.id !== _activeTemplate.id; });
-    if (typeof window._saveCustomEmailTemplates === 'function') {
-      window._saveCustomEmailTemplates(filtered);
+    var isSystem = !!_activeTemplate.isSystemTemplate;
+    if (isSystem) {
+      var deletedIds = (typeof window._getDeletedSystemEmailIds === 'function')
+        ? (window._getDeletedSystemEmailIds() || []).slice()
+        : [];
+      if (deletedIds.indexOf(_activeTemplate.id) === -1) deletedIds.push(_activeTemplate.id);
+      if (typeof window._saveDeletedSystemEmailIds === 'function') {
+        window._saveDeletedSystemEmailIds(deletedIds);
+      }
+      showToast('Built-in template hidden (use "Restore defaults" to bring it back)', 'success');
+    } else {
+      var allTpls = (typeof window._getCustomEmailTemplates === 'function')
+        ? (window._getCustomEmailTemplates() || []).slice()
+        : [];
+      var filtered = allTpls.filter(function(t) { return t.id !== _activeTemplate.id; });
+      if (typeof window._saveCustomEmailTemplates === 'function') {
+        window._saveCustomEmailTemplates(filtered);
+      }
+      showToast('Template deleted', 'success');
     }
-    showToast('Template deleted', 'success');
     if (panel) panel.remove();
     else {
       var ep = document.getElementById('qe-edit-panel');
@@ -1087,18 +1155,55 @@ function openQuickEmailModal() {
     _selectTemplate('');
   }
 
+  function _restoreAllSystemDefaults() {
+    var hasCustomizations = (typeof window.hasSystemEmailCustomizations === 'function')
+      ? window.hasSystemEmailCustomizations()
+      : false;
+    if (!hasCustomizations) {
+      showToast('No customizations to restore', 'info');
+      return;
+    }
+    var msg = 'Restore the built-in templates to their original wording, and bring back any you have hidden? Your saved (user) templates are not affected.';
+    var doRestore = function() {
+      if (typeof window._resetSystemEmailCustomizations === 'function') {
+        window._resetSystemEmailCustomizations();
+      }
+      showToast('Built-in templates restored', 'success');
+      if (typeof window.getQuickEmailCatalog === 'function') _catalog = window.getQuickEmailCatalog();
+      var ep = document.getElementById('qe-edit-panel');
+      if (ep) ep.remove();
+      _selectTemplate(_activeTemplate ? _activeTemplate.id : '');
+    };
+    if (typeof showConfirm === 'function') {
+      showConfirm(msg, 'Restore built-in templates').then(function(ok) { if (ok) doRestore(); });
+    } else if (confirm(msg)) {
+      doRestore();
+    }
+  }
+
   /* ── Send / Copy ─────────────────────────────────── */
 
   function _resetFormAfterSend() {
+    _selectedId = '';
+    _activeTemplate = null;
     _fields = { date: _todayIsoDate() };
     _manualSubject = null;
     _manualBody    = null;
+    if (_draftSaveTimer) {
+      clearTimeout(_draftSaveTimer);
+      _draftSaveTimer = null;
+    }
+    var sp = document.getElementById('qe-save-panel');
+    if (sp) sp.remove();
+    var ep = document.getElementById('qe-edit-panel');
+    if (ep) ep.remove();
     if (window.api && window.api.setSettings) {
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { lastQuickEmailDraftJson: '' });
       window.api.setSettings({ lastQuickEmailDraftJson: '' }).catch(function(e) {
         console.warn('[quick-email] could not clear draft', e);
       });
     }
+    _renderPicker();
     _renderForm();
     _renderPreview();
   }
@@ -1135,7 +1240,7 @@ function openQuickEmailModal() {
       body:    _truncateBodyForOutlook(body)
     }).then(function() {
       _resetFormAfterSend();
-      showToast('Email opened in Outlook \u2014 form cleared for next send', 'success', 3500);
+      showToast('Email opened in Outlook. All fields and template choice were cleared so you can start a new message.', 'success', 4500);
     }).catch(function() {
       /* Error toast is already shown by _invokeOutlookEmail; swallow here so
          the click handler's promise is fully handled. The form is intentionally
@@ -1187,6 +1292,7 @@ function openQuickEmailModal() {
               '<div class="qe-picker-actions" id="quick-email-picker-actions">' +
                 '<a href="#" id="quick-email-edit-link" class="qe-edit-link" style="display:none;">Edit this template</a>' +
                 '<button type="button" id="quick-email-delete-btn" class="qe-delete-link" style="display:none;" title="Remove this saved template">Delete template</button>' +
+                '<button type="button" id="quick-email-restore-defaults" class="qe-delete-link" style="display:none;" title="Restore the built-in templates and unhide any you have removed">Restore defaults</button>' +
               '</div>' +
             '</div>' +
             '<p id="quick-email-description" class="qe-description"></p>' +
@@ -1242,6 +1348,10 @@ function openQuickEmailModal() {
     document.getElementById('quick-email-delete-btn').addEventListener('click', function() {
       _confirmDeleteTemplate(function() { _deleteActiveTemplate(null); });
     });
+    var restoreBtn = document.getElementById('quick-email-restore-defaults');
+    if (restoreBtn) {
+      restoreBtn.addEventListener('click', _restoreAllSystemDefaults);
+    }
 
     var subjEl = document.getElementById('quick-email-subject');
     var bodyEl = document.getElementById('quick-email-body');

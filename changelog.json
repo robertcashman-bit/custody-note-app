@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.5.23",
+      "version": "1.5.24",
       "date": "2026-04-26",
       "latest": true,
+      "changes": [
+        "Voluntary note: 'Voluntary attendance confirmation' (status, rights, pre-interview caution, sub-type, constable) moved out of section 1 to the end of section 3, after client details and welfare. PDF and validation updated to match.",
+        "Quick email: a successful Outlook send now clears the selected template and any optional sections so the form resets cleanly for the next email",
+        "Quick email: removed the 'Custody number', 'DSCC reference', 'Allegation summary' and 'Reply by' optional fields, and the matching lines from the bail-details, disclosure and follow-up templates",
+        "Quick email: every built-in template can now be edited or hidden; a new 'Restore defaults' link brings them all back",
+        "Built-in template changes are stored as per-user overrides so app updates won't overwrite them"
+      ]
+    },
+    {
+      "version": "1.5.23",
+      "date": "2026-04-26",
+      "latest": false,
       "changes": [
         "Voluntary note: removed the redundant 'Legal advice requested?' field",
         "Persistent version banner: now visible on every page, shows installed version + update status (idle / downloading / ready)",

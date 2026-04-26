@@ -1331,14 +1331,7 @@ var LAA = {
       keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'sufficientBenefitTest'],
       fields: [
         { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'voluntary', label: 'Voluntary' }, { value: 'custody', label: 'Custody' }], cols: 2, helpTitle: 'Voluntary = client attending voluntarily and not under arrest. Custody = client under arrest.' },
-        { key: '_note_voluntary', label: 'This is a voluntary attendance. The client attended voluntarily and was not under arrest.', type: 'sectionNote' },
-
-        { key: '_h_vol_status_top', label: 'Voluntary attendance confirmation', type: 'sectionHeading' },
-        { key: 'voluntaryStatusConfirmed', label: 'Client attended voluntarily and was not under arrest', type: 'select', options: ['Yes','No','Not confirmed'], cols: 2, helpTitle: 'Default position for a voluntary interview is Yes. Use No only if attendance was not in fact voluntary.' },
-        { key: 'noticeOfRightsExplained', label: 'Notice of rights (legal advice) explained?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
-        { key: 'cautionGiven', label: 'Caution given (pre-interview)?', type: 'select', options: ['Yes','No','Not yet','Not applicable'], cols: 2, helpTitle: 'Whether a caution was given before the interview began. The interview caution itself is recorded in section 7.' },
-        { key: 'attendanceSubType', label: 'Attendance sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
-        { key: 'constablePresent', label: 'Constable present?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'For non-police body interviews, record whether a constable was present', showIf: { field: 'attendanceSubType', value: 'voluntary_non_police_body' } },
+        { key: '_note_voluntary', label: 'This is a voluntary attendance. The client attended voluntarily and was not under arrest. Formal confirmation of status, rights, and pre-interview caution is recorded in Section 3 (after client details and welfare).', type: 'sectionNote' },
 
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
         { key: '_h_time', label: 'Time (instruction)', type: 'sectionHeading' },
@@ -1449,6 +1442,13 @@ var LAA = {
         { key: 'psychiatricIssues', label: 'Psychiatric / mental health issues?', type: 'select', options: ['Yes','No'] },
         { key: 'psychiatricNotes', label: 'Psychiatric / mental health notes', type: 'text', cols: 2, showIf: { field: 'psychiatricIssues', value: 'Yes' } },
         { key: 'fitToBeInterviewed', label: 'Fit to be interviewed?', type: 'select', options: ['Yes','No'] },
+        { key: '_h_vol_status_top', label: 'Voluntary attendance confirmation', type: 'sectionHeading' },
+        { key: '_note_vol_status_after_welfare', label: 'Record once you have taken identity, contact, and welfare (including fitness for interview).', type: 'sectionNote' },
+        { key: 'voluntaryStatusConfirmed', label: 'Client attended voluntarily and was not under arrest', type: 'select', options: ['Yes','No','Not confirmed'], cols: 2, helpTitle: 'Default position for a voluntary interview is Yes. Use No only if attendance was not in fact voluntary.' },
+        { key: 'noticeOfRightsExplained', label: 'Notice of rights (legal advice) explained?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
+        { key: 'cautionGiven', label: 'Caution given (pre-interview)?', type: 'select', options: ['Yes','No','Not yet','Not applicable'], cols: 2, helpTitle: 'Whether a caution was given before the interview began. The interview caution itself is recorded in section 7.' },
+        { key: 'attendanceSubType', label: 'Attendance sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
+        { key: 'constablePresent', label: 'Constable present?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'For non-police body interviews, record whether a constable was present', showIf: { field: 'attendanceSubType', value: 'voluntary_non_police_body' } },
       ],
     },
 
@@ -11452,7 +11452,7 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'surname', label: 'Surname', section: 0 },
       { key: 'forename', label: 'Forename', section: 0 },
       { key: 'offenceSummary', label: 'Allegation / Offence', section: 0 },
-      { key: 'voluntaryStatusConfirmed', label: 'Client attended voluntarily and was not under arrest', section: 0 },
+      { key: 'voluntaryStatusConfirmed', label: 'Client attended voluntarily and was not under arrest', section: 2 },
     ];
     if (volCaseConcluded) {
       required.push({ key: 'outcomeDecision', label: 'Outcome', section: 7 });
@@ -11471,7 +11471,7 @@ var REQUIRED_FIELD_KEYS = [
       m.push({ key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', section: 0 });
     }
     if (formData.attendanceSubType === 'voluntary_non_police_body' && !formData.constablePresent) {
-      m.push({ key: 'constablePresent', label: 'Constable present? (required for non-police body)', section: 0 });
+      m.push({ key: 'constablePresent', label: 'Constable present? (required for non-police body)', section: 2 });
     }
     if (formData.arrestedDuringAttendance === 'Yes') {
       if (!(formData.arrestTimeIfConverted || '').trim()) m.push({ key: 'arrestTimeIfConverted', label: 'Arrest time (required when converted)', section: 7 });
@@ -12745,11 +12745,6 @@ pdfAuditFooterHtml(d, settings) +
       row('Duty Solicitor?', d.dutySolicitor) + row('Case Status', d.caseStatus) +
       row('Telephone advice already given?', d.telephoneAdviceGiven) + row('Fee Earner (telephone advice)', d.feeEarnerTelephoneAdvice) +
       row('Voluntary interview booked by', d.voluntaryInterviewBookedBy) +
-      row('Client attended voluntarily and not under arrest?', d.voluntaryStatusConfirmed) +
-      row('Attendance sub-type', d.attendanceSubType) +
-      row('Constable present?', d.constablePresent) +
-      row('Notice of rights (legal advice) explained?', d.noticeOfRightsExplained) +
-      row('Caution given (pre-interview)?', d.cautionGiven) +
       '</table>' +
       (d.arrivalNotes ? '<div class="nar">' + h(d.arrivalNotes) + '</div>' : '') +
       '<table>' +
@@ -12798,6 +12793,12 @@ pdfAuditFooterHtml(d, settings) +
       row('Medication', d.medicationRequired === 'Yes' ? (d.medication || 'Yes') : (d.medicationRequired || d.medication || '')) +
       row('Psychiatric / mental health issues?', d.psychiatricIssues) + (d.psychiatricNotes ? row('Details', d.psychiatricNotes) : '') +
       row('Fit to be interviewed?', d.fitToBeInterviewed) +
+      '<tr><td colspan="2" style="padding-top:12px;border-top:1px solid #e2e8f0;font-weight:700;color:#0f766e;">Voluntary attendance confirmation</td></tr>' +
+      row('Client attended voluntarily and not under arrest?', d.voluntaryStatusConfirmed) +
+      row('Attendance sub-type', d.attendanceSubType) +
+      row('Constable present?', d.constablePresent) +
+      row('Notice of rights (legal advice) explained?', d.noticeOfRightsExplained) +
+      row('Caution given (pre-interview)?', d.cautionGiven) +
       '</table>' +
 
       '<h2>4. Offences</h2>' +
@@ -15467,6 +15468,55 @@ pdfAuditFooterHtml(d, settings) +
     }
     window._getCustomEmailTemplates = _getCustomTemplates;
     window._saveCustomEmailTemplates = _saveCustomTemplates;
+
+    /* ── System (built-in) email-template overrides + deletions ──
+       Lets the user edit or remove every built-in Quick Email template.
+       The bundled JSON file (data/quick-email-templates.json) is treated
+       as factory defaults; per-user changes live in app settings so they
+       survive updates and can be reset with one click.
+       ────────────────────────────────────────────────────────────────── */
+    function _getSystemEmailOverrides() {
+      var raw = (window._appSettingsCache && window._appSettingsCache.systemEmailTemplateOverridesJson) || '';
+      if (!raw) return {};
+      try {
+        var parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+      } catch (_) { return {}; }
+    }
+    function _saveSystemEmailOverrides(overrides) {
+      var safe = (overrides && typeof overrides === 'object' && !Array.isArray(overrides)) ? overrides : {};
+      var json = JSON.stringify(safe);
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { systemEmailTemplateOverridesJson: json });
+      if (window.api && window.api.setSettings) {
+        window.api.setSettings({ systemEmailTemplateOverridesJson: json }).catch(function(e) { console.error('[systemEmailOverrides]', e); });
+      }
+    }
+    function _getDeletedSystemEmailIds() {
+      var raw = (window._appSettingsCache && window._appSettingsCache.deletedSystemEmailTemplateIdsJson) || '';
+      if (!raw) return [];
+      try {
+        var parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed.filter(function(x) { return typeof x === 'string' && x.length; }) : [];
+      } catch (_) { return []; }
+    }
+    function _saveDeletedSystemEmailIds(ids) {
+      var safe = Array.isArray(ids) ? ids.filter(function(x) { return typeof x === 'string' && x.length; }) : [];
+      var dedup = []; safe.forEach(function(id) { if (dedup.indexOf(id) === -1) dedup.push(id); });
+      var json = JSON.stringify(dedup);
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { deletedSystemEmailTemplateIdsJson: json });
+      if (window.api && window.api.setSettings) {
+        window.api.setSettings({ deletedSystemEmailTemplateIdsJson: json }).catch(function(e) { console.error('[deletedSystemEmailIds]', e); });
+      }
+    }
+    function _resetSystemEmailCustomizations() {
+      _saveSystemEmailOverrides({});
+      _saveDeletedSystemEmailIds([]);
+    }
+    window._getSystemEmailOverrides = _getSystemEmailOverrides;
+    window._saveSystemEmailOverrides = _saveSystemEmailOverrides;
+    window._getDeletedSystemEmailIds = _getDeletedSystemEmailIds;
+    window._saveDeletedSystemEmailIds = _saveDeletedSystemEmailIds;
+    window._resetSystemEmailCustomizations = _resetSystemEmailCustomizations;
 
     function _renderCustomTemplatesList() {
       var listEl = document.getElementById('custom-templates-list');
