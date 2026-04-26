@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.5.25",
+      "version": "1.5.26",
       "date": "2026-04-26",
       "latest": true,
+      "changes": [
+        "Settings -> Display & Layout Studio: new 'Always show three-column layout' option that keeps the left section list and the right matter-summary / section-status panel visible on smaller screens (overrides the automatic collapse below 1200/1280px). Side panels use slightly tighter widths in this mode so the middle form column remains usable."
+      ]
+    },
+    {
+      "version": "1.5.25",
+      "date": "2026-04-26",
+      "latest": false,
       "changes": [
         "Licence: nerijus83@gmail.com added as a complimentary lifetime user with unlimited devices and full add-on access"
       ]
