@@ -323,6 +323,9 @@ describe('Quick Email modal — send-success clears form, send-failure preserves
     assert.strictEqual(env.document.getElementById('qe-field-station').value,    '', 'station should be cleared on success');
     assert.strictEqual(env.document.getElementById('qe-field-oicName').value,    '', 'officer name should be cleared on success');
     assert.strictEqual(env.document.getElementById('qe-field-officerEmail').value, '', 'officer email should be cleared on success');
+    assert.strictEqual(env.document.getElementById('quick-email-picker').value, '', 'template choice should reset so extra sections are hidden');
+    assert.strictEqual(env.document.getElementById('quick-email-subject').value, '', 'subject preview should be cleared on success');
+    assert.strictEqual(env.document.getElementById('quick-email-body').value,    '', 'message preview should be cleared on success');
     assert.strictEqual(lastSavedDraft, '', 'persisted draft should be cleared on success');
   });
 
@@ -405,27 +408,29 @@ describe('Quick Email modal — user-saved custom template', () => {
     assert.ok(body.includes('Hi Morgan'), 'live update missing, got: ' + body);
   });
 
-  it('exposes Edit link only for user templates', () => {
+  it('exposes the Edit link for every template (system or user) once one is selected', () => {
     const link = env.document.getElementById('quick-email-edit-link');
     /* No template chosen yet → link hidden. */
     assert.strictEqual(link.style.display, 'none');
 
     pickTemplate(env.document, 'system:disclosure');
-    assert.strictEqual(link.style.display, 'none', 'system templates should not be editable');
+    assert.notStrictEqual(link.style.display, 'none', 'built-in templates should also be editable');
 
     pickTemplate(env.document, 'cn-etpl-test-1');
     assert.notStrictEqual(link.style.display, 'none', 'user templates should be editable');
   });
 
-  it('exposes Delete button only for user templates', () => {
+  it('exposes the Delete button for every template, with friendlier wording for built-ins', () => {
     const btn = env.document.getElementById('quick-email-delete-btn');
     assert.strictEqual(btn.style.display, 'none');
 
     pickTemplate(env.document, 'system:disclosure');
-    assert.strictEqual(btn.style.display, 'none');
+    assert.notStrictEqual(btn.style.display, 'none', 'built-in templates should also be removable');
+    assert.strictEqual(btn.textContent, 'Hide template', 'built-in templates use "Hide" wording so users know they can be restored');
 
     pickTemplate(env.document, 'cn-etpl-test-1');
     assert.notStrictEqual(btn.style.display, 'none');
+    assert.strictEqual(btn.textContent, 'Delete template');
   });
 
   it('toolbar Delete removes the saved template after confirm', async () => {
@@ -439,5 +444,99 @@ describe('Quick Email modal — user-saved custom template', () => {
     const opt = Array.from(picker.querySelectorAll('option')).find(o => o.value === 'cn-etpl-test-1');
     assert.ok(!opt, 'template should be removed from picker');
     assert.strictEqual(picker.value, '', 'selection clears to empty after delete');
+  });
+});
+
+describe('Quick Email modal — built-in templates can be edited, hidden and restored', () => {
+  function createEnvWithSystemStores() {
+    const env = createEnv();
+    /* In-memory stores for the new system-override + deleted-id settings. */
+    let _overrides = {};
+    let _deletedIds = [];
+    env.window._getSystemEmailOverrides = () => Object.assign({}, _overrides);
+    env.window._saveSystemEmailOverrides = (o) => { _overrides = Object.assign({}, o || {}); };
+    env.window._getDeletedSystemEmailIds = () => _deletedIds.slice();
+    env.window._saveDeletedSystemEmailIds = (ids) => { _deletedIds = (ids || []).slice(); };
+    env.window._resetSystemEmailCustomizations = () => { _overrides = {}; _deletedIds = []; };
+    return env;
+  }
+
+  it('editing a built-in template persists as an override and is reflected in the picker', () => {
+    const env = createEnvWithSystemStores();
+    openModal(env);
+
+    pickTemplate(env.document, 'system:disclosure');
+    /* Open the edit panel via the toolbar Edit link. */
+    env.document.getElementById('quick-email-edit-link').click();
+    const nameEl = env.document.getElementById('qe-edit-name');
+    assert.ok(nameEl, 'edit panel did not open for the built-in template');
+    nameEl.value = 'Disclosure (custom)';
+    env.document.getElementById('qe-edit-save').click();
+
+    const overrides = env.window._getSystemEmailOverrides();
+    assert.ok(overrides['system:disclosure'], 'override entry should exist for the edited built-in id');
+    assert.strictEqual(overrides['system:disclosure'].name, 'Disclosure (custom)');
+
+    /* The picker should now show the renamed template. */
+    const picker = env.document.getElementById('quick-email-picker');
+    const opt = Array.from(picker.querySelectorAll('option')).find(o => o.value === 'system:disclosure');
+    assert.ok(opt, 'picker missing the built-in option after edit');
+    assert.strictEqual(opt.textContent, 'Disclosure (custom)');
+  });
+
+  it('hiding (deleting) a built-in template removes it from the picker and toggles the Restore link', async () => {
+    const env = createEnvWithSystemStores();
+    openModal(env);
+
+    /* Restore Defaults link should start hidden. */
+    const restoreBtn = env.document.getElementById('quick-email-restore-defaults');
+    assert.ok(restoreBtn, 'restore-defaults button missing from picker actions');
+    assert.strictEqual(restoreBtn.style.display, 'none', 'restore link should start hidden');
+
+    pickTemplate(env.document, 'system:follow-up');
+    env.document.getElementById('quick-email-delete-btn').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const deleted = env.window._getDeletedSystemEmailIds();
+    assert.ok(deleted.indexOf('system:follow-up') !== -1, 'deleted-ids store should remember the hidden template');
+
+    const picker = env.document.getElementById('quick-email-picker');
+    const opt = Array.from(picker.querySelectorAll('option')).find(o => o.value === 'system:follow-up');
+    assert.ok(!opt, 'hidden built-in template should disappear from the picker');
+
+    assert.notStrictEqual(restoreBtn.style.display, 'none', 'restore link should appear once any built-in is hidden');
+  });
+
+  it('Restore defaults wipes overrides and un-hides removed built-ins', async () => {
+    const env = createEnvWithSystemStores();
+    openModal(env);
+
+    /* Hide and edit two different built-ins to set up the test. */
+    pickTemplate(env.document, 'system:follow-up');
+    env.document.getElementById('quick-email-delete-btn').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('quick-email-edit-link').click();
+    env.document.getElementById('qe-edit-name').value = 'Disclosure (custom)';
+    env.document.getElementById('qe-edit-save').click();
+
+    /* Click Restore defaults. */
+    env.document.getElementById('quick-email-restore-defaults').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.deepStrictEqual(env.window._getSystemEmailOverrides(), {}, 'overrides should be cleared');
+    assert.deepStrictEqual(env.window._getDeletedSystemEmailIds(), [], 'deleted-ids should be cleared');
+
+    const picker = env.document.getElementById('quick-email-picker');
+    const followUp = Array.from(picker.querySelectorAll('option')).find(o => o.value === 'system:follow-up');
+    assert.ok(followUp, 'hidden built-in should reappear after restore');
+
+    const disclosure = Array.from(picker.querySelectorAll('option')).find(o => o.value === 'system:disclosure');
+    assert.ok(disclosure, 'edited built-in should still exist after restore');
+    assert.notStrictEqual(disclosure.textContent, 'Disclosure (custom)', 'edited name should revert to default');
   });
 });

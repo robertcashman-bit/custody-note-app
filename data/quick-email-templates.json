@@ -16,7 +16,7 @@
       "category": "Bail",
       "description": "Ask the OIC to confirm bail return date, time and conditions.",
       "subjectTemplate": "{{clientName}} - {{station}} - bail details request",
-      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI write in relation to {{clientName}}, who was dealt with at {{station}}{{#if date}} on {{date}}{{/if}}.\n\n{{#if custodyNumber}}Custody record: {{custodyNumber}}.\n{{/if}}{{#if dsccRef}}DSCC reference: {{dsccRef}}.\n{{/if}}\nPlease confirm the bail return date, time, and any bail conditions imposed.\n\nKind regards,\n{{feeEarnerName}}",
+      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI write in relation to {{clientName}}, who was dealt with at {{station}}{{#if date}} on {{date}}{{/if}}.\n\nPlease confirm the bail return date, time, and any bail conditions imposed.\n\nKind regards,\n{{feeEarnerName}}",
       "requiredFields": ["clientName", "station"]
     },
     {
@@ -34,7 +34,7 @@
       "category": "Disclosure",
       "description": "Ask for disclosure ahead of interview or to take instructions.",
       "subjectTemplate": "{{clientName}} - {{station}} - request for disclosure",
-      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI write on behalf of {{clientName}} in relation to the above matter{{#if offenceType}} ({{offenceType}}){{/if}}.\n\n{{#if date}}Interview / attendance is listed for {{date}}{{#if time}} at {{time}}{{/if}} at {{station}}.\n{{/if}}{{#if allegationSummary}}I understand the allegation is: {{allegationSummary}}.\n{{/if}}\nPlease provide any available disclosure to assist in taking instructions and advising my client. In particular, please confirm:\n\n- the nature of the allegation;\n- the circumstances relied upon; and\n- the key evidence said to support it.\n\n{{#if replyDeadline}}If at all possible, please reply by {{replyDeadline}}.\n{{/if}}Kind regards,\n{{feeEarnerName}}",
+      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI write on behalf of {{clientName}} in relation to the above matter{{#if offenceType}} ({{offenceType}}){{/if}}.\n\n{{#if date}}Interview / attendance is listed for {{date}}{{#if time}} at {{time}}{{/if}} at {{station}}.\n{{/if}}\nPlease provide any available disclosure to assist in taking instructions and advising my client. In particular, please confirm:\n\n- the nature of the allegation;\n- the circumstances relied upon; and\n- the key evidence said to support it.\n\nKind regards,\n{{feeEarnerName}}",
       "requiredFields": ["clientName", "station"]
     },
     {
@@ -43,7 +43,7 @@
       "category": "Follow-up",
       "description": "Polite chaser when an officer hasn't replied.",
       "subjectTemplate": "{{clientName}} - follow-up",
-      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI refer to my earlier email in relation to {{clientName}}{{#if station}} at {{station}}{{/if}}.\n\nI should be grateful for your response when convenient.\n\n{{#if replyDeadline}}If possible, please reply by {{replyDeadline}}.\n\n{{/if}}Kind regards,\n{{feeEarnerName}}",
+      "bodyTemplate": "Dear {{#if oicName}}DC {{oicName}}{{else}}Officer{{/if}},\n\nI refer to my earlier email in relation to {{clientName}}{{#if station}} at {{station}}{{/if}}.\n\nI should be grateful for your response when convenient.\n\nKind regards,\n{{feeEarnerName}}",
       "requiredFields": ["clientName"]
     },
     {

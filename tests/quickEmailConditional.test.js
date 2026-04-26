@@ -35,7 +35,7 @@ describe('conditional rendering', () => {
 
   it('removes the whole block when there is no else and value is missing', () => {
     const out = w.applyQuickEmailTokens(
-      'Hello.\n{{#if dsccRef}}DSCC: {{dsccRef}}.\n{{/if}}Goodbye.',
+      'Hello.\n{{#if bailConditions}}Conditions: {{bailConditions}}.\n{{/if}}Goodbye.',
       {}
     );
     assert.strictEqual(out.trim(), 'Hello.\nGoodbye.');
@@ -85,7 +85,7 @@ describe('listMissingQuickEmailPlaceholders', () => {
   it('does NOT report fields wrapped in conditionals as missing', () => {
     const missing = w.listMissingQuickEmailPlaceholders(
       '{{clientName}}',
-      'Hello {{clientName}}.{{#if dsccRef}} DSCC: {{dsccRef}}.{{/if}}',
+      'Hello {{clientName}}.{{#if bailConditions}} Conditions: {{bailConditions}}.{{/if}}',
       { clientName: 'A' }
     );
     assert.strictEqual(missing.length, 0, JSON.stringify(missing));

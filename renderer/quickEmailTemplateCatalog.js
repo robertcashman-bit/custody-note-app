@@ -19,15 +19,18 @@
   ];
 
   var OPTIONAL_FIELDS = [
-    'custodyNumber', 'dsccRef', 'bailDate', 'bailTime',
-    'bailConditions', 'allegationSummary', 'replyDeadline',
+    'bailDate', 'bailTime',
+    'bailConditions',
     'ourFileNumber', 'ufn'
   ];
 
-  var _systemCache = null;
+  /* The bundled JSON file never changes at runtime, so we cache it once.
+     Overrides/deletions live in app settings and are re-read every call
+     so edits made in the modal show up instantly without an app reload. */
+  var _systemJsonCache = null;
 
-  function _loadSystemTemplates() {
-    if (_systemCache !== null) return _systemCache;
+  function _loadSystemDefaults() {
+    if (_systemJsonCache !== null) return _systemJsonCache;
     try {
       var xhr = new XMLHttpRequest();
       xhr.open('GET', 'data/quick-email-templates.json', false);
@@ -35,14 +38,51 @@
       if (xhr.status === 200 && xhr.responseText) {
         var parsed = JSON.parse(xhr.responseText);
         var list = (parsed && Array.isArray(parsed.templates)) ? parsed.templates : [];
-        _systemCache = list.map(_normaliseSystemTemplate);
-        return _systemCache;
+        _systemJsonCache = list.map(_normaliseSystemTemplate);
+        return _systemJsonCache;
       }
     } catch (e) {
       console.warn('[quickEmailTemplateCatalog] Could not load data/quick-email-templates.json', e);
     }
-    _systemCache = [];
-    return _systemCache;
+    _systemJsonCache = [];
+    return _systemJsonCache;
+  }
+
+  function _getSystemOverrides() {
+    if (typeof global._getSystemEmailOverrides !== 'function') return {};
+    try { return global._getSystemEmailOverrides() || {}; }
+    catch (_) { return {}; }
+  }
+
+  function _getDeletedSystemIds() {
+    if (typeof global._getDeletedSystemEmailIds !== 'function') return [];
+    try { return global._getDeletedSystemEmailIds() || []; }
+    catch (_) { return []; }
+  }
+
+  function _loadSystemTemplates() {
+    var defaults = _loadSystemDefaults();
+    var overrides = _getSystemOverrides();
+    var deletedIds = _getDeletedSystemIds();
+    var deletedSet = {};
+    deletedIds.forEach(function(id) { deletedSet[id] = true; });
+    return defaults
+      .filter(function(t) { return !deletedSet[t.id]; })
+      .map(function(t) {
+        var ov = overrides && overrides[t.id];
+        if (!ov || typeof ov !== 'object') return t;
+        var merged = Object.assign({}, t, {
+          name:            (typeof ov.name === 'string' && ov.name.trim()) ? ov.name.trim() : t.name,
+          category:        (typeof ov.category === 'string' && ov.category.trim()) ? ov.category.trim() : t.category,
+          description:     (typeof ov.description === 'string') ? ov.description : t.description,
+          subjectTemplate: (typeof ov.subjectTemplate === 'string') ? ov.subjectTemplate : t.subjectTemplate,
+          bodyTemplate:    (typeof ov.bodyTemplate === 'string') ? ov.bodyTemplate : t.bodyTemplate,
+          requiredFields:  Array.isArray(ov.requiredFields) ? ov.requiredFields.slice() : t.requiredFields,
+          isSystemTemplate: true,
+          isCustomized: true
+        });
+        return merged;
+      });
   }
 
   function _normaliseSystemTemplate(t) {
@@ -55,8 +95,15 @@
       subjectTemplate:  String(t.subjectTemplate || t.subject || ''),
       bodyTemplate:     String(t.bodyTemplate    || t.body    || ''),
       requiredFields:   Array.isArray(t.requiredFields) ? t.requiredFields.slice() : [],
-      isSystemTemplate: true
+      isSystemTemplate: true,
+      isCustomized:     false
     };
+  }
+
+  function hasSystemEmailCustomizations() {
+    var overrides = _getSystemOverrides();
+    var deleted = _getDeletedSystemIds();
+    return Object.keys(overrides).length > 0 || deleted.length > 0;
   }
 
   function _normaliseUserTemplate(t, idx) {
@@ -157,4 +204,5 @@
   global.getQuickEmailTemplateById = getQuickEmailTemplateById;
   global.getFieldsUsedByTemplate = getFieldsUsedByTemplate;
   global.getRequiredFieldsForTemplate = getRequiredFieldsForTemplate;
+  global.hasSystemEmailCustomizations = hasSystemEmailCustomizations;
 })(typeof window !== 'undefined' ? window : globalThis);
