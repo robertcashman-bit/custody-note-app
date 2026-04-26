@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.5.22",
+      "date": "2026-04-26",
+      "latest": true,
+      "changes": [
+        "Quick email: form clears after a successful Outlook send (failure preserves your text)",
+        "Voluntary interview note: free-to-leave advice moved to the consultation section, status fields relabelled and reordered for chronology, PDF layout updated to match",
+        "Update check: clarifies installed vs latest published version"
+      ]
+    },
+    {
       "version": "1.5.21",
       "date": "2026-04-24",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Auto nav: section sidebar shows at 1200-1279px",
         "Section navigation hint",
