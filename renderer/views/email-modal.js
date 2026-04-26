@@ -315,7 +315,20 @@ function openEmailModal(recordId, recordData, recordStatus) {
           status: recordStatus || 'draft'
         }).catch(function(err) { console.error('[email-modal] Save oicEmail failed:', err); });
       }
-      _openUrl(to, subject, body);
+      _openUrl(to, subject, body).then(function() {
+        /* On a successful send (compose window opened), discard any hand-edits
+           and re-render the modal from the current template so the box is
+           clear for the next send. The "To" address is preserved because the
+           officer is the same. On failure (rejected promise) we keep the
+           typed content untouched so the user does not lose work. */
+        var subjEl = document.getElementById('email-oic-subject');
+        var bodyEl = document.getElementById('email-oic-body');
+        if (!subjEl || !bodyEl) return;
+        var fresh = _currentTemplateContent();
+        subjEl.value = fresh.subject || '';
+        bodyEl.value = fresh.body || '';
+        _updateMissingWarn();
+      }).catch(function() { /* error toast already shown by _invokeOutlookEmail */ });
     });
 
     /* Copy */
@@ -1122,6 +1135,11 @@ function openQuickEmailModal() {
       body:    _truncateBodyForOutlook(body)
     }).then(function() {
       _resetFormAfterSend();
+      showToast('Email opened in Outlook \u2014 form cleared for next send', 'success', 3500);
+    }).catch(function() {
+      /* Error toast is already shown by _invokeOutlookEmail; swallow here so
+         the click handler's promise is fully handled. The form is intentionally
+         NOT cleared on failure so the user does not lose their typed content. */
     });
   }
 

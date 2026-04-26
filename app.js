@@ -1330,16 +1330,15 @@ var LAA = {
       id: 'caseArrival', title: '1. Case Reference & Arrival',
       keyFields: ['date', 'policeStationId', 'firmId', 'forename', 'surname', 'oicName', 'sufficientBenefitTest'],
       fields: [
-        { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'voluntary', label: 'Voluntary' }, { value: 'custody', label: 'Custody' }], cols: 2, helpTitle: 'Voluntary = client attending voluntarily (free to leave). Custody = client under arrest.' },
-        { key: '_note_voluntary', label: 'This is a voluntary attendance. Client is free to leave unless arrested.', type: 'sectionNote' },
+        { key: 'attendanceMode', label: 'Attendance type', type: 'select', options: [{ value: 'voluntary', label: 'Voluntary' }, { value: 'custody', label: 'Custody' }], cols: 2, helpTitle: 'Voluntary = client attending voluntarily and not under arrest. Custody = client under arrest.' },
+        { key: '_note_voluntary', label: 'This is a voluntary attendance. The client attended voluntarily and was not under arrest.', type: 'sectionNote' },
 
-        { key: '_h_vol_status_top', label: 'Voluntary Status & Rights', type: 'sectionHeading' },
-        { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', type: 'select', options: ['Yes','No','Not confirmed'], cols: 2 },
-        { key: 'freeToLeaveExplained', label: 'Free to leave explained to client?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
-        { key: 'cautionGiven', label: 'Caution given?', type: 'select', options: ['Yes','No','Not yet','Not applicable'], cols: 2 },
+        { key: '_h_vol_status_top', label: 'Voluntary attendance confirmation', type: 'sectionHeading' },
+        { key: 'voluntaryStatusConfirmed', label: 'Client attended voluntarily and was not under arrest', type: 'select', options: ['Yes','No','Not confirmed'], cols: 2, helpTitle: 'Default position for a voluntary interview is Yes. Use No only if attendance was not in fact voluntary.' },
         { key: 'noticeOfRightsExplained', label: 'Notice of rights (legal advice) explained?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
         { key: 'legalAdviceRequested', label: 'Legal advice requested?', type: 'select', options: ['Yes','No'], cols: 2 },
-        { key: 'attendanceSubType', label: 'Attendance Sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
+        { key: 'cautionGiven', label: 'Caution given (pre-interview)?', type: 'select', options: ['Yes','No','Not yet','Not applicable'], cols: 2, helpTitle: 'Whether a caution was given before the interview began. The interview caution itself is recorded in section 7.' },
+        { key: 'attendanceSubType', label: 'Attendance sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
         { key: 'constablePresent', label: 'Constable present?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'For non-police body interviews, record whether a constable was present', showIf: { field: 'attendanceSubType', value: 'voluntary_non_police_body' } },
 
         { key: '_h_referral', label: 'Instruction / Referral', type: 'sectionHeading' },
@@ -1648,6 +1647,9 @@ var LAA = {
         { key: 'representationsMade', label: 'Representations made?', type: 'select', options: ['No','Yes'], cols: 2 },
         { key: 'representationsChallenge', label: 'Representations / challenge', type: 'textarea', placeholder: 'What did you ask for, object to, or challenge?', cols: 2, showIf: { field: 'representationsMade', value: 'Yes' } },
         { key: 'representationsResponse', label: 'Police response', type: 'textarea', placeholder: 'What response or decision was given?', cols: 2, showIf: { field: 'representationsMade', value: 'Yes' } },
+        { key: '_h_vol_legal_position', label: 'Voluntary interview legal position', type: 'sectionHeading' },
+        { key: '_note_vol_free_to_leave', label: 'Records the free-to-leave advice given to the client. The default position for a voluntary interview is that the client attended voluntarily and was not under arrest. If the client refused to remain or to be interviewed, the police may consider whether arrest is necessary on the statutory grounds.', type: 'sectionNote' },
+        { key: 'freeToLeaveExplained', label: 'Client advised they were free to leave unless arrested', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'Voluntary interview legal position: confirms you advised the client they were attending voluntarily, were not under arrest, and were free to leave unless arrested.' },
         { key: '_h_instructions_sigs', label: 'Confirmation of Instructions', type: 'sectionHeading' },
         { key: '_note_instructions_sigs', label: 'Rep signs to confirm the record accurately reflects the advice given and instructions received. Client signs to confirm they received this advice and these are their instructions.', type: 'sectionNote' },
         { key: 'instructionsSignRequired', label: 'Signature required?', type: 'select', options: ['No','Yes'], cols: 2 },
@@ -11472,7 +11474,7 @@ var REQUIRED_FIELD_KEYS = [
       { key: 'surname', label: 'Surname', section: 0 },
       { key: 'forename', label: 'Forename', section: 0 },
       { key: 'offenceSummary', label: 'Allegation / Offence', section: 0 },
-      { key: 'voluntaryStatusConfirmed', label: 'Client attending voluntarily?', section: 0 },
+      { key: 'voluntaryStatusConfirmed', label: 'Client attended voluntarily and was not under arrest', section: 0 },
     ];
     if (volCaseConcluded) {
       required.push({ key: 'outcomeDecision', label: 'Outcome', section: 7 });
@@ -12765,6 +12767,12 @@ pdfAuditFooterHtml(d, settings) +
       row('Duty Solicitor?', d.dutySolicitor) + row('Case Status', d.caseStatus) +
       row('Telephone advice already given?', d.telephoneAdviceGiven) + row('Fee Earner (telephone advice)', d.feeEarnerTelephoneAdvice) +
       row('Voluntary interview booked by', d.voluntaryInterviewBookedBy) +
+      row('Client attended voluntarily and not under arrest?', d.voluntaryStatusConfirmed) +
+      row('Attendance sub-type', d.attendanceSubType) +
+      row('Constable present?', d.constablePresent) +
+      row('Notice of rights (legal advice) explained?', d.noticeOfRightsExplained) +
+      row('Legal advice requested?', d.legalAdviceRequested) +
+      row('Caution given (pre-interview)?', d.cautionGiven) +
       '</table>' +
       (d.arrivalNotes ? '<div class="nar">' + h(d.arrivalNotes) + '</div>' : '') +
       '<table>' +
@@ -12800,10 +12808,6 @@ pdfAuditFooterHtml(d, settings) +
       '</table>' +
 
       '<h2>3. Client Details &amp; Welfare</h2><table>' +
-      row('Attending voluntarily?', d.voluntaryStatusConfirmed) + row('Free to leave explained?', d.freeToLeaveExplained) +
-      row('Caution given?', d.cautionGiven) + row('Notice of rights explained?', d.noticeOfRightsExplained) +
-      row('Legal advice requested?', d.legalAdviceRequested) + row('Constable present?', d.constablePresent) +
-      row('Attendance sub-type', d.attendanceSubType) +
       row('Title', d.title) + row('Full name', [d.forename, d.middleName, d.surname].filter(Boolean).join(' ')) +
       row('Date of birth', fmtDate(d.dob)) + row('Gender', d.gender) +
       row('Nationality', d.nationality === 'Other' ? d.nationalityOther : d.nationality) +
@@ -12900,6 +12904,12 @@ pdfAuditFooterHtml(d, settings) +
       row('Representations made?', d.representationsMade) +
       (d.representationsMade === 'Yes' ? row('Representations / challenge', d.representationsChallenge) + row('Police response', d.representationsResponse) : '') +
       '</table>' +
+      (d.freeToLeaveExplained
+        ? '<table>' +
+            '<tr><td colspan="2"><strong>Voluntary interview legal position</strong></td></tr>' +
+            row('Client advised they were free to leave unless arrested', d.freeToLeaveExplained) +
+          '</table>'
+        : '') +
       (d.repInstructionsSig || d.clientInstructionsSig ? '<div class="sig-block"><p class="sig-label">Rep confirmation of instructions</p>' + sig('repInstructionsSig') + '</div><div class="sig-block"><p class="sig-label">Client confirmation of instructions</p>' + sig('clientInstructionsSig') + '</div>' : '') +
 
       (function() {
