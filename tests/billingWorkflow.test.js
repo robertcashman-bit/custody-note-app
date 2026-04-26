@@ -15,7 +15,6 @@ const preloadJs = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const billingJs = fs.readFileSync(path.join(root, 'renderer', 'views', 'billing.js'), 'utf8');
-const billingViewJs = fs.readFileSync(path.join(root, 'renderer', 'views', 'billing-view.js'), 'utf8');
 const mileageJs = fs.readFileSync(path.join(root, 'renderer', 'views', 'station-mileage-admin.js'), 'utf8');
 const stylesCss = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
 
@@ -199,9 +198,10 @@ describe('index.html — billing UI elements', () => {
     assert.ok(indexHtml.includes('data-action="station-mileage"'));
   });
 
-  /* v1.4.217: Billable Attendances sub-report was removed (it duplicated
-     the Open matters view). These regressions assert the deletion is clean
-     and the projected-revenue total now lives on the Open matters summary. */
+  /* v1.4.217: Billable Attendances sub-report was removed.
+     v1.5.23: The standalone "Open matters" view (#view-billing /
+     billing-view.js) was also removed — per-matter billing now lives on
+     #view-matter-billing reached via the bottom-nav "Billing" button. */
   it('does NOT render the deleted Billable Attendances sub-report', () => {
     assert.ok(!/<div\s+id="billable-attendances-section"/.test(indexHtml),
       'deleted #billable-attendances-section reappeared in index.html');
@@ -211,13 +211,15 @@ describe('index.html — billing UI elements', () => {
       'deleted #billable-attendances-table-wrap reappeared');
   });
 
-  it('Open matters view exposes uninvoiced revenue pill (replaces sub-report)', () => {
-    assert.ok(indexHtml.includes('id="view-billing"'));
-    assert.ok(indexHtml.includes('id="billing-view-summary"'));
-    assert.ok(billingViewJs.includes("id=\"bv-summary-revenue\""),
-      'billing-view.js must render the #bv-summary-revenue pill');
-    assert.ok(billingViewJs.includes('Uninvoiced revenue'),
-      'billing-view.js must label the revenue pill');
+  it('does NOT render the deleted Open matters view (#view-billing)', () => {
+    assert.ok(!/id="view-billing"/.test(indexHtml),
+      'deleted #view-billing reappeared in index.html');
+    assert.ok(!/id="billing-view-summary"/.test(indexHtml),
+      'deleted #billing-view-summary reappeared');
+    assert.ok(!/id="billing-view-table-wrap"/.test(indexHtml),
+      'deleted #billing-view-table-wrap reappeared');
+    assert.ok(!/data-nav="billing"/.test(indexHtml),
+      'deleted bottom-nav "All open" button (data-nav="billing") reappeared');
   });
 
   it('has station mileage view', () => {
@@ -255,6 +257,11 @@ describe('index.html — billing UI elements', () => {
       'billable-attendances.js was deleted in v1.4.217 but is still <script>-loaded');
   });
 
+  it('does NOT load the deleted billing-view.js script', () => {
+    assert.ok(!indexHtml.includes('renderer/views/billing-view.js'),
+      'billing-view.js was deleted in v1.5.23 but is still <script>-loaded');
+  });
+
   it('includes station-mileage-admin.js script', () => {
     assert.ok(indexHtml.includes('renderer/views/station-mileage-admin.js'));
   });
@@ -270,9 +277,9 @@ describe('app.js — view wiring', () => {
       'loadBillableAttendances was deleted in v1.4.217; showView must not reference it');
   });
 
-  it('showView calls loadBillingView for the Open matters tab', () => {
-    assert.ok(appJs.includes('loadBillingView'),
-      'showView must wire the Open matters tab to billing-view.js');
+  it('showView no longer calls deleted loadBillingView (Open matters removed in v1.5.23)', () => {
+    assert.ok(!appJs.includes('loadBillingView'),
+      'loadBillingView was deleted in v1.5.23 along with #view-billing; showView must not reference it');
   });
 
   it('showView calls loadStationMileage for station-mileage view', () => {
@@ -379,46 +386,25 @@ describe('billing.js — core functions', () => {
   });
 });
 
-describe('billing-view.js — Open matters (replaces billable-attendances.js)', () => {
+describe('Deleted Open-matters view (#view-billing / billing-view.js) — v1.5.23 regression', () => {
   /* v1.4.217: billable-attendances.js was deleted because its data and filters
-     fully duplicated billing-view.js. The Open matters view now hosts the
-     projected uninvoiced revenue total, the same filters, and the same
-     finalised+uninvoiced records, plus per-row finish-matter actions. */
+     fully duplicated billing-view.js.
+     v1.5.23: billing-view.js itself was deleted, alongside the standalone
+     #view-billing "Open matters" practice-wide list. Per-matter billing now
+     lives on the bottom-nav "Billing" button which routes to
+     #view-matter-billing for the current record. The billableAttendances
+     IPC handler remains as a fallback and is still SQL-contract tested. */
 
-  it('deleted file is gone from the renderer/views directory', () => {
+  it('billable-attendances.js stays gone from renderer/views', () => {
     const deletedPath = path.join(root, 'renderer', 'views', 'billable-attendances.js');
     assert.ok(!fs.existsSync(deletedPath),
       'renderer/views/billable-attendances.js was deleted in v1.4.217 but still exists');
   });
 
-  it('Open matters loads records via billingViewRecords or billableAttendances IPC', () => {
-    assert.ok(billingViewJs.includes('billingViewRecords') || billingViewJs.includes('billableAttendances'),
-      'billing-view.js must call one of the billing-list IPCs');
-  });
-
-  it('Open matters has search, firm, status, and date filters', () => {
-    assert.ok(billingViewJs.includes('bv-search'), 'missing bv-search');
-    assert.ok(billingViewJs.includes('bv-firm-filter'), 'missing bv-firm-filter');
-    assert.ok(billingViewJs.includes('bv-status-filter'), 'missing bv-status-filter');
-    assert.ok(billingViewJs.includes('bv-date-from'), 'missing bv-date-from');
-    assert.ok(billingViewJs.includes('bv-date-to'), 'missing bv-date-to');
-  });
-
-  it('Open matters computes projectedTotal per record', () => {
-    assert.ok(billingViewJs.includes('projectedTotal'),
-      'billing-view.js must derive projectedTotal so the revenue pill is accurate');
-  });
-
-  it('Open matters renders the Uninvoiced revenue summary pill', () => {
-    assert.ok(billingViewJs.includes('bv-summary-revenue'));
-    assert.ok(billingViewJs.includes('Uninvoiced revenue'));
-  });
-
-  it('Open matters table shows client, firm, station and date columns', () => {
-    assert.ok(billingViewJs.includes('clientName'));
-    assert.ok(billingViewJs.includes('firmName'));
-    assert.ok(billingViewJs.includes('stationName'));
-    assert.ok(billingViewJs.includes('bv-cell-client'));
+  it('billing-view.js is gone from renderer/views', () => {
+    const deletedPath = path.join(root, 'renderer', 'views', 'billing-view.js');
+    assert.ok(!fs.existsSync(deletedPath),
+      'renderer/views/billing-view.js was deleted in v1.5.23 but still exists');
   });
 
   it('billableAttendances IPC handler is retained (used as fallback + by SQL contract tests)', () => {
@@ -511,8 +497,6 @@ describe('Security — API keys server-side only', () => {
   it('MD5 hashing only happens server-side', () => {
     assert.ok(mainJs.includes('md5Value'));
     assert.ok(!billingJs.includes('md5'));
-    assert.ok(!billingViewJs.includes('md5'),
-      'billing-view.js (replaces deleted billable-attendances.js) must not do MD5 hashing in the renderer');
   });
 });
 

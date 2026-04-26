@@ -500,7 +500,6 @@ describe('Integration: index.html loads new scripts', () => {
 describe('Integration: app.js opens workflow', () => {
   const appJs = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
   const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  const billingViewJs = fs.readFileSync(path.join(root, 'renderer/views/billing-view.js'), 'utf8');
 
   it('promptBeforeOpeningBilling navigates to the new full-page Billing screen (with overlay fallback)', () => {
     /* Primary path: showView('matter-billing'). Overlay openWorkflow()
@@ -548,10 +547,11 @@ describe('Integration: app.js opens workflow', () => {
       'overlay-only behaviour (Esc / backdrop click) must be suppressed inline');
   });
 
-  it('Open matters list routes per-row Open into the new Billing screen', () => {
-    assert.ok(billingViewJs.includes("showView('matter-billing')"),
-      'bv-open-workflow must navigate to the new Billing screen');
-  });
+  /* (Removed in v1.5.23) Per-row "Open" routing was tested against
+     billing-view.js, which has been deleted along with the standalone
+     "Open matters" practice-wide list. Per-matter billing now lives on
+     #view-matter-billing reached via the bottom-nav "Billing" button,
+     covered by the matter-billing assertions above. */
 
   it('Finish matter / billing workflow is gated on a finalised note (Section 9)', () => {
     /* UX copy + enforcement live in app.js next to loadMatterBillingScreen / _matterBillingMountWorkflow */

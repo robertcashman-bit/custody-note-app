@@ -409,7 +409,6 @@ describe('10 · Source Integrity', () => {
     'renderer/views/documents-screen.js',
     'renderer/views/workflow-stepper.js',
     'renderer/views/billing.js',
-    'renderer/views/billing-view.js',
   ];
 
   it('app.js passes syntax check (no parse errors)', () => {

@@ -509,11 +509,13 @@ textarea.settings-input {
 
 #app { display: flex; flex-direction: column; height: 100vh; width: 100vw; min-width: 100%; }
 
-/* App update: full-width strip under header on every view (footer update is hidden on the attendance form). */
+/* App version + update status: full-width strip under header on every view.
+   Visible by default in the idle (slate) state, switches to green / amber / blue
+   when the auto-updater reports up-to-date / warn / progress respectively. */
 .global-app-update-banner {
   flex-shrink: 0;
   width: 100%;
-  display: none;
+  display: flex;
   box-sizing: border-box;
   border-bottom: 1px solid #10b981;
   background: linear-gradient(135deg, #d1fae5, #ecfdf5);
@@ -523,6 +525,16 @@ html.dark .global-app-update-banner {
   background: linear-gradient(135deg, #064e3b, #022c22);
   border-bottom-color: #10b981;
 }
+.global-app-update-banner--idle {
+  border-bottom-color: #cbd5e1;
+  background: linear-gradient(135deg, #f1f5f9, #f8fafc);
+}
+html.dark .global-app-update-banner--idle {
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+  border-bottom-color: #334155;
+}
+.global-app-update-banner--idle .global-app-update-text { color: #334155; font-weight: 500; }
+html.dark .global-app-update-banner--idle .global-app-update-text { color: #cbd5e1; }
 .global-app-update-inner {
   display: flex;
   align-items: center;
@@ -749,27 +761,9 @@ html.dark .gear-section-label { color: var(--text-muted); }
 }
 .bottom-nav-new .bottom-nav-icon { font-size: 2rem; font-weight: 700; color: #60a5fa; }
 .bottom-nav-new:hover { background: rgba(29,78,216,0.5); }
-/* Billing: two actions in one visual group (practice list + current file) */
-.bottom-nav-billing {
-  display: flex;
-  flex: 1.4;
-  min-width: 0;
-  align-items: stretch;
-  border-left: 1px solid rgba(255, 255, 255, 0.14);
-  border-right: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.14);
-}
-.bottom-nav-billing .bottom-nav-btn {
-  flex: 1;
-  min-width: 0;
-  padding: 0.45rem 0.12rem;
-}
-.bottom-nav-billing .bottom-nav-label {
-  font-size: 0.72rem;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+/* (Removed in v1.5.23) The .bottom-nav-billing wrapper grouped the
+   "All open" and "This matter" buttons. With "All open" deleted the
+   surviving "Billing" button now uses the standard .bottom-nav-btn rule. */
 /* bottom nav clearance handled per-view */
 .footer-row {
   display: flex; justify-content: space-between; align-items: center; width: 100%;

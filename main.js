@@ -3363,45 +3363,10 @@ function createWindow() {
                 }
               }
 
-              /* 31. Open matters view renders projected uninvoiced revenue
-                 (replaces v1.4.216 Billable Attendances sub-report which duplicated
-                 this data â€” see v1.4.217 changelog). */
-              var openMattersBtn = document.querySelector('.bottom-nav-btn[data-nav="billing"]');
-              if (openMattersBtn) {
-                openMattersBtn.click();
-                await sleep(800);
-                if (document.getElementById('view-billing')?.classList.contains('active')) {
-                  var bvSummary = document.getElementById('billing-view-summary');
-                  if (bvSummary) {
-                    log('31a. Open matters summary strip present');
-                    var bvRevenue = document.getElementById('bv-summary-revenue');
-                    if (bvRevenue) {
-                      log('31b. Uninvoiced revenue pill present: ' + (bvRevenue.textContent || '(empty)'));
-                    } else {
-                      errors.push('Open matters revenue pill (#bv-summary-revenue) missing');
-                    }
-                  } else {
-                    errors.push('Open matters summary strip missing');
-                  }
-                  var bvSearch = document.getElementById('bv-search');
-                  var bvFirmFilter = document.getElementById('bv-firm-filter');
-                  var bvDateFrom = document.getElementById('bv-date-from');
-                  var bvDateTo = document.getElementById('bv-date-to');
-                  var bvTableWrap = document.getElementById('billing-view-table-wrap');
-                  if (bvSearch && bvFirmFilter && bvDateFrom && bvDateTo && bvTableWrap) {
-                    log('31c. Open matters filters and table wrapper present');
-                  } else {
-                    errors.push('Open matters missing filter/table elements');
-                  }
-                  var bvBack = document.getElementById('billing-view-back-btn');
-                  if (bvBack) {
-                    bvBack.click();
-                    await sleep(300);
-                  }
-                } else {
-                  errors.push('Open matters view did not activate');
-                }
-              }
+              /* 31. (Removed in v1.5.23) The standalone "Open matters" practice-wide
+                 view (#view-billing) was deleted; per-matter billing is now reached
+                 via the bottom-nav "Billing" button which routes to
+                 #view-matter-billing for the current record. */
 
               /* 32. Station mileage API returns data */
               if (window.api && typeof window.api.stationsMileageList === 'function') {
