@@ -156,11 +156,10 @@ test('pick-image handler has try/catch for error safety', () => {
    projected revenue calc that took its place.)
    ══════════════════════════════════════════════════ */
 
-test('billing-view.js does NOT use hardcoded 1.20 VAT multiplier in revenue calc', () => {
-  const src = readSrc('renderer/views/billing-view.js');
-  const hardcoded = src.match(/\*\s*1\.20/g);
-  assert.equal(hardcoded, null, 'Should not contain hardcoded * 1.20 — must use configurable VAT rate');
-});
+/* (Removed in v1.5.23) The standalone Open-matters view (billing-view.js)
+   was deleted along with #view-billing. Per-matter revenue now flows through
+   billing-screen.js / billingUtils.js, which are still covered by the VAT
+   multiplier check in billingWorkflow.test.js. */
 
 /* ══════════════════════════════════════════════════
    ARCHIVE CONFIRMATION (main form — workflow no longer archives in overlay)

@@ -1,5 +1,5 @@
 /* ─── STATE ─── */
-var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', billing: 'view-billing', 'matter-billing': 'view-matter-billing' };
+var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', 'matter-billing': 'view-matter-billing' };
 var currentAttendanceId = null;
 var stations = [];
 var firms = [];
@@ -1336,7 +1336,6 @@ var LAA = {
         { key: '_h_vol_status_top', label: 'Voluntary attendance confirmation', type: 'sectionHeading' },
         { key: 'voluntaryStatusConfirmed', label: 'Client attended voluntarily and was not under arrest', type: 'select', options: ['Yes','No','Not confirmed'], cols: 2, helpTitle: 'Default position for a voluntary interview is Yes. Use No only if attendance was not in fact voluntary.' },
         { key: 'noticeOfRightsExplained', label: 'Notice of rights (legal advice) explained?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2 },
-        { key: 'legalAdviceRequested', label: 'Legal advice requested?', type: 'select', options: ['Yes','No'], cols: 2 },
         { key: 'cautionGiven', label: 'Caution given (pre-interview)?', type: 'select', options: ['Yes','No','Not yet','Not applicable'], cols: 2, helpTitle: 'Whether a caution was given before the interview began. The interview caution itself is recorded in section 7.' },
         { key: 'attendanceSubType', label: 'Attendance sub-type', type: 'select', options: ['voluntary_police_station','voluntary_other_location','voluntary_non_police_body'], cols: 2 },
         { key: 'constablePresent', label: 'Constable present?', type: 'select', options: ['Yes','No','Not applicable'], cols: 2, helpTitle: 'For non-police body interviews, record whether a constable was present', showIf: { field: 'attendanceSubType', value: 'voluntary_non_police_body' } },
@@ -3230,14 +3229,13 @@ var REQUIRED_FIELD_KEYS = [
     if (name === 'reports') { loadReports(); }
     if (name === 'station-mileage') { if (typeof loadStationMileage === 'function') loadStationMileage(); }
     if (name === 'authorities') { if (typeof loadAuthorities === 'function') loadAuthorities(); }
-    if (name === 'billing') { if (typeof loadBillingView === 'function') loadBillingView(); }
     if (name === 'matter-billing') { if (typeof loadMatterBillingScreen === 'function') loadMatterBillingScreen(); }
     if (name === 'settings') {
       loadSettings();
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     }
     if (name === 'new' && !currentAttendanceId && !Object.keys(formData).length) { activeFormSections = formSections; formData = {}; currentSectionIdx = 0; prefillDefaults(); renderForm(formData); }
-    var navMap = { home: 'home', list: 'list', new: 'new-attendance', firms: 'firms', billing: 'billing', 'matter-billing': 'matter-billing', settings: 'settings' };
+    var navMap = { home: 'home', list: 'list', new: 'new-attendance', firms: 'firms', 'matter-billing': 'matter-billing', settings: 'settings' };
     document.querySelectorAll('.bottom-nav-btn').forEach(function(btn) {
       btn.classList.toggle('active', btn.dataset.nav === (navMap[name] || name));
     });
@@ -3918,31 +3916,11 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  function updateHomeBillingWidget() {
-    if (!window.api) return;
-    var fetchFn = window.api.billingViewRecords || window.api.billableAttendances;
-    if (!fetchFn) return;
-
-    fetchFn().then(function (rows) {
-      var relevant = rows || [];
-      var needsDocs = 0, needsInvoice = 0, invoiced = 0;
-      relevant.forEach(function (r) {
-        var d = safeJson(r.data);
-        var hasInv = !!r.quickfile_invoice_id;
-        var hasAtt = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
-        if (hasInv) invoiced++;
-        else if (!hasAtt) needsDocs++;
-        else needsInvoice++;
-      });
-
-      var actionCount = needsDocs + needsInvoice;
-      var badge = document.getElementById('billing-nav-badge');
-      if (badge) {
-        if (actionCount > 0) { badge.textContent = String(actionCount); badge.style.display = ''; }
-        else { badge.style.display = 'none'; }
-      }
-    }).catch(function () {});
-  }
+  /* Stub kept so renderer/views/billing-screen.js etc. can call
+     window.updateHomeBillingWidget() defensively without ReferenceError.
+     The home nav-badge it used to populate was removed in v1.5.23 along
+     with the standalone "Open matters" view. */
+  function updateHomeBillingWidget() {}
   window.updateHomeBillingWidget = updateHomeBillingWidget;
 
   function openQuickCapture() {
@@ -12771,7 +12749,6 @@ pdfAuditFooterHtml(d, settings) +
       row('Attendance sub-type', d.attendanceSubType) +
       row('Constable present?', d.constablePresent) +
       row('Notice of rights (legal advice) explained?', d.noticeOfRightsExplained) +
-      row('Legal advice requested?', d.legalAdviceRequested) +
       row('Caution given (pre-interview)?', d.cautionGiven) +
       '</table>' +
       (d.arrivalNotes ? '<div class="nar">' + h(d.arrivalNotes) + '</div>' : '') +
@@ -14804,6 +14781,13 @@ pdfAuditFooterHtml(d, settings) +
         var ssVer = document.getElementById('ss-app-version');
         if (vEl && info.version) vEl.textContent = info.version;
         if (ssVer && info.version) ssVer.textContent = info.version;
+        if (info.version) {
+          var gBanner = document.getElementById('global-app-update-banner');
+          var gText = document.getElementById('global-app-update-text');
+          if (gBanner && gText && !gBanner.classList.contains('global-app-update-banner--progress') && !gBanner.classList.contains('global-app-update-banner--warn')) {
+            gText.textContent = 'Custody Note v' + info.version + ' \u2014 checking for updates\u2026';
+          }
+        }
         if (uEl) uEl.textContent = '';
         var relPretty = formatUkDateFromYmd(info.lastUpdated);
         var instPretty = formatUkDateTimeFromIso(info.versionAppliedAt);
@@ -15118,7 +15102,7 @@ pdfAuditFooterHtml(d, settings) +
           }
         } else if (nav === 'update') {
           triggerUpdateCheck();
-        } else if (nav === 'home' || nav === 'list' || nav === 'firms' || nav === 'billing' || nav === 'matter-billing' || nav === 'settings') {
+        } else if (nav === 'home' || nav === 'list' || nav === 'firms' || nav === 'matter-billing' || nav === 'settings') {
           _guardedNav(nav);
         }
       });
@@ -16009,22 +15993,27 @@ pdfAuditFooterHtml(d, settings) +
         if (banner) banner.style.display = 'none';
         if (restartBtn) restartBtn.style.display = 'none';
       }
-      function hideGlobalUpdateBanner() {
+      function showIdleGlobalBanner(msg) {
+        if (gText) gText.textContent = msg || '';
         if (gBanner) {
-          gBanner.style.display = 'none';
           gBanner.classList.remove('global-app-update-banner--warn', 'global-app-update-banner--progress');
+          gBanner.classList.add('global-app-update-banner--idle');
+          gBanner.style.display = '';
         }
-        if (gText) gText.textContent = '';
+        var gIcon = document.getElementById('global-app-update-icon');
+        if (gIcon) gIcon.textContent = '\u2713';
         if (gBtn) { gBtn.style.display = 'none'; gBtn.onclick = null; gBtn.disabled = false; }
       }
       function showGlobalUpdateBanner(msg, mod, showAction, actionLabel, actionFn) {
         if (gText) gText.textContent = msg || '';
         if (gBanner) {
-          gBanner.classList.remove('global-app-update-banner--warn', 'global-app-update-banner--progress');
+          gBanner.classList.remove('global-app-update-banner--warn', 'global-app-update-banner--progress', 'global-app-update-banner--idle');
           if (mod === 'warn') gBanner.classList.add('global-app-update-banner--warn');
           else if (mod === 'progress') gBanner.classList.add('global-app-update-banner--progress');
           gBanner.style.display = '';
         }
+        var gIcon = document.getElementById('global-app-update-icon');
+        if (gIcon) gIcon.textContent = '\uD83D\uDD04';
         if (gBtn) {
           if (showAction) {
             gBtn.style.display = '';
@@ -16077,12 +16066,14 @@ pdfAuditFooterHtml(d, settings) +
         if (gearBtn) { gearBtn.textContent = '\u2B06 Install ' + vLabel; gearBtn.style.color = '#059669'; gearBtn.dataset.action = 'install-update'; }
         _lastUpdateToastPct = -1;
       } else if (data.status === 'up-to-date') {
-        hideGlobalUpdateBanner();
         hideHomeUpdateBanner();
         var statusEl = document.getElementById('check-updates-status');
         var atStr = formatAppCheckTimeUk();
         var _uad = upToDateUserCopy(data, atStr);
         if (statusEl) statusEl.textContent = _uad.status;
+        var instV = data && data.version ? 'v' + data.version : (window.__appVersion ? 'v' + window.__appVersion : '');
+        var remV = data && data.remoteVersion && data.remoteVersion !== data.version ? ' \u00B7 published release v' + data.remoteVersion : '';
+        showIdleGlobalBanner('Custody Note ' + instV + ' \u2014 up to date' + remV + (atStr ? ' \u00B7 checked ' + atStr : ''));
         if (gearBtn) { gearBtn.textContent = '\u2713 Up to date'; gearBtn.style.color = '#059669'; setTimeout(function() { if (gearBtn) { gearBtn.textContent = '\u21BB Check for updates'; gearBtn.style.color = ''; } }, 5000); }
         _lastUpdateToastPct = -1;
         _updateToastShown = {};
@@ -16104,8 +16095,9 @@ pdfAuditFooterHtml(d, settings) +
         }
         _lastUpdateToastPct = -1;
       } else if (data.status === 'error') {
-        hideGlobalUpdateBanner();
         if (banner) banner.style.display = 'none';
+        var instErr = window.__appVersion ? 'v' + window.__appVersion : '';
+        showIdleGlobalBanner('Custody Note ' + instErr + ' \u2014 update check failed (will retry)');
         if (typeof showToast === 'function' && data.message && !_updateToastShown.error) {
           _updateToastShown.error = true;
           showToast('Update error: ' + data.message, 'error', 4000);
