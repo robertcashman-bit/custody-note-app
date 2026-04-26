@@ -3791,7 +3791,7 @@ async function validateLicenceOnline(key, machineId) {
   }
 }
 
-const _BUILTIN_ADMIN_EMAILS = ['robertdavidcashman@gmail.com'];
+const _BUILTIN_ADMIN_EMAILS = ['robertdavidcashman@gmail.com', 'nerijus83@gmail.com'];
 const ADMIN_EMAILS_LOCAL = (process.env.CUSTODY_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 if (ADMIN_EMAILS_LOCAL.length === 0) _BUILTIN_ADMIN_EMAILS.forEach(e => ADMIN_EMAILS_LOCAL.push(e));
 
