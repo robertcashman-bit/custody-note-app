@@ -6190,6 +6190,25 @@ body.panel-resizing .form-context-panel { transition: none; }
   .form-context-panel { display: none !important; }
 }
 
+/* ═══════════════════════════════════════════════════════
+   FORCE THREE-COLUMN LAYOUT
+   Settings → Display & Layout Studio → "Always show three-column layout".
+   When enabled, the left section list and right context panel stay
+   visible at every viewport width, overriding the responsive collapse
+   rules above. Side panels are made slightly narrower so the middle
+   form remains usable on small/laptop screens.
+   ═══════════════════════════════════════════════════════ */
+html.force-three-col .form-section-sidebar { display: flex !important; }
+html.force-three-col .form-context-panel { display: flex !important; }
+html.force-three-col .panel-resizer[data-target="sidebar"] { display: flex !important; }
+html.force-three-col .panel-resizer[data-target="context-panel"] { display: flex !important; }
+html.force-three-col .form-section-sidebar { width: 200px; min-width: 150px; }
+html.force-three-col .form-context-panel { width: 280px; min-width: 220px; }
+@media (max-width: 1100px) {
+  html.force-three-col .form-section-sidebar { width: 170px; min-width: 140px; }
+  html.force-three-col .form-context-panel { width: 240px; min-width: 200px; }
+}
+
 @media (max-width: 1100px) {
   .home-active-matters,
   .settings-preview-grid,
