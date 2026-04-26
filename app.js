@@ -5109,6 +5109,8 @@ var REQUIRED_FIELD_KEYS = [
       if (homeShowStatus) homeShowStatus.checked = s.homeShowStatus !== 'false';
       var showContextPanel = document.getElementById('setting-show-context-panel');
       if (showContextPanel) showContextPanel.checked = s.showContextPanel !== 'false';
+      var forceThreeCol = document.getElementById('setting-force-three-col');
+      if (forceThreeCol) forceThreeCol.checked = s.forceThreeCol === 'true';
       var stickyHeadings = document.getElementById('setting-sticky-section-headings');
       if (stickyHeadings) stickyHeadings.checked = s.stickySectionHeadings !== 'false';
       var largerTextareas = document.getElementById('setting-larger-textareas');
@@ -5429,6 +5431,7 @@ var REQUIRED_FIELD_KEYS = [
       homeShowLaa: document.getElementById('setting-home-show-laa')?.checked ? 'true' : 'false',
       homeShowStatus: document.getElementById('setting-home-show-status')?.checked ? 'true' : 'false',
       showContextPanel: document.getElementById('setting-show-context-panel')?.checked ? 'true' : 'false',
+      forceThreeCol: document.getElementById('setting-force-three-col')?.checked ? 'true' : 'false',
       stickySectionHeadings: document.getElementById('setting-sticky-section-headings')?.checked ? 'true' : 'false',
       largerTextareas: document.getElementById('setting-larger-textareas')?.checked ? 'true' : 'false',
       sectionAccents: document.getElementById('setting-section-accents')?.checked ? 'true' : 'false',
@@ -13964,6 +13967,7 @@ pdfAuditFooterHtml(d, settings) +
     root.classList.add('nav-mode-' + navMode);
 
     root.classList.toggle('context-panel-open', !settings || settings.showContextPanel !== 'false');
+    root.classList.toggle('force-three-col', !!(settings && settings.forceThreeCol === 'true'));
     root.classList.toggle('section-accents-enabled', !settings || settings.sectionAccents !== 'false');
     root.classList.toggle('sticky-section-headings', !settings || settings.stickySectionHeadings !== 'false');
     root.classList.toggle('larger-textareas', settings && settings.largerTextareas === 'true');
@@ -17352,10 +17356,11 @@ pdfAuditFooterHtml(d, settings) +
       });
     });
 
-    ['setting-show-context-panel', 'setting-sticky-section-headings', 'setting-larger-textareas', 'setting-section-accents', 'setting-high-contrast', 'setting-large-controls', 'setting-reduced-motion'].forEach(function(id) {
+    ['setting-show-context-panel', 'setting-force-three-col', 'setting-sticky-section-headings', 'setting-larger-textareas', 'setting-section-accents', 'setting-high-contrast', 'setting-large-controls', 'setting-reduced-motion'].forEach(function(id) {
       document.getElementById(id)?.addEventListener('change', function() {
         var payload = {};
         if (id === 'setting-show-context-panel') payload.showContextPanel = this.checked ? 'true' : 'false';
+        if (id === 'setting-force-three-col') payload.forceThreeCol = this.checked ? 'true' : 'false';
         if (id === 'setting-sticky-section-headings') payload.stickySectionHeadings = this.checked ? 'true' : 'false';
         if (id === 'setting-larger-textareas') payload.largerTextareas = this.checked ? 'true' : 'false';
         if (id === 'setting-section-accents') payload.sectionAccents = this.checked ? 'true' : 'false';
