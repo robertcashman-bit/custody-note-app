@@ -62,6 +62,16 @@ function _invokeOutlookEmail(payload) {
       }
       return result;
     }
+    if (result && result.composeSignature === false) {
+      if (typeof showToast === 'function') {
+        showToast(
+          'Outlook opened but did not confirm a compose route (' + (result.composeReason || 'unknown') + '). Please use Copy and report this if it repeats.',
+          'warning',
+          7000
+        );
+      }
+      return result;
+    }
     var surface = accountType === 'mailto' ? 'your email app' : (accountType === 'work' ? 'Outlook on the web' : 'Outlook.com');
     showToast('Opening ' + surface + '…', 'success');
     if (result && result.truncated && result.clipboardCopied) {

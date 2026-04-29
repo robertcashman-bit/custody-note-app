@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.6.8",
+      "version": "1.6.9",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Added release-safe Outlook launch diagnostics in the installed app: main process now writes account type, launch method, host/path, and compose-signature result to <userData>/email-launch.log for each Quick Email launch attempt.",
+        "Added compose-signature detection to returned launch metadata and a renderer warning toast when Outlook launches with a non-compose signature, so users immediately know the app detected a route mismatch.",
+        "Expanded regression coverage for Windows personal msedge-cli launches and explicit non-compose detection via _composeSignature helper."
+      ]
+    },
+    {
+      "version": "1.6.8",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Fixed Outlook Web launch for Microsoft 365 accounts that were landing on home/inbox instead of compose: work-account URLs now use https://outlook.office.com/?path=/mail/action/compose&to=...&subject=...&body=... (auth-resilient compose route).",
         "Kept existing encoded to/cc/bcc/subject/body transfer and preserved body formatting; updated browser fallback path and all Outlook routing tests/smokes to the new canonical work compose route.",
