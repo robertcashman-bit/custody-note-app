@@ -72,7 +72,28 @@
       out.todayDate = dd + '/' + mm + '/' + d.getFullYear();
       out.today_date = out.todayDate;
     }
+    /* Derived: officerSalutation. Pick the right wording for "Dear …,":
+       - empty officer name → "Officer"
+       - already starts with a rank/title (DC, PC, DS, DI, DCI, Sgt, Insp,
+         Supt, Officer, Detective, Constable, etc.) → use as-is
+       - otherwise → prepend "Officer "
+       Templates can use {{officerSalutation}} and never have to think about
+       whether the user typed "Jarvis" or "DC Jarvis". */
+    if (out.officerSalutation == null || String(out.officerSalutation).trim() === '') {
+      out.officerSalutation = buildOfficerSalutation(out.oicName || out.officerName || '');
+      out.officer_salutation = out.officerSalutation;
+    }
     return out;
+  }
+
+  function buildOfficerSalutation(rawName) {
+    var s = String(rawName == null ? '' : rawName).trim();
+    if (!s) return 'Officer';
+    /* Recognised UK police ranks / generic titles. Word-boundary anchored at
+       start so "Dawson" (begins with D) is NOT mistaken for "DC". */
+    var RANK_RE = /^(officer|detective|constable|pc|dc|ds|di|dci|dcs|sgt|sergeant|insp|inspector|supt|superintendent|ch\.?\s*insp|chief\s+inspector|cmdr|commander|cnst|psgt|police\s+sergeant|police\s+constable)\b\.?/i;
+    if (RANK_RE.test(s)) return s;
+    return 'Officer ' + s;
   }
 
   /* ── Conditional pre-pass ─────────────────────────────────
@@ -182,6 +203,7 @@
   var LABELS = {
     clientName:        'Client name',
     oicName:           'Officer name',
+    officerSalutation: 'Officer salutation',
     station:           'Police station',
     offenceType:       'Offence',
     feeEarnerName:     'Fee earner name',
@@ -302,4 +324,5 @@
   global.listMissingQuickEmailPlaceholders = listMissingQuickEmailPlaceholders;
   global.tokensToFriendlyLabels = tokensToFriendlyLabels;
   global.friendlyLabelsToTokens = friendlyLabelsToTokens;
+  global.buildOfficerSalutation = buildOfficerSalutation;
 })(typeof window !== 'undefined' ? window : globalThis);

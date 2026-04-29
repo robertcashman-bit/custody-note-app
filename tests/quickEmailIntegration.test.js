@@ -161,7 +161,9 @@ describe('Quick Email modal — template selection auto-fills preview', () => {
     assert.ok(subj.includes('John Doe'),       'subject missing client, got: ' + subj);
     assert.ok(subj.includes('Holborn'),        'subject missing station, got: ' + subj);
     assert.ok(/disclosure/i.test(subj),        'subject missing template label');
-    assert.ok(body.includes('Dear DC Smith'),  'body missing officer name, got: ' + body);
+    /* v1.6.4 — templates now use the smart {{officerSalutation}} so a
+       bare "Smith" renders as "Officer Smith" (no fictitious DC rank). */
+    assert.ok(/Dear Officer Smith/i.test(body),'body missing officer salutation, got: ' + body.slice(0, 120));
     assert.ok(body.includes('John Doe'),       'body missing client name');
     assert.ok(body.includes('Holborn'),        'body missing station');
     assert.ok(body.includes('18/04/2026'),     'body missing UK-formatted date, got: ' + body);
@@ -187,8 +189,8 @@ describe('Quick Email modal — template selection auto-fills preview', () => {
 
     setField(env.document, 'oicName', 'Williams');
     const body = env.document.getElementById('quick-email-body').value;
-    assert.ok(body.includes('Dear DC Williams'), 'live update missing, got: ' + body);
-    assert.ok(!body.includes('Dear DC Smith'),   'old officer name should be gone');
+    assert.ok(body.includes('Dear Officer Williams'), 'live update missing, got: ' + body);
+    assert.ok(!body.includes('Officer Smith'),        'old officer name should be gone');
   });
 
   it('changing clientName live-updates the subject', () => {

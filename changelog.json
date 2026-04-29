@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.6.3",
+      "version": "1.6.4",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Quick Email to Officer: Send via Outlook Web now defaults to the real Microsoft 365 compose deeplink (https://outlook.office.com/mail/deeplink/compose?...), not a generic Outlook inbox/home URL. The URL is built with encoded to, subject and body parameters and preserves paragraph breaks.",
+        "Added strict inline validation before opening Outlook: officer email must exist and look valid, and client name, police station, date and time must be present. Failed validation keeps all typed data intact and shows a compact inline message inside the modal.",
+        "Disclosure emails now match the requested wording: subject starts 'Disclosure request - <client> - <station> - <date>'; body uses a rank-aware salutation (Jarvis -> Officer Jarvis, DC Jarvis stays DC Jarvis) and uses 24-hour time such as 09:00.",
+        "Quick Email footer/action bar restyled as a compact dark Custody Note action bar with left/right button groups: Send / Copy / Save on the left, Clear / Cancel on the right. Clear and Cancel are now proper visible buttons.",
+        "Quick Email date/time picker icons are now visually integrated into the Date and Time inputs instead of appearing as detached square buttons underneath.",
+        "Added/updated acceptance tests for the David Walter / Maidstone / 30052@kent.police.uk case, Outlook compose deeplink content, inline validation, rank-aware salutations, and the updated smoke journey. Total: 1189/1189 unit tests pass."
+      ]
+    },
+    {
+      "version": "1.6.3",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Quick Email: pressing 'Send via Outlook Web' no longer auto-clears the form. Outlook can fail silently (pop-up blocker, mid sign-in, network glitch) and the previous behaviour wiped your typed content even when no email actually went out.",
         "New 'Clear' button in both the Quick Email modal and the per-record Officer Email modal. Clearing now requires a confirmation when there is content to lose, so the data is only ever cleared when you explicitly choose to.",
