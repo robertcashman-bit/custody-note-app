@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.6.5",
+      "version": "1.6.6",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Quick Email Outlook launch hardening for Windows: HTTPS compose links are now opened via Edge's command-line (`msedge <compose-url>`) instead of relying only on Electron `shell.openExternal`, after a real install showed Outlook was not opening at all.",
+        "The exact launched URL is still the normal compose deeplink: https://outlook.office.com/mail/deeplink/compose?to=...&subject=...&body=... . The app does not use the microsoft-edge: protocol wrapper.",
+        "If Edge command-line launch fails, the app falls back to Electron `shell.openExternal` and reports the launch method in testable metadata.",
+        "Quick Email validation feedback now says clearly when Outlook was not opened because required fields are missing, and the success toast says it is opening the Outlook compose window.",
+        "Added regression tests for Windows Edge command-line launch and fallback. Total: 1191/1191 unit tests pass; Quick Email as-user smoke passes 8/8 scenarios."
+      ]
+    },
+    {
+      "version": "1.6.5",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Quick Email Outlook launch fix for Microsoft Edge / new Outlook Web: work-account sends now open the plain HTTPS compose deeplink directly (https://outlook.office.com/mail/deeplink/compose?...), with no microsoft-edge: protocol wrapper.",
         "Fixes the case where Edge redirected to outlook.cloud.microsoft/mail and landed in the Inbox/home screen instead of creating a compose email.",

@@ -445,6 +445,50 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
     }
   });
 
+  it('production Windows HTTPS launch uses Edge command-line with the plain compose URL', async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const launched = [];
+      const result = await openOutlookWebEmail(
+        { to: 'a@b.c', subject: 'S', body: 'B' },
+        {
+          skipConfirm: true,
+          accountType: 'work',
+          browserLauncher: (u) => { launched.push(u); return Promise.resolve(); },
+        }
+      );
+      assert.strictEqual(launched.length, 1);
+      assert.ok(launched[0].startsWith('https://outlook.office.com/mail/deeplink/compose?'),
+        'browser launcher must receive the plain compose URL: ' + launched[0]);
+      assert.strictEqual(result.launchMethod, 'msedge-cli');
+      assert.strictEqual(result.launchUrl, launched[0]);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
+  it('if Edge command-line launch fails, falls back to shell.openExternal', async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const spy = shellSpy();
+      const result = await openOutlookWebEmail(
+        { to: 'a@b.c', subject: 'S', body: 'B' },
+        {
+          shell: spy.shell,
+          skipConfirm: true,
+          accountType: 'work',
+          browserLauncher: () => Promise.reject(new Error('msedge missing')),
+        }
+      );
+      assert.strictEqual(spy.calls.length, 1);
+      assert.strictEqual(result.launchMethod, 'shell-fallback');
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
   it("mailto account on Windows uses the OS default mail handler (no microsoft-edge:)", async () => {
     const prev = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });

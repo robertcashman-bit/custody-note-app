@@ -1,6 +1,7 @@
 'use strict';
 
 const { shell, dialog, clipboard } = require('electron');
+const { spawn } = require('child_process');
 const {
   buildOutlookWebComposeUrl,
   buildOutlookWebComposeUrlWithMeta,
@@ -35,6 +36,57 @@ function _sanitiseSubject(s) {
 }
 
 let _outlookWebAckSession = null; // null | 'open' | 'no-body'
+
+function _openUrlViaEdgeCommand(url) {
+  return new Promise((resolve, reject) => {
+    try {
+      const child = spawn(
+        'cmd.exe',
+        ['/d', '/s', '/c', 'start', '""', 'msedge', url],
+        {
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true,
+        }
+      );
+      child.once('error', reject);
+      child.unref();
+      resolve();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+function _launchExternalUrl(url, accountType, deps, shellApi) {
+  const isHttps = /^https:\/\//i.test(String(url || ''));
+  const hasInjectedShell = deps && Object.prototype.hasOwnProperty.call(deps, 'shell');
+
+  /* v1.6.6: On Robert's Windows install, plain Electron shell.openExternal
+     did not visibly open Outlook at all, while the old microsoft-edge:
+     protocol opened Edge but landed in outlook.cloud.microsoft/mail (Inbox).
+     The most reliable Windows route is launching Edge's command line with
+     the normal HTTPS compose URL. Tests inject `browserLauncher` or `shell`
+     so this never opens a real browser during automation. */
+  if (process.platform === 'win32' && isHttps && (!hasInjectedShell || (deps && deps.browserLauncher))) {
+    const browserLauncher = deps && deps.browserLauncher ? deps.browserLauncher : _openUrlViaEdgeCommand;
+    return Promise.resolve(browserLauncher(url)).then(() => ({
+      launchUrl: url,
+      launchMethod: 'msedge-cli',
+    })).catch((err) => {
+      console.warn('[EMAIL] Edge command launch failed, falling back to shell.openExternal:', err && err.message ? err.message : err);
+      return Promise.resolve(shellApi.openExternal(url)).then(() => ({
+        launchUrl: url,
+        launchMethod: 'shell-fallback',
+      }));
+    });
+  }
+
+  return Promise.resolve(shellApi.openExternal(url)).then(() => ({
+    launchUrl: url,
+    launchMethod: 'shell',
+  }));
+}
 
 async function _confirmOutlookWebDeeplink(dialogApi, parentWindow, payload, accountType) {
   if (_outlookWebAckSession === 'open' || _outlookWebAckSession === 'no-body') {
@@ -143,7 +195,7 @@ async function openOutlookWebEmail(payload, deps = {}) {
   // outlook.cloud.microsoft/mail and lose the compose path.
   const launchUrl = url;
 
-  return Promise.resolve(shellApi.openExternal(launchUrl)).then(function() {
+  return _launchExternalUrl(launchUrl, accountType, deps, shellApi).then(function(launchResult) {
     return {
       ok: true,
       mode: mode,
@@ -151,6 +203,8 @@ async function openOutlookWebEmail(payload, deps = {}) {
       reason: meta.reason,
       accountType: accountType,
       clipboardCopied: clipboardCopied,
+      launchUrl: launchResult.launchUrl,
+      launchMethod: launchResult.launchMethod,
     };
   });
 }
@@ -163,4 +217,6 @@ module.exports = {
   buildOutlookWebComposeUrlWithMeta,
   inferOutlookAccountType,
   _resetOutlookWebAckForTests,
+  _openUrlViaEdgeCommand,
+  _launchExternalUrl,
 };
