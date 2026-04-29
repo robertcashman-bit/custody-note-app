@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.6.6",
+      "version": "1.6.7",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Windows Quick Email / Outlook Web: launch Edge by spawning msedge.exe with the compose URL as a single argument (resolved from standard install paths or PATH). The previous implementation invoked cmd.exe `start msedge <url>`, which broke URLs at the first `&` query separator — Outlook opened with a truncated link or not at all.",
+        "Renderer: when a second Send is triggered while the first email IPC is still in flight, the guard now returns `{ skipped: true }` instead of an empty resolve, so the UI does not show false \"Opening…\" success toasts.",
+        "Regression tests: full Outlook + Quick Email suites pass."
+      ]
+    },
+    {
+      "version": "1.6.6",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Quick Email Outlook launch hardening for Windows: HTTPS compose links are now opened via Edge's command-line (`msedge <compose-url>`) instead of relying only on Electron `shell.openExternal`, after a real install showed Outlook was not opening at all.",
         "The exact launched URL is still the normal compose deeplink: https://outlook.office.com/mail/deeplink/compose?to=...&subject=...&body=... . The app does not use the microsoft-edge: protocol wrapper.",
