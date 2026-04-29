@@ -1,9 +1,28 @@
 {
   "releases": [
     {
+      "version": "1.6.0",
+      "date": "2026-04-29",
+      "latest": true,
+      "changes": [
+        "Security hardening pass: Electron defence-in-depth (window-open / navigation / permission default-deny, header-level CSP, no third-party script origins)",
+        "PBKDF2 iterations bumped to 600,000 for recovery and key escrow with transparent legacy migration",
+        "Outlook Web compose now requires per-session confirmation with subject-only mode that strips body from URL",
+        "idle-lock default 10 minutes plus immediate force-lock on OS lock-screen / suspend / shutdown",
+        "recent contacts moved out of localStorage into the encrypted settings DB",
+        "sql.js bundled locally instead of loaded from a CDN",
+        "PWA gated behind explicit confidentiality warning page",
+        "admin email allow-list now sourced from CUSTODY_ADMIN_EMAILS env var",
+        "redacting log helper plus append-only security event log at userData/security.log",
+        "new SECURITY.md, PRIVACY_AND_CONFIDENTIALITY.md, MANUAL_ACTIONS.md, and SECURITY_AUDIT_REPORT.md",
+        "npm run security:audit gate runs npm audit plus an in-tree secret scanner",
+        "1133/1133 tests pass"
+      ]
+    },
+    {
       "version": "1.5.26",
       "date": "2026-04-26",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Settings -> Display & Layout Studio: new 'Always show three-column layout' option that keeps the left section list and the right matter-summary / section-status panel visible on smaller screens (overrides the automatic collapse below 1200/1280px). Side panels use slightly tighter widths in this mode so the middle form column remains usable."
       ]
