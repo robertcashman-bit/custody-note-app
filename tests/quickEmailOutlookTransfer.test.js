@@ -263,7 +263,7 @@ describe('Quick Email → OWA URL builder', () => {
       subject: 'Disclosure request: John Doe',
       body: 'Hello DC Smith,\n\nPlease send disclosure for John Doe at Holborn.',
     });
-    assert.ok(url.startsWith('https://outlook.office.com/?path=/mail/action/compose'));
+    assert.ok(url.startsWith('https://outlook.office.com/mail/deeplink/compose'));
     assert.ok(url.indexOf('to=' + encodeURIComponent('oic@met.police.uk')) !== -1, 'to= missing');
     assert.ok(url.indexOf('subject=' + encodeURIComponent('Disclosure request: John Doe')) !== -1, 'subject missing');
     assert.ok(url.indexOf('body=' + encodeURIComponent('Hello DC Smith,\n\nPlease send disclosure for John Doe at Holborn.')) !== -1, 'body missing');
@@ -473,10 +473,10 @@ describe('Quick Email modal — accountType setting selects the right Outlook su
 
     assert.strictEqual(env.opens.length, 1, 'Outlook compose URL should open exactly once');
     const launchUrl = env.opens[0];
-    assert.ok(launchUrl.includes('/?path=/mail/action/compose&'),
+    assert.ok(launchUrl.includes('/mail/deeplink/compose?'),
       'URL must be a compose deeplink, not inbox/home: ' + launchUrl.slice(0, 200));
     assert.ok(
-      launchUrl.startsWith('https://outlook.office.com/?path=/mail/action/compose'),
+      launchUrl.startsWith('https://outlook.office.com/mail/deeplink/compose'),
       'default Quick Email Outlook surface should be office.com compose: ' + launchUrl.slice(0, 200)
     );
     assert.ok(!launchUrl.startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
@@ -493,3 +493,4 @@ describe('Quick Email modal — accountType setting selects the right Outlook su
     assert.ok(copyBodyBeforeSend.includes('David Walter'), 'generated body source missing client');
   });
 });
+

@@ -88,7 +88,7 @@ describe('Outlook Web email routing', () => {
     assert.ok(openOutlookModule.includes('const launchUrl = url'), 'OWA opens as plain HTTPS compose URL');
     assert.ok(!openOutlookModule.includes("'microsoft-edge:' + url"), 'Windows must not wrap OWA with microsoft-edge:');
     assert.ok(outlookUrlLib.includes('outlook.office.com'), 'OWA host in lib/outlookWebComposeUrl.js');
-    assert.ok(outlookUrlLib.includes('/?path=/mail/action/compose'), 'OWA compose route in lib/outlookWebComposeUrl.js');
+    assert.ok(outlookUrlLib.includes('/mail/deeplink/compose'), 'OWA compose route in lib/outlookWebComposeUrl.js');
     assert.ok(mainJs.includes("u.toLowerCase().startsWith('mailto:')"), 'mailto blocked in open-external');
   });
 
@@ -107,3 +107,4 @@ describe('Outlook Web email routing', () => {
     assert.ok(!settingsJs.includes('preferredEmailClient'), 'preferredEmailClient removed from settings.js');
   });
 });
+
