@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.6.0",
+      "version": "1.6.1",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Fix: Quick Email -> Outlook now sends the typed message body by default (the H02 confirm dialog used to default to 'subject only' which silently stripped the body)",
+        "'subject only' remains as an opt-in for legally privileged matter",
+        "'Don't ask again' now remembers the chosen mode across sends",
+        "new regression tests pin the defaults end-to-end"
+      ]
+    },
+    {
+      "version": "1.6.0",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Security hardening pass: Electron defence-in-depth (window-open / navigation / permission default-deny, header-level CSP, no third-party script origins)",
         "PBKDF2 iterations bumped to 600,000 for recovery and key escrow with transparent legacy migration",
