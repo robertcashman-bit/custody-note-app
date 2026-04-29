@@ -97,10 +97,23 @@ describe('Quick Email system templates (data/quick-email-templates.json)', () =>
     assert.ok(out.body.startsWith('Dear Officer,'), 'expected "Dear Officer," fallback, got: ' + out.body.slice(0, 40));
   });
 
-  it('uses "Dear DC <name>" when oicName is provided', () => {
+  it('uses "Dear Officer <name>" when oicName is a bare name (no rank duplication)', () => {
+    /* v1.6.4 — system templates use {{officerSalutation}} which adds
+       "Officer " in front of bare names but leaves rank-prefixed names
+       alone. So "Jones" → "Officer Jones" (was "DC Jones"). */
     const tpl = templates.find((t) => t.id === 'system:bail-details');
     const out = renderWithRequiredOnly(tpl, { oicName: 'Jones' });
-    assert.ok(out.body.startsWith('Dear DC Jones,'), 'expected "Dear DC Jones," got: ' + out.body.slice(0, 40));
+    assert.ok(out.body.startsWith('Dear Officer Jones,'),
+      'expected "Dear Officer Jones," got: ' + out.body.slice(0, 60));
+  });
+
+  it('preserves rank when oicName already includes one (e.g. DC, Sgt, Inspector)', () => {
+    const tpl = templates.find((t) => t.id === 'system:bail-details');
+    for (const name of ['DC Jones', 'PC Khan', 'Sgt Patel', 'Inspector Wood', 'Detective Chen']) {
+      const out = renderWithRequiredOnly(tpl, { oicName: name });
+      assert.ok(out.body.startsWith('Dear ' + name + ','),
+        'expected "Dear ' + name + '," got: ' + out.body.slice(0, 60));
+    }
   });
 
   it('disclosure template subject contains client + station', () => {

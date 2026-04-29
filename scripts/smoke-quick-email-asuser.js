@@ -154,8 +154,8 @@ function expect(label, actual, predicate) {
     ok = expect('URL targets outlook.live.com', url, (u) => u.startsWith('https://outlook.live.com/mail/0/deeplink/compose')) && ok;
     ok = expect('recipient = dc.smith@met.police.uk', url, (u) => u.includes('to=' + encodeURIComponent('dc.smith@met.police.uk'))) && ok;
     ok = expect("subject contains client name (encoded)", url, (u) => u.includes(encodeURIComponent("John O'Brien"))) && ok;
-    ok = expect('subject contains "request for disclosure"', url, (u) => u.includes(encodeURIComponent('request for disclosure'))) && ok;
-    ok = expect('body contains "Dear DC Smith,"', url, (u) => u.includes(encodeURIComponent('Dear DC Smith,'))) && ok;
+    ok = expect('subject contains "Disclosure request"', url, (u) => u.includes(encodeURIComponent('Disclosure request'))) && ok;
+    ok = expect('body contains "Dear Officer Smith,"', url, (u) => u.includes(encodeURIComponent('Dear Officer Smith,'))) && ok;
     ok = expect('body contains UK-formatted date 29/04/2026', url, (u) => u.includes(encodeURIComponent('29/04/2026'))) && ok;
     ok = expect('body contains the offence', url, (u) => u.includes(encodeURIComponent('ABH & threats'))) && ok;
     ok = expect('body contains the fee earner sign-off', url, (u) => u.includes(encodeURIComponent('Robert Cashman'))) && ok;
@@ -169,6 +169,8 @@ function expect(label, actual, predicate) {
     setField(env.document, 'officerEmail', 'duty.team@cityoflondon.police.uk');
     setField(env.document, 'clientName',   'Jane Smith');
     setField(env.document, 'station',      'Bishopsgate');
+    setField(env.document, 'date',         '2026-04-29');
+    setField(env.document, 'time',         '10:00');
     pickTemplate(env.document, 'system:bail-details');
     env.document.getElementById('qe-send').click();
     await tick(10);
@@ -189,6 +191,9 @@ function expect(label, actual, predicate) {
     setField(env.document, 'officerEmail', 'oic@kent.police.uk');
     setField(env.document, 'oicName',      'Williams');
     setField(env.document, 'clientName',   'Alice Brown');
+    setField(env.document, 'station',      'Maidstone');
+    setField(env.document, 'date',         '2026-04-29');
+    setField(env.document, 'time',         '11:30');
     pickTemplate(env.document, 'system:representation');
     env.document.getElementById('qe-send').click();
     await tick(10);
@@ -198,13 +203,17 @@ function expect(label, actual, predicate) {
     ok = expect('URL is a mailto: URI', url, (u) => u.startsWith('mailto:')) && ok;
     ok = expect('recipient encoded in path', url, (u) => u.startsWith('mailto:' + encodeURIComponent('oic@kent.police.uk'))) && ok;
     ok = expect('subject in headers', url, (u) => u.includes('subject=' + encodeURIComponent('Alice Brown - representation confirmed'))) && ok;
-    ok = expect('body in headers', url, (u) => u.includes('body=' + encodeURIComponent('Dear DC Williams,'))) && ok;
+    ok = expect('body in headers', url, (u) => u.includes('body=' + encodeURIComponent('Dear Officer Williams,'))) && ok;
     return { ok, summary: ok ? 'all 5 checks passed; mailto length ' + url.length : 'see failed checks above' };
   });
 
   // ── Scenario 4: Free-compose (no template) — typed subject + body must transfer ──
   await scenario('No template — typed subject and body still reach Outlook', 'personal', async (env) => {
     setField(env.document, 'officerEmail', 'free@example.uk');
+    setField(env.document, 'clientName', 'Free Compose Client');
+    setField(env.document, 'station', 'Free Station');
+    setField(env.document, 'date', '2026-04-29');
+    setField(env.document, 'time', '12:00');
     const subjEl = env.document.getElementById('quick-email-subject');
     const bodyEl = env.document.getElementById('quick-email-body');
     subjEl.value = 'Quick question about R v Cole';
@@ -228,19 +237,26 @@ function expect(label, actual, predicate) {
     pickTemplate(env.document, 'system:disclosure');
     setField(env.document, 'oicName', 'Smith');
     setField(env.document, 'clientName', 'Test Client');
+    setField(env.document, 'station', 'Test Station');
+    setField(env.document, 'date', '2026-04-29');
+    setField(env.document, 'time', '13:00');
     /* officerEmail intentionally left blank */
     env.document.getElementById('qe-send').click();
     await tick(8);
-    const toasts = env.getToasts();
+    const err = env.document.getElementById('quick-email-error-strip');
     let ok = true;
     ok = expect('no URL launched', env.opens.length, (n) => n === 0) && ok;
-    ok = expect('a warning toast was shown', toasts, (t) => t.some(x => /officer email/i.test(x.message) || /add the officer/i.test(x.message))) && ok;
-    return { ok, summary: ok ? 'graceful block + toast' : 'see failed checks above' };
+    ok = expect('inline validation mentions officer email', err && err.textContent, (t) => /officer email/i.test(String(t || ''))) && ok;
+    return { ok, summary: ok ? 'graceful block + inline validation' : 'see failed checks above' };
   });
 
   // ── Scenario 6: Huge body (>20k chars) → URL is trimmed AND clipboard gets full body ──
   await scenario('Body too long → trim URL, copy full body to clipboard', 'personal', async (env) => {
     setField(env.document, 'officerEmail', 'oic@example.uk');
+    setField(env.document, 'clientName', 'Long Body Client');
+    setField(env.document, 'station', 'Long Body Station');
+    setField(env.document, 'date', '2026-04-29');
+    setField(env.document, 'time', '14:00');
     pickTemplate(env.document, 'system:representation');
     const bodyEl = env.document.getElementById('quick-email-body');
     const huge = 'PARA_' + 'X'.repeat(20000);
@@ -270,7 +286,7 @@ function expect(label, actual, predicate) {
     ok = expect("inferOutlookAccountType('me@hotmail.co.uk') === 'personal'", inferOutlookAccountType('me@hotmail.co.uk'), (v) => v === 'personal') && ok;
     ok = expect("inferOutlookAccountType('me@firmname.co.uk') === 'work'", inferOutlookAccountType('me@firmname.co.uk'), (v) => v === 'work') && ok;
     ok = expect("inferOutlookAccountType('me@gmail.com') === 'personal'", inferOutlookAccountType('me@gmail.com'), (v) => v === 'personal') && ok;
-    ok = expect("inferOutlookAccountType('') === 'personal'", inferOutlookAccountType(''), (v) => v === 'personal') && ok;
+    ok = expect("inferOutlookAccountType('') === 'work'", inferOutlookAccountType(''), (v) => v === 'work') && ok;
     return { ok, summary: ok ? '4/4 inference rules correct' : 'see above' };
   });
 
@@ -279,6 +295,9 @@ function expect(label, actual, predicate) {
     setField(env.document, 'officerEmail', 'oic@example.uk');
     pickTemplate(env.document, 'system:representation');
     setField(env.document, 'clientName', 'Switching Client');
+    setField(env.document, 'station', 'Switching Station');
+    setField(env.document, 'date', '2026-04-29');
+    setField(env.document, 'time', '15:00');
     env.document.getElementById('qe-send').click();
     await tick(8);
     const url1 = env.opens[0] || '';
@@ -289,6 +308,9 @@ function expect(label, actual, predicate) {
     setField(env.document, 'officerEmail', 'oic@example.uk');
     pickTemplate(env.document, 'system:representation');
     setField(env.document, 'clientName', 'Switching Client');
+    setField(env.document, 'station', 'Switching Station');
+    setField(env.document, 'date', '2026-04-29');
+    setField(env.document, 'time', '15:30');
     env.document.getElementById('qe-send').click();
     await tick(8);
     const url2 = env.opens[1] || '';

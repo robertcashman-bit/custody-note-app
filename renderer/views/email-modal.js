@@ -28,10 +28,14 @@ function _invokeOutlookEmail(payload) {
   }
   /* Forward the saved account-type hint (work | personal | mailto) so the
      main process picks the right Outlook surface and the dialog wording
-     matches what the user chose in Settings. */
+     matches what the user chose in Settings. v1.6.4: default surface is
+     'work' (outlook.office.com/mail/deeplink/compose) — that's the URL
+     that actually opens compose for users on M365 firm accounts (the
+     common case for solicitors). Personal Outlook.com users can opt in
+     via Settings → Your Details → "Quick Email opens in". */
   var settings = window._appSettingsCache || {};
   var accountType = String(settings.outlookAccountType || '').toLowerCase();
-  if (accountType !== 'work' && accountType !== 'mailto') accountType = 'personal';
+  if (accountType !== 'personal' && accountType !== 'mailto') accountType = 'work';
   var enriched = Object.assign({}, payload || {}, { accountType: accountType });
   return window.invokeOutlookWebCompose(enriched).then(function(result) {
     var surface = accountType === 'mailto' ? 'your email app' : (accountType === 'work' ? 'Outlook on the web' : 'Outlook.com');
@@ -644,8 +648,8 @@ function openQuickEmailModal() {
     var attendanceRaw = _fields.attendanceType || '';
     var attendanceLabel = (function(v) {
       if (v === 'telephone') return 'telephone advice';
-      if (v === 'voluntary') return 'voluntary attendance';
-      if (v === 'custody')   return 'attendance';
+      if (v === 'voluntary') return 'voluntary attendee';
+      if (v === 'custody')   return 'custody attendee';
       return '';
     })(attendanceRaw);
     return {
@@ -832,6 +836,13 @@ function openQuickEmailModal() {
         }
         _renderPreview();
         _persistDraft();
+        /* Clear the inline error strip the moment the user starts fixing
+           the problem so we don't keep nagging them. */
+        var stripEl = document.getElementById('quick-email-error-strip');
+        if (stripEl && stripEl.style.display !== 'none') {
+          stripEl.style.display = 'none';
+          stripEl.innerHTML = '';
+        }
       });
     });
   }
@@ -1239,28 +1250,92 @@ function openQuickEmailModal() {
     _renderPreview();
   }
 
+  /* Compact inline error strip inside the modal — used for validation
+     failures that should block the send (invalid officer email, missing
+     core fields). Cleared on the next send attempt. */
+  function _showInlineError(html) {
+    var stripEl = document.getElementById('quick-email-error-strip');
+    if (!stripEl) return;
+    stripEl.innerHTML = html;
+    stripEl.style.display = '';
+  }
+  function _clearInlineError() {
+    var stripEl = document.getElementById('quick-email-error-strip');
+    if (!stripEl) return;
+    stripEl.innerHTML = '';
+    stripEl.style.display = 'none';
+  }
+
+  /* Light-touch RFC-5322-ish email sanity check — same shape used by the
+     rest of the app (officerEmail / firm contact email validation). */
+  function _looksLikeEmail(s) {
+    if (s == null) return false;
+    var v = String(s).trim();
+    if (!v) return false;
+    return /^[^\s@]+@[^\s@.]+\.[^\s@]{2,}$/.test(v);
+  }
+
   function _sendViaOutlook() {
+    _clearInlineError();
+
     var to      = (_fields.officerEmail || '').trim();
     var subject = ((document.getElementById('quick-email-subject') || {}).value || '').trim();
     var body    = ((document.getElementById('quick-email-body')    || {}).value || '');
 
+    /* Hard validation gate (B+C of the v1.6.4 spec). Outlook compose silently
+       redirects to the inbox if the URL is malformed or the to-address is
+       missing — better to refuse to open than to confuse the user. */
+    var problems = [];
     if (!to) {
-      var officerEl = document.getElementById('qe-field-officerEmail');
-      if (officerEl) officerEl.focus();
-      showToast('Add the officer email address first', 'warning');
-      return;
+      problems.push({ field: 'officerEmail', msg: 'officer email is required' });
+    } else if (!_looksLikeEmail(to)) {
+      problems.push({ field: 'officerEmail', msg: 'officer email does not look like a valid address' });
+    }
+    var hardRequired = ['clientName', 'station', 'date', 'time'];
+    hardRequired.forEach(function(k) {
+      var v = _fields[k];
+      if (v == null || String(v).trim() === '') {
+        problems.push({ field: k, msg: (QUICK_EMAIL_FIELD_DEFS[k] && QUICK_EMAIL_FIELD_DEFS[k].label || k).toLowerCase() + ' is required' });
+      }
+    });
+    if (problems.length) {
+      var first = problems[0];
+      var firstEl = document.getElementById('qe-field-' + first.field);
+      if (firstEl) firstEl.focus();
+      var lines = problems.map(function(p) { return '<li>' + p.msg.replace(/[<>&]/g, function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&amp;';}) + '</li>'; }).join('');
+      _showInlineError(
+        '<strong>Cannot open Outlook yet.</strong> Please fix the following before sending:' +
+        '<ul style="margin:0.4rem 0 0 1.1rem;padding:0;">' + lines + '</ul>'
+      );
+      _renderMissingStrip();
+      if (typeof showToast === 'function') showToast('Add the missing details before opening Outlook', 'warning');
+      return Promise.resolve(); // do NOT open Outlook
     }
 
-    var req = _requiredFields().filter(function(k) { return k !== 'officerEmail'; });
-    var firstMissing = req.find(function(k) {
-      var v = _fields[k];
-      return v == null || String(v).trim() === '';
-    });
-    if (firstMissing) {
-      var el = document.getElementById('qe-field-' + firstMissing);
-      if (el) el.focus();
-      _renderMissingStrip();
-      // Don't block — strip is shown, user can carry on or fill the field.
+    /* Spec: "If subject/body are empty at click time, generate them before
+       opening Outlook." If we have an active template and either side is
+       blank, render now so something useful reaches Outlook. */
+    if (_activeTemplate && typeof window.renderQuickEmailFromTemplates === 'function' &&
+        (!subject || !body || !body.trim())) {
+      var rendered = window.renderQuickEmailFromTemplates(
+        _activeTemplate.subjectTemplate || '',
+        _activeTemplate.bodyTemplate    || '',
+        _buildRenderMap()
+      );
+      if (!subject) {
+        subject = (rendered.subject || '').trim();
+        var subjEl = document.getElementById('quick-email-subject'); if (subjEl) subjEl.value = subject;
+      }
+      if (!body || !body.trim()) {
+        body = rendered.body || '';
+        var bodyEl = document.getElementById('quick-email-body'); if (bodyEl) bodyEl.value = body;
+      }
+    }
+    if (!subject) subject = 'Message from CustodyNote';
+    if (!body || !body.trim()) {
+      body = 'Hello,\n\nPlease see the details below.\n\nKind regards,\n' +
+             ((window._appSettingsCache || {}).feeEarnerNameDefault || '');
+      var bodyEl2 = document.getElementById('quick-email-body'); if (bodyEl2) bodyEl2.value = body;
     }
 
     return _invokeOutlookEmail({
@@ -1358,6 +1433,7 @@ function openQuickEmailModal() {
             '<div id="quick-email-form" class="qe-form"></div>' +
 
             '<div id="quick-email-missing-strip" class="qe-missing-strip" style="display:none;" role="status"></div>' +
+            '<div id="quick-email-error-strip"   class="qe-error-strip"   style="display:none;" role="alert"></div>' +
 
             '<div class="qe-preview">' +
               '<label class="qe-label" for="quick-email-subject">Subject</label>' +
@@ -1369,11 +1445,15 @@ function openQuickEmailModal() {
           '</div>' +
 
           '<div class="email-oic-actions qe-actions">' +
-            '<button type="button" id="qe-send"   class="btn btn-primary">Send via Outlook Web</button>' +
-            '<button type="button" id="qe-copy"   class="btn btn-secondary">Copy</button>' +
-            '<button type="button" id="qe-save"   class="btn btn-secondary">Save as new template</button>' +
-            '<button type="button" id="qe-clear"  class="btn btn-tertiary" title="Reset the form, template choice and message">Clear</button>' +
-            '<button type="button" id="qe-cancel" class="btn btn-tertiary">Cancel</button>' +
+            '<div class="qe-actions-left">' +
+              '<button type="button" id="qe-send"   class="btn btn-primary">Send via Outlook Web</button>' +
+              '<button type="button" id="qe-copy"   class="btn btn-secondary">Copy</button>' +
+              '<button type="button" id="qe-save"   class="btn btn-secondary">Save as new template</button>' +
+            '</div>' +
+            '<div class="qe-actions-right">' +
+              '<button type="button" id="qe-clear"  class="btn btn-ghost"   title="Reset the form, template choice and message">Clear</button>' +
+              '<button type="button" id="qe-cancel" class="btn btn-ghost">Cancel</button>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>';

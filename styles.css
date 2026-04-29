@@ -7546,13 +7546,119 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   line-height: 1.35;
 }
 
+/* v1.6.4 — compact, dark-themed action bar with deliberate left/right
+   button groups. Replaces the previous large white footer that floated
+   with no clear hierarchy and made Clear/Cancel feel like afterthoughts. */
 .qe-actions {
-  padding: 0.8rem 1rem 1rem;
-  border-top: 1px solid #e2e8f0;
-  display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end;
-  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  min-height: 76px;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  background: #0f172a;
+  border-radius: 0 0 12px 12px;
+  flex-shrink: 0;
 }
-.qe-actions .btn-primary { margin-right: auto; }
+.qe-actions-left,
+.qe-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.qe-actions-right { justify-content: flex-end; }
+
+/* All footer buttons get a consistent height + radius so the bar reads
+   as one unit. The .btn rules elsewhere stay untouched. */
+.qe-actions .btn {
+  min-height: 42px;
+  border-radius: 10px;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+}
+
+/* Ghost buttons (Clear / Cancel) — visible against the dark bar but
+   secondary to the primary actions on the left. */
+.qe-actions .btn-ghost {
+  background: transparent;
+  color: #e2e8f0;
+  border: 1px solid rgba(226, 232, 240, 0.35);
+}
+.qe-actions .btn-ghost:hover {
+  background: rgba(226, 232, 240, 0.08);
+  border-color: rgba(226, 232, 240, 0.55);
+  color: #f8fafc;
+}
+.qe-actions .btn-ghost:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+/* Hard-validation error strip rendered just above the action bar. */
+.qe-error-strip {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #7f1d1d;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+.qe-error-strip ul { margin: 0.4rem 0 0 1.1rem; padding: 0; }
+.qe-error-strip strong { color: #b91c1c; }
+html.dark .qe-error-strip {
+  background: rgba(127, 29, 29, 0.25);
+  border-color: rgba(252, 165, 165, 0.55);
+  color: #fecaca;
+}
+html.dark .qe-error-strip strong { color: #fca5a5; }
+
+/* Make the wheel-picker trigger feel like part of the input, not a
+   detached button below it. Scoped to the Quick Email modal so it
+   doesn't disturb other forms (Quick Capture, station-visit cards
+   etc.) where the existing inline buttons already work well. */
+.qe-field { position: relative; }
+.qe-field .wp-trigger {
+  position: absolute;
+  right: 4px;
+  top: auto;
+  bottom: 4px;
+  margin: 0;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  opacity: 0.78;
+  border-radius: 6px;
+}
+.qe-field .wp-trigger:hover {
+  opacity: 1;
+  background: rgba(15, 23, 42, 0.06);
+  color: #0f172a;
+}
+.qe-field .wp-trigger:focus-visible {
+  opacity: 1;
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+.qe-field input[type="date"].qe-input,
+.qe-field input[type="time"].qe-input,
+.qe-field input[type="datetime-local"].qe-input {
+  padding-right: 40px;
+}
+html.dark .qe-field .wp-trigger { color: #cbd5e1; }
+html.dark .qe-field .wp-trigger:hover { background: rgba(248, 250, 252, 0.08); color: #f8fafc; }
+
+/* Mobile: stack the left/right groups so nothing overlaps. */
+@media (max-width: 560px) {
+  .qe-actions { flex-direction: column; align-items: stretch; padding: 12px 14px; min-height: 0; }
+  .qe-actions-left, .qe-actions-right { width: 100%; justify-content: stretch; }
+  .qe-actions-left  .btn { flex: 1 1 auto; }
+  .qe-actions-right .btn { flex: 1 1 auto; }
+}
 
 /* Save / edit inline panels */
 .qe-save-panel {

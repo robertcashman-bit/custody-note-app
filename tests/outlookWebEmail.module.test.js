@@ -388,10 +388,15 @@ describe('inferOutlookAccountType — pick a sensible Outlook surface from the u
     assert.strictEqual(inferOutlookAccountType('robert@cashman-law.co.uk'), 'work');
     assert.strictEqual(inferOutlookAccountType('partner@firmname.com'), 'work');
   });
-  it('falls back to personal when the address is empty / malformed', () => {
-    assert.strictEqual(inferOutlookAccountType(''), 'personal');
-    assert.strictEqual(inferOutlookAccountType(null), 'personal');
-    assert.strictEqual(inferOutlookAccountType('not-an-email'), 'personal');
+  it('falls back to the work surface (office.com) when the address is empty / malformed', () => {
+    /* v1.6.4 — DEFAULT_ACCOUNT_TYPE switched from "personal" to "work"
+       so the OOTB compose URL is https://outlook.office.com/mail/deeplink/compose,
+       which is the surface that actually opens compose for the common
+       case (solicitors on M365 firm accounts). Personal users opt in
+       via Settings → Your Details → "Quick Email opens in". */
+    assert.strictEqual(inferOutlookAccountType(''), 'work');
+    assert.strictEqual(inferOutlookAccountType(null), 'work');
+    assert.strictEqual(inferOutlookAccountType('not-an-email'), 'work');
   });
 });
 
