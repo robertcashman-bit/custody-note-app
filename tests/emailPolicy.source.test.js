@@ -56,6 +56,10 @@ const MAILTO_ALLOWED = new Set([
   'lib/outlookWebComposeUrl.js',
   'main/openOutlookWebEmail.js',
   'browser-api.js',
+  /* Functional smoke test that drives the full Quick Email pipeline; it
+     asserts mailto: URIs are produced for the desktop-mail account-type
+     and so legitimately mentions the literal string. */
+  'scripts/smoke-quick-email-asuser.js',
   'main.js', // contains the open-external mailto block
 ]);
 

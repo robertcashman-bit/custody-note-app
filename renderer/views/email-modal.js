@@ -255,6 +255,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
             '<button type="button" id="email-oic-copy"      class="btn btn-secondary">Copy Email</button>' +
             '<button type="button" id="email-oic-save-tpl"  class="btn btn-secondary">Save as Template</button>' +
             '<button type="button" id="email-oic-mark-sent" class="btn btn-secondary">Mark Sent</button>' +
+            '<button type="button" id="email-oic-clear"     class="btn btn-tertiary" title="Reset subject and message to the template defaults">Clear</button>' +
             '<button type="button" id="email-oic-cancel"    class="btn btn-secondary">Cancel</button>' +
           '</div>' +
         '</div>' +
@@ -329,20 +330,36 @@ function openEmailModal(recordId, recordData, recordStatus) {
           status: recordStatus || 'draft'
         }).catch(function(err) { console.error('[email-modal] Save oicEmail failed:', err); });
       }
-      _openUrl(to, subject, body).then(function() {
-        /* On a successful send (compose window opened), discard any hand-edits
-           and re-render the modal from the current template so the box is
-           clear for the next send. The "To" address is preserved because the
-           officer is the same. On failure (rejected promise) we keep the
-           typed content untouched so the user does not lose work. */
-        var subjEl = document.getElementById('email-oic-subject');
-        var bodyEl = document.getElementById('email-oic-body');
-        if (!subjEl || !bodyEl) return;
+      _openUrl(to, subject, body).catch(function() { /* error toast already shown by _invokeOutlookEmail */ });
+      /* IMPORTANT: do NOT auto-wipe the typed subject/body after handing the
+         message to Outlook. Outlook can reject or silently drop the deeplink
+         (browser pop-up blockers, mid-flight sign-in, network glitch) and the
+         user would lose everything they typed. The user can press the
+         "Clear" button below when they are sure the email has been sent. */
+    });
+
+    /* Explicit Clear — user-initiated reset of subject + body to the current
+       template defaults. We deliberately keep the "To" field untouched so the
+       officer address is preserved for follow-up sends. */
+    document.getElementById('email-oic-clear').addEventListener('click', function() {
+      var subjEl = document.getElementById('email-oic-subject');
+      var bodyEl = document.getElementById('email-oic-body');
+      if (!subjEl || !bodyEl) return;
+      var doClear = function() {
         var fresh = _currentTemplateContent();
         subjEl.value = fresh.subject || '';
         bodyEl.value = fresh.body || '';
         _updateMissingWarn();
-      }).catch(function() { /* error toast already shown by _invokeOutlookEmail */ });
+        if (typeof showToast === 'function') showToast('Cleared back to the template defaults', 'info');
+      };
+      var hasContent = (subjEl.value && subjEl.value.trim()) || (bodyEl.value && bodyEl.value.trim());
+      if (!hasContent) { doClear(); return; }
+      if (typeof showConfirm === 'function') {
+        showConfirm('Clear the subject and message? You can pick the same template again to bring back the defaults.', 'Clear email')
+          .then(function(ok) { if (ok) doClear(); });
+      } else if (typeof confirm === 'function' ? confirm('Clear the subject and message?') : true) {
+        doClear();
+      }
     });
 
     /* Copy */
@@ -1253,13 +1270,40 @@ function openQuickEmailModal() {
       subject: subject,
       body:    _truncateBodyForOutlook(body)
     }).then(function() {
-      _resetFormAfterSend();
-      showToast('Email opened in Outlook. All fields and template choice were cleared so you can start a new message.', 'success', 4500);
+      /* IMPORTANT: do NOT auto-clear the form here. Outlook can fail silently
+         (pop-up blocker, the user is mid sign-in, etc.) and the user would lose
+         everything they typed. The user is in charge of clearing the form via
+         the explicit "Clear" button when they are happy the email was sent. */
+      showToast('Email opened in Outlook. Use "Clear" to start a new message when you are ready.', 'success', 4500);
     }).catch(function() {
       /* Error toast is already shown by _invokeOutlookEmail; swallow here so
          the click handler's promise is fully handled. The form is intentionally
          NOT cleared on failure so the user does not lose their typed content. */
     });
+  }
+
+  /* User-initiated reset for the Quick Email modal. Wipes the form, the
+     template choice, the preview, and the persisted draft, with confirmation
+     when there is content to lose. */
+  function _clearForm() {
+    var hasContent =
+      Object.keys(_fields || {}).some(function(k) {
+        var v = _fields[k];
+        return v != null && String(v).trim() !== '' && k !== 'date';
+      }) ||
+      ((document.getElementById('quick-email-subject') || {}).value || '').trim() ||
+      ((document.getElementById('quick-email-body')    || {}).value || '').trim();
+    var doClear = function() {
+      _resetFormAfterSend();
+      if (typeof showToast === 'function') showToast('Quick Email cleared', 'info');
+    };
+    if (!hasContent) { doClear(); return; }
+    if (typeof showConfirm === 'function') {
+      showConfirm('Clear the form, message and template choice? This cannot be undone.', 'Clear Quick Email')
+        .then(function(ok) { if (ok) doClear(); });
+    } else if (typeof confirm === 'function' ? confirm('Clear the form, message and template choice?') : true) {
+      doClear();
+    }
   }
 
   function _copy() {
@@ -1328,6 +1372,7 @@ function openQuickEmailModal() {
             '<button type="button" id="qe-send"   class="btn btn-primary">Send via Outlook Web</button>' +
             '<button type="button" id="qe-copy"   class="btn btn-secondary">Copy</button>' +
             '<button type="button" id="qe-save"   class="btn btn-secondary">Save as new template</button>' +
+            '<button type="button" id="qe-clear"  class="btn btn-tertiary" title="Reset the form, template choice and message">Clear</button>' +
             '<button type="button" id="qe-cancel" class="btn btn-tertiary">Cancel</button>' +
           '</div>' +
         '</div>' +
@@ -1375,6 +1420,8 @@ function openQuickEmailModal() {
     document.getElementById('qe-send').addEventListener('click', _sendViaOutlook);
     document.getElementById('qe-copy').addEventListener('click', _copy);
     document.getElementById('qe-save').addEventListener('click', _openSavePanel);
+    var clearBtn = document.getElementById('qe-clear');
+    if (clearBtn) clearBtn.addEventListener('click', _clearForm);
   }
 
   /* ── Boot ────────────────────────────────────────── */
