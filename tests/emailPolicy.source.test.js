@@ -148,8 +148,10 @@ describe('Email policy — production sources', () => {
 
   it('lib/outlookWebComposeUrl.js uses correct OWA base URL', () => {
     const lib = fs.readFileSync(path.join(root, 'lib', 'outlookWebComposeUrl.js'), 'utf8');
-    assert.ok(lib.includes('https://outlook.office.com/mail/deeplink/compose'),
-      'canonical URL must be outlook.office.com/mail/deeplink/compose');
+    assert.ok(lib.includes("outlook.office.com"),
+      'work Outlook host must be outlook.office.com');
+    assert.ok(lib.includes('/?path=/mail/action/compose'),
+      'canonical compose route must include ?path=/mail/action/compose');
     assert.ok(lib.includes('encodeURIComponent'), 'must use encodeURIComponent for safety');
   });
 });
