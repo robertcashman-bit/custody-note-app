@@ -178,7 +178,7 @@ function expect(label, actual, predicate) {
     let ok = true;
     ok = expect('one URL launched', env.opens.length, (n) => n === 1) && ok;
     /* Off-Windows the work URL stays plain https; on Windows it'd be 'microsoft-edge:'-prefixed. Both are valid. */
-    ok = expect('targets outlook.office.com', url, (u) => u.includes('outlook.office.com/?path=/mail/action/compose')) && ok;
+    ok = expect('targets outlook.office.com', url, (u) => u.includes('outlook.office.com/mail/deeplink/compose')) && ok;
     ok = expect('uses "Dear Officer" fallback (no oicName supplied)', url, (u) => u.includes(encodeURIComponent('Dear Officer,'))) && ok;
     ok = expect('subject contains "bail details request"', url, (u) => u.includes(encodeURIComponent('bail details request'))) && ok;
     ok = expect('client name in body', url, (u) => u.includes(encodeURIComponent('Jane Smith'))) && ok;
@@ -317,7 +317,7 @@ function expect(label, actual, predicate) {
 
     let ok = true;
     ok = expect('first send went to outlook.live.com', url1, (u) => u.startsWith('https://outlook.live.com/')) && ok;
-    ok = expect('second send (after switch) went to outlook.office.com', url2, (u) => u.includes('outlook.office.com/?path=/mail/action/compose')) && ok;
+    ok = expect('second send (after switch) went to outlook.office.com', url2, (u) => u.includes('outlook.office.com/mail/deeplink/compose')) && ok;
     return { ok, summary: ok ? 'live.com -> office.com switch works' : 'see above' };
   });
 
@@ -333,3 +333,4 @@ function expect(label, actual, predicate) {
   console.log('');
   process.exit(passed === total ? 0 : 1);
 })().catch((e) => { console.error('Fatal:', e); process.exit(2); });
+

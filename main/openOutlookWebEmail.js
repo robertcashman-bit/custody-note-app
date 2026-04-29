@@ -64,9 +64,9 @@ function _composeSignature(accountType, launchUrl) {
   var host = String(u.hostname || '').toLowerCase();
   if (t === 'work') {
     if (host !== 'outlook.office.com') return { composeSignature: false, composeReason: 'work_wrong_host' };
+    if (String(u.pathname || '') === '/mail/deeplink/compose') return { composeSignature: true, composeReason: 'work_deeplink_compose' };
     var qp = String(u.searchParams.get('path') || '');
     if (qp === '/mail/action/compose') return { composeSignature: true, composeReason: 'work_action_compose' };
-    if (String(u.pathname || '') === '/mail/deeplink/compose') return { composeSignature: true, composeReason: 'work_deeplink_compose' };
     return { composeSignature: false, composeReason: 'work_not_compose_route' };
   }
   if (t === 'personal') {
