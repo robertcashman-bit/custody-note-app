@@ -38,6 +38,30 @@ function _invokeOutlookEmail(payload) {
   if (accountType !== 'personal' && accountType !== 'mailto') accountType = 'work';
   var enriched = Object.assign({}, payload || {}, { accountType: accountType });
   return window.invokeOutlookWebCompose(enriched).then(function(result) {
+    /* Main returns { ok:false, cancelled:true } when the user dismisses the
+       privacy dialog — must not show success toasts or callers think Outlook opened. */
+    if (result && result.cancelled) {
+      if (typeof showToast === 'function') {
+        showToast(
+          'Outlook was not opened — the confirmation dialog was cancelled. Use "Open in Outlook" on that dialog to launch compose.',
+          'warning',
+          6500
+        );
+      }
+      return result;
+    }
+    if (result && result.skipped && result.reason === 'busy') {
+      if (typeof showToast === 'function') {
+        showToast('Already opening an email — please wait for it to finish.', 'info', 3500);
+      }
+      return result;
+    }
+    if (result && result.ok === false) {
+      if (typeof showToast === 'function') {
+        showToast('Outlook could not be opened. Try again or use Copy.', 'error', 5500);
+      }
+      return result;
+    }
     var surface = accountType === 'mailto' ? 'your email app' : (accountType === 'work' ? 'Outlook on the web' : 'Outlook.com');
     showToast('Opening ' + surface + '…', 'success');
     if (result && result.truncated && result.clipboardCopied) {
@@ -1344,7 +1368,8 @@ function openQuickEmailModal() {
       bcc:     '',
       subject: subject,
       body:    _truncateBodyForOutlook(body)
-    }).then(function() {
+    }).then(function(result) {
+      if (result && (result.cancelled || result.skipped || result.ok === false)) return;
       /* IMPORTANT: do NOT auto-clear the form here. Outlook can fail silently
          (pop-up blocker, the user is mid sign-in, etc.) and the user would lose
          everything they typed. The user is in charge of clearing the form via

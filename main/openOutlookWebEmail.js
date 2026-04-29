@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
 const { shell, dialog, clipboard } = require('electron');
 const { spawn } = require('child_process');
 const {
@@ -37,18 +39,36 @@ function _sanitiseSubject(s) {
 
 let _outlookWebAckSession = null; // null | 'open' | 'no-body'
 
+/** Prefer a full path so we need not go through cmd.exe (cmd treats `&` in URLs as shell operators). */
+function _resolveMsEdgeExecutable() {
+  const candidates = [];
+  if (process.env['PROGRAMFILES(X86)']) {
+    candidates.push(path.join(process.env['PROGRAMFILES(X86)'], 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+  }
+  if (process.env.PROGRAMFILES) {
+    candidates.push(path.join(process.env.PROGRAMFILES, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+  }
+  if (process.env.LOCALAPPDATA) {
+    candidates.push(path.join(process.env.LOCALAPPDATA, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+  }
+  for (let i = 0; i < candidates.length; i++) {
+    try {
+      if (fs.existsSync(candidates[i])) return candidates[i];
+    } catch (_) { /* continue */ }
+  }
+  return 'msedge';
+}
+
 function _openUrlViaEdgeCommand(url) {
   return new Promise((resolve, reject) => {
     try {
-      const child = spawn(
-        'cmd.exe',
-        ['/d', '/s', '/c', 'start', '""', 'msedge', url],
-        {
-          detached: true,
-          stdio: 'ignore',
-          windowsHide: true,
-        }
-      );
+      const exe = _resolveMsEdgeExecutable();
+      /* Single argv URL — preserves ?…&… in OWA compose links (cmd.exe start … would break on &). */
+      const child = spawn(exe, [url], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
       child.once('error', reject);
       child.unref();
       resolve();

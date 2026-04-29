@@ -13,7 +13,8 @@
     if (!global.emailAPI || typeof global.emailAPI.open !== 'function') {
       return Promise.reject(new Error('Email unavailable'));
     }
-    if (isSending) return Promise.resolve();
+    /* Resolve with a sentinel so callers never treat an empty resolve() as success (would show false "Opening…" toasts). */
+    if (isSending) return Promise.resolve({ ok: false, skipped: true, reason: 'busy' });
     isSending = true;
     return global.emailAPI.open(payload).finally(function () {
       isSending = false;
