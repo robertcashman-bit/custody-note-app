@@ -27,40 +27,52 @@ function _sanitiseSubject(s) {
 }
 
 // In-memory "remember for this app session" so the user is not prompted on
-// every email click. Acknowledgement is intentionally NOT persisted — closing
-// the app forces re-acknowledgement.
-let _outlookWebAckSession = false;
+// every email click. We store the LAST mode the user picked so a subsequent
+// send uses that same choice (otherwise a "Don't ask again" tick after
+// "subject only" would silently start sending the body next time, which is
+// the opposite of the user's intent). Acknowledgement is intentionally NOT
+// persisted to disk — closing the app forces re-acknowledgement.
+let _outlookWebAckSession = null; // null | 'open' | 'no-body'
 
 /**
  * Show the per-session confirmation dialog. Returns:
- *   "open"    — user accepted, open the compose URL.
+ *   "open"    — user accepted, open the compose URL with subject + body.
  *   "no-body" — user accepted but asked us to strip the body (subject only).
  *   "cancel"  — user cancelled.
+ *
+ * NOTE on default button: the default action is "Open in Outlook Web (with
+ * everything I typed)" so that pressing Enter / clicking the default never
+ * silently throws away the body the user just typed in the email modal.
+ * The "subject only" option remains for legally-privileged matters where
+ * the user explicitly does NOT want the body in the URL — but that is now
+ * an opt-in, not the default.
  */
 async function _confirmOutlookWebDeeplink(dialogApi, parentWindow, payload) {
-  if (_outlookWebAckSession) return 'open';
+  if (_outlookWebAckSession === 'open' || _outlookWebAckSession === 'no-body') {
+    return _outlookWebAckSession;
+  }
   const bodyLen = payload && payload.body ? String(payload.body).length : 0;
   const subjectLen = payload && payload.subject ? String(payload.subject).length : 0;
   const detail =
     'CustodyNote will open Outlook Web in your browser to compose this email.\n\n'
-    + 'Microsoft Outlook receives the subject line and the email body in the URL. '
-    + 'That URL is visible to:\n'
+    + 'Microsoft Outlook receives the subject line and (by default) the email body '
+    + 'in the URL. That URL is visible to:\n'
     + '  • your browser history,\n'
     + '  • any corporate web proxy or DLP product,\n'
     + '  • Microsoft\'s outlook.office.com servers.\n\n'
-    + 'For LEGALLY PRIVILEGED material consider sending an email with no body — '
-    + 'attach the PDF in Outlook before sending.\n\n'
+    + 'For LEGALLY PRIVILEGED material you can choose to send the subject only — '
+    + 'then attach the PDF or paste the body in Outlook before sending.\n\n'
     + 'Subject length: ' + subjectLen + ' chars\n'
     + 'Body length: ' + bodyLen + ' chars';
   const { response, checkboxChecked } = await dialogApi.showMessageBox(parentWindow || null, {
-    type: 'warning',
-    title: 'Confirm: open in Outlook Web',
-    message: 'Send this content via Outlook Web?',
+    type: 'question',
+    title: 'Open in Outlook Web',
+    message: 'Send this email via Outlook Web?',
     detail: detail,
     buttons: [
-      'Open with subject only (recommended)',
-      'Open with subject + body',
-      'Cancel',
+      'Open in Outlook Web',                    // 0 — default: send everything the user typed
+      'Open with subject only (no body)',       // 1 — privacy opt-in
+      'Cancel',                                 // 2
     ],
     defaultId: 0,
     cancelId: 2,
@@ -69,8 +81,9 @@ async function _confirmOutlookWebDeeplink(dialogApi, parentWindow, payload) {
     checkboxChecked: false,
   });
   if (response === 2) return 'cancel';
-  if (checkboxChecked) _outlookWebAckSession = true;
-  return response === 0 ? 'no-body' : 'open';
+  const mode = response === 1 ? 'no-body' : 'open';
+  if (checkboxChecked) _outlookWebAckSession = mode;
+  return mode;
 }
 
 async function openOutlookWebEmail(payload, deps = {}) {
@@ -112,7 +125,7 @@ async function openOutlookWebEmail(payload, deps = {}) {
 }
 
 // Test-only hook to reset the per-session ack state.
-function _resetOutlookWebAckForTests() { _outlookWebAckSession = false; }
+function _resetOutlookWebAckForTests() { _outlookWebAckSession = null; }
 
 module.exports = {
   openOutlookWebEmail,

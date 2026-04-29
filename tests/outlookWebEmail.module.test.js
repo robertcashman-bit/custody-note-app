@@ -181,13 +181,32 @@ describe('openOutlookWebEmail confirmation gate (H02 hardening)', () => {
     assert.strictEqual(result.cancelled, true);
   });
 
-  it('strips the body when the user picks "subject only"', async () => {
+  it('opens with the FULL body when the user picks the default action (response 0)', async () => {
+    /* Regression test for the "typed info not transferring to Outlook" bug:
+       the dialog default must NEVER strip the body. Pressing Enter or
+       clicking the highlighted button must send everything the user typed. */
     const calls = [];
     const result = await openOutlookWebEmail(
       { to: 't@test.com', subject: 'S', body: 'sensitive body text' },
       {
         shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
         dialog: { showMessageBox: async () => ({ response: 0, checkboxChecked: false }) },
+      }
+    );
+    assert.strictEqual(calls.length, 1, 'should open the URL');
+    assert.ok(calls[0].includes(encodeURIComponent('sensitive body text')),
+      'default action MUST include the body — otherwise the user\'s typed content is silently dropped');
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.mode, 'open');
+  });
+
+  it('strips the body only when the user explicitly picks "subject only" (response 1)', async () => {
+    const calls = [];
+    const result = await openOutlookWebEmail(
+      { to: 't@test.com', subject: 'S', body: 'sensitive body text' },
+      {
+        shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
+        dialog: { showMessageBox: async () => ({ response: 1, checkboxChecked: false }) },
       }
     );
     assert.strictEqual(calls.length, 1, 'should still open the URL, just with empty body');
@@ -197,19 +216,53 @@ describe('openOutlookWebEmail confirmation gate (H02 hardening)', () => {
     assert.strictEqual(result.mode, 'no-body');
   });
 
-  it('opens with body when the user explicitly accepts', async () => {
-    const calls = [];
-    const result = await openOutlookWebEmail(
-      { to: 't@test.com', subject: 'S', body: 'sensitive body text' },
+  it('the default button is response 0 ("Open in Outlook Web") and Cancel is response 2', async () => {
+    /* Pin the button order so a future refactor cannot accidentally
+       reintroduce the body-stripping default. */
+    let captured = null;
+    await openOutlookWebEmail(
+      { to: 't@test.com', subject: 'S', body: 'B' },
       {
-        shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
-        dialog: { showMessageBox: async () => ({ response: 1, checkboxChecked: false }) },
+        shell: { openExternal: () => Promise.resolve() },
+        dialog: {
+          showMessageBox: async (_win, opts) => {
+            captured = opts;
+            return { response: opts.defaultId, checkboxChecked: false };
+          },
+        },
       }
     );
-    assert.strictEqual(calls.length, 1);
-    assert.ok(calls[0].includes(encodeURIComponent('sensitive body text')));
-    assert.strictEqual(result.ok, true);
-    assert.strictEqual(result.mode, 'open');
+    assert.ok(captured, 'showMessageBox was not invoked');
+    assert.strictEqual(captured.defaultId, 0, 'default button must be index 0 (the full-body send)');
+    assert.strictEqual(captured.cancelId, 2, 'cancel button must be index 2');
+    assert.ok(/Open in Outlook Web$/i.test(captured.buttons[0]),
+      'button 0 should be the full-body send, got: ' + captured.buttons[0]);
+    assert.ok(/subject only/i.test(captured.buttons[1]),
+      'button 1 should be the privacy opt-in, got: ' + captured.buttons[1]);
+    assert.ok(/cancel/i.test(captured.buttons[2]),
+      'button 2 should be Cancel, got: ' + captured.buttons[2]);
+  });
+
+  it('"Don\'t ask again" remembers the user\'s last mode (subject-only sticks across sends)', async () => {
+    /* If a user picked "subject only" with the checkbox ticked, every
+       subsequent send must also be subject-only — not silently switch
+       to full body. */
+    const opens = [];
+    const dialog = {
+      showMessageBox: async () => ({ response: 1, checkboxChecked: true }),
+    };
+    const shell = { openExternal: (u) => { opens.push(u); return Promise.resolve(); } };
+    await openOutlookWebEmail({ to: 't@test.com', subject: 'S', body: 'private body 1' }, { shell, dialog });
+    /* Second send should NOT prompt again (ack is sticky). It must still
+       suppress the body because that was the user's last choice. */
+    let dialogShownAgain = false;
+    const shell2 = { openExternal: (u) => { opens.push(u); return Promise.resolve(); } };
+    const dialog2 = { showMessageBox: async () => { dialogShownAgain = true; return { response: 0, checkboxChecked: false }; } };
+    await openOutlookWebEmail({ to: 't@test.com', subject: 'S', body: 'private body 2' }, { shell: shell2, dialog: dialog2 });
+    assert.strictEqual(dialogShownAgain, false, 'dialog must not reopen after Don\'t ask again');
+    assert.strictEqual(opens.length, 2);
+    assert.ok(!opens[0].includes(encodeURIComponent('private body 1')), 'first send should be subject-only');
+    assert.ok(!opens[1].includes(encodeURIComponent('private body 2')), 'second send must respect the remembered subject-only choice');
   });
 });
 
