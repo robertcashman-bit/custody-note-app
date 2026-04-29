@@ -1304,11 +1304,11 @@ function openQuickEmailModal() {
       if (firstEl) firstEl.focus();
       var lines = problems.map(function(p) { return '<li>' + p.msg.replace(/[<>&]/g, function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&amp;';}) + '</li>'; }).join('');
       _showInlineError(
-        '<strong>Cannot open Outlook yet.</strong> Please fix the following before sending:' +
+        '<strong>Outlook was not opened.</strong> Please fix the following before sending:' +
         '<ul style="margin:0.4rem 0 0 1.1rem;padding:0;">' + lines + '</ul>'
       );
       _renderMissingStrip();
-      if (typeof showToast === 'function') showToast('Add the missing details before opening Outlook', 'warning');
+      if (typeof showToast === 'function') showToast('Outlook was not opened — add the missing details shown in the modal', 'warning', 5000);
       return Promise.resolve(); // do NOT open Outlook
     }
 
@@ -1349,7 +1349,7 @@ function openQuickEmailModal() {
          (pop-up blocker, the user is mid sign-in, etc.) and the user would lose
          everything they typed. The user is in charge of clearing the form via
          the explicit "Clear" button when they are happy the email was sent. */
-      showToast('Email opened in Outlook. Use "Clear" to start a new message when you are ready.', 'success', 4500);
+      showToast('Opening Outlook compose window. If it does not appear, try again or use Copy.', 'success', 5500);
     }).catch(function() {
       /* Error toast is already shown by _invokeOutlookEmail; swallow here so
          the click handler's promise is fully handled. The form is intentionally
