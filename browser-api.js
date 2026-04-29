@@ -5,12 +5,42 @@
     running entirely in the browser, with IndexedDB persistence.
     If window.api already exists (Electron preload), this file
     is a no-op so both environments can share the same codebase.
+
+    SECURITY GATE (added by 2026-04-28 hardening pass):
+    The web/PWA build of CustodyNote is NOT a confidential store.
+    Real client information must only ever be entered into the
+    desktop app, which encrypts at rest. To prevent accidental
+    use, the browser bootstrap is gated on an explicit user
+    acknowledgement set by browser-demo.html; without it we
+    redirect to the demo gate page and never initialise sql.js.
     ──────────────────────────────────────────────────────────── */
 (async function () {
   'use strict';
 
   /* Skip if running inside Electron (preload already set window.api) */
   if (window.api) return;
+
+  /* SECURITY GATE: refuse to initialise the browser/PWA stack unless the
+   * user has passed through browser-demo.html. The acknowledgement lives
+   * in sessionStorage so it does not survive the tab being closed.
+   * On Electron this code is never reached because window.api is already
+   * defined by the preload script. */
+  try {
+    var ack = sessionStorage.getItem('cn-web-demo-ack');
+    if (ack !== '1') {
+      var dest = './browser-demo.html';
+      // Only redirect within the same origin to avoid open-redirect risk.
+      try {
+        if (location.pathname.endsWith('/browser-demo.html')) return;
+      } catch (_) {}
+      location.replace(dest);
+      return;
+    }
+  } catch (_) {
+    /* sessionStorage unavailable (e.g. cookies disabled) — fall through;
+     * the user is in a constrained environment where the demo will not
+     * function meaningfully anyway. */
+  }
 
   /* ─── IndexedDB helpers ─── */
   const IDB_NAME = 'ps-attendance-db';
@@ -45,18 +75,31 @@
     });
   }
 
-  /* ─── Load sql.js WASM (dynamically so Electron app never blocks on this when offline) ─── */
+  /* ─── Load sql.js WASM (locally bundled, NOT from a third-party CDN) ───
+   *
+   * SECURITY: this script processes confidential client data. Loading the
+   * SQLite engine itself from a third-party CDN (https://sql.js.org) was
+   * removed because:
+   *   - any compromise of that CDN would let an attacker exfiltrate every
+   *     custody note in the open browser session,
+   *   - it required broadening the page CSP to allow that origin,
+   *   - it broke offline use.
+   *
+   * Files are now bundled into /vendor/sqljs by `npm run bundle:sqljs` (run
+   * automatically as part of the build). A deploy that forgot to run that
+   * script will fail fast (404) rather than silently fall back to the CDN.
+   */
   if (typeof initSqlJs === 'undefined') {
     await new Promise(function (resolve, reject) {
       var s = document.createElement('script');
-      s.src = 'https://sql.js.org/dist/sql-wasm.js';
+      s.src = 'vendor/sqljs/sql-wasm.js';
       s.onload = resolve;
-      s.onerror = function () { reject(new Error('Failed to load sql.js')); };
+      s.onerror = function () { reject(new Error('Failed to load sql.js. Run `npm run bundle:sqljs` and redeploy.')); };
       document.head.appendChild(s);
     });
   }
   const SQL = await initSqlJs({
-    locateFile: function (file) { return 'https://sql.js.org/dist/' + file; }
+    locateFile: function (file) { return 'vendor/sqljs/' + file; }
   });
 
   /* ─── Restore or create database ─── */

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <meta http-equiv="Referrer-Policy" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow,noarchive,nosnippet">
+  <title>Custody Note — Web demo (test data only)</title>
+  <link rel="icon" href="icon-192.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2rem 1rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a; color: #f8fafc; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .card {
+      max-width: 720px; width: 100%;
+      background: #1e293b; border: 1px solid #475569; border-radius: 12px;
+      padding: 2rem; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    }
+    h1 { margin: 0 0 0.5rem; font-size: 1.6rem; }
+    h2 { margin: 1.5rem 0 0.5rem; font-size: 1.05rem; color: #fcd34d; }
+    p, li { line-height: 1.55; color: #e2e8f0; }
+    ul { padding-left: 1.25rem; }
+    .badge {
+      display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px;
+      background: #b91c1c; color: #fff; font-size: 0.75rem; font-weight: 600;
+      letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 1rem;
+    }
+    .actions { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    button, a.btn {
+      font: inherit; padding: 0.75rem 1.25rem; border-radius: 8px;
+      cursor: pointer; border: 1px solid transparent; text-decoration: none;
+      display: inline-block;
+    }
+    .btn-primary { background: #2563eb; color: #fff; border-color: #1d4ed8; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #334155; color: #f8fafc; border-color: #475569; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-danger { background: #b91c1c; color: #fff; border-color: #991b1b; }
+    .check {
+      display: flex; align-items: flex-start; gap: 0.5rem;
+      margin: 0.75rem 0; padding: 0.75rem;
+      background: #0f172a; border: 1px solid #334155; border-radius: 6px;
+    }
+    .check input { margin-top: 0.25rem; }
+    .check label { color: #f8fafc; cursor: pointer; }
+    a { color: #93c5fd; }
+    .footer { margin-top: 1.5rem; font-size: 0.85rem; color: #94a3b8; }
+    code { background: #0f172a; padding: 0.1rem 0.4rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <main class="card" role="main">
+    <span class="badge">Web demo — test data only</span>
+    <h1>Custody Note web demo</h1>
+    <p>
+      The desktop app is the only supported way to record real client information.
+      The web demo is published so prospective users can try the interface; it is
+      <strong>not suitable for handling real custody notes, real client information,
+      or any legally privileged or special-category data</strong>.
+    </p>
+
+    <h2>Why the web demo is not safe for real client data</h2>
+    <ul>
+      <li>The whole local database lives <strong>unencrypted</strong> in the browser's
+        IndexedDB; anyone with access to your browser profile can read it.</li>
+      <li>Other websites that run JavaScript in this browser may, via supply-chain
+        compromise of dependencies the browser loads, exfiltrate the database.</li>
+      <li>The page loads a third-party WebAssembly module from
+        <code>sql.js.org</code>; the desktop app does not.</li>
+      <li>There is no encryption at rest, no recovery password, no idle lock,
+        no audit log, and no encrypted backup.</li>
+    </ul>
+
+    <h2>Use the desktop app instead</h2>
+    <p>
+      Download the signed Windows installer from
+      <a href="https://www.custodynote.com" rel="noopener noreferrer">www.custodynote.com</a>.
+      The desktop app stores all data with AES-256-GCM at rest, supports a
+      recovery password, can back up to UK-resident immutable storage, and
+      meets the design requirements for legal-sector confidentiality.
+    </p>
+
+    <h2>If you continue, you confirm</h2>
+    <div class="check">
+      <input type="checkbox" id="ack-1">
+      <label for="ack-1">I will only enter <strong>fabricated test data</strong> — no real names,
+        no real custody numbers, no real disclosure, no real advice.</label>
+    </div>
+    <div class="check">
+      <input type="checkbox" id="ack-2">
+      <label for="ack-2">I understand that the web demo stores its data <strong>unencrypted</strong>
+        in this browser's IndexedDB and is not suitable for confidential or
+        privileged material.</label>
+    </div>
+    <div class="check">
+      <input type="checkbox" id="ack-3">
+      <label for="ack-3">I will not use the web demo to satisfy any SRA, GDPR, or
+        professional-confidentiality requirement, and I will use the desktop
+        app for any real matter.</label>
+    </div>
+
+    <div class="actions">
+      <a href="https://www.custodynote.com/download" class="btn btn-primary" rel="noopener noreferrer">Download the desktop app</a>
+      <button type="button" id="continue-btn" class="btn-secondary" disabled>Continue to web demo</button>
+    </div>
+
+    <p class="footer">
+      No tracking, no analytics, no third-party cookies are loaded by this page.
+      Your acknowledgement is stored only in this browser tab's session storage
+      and is cleared when you close the tab.
+    </p>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+      var checks = ['ack-1', 'ack-2', 'ack-3'].map(function (id) { return document.getElementById(id); });
+      var btn = document.getElementById('continue-btn');
+      function update() {
+        var allChecked = checks.every(function (c) { return c && c.checked; });
+        btn.disabled = !allChecked;
+      }
+      checks.forEach(function (c) { if (c) c.addEventListener('change', update); });
+      btn.addEventListener('click', function () {
+        try { sessionStorage.setItem('cn-web-demo-ack', '1'); } catch (_) {}
+        location.replace('./index.html');
+      });
+    })();
+  </script>
+</body>
+</html>

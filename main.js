@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu, powerMonitor } = require('electron');
 const os = require('os');
 const path = require('path');
 /* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use). */
@@ -67,6 +67,9 @@ const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
 const { createBackupScheduler } = require('./main/backupScheduler');
 const { openOutlookWebEmail } = require('./main/openOutlookWebEmail');
+const { hardenWindow, hardenSession, isSafeExternalUrl } = require('./main/windowHardening');
+const _securityLog = require('./main/securityLog');
+const _safeLog = require('./lib/safeLog');
 
 let mainWindow;
 let db;
@@ -117,7 +120,13 @@ function writeCliError(message) {
    DATABASE ENCRYPTION (AES-256-GCM + dual key)
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const MAGIC = 'CNDB';
-const PBKDF2_ITERATIONS = 100000;
+// Recovery-password and key-escrow KDF iterations. Bumped from 100,000 to
+// 600,000 (OWASP Password Storage Cheat Sheet 2023+ minimum for PBKDF2-SHA512).
+// Older recovery files written with 100k are still accepted via tryRecoverMasterKey,
+// which falls back to the legacy iteration count and rewrites the file at
+// the new strength on a successful unlock.
+const PBKDF2_ITERATIONS = 600000;
+const PBKDF2_ITERATIONS_LEGACY = 100000;
 const PBKDF2_DIGEST = 'sha512';
 let _masterKey = null;
 let _recoveryPasswordHash = null;
@@ -296,15 +305,41 @@ function tryRecoverMasterKey(password) {
   const iv = data.slice(32, 44);
   const tag = data.slice(44, 60);
   const enc = data.slice(60);
-  const derived = deriveKeyFromPassword(password, salt);
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', derived, iv);
-    decipher.setAuthTag(tag);
-    const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
-    return dec.toString('utf8');
-  } catch (_) {
-    return null;
+  // Try current iteration count first.
+  const tryWith = function (iters) {
+    try {
+      const derived = crypto.pbkdf2Sync(password, salt, iters, 32, PBKDF2_DIGEST);
+      const decipher = crypto.createDecipheriv('aes-256-gcm', derived, iv);
+      decipher.setAuthTag(tag);
+      const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
+      return dec.toString('utf8');
+    } catch (_) {
+      return null;
+    }
+  };
+  let recovered = tryWith(PBKDF2_ITERATIONS);
+  if (recovered) return recovered;
+  // Fallback: legacy 100k file. On success, rewrite with the new (stronger)
+  // iteration count so the next unlock uses 600k. We never log the password
+  // and we ignore rewrite failures (the user can still unlock).
+  recovered = tryWith(PBKDF2_ITERATIONS_LEGACY);
+  if (recovered) {
+    try {
+      const newSalt = crypto.randomBytes(32);
+      const newDerived = deriveKeyFromPassword(password, newSalt);
+      const newIv = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv('aes-256-gcm', newDerived, newIv);
+      const newEnc = Buffer.concat([cipher.update(Buffer.from(recovered, 'utf8')), cipher.final()]);
+      const newTag = cipher.getAuthTag();
+      const out = Buffer.concat([newSalt, newIv, newTag, newEnc]);
+      fs.writeFileSync(recPath, out);
+      console.info('[Encryption] Upgraded recovery.dat to PBKDF2 ' + PBKDF2_ITERATIONS + ' iterations.');
+    } catch (e) {
+      console.warn('[Encryption] Could not upgrade recovery.dat KDF strength:', e && e.message ? e.message : e);
+    }
+    return recovered;
   }
+  return null;
 }
 
 /* â”€â”€â”€ Cloud key escrow â”€â”€â”€ */
@@ -325,15 +360,20 @@ function decryptMasterKeyFromEscrow(blob, licenceKey) {
   const tag = raw.slice(12, 28);
   const enc = raw.slice(28);
   const salt = crypto.createHash('sha256').update('cn-escrow-salt:' + licenceKey.trim().toUpperCase()).digest();
-  const derived = crypto.pbkdf2Sync(licenceKey.trim().toUpperCase(), salt, PBKDF2_ITERATIONS, 32, PBKDF2_DIGEST);
-  try {
-    const decipher = crypto.createDecipheriv('aes-256-gcm', derived, iv);
-    decipher.setAuthTag(tag);
-    const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
-    return dec.toString('utf8');
-  } catch (_) {
-    return null;
-  }
+  const tryWith = function (iters) {
+    try {
+      const derived = crypto.pbkdf2Sync(licenceKey.trim().toUpperCase(), salt, iters, 32, PBKDF2_DIGEST);
+      const decipher = crypto.createDecipheriv('aes-256-gcm', derived, iv);
+      decipher.setAuthTag(tag);
+      const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
+      return dec.toString('utf8');
+    } catch (_) {
+      return null;
+    }
+  };
+  // Try the current (stronger) iteration count first; fall back to legacy
+  // 100k for blobs uploaded by older clients before the 2026 hardening pass.
+  return tryWith(PBKDF2_ITERATIONS) || tryWith(PBKDF2_ITERATIONS_LEGACY);
 }
 
 async function uploadKeyEscrow() {
@@ -474,6 +514,14 @@ function showPasswordInputDialog() {
       title: 'Recovery Password',
       autoHideMenuBar: true,
     });
+    // Defence-in-depth: refuse navigation/window.open in this modal.
+    try {
+      hardenWindow(win, {
+        logger: { warn: (msg, meta) => console.warn(msg, meta || '') },
+        appOrigin: '',
+        shellOpenExternal: () => Promise.resolve(),
+      });
+    } catch (_) {}
 
     ipcMain.once('recovery-pw-submit', (_, pw) => done(pw));
     ipcMain.once('recovery-pw-cancel', () => done(null));
@@ -2301,6 +2349,23 @@ function createWindow() {
   const ses = mainWindow.webContents.session;
   ses.clearCache().catch(() => {});
   ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
+  // Defence-in-depth: block navigation away from file://, refuse window.open,
+  // deny camera/mic/geolocation/etc., and force CSP/security response headers.
+  // None of these is a security boundary on its own — sandbox + contextIsolation
+  // + nodeIntegration:false are — but they close known bypasses.
+  try {
+    const indexFileUrl = require('url').pathToFileURL(path.join(__dirname, 'index.html')).href;
+    hardenWindow(mainWindow, {
+      logger: { warn: (msg, meta) => console.warn(msg, meta || '') },
+      appOrigin: indexFileUrl,
+      shellOpenExternal: (u) => (isSafeExternalUrl(u) ? shell.openExternal(u) : Promise.resolve()),
+    });
+    hardenSession(ses, {
+      logger: { warn: (msg, meta) => console.warn(msg, meta || '') },
+    });
+  } catch (e) {
+    console.warn('[security] Failed to apply window/session hardening:', e && e.message);
+  }
   if (updaterController && updaterController.scheduleDeferredCheck) {
     updaterController.scheduleDeferredCheck(mainWindow);
   }
@@ -3791,9 +3856,24 @@ async function validateLicenceOnline(key, machineId) {
   }
 }
 
-const _BUILTIN_ADMIN_EMAILS = ['robertdavidcashman@gmail.com', 'nerijus83@gmail.com'];
-const ADMIN_EMAILS_LOCAL = (process.env.CUSTODY_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
-if (ADMIN_EMAILS_LOCAL.length === 0) _BUILTIN_ADMIN_EMAILS.forEach(e => ADMIN_EMAILS_LOCAL.push(e));
+// Admin email allow-list. Previously contained two hardcoded personal email
+// addresses (`robertdavidcashman@gmail.com`, `nerijus83@gmail.com`) which
+// granted unconditional admin entitlements to any installation that had a
+// licence registered against either address. That is unsafe in a multi-user
+// product because (a) the owners of those addresses change over time, (b) it
+// blurs the audit trail, and (c) an attacker who can register a licence
+// against one of those emails on the licence server gets full admin.
+//
+// The list is now strictly opt-in via the `CUSTODY_ADMIN_EMAILS` env var
+// (comma-separated). If the env var is unset or empty, NO local install
+// treats any user as an admin. This means the licence server remains the
+// single source of truth for entitlements.
+//
+// Set CUSTODY_ADMIN_EMAILS only on machines used for support/admin work.
+const ADMIN_EMAILS_LOCAL = (process.env.CUSTODY_ADMIN_EMAILS || '')
+  .split(',')
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
 
 function computeLicenceStatus(data) {
   const noAddons = { quickfile: false, emailAddon: false };
@@ -4078,6 +4158,8 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   console.log(`[Startup] Custody Note v${app.getVersion()} â€” packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}`);
+  try { _securityLog.init(app.getPath('userData')); _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }); }
+  catch (_) {}
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
@@ -5419,6 +5501,39 @@ function verifySensitiveActionCredential(password, purpose) {
 
 ipcMain.handle('session-lock-status', () => getSecurityCredentialStatus());
 
+// Lock the renderer immediately when the OS reports lock-screen, suspend,
+// shutdown, or screen lock events. Treats those as "user has stepped away,
+// the session is no longer trusted". The renderer-side lock overlay handles
+// the actual UI; here we just notify it.
+function _broadcastForceLock(reason) {
+  try {
+    const wins = BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
+    for (const w of wins) {
+      if (w && !w.isDestroyed() && w.webContents) {
+        try { w.webContents.send('session-force-lock', { reason: reason || 'os-event' }); }
+        catch (_) {}
+      }
+    }
+    try { _securityLog && _securityLog.record && _securityLog.record('power_lock_triggered', { reason: reason || 'os-event' }); }
+    catch (_) {}
+  } catch (_) {}
+}
+try {
+  if (powerMonitor && typeof powerMonitor.on === 'function') {
+    powerMonitor.on('lock-screen', () => _broadcastForceLock('lock-screen'));
+    powerMonitor.on('suspend',     () => _broadcastForceLock('suspend'));
+    powerMonitor.on('shutdown',    () => _broadcastForceLock('shutdown'));
+    if (process.platform !== 'win32') {
+      // Some platforms expose 'user-did-resign-active' (macOS) for tab switch
+      // away from the app. Useful but noisy; gated to non-Windows.
+      try { powerMonitor.on('user-did-resign-active', () => _broadcastForceLock('user-did-resign-active')); }
+      catch (_) {}
+    }
+  }
+} catch (e) {
+  console.warn('[security] powerMonitor lock binding failed:', e && e.message ? e.message : e);
+}
+
 // H29 — bucket per-channel attempts so credential stuffing over IPC is
 // bounded to 5 tries per minute. Unlock via OS safeStorage isn't affected.
 const _ipcRateBuckets = new Map();
@@ -5828,13 +5943,16 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Missing email payload');
   }
-  return openOutlookWebEmail({
-    to: payload.to != null ? String(payload.to) : '',
-    cc: payload.cc != null ? String(payload.cc) : '',
-    bcc: payload.bcc != null ? String(payload.bcc) : '',
-    subject: payload.subject != null ? String(payload.subject) : '',
-    body: payload.body != null ? String(payload.body) : '',
-  });
+  return openOutlookWebEmail(
+    {
+      to: payload.to != null ? String(payload.to) : '',
+      cc: payload.cc != null ? String(payload.cc) : '',
+      bcc: payload.bcc != null ? String(payload.bcc) : '',
+      subject: payload.subject != null ? String(payload.subject) : '',
+      body: payload.body != null ? String(payload.body) : '',
+    },
+    { parentWindow: mainWindow || null }
+  );
 });
 
 ipcMain.handle('open-external', async (_, url) => {
@@ -5938,6 +6056,15 @@ async function renderHtmlToPdfBuffer(html) {
     width: 800, height: 600, show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
+  // Offscreen PDF window: belt-and-braces — should never need to navigate
+  // anywhere except the local temp file we just wrote.
+  try {
+    hardenWindow(win, {
+      logger: { warn: (msg, meta) => console.warn(msg, meta || '') },
+      appOrigin: '',
+      shellOpenExternal: () => Promise.resolve(),
+    });
+  } catch (_) {}
 
   function cleanupTemp() {
     try { fs.unlinkSync(tempPath); } catch (_) { /* ignore */ }
@@ -5989,22 +6116,26 @@ async function renderHtmlToPdfBuffer(html) {
 }
 
 ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
+  // Logged-name only (never log the full path — the home folder leaks the
+  // OS username; the file basename can leak client name if the renderer
+  // hasn't already sanitised it). The basename is what the user already
+  // sees in the success toast, so logging that is acceptable.
   let outPath = '<not yet set>';
+  let safeName = '';
   try {
     const desktop = app.getPath('desktop');
     if (!fs.existsSync(desktop)) {
-      throw new Error('Desktop folder does not exist: ' + desktop +
-        '. If you use OneDrive Known Folder Move, sign in to OneDrive and try again.');
+      throw new Error('Desktop folder does not exist. If you use OneDrive Known Folder Move, sign in to OneDrive and try again.');
     }
-    const safeName = path.basename(filename || `attendance-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
+    safeName = path.basename(filename || `attendance-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
     outPath = path.join(desktop, safeName);
     const buf = await renderHtmlToPdfBuffer(html);
     fs.writeFileSync(outPath, buf);
-    console.log('[print-to-pdf] wrote', outPath, '(' + buf.length + ' bytes from ' + (html ? html.length : 0) + ' chars HTML)');
+    console.log('[print-to-pdf] wrote ' + safeName + ' (' + buf.length + ' bytes)');
     return outPath;
   } catch (err) {
     const msg = err && err.message ? err.message : String(err);
-    console.error('[print-to-pdf] FAILED outPath=' + outPath + ' htmlLen=' + (html ? html.length : 0) + ' err=' + msg);
+    console.error('[print-to-pdf] FAILED file=' + (safeName || '<none>') + ' htmlLen=' + (html ? html.length : 0) + ' err=' + msg);
     throw new Error(msg);
   }
 });
@@ -6260,6 +6391,13 @@ ipcMain.handle('print-pdf-file', async (_, filePath) => {
     width: 800, height: 600, show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
   });
+  try {
+    hardenWindow(win, {
+      logger: { warn: (msg, meta) => console.warn(msg, meta || '') },
+      appOrigin: '',
+      shellOpenExternal: () => Promise.resolve(),
+    });
+  } catch (_) {}
   try {
     await win.loadFile(resolvedPath);
     await new Promise((resolve) => setTimeout(resolve, 500));

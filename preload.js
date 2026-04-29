@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   hasRecoveryPassword: () => ipcRenderer.invoke('has-recovery-password'),
   sessionLockStatus: () => ipcRenderer.invoke('session-lock-status'),
   sessionUnlock: (password) => ipcRenderer.invoke('session-unlock', password),
+  onSessionForceLock: (cb) => ipcRenderer.on('session-force-lock', (_, data) => cb(data)),
   recoverKeyFromCloud: () => ipcRenderer.invoke('recover-key-from-cloud'),
   isDbEncrypted: () => ipcRenderer.invoke('is-db-encrypted'),
   isSafeStorageAvailable: () => ipcRenderer.invoke('is-safe-storage-available'),
