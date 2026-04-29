@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.6.7",
+      "version": "1.6.8",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Fixed Outlook Web launch for Microsoft 365 accounts that were landing on home/inbox instead of compose: work-account URLs now use https://outlook.office.com/?path=/mail/action/compose&to=...&subject=...&body=... (auth-resilient compose route).",
+        "Kept existing encoded to/cc/bcc/subject/body transfer and preserved body formatting; updated browser fallback path and all Outlook routing tests/smokes to the new canonical work compose route.",
+        "Regression tests pass for Outlook URL building, main-process launcher, Quick Email payload transfer, routing policy, and window hardening."
+      ]
+    },
+    {
+      "version": "1.6.7",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Windows Quick Email / Outlook Web: launch Edge by spawning msedge.exe with the compose URL as a single argument (resolved from standard install paths or PATH). The previous implementation invoked cmd.exe `start msedge <url>`, which broke URLs at the first `&` query separator — Outlook opened with a truncated link or not at all.",
         "Renderer: when a second Send is triggered while the first email IPC is still in flight, the guard now returns `{ skipped: true }` instead of an empty resolve, so the UI does not show false \"Opening…\" success toasts.",

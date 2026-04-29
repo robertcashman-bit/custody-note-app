@@ -434,8 +434,8 @@
 
       var url;
       if (accountType === 'work') {
-        url = 'https://outlook.office.com/mail/deeplink/compose'
-            + '?to=' + enc(p.to) + '&cc=' + enc(p.cc) + '&bcc=' + enc(p.bcc)
+        url = 'https://outlook.office.com/?path=/mail/action/compose'
+            + '&to=' + enc(p.to) + '&cc=' + enc(p.cc) + '&bcc=' + enc(p.bcc)
             + '&subject=' + enc(p.subject) + '&body=' + enc(p.body);
       } else if (accountType === 'mailto') {
         var hdr = [];

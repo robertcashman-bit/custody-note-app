@@ -23,7 +23,7 @@ describe('buildOutlookWebComposeUrl', () => {
       subject: 'Hello & welcome',
       body: 'Line1\nLine2',
     });
-    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.ok(u.startsWith('https://outlook.office.com/?path=/mail/action/compose&'));
     assert.ok(u.includes('to=' + encodeURIComponent('a@b.com')));
     assert.ok(u.includes('subject=' + encodeURIComponent('Hello & welcome')));
     assert.ok(u.includes('body=' + encodeURIComponent('Line1\nLine2')));
@@ -40,8 +40,8 @@ describe('buildOutlookWebComposeUrl', () => {
     });
     assert.strictEqual(
       u,
-      'https://outlook.office.com/mail/deeplink/compose' +
-        '?to=' + encodeURIComponent('x@y.co.uk') +
+      'https://outlook.office.com/?path=/mail/action/compose' +
+        '&to=' + encodeURIComponent('x@y.co.uk') +
         '&cc=' + encodeURIComponent('a b@c.com') +
         '&bcc=' + encodeURIComponent('d@e.com') +
         '&subject=' + encodeURIComponent('?&=#') +
@@ -65,7 +65,7 @@ describe('openOutlookWebEmail (legacy work-account behaviour, accountType="work"
         }
       );
       assert.strictEqual(calls.length, 1);
-      assert.ok(calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'));
+      assert.ok(calls[0].startsWith('https://outlook.office.com/?path=/mail/action/compose'));
       assert.ok(!calls[0].toLowerCase().includes('mailto'));
     } finally {
       Object.defineProperty(process, 'platform', { value: prevPlatform, configurable: true });
@@ -87,7 +87,7 @@ describe('openOutlookWebEmail (legacy work-account behaviour, accountType="work"
       );
       assert.strictEqual(calls.length, 1);
       assert.ok(
-        calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'),
+        calls[0].startsWith('https://outlook.office.com/?path=/mail/action/compose'),
         'expected plain HTTPS compose URL on Windows: ' + calls[0].slice(0, 100)
       );
       assert.ok(!calls[0].startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
@@ -100,14 +100,14 @@ describe('openOutlookWebEmail (legacy work-account behaviour, accountType="work"
 describe('buildOutlookWebComposeUrl — edge cases', () => {
   it('handles empty/undefined fields without crashing', () => {
     const u = buildOutlookWebComposeUrl({});
-    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.ok(u.startsWith('https://outlook.office.com/?path=/mail/action/compose&'));
     assert.ok(u.includes('to=&'));
     assert.ok(u.includes('subject=&'));
   });
 
   it('handles null/undefined values gracefully', () => {
     const u = buildOutlookWebComposeUrl({ to: null, cc: undefined, bcc: null, subject: undefined, body: null });
-    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.ok(u.startsWith('https://outlook.office.com/?path=/mail/action/compose&'));
     assert.ok(!u.toLowerCase().includes('mailto'));
   });
 
@@ -154,7 +154,7 @@ describe('buildOutlookWebComposeUrl — edge cases', () => {
     ];
     for (const opts of inputs) {
       const u = buildOutlookWebComposeUrl(opts);
-      assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose'),
+      assert.ok(u.startsWith('https://outlook.office.com/?path=/mail/action/compose'),
         'must always start with OWA base URL');
     }
   });
@@ -291,7 +291,7 @@ describe('invokeOutlookWebCompose (renderer guard)', () => {
 describe('buildOutlookWebComposeUrl — multi-account-type support (v1.6.2)', () => {
   it('default (no accountType) preserves the legacy outlook.office.com URL for backwards-compat', () => {
     const u = buildOutlookWebComposeUrl({ to: 'a@b.c', subject: 'S', body: 'B' });
-    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'),
+    assert.ok(u.startsWith('https://outlook.office.com/?path=/mail/action/compose&'),
       'no-arg call must keep working with the office.com URL: ' + u);
   });
 
@@ -306,7 +306,7 @@ describe('buildOutlookWebComposeUrl — multi-account-type support (v1.6.2)', ()
 
   it("accountType='work' targets outlook.office.com (M365)", () => {
     const u = buildOutlookWebComposeUrl({ accountType: 'work', to: 'a@b.c', subject: 'S', body: 'B' });
-    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'), u);
+    assert.ok(u.startsWith('https://outlook.office.com/?path=/mail/action/compose&'), u);
   });
 
   it("accountType='mailto' produces a RFC 6068 mailto: URI with subject + body in headers", () => {
@@ -391,7 +391,7 @@ describe('inferOutlookAccountType — pick a sensible Outlook surface from the u
   });
   it('falls back to the work surface (office.com) when the address is empty / malformed', () => {
     /* v1.6.4 — DEFAULT_ACCOUNT_TYPE switched from "personal" to "work"
-       so the OOTB compose URL is https://outlook.office.com/mail/deeplink/compose,
+       so the OOTB compose URL is https://outlook.office.com/?path=/mail/action/compose,
        which is the surface that actually opens compose for the common
        case (solicitors on M365 firm accounts). Personal users opt in
        via Settings → Your Details → "Quick Email opens in". */
@@ -436,7 +436,7 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
         { to: 'a@b.c', subject: 'S', body: 'B' },
         { shell: spy.shell, skipConfirm: true, accountType: 'work' }
       );
-      assert.ok(spy.calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'),
+      assert.ok(spy.calls[0].startsWith('https://outlook.office.com/?path=/mail/action/compose'),
         'work must launch the plain office.com compose URL: ' + spy.calls[0]);
       assert.ok(!spy.calls[0].startsWith('microsoft-edge:'),
         'work must not use microsoft-edge: prefix: ' + spy.calls[0]);
@@ -459,7 +459,7 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
         }
       );
       assert.strictEqual(launched.length, 1);
-      assert.ok(launched[0].startsWith('https://outlook.office.com/mail/deeplink/compose?'),
+      assert.ok(launched[0].startsWith('https://outlook.office.com/?path=/mail/action/compose&'),
         'browser launcher must receive the plain compose URL: ' + launched[0]);
       assert.strictEqual(result.launchMethod, 'msedge-cli');
       assert.strictEqual(result.launchUrl, launched[0]);
