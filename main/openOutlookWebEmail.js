@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { shell, dialog, clipboard } = require('electron');
+const { shell, dialog, clipboard, app } = require('electron');
 const { spawn } = require('child_process');
 const {
   buildOutlookWebComposeUrl,
@@ -38,6 +38,48 @@ function _sanitiseSubject(s) {
 }
 
 let _outlookWebAckSession = null; // null | 'open' | 'no-body'
+
+function _traceLaunch(event, data) {
+  try {
+    var base = null;
+    try { base = app && typeof app.getPath === 'function' ? app.getPath('userData') : null; } catch (_) {}
+    if (!base) base = process.cwd();
+    var file = path.join(base, 'email-launch.log');
+    var line = JSON.stringify({
+      ts: new Date().toISOString(),
+      event: String(event || 'unknown'),
+      data: data || {},
+    });
+    fs.appendFileSync(file, line + '\n');
+  } catch (_) { /* tracing must never break launch */ }
+}
+
+function _composeSignature(accountType, launchUrl) {
+  var t = String(accountType || '').toLowerCase();
+  var raw = String(launchUrl || '');
+  var out = { composeSignature: false, composeReason: 'empty_url' };
+  if (!raw) return out;
+  var u;
+  try { u = new URL(raw); } catch (_) { return { composeSignature: false, composeReason: 'invalid_url' }; }
+  var host = String(u.hostname || '').toLowerCase();
+  if (t === 'work') {
+    if (host !== 'outlook.office.com') return { composeSignature: false, composeReason: 'work_wrong_host' };
+    var qp = String(u.searchParams.get('path') || '');
+    if (qp === '/mail/action/compose') return { composeSignature: true, composeReason: 'work_action_compose' };
+    if (String(u.pathname || '') === '/mail/deeplink/compose') return { composeSignature: true, composeReason: 'work_deeplink_compose' };
+    return { composeSignature: false, composeReason: 'work_not_compose_route' };
+  }
+  if (t === 'personal') {
+    if (host !== 'outlook.live.com') return { composeSignature: false, composeReason: 'personal_wrong_host' };
+    if (String(u.pathname || '') === '/mail/0/deeplink/compose') return { composeSignature: true, composeReason: 'personal_deeplink_compose' };
+    return { composeSignature: false, composeReason: 'personal_not_compose_route' };
+  }
+  if (t === 'mailto') {
+    if (String(u.protocol || '').toLowerCase() === 'mailto:') return { composeSignature: true, composeReason: 'mailto' };
+    return { composeSignature: false, composeReason: 'mailto_wrong_protocol' };
+  }
+  return { composeSignature: false, composeReason: 'unknown_account_type' };
+}
 
 /** Prefer a full path so we need not go through cmd.exe (cmd treats `&` in URLs as shell operators). */
 function _resolveMsEdgeExecutable() {
@@ -171,6 +213,7 @@ async function openOutlookWebEmail(payload, deps = {}) {
     if (safePayload.feeEarnerEmail) return inferOutlookAccountType(safePayload.feeEarnerEmail);
     return inferOutlookAccountType(''); // shared default: work / office.com
   })();
+  _traceLaunch('resolve_account_type', { accountType: accountType, skipConfirm: !!skipConfirm });
   // Strip our internal hints from the payload before URL building.
   delete safePayload.accountType;
   delete safePayload.feeEarnerEmail;
@@ -185,6 +228,7 @@ async function openOutlookWebEmail(payload, deps = {}) {
     }
   }
   if (mode === 'cancel') {
+    _traceLaunch('cancelled', { accountType: accountType });
     return { ok: false, cancelled: true, truncated: false, reason: 'user_cancelled', accountType: accountType };
   }
   if (mode === 'no-body') {
@@ -193,6 +237,15 @@ async function openOutlookWebEmail(payload, deps = {}) {
 
   const meta = buildOutlookWebComposeUrlWithMeta(Object.assign({}, safePayload, { accountType: accountType }));
   const url = meta.url;
+  _traceLaunch('url_built', {
+    accountType: accountType,
+    host: (function () { try { return new URL(url).hostname; } catch (_) { return ''; } })(),
+    path: (function () { try { return new URL(url).pathname; } catch (_) { return ''; } })(),
+    hasPathParam: (function () { try { return String(new URL(url).searchParams.get('path') || '') !== ''; } catch (_) { return false; } })(),
+    len: String(url).length,
+    truncated: !!meta.truncated,
+    mode: mode,
+  });
 
   // M20 — never log subject/body in production.
   console.log('[EMAIL] Opening Outlook (account=' + accountType + ', len=' + url.length + ', truncated=' + meta.truncated + ', mode=' + mode + ')');
@@ -216,6 +269,16 @@ async function openOutlookWebEmail(payload, deps = {}) {
   const launchUrl = url;
 
   return _launchExternalUrl(launchUrl, accountType, deps, shellApi).then(function(launchResult) {
+    const sig = _composeSignature(accountType, launchResult && launchResult.launchUrl);
+    _traceLaunch('url_launched', {
+      accountType: accountType,
+      launchMethod: launchResult && launchResult.launchMethod,
+      composeSignature: sig.composeSignature,
+      composeReason: sig.composeReason,
+      host: (function () { try { return new URL(launchResult.launchUrl).hostname; } catch (_) { return ''; } })(),
+      path: (function () { try { return new URL(launchResult.launchUrl).pathname; } catch (_) { return ''; } })(),
+      hasPathParam: (function () { try { return String(new URL(launchResult.launchUrl).searchParams.get('path') || '') !== ''; } catch (_) { return false; } })(),
+    });
     return {
       ok: true,
       mode: mode,
@@ -225,6 +288,8 @@ async function openOutlookWebEmail(payload, deps = {}) {
       clipboardCopied: clipboardCopied,
       launchUrl: launchResult.launchUrl,
       launchMethod: launchResult.launchMethod,
+      composeSignature: sig.composeSignature,
+      composeReason: sig.composeReason,
     };
   });
 }
@@ -239,4 +304,5 @@ module.exports = {
   _resetOutlookWebAckForTests,
   _openUrlViaEdgeCommand,
   _launchExternalUrl,
+  _composeSignature,
 };

@@ -463,6 +463,7 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
         'browser launcher must receive the plain compose URL: ' + launched[0]);
       assert.strictEqual(result.launchMethod, 'msedge-cli');
       assert.strictEqual(result.launchUrl, launched[0]);
+      assert.strictEqual(result.composeSignature, true);
     } finally {
       Object.defineProperty(process, 'platform', { value: prev, configurable: true });
     }
@@ -484,6 +485,7 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
       );
       assert.strictEqual(spy.calls.length, 1);
       assert.strictEqual(result.launchMethod, 'shell-fallback');
+      assert.strictEqual(result.composeSignature, true);
     } finally {
       Object.defineProperty(process, 'platform', { value: prev, configurable: true });
     }
@@ -503,6 +505,7 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
       assert.ok(spy.calls[0].includes('subject=' + encodeURIComponent('Hi')));
       assert.ok(spy.calls[0].includes('body=' + encodeURIComponent('Hello')));
       assert.strictEqual(result.accountType, 'mailto');
+      assert.strictEqual(result.composeSignature, true);
     } finally {
       Object.defineProperty(process, 'platform', { value: prev, configurable: true });
     }
@@ -551,5 +554,39 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
     assert.strictEqual(result.cancelled, true);
     assert.strictEqual(result.reason, 'user_cancelled');
     assert.strictEqual(result.accountType, 'personal');
+  });
+
+  it('production Windows personal HTTPS launch uses Edge command-line and compose signature', async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const launched = [];
+      const result = await openOutlookWebEmail(
+        { to: 'person@example.com', subject: 'S', body: 'B' },
+        {
+          skipConfirm: true,
+          accountType: 'personal',
+          browserLauncher: (u) => { launched.push(u); return Promise.resolve(); },
+        }
+      );
+      assert.strictEqual(launched.length, 1);
+      assert.ok(launched[0].startsWith('https://outlook.live.com/mail/0/deeplink/compose?'));
+      assert.strictEqual(result.launchMethod, 'msedge-cli');
+      assert.strictEqual(result.composeSignature, true);
+      assert.strictEqual(result.composeReason, 'personal_deeplink_compose');
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+});
+
+describe('_composeSignature helper', () => {
+  const mod = require('../main/openOutlookWebEmail');
+  const composeSignature = mod._composeSignature;
+  it('flags inbox/home URLs as non-compose', () => {
+    const work = composeSignature('work', 'https://outlook.office.com/mail/');
+    const personal = composeSignature('personal', 'https://outlook.live.com/mail/0/inbox');
+    assert.strictEqual(work.composeSignature, false);
+    assert.strictEqual(personal.composeSignature, false);
   });
 });
