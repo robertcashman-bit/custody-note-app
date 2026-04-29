@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.6.2",
+      "version": "1.6.3",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Quick Email: pressing 'Send via Outlook Web' no longer auto-clears the form. Outlook can fail silently (pop-up blocker, mid sign-in, network glitch) and the previous behaviour wiped your typed content even when no email actually went out.",
+        "New 'Clear' button in both the Quick Email modal and the per-record Officer Email modal. Clearing now requires a confirmation when there is content to lose, so the data is only ever cleared when you explicitly choose to.",
+        "New rotating-wheel ('counter style') date and time picker. Tap the calendar/clock icon next to any date or time field — including the attendance date and time, time of first contact, time set off / arrived / left, and station-visit times — to scroll Day / Month / Year / Hour / Minute on a thumb-friendly wheel.",
+        "Wheel picker has Now / Cancel / Done, snaps to row boundaries, re-clamps the day when you change month/year (29 Feb 2024 vs 28 Feb 2025), and writes back the standard ISO value so existing auto-save and validation keep working. Native typing in the input still works as a fallback.",
+        "Picker auto-attaches to dynamically-added inputs too (e.g. additional station-visit cards), driven by a MutationObserver — no extra wiring needed in any view.",
+        "16 new tests for the wheel picker (parse/format helpers, attach + open + commit, Cancel preserves value, Now writes the current time, day re-clamping). 4 new tests for the Quick Email Clear behaviour. Total: 1186/1186 unit tests pass."
+      ]
+    },
+    {
+      "version": "1.6.2",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Quick Email: choose where 'Send via Outlook' opens — Outlook.com (personal), Outlook on the web (M365 work / school), or your default email app (Outlook desktop / Mail). Settings -> Your Details -> 'Quick Email opens in'.",
         "Fix: previously the button always tried Microsoft 365 (outlook.office.com), which silently fails for users on personal Outlook.com / Hotmail accounts — recipient/subject/body never reached Outlook.",

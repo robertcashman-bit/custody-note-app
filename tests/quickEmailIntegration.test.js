@@ -293,16 +293,23 @@ describe('Quick Email modal — value-to-placeholder save flow', () => {
   });
 });
 
-describe('Quick Email modal — send-success clears form, send-failure preserves', () => {
-  it('successful Outlook open clears all form fields and the persisted draft', async () => {
+describe('Quick Email modal — send never auto-clears; user-initiated Clear does', () => {
+  /* User report (v1.6.3): "email is not being transferred automatically to
+     Outlook web when done but cleared. Emails should only be cleared by user
+     (maybe option to do so) on quick email."
+     The previous behaviour wiped the form on a successful resolve from the
+     Outlook compose IPC. That is wrong because Outlook can fail silently
+     (pop-up blocker, mid sign-in) — the user would lose the typed content
+     even though no email was actually sent. */
+
+  it('successful Outlook open KEEPS all form fields and the persisted draft', async () => {
     const env = createEnv();
-    /* Stub Outlook compose to resolve (success). */
     env.window.invokeOutlookWebCompose = () => Promise.resolve();
 
-    let lastSavedDraft;
+    let clearedDraft = false;
     env.window.api.setSettings = (patch) => {
-      if (patch && Object.prototype.hasOwnProperty.call(patch, 'lastQuickEmailDraftJson')) {
-        lastSavedDraft = patch.lastQuickEmailDraftJson;
+      if (patch && Object.prototype.hasOwnProperty.call(patch, 'lastQuickEmailDraftJson') && patch.lastQuickEmailDraftJson === '') {
+        clearedDraft = true;
       }
       return Promise.resolve();
     };
@@ -314,19 +321,22 @@ describe('Quick Email modal — send-success clears form, send-failure preserves
     setField(env.document, 'oicName',      'Smith');
     pickTemplate(env.document, 'system:disclosure');
 
+    const subjBefore = env.document.getElementById('quick-email-subject').value;
+    const bodyBefore = env.document.getElementById('quick-email-body').value;
+
     env.document.getElementById('qe-send').click();
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
-    assert.strictEqual(env.document.getElementById('qe-field-clientName').value, '', 'client name should be cleared on success');
-    assert.strictEqual(env.document.getElementById('qe-field-station').value,    '', 'station should be cleared on success');
-    assert.strictEqual(env.document.getElementById('qe-field-oicName').value,    '', 'officer name should be cleared on success');
-    assert.strictEqual(env.document.getElementById('qe-field-officerEmail').value, '', 'officer email should be cleared on success');
-    assert.strictEqual(env.document.getElementById('quick-email-picker').value, '', 'template choice should reset so extra sections are hidden');
-    assert.strictEqual(env.document.getElementById('quick-email-subject').value, '', 'subject preview should be cleared on success');
-    assert.strictEqual(env.document.getElementById('quick-email-body').value,    '', 'message preview should be cleared on success');
-    assert.strictEqual(lastSavedDraft, '', 'persisted draft should be cleared on success');
+    assert.strictEqual(env.document.getElementById('qe-field-clientName').value,   'Alice Brown',   'client name kept after send');
+    assert.strictEqual(env.document.getElementById('qe-field-station').value,      'Camden',        'station kept after send');
+    assert.strictEqual(env.document.getElementById('qe-field-oicName').value,      'Smith',         'officer name kept after send');
+    assert.strictEqual(env.document.getElementById('qe-field-officerEmail').value, 'oic@police.uk', 'officer email kept after send');
+    assert.strictEqual(env.document.getElementById('quick-email-picker').value,    'system:disclosure', 'template choice kept after send');
+    assert.strictEqual(env.document.getElementById('quick-email-subject').value,   subjBefore,      'subject preview kept after send');
+    assert.strictEqual(env.document.getElementById('quick-email-body').value,      bodyBefore,      'message preview kept after send');
+    assert.strictEqual(clearedDraft, false, 'persisted draft must NOT be cleared by sending');
   });
 
   it('failed Outlook open preserves form fields (no clearing)', async () => {
@@ -347,16 +357,71 @@ describe('Quick Email modal — send-success clears form, send-failure preserves
     pickTemplate(env.document, 'system:disclosure');
 
     env.document.getElementById('qe-send').click();
-    /* Allow microtasks for the rejected promise chain. */
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
 
-    assert.strictEqual(env.document.getElementById('qe-field-clientName').value,   'Bob Stone',     'client name should be kept on failure');
-    assert.strictEqual(env.document.getElementById('qe-field-station').value,      'Holborn',       'station should be kept on failure');
-    assert.strictEqual(env.document.getElementById('qe-field-oicName').value,      'Williams',      'officer name should be kept on failure');
-    assert.strictEqual(env.document.getElementById('qe-field-officerEmail').value, 'oic@police.uk', 'officer email should be kept on failure');
+    assert.strictEqual(env.document.getElementById('qe-field-clientName').value,   'Bob Stone',     'client name kept on failure');
+    assert.strictEqual(env.document.getElementById('qe-field-station').value,      'Holborn',       'station kept on failure');
+    assert.strictEqual(env.document.getElementById('qe-field-oicName').value,      'Williams',      'officer name kept on failure');
+    assert.strictEqual(env.document.getElementById('qe-field-officerEmail').value, 'oic@police.uk', 'officer email kept on failure');
     assert.strictEqual(clearedDraft, false, 'persisted draft must NOT be cleared on failure');
+  });
+
+  it('explicit Clear button clears the form, template, preview and persisted draft', async () => {
+    const env = createEnv();
+    /* Always confirm so we exercise the destructive branch. */
+    env.window.eval('showConfirm = function(){ return Promise.resolve(true); };');
+    env.window.invokeOutlookWebCompose = () => Promise.resolve();
+
+    let clearedDraft = false;
+    env.window.api.setSettings = (patch) => {
+      if (patch && Object.prototype.hasOwnProperty.call(patch, 'lastQuickEmailDraftJson') && patch.lastQuickEmailDraftJson === '') {
+        clearedDraft = true;
+      }
+      return Promise.resolve();
+    };
+
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@police.uk');
+    setField(env.document, 'clientName',   'Alice Brown');
+    setField(env.document, 'station',      'Camden');
+    setField(env.document, 'oicName',      'Smith');
+    pickTemplate(env.document, 'system:disclosure');
+
+    const clearBtn = env.document.getElementById('qe-clear');
+    assert.ok(clearBtn, 'Clear button must exist in the actions bar');
+    clearBtn.click();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.strictEqual(env.document.getElementById('qe-field-clientName').value,   '', 'client name cleared by Clear');
+    assert.strictEqual(env.document.getElementById('qe-field-station').value,      '', 'station cleared by Clear');
+    assert.strictEqual(env.document.getElementById('qe-field-oicName').value,      '', 'officer name cleared by Clear');
+    assert.strictEqual(env.document.getElementById('qe-field-officerEmail').value, '', 'officer email cleared by Clear');
+    assert.strictEqual(env.document.getElementById('quick-email-picker').value,    '', 'template choice cleared by Clear');
+    assert.strictEqual(env.document.getElementById('quick-email-subject').value,   '', 'subject preview cleared by Clear');
+    assert.strictEqual(env.document.getElementById('quick-email-body').value,      '', 'message preview cleared by Clear');
+    assert.strictEqual(clearedDraft, true, 'persisted draft cleared by Clear');
+  });
+
+  it('Clear button cancellation (showConfirm rejected) keeps the form intact', async () => {
+    const env = createEnv();
+    env.window.eval('showConfirm = function(){ return Promise.resolve(false); };');
+
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@police.uk');
+    setField(env.document, 'clientName',   'Alice Brown');
+    pickTemplate(env.document, 'system:disclosure');
+
+    env.document.getElementById('qe-clear').click();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.strictEqual(env.document.getElementById('qe-field-clientName').value,   'Alice Brown',  'cancel keeps client name');
+    assert.strictEqual(env.document.getElementById('qe-field-officerEmail').value, 'oic@police.uk','cancel keeps officer email');
+    assert.strictEqual(env.document.getElementById('quick-email-picker').value,    'system:disclosure', 'cancel keeps template');
   });
 });
 
