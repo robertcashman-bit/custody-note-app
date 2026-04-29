@@ -85,7 +85,8 @@ describe('Outlook Web email routing', () => {
   it('main process exposes open-outlook-email and blocks mailto in open-external', () => {
     assert.ok(mainJs.includes("ipcMain.handle('open-outlook-email'"), 'IPC handler present');
     assert.ok(mainJs.includes("require('./main/openOutlookWebEmail')"), 'delegates to module');
-    assert.ok(openOutlookModule.includes("'microsoft-edge:' + url"), 'Windows forces Edge for OWA');
+    assert.ok(openOutlookModule.includes('const launchUrl = url'), 'OWA opens as plain HTTPS compose URL');
+    assert.ok(!openOutlookModule.includes("'microsoft-edge:' + url"), 'Windows must not wrap OWA with microsoft-edge:');
     assert.ok(outlookUrlLib.includes('outlook.office.com/mail/deeplink/compose'), 'OWA URL in lib/outlookWebComposeUrl.js');
     assert.ok(mainJs.includes("u.toLowerCase().startsWith('mailto:')"), 'mailto blocked in open-external');
   });
