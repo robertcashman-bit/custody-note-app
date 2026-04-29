@@ -26,8 +26,22 @@ function _invokeOutlookEmail(payload) {
   if (typeof window.invokeOutlookWebCompose !== 'function') {
     return Promise.reject(new Error('Email unavailable'));
   }
-  return window.invokeOutlookWebCompose(payload).then(function() {
-    showToast('Opening Outlook Web…', 'success');
+  /* Forward the saved account-type hint (work | personal | mailto) so the
+     main process picks the right Outlook surface and the dialog wording
+     matches what the user chose in Settings. */
+  var settings = window._appSettingsCache || {};
+  var accountType = String(settings.outlookAccountType || '').toLowerCase();
+  if (accountType !== 'work' && accountType !== 'mailto') accountType = 'personal';
+  var enriched = Object.assign({}, payload || {}, { accountType: accountType });
+  return window.invokeOutlookWebCompose(enriched).then(function(result) {
+    var surface = accountType === 'mailto' ? 'your email app' : (accountType === 'work' ? 'Outlook on the web' : 'Outlook.com');
+    showToast('Opening ' + surface + '…', 'success');
+    if (result && result.truncated && result.clipboardCopied) {
+      showToast('Email body was too long for the link — full body copied to clipboard, paste it into Outlook.', 'warning', 6000);
+    } else if (result && result.truncated) {
+      showToast('Email body was too long for the link — it has been trimmed. Paste the rest manually.', 'warning', 6000);
+    }
+    return result;
   }).catch(function(err) {
     console.error('[email-modal]', err);
     showToast(err && err.message ? err.message : 'Could not open email', 'error');

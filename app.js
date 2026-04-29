@@ -5162,6 +5162,11 @@ var REQUIRED_FIELD_KEYS = [
       if (qfApp) qfApp.value = s.quickfileAppId || '';
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
+      const oat = document.getElementById('setting-outlook-account-type');
+      if (oat) {
+        var raw = String(s.outlookAccountType || '').toLowerCase();
+        oat.value = (raw === 'work' || raw === 'mailto') ? raw : 'personal';
+      }
       const opc = document.getElementById('setting-office-postcode');
       if (opc && document.activeElement !== opc) opc.value = s.officePostcode || '';
       const dm = document.getElementById('setting-dark-mode');
@@ -5501,6 +5506,10 @@ var REQUIRED_FIELD_KEYS = [
       billingMileageRate: document.getElementById('setting-billing-mileage-rate')?.value?.trim() || '0.45',
       billingVatRate: document.getElementById('setting-billing-vat-rate')?.value?.trim() || '20',
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
+      outlookAccountType: (function() {
+        var v = String(document.getElementById('setting-outlook-account-type')?.value || 'personal').toLowerCase();
+        return (v === 'work' || v === 'mailto') ? v : 'personal';
+      })(),
       feeEarnerSigMode: (function() {
         const c = document.querySelector('input[name="fee-earner-sig-mode"]:checked');
         return c && c.value === 'saved' ? 'saved' : 'draw';
@@ -17358,6 +17367,13 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('setting-fee-earner-name')?.addEventListener('input', debounce((e) => {
       window.api.setSettings({ feeEarnerNameDefault: e.target.value.trim() }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     }, 800));
+
+    document.getElementById('setting-outlook-account-type')?.addEventListener('change', function(e) {
+      var v = String(e.target.value || 'personal').toLowerCase();
+      if (v !== 'work' && v !== 'mailto') v = 'personal';
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { outlookAccountType: v });
+      window.api.setSettings({ outlookAccountType: v }).then(showSettingsSavedToast).catch(function(err) { console.error('[setSettings]', err); });
+    });
 
     document.querySelectorAll('input[name="fee-earner-sig-mode"]').forEach(function(r) {
       r.addEventListener('change', function() {

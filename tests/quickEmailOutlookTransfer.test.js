@@ -317,3 +317,97 @@ describe('Quick Email → main-process end-to-end (regression: typed body must r
     assert.ok(opens[0].includes(encodeURIComponent('KEEP_ME_IN_URL')), opens[0]);
   });
 });
+
+describe('Quick Email modal — accountType setting selects the right Outlook surface end-to-end', () => {
+  /* Re-uses the createEnv helper from the top of this file but injects an
+     outlookAccountType setting and a fresh emailAPI.open spy that runs the
+     real openOutlookWebEmail so the mailto / personal / work URL surfaces
+     are exercised through the full pipeline (form -> modal -> _invokeOutlookEmail
+     -> emailAPI.open -> openOutlookWebEmail -> shell.openExternal). */
+
+  function makeWiredEnv(accountType) {
+    const env = createEnv();
+    env.window._appSettingsCache = Object.assign({}, env.window._appSettingsCache || {}, { outlookAccountType: accountType });
+
+    /* Replace the captured-payloads stub with one that invokes the real
+       main-process opener so URL building + Edge logic + clipboard
+       fallback are exercised together. */
+    const opens = [];
+    env.opens = opens;
+    env.window.invokeOutlookWebCompose = (payload) => openOutlookWebEmail(
+      Object.assign({}, payload),
+      {
+        shell: { openExternal: (u) => { opens.push(u); return Promise.resolve(); } },
+        skipConfirm: true,
+        accountType: payload.accountType,
+      }
+    );
+    return env;
+  }
+
+  it("setting outlookAccountType='personal' opens outlook.live.com with the typed body", async () => {
+    _resetOutlookWebAckForTests();
+    const env = makeWiredEnv('personal');
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@met.police.uk');
+    setField(env.document, 'oicName',      'Smith');
+    setField(env.document, 'clientName',   'John Doe');
+    setField(env.document, 'station',      'Holborn');
+    pickTemplate(env.document, 'system:disclosure');
+
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(8);
+
+    assert.strictEqual(env.opens.length, 1, 'send did not reach openOutlookWebEmail');
+    const launchUrl = env.opens[0];
+    assert.ok(launchUrl.startsWith('https://outlook.live.com/mail/0/deeplink/compose'),
+      'personal must hit outlook.live.com: ' + launchUrl.slice(0, 200));
+    assert.ok(launchUrl.includes('to=' + encodeURIComponent('oic@met.police.uk')));
+    assert.ok(launchUrl.includes(encodeURIComponent('John Doe')));
+    assert.ok(launchUrl.includes(encodeURIComponent('Holborn')));
+    assert.ok(launchUrl.includes(encodeURIComponent('Dear DC Smith,')));
+  });
+
+  it("setting outlookAccountType='mailto' produces a mailto: URI with subject + body", async () => {
+    _resetOutlookWebAckForTests();
+    const env = makeWiredEnv('mailto');
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@met.police.uk');
+    setField(env.document, 'oicName',      'Williams');
+    setField(env.document, 'clientName',   'Alice Brown');
+    setField(env.document, 'station',      'Camden');
+    pickTemplate(env.document, 'system:disclosure');
+
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(8);
+
+    assert.strictEqual(env.opens.length, 1);
+    const launchUrl = env.opens[0];
+    assert.ok(launchUrl.startsWith('mailto:'), 'mailto must use mailto: scheme: ' + launchUrl.slice(0, 100));
+    assert.ok(launchUrl.startsWith('mailto:' + encodeURIComponent('oic@met.police.uk')));
+    assert.ok(launchUrl.includes('subject=' + encodeURIComponent('Alice Brown - Camden - request for disclosure')));
+    assert.ok(launchUrl.includes(encodeURIComponent('Dear DC Williams,')));
+  });
+
+  it("setting outlookAccountType='work' keeps the existing outlook.office.com path", async () => {
+    _resetOutlookWebAckForTests();
+    const env = makeWiredEnv('work');
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@firm.example');
+    setField(env.document, 'clientName',   'Test Client');
+    setField(env.document, 'station',      'Westminster');
+    pickTemplate(env.document, 'system:representation');
+
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(8);
+
+    const launchUrl = env.opens[0];
+    /* On Windows the work surface gets prefixed with microsoft-edge:; off Windows it stays plain https. */
+    assert.ok(
+      launchUrl.startsWith('https://outlook.office.com/') ||
+      launchUrl.startsWith('microsoft-edge:https://outlook.office.com/'),
+      'work must hit outlook.office.com: ' + launchUrl.slice(0, 200)
+    );
+    assert.ok(launchUrl.includes(encodeURIComponent('Test Client')));
+  });
+});

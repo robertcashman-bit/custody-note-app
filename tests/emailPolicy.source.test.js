@@ -48,12 +48,24 @@ function walkJsHtml(dir) {
   return results;
 }
 
+/* v1.6.2: mailto: is now an opt-in Outlook surface (Settings → "My default email
+   app"), so the URL builders and the browser fallback are allowed to emit it.
+   Other renderer/UI files (templates, list/billing/settings views, etc.) must
+   STILL not contain raw mailto: strings — they have to go through emailAPI. */
+const MAILTO_ALLOWED = new Set([
+  'lib/outlookWebComposeUrl.js',
+  'main/openOutlookWebEmail.js',
+  'browser-api.js',
+  'main.js', // contains the open-external mailto block
+]);
+
 describe('Email policy — production sources', () => {
-  it('listed JS/HTML files contain no mailto: (mailto is blocked in main only)', () => {
+  it('renderer/UI files still contain no mailto: (mailto only goes through the URL builders)', () => {
     const bad = [];
     for (const rel of PROD_FILES) {
       const f = path.join(root, rel);
       if (!fs.existsSync(f)) continue;
+      if (MAILTO_ALLOWED.has(rel)) continue;
       const text = fs.readFileSync(f, 'utf8');
       if (text.toLowerCase().includes('mailto:')) {
         bad.push(rel);
@@ -62,20 +74,19 @@ describe('Email policy — production sources', () => {
     assert.deepStrictEqual(bad, [], 'Unexpected mailto: in:\n' + bad.join('\n'));
   });
 
-  it('FULL codebase scan: zero mailto: in any JS/HTML file (except main.js block + tests)', () => {
-    const allowedFiles = ['main.js'];
+  it('FULL codebase scan: mailto: only appears in the allow-listed builder/fallback files', () => {
     const allFiles = walkJsHtml(root);
     const bad = [];
     for (const f of allFiles) {
       const rel = path.relative(root, f).replace(/\\/g, '/');
       if (rel.startsWith('tests/')) continue;
-      if (allowedFiles.includes(rel)) continue;
+      if (MAILTO_ALLOWED.has(rel)) continue;
       const text = fs.readFileSync(f, 'utf8');
       if (text.toLowerCase().includes('mailto:')) {
         bad.push(rel);
       }
     }
-    assert.deepStrictEqual(bad, [], 'mailto: found in active source files:\n' + bad.join('\n'));
+    assert.deepStrictEqual(bad, [], 'mailto: found in non-allow-listed source files:\n' + bad.join('\n'));
   });
 
   it('no navigator.share used for email in any JS file', () => {
