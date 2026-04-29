@@ -20,10 +20,10 @@ const {
  * v1.6.2 hardening:
  *   - Honours `accountType` ('work' | 'personal' | 'mailto') so the URL goes
  *     to outlook.office.com, outlook.live.com, or mailto: respectively.
- *   - Only force `microsoft-edge:` when targeting outlook.office.com on
- *     Windows; for personal Outlook and mailto we use the OS default app
- *     (so users without Edge / signed into a different Outlook profile in
- *     their default browser get the right destination).
+ *   - v1.6.5 update: do NOT prefix work links with `microsoft-edge:`. On
+ *     current Edge / Outlook Web, the new outlook.cloud.microsoft shell can
+ *     normalise the Edge-protocol launch back to the mailbox and drop the
+ *     compose route. Plain HTTPS preserves the /mail/deeplink/compose URL.
  *   - When the body has to be trimmed for URL length, the FULL body is also
  *     copied to the system clipboard so the user can paste it into Outlook.
  */
@@ -97,7 +97,7 @@ async function openOutlookWebEmail(payload, deps = {}) {
     if (deps.accountType) return deps.accountType;
     if (safePayload.accountType) return safePayload.accountType;
     if (safePayload.feeEarnerEmail) return inferOutlookAccountType(safePayload.feeEarnerEmail);
-    return 'personal'; // sensible default for "Outlook.com" users
+    return inferOutlookAccountType(''); // shared default: work / office.com
   })();
   // Strip our internal hints from the payload before URL building.
   delete safePayload.accountType;
@@ -122,8 +122,11 @@ async function openOutlookWebEmail(payload, deps = {}) {
   const meta = buildOutlookWebComposeUrlWithMeta(Object.assign({}, safePayload, { accountType: accountType }));
   const url = meta.url;
 
-  // M20 — never log subject/body in the URL.
+  // M20 — never log subject/body in production.
   console.log('[EMAIL] Opening Outlook (account=' + accountType + ', len=' + url.length + ', truncated=' + meta.truncated + ', mode=' + mode + ')');
+  if (process && process.env && process.env.NODE_ENV === 'development') {
+    console.log('Opening Outlook compose URL:', url);
+  }
 
   // If we had to trim the body, copy the FULL original body to the clipboard
   // so the user can paste it into the Outlook compose window.
@@ -135,16 +138,10 @@ async function openOutlookWebEmail(payload, deps = {}) {
     } catch (_) { /* clipboard not available — continue silently */ }
   }
 
-  // Edge-forcing rule:
-  //   - work (outlook.office.com): on Windows, prefix `microsoft-edge:` so the
-  //     "New Outlook" desktop URL handler doesn't intercept the deeplink.
-  //   - personal (outlook.live.com): use the OS default browser — Outlook
-  //     desktop never claims outlook.live.com so default is correct.
-  //   - mailto: use the OS default mail handler.
-  let launchUrl = url;
-  if (process.platform === 'win32' && accountType === 'work' && url.startsWith('https://')) {
-    launchUrl = 'microsoft-edge:' + url;
-  }
+  // Use the plain URL for all HTTPS compose links. Do not wrap with
+  // microsoft-edge: — Edge/Outlook can redirect that protocol launch to
+  // outlook.cloud.microsoft/mail and lose the compose path.
+  const launchUrl = url;
 
   return Promise.resolve(shellApi.openExternal(launchUrl)).then(function() {
     return {

@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.6.4",
+      "version": "1.6.5",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Quick Email Outlook launch fix for Microsoft Edge / new Outlook Web: work-account sends now open the plain HTTPS compose deeplink directly (https://outlook.office.com/mail/deeplink/compose?...), with no microsoft-edge: protocol wrapper.",
+        "Fixes the case where Edge redirected to outlook.cloud.microsoft/mail and landed in the Inbox/home screen instead of creating a compose email.",
+        "Kept the existing encoded to/subject/body parameters and compose path; tests now assert the launched URL contains /mail/deeplink/compose? and is not wrapped in microsoft-edge:.",
+        "Updated routing regression tests and smoke journey. Total: 1189/1189 unit tests pass; Quick Email as-user smoke passes 8/8 scenarios."
+      ]
+    },
+    {
+      "version": "1.6.4",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Quick Email to Officer: Send via Outlook Web now defaults to the real Microsoft 365 compose deeplink (https://outlook.office.com/mail/deeplink/compose?...), not a generic Outlook inbox/home URL. The URL is built with encoded to, subject and body parameters and preserves paragraph breaks.",
         "Added strict inline validation before opening Outlook: officer email must exist and look valid, and client name, police station, date and time must be present. Failed validation keeps all typed data intact and shows a compact inline message inside the modal.",

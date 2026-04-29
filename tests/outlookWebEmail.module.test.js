@@ -72,7 +72,7 @@ describe('openOutlookWebEmail (legacy work-account behaviour, accountType="work"
     }
   });
 
-  it('on Windows prefixes microsoft-edge: when accountType="work" (avoids New Outlook intercept)', () => {
+  it('on Windows launches the plain HTTPS work compose URL (no microsoft-edge wrapper)', () => {
     const calls = [];
     const prevPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
@@ -87,9 +87,10 @@ describe('openOutlookWebEmail (legacy work-account behaviour, accountType="work"
       );
       assert.strictEqual(calls.length, 1);
       assert.ok(
-        calls[0].startsWith('microsoft-edge:https://outlook.office.com/mail/deeplink/compose'),
-        'expected Edge scheme on Windows: ' + calls[0].slice(0, 80)
+        calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'),
+        'expected plain HTTPS compose URL on Windows: ' + calls[0].slice(0, 100)
       );
+      assert.ok(!calls[0].startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
     } finally {
       Object.defineProperty(process, 'platform', { value: prevPlatform, configurable: true });
     }
@@ -426,7 +427,7 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
     }
   });
 
-  it("work account on Windows DOES prefix microsoft-edge: (avoids New Outlook desktop intercept)", async () => {
+  it("work account on Windows uses plain HTTPS (avoids Edge/Outlook cloud shell losing compose)", async () => {
     const prev = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
@@ -435,8 +436,10 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
         { to: 'a@b.c', subject: 'S', body: 'B' },
         { shell: spy.shell, skipConfirm: true, accountType: 'work' }
       );
-      assert.ok(spy.calls[0].startsWith('microsoft-edge:https://outlook.office.com/'),
-        'work must keep microsoft-edge: prefix: ' + spy.calls[0]);
+      assert.ok(spy.calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'),
+        'work must launch the plain office.com compose URL: ' + spy.calls[0]);
+      assert.ok(!spy.calls[0].startsWith('microsoft-edge:'),
+        'work must not use microsoft-edge: prefix: ' + spy.calls[0]);
     } finally {
       Object.defineProperty(process, 'platform', { value: prev, configurable: true });
     }

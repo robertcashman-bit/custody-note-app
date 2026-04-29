@@ -441,12 +441,14 @@ describe('Quick Email modal — accountType setting selects the right Outlook su
     await tickMicrotasks(8);
 
     const launchUrl = env.opens[0];
-    /* On Windows the work surface gets prefixed with microsoft-edge:; off Windows it stays plain https. */
+    /* v1.6.5 — even on Windows, work uses plain HTTPS. The old
+       microsoft-edge: wrapper could land in outlook.cloud.microsoft/mail
+       (inbox) and lose the compose route. */
     assert.ok(
-      launchUrl.startsWith('https://outlook.office.com/') ||
-      launchUrl.startsWith('microsoft-edge:https://outlook.office.com/'),
+      launchUrl.startsWith('https://outlook.office.com/'),
       'work must hit outlook.office.com: ' + launchUrl.slice(0, 200)
     );
+    assert.ok(!launchUrl.startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
     assert.ok(launchUrl.includes(encodeURIComponent('Test Client')));
   });
 
@@ -474,10 +476,10 @@ describe('Quick Email modal — accountType setting selects the right Outlook su
     assert.ok(launchUrl.includes('/mail/deeplink/compose?'),
       'URL must be a compose deeplink, not inbox/home: ' + launchUrl.slice(0, 200));
     assert.ok(
-      launchUrl.startsWith('https://outlook.office.com/mail/deeplink/compose') ||
-      launchUrl.startsWith('microsoft-edge:https://outlook.office.com/mail/deeplink/compose'),
+      launchUrl.startsWith('https://outlook.office.com/mail/deeplink/compose'),
       'default Quick Email Outlook surface should be office.com compose: ' + launchUrl.slice(0, 200)
     );
+    assert.ok(!launchUrl.startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
     assert.ok(launchUrl.includes('to=' + encodeURIComponent('30052@kent.police.uk')), 'to param missing');
     assert.ok(launchUrl.includes('subject=' + encodeURIComponent('Disclosure request - David Walter - Maidstone - 30/04/2026')),
       'subject param missing or wrong: ' + launchUrl);
