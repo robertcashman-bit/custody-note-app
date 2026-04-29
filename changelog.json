@@ -1,9 +1,23 @@
 {
   "releases": [
     {
-      "version": "1.6.1",
+      "version": "1.6.2",
       "date": "2026-04-29",
       "latest": true,
+      "changes": [
+        "Quick Email: choose where 'Send via Outlook' opens — Outlook.com (personal), Outlook on the web (M365 work / school), or your default email app (Outlook desktop / Mail). Settings -> Your Details -> 'Quick Email opens in'.",
+        "Fix: previously the button always tried Microsoft 365 (outlook.office.com), which silently fails for users on personal Outlook.com / Hotmail accounts — recipient/subject/body never reached Outlook.",
+        "Personal Outlook.com URLs no longer force Edge on Windows (your default browser handles outlook.live.com directly).",
+        "mailto: mode opens Outlook desktop / Apple Mail / Thunderbird directly with the recipient, subject and body prefilled.",
+        "When the email body is too long for the URL, the FULL body is now copied to the clipboard automatically and a toast tells you to paste it.",
+        "Special characters, line breaks, ampersands and apostrophes are encoded exactly once across all three modes.",
+        "23 new regression tests covering account-type plumbing, encoding, line-break preservation and clipboard fallback (1168/1168 tests pass)."
+      ]
+    },
+    {
+      "version": "1.6.1",
+      "date": "2026-04-29",
+      "latest": false,
       "changes": [
         "Fix: Quick Email -> Outlook now sends the typed message body by default (the H02 confirm dialog used to default to 'subject only' which silently stripped the body)",
         "'subject only' remains as an opt-in for legally privileged matter",
