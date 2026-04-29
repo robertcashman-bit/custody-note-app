@@ -1,11 +1,24 @@
 /**
  * Local admin authentication.
- * Argon2id for password hashing. Lockout after 5 failures.
- * Admin session TTL 10 minutes idle.
+ * PBKDF2-SHA512 (310,000 iterations) for password hashing. Lockout after 5
+ * failures. Admin session TTL 10 minutes idle. Header comment previously said
+ * Argon2id — that was incorrect. PBKDF2 at this iteration count meets OWASP
+ * 2023 minimums; consider migrating to Argon2id when the build can ship a
+ * native module.
+ *
+ * All login attempts (success and failure) and lockouts are forwarded to the
+ * append-only security event log if available.
  */
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
+
+let _securityLog = null;
+try { _securityLog = require('./securityLog'); } catch (_) { _securityLog = null; }
+function _audit(event, meta) {
+  try { if (_securityLog && _securityLog.record) _securityLog.record(event, meta); }
+  catch (_) {}
+}
 
 const LOCKOUT_ATTEMPTS = 5;
 const LOCKOUT_MS = 5 * 60 * 1000;
@@ -65,9 +78,15 @@ function checkLockout() {
 
 function login(app, password) {
   const lock = checkLockout();
-  if (lock.locked) return { ok: false, error: 'Locked out', retryAfter: lock.retryAfter };
+  if (lock.locked) {
+    _audit('admin_login_locked_out', { retryAfterSec: lock.retryAfter });
+    return { ok: false, error: 'Locked out', retryAfter: lock.retryAfter };
+  }
 
-  if (!hasAdminPassword(app)) return { ok: false, error: 'Admin not configured' };
+  if (!hasAdminPassword(app)) {
+    _audit('admin_login_failure', { reason: 'admin_not_configured' });
+    return { ok: false, error: 'Admin not configured' };
+  }
 
   const stored = fs.readFileSync(getHashPath(app), 'utf8');
   if (!verifyPassword(password, stored)) {
@@ -75,12 +94,15 @@ function login(app, password) {
     if (_failedAttempts >= LOCKOUT_ATTEMPTS) {
       _lockoutUntil = Date.now() + LOCKOUT_MS;
       _failedAttempts = 0;
+      _audit('admin_lockout', { lockoutMs: LOCKOUT_MS });
       return { ok: false, error: 'Locked out', retryAfter: LOCKOUT_MS / 1000 };
     }
+    _audit('admin_login_failure', { reason: 'invalid_password', failedAttempts: _failedAttempts });
     return { ok: false, error: 'Invalid password' };
   }
   _failedAttempts = 0;
   _adminSessionUntil = Date.now() + SESSION_TTL_MS;
+  _audit('admin_login_success');
   return { ok: true };
 }
 

@@ -1,7 +1,7 @@
 /**
  * Unit tests for Outlook Web compose — URL building and main-process open (mocked shell).
  */
-const { describe, it } = require('node:test');
+const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
@@ -158,6 +158,58 @@ describe('buildOutlookWebComposeUrl — edge cases', () => {
       assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose'),
         'must always start with OWA base URL');
     }
+  });
+});
+
+describe('openOutlookWebEmail confirmation gate (H02 hardening)', () => {
+  const { _resetOutlookWebAckForTests } = require('../main/openOutlookWebEmail');
+  // Each test must start with a clean per-session ack flag, otherwise a
+  // "remember my choice" tick in one case would carry into the next.
+  beforeEach(() => { _resetOutlookWebAckForTests(); });
+
+  it('cancels when the user cancels the dialog', async () => {
+    const calls = [];
+    const result = await openOutlookWebEmail(
+      { to: 't@test.com', subject: 'S', body: 'sensitive body text' },
+      {
+        shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
+        dialog: { showMessageBox: async () => ({ response: 2, checkboxChecked: false }) },
+      }
+    );
+    assert.strictEqual(calls.length, 0, 'shell.openExternal must not be called when user cancels');
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.cancelled, true);
+  });
+
+  it('strips the body when the user picks "subject only"', async () => {
+    const calls = [];
+    const result = await openOutlookWebEmail(
+      { to: 't@test.com', subject: 'S', body: 'sensitive body text' },
+      {
+        shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
+        dialog: { showMessageBox: async () => ({ response: 0, checkboxChecked: false }) },
+      }
+    );
+    assert.strictEqual(calls.length, 1, 'should still open the URL, just with empty body');
+    assert.ok(!calls[0].includes(encodeURIComponent('sensitive body text')),
+      'body must NOT appear in the URL when subject-only mode is chosen');
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.mode, 'no-body');
+  });
+
+  it('opens with body when the user explicitly accepts', async () => {
+    const calls = [];
+    const result = await openOutlookWebEmail(
+      { to: 't@test.com', subject: 'S', body: 'sensitive body text' },
+      {
+        shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
+        dialog: { showMessageBox: async () => ({ response: 1, checkboxChecked: false }) },
+      }
+    );
+    assert.strictEqual(calls.length, 1);
+    assert.ok(calls[0].includes(encodeURIComponent('sensitive body text')));
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.mode, 'open');
   });
 });
 

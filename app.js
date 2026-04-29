@@ -4045,14 +4045,34 @@ var REQUIRED_FIELD_KEYS = [
   var QC_LAST_FIRM_KEY = 'cn-qc-last-firm-id';
   var QC_RECENT_CONTACTS_KEY = 'cn-qc-recent-contacts';
 
+  // Security (2026 hardening, finding H‑04): the QuickCapture recent-contacts
+  // list contains third-party PII (referrer name + phone + email) that must
+  // be stored at the same confidentiality level as the rest of the encrypted
+  // database. localStorage is unencrypted Chromium storage and bypassed the
+  // AES-256-GCM-at-rest guarantee. We now persist to the encrypted settings
+  // table via window.api.setSettings; the in-memory copy below caches the
+  // most-recent read so callers stay synchronous. A one-shot migration runs
+  // at startup (qcMigrateLocalStorageOnce).
+  var _qcRecentContactsCache = null;
+  var _qcLastFirmIdCache = null;
+
+  function _qcSettingsApiAvailable() {
+    return !!(window.api && typeof window.api.setSettings === 'function' && typeof window.api.getSettings === 'function');
+  }
+
   function getQuickCaptureRecentContacts() {
+    if (Array.isArray(_qcRecentContactsCache)) return _qcRecentContactsCache;
+    // Best-effort sync read from the cached settings object populated at
+    // startup; if the cache is empty we return [] and refresh in the
+    // background so the next call has data.
     try {
-      var raw = localStorage.getItem(QC_RECENT_CONTACTS_KEY);
-      var parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
+      var s = window._appSettingsCache || {};
+      var raw = s[QC_RECENT_CONTACTS_KEY];
+      _qcRecentContactsCache = raw ? JSON.parse(raw) : [];
     } catch (_) {
-      return [];
+      _qcRecentContactsCache = [];
     }
+    return Array.isArray(_qcRecentContactsCache) ? _qcRecentContactsCache : [];
   }
 
   function saveQuickCaptureRecentContact(entry) {
@@ -4074,23 +4094,90 @@ var REQUIRED_FIELD_KEYS = [
       firmName: String(entry.firmName || '').trim(),
       savedAt: Date.now()
     });
-    try {
-      localStorage.setItem(QC_RECENT_CONTACTS_KEY, JSON.stringify(next.slice(0, 12)));
-    } catch (_) {}
+    var trimmed = next.slice(0, 12);
+    _qcRecentContactsCache = trimmed;
+    if (_qcSettingsApiAvailable()) {
+      var patch = {};
+      patch[QC_RECENT_CONTACTS_KEY] = JSON.stringify(trimmed);
+      window.api.setSettings(patch).then(function() {
+        try {
+          window._appSettingsCache = window._appSettingsCache || {};
+          window._appSettingsCache[QC_RECENT_CONTACTS_KEY] = JSON.stringify(trimmed);
+        } catch (_) {}
+      }).catch(function() {});
+    }
   }
 
   function rememberQuickCaptureFirmId(firmId) {
-    try {
-      if (firmId) localStorage.setItem(QC_LAST_FIRM_KEY, String(firmId));
-      else localStorage.removeItem(QC_LAST_FIRM_KEY);
-    } catch (_) {}
+    var v = firmId ? String(firmId) : '';
+    _qcLastFirmIdCache = v;
+    if (_qcSettingsApiAvailable()) {
+      var patch = {};
+      patch[QC_LAST_FIRM_KEY] = v;
+      window.api.setSettings(patch).then(function() {
+        try {
+          window._appSettingsCache = window._appSettingsCache || {};
+          window._appSettingsCache[QC_LAST_FIRM_KEY] = v;
+        } catch (_) {}
+      }).catch(function() {});
+    }
   }
 
   function getRememberedQuickCaptureFirmId() {
+    if (typeof _qcLastFirmIdCache === 'string') return _qcLastFirmIdCache;
     try {
-      return localStorage.getItem(QC_LAST_FIRM_KEY) || '';
+      var s = window._appSettingsCache || {};
+      _qcLastFirmIdCache = s[QC_LAST_FIRM_KEY] || '';
     } catch (_) {
-      return '';
+      _qcLastFirmIdCache = '';
+    }
+    return _qcLastFirmIdCache;
+  }
+
+  // One-shot migration: copy any pre-existing localStorage values into the
+  // encrypted settings store, then delete them. Idempotent — safe to call on
+  // every startup. We never log the values themselves.
+  function qcMigrateLocalStorageOnce() {
+    if (!_qcSettingsApiAvailable()) return;
+    var migrated = {};
+    var hadAny = false;
+    try {
+      var rawContacts = localStorage.getItem(QC_RECENT_CONTACTS_KEY);
+      if (rawContacts) {
+        migrated[QC_RECENT_CONTACTS_KEY] = rawContacts;
+        hadAny = true;
+      }
+    } catch (_) {}
+    try {
+      var rawFirm = localStorage.getItem(QC_LAST_FIRM_KEY);
+      if (rawFirm) {
+        migrated[QC_LAST_FIRM_KEY] = rawFirm;
+        hadAny = true;
+      }
+    } catch (_) {}
+    if (!hadAny) return;
+    window.api.setSettings(migrated).then(function() {
+      try { localStorage.removeItem(QC_RECENT_CONTACTS_KEY); } catch (_) {}
+      try { localStorage.removeItem(QC_LAST_FIRM_KEY); } catch (_) {}
+      try {
+        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, migrated);
+      } catch (_) {}
+      console.info('[security] Migrated QuickCapture localStorage to encrypted settings.');
+    }).catch(function() {
+      // Leave localStorage in place if the write failed; will retry next startup.
+    });
+  }
+  // Run the migration once the settings API is ready.
+  if (typeof window !== 'undefined') {
+    if (window._appSettingsCache) {
+      qcMigrateLocalStorageOnce();
+    } else {
+      // Wait one tick after the global getSettings() promise resolves. The
+      // bootstrap flow assigns window._appSettingsCache once settings load.
+      setTimeout(function tryMigrate() {
+        if (window._appSettingsCache) qcMigrateLocalStorageOnce();
+        else setTimeout(tryMigrate, 500);
+      }, 500);
     }
   }
 
@@ -13100,7 +13187,11 @@ pdfAuditFooterHtml(d, settings) +
       totals = { fixedFee: 0, mileageAmount: 0, parkingAmount: 0, subTotal: 0, vatTotal: 0, grandTotal: 0, vatRate: 0.2, mileageMiles: 0, mileageRate: 0.45 };
     }
     function fc(v) { return '\u00A3' + (v || 0).toFixed(2); }
-    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    // Attribute-safe HTML escape (was previously text-only — escaping " and '
+    // is required if any caller uses esc() inside an attribute context;
+    // currently this scope only emits text-context but the wider escape
+    // is safer if call sites change).
+    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
     function fmtDate(v) { if (!v) return ''; var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : v; }
     var vatPct = (totals.vatRate != null) ? (Math.round(totals.vatRate * 1000) / 10) : 20;
     if (Math.abs(vatPct - Math.round(vatPct)) < 0.01) vatPct = Math.round(vatPct);
@@ -16850,6 +16941,44 @@ pdfAuditFooterHtml(d, settings) +
       });
     })();
 
+    /**
+     * Copy a licence key to the clipboard, then auto-clear it 30 seconds
+     * later. Never logs the key. Fails silently if the clipboard API
+     * refuses (e.g. window not focused). Used by the admin reveal flow.
+     */
+    function _adminCopyLicenceKeyToClipboard(licenceKey) {
+      if (typeof licenceKey !== 'string' || !licenceKey) {
+        showToast('No licence key to copy', 'error');
+        return;
+      }
+      function clearLater() {
+        setTimeout(function () {
+          try {
+            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+              // Best-effort: only clear if the clipboard still contains our key.
+              navigator.clipboard.readText().then(function (current) {
+                if (current === licenceKey) {
+                  navigator.clipboard.writeText('').catch(function () {});
+                }
+              }).catch(function () {});
+            }
+          } catch (_) {}
+        }, 30000);
+      }
+      try {
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(licenceKey).then(function () {
+            showToast('Licence key copied to clipboard. It will auto-clear in 30 seconds.', 'success');
+            clearLater();
+          }).catch(function () {
+            showToast('Could not access clipboard. Use the Resend button to email the key instead.', 'error');
+          });
+          return;
+        }
+      } catch (_) {}
+      showToast('Clipboard not available. Use the Resend button to email the key instead.', 'error');
+    }
+
     (function initAdminLicencePanel() {
       if (!window.custodyNote) return;
       var panel = document.getElementById('admin-licence-panel');
@@ -16895,8 +17024,16 @@ pdfAuditFooterHtml(d, settings) +
           resultsEl.querySelectorAll('.admin-reveal-btn').forEach(function(b) {
             b.addEventListener('click', function() {
               custodyNote.adminRevealLicence(b.dataset.id).then(function(rec) {
-                if (rec && rec.licence_key) showToast('Licence: ' + rec.licence_key, 'success');
-                else if (rec && rec.error) showToast(rec.error, 'error');
+                if (rec && rec.licence_key) {
+                  // Security: never display the full licence key in a toast
+                  // (screenshot/screen-recording risk; licence key is also
+                  // the secret used to derive the cloud key escrow). Copy
+                  // to clipboard with a 30-second auto-clear and tell the
+                  // operator that's where it went.
+                  _adminCopyLicenceKeyToClipboard(rec.licence_key);
+                } else if (rec && rec.error) {
+                  showToast(rec.error, 'error');
+                }
               });
             });
           });
@@ -17912,13 +18049,84 @@ pdfAuditFooterHtml(d, settings) +
     });
   }
 
+  // Security default: when no value is configured, fall back to a 10-minute
+  // idle lock for legal-sector use. The user can disable in Settings (set 0)
+  // but the default-on stance protects unattended laptops in chambers, on
+  // trains, etc. Existing installs that explicitly chose 0 still get 0.
+  var _IDLE_DEFAULT_MINUTES = 10;
+  function _getIdleMinutes() {
+    var s = window._appSettingsCache || {};
+    var raw = s.idleTimeoutMinutes;
+    if (raw === undefined || raw === null || raw === '') return _IDLE_DEFAULT_MINUTES;
+    var n = parseInt(raw, 10);
+    if (isNaN(n)) return _IDLE_DEFAULT_MINUTES;
+    return n;
+  }
   function _resetIdleTimer() {
     if (_idleTimer) clearTimeout(_idleTimer);
-    var mins = parseInt((window._appSettingsCache && window._appSettingsCache.idleTimeoutMinutes) || '0', 10);
+    var mins = _getIdleMinutes();
     if (!mins || mins <= 0) return;
     _idleTimer = setTimeout(_lock, mins * 60 * 1000);
   }
   window._resetIdleTimer = _resetIdleTimer;
+
+  // Subscribe to OS-driven force-lock events: when the user locks Windows,
+  // the laptop suspends, or the system shuts down, we lock immediately
+  // regardless of the configured idle timeout.
+  if (window.api && typeof window.api.onSessionForceLock === 'function') {
+    try {
+      window.api.onSessionForceLock(function(meta) {
+        try {
+          if (window.api && window.api.sessionLockStatus) {
+            // Even if no recovery/admin password is configured, ensure the
+            // app is at least visually obscured so a passer-by sees nothing.
+            window.api.sessionLockStatus().then(function(status) {
+              if (status && status.canLock) {
+                _lock();
+              } else {
+                // Best-effort visual blanker: hide the main UI and show a
+                // simple "Session locked" overlay even without a credential.
+                _showCredentialFreeBlanker(meta && meta.reason);
+              }
+            }).catch(function() {
+              _showCredentialFreeBlanker(meta && meta.reason);
+            });
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
+
+  function _showCredentialFreeBlanker(reason) {
+    try {
+      var existing = document.getElementById('cn-credentialfree-blanker');
+      if (existing) return;
+      var div = document.createElement('div');
+      div.id = 'cn-credentialfree-blanker';
+      div.setAttribute('role', 'alertdialog');
+      div.setAttribute('aria-modal', 'true');
+      div.style.cssText =
+        'position:fixed;inset:0;z-index:2147483647;background:#0f172a;color:#f8fafc;'
+        + 'display:flex;align-items:center;justify-content:center;flex-direction:column;'
+        + 'font-family:Segoe UI,Arial,sans-serif;padding:2rem;text-align:center;';
+      div.innerHTML =
+        '<h2 style="margin:0 0 1rem;font-size:1.5rem;">Session locked</h2>'
+        + '<p style="max-width:36rem;line-height:1.5;">'
+        + 'CustodyNote was locked because the operating system reported a '
+        + (reason ? '<code>' + reason.replace(/[<>&]/g, '') + '</code>' : 'lock event')
+        + '. To unlock, set a recovery password or admin password in Settings &gt; Security '
+        + 'and re-open the app.</p>'
+        + '<button type="button" id="cn-credentialfree-dismiss" '
+        + 'style="margin-top:1.5rem;padding:0.5rem 1.25rem;border:1px solid #475569;'
+        + 'background:#1e293b;color:#f8fafc;border-radius:6px;cursor:pointer;">'
+        + 'Dismiss (no real client data)</button>';
+      document.body.appendChild(div);
+      var btn = document.getElementById('cn-credentialfree-dismiss');
+      if (btn) btn.addEventListener('click', function() {
+        try { div.parentNode.removeChild(div); } catch (_) {}
+      });
+    } catch (_) {}
+  }
 
   ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(function(ev) {
     document.addEventListener(ev, function() {
