@@ -7,7 +7,11 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const { buildOutlookWebComposeUrl } = require('../lib/outlookWebComposeUrl');
+const {
+  buildOutlookWebComposeUrl,
+  buildOutlookWebComposeUrlWithMeta,
+  inferOutlookAccountType,
+} = require('../lib/outlookWebComposeUrl');
 const { openOutlookWebEmail } = require('../main/openOutlookWebEmail');
 
 describe('buildOutlookWebComposeUrl', () => {
@@ -46,8 +50,8 @@ describe('buildOutlookWebComposeUrl', () => {
   });
 });
 
-describe('openOutlookWebEmail', () => {
-  it('calls shell.openExternal exactly once with OWA URL (non-Windows)', () => {
+describe('openOutlookWebEmail (legacy work-account behaviour, accountType="work")', () => {
+  it('calls shell.openExternal exactly once with OWA URL (non-Windows, work account)', () => {
     const calls = [];
     const prevPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
@@ -55,12 +59,9 @@ describe('openOutlookWebEmail', () => {
       openOutlookWebEmail(
         { to: 't@test.com', cc: '', bcc: '', subject: 'S', body: 'B' },
         {
-          shell: {
-            openExternal: (u) => {
-              calls.push(u);
-              return Promise.resolve();
-            },
-          },
+          shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
+          accountType: 'work',
+          skipConfirm: true,
         }
       );
       assert.strictEqual(calls.length, 1);
@@ -71,7 +72,7 @@ describe('openOutlookWebEmail', () => {
     }
   });
 
-  it('on Windows prefixes microsoft-edge: for the same https URL', () => {
+  it('on Windows prefixes microsoft-edge: when accountType="work" (avoids New Outlook intercept)', () => {
     const calls = [];
     const prevPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
@@ -79,12 +80,9 @@ describe('openOutlookWebEmail', () => {
       openOutlookWebEmail(
         { to: 'a@b.com', cc: '', bcc: '', subject: '', body: '' },
         {
-          shell: {
-            openExternal: (u) => {
-              calls.push(u);
-              return Promise.resolve();
-            },
-          },
+          shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
+          accountType: 'work',
+          skipConfirm: true,
         }
       );
       assert.strictEqual(calls.length, 1);
@@ -235,7 +233,7 @@ describe('openOutlookWebEmail confirmation gate (H02 hardening)', () => {
     assert.ok(captured, 'showMessageBox was not invoked');
     assert.strictEqual(captured.defaultId, 0, 'default button must be index 0 (the full-body send)');
     assert.strictEqual(captured.cancelId, 2, 'cancel button must be index 2');
-    assert.ok(/Open in Outlook Web$/i.test(captured.buttons[0]),
+    assert.ok(/^Open in Outlook/i.test(captured.buttons[0]),
       'button 0 should be the full-body send, got: ' + captured.buttons[0]);
     assert.ok(/subject only/i.test(captured.buttons[1]),
       'button 1 should be the privacy opt-in, got: ' + captured.buttons[1]);
@@ -286,5 +284,220 @@ describe('invokeOutlookWebCompose (renderer guard)', () => {
     const p2 = invoke({ to: 'c@d.com', subject: '', body: '' });
     await Promise.all([p1, p2]);
     assert.strictEqual(openCount, 1, 'only one emailAPI.open while first compose is pending');
+  });
+});
+
+describe('buildOutlookWebComposeUrl — multi-account-type support (v1.6.2)', () => {
+  it('default (no accountType) preserves the legacy outlook.office.com URL for backwards-compat', () => {
+    const u = buildOutlookWebComposeUrl({ to: 'a@b.c', subject: 'S', body: 'B' });
+    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'),
+      'no-arg call must keep working with the office.com URL: ' + u);
+  });
+
+  it("accountType='personal' targets outlook.live.com (Outlook.com / Hotmail / Live)", () => {
+    const u = buildOutlookWebComposeUrl({ accountType: 'personal', to: 'a@b.c', subject: 'S', body: 'B' });
+    assert.ok(u.startsWith('https://outlook.live.com/mail/0/deeplink/compose?'),
+      'personal must target outlook.live.com: ' + u);
+    assert.ok(u.includes('to=' + encodeURIComponent('a@b.c')));
+    assert.ok(u.includes('subject=S'));
+    assert.ok(u.includes('body=B'));
+  });
+
+  it("accountType='work' targets outlook.office.com (M365)", () => {
+    const u = buildOutlookWebComposeUrl({ accountType: 'work', to: 'a@b.c', subject: 'S', body: 'B' });
+    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'), u);
+  });
+
+  it("accountType='mailto' produces a RFC 6068 mailto: URI with subject + body in headers", () => {
+    const u = buildOutlookWebComposeUrl({
+      accountType: 'mailto',
+      to: 'oic@met.police.uk',
+      cc: 'cc@example.com',
+      subject: 'Disclosure for John Doe',
+      body: 'Hello,\n\nPlease send disclosure.',
+    });
+    assert.ok(u.startsWith('mailto:'), 'mailto must use mailto: scheme: ' + u);
+    assert.ok(u.includes(encodeURIComponent('oic@met.police.uk')));
+    assert.ok(u.includes('cc=' + encodeURIComponent('cc@example.com')));
+    assert.ok(u.includes('subject=' + encodeURIComponent('Disclosure for John Doe')));
+    assert.ok(u.includes('body=' + encodeURIComponent('Hello,\n\nPlease send disclosure.')));
+  });
+
+  it('accepts case-insensitive aliases (Office, M365, Hotmail, Desktop, …)', () => {
+    assert.ok(buildOutlookWebComposeUrl({ accountType: 'M365', to: 'a@b.c' }).startsWith('https://outlook.office.com/'));
+    assert.ok(buildOutlookWebComposeUrl({ accountType: 'Hotmail', to: 'a@b.c' }).startsWith('https://outlook.live.com/'));
+    assert.ok(buildOutlookWebComposeUrl({ accountType: 'Desktop', to: 'a@b.c' }).startsWith('mailto:'));
+  });
+
+  it('preserves line breaks via percent-encoding for all surfaces', () => {
+    const body = 'Line 1\nLine 2\r\nLine 3';
+    for (const t of ['personal', 'work', 'mailto']) {
+      const u = buildOutlookWebComposeUrl({ accountType: t, to: 'a@b.c', body });
+      assert.ok(u.includes(encodeURIComponent(body)), t + ' must preserve newlines: ' + u.slice(0, 200));
+    }
+  });
+
+  it('encodes ampersands, apostrophes, spaces and unicode safely (no double-encoding)', () => {
+    const subject = "R v O'Brien & Co — café";
+    for (const t of ['personal', 'work', 'mailto']) {
+      const u = buildOutlookWebComposeUrl({ accountType: t, to: 'a@b.c', subject, body: '' });
+      assert.ok(u.includes(encodeURIComponent(subject)), t + ' must encode subject exactly once');
+      // double-encoding would produce %2520, %2526 etc — none must appear.
+      assert.ok(!/%25(2[0-9A-F]|3[0-9A-F])/.test(u), t + ' double-encoded subject: ' + u);
+    }
+  });
+
+  it('omits null/undefined fields without producing literal "undefined" / "null" text', () => {
+    const u = buildOutlookWebComposeUrl({
+      accountType: 'personal', to: 'a@b.c',
+      cc: undefined, bcc: null, subject: undefined, body: null,
+    });
+    assert.ok(!u.includes('undefined'), 'must not leak the word "undefined": ' + u);
+    assert.ok(!/[?&]subject=null/.test(u), 'must not leak the word "null"');
+  });
+});
+
+describe('buildOutlookWebComposeUrlWithMeta — truncation per surface', () => {
+  it('mailto: uses a tighter URL budget (~1900 chars) than OWA web (~6000)', () => {
+    const huge = 'X'.repeat(20000);
+    const mailtoMeta = buildOutlookWebComposeUrlWithMeta({ accountType: 'mailto', to: 'a@b.c', subject: 's', body: huge });
+    const webMeta = buildOutlookWebComposeUrlWithMeta({ accountType: 'personal', to: 'a@b.c', subject: 's', body: huge });
+    assert.strictEqual(mailtoMeta.truncated, true);
+    assert.strictEqual(webMeta.truncated, true);
+    assert.ok(mailtoMeta.url.length < webMeta.url.length, 'mailto must trim earlier than OWA: ' + mailtoMeta.url.length + ' vs ' + webMeta.url.length);
+  });
+
+  it('reports the chosen accountType back so the renderer can show a matching toast', () => {
+    const meta = buildOutlookWebComposeUrlWithMeta({ accountType: 'personal', to: 'a@b.c', subject: 's', body: 'b' });
+    assert.strictEqual(meta.accountType, 'personal');
+  });
+});
+
+describe('inferOutlookAccountType — pick a sensible Outlook surface from the user\'s own email', () => {
+  it('detects personal Microsoft consumer domains', () => {
+    for (const e of ['me@outlook.com', 'me@hotmail.com', 'me@hotmail.co.uk', 'me@live.com', 'me@msn.com']) {
+      assert.strictEqual(inferOutlookAccountType(e), 'personal', e + ' should be personal');
+    }
+  });
+  it('treats common non-Microsoft consumer addresses (gmail, yahoo, icloud) as personal', () => {
+    for (const e of ['me@gmail.com', 'me@yahoo.co.uk', 'me@icloud.com', 'me@protonmail.com']) {
+      assert.strictEqual(inferOutlookAccountType(e), 'personal', e + ' should default to personal Outlook');
+    }
+  });
+  it('treats unknown / custom-domain addresses as work (M365 is the common case in firms)', () => {
+    assert.strictEqual(inferOutlookAccountType('robert@cashman-law.co.uk'), 'work');
+    assert.strictEqual(inferOutlookAccountType('partner@firmname.com'), 'work');
+  });
+  it('falls back to personal when the address is empty / malformed', () => {
+    assert.strictEqual(inferOutlookAccountType(''), 'personal');
+    assert.strictEqual(inferOutlookAccountType(null), 'personal');
+    assert.strictEqual(inferOutlookAccountType('not-an-email'), 'personal');
+  });
+});
+
+describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', () => {
+  const { _resetOutlookWebAckForTests } = require('../main/openOutlookWebEmail');
+  beforeEach(() => { _resetOutlookWebAckForTests(); });
+
+  function shellSpy() {
+    const calls = [];
+    return { calls, shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } } };
+  }
+
+  it("personal account on Windows does NOT prefix microsoft-edge: (default browser handles outlook.live.com)", async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const spy = shellSpy();
+      await openOutlookWebEmail(
+        { to: 'a@b.c', subject: 'S', body: 'B' },
+        { shell: spy.shell, skipConfirm: true, accountType: 'personal' }
+      );
+      assert.strictEqual(spy.calls.length, 1);
+      assert.ok(spy.calls[0].startsWith('https://outlook.live.com/'),
+        'personal must launch outlook.live.com without microsoft-edge: prefix: ' + spy.calls[0]);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
+  it("work account on Windows DOES prefix microsoft-edge: (avoids New Outlook desktop intercept)", async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const spy = shellSpy();
+      await openOutlookWebEmail(
+        { to: 'a@b.c', subject: 'S', body: 'B' },
+        { shell: spy.shell, skipConfirm: true, accountType: 'work' }
+      );
+      assert.ok(spy.calls[0].startsWith('microsoft-edge:https://outlook.office.com/'),
+        'work must keep microsoft-edge: prefix: ' + spy.calls[0]);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
+  it("mailto account on Windows uses the OS default mail handler (no microsoft-edge:)", async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const spy = shellSpy();
+      const result = await openOutlookWebEmail(
+        { to: 'oic@met.police.uk', subject: 'Hi', body: 'Hello' },
+        { shell: spy.shell, skipConfirm: true, accountType: 'mailto' }
+      );
+      assert.ok(spy.calls[0].startsWith('mailto:'), 'mailto must use the mailto: scheme: ' + spy.calls[0]);
+      assert.ok(spy.calls[0].includes(encodeURIComponent('oic@met.police.uk')));
+      assert.ok(spy.calls[0].includes('subject=' + encodeURIComponent('Hi')));
+      assert.ok(spy.calls[0].includes('body=' + encodeURIComponent('Hello')));
+      assert.strictEqual(result.accountType, 'mailto');
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
+  it('infers account type from feeEarnerEmail when caller does not pass accountType explicitly', async () => {
+    const spy = shellSpy();
+    const result = await openOutlookWebEmail(
+      { to: 'oic@met.police.uk', subject: 'S', body: 'B', feeEarnerEmail: 'me@hotmail.co.uk' },
+      { shell: spy.shell, skipConfirm: true }
+    );
+    assert.strictEqual(result.accountType, 'personal');
+    assert.ok(spy.calls[0].startsWith('https://outlook.live.com/'));
+  });
+
+  it('copies the FULL body to the clipboard when the URL had to be trimmed', async () => {
+    const huge = 'PRIVATE_BODY_' + 'X'.repeat(20000);
+    let clipboardWritten = '';
+    const spy = shellSpy();
+    const result = await openOutlookWebEmail(
+      { to: 'a@b.c', subject: 'S', body: huge },
+      {
+        shell: spy.shell,
+        skipConfirm: true,
+        accountType: 'personal',
+        clipboard: { writeText: (t) => { clipboardWritten = t; } },
+      }
+    );
+    assert.strictEqual(result.truncated, true);
+    assert.strictEqual(result.clipboardCopied, true);
+    assert.strictEqual(clipboardWritten, huge, 'clipboard must contain the FULL untrimmed body');
+  });
+
+  it('returns a clear error result when the user cancels the confirm dialog', async () => {
+    const spy = shellSpy();
+    const result = await openOutlookWebEmail(
+      { to: 'a@b.c', subject: 'S', body: 'B' },
+      {
+        shell: spy.shell,
+        accountType: 'personal',
+        dialog: { showMessageBox: async () => ({ response: 2, checkboxChecked: false }) },
+      }
+    );
+    assert.strictEqual(spy.calls.length, 0);
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.cancelled, true);
+    assert.strictEqual(result.reason, 'user_cancelled');
+    assert.strictEqual(result.accountType, 'personal');
   });
 });

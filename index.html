@@ -947,6 +947,13 @@
           <p class="settings-hint" style="margin-top:4px;">Auto-fills the origin postcode for journey-to-station mileage on new records.</p>
           <label style="margin-top:0.75rem;">Your email (PDFs sent here to check)</label>
           <input type="email" id="setting-email" class="settings-input" placeholder="you@example.com">
+          <label style="margin-top:0.75rem;">Quick Email opens in</label>
+          <select id="setting-outlook-account-type" class="settings-input" style="max-width:360px;">
+            <option value="personal">Outlook.com (personal — outlook.live.com)</option>
+            <option value="work">Outlook on the web (work / school — outlook.office.com)</option>
+            <option value="mailto">My default email app (Outlook desktop, Mail, etc.)</option>
+          </select>
+          <p class="settings-hint" style="margin-top:4px;">If Quick Email opens but the recipient/subject/body don\u2019t appear, switch this. Most personal Outlook users want <strong>Outlook.com</strong>; firms on Microsoft 365 want <strong>Outlook on the web</strong>; users with Outlook installed locally usually want <strong>default email app</strong>.</p>
         </div>
 
         <div class="settings-card" id="desktop-shortcut-card">

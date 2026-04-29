@@ -5943,6 +5943,26 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Missing email payload');
   }
+  // Read the user's chosen Outlook surface from settings. Renderer also
+  // sends a hint in the payload (so the dialog wording matches what the
+  // user just confirmed), but the saved setting wins for safety.
+  let savedAccountType = '';
+  let savedFeeEarnerEmail = '';
+  try {
+    const rows = dbAll('SELECT key, value FROM settings WHERE key IN (?, ?, ?)', [
+      'outlookAccountType', 'feeEarnerEmail', 'solicitorEmail',
+    ]);
+    for (const r of rows) {
+      if (r.key === 'outlookAccountType') savedAccountType = String(r.value || '').trim();
+      if (r.key === 'feeEarnerEmail' && !savedFeeEarnerEmail) savedFeeEarnerEmail = String(r.value || '').trim();
+      if (r.key === 'solicitorEmail' && !savedFeeEarnerEmail) savedFeeEarnerEmail = String(r.value || '').trim();
+    }
+  } catch (_) { /* settings table not ready — fall back to the payload hint */ }
+
+  const accountType = savedAccountType
+    || (payload.accountType != null ? String(payload.accountType) : '')
+    || ''; // empty → openOutlookWebEmail will infer from feeEarnerEmail or default to 'personal'
+
   return openOutlookWebEmail(
     {
       to: payload.to != null ? String(payload.to) : '',
@@ -5950,8 +5970,12 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
       bcc: payload.bcc != null ? String(payload.bcc) : '',
       subject: payload.subject != null ? String(payload.subject) : '',
       body: payload.body != null ? String(payload.body) : '',
+      feeEarnerEmail: savedFeeEarnerEmail,
     },
-    { parentWindow: mainWindow || null }
+    {
+      parentWindow: mainWindow || null,
+      accountType: accountType || undefined,
+    }
   );
 });
 

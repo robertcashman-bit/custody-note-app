@@ -420,18 +420,38 @@
 
   window.__CUSTODYNOTE_E2E__ = { skipLicenceGate: false };
 
-  /* OWA URL must match lib/outlookWebComposeUrl.js + main/openOutlookWebEmail.js (browser has no IPC). */
+  /* OWA URL must match lib/outlookWebComposeUrl.js + main/openOutlookWebEmail.js (browser has no IPC).
+     Honours the saved outlookAccountType setting (work / personal / mailto). */
   window.emailAPI = {
     open: function (payload) {
       var p = payload && typeof payload === 'object' ? payload : {};
-      function enc(v) { return encodeURIComponent(v || ''); }
-      var url =
-        'https://outlook.office.com/mail/deeplink/compose' +
-        '?to=' + enc(p.to) +
-        '&cc=' + enc(p.cc) +
-        '&bcc=' + enc(p.bcc) +
-        '&subject=' + enc(p.subject) +
-        '&body=' + enc(p.body);
+      function enc(v) { return encodeURIComponent(v == null ? '' : v); }
+      var settings = (window._appSettingsCache || {});
+      var rawAccountType = String(settings.outlookAccountType || p.accountType || 'personal').toLowerCase();
+      var accountType = rawAccountType === 'work' ? 'work'
+        : rawAccountType === 'mailto' || rawAccountType === 'desktop' ? 'mailto'
+        : 'personal';
+
+      var url;
+      if (accountType === 'work') {
+        url = 'https://outlook.office.com/mail/deeplink/compose'
+            + '?to=' + enc(p.to) + '&cc=' + enc(p.cc) + '&bcc=' + enc(p.bcc)
+            + '&subject=' + enc(p.subject) + '&body=' + enc(p.body);
+      } else if (accountType === 'mailto') {
+        var hdr = [];
+        if (p.cc) hdr.push('cc=' + enc(p.cc));
+        if (p.bcc) hdr.push('bcc=' + enc(p.bcc));
+        if (p.subject) hdr.push('subject=' + enc(p.subject));
+        if (p.body) hdr.push('body=' + enc(p.body));
+        url = 'mailto:' + enc(p.to) + (hdr.length ? '?' + hdr.join('&') : '');
+        // mailto: must navigate top-level so the OS handler picks it up.
+        window.location.href = url;
+        return Promise.resolve();
+      } else {
+        url = 'https://outlook.live.com/mail/0/deeplink/compose'
+            + '?to=' + enc(p.to) + '&cc=' + enc(p.cc) + '&bcc=' + enc(p.bcc)
+            + '&subject=' + enc(p.subject) + '&body=' + enc(p.body);
+      }
       window.open(url, '_blank', 'noopener');
       return Promise.resolve();
     },
