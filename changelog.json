@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.6.11",
+      "version": "1.6.12",
       "date": "2026-04-30",
       "latest": true,
+      "changes": [
+        "Quick Email: new Settings toggle 'Always use Outlook on the web (M365 work)' that hard-overrides Outlook desktop detection and pins the most reliable compose URL",
+        "Quick Email: fixes the v1.6.11 case where .eml drafts were handed to Edge (PWA) instead of Outlook desktop and ended up showing a malformed OWA URL with no compose path",
+        "Quick Email: route-preview pill now clearly says 'Outlook on the web (M365 work — forced)' when the toggle is on so you can see exactly what will happen before clicking Send"
+      ]
+    },
+    {
+      "version": "1.6.11",
+      "date": "2026-04-30",
+      "latest": false,
       "changes": [
         "Quick Email: smart-routes to Outlook desktop draft when Outlook is installed (no more landing on the inbox)",
         "Quick Email: route-preview pill and dynamic Send button label show the resolved Outlook target before you click",
