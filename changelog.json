@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.6.13",
+      "version": "1.6.14",
       "date": "2026-04-30",
       "latest": true,
+      "changes": [
+        "Officer Emails: use OWA path=/mail/action/compose (work alt) so Microsoft 365 new shell opens compose instead of dropping the compose deep link to inbox",
+        "open-external-url allowlist accepts both OWA compose URL shapes"
+      ]
+    },
+    {
+      "version": "1.6.13",
+      "date": "2026-04-30",
+      "latest": false,
       "changes": [
         "Officer Emails: prepare standardised emails to officers (bail details, attendance confirmation, disclosure update, general), open them in Outlook on the web via a strict allowlisted shell.openExternal handler, and keep a local record on this device with full draft / opened / sent / cancelled lifecycle",
         "Removed older Quick Email feature replaced by Officer Emails"
