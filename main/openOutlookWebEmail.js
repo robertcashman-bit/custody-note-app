@@ -27,6 +27,11 @@ const {
  *     current Edge / Outlook Web, the new outlook.cloud.microsoft shell can
  *     normalise the Edge-protocol launch back to the mailbox and drop the
  *     compose route. Plain HTTPS preserves the /mail/deeplink/compose URL.
+ *   - Windows: `_launchExternalUrl` forces Edge InPrivate for outlook.office.com /
+ *     outlook.live.com unless openMethod is explicitly `shell` (Default browser).
+ *     Otherwise shell.openExternal uses the default browser and the Outlook PWA
+ *     often hijacks the compose deeplink — tests that called openOutlookWebEmail
+ *     without IPC showed success while Quick Email failed for the same reason.
  *   - When the body has to be trimmed for URL length, the FULL body is also
  *     copied to the system clipboard so the user can paste it into Outlook.
  */
@@ -112,12 +117,13 @@ function _resolveMsEdgeExecutable() {
   return 'msedge';
 }
 
-function _openUrlViaEdgeCommand(url) {
+function _openUrlViaEdgeCommand(url, spawnImpl) {
+  const sp = spawnImpl || spawn;
   return new Promise((resolve, reject) => {
     try {
       const exe = _resolveMsEdgeExecutable();
       /* Single argv URL — preserves ?…&… in OWA compose links (cmd.exe start … would break on &). */
-      const child = spawn(exe, [url], {
+      const child = sp(exe, [url], {
         detached: true,
         stdio: 'ignore',
         windowsHide: true,
@@ -138,12 +144,13 @@ function _openUrlViaEdgeCommand(url) {
    M365 account on first use. We resolve a full path to msedge.exe so we
    can spawn directly without going through cmd.exe (which would split on
    the URL's `&` query separators). */
-function _openUrlViaEdgeInPrivate(url) {
+function _openUrlViaEdgeInPrivate(url, spawnImpl) {
+  const sp = spawnImpl || spawn;
   return new Promise((resolve, reject) => {
     try {
       const exe = _resolveMsEdgeExecutable();
       const args = ['--inprivate', '--new-window', url];
-      const child = spawn(exe, args, {
+      const child = sp(exe, args, {
         detached: true,
         stdio: 'ignore',
         windowsHide: true,
@@ -155,6 +162,16 @@ function _openUrlViaEdgeInPrivate(url) {
       reject(err);
     }
   });
+}
+
+/** outlook.office.com / outlook.live.com — must not open via default browser on Windows (Outlook PWA hijack). */
+function _isMicrosoftOwaHttpsHost(url) {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return h === 'outlook.office.com' || h === 'outlook.live.com';
+  } catch (_) {
+    return false;
+  }
 }
 
 function _copyUrlToClipboardSafe(clipboardApi, url) {
@@ -169,12 +186,19 @@ function _launchExternalUrl(url, accountType, deps, shellApi) {
   const isHttps = /^https:\/\//i.test(String(url || ''));
   const browserLauncher = deps && deps.browserLauncher ? deps.browserLauncher : null;
   const clipboardApi = deps && deps.clipboard != null ? deps.clipboard : clipboard;
+  const spawnImpl = deps && deps.spawn ? deps.spawn : spawn;
   /* H62 — caller (renderer Officer Emails screen) can force an Edge InPrivate
      launch to bypass Outlook PWA hijacking on Windows. Only valid for HTTPS
-     URLs; mailto: stays on shell.openExternal. */
-  const openMethod = String((deps && deps.openMethod) || '').toLowerCase();
+     URLs; mailto: stays on shell.openExternal.
+     Windows + OWA hosts: always coerce to Edge InPrivate unless the user
+     explicitly chose openMethod "shell" (Default browser). Tests and internal
+     callers that omit IPC still get the same behaviour as Quick Email. */
+  let openMethod = String((deps && deps.openMethod) || '').toLowerCase();
+  if (process.platform === 'win32' && isHttps && openMethod !== 'shell' && _isMicrosoftOwaHttpsHost(url)) {
+    openMethod = 'edge-inprivate';
+  }
   if (isHttps && openMethod === 'edge-inprivate') {
-    return _openUrlViaEdgeInPrivate(url).then(() => ({
+    return _openUrlViaEdgeInPrivate(url, spawnImpl).then(() => ({
       launchUrl: url,
       launchMethod: 'edge-inprivate',
     })).catch((edgeErr) => {
@@ -183,13 +207,21 @@ function _launchExternalUrl(url, accountType, deps, shellApi) {
         accountType: accountType,
         reason: edgeErr && edgeErr.message ? edgeErr.message : String(edgeErr),
       });
-      /* Fall back to shell.openExternal so the user still sees the link launch
-         somewhere, even if Edge isn't installed. The clipboard fallback below
-         catches the next failure. */
-      return Promise.resolve(shellApi.openExternal(url)).then(() => ({
+      /* Second try: normal Edge window (still Edge, not Chrome / PWA handler). */
+      return _openUrlViaEdgeCommand(url, spawnImpl).then(() => ({
         launchUrl: url,
-        launchMethod: 'shell-after-edge-inprivate-failed',
-      })).catch(clipboardFallback);
+        launchMethod: 'edge-window-after-inprivate-failed',
+      })).catch((edge2Err) => {
+        console.warn('[EMAIL] Edge normal-window launch failed:', edge2Err && edge2Err.message ? edge2Err.message : edge2Err);
+        _traceLaunch('edge_normal_window_failed', {
+          accountType: accountType,
+          reason: edge2Err && edge2Err.message ? edge2Err.message : String(edge2Err),
+        });
+        return Promise.resolve(shellApi.openExternal(url)).then(() => ({
+          launchUrl: url,
+          launchMethod: 'shell-after-edge-failed',
+        })).catch(clipboardFallback);
+      });
     });
   }
 
@@ -218,9 +250,9 @@ function _launchExternalUrl(url, accountType, deps, shellApi) {
     throw err;
   }
 
-  /* Prefer shell.openExternal first. It respects the user's default browser
-     and avoids Edge-specific routing quirks that can drop compose deeplinks
-     into the inbox/home surface. If the shell handler fails we fall through
+  /* Non-Windows or explicit shell / non-OWA HTTPS: prefer shell.openExternal.
+     (Windows OWA is handled above — Edge InPrivate so the Outlook PWA cannot
+     swallow /mail/deeplink/compose.) If the shell handler fails we fall through
      to the optional explicit browser launcher, and finally — for HTTPS
      compose URLs — to a clipboard-only fallback so the user can paste the
      compose link into a browser tab themselves. */

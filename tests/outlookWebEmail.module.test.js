@@ -1,7 +1,7 @@
 /**
  * Unit tests for Outlook Web compose — URL building and main-process open (mocked shell).
  */
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
@@ -84,7 +84,7 @@ describe('openOutlookWebEmail — Edge InPrivate launch path (H62)', () => {
       assert.strictEqual(result.launchMethod, 'edge-inprivate');
     } else {
       assert.strictEqual(shellCalls.length, 1);
-      assert.strictEqual(result.launchMethod, 'shell-after-edge-inprivate-failed');
+      assert.strictEqual(result.launchMethod, 'shell-after-edge-failed');
       assert.ok(shellCalls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'));
     }
     /* Either way, browserCalls (the optional second-tier fallback) must NOT
@@ -106,7 +106,8 @@ describe('openOutlookWebEmail — Edge InPrivate launch path (H62)', () => {
         openMethod: 'edge-inprivate',
       }
     );
-    assert.ok(['edge-inprivate', 'shell-after-edge-inprivate-failed'].includes(result.launchMethod),
+    assert.ok(
+      ['edge-inprivate', 'edge-window-after-inprivate-failed', 'shell-after-edge-failed'].includes(result.launchMethod),
       'launchMethod should be edge-inprivate (success) or its documented fallback. Got: ' + result.launchMethod);
   });
 });
@@ -133,25 +134,67 @@ describe('openOutlookWebEmail (legacy work-account behaviour, accountType="work"
     }
   });
 
-  it('on Windows launches the plain HTTPS work compose URL (no microsoft-edge wrapper)', () => {
-    const calls = [];
+  it('on Windows uses Edge InPrivate for OWA compose (mock spawn); never default-browser shell when Edge succeeds', async () => {
+    const shellCalls = [];
+    const spawnCalls = [];
     const prevPlatform = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    function fakeSpawn(exe, args) {
+      spawnCalls.push({ exe: String(exe).slice(-20), args: args.slice() });
+      const child = { once: function () {}, unref: function () {} };
+      return child;
+    }
     try {
-      openOutlookWebEmail(
+      const result = await openOutlookWebEmail(
         { to: 'a@b.com', cc: '', bcc: '', subject: '', body: '' },
         {
-          shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } },
+          shell: { openExternal: (u) => { shellCalls.push(u); return Promise.resolve(); } },
           accountType: 'work',
           skipConfirm: true,
+          spawn: fakeSpawn,
         }
       );
-      assert.strictEqual(calls.length, 1);
+      assert.strictEqual(shellCalls.length, 0, 'OWA on Windows must not open via shell when Edge spawn succeeds');
+      assert.ok(spawnCalls.length >= 1, 'expected at least one Edge spawn');
+      const inPrivate = spawnCalls.find(function (c) {
+        return Array.isArray(c.args) && c.args.indexOf('--inprivate') >= 0;
+      });
+      assert.ok(inPrivate, 'first OWA launch should use --inprivate');
       assert.ok(
-        calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'),
-        'expected plain HTTPS compose URL on Windows: ' + calls[0].slice(0, 100)
+        inPrivate.args.some(function (a) {
+          return String(a).indexOf('outlook.office.com/mail/deeplink/compose') >= 0;
+        }),
+        'spawn argv should contain OWA compose URL'
       );
-      assert.ok(!calls[0].startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
+      assert.strictEqual(result.launchMethod, 'edge-inprivate');
+      assert.ok(!(result.launchUrl || '').startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prevPlatform, configurable: true });
+    }
+  });
+
+  it('on Windows with openMethod shell still uses default browser for OWA (explicit user choice)', async () => {
+    const shellCalls = [];
+    const spawnCalls = [];
+    const prevPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    function fakeSpawn() {
+      spawnCalls.push(arguments);
+      return { once: function () {}, unref: function () {} };
+    }
+    try {
+      await openOutlookWebEmail(
+        { to: 'a@b.com', cc: '', bcc: '', subject: '', body: '', openMethod: 'shell' },
+        {
+          shell: { openExternal: (u) => { shellCalls.push(u); return Promise.resolve(); } },
+          accountType: 'work',
+          skipConfirm: true,
+          spawn: fakeSpawn,
+        }
+      );
+      assert.strictEqual(spawnCalls.length, 0, 'explicit shell must not spawn Edge');
+      assert.strictEqual(shellCalls.length, 1);
+      assert.ok(shellCalls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'));
     } finally {
       Object.defineProperty(process, 'platform', { value: prevPlatform, configurable: true });
     }
@@ -223,9 +266,19 @@ describe('buildOutlookWebComposeUrl — edge cases', () => {
 
 describe('openOutlookWebEmail confirmation gate (H02 hardening)', () => {
   const { _resetOutlookWebAckForTests } = require('../main/openOutlookWebEmail');
+  let prevPlatform;
   // Each test must start with a clean per-session ack flag, otherwise a
   // "remember my choice" tick in one case would carry into the next.
-  beforeEach(() => { _resetOutlookWebAckForTests(); });
+  // Non-Windows: these cases assert shell.openExternal (dialog behaviour only).
+  // On Windows, OWA HTTPS uses Edge InPrivate instead of the default browser.
+  beforeEach(() => {
+    _resetOutlookWebAckForTests();
+    prevPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', { value: prevPlatform, configurable: true });
+  });
 
   it('cancels when the user cancels the dialog', async () => {
     const calls = [];
@@ -525,18 +578,27 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
     return { calls, shell: { openExternal: (u) => { calls.push(u); return Promise.resolve(); } } };
   }
 
-  it("personal account on Windows does NOT prefix microsoft-edge: (default browser handles outlook.live.com)", async () => {
+  /** Avoid spawning real msedge in tests; Edge InPrivate resolves synchronously. */
+  function spawnOk() {
+    return function () {
+      return { once: function () {}, unref: function () {} };
+    };
+  }
+
+  it("personal account on Windows does NOT prefix microsoft-edge: (Edge InPrivate opens plain HTTPS)", async () => {
     const prev = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
       const spy = shellSpy();
-      await openOutlookWebEmail(
+      const result = await openOutlookWebEmail(
         { to: 'a@b.c', subject: 'S', body: 'B' },
-        { shell: spy.shell, skipConfirm: true, accountType: 'personal' }
+        { shell: spy.shell, skipConfirm: true, accountType: 'personal', spawn: spawnOk() }
       );
-      assert.strictEqual(spy.calls.length, 1);
-      assert.ok(spy.calls[0].startsWith('https://outlook.live.com/'),
-        'personal must launch outlook.live.com without microsoft-edge: prefix: ' + spy.calls[0]);
+      assert.strictEqual(spy.calls.length, 0, 'OWA on Windows must not use default browser');
+      assert.ok(result.launchUrl.startsWith('https://outlook.live.com/'),
+        'personal must launch outlook.live.com without microsoft-edge: prefix: ' + result.launchUrl);
+      assert.ok(!result.launchUrl.startsWith('microsoft-edge:'));
+      assert.strictEqual(result.launchMethod, 'edge-inprivate');
     } finally {
       Object.defineProperty(process, 'platform', { value: prev, configurable: true });
     }
@@ -547,20 +609,21 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
       const spy = shellSpy();
-      await openOutlookWebEmail(
+      const result = await openOutlookWebEmail(
         { to: 'a@b.c', subject: 'S', body: 'B' },
-        { shell: spy.shell, skipConfirm: true, accountType: 'work' }
+        { shell: spy.shell, skipConfirm: true, accountType: 'work', spawn: spawnOk() }
       );
-      assert.ok(spy.calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'),
-        'work must launch the plain office.com compose URL: ' + spy.calls[0]);
-      assert.ok(!spy.calls[0].startsWith('microsoft-edge:'),
-        'work must not use microsoft-edge: prefix: ' + spy.calls[0]);
+      assert.strictEqual(spy.calls.length, 0);
+      assert.ok(result.launchUrl.startsWith('https://outlook.office.com/mail/deeplink/compose'),
+        'work must launch the plain office.com compose URL: ' + result.launchUrl);
+      assert.ok(!result.launchUrl.startsWith('microsoft-edge:'),
+        'work must not use microsoft-edge: prefix: ' + result.launchUrl);
     } finally {
       Object.defineProperty(process, 'platform', { value: prev, configurable: true });
     }
   });
 
-  it('launches via shell.openExternal by default on Windows HTTPS compose URLs', async () => {
+  it('launches work OWA via Edge InPrivate on Windows (not default browser)', async () => {
     const prev = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
@@ -571,13 +634,13 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
           shell: spy.shell,
           skipConfirm: true,
           accountType: 'work',
+          spawn: spawnOk(),
         }
       );
-      assert.strictEqual(spy.calls.length, 1);
-      assert.ok(spy.calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose?'),
-        'shell must receive the plain compose URL: ' + spy.calls[0]);
-      assert.strictEqual(result.launchMethod, 'shell');
-      assert.strictEqual(result.launchUrl, spy.calls[0]);
+      assert.strictEqual(spy.calls.length, 0);
+      assert.ok(result.launchUrl.startsWith('https://outlook.office.com/mail/deeplink/compose?'),
+        'compose URL must be plain HTTPS: ' + result.launchUrl);
+      assert.strictEqual(result.launchMethod, 'edge-inprivate');
       assert.strictEqual(result.composeSignature, true);
     } finally {
       Object.defineProperty(process, 'platform', { value: prev, configurable: true });
@@ -590,7 +653,7 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
     try {
       const launched = [];
       const result = await openOutlookWebEmail(
-        { to: 'a@b.c', subject: 'S', body: 'B' },
+        { to: 'a@b.c', subject: 'S', body: 'B', openMethod: 'shell' },
         {
           shell: { openExternal: () => Promise.reject(new Error('shell failed')) },
           skipConfirm: true,
@@ -613,7 +676,7 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
     try {
       let clipboardWritten = '';
       const result = await openOutlookWebEmail(
-        { to: 'a@b.c', subject: 'S', body: 'B' },
+        { to: 'a@b.c', subject: 'S', body: 'B', openMethod: 'shell' },
         {
           shell: { openExternal: () => Promise.reject(new Error('shell refused')) },
           skipConfirm: true,
@@ -639,7 +702,7 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
     try {
       let clipboardWritten = '';
       const result = await openOutlookWebEmail(
-        { to: 'a@b.c', subject: 'S', body: 'B' },
+        { to: 'a@b.c', subject: 'S', body: 'B', openMethod: 'shell' },
         {
           shell: { openExternal: () => Promise.reject(new Error('shell refused')) },
           skipConfirm: true,
@@ -664,7 +727,7 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
       let threw = null;
       try {
         await openOutlookWebEmail(
-          { to: 'a@b.c', subject: 'S', body: 'B' },
+          { to: 'a@b.c', subject: 'S', body: 'B', openMethod: 'shell' },
           {
             shell: { openExternal: () => Promise.reject(new Error('shell refused')) },
             skipConfirm: true,
@@ -707,12 +770,19 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
 
   it('infers account type from feeEarnerEmail when caller does not pass accountType explicitly', async () => {
     const spy = shellSpy();
-    const result = await openOutlookWebEmail(
-      { to: 'oic@met.police.uk', subject: 'S', body: 'B', feeEarnerEmail: 'me@hotmail.co.uk' },
-      { shell: spy.shell, skipConfirm: true }
-    );
-    assert.strictEqual(result.accountType, 'personal');
-    assert.ok(spy.calls[0].startsWith('https://outlook.live.com/'));
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const result = await openOutlookWebEmail(
+        { to: 'oic@met.police.uk', subject: 'S', body: 'B', feeEarnerEmail: 'me@hotmail.co.uk' },
+        { shell: spy.shell, skipConfirm: true, spawn: spawnOk() }
+      );
+      assert.strictEqual(result.accountType, 'personal');
+      assert.strictEqual(spy.calls.length, 0);
+      assert.ok(result.launchUrl.startsWith('https://outlook.live.com/'));
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
   });
 
   it('copies the FULL body to the clipboard when the URL had to be trimmed', async () => {
@@ -750,7 +820,7 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
     assert.strictEqual(result.accountType, 'personal');
   });
 
-  it('personal compose also uses shell.openExternal by default on Windows', async () => {
+  it('personal compose uses Edge InPrivate on Windows for outlook.live.com', async () => {
     const prev = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
@@ -761,11 +831,12 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
           shell: spy.shell,
           skipConfirm: true,
           accountType: 'personal',
+          spawn: spawnOk(),
         }
       );
-      assert.strictEqual(spy.calls.length, 1);
-      assert.ok(spy.calls[0].startsWith('https://outlook.live.com/mail/0/deeplink/compose?'));
-      assert.strictEqual(result.launchMethod, 'shell');
+      assert.strictEqual(spy.calls.length, 0);
+      assert.ok(result.launchUrl.startsWith('https://outlook.live.com/mail/0/deeplink/compose?'));
+      assert.strictEqual(result.launchMethod, 'edge-inprivate');
       assert.strictEqual(result.composeSignature, true);
       assert.strictEqual(result.composeReason, 'personal_deeplink_compose');
     } finally {
