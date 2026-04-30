@@ -15,6 +15,7 @@ const PROD_FILES = [
   'index.html',
   'browser-api.js',
   'renderer/outlook-email-invoke.js',
+  'renderer/officerEmails.js',
   'renderer/views/email-modal.js',
   'renderer/views/billing.js',
   'renderer/email-templates.js',

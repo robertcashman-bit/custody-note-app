@@ -1,5 +1,5 @@
 /* ─── STATE ─── */
-var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', 'matter-billing': 'view-matter-billing' };
+var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', 'matter-billing': 'view-matter-billing', 'officer-emails': 'view-officer-emails' };
 var currentAttendanceId = null;
 var stations = [];
 var firms = [];
@@ -3428,12 +3428,6 @@ var REQUIRED_FIELD_KEYS = [
       emailContent.style.display = addons.emailAddon ? '' : 'none';
     }
 
-    var quickEmailCard = document.getElementById('home-card-quick-email');
-    var quickEmailListBtn = document.getElementById('list-quick-email-btn');
-    var emailEnabled = addons.emailAddon && window._emailTemplatesAddonEnabled;
-    if (quickEmailCard) quickEmailCard.style.display = emailEnabled ? '' : 'none';
-    if (quickEmailListBtn) quickEmailListBtn.style.display = emailEnabled ? '' : 'none';
-
     var modulesList = document.getElementById('modules-list');
     var modulesEmpty = document.getElementById('modules-installed-empty');
     if (modulesList) {
@@ -5129,35 +5123,6 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  /* Render the auto-learned Outlook compose route inside the Settings card so
-     the user can see what is currently remembered and reset it from one place.
-     Exposed on window so the Quick Email modal can refresh the pill after a
-     successful "Yes, looks good" persist without a full settings reload. */
-  function _refreshOutlookRouteStatus(s) {
-    var el = document.getElementById('setting-outlook-route-status');
-    var resetBtn = document.getElementById('setting-outlook-route-reset');
-    if (!el) return;
-    s = s || (window._appSettingsCache || {});
-    var route = String(s.lastWorkingOutlookRoute || '').toLowerCase();
-    var account = String(s.lastWorkingOutlookAccountType || '').toLowerCase();
-    if (!route && !account) {
-      el.textContent = 'No preferred route saved yet';
-      el.classList.remove('qe-route-pill--active');
-      if (resetBtn) resetBtn.disabled = true;
-      return;
-    }
-    var label;
-    if (route === 'desktop' || account === 'desktop') label = 'Outlook desktop draft (.eml)';
-    else if (route === 'work_alt') label = 'M365 alternate (owa/action/compose)';
-    else if (route === 'personal' || account === 'personal') label = 'Outlook.com personal';
-    else if (account === 'mailto') label = 'Default email app (mailto)';
-    else label = 'M365 work compose (outlook.office.com)';
-    el.textContent = 'Saved route: ' + label;
-    el.classList.add('qe-route-pill--active');
-    if (resetBtn) resetBtn.disabled = false;
-  }
-  window._refreshOutlookRouteStatus = _refreshOutlookRouteStatus;
-
   function loadSettings() {
     if (!window.api) return;
     loadLicenceSettingsUI();
@@ -5191,14 +5156,6 @@ var REQUIRED_FIELD_KEYS = [
       if (qfApp) qfApp.value = s.quickfileAppId || '';
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
-      const oat = document.getElementById('setting-outlook-account-type');
-      if (oat) {
-        var raw = String(s.outlookAccountType || '').toLowerCase();
-        oat.value = (raw === 'work' || raw === 'mailto' || raw === 'desktop') ? raw : 'personal';
-      }
-      const auow = document.getElementById('setting-always-use-outlook-web');
-      if (auow) auow.checked = String(s.alwaysUseOutlookWeb || '').toLowerCase() === 'true';
-      _refreshOutlookRouteStatus(s);
       const opc = document.getElementById('setting-office-postcode');
       if (opc && document.activeElement !== opc) opc.value = s.officePostcode || '';
       const dm = document.getElementById('setting-dark-mode');
@@ -5538,11 +5495,6 @@ var REQUIRED_FIELD_KEYS = [
       billingMileageRate: document.getElementById('setting-billing-mileage-rate')?.value?.trim() || '0.45',
       billingVatRate: document.getElementById('setting-billing-vat-rate')?.value?.trim() || '20',
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
-      outlookAccountType: (function() {
-        var v = String(document.getElementById('setting-outlook-account-type')?.value || 'personal').toLowerCase();
-        return (v === 'work' || v === 'mailto' || v === 'desktop') ? v : 'personal';
-      })(),
-      alwaysUseOutlookWeb: document.getElementById('setting-always-use-outlook-web')?.checked ? 'true' : 'false',
       feeEarnerSigMode: (function() {
         const c = document.querySelector('input[name="fee-earner-sig-mode"]:checked');
         return c && c.value === 'saved' ? 'saved' : 'draw';
@@ -14723,6 +14675,17 @@ pdfAuditFooterHtml(d, settings) +
             e.preventDefault();
             if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
             openQuickCapture();
+            return;
+          case 'openOfficerEmailsBtn':
+            e.preventDefault();
+            showView('officer-emails');
+            if (window.OfficerEmails && typeof window.OfficerEmails.onShow === 'function') {
+              window.OfficerEmails.onShow();
+            }
+            return;
+          case 'officerBackHomeBtn':
+            e.preventDefault();
+            showView('home');
             return;
           case 'home-card-quick-email':
             e.preventDefault();

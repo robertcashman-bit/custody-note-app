@@ -6070,6 +6070,22 @@ ipcMain.handle('open-external', async (_, url) => {
   }
 });
 
+/* Officer Emails — strict allowlist for the OWA work-account compose deeplink.
+   Used by the Officer Emails screen so the renderer can never trick this
+   handler into opening anything other than outlook.office.com compose. */
+ipcMain.handle('open-external-url', async (_event, url) => {
+  if (typeof url !== 'string') {
+    throw new Error('Invalid URL');
+  }
+  const allowedPrefix = 'https://outlook.office.com/mail/deeplink/compose';
+  const trimmed = url.trim();
+  if (!trimmed.startsWith(allowedPrefix)) {
+    throw new Error('Blocked external URL');
+  }
+  await shell.openExternal(trimmed);
+  return true;
+});
+
 ipcMain.handle('open-path', async (_, filePath) => {
   try {
     if (typeof filePath !== 'string') return false;
