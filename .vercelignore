@@ -37,8 +37,12 @@ release-*.log
 
 # Tests / scripts not needed in the static deploy.
 # bundle-sqljs.mjs is REQUIRED by Vercel buildCommand — keep it.
+# IMPORTANT: use `scripts/*` (not `scripts/`). With `scripts/` the whole
+# directory is excluded and gitignore-style negation cannot re-include
+# children, so `!scripts/bundle-sqljs.mjs` would silently have no effect
+# and the Vercel build would fail with `Cannot find module bundle-sqljs.mjs`.
 tests/
-scripts/
+scripts/*
 !scripts/bundle-sqljs.mjs
 
 # Markdown docs (the static deploy is the app, not the docs)
