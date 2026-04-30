@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.6.12",
+      "version": "1.6.13",
       "date": "2026-04-30",
       "latest": true,
+      "changes": [
+        "Officer Emails: prepare standardised emails to officers (bail details, attendance confirmation, disclosure update, general), open them in Outlook on the web via a strict allowlisted shell.openExternal handler, and keep a local record on this device with full draft / opened / sent / cancelled lifecycle",
+        "Removed older Quick Email feature replaced by Officer Emails"
+      ]
+    },
+    {
+      "version": "1.6.12",
+      "date": "2026-04-30",
+      "latest": false,
       "changes": [
         "Quick Email: new Settings toggle 'Always use Outlook on the web (M365 work)' that hard-overrides Outlook desktop detection and pins the most reliable compose URL",
         "Quick Email: fixes the v1.6.11 case where .eml drafts were handed to Edge (PWA) instead of Outlook desktop and ended up showing a malformed OWA URL with no compose path",
