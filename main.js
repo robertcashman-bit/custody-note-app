@@ -6070,16 +6070,37 @@ ipcMain.handle('open-external', async (_, url) => {
   }
 });
 
-/* Officer Emails — strict allowlist for the OWA work-account compose deeplink.
-   Used by the Officer Emails screen so the renderer can never trick this
-   handler into opening anything other than outlook.office.com compose. */
+/* Officer Emails — strict allowlist for outlook.office.com compose URLs only.
+   Two shapes (same as lib/outlookWebComposeUrl.js):
+   - https://outlook.office.com/mail/deeplink/compose?…
+   - https://outlook.office.com/owa/?path=/mail/action/compose&…  (work_alt;
+     survives redirects to outlook.cloud.microsoft better for some tenants). */
+function _isAllowedOfficerOutlookComposeUrl(urlStr) {
+  if (typeof urlStr !== 'string') return false;
+  const trimmed = urlStr.trim();
+  if (!trimmed || /[\u0000-\u001F\u007F]/.test(trimmed)) return false;
+  let u;
+  try {
+    u = new URL(trimmed);
+  } catch (_) {
+    return false;
+  }
+  if (u.protocol !== 'https:') return false;
+  if (String(u.hostname || '').toLowerCase() !== 'outlook.office.com') return false;
+  const path = String(u.pathname || '');
+  if (path === '/mail/deeplink/compose') return true;
+  if (path === '/owa' || path === '/owa/') {
+    return u.searchParams.get('path') === '/mail/action/compose';
+  }
+  return false;
+}
+
 ipcMain.handle('open-external-url', async (_event, url) => {
   if (typeof url !== 'string') {
     throw new Error('Invalid URL');
   }
-  const allowedPrefix = 'https://outlook.office.com/mail/deeplink/compose';
   const trimmed = url.trim();
-  if (!trimmed.startsWith(allowedPrefix)) {
+  if (!_isAllowedOfficerOutlookComposeUrl(trimmed)) {
     throw new Error('Blocked external URL');
   }
   await shell.openExternal(trimmed);
