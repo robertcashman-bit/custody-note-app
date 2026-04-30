@@ -295,6 +295,228 @@ describe('Quick Email → Outlook payload transfer', () => {
   });
 });
 
+/* ─────────────────────────────────────────────────────────────────────────
+   Smart-routing tests for the v1.6.10 follow-up: Outlook web URLs are
+   environment-fragile (Edge / M365 tenant policy normalises
+   /mail/deeplink/compose back to /mail/), so on Windows with Outlook
+   desktop installed the primary Send must transparently switch to the
+   .eml draft route. The previous implementation kicked off detection
+   asynchronously inside _bindEvents, so a fast click raced past it and
+   the renderer ended up sending the user to the inbox.
+   ───────────────────────────────────────────────────────────────────── */
+describe('Quick Email — primary Send routes to Outlook desktop draft when detected installed', () => {
+  function makeDesktopDetectedEnv(opts) {
+    opts = opts || {};
+    const env = createEnv();
+    /* Pre-seed cache so _ensureDesktopDetect resolves synchronously to
+       the requested state — exactly what a real boot would look like
+       once the pre-warm IPC has resolved. */
+    env.window._outlookDesktopDetect = { installed: !!opts.installed, exePath: opts.installed ? 'C:\\OUTLOOK.EXE' : null };
+    env.window.emailAPI.detectOutlookDesktop = () => Promise.resolve(env.window._outlookDesktopDetect);
+    if (opts.savedAccountType != null) {
+      env.window._appSettingsCache = Object.assign({}, env.window._appSettingsCache || {}, { outlookAccountType: opts.savedAccountType });
+    }
+    if (opts.lastWorkingAccountType != null) {
+      env.window._appSettingsCache = Object.assign({}, env.window._appSettingsCache || {}, { lastWorkingOutlookAccountType: opts.lastWorkingAccountType });
+    }
+    return env;
+  }
+
+  function fillRequired(env, overrides) {
+    const o = overrides || {};
+    setField(env.document, 'officerEmail', o.officerEmail || '30052@kent.police.uk');
+    setField(env.document, 'clientName',   o.clientName   || 'David Walter');
+    setField(env.document, 'station',      o.station      || 'Maidstone');
+    setField(env.document, 'date',         o.date         || '2026-04-30');
+    setField(env.document, 'time',         o.time         || '09:00');
+    if (o.oicName) setField(env.document, 'oicName', o.oicName);
+  }
+
+  it('sends forceAccountType="desktop" when Outlook desktop is detected installed and user has no setting', async () => {
+    const env = makeDesktopDetectedEnv({ installed: true });
+    openModal(env);
+    fillRequired(env, { oicName: 'Jarvis' });
+    pickTemplate(env.document, 'system:disclosure');
+
+    env.document.getElementById('qe-send').click();
+    /* 8 microtasks: detection awaits + downstream promises */
+    await tickMicrotasks(10);
+
+    assert.strictEqual(env.sentPayloads.length, 1, 'must forward exactly one payload');
+    const sent = env.sentPayloads[0];
+    assert.strictEqual(sent.forceAccountType, 'desktop',
+      'desktop must be FORCED so the saved setting cannot override it: ' + JSON.stringify(sent));
+    assert.strictEqual(sent.accountType, 'desktop',
+      'accountType must also be desktop in the payload');
+  });
+
+  it('OVERRIDES legacy outlookAccountType="work" with desktop when Outlook desktop is detected installed', async () => {
+    /* Real-world bug: existing users have outlookAccountType="work" saved
+       from earlier versions where it was the silent default. The web URL
+       route is unreliable, so on a Windows box with Outlook installed we
+       must prefer the .eml draft route even though "work" is saved. */
+    const env = makeDesktopDetectedEnv({ installed: true, savedAccountType: 'work' });
+    openModal(env);
+    fillRequired(env, { oicName: 'Jarvis' });
+    pickTemplate(env.document, 'system:disclosure');
+
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(10);
+
+    assert.strictEqual(env.sentPayloads.length, 1);
+    assert.strictEqual(env.sentPayloads[0].forceAccountType, 'desktop',
+      'desktop must override the legacy "work" default');
+  });
+
+  it('RESPECTS lastWorkingOutlookAccountType once the user has confirmed a web route', async () => {
+    /* If the user has previously clicked "Yes, looks good" on a web route
+       follow-up, that learned preference must beat the desktop default. */
+    const env = makeDesktopDetectedEnv({
+      installed: true,
+      savedAccountType: 'work',
+      lastWorkingAccountType: 'work',
+    });
+    openModal(env);
+    fillRequired(env, { oicName: 'Jarvis' });
+    pickTemplate(env.document, 'system:disclosure');
+
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(10);
+
+    assert.strictEqual(env.sentPayloads.length, 1);
+    assert.strictEqual(env.sentPayloads[0].forceAccountType, 'work',
+      'a confirmed working route must beat the desktop default');
+  });
+
+  it('falls back to web when Outlook desktop is NOT installed', async () => {
+    const env = makeDesktopDetectedEnv({ installed: false, savedAccountType: 'work' });
+    openModal(env);
+    fillRequired(env, { oicName: 'Jarvis' });
+    pickTemplate(env.document, 'system:disclosure');
+
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(10);
+
+    assert.strictEqual(env.sentPayloads.length, 1);
+    const sent = env.sentPayloads[0];
+    assert.strictEqual(sent.forceAccountType, 'work',
+      'with no Outlook desktop available, "work" web route is the right choice');
+  });
+
+  it('AWAITS in-flight detection: clicking Send before detection lands still routes to desktop', async () => {
+    /* This is the original race that put the user in the inbox: detection
+       was asynchronous, so the click went out using accountType='' and
+       fell back to web. With the await guard, the click handler must
+       block on the in-flight detection promise. */
+    const env = createEnv();
+    let resolveDetect;
+    env.window.emailAPI.detectOutlookDesktop = () => new Promise(function(resolve) { resolveDetect = resolve; });
+    openModal(env);
+
+    fillRequired(env, { oicName: 'Jarvis' });
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('qe-send').click();
+
+    /* Without the race fix, the click would have already sent a payload by
+       now using accountType='work'. With the fix, it is awaiting detection. */
+    await tickMicrotasks(2);
+    assert.strictEqual(env.sentPayloads.length, 0, 'click must wait for detection to resolve');
+
+    /* Now resolve the detection as "installed" — the awaiting click should
+       proceed and send a desktop-routed payload. */
+    resolveDetect({ installed: true, exePath: 'C:\\OUTLOOK.EXE' });
+    await tickMicrotasks(15);
+
+    assert.strictEqual(env.sentPayloads.length, 1, 'click must complete after detection resolves');
+    assert.strictEqual(env.sentPayloads[0].forceAccountType, 'desktop',
+      'after detection resolves "installed", desktop route must be used');
+  });
+
+  it('shows a route-preview pill that updates to reflect the resolved route', async () => {
+    const env = makeDesktopDetectedEnv({ installed: true });
+    openModal(env);
+    await tickMicrotasks(5);
+    const pill = env.document.getElementById('quick-email-route-preview');
+    assert.ok(pill, 'route-preview pill must render in the modal footer');
+    assert.ok(/desktop draft/i.test(pill.textContent),
+      'pill must reflect the desktop route when detected installed: ' + pill.textContent);
+  });
+
+  it('Send button label switches to "Send via Outlook (desktop)" when desktop is the resolved route', async () => {
+    const env = makeDesktopDetectedEnv({ installed: true });
+    openModal(env);
+    await tickMicrotasks(5);
+    const btn = env.document.getElementById('qe-send');
+    assert.ok(btn);
+    assert.ok(/desktop/i.test(btn.textContent), 'button label must indicate desktop: ' + btn.textContent);
+  });
+
+  it('Send button label stays "Send via Outlook Web" when desktop is NOT installed', async () => {
+    const env = makeDesktopDetectedEnv({ installed: false });
+    openModal(env);
+    await tickMicrotasks(5);
+    const btn = env.document.getElementById('qe-send');
+    assert.ok(btn);
+    assert.ok(/web/i.test(btn.textContent), 'button label must stay "Web" when desktop unavailable: ' + btn.textContent);
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Acceptance test from the v1.6.11 brief — the David Walter scenario.
+   Verifies the URL builders produce a real compose deeplink (not the
+   inbox URL), with the required to / subject / body content.
+   ───────────────────────────────────────────────────────────────────── */
+describe('Acceptance: David Walter / Maidstone scenario', () => {
+  const SCENARIO = {
+    to: '30052@kent.police.uk',
+    subject: 'Disclosure request - David Walter - Maidstone - 30/04/2026',
+    body:
+      'Dear Officer Jarvis,\n\n'
+      + 'I am instructed in relation to David Walter, who is attending Maidstone Police Station '
+      + 'on 30/04/2026 at 09:00 as a voluntary attendee in relation to Common Assault.\n\n'
+      + 'Please could you provide disclosure ahead of the interview, or alternatively contact me '
+      + 'so that I can take instructions.\n\n'
+      + 'Kind regards,\nRobert Cashman',
+  };
+
+  it('M365 work compose URL contains the encoded recipient, subject and body verbatim', () => {
+    const url = buildOutlookWebComposeUrl(Object.assign({ accountType: 'work' }, SCENARIO));
+    assert.ok(url.startsWith('https://outlook.office.com/mail/deeplink/compose?'),
+      'URL must use the work compose deeplink: ' + url.slice(0, 120));
+    assert.ok(url.includes('to=' + encodeURIComponent(SCENARIO.to).replace(/%40/gi, '%40')),
+      'to= encoded recipient must be present');
+    assert.ok(url.includes('subject='), 'subject= must be present');
+    assert.ok(url.includes('body='), 'body= must be present');
+    const decodedBody = new URL(url).searchParams.get('body') || '';
+    assert.ok(decodedBody.includes('Dear Officer Jarvis'), 'salutation present in decoded body');
+    assert.ok(decodedBody.includes('David Walter'),        'client name present in decoded body');
+    assert.ok(decodedBody.includes('Maidstone'),           'station present in decoded body');
+    assert.ok(decodedBody.includes('30/04/2026'),          'UK date present in decoded body');
+    assert.ok(decodedBody.includes('09:00'),               '24h time present in decoded body');
+    assert.ok(decodedBody.includes('Common Assault'),      'offence present in decoded body');
+    assert.ok(decodedBody.includes('Kind regards'),        'sign-off present in decoded body');
+    assert.ok(decodedBody.includes('Robert Cashman'),      'fee earner name present in decoded body');
+    assert.ok(decodedBody.includes('\n\n'),                'paragraph breaks preserved (not collapsed)');
+  });
+
+  it('all three compose endpoints are produced and contain the same payload', () => {
+    const urls = buildOutlookComposeUrls(SCENARIO);
+    assert.ok(urls.office365.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.ok(urls.office365Alt.startsWith('https://outlook.office.com/owa/?path=/mail/action/compose&'));
+    assert.ok(urls.personal.startsWith('https://outlook.live.com/mail/0/deeplink/compose?'));
+    /* All three must NOT collapse to the inbox URL. */
+    assert.ok(urls.office365 !== 'https://outlook.office.com/mail/');
+    assert.ok(urls.personal !== 'https://outlook.live.com/mail/');
+    /* All three must carry the to/subject/body. */
+    [urls.office365, urls.office365Alt, urls.personal].forEach((u) => {
+      const sp = new URL(u).searchParams;
+      assert.strictEqual(sp.get('to'), SCENARIO.to);
+      assert.strictEqual(sp.get('subject'), SCENARIO.subject);
+      assert.strictEqual(sp.get('body'), SCENARIO.body);
+    });
+  });
+});
+
 describe('Quick Email → OWA URL builder', () => {
   it('embeds the typed values into the Outlook Web compose URL verbatim', () => {
     const url = buildOutlookWebComposeUrl({

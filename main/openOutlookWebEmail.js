@@ -120,28 +120,69 @@ function _openUrlViaEdgeCommand(url) {
   });
 }
 
+function _copyUrlToClipboardSafe(clipboardApi, url) {
+  if (!clipboardApi || typeof clipboardApi.writeText !== 'function') return false;
+  try {
+    clipboardApi.writeText(String(url || ''));
+    return true;
+  } catch (_) { return false; }
+}
+
 function _launchExternalUrl(url, accountType, deps, shellApi) {
   const isHttps = /^https:\/\//i.test(String(url || ''));
   const browserLauncher = deps && deps.browserLauncher ? deps.browserLauncher : null;
+  const clipboardApi = deps && deps.clipboard != null ? deps.clipboard : clipboard;
+
+  function clipboardFallback(rootCause) {
+    const copied = _copyUrlToClipboardSafe(clipboardApi, url);
+    _traceLaunch('launch_failed_clipboard_fallback', {
+      accountType: accountType,
+      copied: copied,
+      reason: rootCause && rootCause.message ? rootCause.message : String(rootCause || 'unknown'),
+    });
+    if (copied) {
+      return {
+        launchUrl: url,
+        launchMethod: 'clipboard-fallback',
+        launchFailed: true,
+        urlCopiedToClipboard: true,
+      };
+    }
+    /* Clipboard refused too — caller turns this into an inline error toast. */
+    const err = new Error(
+      'Outlook could not be opened automatically and the compose URL could not be copied to the clipboard. '
+      + (rootCause && rootCause.message ? '(' + rootCause.message + ')' : '')
+    );
+    err.launchFailed = true;
+    err.urlCopiedToClipboard = false;
+    throw err;
+  }
 
   /* Prefer shell.openExternal first. It respects the user's default browser
      and avoids Edge-specific routing quirks that can drop compose deeplinks
-     into the inbox/home surface. Keep the explicit browser launcher only as
-     an optional fallback when shell fails. */
+     into the inbox/home surface. If the shell handler fails we fall through
+     to the optional explicit browser launcher, and finally — for HTTPS
+     compose URLs — to a clipboard-only fallback so the user can paste the
+     compose link into a browser tab themselves. */
   if (isHttps) {
     return Promise.resolve(shellApi.openExternal(url)).then(() => ({
       launchUrl: url,
       launchMethod: 'shell',
-    })).catch((err) => {
-      if (!browserLauncher) throw err;
-      console.warn('[EMAIL] shell.openExternal failed, falling back to browser launcher:', err && err.message ? err.message : err);
+    })).catch((shellErr) => {
+      console.warn('[EMAIL] shell.openExternal failed:', shellErr && shellErr.message ? shellErr.message : shellErr);
+      if (!browserLauncher) return clipboardFallback(shellErr);
       return Promise.resolve(browserLauncher(url)).then(() => ({
         launchUrl: url,
         launchMethod: 'browser-launcher-fallback',
-      }));
+      })).catch((browserErr) => {
+        console.warn('[EMAIL] browser launcher also failed:', browserErr && browserErr.message ? browserErr.message : browserErr);
+        return clipboardFallback(browserErr);
+      });
     });
   }
 
+  /* Non-HTTPS schemes (mailto:) — only path is shell.openExternal; there is no
+     compose URL we can put on the clipboard for the user to paste into a browser. */
   return Promise.resolve(shellApi.openExternal(url)).then(() => ({ launchUrl: url, launchMethod: 'shell' }));
 }
 
@@ -288,6 +329,8 @@ async function openOutlookWebEmail(payload, deps = {}) {
       launchMethod: launchResult.launchMethod,
       composeSignature: sig.composeSignature,
       composeReason: sig.composeReason,
+      launchFailed: !!launchResult.launchFailed,
+      urlCopiedToClipboard: !!launchResult.urlCopiedToClipboard,
     };
   });
 }

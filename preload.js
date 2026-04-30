@@ -140,6 +140,11 @@ contextBridge.exposeInMainWorld('api', {
 
 contextBridge.exposeInMainWorld('emailAPI', {
   open: (payload) => ipcRenderer.invoke('open-outlook-email', payload),
+  /* Returns { installed: boolean, exePath: string|null }. The renderer uses
+     this to default the Outlook compose surface to 'desktop' on Windows
+     when Outlook is installed locally — bypasses every web URL routing
+     issue by writing a draft .eml the OS hands to Outlook. */
+  detectOutlookDesktop: () => ipcRenderer.invoke('detect-outlook-desktop'),
 });
 
 /* Playwright / automated tests: fresh userData has no licence — allow skipping the sign-in overlay when env is set.

@@ -132,6 +132,18 @@ function expect(label, actual, predicate) {
   return ok;
 }
 
+/* The Outlook Web compose URL builder uses URLSearchParams.toString() which
+   emits application/x-www-form-urlencoded — spaces become '+' (not '%20'),
+   and '!\'()*' get percent-encoded (which encodeURIComponent leaves alone).
+   The mailto: assembler uses encodeURIComponent directly. This helper picks
+   the right encoding so substring assertions work for both shapes. */
+function encInUrl(url, raw) {
+  if (typeof url !== 'string' || url.length === 0) return false;
+  if (url.startsWith('mailto:')) return url.includes(encodeURIComponent(raw));
+  const enc = new URLSearchParams({ x: String(raw) }).toString().slice(2); // strip "x="
+  return url.includes(enc);
+}
+
 (async () => {
   console.log(C_BOLD + 'Quick Email — as-a-user functional smoke test' + C_RESET);
   console.log(info('Today: ' + new Date().toISOString()));
@@ -153,12 +165,12 @@ function expect(label, actual, predicate) {
     ok = expect('exactly one URL launched', env.opens.length, (n) => n === 1) && ok;
     ok = expect('URL targets outlook.live.com', url, (u) => u.startsWith('https://outlook.live.com/mail/0/deeplink/compose')) && ok;
     ok = expect('recipient = dc.smith@met.police.uk', url, (u) => u.includes('to=' + encodeURIComponent('dc.smith@met.police.uk'))) && ok;
-    ok = expect("subject contains client name (encoded)", url, (u) => u.includes(encodeURIComponent("John O'Brien"))) && ok;
-    ok = expect('subject contains "Disclosure request"', url, (u) => u.includes(encodeURIComponent('Disclosure request'))) && ok;
-    ok = expect('body contains "Dear Officer Smith,"', url, (u) => u.includes(encodeURIComponent('Dear Officer Smith,'))) && ok;
-    ok = expect('body contains UK-formatted date 29/04/2026', url, (u) => u.includes(encodeURIComponent('29/04/2026'))) && ok;
-    ok = expect('body contains the offence', url, (u) => u.includes(encodeURIComponent('ABH & threats'))) && ok;
-    ok = expect('body contains the fee earner sign-off', url, (u) => u.includes(encodeURIComponent('Robert Cashman'))) && ok;
+    ok = expect("subject contains client name (encoded)", url, (u) => encInUrl(u, "John O'Brien")) && ok;
+    ok = expect('subject contains "Disclosure request"', url, (u) => encInUrl(u, 'Disclosure request')) && ok;
+    ok = expect('body contains "Dear Officer Smith,"', url, (u) => encInUrl(u, 'Dear Officer Smith,')) && ok;
+    ok = expect('body contains UK-formatted date 29/04/2026', url, (u) => encInUrl(u, '29/04/2026')) && ok;
+    ok = expect('body contains the offence', url, (u) => encInUrl(u, 'ABH & threats')) && ok;
+    ok = expect('body contains the fee earner sign-off', url, (u) => encInUrl(u, 'Robert Cashman')) && ok;
     ok = expect('no double-encoded characters (%25xx)', url, (u) => !/%25(2[0-9A-F]|3[0-9A-F])/.test(u)) && ok;
     ok = expect('URL contains no literal "undefined" or "null"', url, (u) => !u.includes('undefined') && !/[?&]subject=null/.test(u)) && ok;
     return { ok, summary: ok ? 'all 10 checks passed; URL length ' + url.length : 'see failed checks above' };
@@ -179,10 +191,10 @@ function expect(label, actual, predicate) {
     ok = expect('one URL launched', env.opens.length, (n) => n === 1) && ok;
     /* Off-Windows the work URL stays plain https; on Windows it'd be 'microsoft-edge:'-prefixed. Both are valid. */
     ok = expect('targets outlook.office.com', url, (u) => u.includes('outlook.office.com/mail/deeplink/compose')) && ok;
-    ok = expect('uses "Dear Officer" fallback (no oicName supplied)', url, (u) => u.includes(encodeURIComponent('Dear Officer,'))) && ok;
-    ok = expect('subject contains "bail details request"', url, (u) => u.includes(encodeURIComponent('bail details request'))) && ok;
-    ok = expect('client name in body', url, (u) => u.includes(encodeURIComponent('Jane Smith'))) && ok;
-    ok = expect('station in body', url, (u) => u.includes(encodeURIComponent('Bishopsgate'))) && ok;
+    ok = expect('uses "Dear Officer" fallback (no oicName supplied)', url, (u) => encInUrl(u, 'Dear Officer,')) && ok;
+    ok = expect('subject contains "bail details request"', url, (u) => encInUrl(u, 'bail details request')) && ok;
+    ok = expect('client name in body', url, (u) => encInUrl(u, 'Jane Smith')) && ok;
+    ok = expect('station in body', url, (u) => encInUrl(u, 'Bishopsgate')) && ok;
     return { ok, summary: ok ? 'all 6 checks passed; URL length ' + url.length : 'see failed checks above' };
   });
 
@@ -226,9 +238,9 @@ function expect(label, actual, predicate) {
     const url = env.opens[0] || '';
     let ok = true;
     ok = expect('one URL launched', env.opens.length, (n) => n === 1) && ok;
-    ok = expect('subject preserved exactly', url, (u) => u.includes('subject=' + encodeURIComponent('Quick question about R v Cole'))) && ok;
-    ok = expect('body line breaks preserved (LF encoded as %0A)', url, (u) => u.includes(encodeURIComponent('\n\n'))) && ok;
-    ok = expect('full body text in URL', url, (u) => u.includes(encodeURIComponent('Hi,\n\nWhen is the next hearing listed?\n\nThanks,\nRobert'))) && ok;
+    ok = expect('subject preserved exactly', url, (u) => encInUrl(u, 'Quick question about R v Cole')) && ok;
+    ok = expect('body line breaks preserved (LF encoded as %0A)', url, (u) => encInUrl(u, '\n\n')) && ok;
+    ok = expect('full body text in URL', url, (u) => encInUrl(u, 'Hi,\n\nWhen is the next hearing listed?\n\nThanks,\nRobert')) && ok;
     return { ok, summary: ok ? 'all 4 checks passed' : 'see failed checks above' };
   });
 
@@ -274,7 +286,7 @@ function expect(label, actual, predicate) {
        is therefore: either the URL contains the full prefix, OR the clipboard contains it. Both count
        as a passing scenario. */
     const bodyDelivered =
-      url.includes(encodeURIComponent(huge.slice(0, 1000))) ||
+      encInUrl(url, huge.slice(0, 1000)) ||
       (clip && clip.length >= 1000);
     ok = expect('full body content available either in URL or in clipboard', bodyDelivered, (v) => v === true) && ok;
     return { ok, summary: ok ? ('URL ' + url.length + ' chars, clipboard ' + clip.length + ' chars') : 'body lost' };

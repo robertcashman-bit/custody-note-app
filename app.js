@@ -5147,7 +5147,8 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     var label;
-    if (route === 'work_alt') label = 'M365 alternate (owa/action/compose)';
+    if (route === 'desktop' || account === 'desktop') label = 'Outlook desktop draft (.eml)';
+    else if (route === 'work_alt') label = 'M365 alternate (owa/action/compose)';
     else if (route === 'personal' || account === 'personal') label = 'Outlook.com personal';
     else if (account === 'mailto') label = 'Default email app (mailto)';
     else label = 'M365 work compose (outlook.office.com)';
@@ -5193,7 +5194,7 @@ var REQUIRED_FIELD_KEYS = [
       const oat = document.getElementById('setting-outlook-account-type');
       if (oat) {
         var raw = String(s.outlookAccountType || '').toLowerCase();
-        oat.value = (raw === 'work' || raw === 'mailto') ? raw : 'personal';
+        oat.value = (raw === 'work' || raw === 'mailto' || raw === 'desktop') ? raw : 'personal';
       }
       _refreshOutlookRouteStatus(s);
       const opc = document.getElementById('setting-office-postcode');
@@ -5537,7 +5538,7 @@ var REQUIRED_FIELD_KEYS = [
       feeEarnerNameDefault: document.getElementById('setting-fee-earner-name')?.value?.trim() || '',
       outlookAccountType: (function() {
         var v = String(document.getElementById('setting-outlook-account-type')?.value || 'personal').toLowerCase();
-        return (v === 'work' || v === 'mailto') ? v : 'personal';
+        return (v === 'work' || v === 'mailto' || v === 'desktop') ? v : 'personal';
       })(),
       feeEarnerSigMode: (function() {
         const c = document.querySelector('input[name="fee-earner-sig-mode"]:checked');
@@ -14999,6 +15000,17 @@ pdfAuditFooterHtml(d, settings) +
     /* First-launch setup check: hide splash immediately so user can complete setup */
     window._emailTemplatesAddonEnabled = false;
     window._billingDefaults = {};
+
+    /* Pre-warm Outlook-desktop detection so the Quick Email modal's primary
+       Send button never has to await it on first click. The detection IPC is
+       cheap (a few synchronous fs.existsSync calls in main) but the round
+       trip is async; firing it at boot makes the result reliably cached. */
+    if (window.emailAPI && typeof window.emailAPI.detectOutlookDesktop === 'function' && !window._outlookDesktopDetectPromise) {
+      window._outlookDesktopDetectPromise = window.emailAPI.detectOutlookDesktop()
+        .then(function(d) { window._outlookDesktopDetect = d || { installed: false, exePath: null }; return window._outlookDesktopDetect; })
+        .catch(function() { window._outlookDesktopDetect = { installed: false, exePath: null }; return window._outlookDesktopDetect; });
+    }
+
     window.api.getSettings().then(function(s) {
       window._appSettingsCache = s || {};
       applyFeeEarnerSigModeUI(s.feeEarnerSigMode || 'draw');
@@ -17399,7 +17411,7 @@ pdfAuditFooterHtml(d, settings) +
 
     document.getElementById('setting-outlook-account-type')?.addEventListener('change', function(e) {
       var v = String(e.target.value || 'personal').toLowerCase();
-      if (v !== 'work' && v !== 'mailto') v = 'personal';
+      if (v !== 'work' && v !== 'mailto' && v !== 'desktop') v = 'personal';
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { outlookAccountType: v });
       window.api.setSettings({ outlookAccountType: v }).then(showSettingsSavedToast).catch(function(err) { console.error('[setSettings]', err); });
     });
