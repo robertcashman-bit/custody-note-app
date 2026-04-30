@@ -67,6 +67,25 @@ const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
 const { createBackupScheduler } = require('./main/backupScheduler');
 const { openOutlookWebEmail } = require('./main/openOutlookWebEmail');
+const { openComposeEml } = require('./main/openComposeEml');
+
+/** Heuristic: is Outlook desktop installed on this machine? Used by the
+ *  renderer to default the Quick Email surface to 'desktop' on Windows. */
+function detectOutlookDesktop() {
+  if (process.platform !== 'win32') return { installed: false, exePath: null };
+  const candidates = [
+    process.env.PROGRAMFILES && require('path').join(process.env.PROGRAMFILES, 'Microsoft Office', 'root', 'Office16', 'OUTLOOK.EXE'),
+    process.env['PROGRAMFILES(X86)'] && require('path').join(process.env['PROGRAMFILES(X86)'], 'Microsoft Office', 'root', 'Office16', 'OUTLOOK.EXE'),
+    process.env.PROGRAMFILES && require('path').join(process.env.PROGRAMFILES, 'Microsoft Office', 'Office16', 'OUTLOOK.EXE'),
+    process.env['PROGRAMFILES(X86)'] && require('path').join(process.env['PROGRAMFILES(X86)'], 'Microsoft Office', 'Office16', 'OUTLOOK.EXE'),
+    process.env.PROGRAMFILES && require('path').join(process.env.PROGRAMFILES, 'Microsoft Office', 'root', 'Office15', 'OUTLOOK.EXE'),
+    process.env['PROGRAMFILES(X86)'] && require('path').join(process.env['PROGRAMFILES(X86)'], 'Microsoft Office', 'root', 'Office15', 'OUTLOOK.EXE'),
+  ].filter(Boolean);
+  for (const p of candidates) {
+    try { if (require('fs').existsSync(p)) return { installed: true, exePath: p }; } catch (_) {}
+  }
+  return { installed: false, exePath: null };
+}
 const { hardenWindow, hardenSession, isSafeExternalUrl } = require('./main/windowHardening');
 const _securityLog = require('./main/securityLog');
 const _safeLog = require('./lib/safeLog');
@@ -3256,7 +3275,10 @@ function createWindow() {
                 errors.push('Backup APIs not available');
               }
 
-              /* 28. Finish-matter workflow (header) â€” documents step then QuickFile invoice step */
+              /* 28. Finish-matter workflow (header) — opens the matter-billing
+               * full-page screen; if the open record is finalised the workflow
+               * auto-mounts inline, otherwise the start button is disabled and
+               * we just verify the screen rendered correctly. */
               var cardAtt4 = document.getElementById('home-card-attendance');
               if (cardAtt4) {
                 cardAtt4.click();
@@ -3265,11 +3287,26 @@ function createWindow() {
                 if (billingBtn) {
                   log('28a. Finish matter button present in form header');
                   billingBtn.click();
-                  await sleep(350);
-                  /* promptBeforeOpeningBilling: OK = attach first; Cancel = open workflow */
-                  var attachCancel = document.querySelector('.cn-confirm-overlay .cn-confirm-btns .btn-secondary');
-                  if (attachCancel && attachCancel.textContent === 'Cancel') {
-                    attachCancel.click();
+                  await sleep(500);
+                  var matterBillingView = document.getElementById('view-matter-billing');
+                  var matterBillingActive = matterBillingView && matterBillingView.classList.contains('active');
+                  if (!matterBillingActive) {
+                    /* Fallback for older builds that still use a modal overlay. */
+                    var attachCancel = document.querySelector('.cn-confirm-overlay .cn-confirm-btns .btn-secondary');
+                    if (attachCancel && attachCancel.textContent === 'Cancel') {
+                      attachCancel.click();
+                      await sleep(450);
+                    }
+                  }
+                  var startBtn = document.getElementById('matter-billing-start-btn');
+                  if (matterBillingActive || startBtn) {
+                    log('28a1. Matter-billing screen rendered');
+                  }
+                  /* If the start button exists and is enabled (i.e. record is
+                   * finalised), click it to mount the inline workflow. The
+                   * workflow may also auto-mount on screen entry. */
+                  if (startBtn && !startBtn.disabled) {
+                    startBtn.click();
                     await sleep(450);
                   }
                   var wfOverlay = document.getElementById('workflow-overlay');
@@ -3360,8 +3397,15 @@ function createWindow() {
                         errors.push('Workflow overlay did not close');
                       }
                     }
+                  } else if (startBtn && startBtn.disabled) {
+                    /* Note isn't finalised in this section of the smoke (fresh
+                     * blank attendance form) — start button correctly disabled.
+                     * The full inline workflow is exercised by the e2e tests. */
+                    log('28b. Matter-billing start button correctly disabled until note is finalised');
+                  } else if (matterBillingActive) {
+                    log('28b. Matter-billing screen rendered (workflow not auto-mounted on this record)');
                   } else {
-                    errors.push('Finish-matter workflow overlay did not open');
+                    errors.push('Finish-matter screen did not open (no view-matter-billing.active and no matter-billing-start-btn)');
                   }
                 } else {
                   errors.push('Finish matter button not found in form header');
@@ -5965,6 +6009,36 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
     || (payload.accountType != null ? String(payload.accountType) : '')
     || ''; // empty → openOutlookWebEmail will infer from feeEarnerEmail or default to 'personal'
 
+  /* 'desktop' route → write a draft .eml file with X-Unsent: 1 and let the
+     OS hand it to the .eml-registered app (Outlook desktop on Windows).
+     This bypasses every flavour of Outlook Web URL routing and reliably
+     opens the compose window pre-populated. */
+  if (String(accountType).toLowerCase() === 'desktop') {
+    try {
+      const result = await openComposeEml({
+        to: payload.to != null ? String(payload.to) : '',
+        cc: payload.cc != null ? String(payload.cc) : '',
+        bcc: payload.bcc != null ? String(payload.bcc) : '',
+        subject: payload.subject != null ? String(payload.subject) : '',
+        body: payload.body != null ? String(payload.body) : '',
+      });
+      return Object.assign({}, result, {
+        mode: 'open',
+        truncated: false,
+        accountType: 'desktop',
+      });
+    } catch (err) {
+      console.error('[open-outlook-email] desktop .eml route failed:', err && err.message ? err.message : err);
+      return {
+        ok: false,
+        accountType: 'desktop',
+        composeSignature: false,
+        composeReason: 'eml_open_failed',
+        reason: err && err.message ? err.message : 'unknown_error',
+      };
+    }
+  }
+
   return openOutlookWebEmail(
     {
       to: payload.to != null ? String(payload.to) : '',
@@ -5981,6 +6055,8 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
     }
   );
 });
+
+ipcMain.handle('detect-outlook-desktop', async () => detectOutlookDesktop());
 
 ipcMain.handle('open-external', async (_, url) => {
   if (typeof url !== 'string') return;

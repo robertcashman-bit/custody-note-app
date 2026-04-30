@@ -34,9 +34,9 @@ function _invokeOutlookEmail(payload) {
      common case for solicitors). Personal Outlook.com users can opt in
      via Settings → Your Details → "Quick Email opens in". */
   var settings = window._appSettingsCache || {};
-  var requestedType = String((payload && payload.accountType) || '').toLowerCase();
+  var requestedType = String((payload && payload.accountType) || (payload && payload.forceAccountType) || '').toLowerCase();
   var accountType = String(requestedType || settings.outlookAccountType || '').toLowerCase();
-  if (accountType !== 'personal' && accountType !== 'mailto') accountType = 'work';
+  if (accountType !== 'personal' && accountType !== 'mailto' && accountType !== 'desktop') accountType = 'work';
   var enriched = Object.assign({}, payload || {}, { accountType: accountType });
   return window.invokeOutlookWebCompose(enriched).then(function(result) {
     /* Main returns { ok:false, cancelled:true } when the user dismisses the
@@ -73,7 +73,28 @@ function _invokeOutlookEmail(payload) {
       }
       return result;
     }
-    var surface = accountType === 'mailto' ? 'your email app' : (accountType === 'work' ? 'Outlook on the web' : 'Outlook.com');
+    if (result && result.launchFailed) {
+      if (typeof showToast === 'function') {
+        if (result.urlCopiedToClipboard) {
+          showToast(
+            'Outlook could not be opened automatically. The compose URL has been copied to your clipboard \u2014 paste it into a new browser tab to send.',
+            'warning',
+            8000
+          );
+        } else {
+          showToast(
+            'Outlook could not be opened and the compose URL could not be copied. Please use Copy and paste into Outlook manually.',
+            'error',
+            8000
+          );
+        }
+      }
+      return result;
+    }
+    var surface = accountType === 'desktop' ? 'Outlook desktop (draft .eml)'
+      : accountType === 'mailto' ? 'your email app'
+      : accountType === 'work' ? 'Outlook on the web'
+      : 'Outlook.com';
     showToast('Opening ' + surface + '…', 'success');
     if (result && result.truncated && result.clipboardCopied) {
       showToast('Email body was too long for the link — full body copied to clipboard, paste it into Outlook.', 'warning', 6000);
@@ -1359,6 +1380,17 @@ function openQuickEmailModal() {
     if (route === 'work_alt') return 'https://outlook.office.com/owa/?path=/mail/action/compose&' + q;
     return 'https://outlook.office.com/mail/deeplink/compose?' + q;
   }
+  /* Returns all three known compose endpoints for the same draft. Used by
+     the dev-mode "Copy all debug URLs" button so the developer can paste
+     each into a browser and see which one Outlook actually opens compose
+     for in their environment. */
+  function _buildAllDebugComposeUrls(to, subject, body) {
+    return [
+      'M365 work primary  : ' + _buildDebugComposeUrl('work_primary', to, subject, body),
+      'M365 work alt      : ' + _buildDebugComposeUrl('work_alt', to, subject, body),
+      'Outlook.com personal: ' + _buildDebugComposeUrl('personal', to, subject, body),
+    ].join('\n');
+  }
 
   function _buildDraftFromCurrentState() {
     var toInput = document.getElementById('qe-field-officerEmail');
@@ -1427,15 +1459,93 @@ function openQuickEmailModal() {
 
   /* ── Preferred route persistence + UI toggles ───────── */
 
-  function _getPreferredRoute() {
-    var s = window._appSettingsCache || {};
-    return String(s.lastWorkingOutlookRoute || '');
-  }
+  /* Resolution priority for the primary "Send" button:
+       1. lastWorkingOutlookAccountType — what the user has previously
+          confirmed actually opened compose ("Yes, looks good" on the
+          follow-up). Honour their learned preference above all else.
+       2. Explicit Settings choice of 'desktop' — they asked for the
+          .eml draft route by name.
+       3. Outlook desktop is installed (detection cached on
+          window._outlookDesktopDetect) — prefer 'desktop' even when the
+          saved setting is the legacy 'work' default. The web URL route
+          is environment-fragile (Edge/M365 tenant policy normalises
+          /mail/deeplink/compose back to /mail/) and the .eml draft
+          opens compose every time.
+       4. Otherwise honour the explicit Settings dropdown value
+          (work/personal/mailto), or '' to let main process infer. */
   function _getPreferredAccountType() {
     var s = window._appSettingsCache || {};
-    var raw = String(s.lastWorkingOutlookAccountType || '').toLowerCase();
-    if (raw === 'work' || raw === 'personal' || raw === 'mailto') return raw;
+    var lastWorking = String(s.lastWorkingOutlookAccountType || '').toLowerCase();
+    if (lastWorking === 'work' || lastWorking === 'personal' || lastWorking === 'mailto' || lastWorking === 'desktop') {
+      return lastWorking;
+    }
+    var setting = String(s.outlookAccountType || '').toLowerCase();
+    if (setting === 'desktop') return 'desktop';
+    var desktopInstalled = !!(window._outlookDesktopDetect && window._outlookDesktopDetect.installed);
+    if (desktopInstalled) return 'desktop';
+    if (setting === 'mailto' || setting === 'personal' || setting === 'work') return setting;
     return '';
+  }
+  function _getPreferredRoute() {
+    var s = window._appSettingsCache || {};
+    var lastWorkingRoute = String(s.lastWorkingOutlookRoute || '').toLowerCase();
+    if (lastWorkingRoute) return lastWorkingRoute;
+    /* Mirror the account-type resolution so the route hint reflects the
+       same decision the click handler will actually make. */
+    var resolvedAccountType = _getPreferredAccountType();
+    if (resolvedAccountType === 'desktop') return 'desktop';
+    return '';
+  }
+  /* Public, route-label resolver used by the in-modal preview pill so the
+     user can see exactly what will happen before clicking Send. */
+  function _resolvedRouteLabel() {
+    var route = _getPreferredRoute();
+    var account = _getPreferredAccountType();
+    if (route === 'desktop' || account === 'desktop') return 'Outlook desktop draft (.eml)';
+    if (route === 'work_alt') return 'M365 alternate compose (owa/action/compose)';
+    if (route === 'personal' || account === 'personal') return 'Outlook.com personal (web)';
+    if (account === 'mailto') return 'Default email app (system mail handler)';
+    return 'Outlook on the web (M365 work compose)';
+  }
+  /* Eager, idempotent Outlook-desktop detection. Returns the cached value
+     synchronously when known and a Promise otherwise. The Send click handler
+     awaits this so we never race the IPC response. */
+  function _ensureDesktopDetect() {
+    if (window._outlookDesktopDetect) return Promise.resolve(window._outlookDesktopDetect);
+    if (!window.emailAPI || typeof window.emailAPI.detectOutlookDesktop !== 'function') {
+      window._outlookDesktopDetect = { installed: false, exePath: null };
+      return Promise.resolve(window._outlookDesktopDetect);
+    }
+    if (!window._outlookDesktopDetectPromise) {
+      window._outlookDesktopDetectPromise = window.emailAPI.detectOutlookDesktop()
+        .then(function(d) {
+          window._outlookDesktopDetect = d || { installed: false, exePath: null };
+          return window._outlookDesktopDetect;
+        })
+        .catch(function() {
+          window._outlookDesktopDetect = { installed: false, exePath: null };
+          return window._outlookDesktopDetect;
+        });
+    }
+    return window._outlookDesktopDetectPromise;
+  }
+  function _refreshRoutePreview() {
+    var pill = document.getElementById('quick-email-route-preview');
+    if (!pill) return;
+    pill.textContent = 'Will use: ' + _resolvedRouteLabel();
+  }
+  function _refreshSendButtonLabel() {
+    var btn = document.getElementById('qe-send');
+    if (!btn) return;
+    var route = _getPreferredRoute();
+    var account = _getPreferredAccountType();
+    if (route === 'desktop' || account === 'desktop') {
+      btn.textContent = 'Send via Outlook (desktop)';
+      btn.title = 'Writes a draft .eml file and opens it in Outlook desktop \u2014 every time, no inbox redirects.';
+    } else {
+      btn.textContent = 'Send via Outlook Web';
+      btn.title = 'Opens an Outlook compose window in your browser. If your Outlook session redirects to the inbox, use \u201cMore routes\u201d below.';
+    }
   }
   function _persistPreferredRoute(route, accountType) {
     if (!window.api || typeof window.api.setSettings !== 'function') return;
@@ -1469,7 +1579,8 @@ function openQuickEmailModal() {
   function _showFollowupPrompt(routeUsed, accountTypeUsed) {
     var el = document.getElementById('quick-email-followup');
     if (!el) return;
-    var routeLabel = routeUsed === 'work_alt' ? 'M365 alternate (owa/action/compose)'
+    var routeLabel = routeUsed === 'desktop' || accountTypeUsed === 'desktop' ? 'Outlook desktop draft (.eml)'
+      : routeUsed === 'work_alt' ? 'M365 alternate (owa/action/compose)'
       : routeUsed === 'personal' ? 'Outlook.com personal'
       : (accountTypeUsed === 'mailto' ? 'system mailto' : 'M365 work compose');
     el.innerHTML =
@@ -1554,6 +1665,17 @@ function openQuickEmailModal() {
       if (result && (result.cancelled || result.skipped || result.ok === false)) return;
       var routeUsedFinal = routeOverride || (result && result.route) || '';
       var accountTypeUsedFinal = accountTypeOverride || (result && result.accountType) || '';
+      if (result && result.launchFailed) {
+        /* _invokeOutlookEmail already showed a clipboard / failure toast.
+           Do NOT show the "did it land on compose?" follow-up because
+           Outlook never opened in the first place. */
+        _showInlineError(
+          result.urlCopiedToClipboard
+            ? '<strong>Outlook did not open.</strong> The compose URL has been copied to your clipboard — paste it into a new browser tab to send.'
+            : '<strong>Outlook did not open.</strong> Please use the <em>Copy</em> button below and paste into Outlook manually.'
+        );
+        return;
+      }
       if (result && result.composeSignature === false) {
         _showInlineError(
           '<strong>Outlook opened but not in compose mode.</strong> ' +
@@ -1637,7 +1759,8 @@ function openQuickEmailModal() {
     if (!_fields.date) _fields.date = _todayIsoDate();
     var debugTools = _isQuickEmailDebugEnabled()
       ? '<div class="qe-actions-debug">' +
-          '<button type="button" id="qe-copy-debug-url" class="btn btn-ghost" title="Copy the exact Outlook compose URL for troubleshooting">Copy Outlook debug URL</button>' +
+          '<button type="button" id="qe-copy-debug-url" class="btn btn-ghost" title="Copy the exact M365 work-primary Outlook compose URL for troubleshooting">Copy Outlook debug URL</button>' +
+          '<button type="button" id="qe-copy-all-debug-urls" class="btn btn-ghost" title="Copy ALL three Outlook compose URLs (work primary, work alternate, personal) so you can test each one in a browser">Copy ALL debug URLs</button>' +
         '</div>'
       : '';
     var html =
@@ -1675,10 +1798,11 @@ function openQuickEmailModal() {
 
             '<div id="quick-email-followup" class="qe-followup" style="display:none;" role="status" aria-live="polite"></div>' +
             '<div id="quick-email-routes-panel" class="qe-routes-panel" style="display:none;">' +
-              '<div class="qe-routes-title">If Outlook landed on the inbox or home, try a different compose route:</div>' +
+              '<div class="qe-routes-title">Choose a different compose route. <strong>Outlook desktop draft</strong> is the most reliable on Windows when Outlook is installed \u2014 it bypasses every browser/inbox routing problem.</div>' +
               '<div class="qe-routes-actions">' +
-                '<button type="button" id="qe-send-alt" class="btn btn-secondary" title="Try Outlook compose alternate route (M365 OWA action/compose)">Try alternate compose</button>' +
-                '<button type="button" id="qe-send-personal" class="btn btn-secondary" title="Try Outlook.com personal compose route">Try personal compose</button>' +
+                '<button type="button" id="qe-send-desktop" class="btn btn-primary" title="Write a draft .eml file and open it in Outlook desktop \u2014 every time, no inbox redirects">Send via Outlook desktop draft</button>' +
+                '<button type="button" id="qe-send-alt" class="btn btn-secondary" title="Try Outlook compose alternate route (M365 OWA action/compose)">Try alternate web compose</button>' +
+                '<button type="button" id="qe-send-personal" class="btn btn-secondary" title="Try Outlook.com personal compose route">Try personal web compose</button>' +
                 debugTools +
               '</div>' +
             '</div>' +
@@ -1688,6 +1812,7 @@ function openQuickEmailModal() {
               '<button type="button" id="qe-send"   class="btn btn-primary">Send via Outlook Web</button>' +
               '<button type="button" id="qe-copy"   class="btn btn-secondary">Copy</button>' +
               '<button type="button" id="qe-save"   class="btn btn-secondary">Save as new template</button>' +
+              '<span id="quick-email-route-preview" class="qe-route-preview" aria-live="polite" title="The exact Outlook compose route that will be used when you click Send.">Will use: \u2026</span>' +
             '</div>' +
             '<div class="qe-actions-right">' +
               '<button type="button" id="qe-routes-toggle" class="qe-link-btn" title="Show or hide alternate Outlook compose routes" aria-expanded="false">More routes</button>' +
@@ -1737,9 +1862,42 @@ function openQuickEmailModal() {
     if (subjEl) subjEl.addEventListener('input', function() { _manualSubject = subjEl.value; });
     if (bodyEl) bodyEl.addEventListener('input', function() { _manualBody    = bodyEl.value; });
 
-    document.getElementById('qe-send').addEventListener('click', function(e) { _sendViaOutlook(e, _getPreferredRoute(), _getPreferredAccountType()); });
+    /* Race fix: ALWAYS await Outlook-desktop detection before honouring the
+       primary Send click. The previous code resolved detection asynchronously
+       in the background, so a fast user click resulted in
+       window._outlookDesktopDetect === undefined → desktop default skipped →
+       web URL used → Outlook normalised the compose deeplink to the inbox. */
+    document.getElementById('qe-send').addEventListener('click', function(e) {
+      if (e && typeof e.preventDefault === 'function') e.preventDefault();
+      if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+      var sendBtn = e && e.currentTarget;
+      var prevText = sendBtn ? sendBtn.textContent : '';
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Preparing\u2026'; }
+      _ensureDesktopDetect().then(function() {
+        _refreshRoutePreview();
+        _refreshSendButtonLabel();
+        return _sendViaOutlook(e, _getPreferredRoute(), _getPreferredAccountType());
+      }).finally(function() {
+        if (sendBtn) {
+          sendBtn.disabled = false;
+          /* Restore label using the now-known route. */
+          _refreshSendButtonLabel();
+          if (sendBtn.textContent === 'Preparing\u2026') sendBtn.textContent = prevText || 'Send via Outlook Web';
+        }
+      });
+    });
+    document.getElementById('qe-send-desktop').addEventListener('click', function(e) { _sendViaOutlook(e, 'desktop', 'desktop'); });
     document.getElementById('qe-send-alt').addEventListener('click', function(e) { _sendViaOutlook(e, 'work_alt', 'work'); });
     document.getElementById('qe-send-personal').addEventListener('click', function(e) { _sendViaOutlook(e, 'personal', 'personal'); });
+
+    /* Eagerly start Outlook-desktop detection as soon as the modal is bound
+       so the result is cached by the time the user clicks Send. The Send
+       click handler also awaits this promise as a belt-and-braces guarantee
+       against the historical race. */
+    _ensureDesktopDetect().then(function() {
+      _refreshSendButtonLabel();
+      _refreshRoutePreview();
+    });
     var routesToggle = document.getElementById('qe-routes-toggle');
     if (routesToggle) {
       routesToggle.addEventListener('click', function(e) {
@@ -1762,6 +1920,22 @@ function openQuickEmailModal() {
           }).catch(function() { _fallbackCopyQuick(url); });
         } else {
           _fallbackCopyQuick(url);
+        }
+      });
+    }
+    var copyAllDebugBtn = document.getElementById('qe-copy-all-debug-urls');
+    if (copyAllDebugBtn) {
+      copyAllDebugBtn.addEventListener('click', function(e) {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        var draft = _buildDraftFromCurrentState();
+        var blob = _buildAllDebugComposeUrls(draft.to, draft.subject, _truncateBodyForOutlook(draft.body));
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(blob).then(function() {
+            showToast('Copied ALL three Outlook compose URLs (work primary, work alt, personal)', 'success', 5000);
+          }).catch(function() { _fallbackCopyQuick(blob); });
+        } else {
+          _fallbackCopyQuick(blob);
         }
       });
     }

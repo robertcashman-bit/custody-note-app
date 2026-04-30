@@ -501,6 +501,84 @@ describe('openOutlookWebEmail — account-type plumbing + external launcher rule
     }
   });
 
+  it('if shell.openExternal fails and no browserLauncher is provided, copies the compose URL to the clipboard as a final fallback', async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      let clipboardWritten = '';
+      const result = await openOutlookWebEmail(
+        { to: 'a@b.c', subject: 'S', body: 'B' },
+        {
+          shell: { openExternal: () => Promise.reject(new Error('shell refused')) },
+          skipConfirm: true,
+          accountType: 'work',
+          clipboard: { writeText: (t) => { clipboardWritten = t; } },
+        }
+      );
+      assert.strictEqual(result.launchMethod, 'clipboard-fallback');
+      assert.strictEqual(result.launchFailed, true);
+      assert.strictEqual(result.urlCopiedToClipboard, true);
+      assert.ok(clipboardWritten.startsWith('https://outlook.office.com/mail/deeplink/compose?'),
+        'clipboard must contain the compose URL: ' + clipboardWritten);
+      /* The launch URL should still flow through to telemetry / signature check. */
+      assert.strictEqual(result.composeSignature, true);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
+  it('if shell AND browser launcher both fail, copies the compose URL to the clipboard', async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      let clipboardWritten = '';
+      const result = await openOutlookWebEmail(
+        { to: 'a@b.c', subject: 'S', body: 'B' },
+        {
+          shell: { openExternal: () => Promise.reject(new Error('shell refused')) },
+          skipConfirm: true,
+          accountType: 'work',
+          browserLauncher: () => Promise.reject(new Error('msedge missing')),
+          clipboard: { writeText: (t) => { clipboardWritten = t; } },
+        }
+      );
+      assert.strictEqual(result.launchMethod, 'clipboard-fallback');
+      assert.strictEqual(result.launchFailed, true);
+      assert.strictEqual(result.urlCopiedToClipboard, true);
+      assert.ok(clipboardWritten.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
+  it('if every launch path AND the clipboard fail, surfaces a clear error (does not silently succeed)', async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      let threw = null;
+      try {
+        await openOutlookWebEmail(
+          { to: 'a@b.c', subject: 'S', body: 'B' },
+          {
+            shell: { openExternal: () => Promise.reject(new Error('shell refused')) },
+            skipConfirm: true,
+            accountType: 'work',
+            browserLauncher: () => Promise.reject(new Error('msedge missing')),
+            clipboard: { writeText: () => { throw new Error('clipboard locked'); } },
+          }
+        );
+      } catch (err) {
+        threw = err;
+      }
+      assert.ok(threw, 'expected openOutlookWebEmail to reject when every fallback fails');
+      assert.strictEqual(threw.launchFailed, true);
+      assert.strictEqual(threw.urlCopiedToClipboard, false);
+      assert.ok(/could not be opened/i.test(threw.message), 'message should explain failure: ' + threw.message);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
   it("mailto account on Windows uses the OS default mail handler (no microsoft-edge:)", async () => {
     const prev = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
