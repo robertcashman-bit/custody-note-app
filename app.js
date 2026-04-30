@@ -5196,6 +5196,8 @@ var REQUIRED_FIELD_KEYS = [
         var raw = String(s.outlookAccountType || '').toLowerCase();
         oat.value = (raw === 'work' || raw === 'mailto' || raw === 'desktop') ? raw : 'personal';
       }
+      const auow = document.getElementById('setting-always-use-outlook-web');
+      if (auow) auow.checked = String(s.alwaysUseOutlookWeb || '').toLowerCase() === 'true';
       _refreshOutlookRouteStatus(s);
       const opc = document.getElementById('setting-office-postcode');
       if (opc && document.activeElement !== opc) opc.value = s.officePostcode || '';
@@ -5540,6 +5542,7 @@ var REQUIRED_FIELD_KEYS = [
         var v = String(document.getElementById('setting-outlook-account-type')?.value || 'personal').toLowerCase();
         return (v === 'work' || v === 'mailto' || v === 'desktop') ? v : 'personal';
       })(),
+      alwaysUseOutlookWeb: document.getElementById('setting-always-use-outlook-web')?.checked ? 'true' : 'false',
       feeEarnerSigMode: (function() {
         const c = document.querySelector('input[name="fee-earner-sig-mode"]:checked');
         return c && c.value === 'saved' ? 'saved' : 'draw';
@@ -17414,6 +17417,22 @@ pdfAuditFooterHtml(d, settings) +
       if (v !== 'work' && v !== 'mailto' && v !== 'desktop') v = 'personal';
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { outlookAccountType: v });
       window.api.setSettings({ outlookAccountType: v }).then(showSettingsSavedToast).catch(function(err) { console.error('[setSettings]', err); });
+    });
+
+    document.getElementById('setting-always-use-outlook-web')?.addEventListener('change', function(e) {
+      var v = e.target.checked ? 'true' : 'false';
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { alwaysUseOutlookWeb: v });
+      window.api.setSettings({ alwaysUseOutlookWeb: v }).then(function() {
+        showSettingsSavedToast();
+        if (typeof showToast === 'function') {
+          showToast(
+            v === 'true'
+              ? 'Quick Email will now always open in Outlook on the web (M365 work).'
+              : 'Quick Email will use the route from the dropdown above (or auto-detect).',
+            'success', 4500
+          );
+        }
+      }).catch(function(err) { console.error('[setSettings]', err); });
     });
 
     document.getElementById('setting-outlook-route-reset')?.addEventListener('click', function() {

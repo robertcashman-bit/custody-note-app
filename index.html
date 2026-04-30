@@ -957,6 +957,16 @@
           <p class="settings-hint" style="margin-top:4px;"><strong>Outlook desktop draft</strong> writes a tiny draft file and opens it in your installed Outlook — every time, no inbox redirects, no URL length limits. Use it if Outlook desktop is installed. The web options send the email through a browser link, which can sometimes land on the inbox depending on your Outlook session.</p>
 
           <div class="settings-subsection" style="margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border-soft, rgba(148,163,184,0.25));">
+            <label style="display:flex;gap:0.5rem;align-items:flex-start;cursor:pointer;">
+              <input type="checkbox" id="setting-always-use-outlook-web" style="margin-top:4px;flex-shrink:0;">
+              <span>
+                <strong>Always use Outlook on the web (Microsoft 365 work)</strong>
+                <span class="settings-hint" style="display:block;margin-top:2px;">Hard override — ignore Outlook desktop detection, ignore the dropdown above, and always open <code>outlook.office.com</code> in your default browser using the most reliable compose URL (<code>?path=/mail/action/compose</code>). Use this if a desktop draft (.eml) keeps getting handed to Edge/Outlook web instead of opening Outlook desktop.</span>
+              </span>
+            </label>
+          </div>
+
+          <div class="settings-subsection" style="margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border-soft, rgba(148,163,184,0.25));">
             <label style="display:block;">Preferred Outlook compose route (auto-learned)</label>
             <p class="settings-hint" style="margin:4px 0 8px 0;">When you confirm <em>Yes, looks good</em> after a Quick Email send, that route is remembered and used by default next time. Use this to clear it if Outlook stops cooperating.</p>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">

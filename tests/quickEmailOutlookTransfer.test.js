@@ -462,6 +462,183 @@ describe('Quick Email — primary Send routes to Outlook desktop draft when dete
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
+   v1.6.12 — "Always use Outlook on the web" hard-override toggle.
+
+   Bug from v1.6.11 (Robert's screenshot, 30/04/2026):
+     • Renderer correctly detected Outlook desktop installed → routed to .eml
+       draft → main called shell.openPath(<file>.eml).
+     • On Robert's machine .eml is registered to Edge (Outlook web PWA), not
+       Outlook desktop. Edge parsed the .eml as a mailto: and converted it
+       into a malformed `outlook.office.com/owa/?bcc=&body=...` URL — missing
+       the `path=/mail/action/compose` parameter — opened in an Edge app-mode
+       child window that landed on the OWA inbox/home.
+     • There was no way for the user to force the pure web-URL route.
+
+   Fix: a hard-override checkbox in Settings ("alwaysUseOutlookWeb=true")
+   that bypasses ALL detection, ALL saved account-type, AND any learned
+   lastWorkingOutlookAccountType. Pins the work_alt URL because
+   /owa/?path=/mail/action/compose is the variant least likely to be
+   normalised back to the inbox by browser/tenant policy.
+   ───────────────────────────────────────────────────────────────────── */
+describe('Quick Email — alwaysUseOutlookWeb hard-override (v1.6.12)', () => {
+  function makeEnvWithOverride(opts) {
+    opts = opts || {};
+    const env = createEnv();
+    env.window._appSettingsCache = Object.assign({}, env.window._appSettingsCache || {}, {
+      alwaysUseOutlookWeb: opts.alwaysUseOutlookWeb || 'false',
+    });
+    if (opts.savedAccountType != null) {
+      env.window._appSettingsCache.outlookAccountType = opts.savedAccountType;
+    }
+    if (opts.lastWorkingAccountType != null) {
+      env.window._appSettingsCache.lastWorkingOutlookAccountType = opts.lastWorkingAccountType;
+    }
+    if (opts.lastWorkingRoute != null) {
+      env.window._appSettingsCache.lastWorkingOutlookRoute = opts.lastWorkingRoute;
+    }
+    if (opts.desktopInstalled != null) {
+      env.window._outlookDesktopDetect = { installed: !!opts.desktopInstalled, exePath: opts.desktopInstalled ? 'C:\\OUTLOOK.EXE' : null };
+      env.window.emailAPI.detectOutlookDesktop = () => Promise.resolve(env.window._outlookDesktopDetect);
+    }
+    return env;
+  }
+
+  function fillRequired(env) {
+    setField(env.document, 'officerEmail', '30052@kent.police.uk');
+    setField(env.document, 'clientName',   'David Walter');
+    setField(env.document, 'station',      'Maidstone');
+    setField(env.document, 'date',         '2026-04-30');
+    setField(env.document, 'time',         '09:00');
+    setField(env.document, 'oicName',      'Jarvis');
+  }
+
+  it('toggle ON + Outlook desktop INSTALLED still routes to work web (overrides desktop detection)', async () => {
+    const env = makeEnvWithOverride({ alwaysUseOutlookWeb: 'true', desktopInstalled: true });
+    openModal(env);
+    fillRequired(env);
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(12);
+
+    assert.strictEqual(env.sentPayloads.length, 1);
+    const sent = env.sentPayloads[0];
+    assert.strictEqual(sent.forceAccountType, 'work',
+      'force-web toggle MUST beat desktop detection: ' + JSON.stringify(sent));
+    assert.strictEqual(sent.accountType, 'work', 'accountType in IPC payload must be "work"');
+    assert.strictEqual(sent.route, 'work_alt',
+      'force-web toggle pins the work_alt URL (path=/mail/action/compose)');
+  });
+
+  it('toggle ON + savedAccountType="desktop" still routes to work web (overrides explicit saved desktop)', async () => {
+    const env = makeEnvWithOverride({
+      alwaysUseOutlookWeb: 'true',
+      savedAccountType: 'desktop',
+      desktopInstalled: true,
+    });
+    openModal(env);
+    fillRequired(env);
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(12);
+
+    assert.strictEqual(env.sentPayloads[0].forceAccountType, 'work',
+      'force-web toggle MUST beat the saved "desktop" dropdown choice');
+    assert.strictEqual(env.sentPayloads[0].route, 'work_alt');
+  });
+
+  it('toggle ON + lastWorkingOutlookAccountType="desktop" still routes to work web (overrides learned preference)', async () => {
+    const env = makeEnvWithOverride({
+      alwaysUseOutlookWeb: 'true',
+      lastWorkingAccountType: 'desktop',
+      lastWorkingRoute: 'desktop',
+      desktopInstalled: true,
+    });
+    openModal(env);
+    fillRequired(env);
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(12);
+
+    assert.strictEqual(env.sentPayloads[0].forceAccountType, 'work',
+      'force-web toggle MUST beat lastWorkingOutlookAccountType too');
+    assert.strictEqual(env.sentPayloads[0].route, 'work_alt');
+  });
+
+  it('toggle ON + savedAccountType="personal" still routes to work web (not personal)', async () => {
+    /* The toggle is specifically "Always use Outlook on the WEB (work / M365)"
+       so personal must also be overridden — the user wants office.com, not live.com. */
+    const env = makeEnvWithOverride({
+      alwaysUseOutlookWeb: 'true',
+      savedAccountType: 'personal',
+    });
+    openModal(env);
+    fillRequired(env);
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(12);
+
+    assert.strictEqual(env.sentPayloads[0].forceAccountType, 'work');
+    assert.strictEqual(env.sentPayloads[0].route, 'work_alt');
+  });
+
+  it('toggle OFF (default) preserves existing behaviour: desktop detected → desktop route', async () => {
+    const env = makeEnvWithOverride({ alwaysUseOutlookWeb: 'false', desktopInstalled: true });
+    openModal(env);
+    fillRequired(env);
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(12);
+
+    assert.strictEqual(env.sentPayloads[0].forceAccountType, 'desktop',
+      'with the toggle OFF, the existing desktop-detection logic must still fire');
+  });
+
+  it('toggle ON: route-preview pill clearly says "Outlook on the web (M365 work — forced)"', async () => {
+    const env = makeEnvWithOverride({ alwaysUseOutlookWeb: 'true', desktopInstalled: true });
+    openModal(env);
+    await tickMicrotasks(8);
+    const pill = env.document.getElementById('quick-email-route-preview');
+    assert.ok(pill, 'route-preview pill must render');
+    assert.ok(/forced/i.test(pill.textContent),
+      'pill text must call out the forced state so the user knows the toggle is on: ' + pill.textContent);
+    assert.ok(/web/i.test(pill.textContent) && /M365|work/i.test(pill.textContent),
+      'pill text must name the web route: ' + pill.textContent);
+  });
+
+  it('toggle ON: Send button stays labelled "Send via Outlook Web" even when desktop is installed', async () => {
+    const env = makeEnvWithOverride({ alwaysUseOutlookWeb: 'true', desktopInstalled: true });
+    openModal(env);
+    await tickMicrotasks(8);
+    const btn = env.document.getElementById('qe-send');
+    assert.ok(btn);
+    assert.ok(!/desktop/i.test(btn.textContent),
+      'Send button must NOT mention desktop when toggle forces web: ' + btn.textContent);
+    assert.ok(/web/i.test(btn.textContent),
+      'Send button must say "Web": ' + btn.textContent);
+  });
+
+  it('toggle ON: the launched URL is outlook.office.com/owa/?path=/mail/action/compose (the work_alt URL)', () => {
+    /* Verifies the URL builder produces the exact URL shape the renderer pins
+       when the toggle is on. This is the URL Robert's bug screenshot was
+       missing the `path=` parameter from. */
+    const url = buildOutlookWebComposeUrl({
+      to: '30052@kent.police.uk',
+      subject: 'Disclosure request - David Walter - Maidstone - 30/04/2026',
+      body: 'Dear Officer Jarvis,\n\nKind regards,\nRobert Cashman',
+      accountType: 'work',
+      route: 'work_alt',
+    });
+    assert.ok(url.startsWith('https://outlook.office.com/owa/?path=/mail/action/compose&'),
+      'URL must use the /owa/ path with action/compose: ' + url.slice(0, 120));
+    const sp = new URL(url).searchParams;
+    assert.strictEqual(sp.get('path'), '/mail/action/compose', 'path= param missing or wrong');
+    assert.strictEqual(sp.get('to'), '30052@kent.police.uk', 'to= must be present');
+    assert.ok(sp.get('subject') && sp.get('subject').includes('Disclosure request'), 'subject= must be populated');
+    assert.ok(sp.get('body') && sp.get('body').includes('Dear Officer Jarvis'), 'body= must be populated');
+  });
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
    Acceptance test from the v1.6.11 brief — the David Walter scenario.
    Verifies the URL builders produce a real compose deeplink (not the
    inbox URL), with the required to / subject / body content.
