@@ -19,7 +19,6 @@ const PROD_FILES = [
   'renderer/views/email-modal.js',
   'renderer/views/billing.js',
   'renderer/email-templates.js',
-  'renderer/quick-email-template-render.js',
   'renderer/views/list.js',
   'renderer/views/settings.js',
   'renderer/views/reports.js',

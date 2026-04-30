@@ -2,7 +2,8 @@
    Officer Emails — vanilla-JS Custody Note feature.
 
    Prepares standard officer emails, opens them in Outlook on the
-   web (https://outlook.office.com/mail/deeplink/compose), and keeps
+   web (https://outlook.office.com — OWA compose via path=/mail/action/compose),
+   and keeps
    a local record in localStorage. The Outlook URL is launched via
    window.custodyNote.openExternalUrl(...) which is allowlisted in
    the main process to that exact deeplink/compose prefix.
@@ -17,7 +18,11 @@
   'use strict';
 
   var STORAGE_KEY = 'custody_note_officer_email_records_v2';
-  var OUTLOOK_PREFIX = 'https://outlook.office.com/mail/deeplink/compose';
+  /* Same query string as lib/outlookWebComposeUrl.js office365Alt — survives
+     outlook.cloud.microsoft redirects better than /mail/deeplink/compose for
+     some M365 tenants (inbox landing instead of compose). */
+  var OUTLOOK_WORK_ACTION_COMPOSE =
+    'https://outlook.office.com/owa/?path=/mail/action/compose';
 
   var activeTab = 'details';
   var activeRecordId = null;
@@ -338,7 +343,25 @@
         ? data.body
         : rawValueOf('officerBodyInput'),
     });
-    return OUTLOOK_PREFIX + '?' + params.toString();
+    return OUTLOOK_WORK_ACTION_COMPOSE + '&' + params.toString();
+  }
+
+  /** True for allowed Officer Emails launch URLs (must match main process). */
+  function isWorkOutlookComposeUrl(url) {
+    if (typeof url !== 'string' || !url) return false;
+    try {
+      var u = new URL(url);
+      if (u.protocol !== 'https:' || u.hostname.toLowerCase() !== 'outlook.office.com') {
+        return false;
+      }
+      if (u.pathname === '/mail/deeplink/compose') return true;
+      if (u.pathname === '/owa' || u.pathname === '/owa/') {
+        return u.searchParams.get('path') === '/mail/action/compose';
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
   }
 
   function openInOutlookWeb() {
@@ -845,8 +868,8 @@
 
     var results = [
       {
-        name: 'Outlook URL uses Outlook Web deeplink',
-        passed: url.indexOf(OUTLOOK_PREFIX) === 0,
+        name: 'Outlook URL is outlook.office.com work compose',
+        passed: isWorkOutlookComposeUrl(url),
         detail: url,
       },
       {
@@ -948,6 +971,7 @@
       lastSavedRecordStatus: records[0] ? records[0].status : 'No saved records',
       activeRecordId: activeRecordId,
       ipcOpenExternalUrlAvailable: !!(window.custodyNote && typeof window.custodyNote.openExternalUrl === 'function'),
+      outlookComposeUrlStyle: 'owa-path-action-compose',
       signInReminder: 'Outlook Web may ask you to sign in to the email account you want to send from.',
     };
     var debug = $('officerDebugOutput');
@@ -971,6 +995,7 @@
     /* Internal helpers exposed for ad-hoc renderer-console testing only. */
     _internal: {
       buildOutlookWebUrl: buildOutlookWebUrl,
+      isWorkOutlookComposeUrl: isWorkOutlookComposeUrl,
       adjustDate: adjustDate,
       adjustTime: adjustTime,
       isValidEmail: isValidEmail,
