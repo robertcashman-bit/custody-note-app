@@ -28,11 +28,12 @@
   var STORAGE_KEY = 'custody_note_officer_email_records_v2';
   /* H62 — Outlook sign-in hint. Persisted on this device so Edge / the
      Outlook PWA pick the right account when the active browser session is
-     signed in to a different one (e.g. a personal Gmail). Defaults to the
-     user's known M365 address; they can edit the field on the Compose tab
-     to override. */
+     signed in to a different one (e.g. a personal Gmail). First-time empty
+     field may pre-fill from Settings (fee earner / solicitor email) only —
+     never a hardcoded address. User can edit on the Compose tab. */
   var LOGIN_HINT_STORAGE_KEY = 'custody_note_officer_email_login_hint_v1';
-  var DEFAULT_LOGIN_HINT = 'cashmanr@tuckerssolicitors.com';
+  /* Removed legacy mistaken default — migrate old localStorage so no install keeps it. */
+  var LEGACY_LOGIN_HINT_TO_STRIP = 'cashmanr@tuckerssolicitors.com';
   /* H62 — Outlook handler choice. 'edge-inprivate' (default) spawns Edge
      in InPrivate mode so the OWA URL bypasses the Outlook PWA hijack.
      'desktop' writes an .eml draft (only useful when .eml is associated
@@ -67,7 +68,7 @@
           ' in respect of ' + safe(data.matter, '[Matter]') + '.\n\n' +
           (note ? note + '\n\n' : '') +
           'Please could you confirm the bail return date, time, and any bail conditions imposed.\n\n' +
-          'Kind regards,\nRobert Cashman';
+          feeEarnerClosingSignature();
       },
     },
 
@@ -85,7 +86,7 @@
           ' in respect of ' + safe(data.matter, '[Matter]') + '.\n\n' +
           (note ? note + '\n\n' : '') +
           'Please let me know if you require anything further.\n\n' +
-          'Kind regards,\nRobert Cashman';
+          feeEarnerClosingSignature();
       },
     },
 
@@ -105,7 +106,7 @@
           ' in respect of ' + safe(data.matter, '[Matter]') + '.\n\n' +
           (note ? note + '\n\n' : '') +
           'Please could you provide an update in relation to this matter, including any relevant bail, release, charging, NFA, or further investigation position.\n\n' +
-          'Kind regards,\nRobert Cashman';
+          feeEarnerClosingSignature();
       },
     },
 
@@ -121,7 +122,7 @@
           'I am writing in relation to ' + safe(data.clientName, '[Client Name]') + ' in respect of ' +
           safe(data.matter, '[Matter]') + '.\n\n' +
           (note ? note + '\n\n' : '') +
-          'Kind regards,\nRobert Cashman';
+          feeEarnerClosingSignature();
       },
     },
   };
@@ -203,11 +204,14 @@
       el.addEventListener('change', updatePreviewAndSummary);
     }
 
-    /* Login-hint field: pre-fill from localStorage (or the default), then
+    /* Login-hint field: pre-fill from localStorage, else Settings email, then
        auto-save on every change so the user only types it once. */
     var loginHintEl = $('officerLoginHintInput');
     if (loginHintEl) {
-      loginHintEl.value = getStoredLoginHint();
+      stripLegacyLoginHintIfPresent();
+      var initialHint = getStoredLoginHint();
+      if (!initialHint) initialHint = settingsFallbackLoginHint();
+      loginHintEl.value = initialHint;
       loginHintEl.addEventListener('input', function () {
         saveLoginHint(loginHintEl.value);
         updatePreviewAndSummary();
@@ -311,12 +315,30 @@
     });
   }
 
+  function stripLegacyLoginHintIfPresent() {
+    try {
+      var v = window.localStorage.getItem(LOGIN_HINT_STORAGE_KEY);
+      if (typeof v === 'string' && v.trim().toLowerCase() === LEGACY_LOGIN_HINT_TO_STRIP.toLowerCase()) {
+        window.localStorage.removeItem(LOGIN_HINT_STORAGE_KEY);
+      }
+    } catch (_) { /* localStorage unavailable */ }
+  }
+
+  function settingsFallbackLoginHint() {
+    try {
+      var s = window._appSettingsCache || {};
+      return String(s.feeEarnerEmail || s.solicitorEmail || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
   function getStoredLoginHint() {
     try {
       var v = window.localStorage.getItem(LOGIN_HINT_STORAGE_KEY);
       if (typeof v === 'string' && v.trim()) return v.trim();
     } catch (_) { /* localStorage unavailable */ }
-    return DEFAULT_LOGIN_HINT;
+    return '';
   }
 
   function saveLoginHint(value) {
@@ -356,6 +378,7 @@
     bindClick('officerClearAllRecordsBtn', clearAllRecords);
     bindClick('officerRunTestsBtn', runTests);
     bindClick('officerRunDebugBtn', runDebugCheck);
+    bindClick('officerOpenEmailSendTraceBtn', openEmailSendTraceReadme);
 
     bindClick('officerPrevDayBtn', function () {
       var input = $('attendanceDateInput');
@@ -457,6 +480,16 @@
   function safe(value, fallback) {
     var s = value == null ? '' : String(value);
     return s.trim() ? s.trim() : fallback;
+  }
+
+  /** Closing line for generated templates: fee earner from Settings when set, else neutral placeholder. */
+  function feeEarnerClosingSignature() {
+    try {
+      var s = window._appSettingsCache || {};
+      var n = String(s.feeEarnerName || '').trim();
+      if (n) return 'Kind regards,\n' + n;
+    } catch (_) { /* ignore */ }
+    return 'Kind regards,\n[Your name]';
   }
 
   function pad2(n) { return String(n).padStart(2, '0'); }
@@ -1168,6 +1201,19 @@
         '<strong>' + (result.passed ? 'PASS' : 'FAIL') + ' — ' + escapeHtml(result.name) + '</strong>' +
         '<p>' + escapeHtml(result.detail) + '</p>';
       container.appendChild(row);
+    });
+  }
+
+  function openEmailSendTraceReadme() {
+    if (!window.api || typeof window.api.openEmailSendTrace !== 'function') {
+      showNotice('Email send trace is not available here.');
+      return;
+    }
+    window.api.openEmailSendTrace().then(function (r) {
+      if (!r || !r.ok) showNotice((r && r.error) || 'Could not open trace file.');
+      else showNotice('Opened email-send-trace.txt (app data folder).');
+    }).catch(function () {
+      showNotice('Could not open trace file.');
     });
   }
 

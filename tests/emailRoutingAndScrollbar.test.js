@@ -103,6 +103,17 @@ describe('Outlook Web email routing', () => {
     assert.ok(!fnBody.includes('mailto:'), 'no mailto in openOutlookWebCompose');
   });
 
+  it('bundled email-send-trace ships with app and Help opens it via IPC', () => {
+    const tracePath = path.join(__dirname, '..', 'deployment', 'email-send-trace.txt');
+    assert.ok(fs.existsSync(tracePath), 'deployment/email-send-trace.txt must exist');
+    const preloadJs = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+    assert.ok(preloadJs.includes('open-email-send-trace'), 'preload invokes open-email-send-trace');
+    assert.ok(mainJs.includes("ipcMain.handle('open-email-send-trace'"), 'main registers handler');
+    assert.ok(mainJs.includes('syncEmailSendTraceToUserData'), 'startup sync copies trace to userData');
+    assert.ok(indexHtml.includes('help-open-email-send-trace'), 'Help button');
+    assert.ok(indexHtml.includes('officerOpenEmailSendTraceBtn'), 'Officer Emails Testing button');
+  });
+
   it('main process exposes open-outlook-email and blocks mailto in open-external', () => {
     assert.ok(mainJs.includes("ipcMain.handle('open-outlook-email'"), 'IPC handler present');
     assert.ok(mainJs.includes("require('./main/openOutlookWebEmail')"), 'delegates to module');

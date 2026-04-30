@@ -184,7 +184,7 @@ function makeFixture() {
     oicName: 'PC OIC', oicEmail: 'oic@x', oicPhone: '01000',
     firmId: 1, firmName: 'Firm Ltd', firmLaaAccount: 'F1',
     date: '2025-01-01', instructionDateTime: '2025-01-01T09:00',
-    feeEarnerName: 'Robert Cashman',
+    feeEarnerName: 'Jane Fee-Earner',
     attendanceMode: 'duty', _formType: 'attendance',
 
     /* R. Comms / contacts (KEEP) */

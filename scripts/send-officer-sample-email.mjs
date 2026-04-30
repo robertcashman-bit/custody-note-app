@@ -53,7 +53,7 @@ function buildBody(data) {
     `I am writing in relation to ${data.clientName}, whom I attended on ${formatDateForEmail(data.attendanceDate)} at ${data.attendanceTime} in respect of ${data.matter}.\n\n` +
     (note ? `${note}\n\n` : '') +
     'Please could you confirm the bail return date, time, and any bail conditions imposed.\n\n' +
-    'Kind regards,\nRobert Cashman';
+    'Kind regards,\n[Your name]';
 
   return (
     '*** TEST EMAIL ONLY — fictional names/details; do not use for disclosure or court. ***\n' +
@@ -89,7 +89,7 @@ const transporter = nodemailer.createTransport({
 
 const mail = officerTo
   ? {
-      from: `"Robert Cashman" <${user}>`,
+      from: `"Custody Note — sample script" <${user}>`,
       to: officerTo,
       bcc: sampleTo,
       subject,
@@ -98,7 +98,7 @@ const mail = officerTo
         `\n\n---\n[TEST] BCC copy to ${sampleTo}. Officer To: ${officerTo}`,
     }
   : {
-      from: `"Robert Cashman" <${user}>`,
+      from: `"Custody Note — sample script" <${user}>`,
       to: sampleTo,
       subject,
       text:

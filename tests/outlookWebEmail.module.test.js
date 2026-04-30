@@ -401,10 +401,10 @@ describe('buildOutlookWebComposeUrl — multi-account-type support (v1.6.2)', ()
         to: 'oic@met.police.uk',
         subject: 'S',
         body: 'B',
-        loginHint: 'cashmanr@tuckerssolicitors.com',
+        loginHint: 'fee.earner@example.com',
       });
       const url = new URL(u);
-      assert.strictEqual(url.searchParams.get('login_hint'), 'cashmanr@tuckerssolicitors.com');
+      assert.strictEqual(url.searchParams.get('login_hint'), 'fee.earner@example.com');
       assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'), u);
     });
 

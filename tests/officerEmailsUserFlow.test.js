@@ -74,6 +74,7 @@ describe('Officer Emails — quick hero compose (user flow)', () => {
     byId(window, 'clientNameInput').value = 'John Smith';
     byId(window, 'matterInput').value = 'Assault allegation';
     byId(window, 'attendanceNoteInput').value = 'The client was interviewed under caution.';
+    byId(window, 'officerLoginHintInput').value = 'fee.earner@example.com';
 
     click(window, 'officerGenerateBtn');
     assert.ok(byId(window, 'officerSubjectInput').value.includes('John Smith'), 'subject should include client');

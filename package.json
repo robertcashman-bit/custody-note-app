@@ -83,6 +83,7 @@
       "include": "build/installer.nsh"
     },
     "files": [
+      "deployment/email-send-trace.txt",
       "**/*",
       "!dist",
       "!.git",
