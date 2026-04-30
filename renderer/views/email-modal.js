@@ -650,3 +650,13 @@ function _saveAsTemplate(modalId) {
   });
   wrap.querySelector('#save-tpl-name').focus();
 }
+
+/**
+ * "Quick email to officer" — Records toolbar / shortcuts without opening a saved attendance first.
+ * Opens the same Email OIC modal with empty record context; user enters To + edits template, then Outlook Web.
+ */
+function openQuickEmailModal() {
+  openEmailModal(null, {}, null);
+}
+
+window.openQuickEmailModal = openQuickEmailModal;

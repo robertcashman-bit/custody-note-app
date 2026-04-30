@@ -5992,15 +5992,22 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
   // user just confirmed), but the saved setting wins for safety.
   let savedAccountType = '';
   let savedFeeEarnerEmail = '';
+  /* H62 — also read the user-facing "Your email" field (settings key "email")
+     so the user's address can be passed to OWA as login_hint without their
+     having to fill a second field. Priority: feeEarnerEmail > solicitorEmail
+     > email. */
+  let savedSelfEmail = '';
   try {
-    const rows = dbAll('SELECT key, value FROM settings WHERE key IN (?, ?, ?)', [
-      'outlookAccountType', 'feeEarnerEmail', 'solicitorEmail',
+    const rows = dbAll('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)', [
+      'outlookAccountType', 'feeEarnerEmail', 'solicitorEmail', 'email',
     ]);
     for (const r of rows) {
       if (r.key === 'outlookAccountType') savedAccountType = String(r.value || '').trim();
       if (r.key === 'feeEarnerEmail' && !savedFeeEarnerEmail) savedFeeEarnerEmail = String(r.value || '').trim();
       if (r.key === 'solicitorEmail' && !savedFeeEarnerEmail) savedFeeEarnerEmail = String(r.value || '').trim();
+      if (r.key === 'email') savedSelfEmail = String(r.value || '').trim();
     }
+    if (!savedFeeEarnerEmail && savedSelfEmail) savedFeeEarnerEmail = savedSelfEmail;
   } catch (_) { /* settings table not ready — fall back to the payload hint */ }
 
   const forcedAccountType = payload.forceAccountType != null ? String(payload.forceAccountType) : '';
@@ -6039,6 +6046,18 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
     }
   }
 
+  /* H62 — pick the most specific login_hint we have. Renderer-supplied
+     payload.loginHint wins (it's the most direct user signal — e.g. a
+     dedicated field on the Officer Emails screen). Otherwise fall back to
+     the user's saved address (savedFeeEarnerEmail already includes the
+     "email" settings field as a fallback). */
+  const payloadLoginHint = (payload.loginHint != null) ? String(payload.loginHint).trim() : '';
+  const loginHint = payloadLoginHint || savedFeeEarnerEmail || '';
+
+  /* Playwright / automation only — native privacy dialog is not drivable from
+     browser automation. Set CUSTODYNOTE_E2E_SKIP_OUTLOOK_CONFIRM=1 for e2e. */
+  const e2eSkipOutlookConfirm = String(process.env.CUSTODYNOTE_E2E_SKIP_OUTLOOK_CONFIRM || '').trim() === '1';
+
   return openOutlookWebEmail(
     {
       to: payload.to != null ? String(payload.to) : '',
@@ -6046,12 +6065,16 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
       bcc: payload.bcc != null ? String(payload.bcc) : '',
       subject: payload.subject != null ? String(payload.subject) : '',
       body: payload.body != null ? String(payload.body) : '',
-      feeEarnerEmail: savedFeeEarnerEmail,
+      feeEarnerEmail: loginHint,
       route: payload.route != null ? String(payload.route) : '',
+      /* H62 — Officer Emails screen sends 'edge-inprivate' to bypass the
+         Outlook PWA hijack on Windows. */
+      openMethod: payload.openMethod != null ? String(payload.openMethod) : '',
     },
     {
       parentWindow: mainWindow || null,
       accountType: accountType || undefined,
+      skipConfirm: e2eSkipOutlookConfirm,
     }
   );
 });
@@ -6068,43 +6091,6 @@ ipcMain.handle('open-external', async (_, url) => {
   if (u.startsWith('https://') || u.startsWith('http://')) {
     await shell.openExternal(u);
   }
-});
-
-/* Officer Emails — strict allowlist for outlook.office.com compose URLs only.
-   Two shapes (same as lib/outlookWebComposeUrl.js):
-   - https://outlook.office.com/mail/deeplink/compose?…
-   - https://outlook.office.com/owa/?path=/mail/action/compose&…  (work_alt;
-     survives redirects to outlook.cloud.microsoft better for some tenants). */
-function _isAllowedOfficerOutlookComposeUrl(urlStr) {
-  if (typeof urlStr !== 'string') return false;
-  const trimmed = urlStr.trim();
-  if (!trimmed || /[\u0000-\u001F\u007F]/.test(trimmed)) return false;
-  let u;
-  try {
-    u = new URL(trimmed);
-  } catch (_) {
-    return false;
-  }
-  if (u.protocol !== 'https:') return false;
-  if (String(u.hostname || '').toLowerCase() !== 'outlook.office.com') return false;
-  const path = String(u.pathname || '');
-  if (path === '/mail/deeplink/compose') return true;
-  if (path === '/owa' || path === '/owa/') {
-    return u.searchParams.get('path') === '/mail/action/compose';
-  }
-  return false;
-}
-
-ipcMain.handle('open-external-url', async (_event, url) => {
-  if (typeof url !== 'string') {
-    throw new Error('Invalid URL');
-  }
-  const trimmed = url.trim();
-  if (!_isAllowedOfficerOutlookComposeUrl(trimmed)) {
-    throw new Error('Blocked external URL');
-  }
-  await shell.openExternal(trimmed);
-  return true;
 });
 
 ipcMain.handle('open-path', async (_, filePath) => {

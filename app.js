@@ -3439,6 +3439,13 @@ var REQUIRED_FIELD_KEYS = [
         : '';
       if (modulesEmpty) modulesEmpty.style.display = installed.length ? 'none' : '';
     }
+
+    var showQuickOfficerEmail =
+      !!(addons.emailAddon && window._emailTemplatesAddonEnabled);
+    var qeBtn = document.getElementById('list-quick-email-btn');
+    if (qeBtn) qeBtn.style.display = showQuickOfficerEmail ? '' : 'none';
+    var homeQe = document.getElementById('home-card-quick-email');
+    if (homeQe) homeQe.style.display = showQuickOfficerEmail ? '' : 'none';
   }
 
   function updateHomeLicenceCard() {

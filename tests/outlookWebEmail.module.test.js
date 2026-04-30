@@ -51,6 +51,66 @@ describe('buildOutlookWebComposeUrl', () => {
   });
 });
 
+/* H62 — Edge InPrivate launch path (bypasses Outlook PWA hijack on Windows). */
+describe('openOutlookWebEmail — Edge InPrivate launch path (H62)', () => {
+  it('uses payload.openMethod="edge-inprivate"; optional deps.browserLauncher must not run', async () => {
+    const shellCalls = [];
+    const browserCalls = [];
+    /* Edge-InPrivate uses spawn(msedge); it never delegates to deps.browserLauncher
+       (that fallback exists only after shell.openExternal fails on the normal path).
+       If spawn succeeds, neither shell nor browserLauncher runs; if spawn fails,
+       shell.openExternal runs once — browserLauncher still must not. */
+    const result = await openOutlookWebEmail(
+      { to: 't@example.com', cc: '', bcc: '', subject: 'S', body: 'B', openMethod: 'edge-inprivate' },
+      {
+        shell: { openExternal: (u) => { shellCalls.push(u); return Promise.resolve(); } },
+        accountType: 'work',
+        skipConfirm: true,
+        browserLauncher: (u) => {
+          browserCalls.push(u);
+          return Promise.resolve();
+        },
+        /* The module's real spawn() will attempt to run msedge.exe on the
+           host. On non-Windows CI it will likely error and fall back to
+           shell.openExternal — that fallback path is the contract under
+           test below. */
+      }
+    );
+    /* Either the real spawn worked (no shell call), OR it failed and we
+       fell back to shell.openExternal exactly once. Both are valid per
+       the documented fallback chain — but launchMethod must reflect
+       which path actually completed. */
+    if (shellCalls.length === 0) {
+      assert.strictEqual(result.launchMethod, 'edge-inprivate');
+    } else {
+      assert.strictEqual(shellCalls.length, 1);
+      assert.strictEqual(result.launchMethod, 'shell-after-edge-inprivate-failed');
+      assert.ok(shellCalls[0].startsWith('https://outlook.office.com/mail/deeplink/compose'));
+    }
+    /* Either way, browserCalls (the optional second-tier fallback) must NOT
+       have fired — Edge-InPrivate branch never delegates to it. */
+    assert.strictEqual(browserCalls.length, 0);
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.accountType, 'work');
+  });
+
+  it('forwards openMethod from payload (renderer-supplied) and from deps (caller-supplied) equivalently', async () => {
+    /* If we pass openMethod via deps only (no payload), the same code path
+       must fire. Both sources are unified inside openOutlookWebEmail. */
+    const result = await openOutlookWebEmail(
+      { to: 't@example.com', cc: '', bcc: '', subject: 'S', body: 'B' },
+      {
+        shell: { openExternal: () => Promise.resolve() },
+        accountType: 'work',
+        skipConfirm: true,
+        openMethod: 'edge-inprivate',
+      }
+    );
+    assert.ok(['edge-inprivate', 'shell-after-edge-inprivate-failed'].includes(result.launchMethod),
+      'launchMethod should be edge-inprivate (success) or its documented fallback. Got: ' + result.launchMethod);
+  });
+});
+
 describe('openOutlookWebEmail (legacy work-account behaviour, accountType="work")', () => {
   it('calls shell.openExternal exactly once with OWA URL (non-Windows, work account)', () => {
     const calls = [];
@@ -329,6 +389,52 @@ describe('buildOutlookWebComposeUrl — multi-account-type support (v1.6.2)', ()
     assert.ok(buildOutlookWebComposeUrl({ accountType: 'M365', to: 'a@b.c' }).startsWith('https://outlook.office.com/'));
     assert.ok(buildOutlookWebComposeUrl({ accountType: 'Hotmail', to: 'a@b.c' }).startsWith('https://outlook.live.com/'));
     assert.ok(buildOutlookWebComposeUrl({ accountType: 'Desktop', to: 'a@b.c' }).startsWith('mailto:'));
+  });
+
+  /* H62 — login_hint param so Edge / Outlook PWA / login.microsoftonline.com
+     pick the correct account when the active browser session is signed in
+     under a different one (e.g. user has Gmail in Edge, work account in M365). */
+  describe('login_hint support (H62)', () => {
+    it("appends login_hint to work URL when loginHint looks like an email", () => {
+      const u = buildOutlookWebComposeUrl({
+        accountType: 'work',
+        to: 'oic@met.police.uk',
+        subject: 'S',
+        body: 'B',
+        loginHint: 'cashmanr@tuckerssolicitors.com',
+      });
+      const url = new URL(u);
+      assert.strictEqual(url.searchParams.get('login_hint'), 'cashmanr@tuckerssolicitors.com');
+      assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'), u);
+    });
+
+    it("appends login_hint to personal URL too", () => {
+      const u = buildOutlookWebComposeUrl({
+        accountType: 'personal',
+        to: 'oic@met.police.uk',
+        loginHint: 'me@outlook.com',
+      });
+      assert.strictEqual(new URL(u).searchParams.get('login_hint'), 'me@outlook.com');
+    });
+
+    it("does NOT append login_hint when value is missing or not email-shaped", () => {
+      const noHint = buildOutlookWebComposeUrl({ accountType: 'work', to: 'a@b.c' });
+      assert.strictEqual(new URL(noHint).searchParams.get('login_hint'), null);
+      const blank = buildOutlookWebComposeUrl({ accountType: 'work', to: 'a@b.c', loginHint: '' });
+      assert.strictEqual(new URL(blank).searchParams.get('login_hint'), null);
+      const noAt = buildOutlookWebComposeUrl({ accountType: 'work', to: 'a@b.c', loginHint: 'not-an-email' });
+      assert.strictEqual(new URL(noAt).searchParams.get('login_hint'), null);
+    });
+
+    it("mailto URLs ignore login_hint entirely (no such concept)", () => {
+      const u = buildOutlookWebComposeUrl({
+        accountType: 'mailto',
+        to: 'a@b.c',
+        loginHint: 'me@example.com',
+      });
+      assert.ok(u.startsWith('mailto:'));
+      assert.ok(!u.includes('login_hint'), 'mailto must not include login_hint: ' + u);
+    });
   });
 
   it('preserves line breaks via percent-encoding for all surfaces', () => {
