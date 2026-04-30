@@ -168,7 +168,4 @@ contextBridge.exposeInMainWorld('custodyNote', {
   adminDashboard: () => ipcRenderer.invoke('custody:adminDashboard'),
   adminResendToEmail: (opts) => ipcRenderer.invoke('custody:adminResendToEmail', opts),
   serverConfigured: () => ipcRenderer.invoke('custody:serverConfigured'),
-  /* Officer Emails — opens the OWA work-account compose deeplink only.
-     Main process validates the URL prefix; any other URL throws. */
-  openExternalUrl: (url) => ipcRenderer.invoke('open-external-url', url),
 });

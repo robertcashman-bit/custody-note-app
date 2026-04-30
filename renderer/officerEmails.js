@@ -1,12 +1,20 @@
 /* ═══════════════════════════════════════════════════════════
    Officer Emails — vanilla-JS Custody Note feature.
 
-   Prepares standard officer emails, opens them in Outlook on the
-   web (https://outlook.office.com — OWA compose via path=/mail/action/compose),
-   and keeps
-   a local record in localStorage. The Outlook URL is launched via
-   window.custodyNote.openExternalUrl(...) which is allowlisted in
-   the main process to that exact deeplink/compose prefix.
+   Prepares standard officer emails and opens them in Outlook on
+   the web (https://outlook.office.com — OWA compose), keeping a
+   local record in localStorage.
+
+   Launching the email goes through the SINGLE app-wide email path:
+       window.invokeOutlookWebCompose({ to, subject, body })
+         -> window.emailAPI.open(...)
+         -> ipcMain.handle('open-outlook-email')
+         -> main/openOutlookWebEmail.js (which is the only module
+            allowed to call the Electron OS-launch API).
+   No parallel IPC channel, no window.open fallback, no URL built
+   in the renderer for launching (the URL builder below is kept
+   ONLY to power the Test/Debug panel previews, which never fire
+   any launch).
 
    This module only manages the inner UI of #view-officer-emails.
    The home-card click and the back-button click are wired into the
@@ -18,6 +26,21 @@
   'use strict';
 
   var STORAGE_KEY = 'custody_note_officer_email_records_v2';
+  /* H62 — Outlook sign-in hint. Persisted on this device so Edge / the
+     Outlook PWA pick the right account when the active browser session is
+     signed in to a different one (e.g. a personal Gmail). Defaults to the
+     user's known M365 address; they can edit the field on the Compose tab
+     to override. */
+  var LOGIN_HINT_STORAGE_KEY = 'custody_note_officer_email_login_hint_v1';
+  var DEFAULT_LOGIN_HINT = 'cashmanr@tuckerssolicitors.com';
+  /* H62 — Outlook handler choice. 'edge-inprivate' (default) spawns Edge
+     in InPrivate mode so the OWA URL bypasses the Outlook PWA hijack.
+     'desktop' writes an .eml draft (only useful when .eml is associated
+     with Outlook desktop, NOT the Outlook PWA). 'web' uses the default
+     browser. v2: bumped from v1 so the previous 'desktop' default no
+     longer wins on machines where the PWA hijacks .eml files too. */
+  var HANDLER_STORAGE_KEY = 'custody_note_officer_email_handler_v2';
+  var outlookDesktopDetected = null; // null = unknown, true/false after detection
   /* Same query string as lib/outlookWebComposeUrl.js office365Alt — survives
      outlook.cloud.microsoft redirects better than /mail/deeplink/compose for
      some M365 tenants (inbox landing instead of compose). */
@@ -179,6 +202,135 @@
       el.addEventListener('input', updatePreviewAndSummary);
       el.addEventListener('change', updatePreviewAndSummary);
     }
+
+    /* Login-hint field: pre-fill from localStorage (or the default), then
+       auto-save on every change so the user only types it once. */
+    var loginHintEl = $('officerLoginHintInput');
+    if (loginHintEl) {
+      loginHintEl.value = getStoredLoginHint();
+      loginHintEl.addEventListener('input', function () {
+        saveLoginHint(loginHintEl.value);
+        updatePreviewAndSummary();
+      });
+      loginHintEl.addEventListener('change', function () {
+        saveLoginHint(loginHintEl.value);
+        updatePreviewAndSummary();
+      });
+    }
+
+    /* Handler radios: pre-select from localStorage, default to 'desktop'.
+       Auto-detect whether Outlook desktop is installed and reflect in the
+       inline status hint. */
+    var stored = getStoredHandler();
+    /* H62 — default to Edge InPrivate. Outlook desktop is unreliable on
+       Windows machines where .eml is associated with the Outlook PWA, and
+       the default-browser route is unreliable wherever the PWA intercepts
+       outlook.office.com. Edge InPrivate has neither problem. */
+    var initial = stored || 'edge-inprivate';
+    setHandlerRadio(initial);
+    bindHandlerRadios();
+    syncLoginHintVisibility();
+    detectOutlookDesktopAndUpdate();
+  }
+
+  var VALID_HANDLERS = ['edge-inprivate', 'desktop', 'web'];
+
+  function getStoredHandler() {
+    try {
+      var v = window.localStorage.getItem(HANDLER_STORAGE_KEY);
+      if (VALID_HANDLERS.indexOf(v) >= 0) return v;
+    } catch (_) { /* localStorage unavailable */ }
+    return null;
+  }
+
+  function saveHandler(value) {
+    try {
+      if (VALID_HANDLERS.indexOf(value) >= 0) {
+        window.localStorage.setItem(HANDLER_STORAGE_KEY, value);
+      }
+    } catch (_) { /* localStorage unavailable */ }
+  }
+
+  function getCurrentHandler() {
+    var checked = document.querySelector('input[name="officerOutlookHandler"]:checked');
+    if (checked && VALID_HANDLERS.indexOf(checked.value) >= 0) return checked.value;
+    return getStoredHandler() || 'edge-inprivate';
+  }
+
+  function setHandlerRadio(value) {
+    var e = $('officerHandlerEdgeInPrivate');
+    var d = $('officerHandlerDesktop');
+    var w = $('officerHandlerWeb');
+    if (e) e.checked = (value === 'edge-inprivate');
+    if (d) d.checked = (value === 'desktop');
+    if (w) w.checked = (value === 'web');
+  }
+
+  function bindHandlerRadios() {
+    var ids = ['officerHandlerEdgeInPrivate', 'officerHandlerDesktop', 'officerHandlerWeb'];
+    function onChange() {
+      var val = getCurrentHandler();
+      saveHandler(val);
+      syncLoginHintVisibility();
+      updatePreviewAndSummary();
+    }
+    for (var i = 0; i < ids.length; i++) {
+      var el = $(ids[i]);
+      if (el) el.addEventListener('change', onChange);
+    }
+  }
+
+  function syncLoginHintVisibility() {
+    var label = $('officerLoginHintLabel');
+    var help = $('officerLoginHintHelp');
+    /* Login-hint matters for any browser-based route (Edge InPrivate uses the
+       same OWA URL with login_hint=…). Hide only for the desktop .eml route. */
+    var visible = getCurrentHandler() !== 'desktop';
+    if (label) label.style.display = visible ? '' : 'none';
+    if (help) help.style.display = visible ? '' : 'none';
+  }
+
+  function detectOutlookDesktopAndUpdate() {
+    var status = $('officerHandlerStatus');
+    if (!window.emailAPI || typeof window.emailAPI.detectOutlookDesktop !== 'function') {
+      outlookDesktopDetected = false;
+      if (status) status.textContent = 'Outlook desktop detection unavailable in this build.';
+      return;
+    }
+    Promise.resolve(window.emailAPI.detectOutlookDesktop()).then(function (result) {
+      outlookDesktopDetected = !!(result && result.installed);
+      if (!status) return;
+      if (outlookDesktopDetected) {
+        status.textContent = 'Outlook desktop detected on this PC. Edge InPrivate is still the most reliable on Windows when the Outlook PWA is also installed.';
+      } else {
+        status.textContent = 'Outlook desktop was NOT detected. Use Edge InPrivate (recommended) or Default browser above.';
+      }
+    }).catch(function () {
+      outlookDesktopDetected = false;
+      if (status) status.textContent = 'Outlook desktop detection failed (assume not installed).';
+    });
+  }
+
+  function getStoredLoginHint() {
+    try {
+      var v = window.localStorage.getItem(LOGIN_HINT_STORAGE_KEY);
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    } catch (_) { /* localStorage unavailable */ }
+    return DEFAULT_LOGIN_HINT;
+  }
+
+  function saveLoginHint(value) {
+    var v = String(value == null ? '' : value).trim();
+    try {
+      if (v) window.localStorage.setItem(LOGIN_HINT_STORAGE_KEY, v);
+      else window.localStorage.removeItem(LOGIN_HINT_STORAGE_KEY);
+    } catch (_) { /* localStorage unavailable */ }
+  }
+
+  function getCurrentLoginHint() {
+    var el = $('officerLoginHintInput');
+    if (el && typeof el.value === 'string' && el.value.trim()) return el.value.trim();
+    return getStoredLoginHint();
   }
 
   function bindActionButtons() {
@@ -367,22 +519,47 @@
   function openInOutlookWeb() {
     var validationError = validate();
     if (validationError) { showError(validationError); return; }
-    var data = getFormData();
-    var outlookUrl = buildOutlookWebUrl(data);
 
-    var launch;
-    if (window.custodyNote && typeof window.custodyNote.openExternalUrl === 'function') {
-      launch = Promise.resolve(window.custodyNote.openExternalUrl(outlookUrl));
-    } else {
-      try {
-        window.open(outlookUrl, '_blank', 'noopener,noreferrer');
-        launch = Promise.resolve(true);
-      } catch (err) {
-        launch = Promise.reject(err);
-      }
+    var data = getFormData();
+    var handler = getCurrentHandler();
+    var loginHint = getCurrentLoginHint();
+    var payload = {
+      to: data.officerEmail,
+      subject: data.subject,
+      body: (typeof data.body === 'string' && data.body !== '')
+        ? data.body
+        : rawValueOf('officerBodyInput'),
+      /* H62 — passed straight through to main.js's open-outlook-email IPC,
+         which treats payload.loginHint as the highest-priority source for
+         the OWA login_hint param (only meaningful for the web route). */
+      loginHint: loginHint,
+    };
+    if (handler === 'desktop') {
+      /* H62 — main.js routes 'desktop' through openComposeEml.js (.eml draft
+         + shell.openPath). Only useful when .eml is associated with Outlook
+         desktop (NOT the Outlook PWA, which is the common Windows pitfall). */
+      payload.forceAccountType = 'desktop';
+    } else if (handler === 'edge-inprivate') {
+      /* H62 — main.js will spawn msedge.exe --inprivate --new-window <url>.
+         The InPrivate window has no signed-in browser accounts and no PWA
+         interception, so the OWA URL with login_hint=… reaches OWA intact. */
+      payload.openMethod = 'edge-inprivate';
+    }
+    /* handler === 'web' falls through to the default OS-level URL launch. */
+
+    if (typeof window.invokeOutlookWebCompose !== 'function') {
+      showError('Outlook Web bridge is unavailable. Please restart Custody Note and try again.');
+      return;
     }
 
-    launch.then(function () {
+    window.invokeOutlookWebCompose(payload).then(function (result) {
+      /* invokeOutlookWebCompose dedupes overlapping clicks via an isSending lock; treat as a no-op. */
+      if (result && result.skipped) return;
+      if (result && result.ok === false) {
+        showError('Outlook Web could not be opened: ' +
+          (result.reason || 'unknown reason') + '. The draft is still in the form.');
+        return;
+      }
       var now = new Date().toISOString();
       var record = buildRecord('Opened in Outlook Web');
       record.openedAt = now;
@@ -622,21 +799,38 @@
   }
 
   function reopenRecord(record) {
-    var url = buildOutlookWebUrl({
-      officerEmail: record.officerEmail,
-      subject: record.subject,
-      body: record.body,
-    });
-    var launch;
-    if (window.custodyNote && typeof window.custodyNote.openExternalUrl === 'function') {
-      launch = Promise.resolve(window.custodyNote.openExternalUrl(url));
-    } else {
-      try {
-        window.open(url, '_blank', 'noopener,noreferrer');
-        launch = Promise.resolve(true);
-      } catch (err) { launch = Promise.reject(err); }
+    if (typeof window.invokeOutlookWebCompose !== 'function') {
+      showError('Outlook Web bridge is unavailable. Please restart Custody Note and try again.');
+      return;
     }
-    launch.then(function () {
+    var payload = {
+      to: record.officerEmail || '',
+      subject: record.subject || '',
+      body: record.body || '',
+      loginHint: getCurrentLoginHint(),
+    };
+    var rh = getCurrentHandler();
+    if (rh === 'desktop') {
+      payload.forceAccountType = 'desktop';
+    } else if (rh === 'edge-inprivate') {
+      payload.openMethod = 'edge-inprivate';
+    }
+    window.invokeOutlookWebCompose(payload).then(function (result) {
+      if (result && result.skipped) return;
+      if (result && result.ok === false) {
+        showError('Outlook Web could not be opened: ' +
+          (result.reason || 'unknown reason') + '.');
+        return;
+      }
+      var now = new Date().toISOString();
+      var updated = Object.assign({}, record, {
+        status: 'Opened in Outlook Web',
+        openedAt: now,
+        updatedAt: now,
+      });
+      upsertRecord(updated);
+      activeRecordId = updated.id;
+      renderRecords();
       showNotice('Outlook Web opened for saved record.');
     }).catch(function (error) {
       showError('Unable to open Outlook Web: ' + (error && error.message ? error.message : String(error)));
@@ -936,6 +1130,26 @@
         }).length > 0,
         detail: 'Missing fields detected.',
       },
+      {
+        name: 'Single Outlook path bridge is wired',
+        passed: typeof window.invokeOutlookWebCompose === 'function'
+          && !!(window.emailAPI && typeof window.emailAPI.open === 'function'),
+        detail: 'Renderer reaches main via window.invokeOutlookWebCompose -> window.emailAPI.open -> open-outlook-email IPC.',
+      },
+      {
+        name: 'Disclosure template salutation has the comma after the surname',
+        passed: /Dear Officer [^,\n]+,\n\n/.test(
+          templates.disclosure_update.body({
+            officerSurname: 'Fisher',
+            clientName: 'John Smith',
+            attendanceDate: '2026-04-30',
+            attendanceTime: '14:30',
+            matter: 'Assault allegation',
+            attendanceNote: '',
+          })
+        ),
+        detail: 'Salutation must read "Dear Officer [Surname],\\n\\n".',
+      },
     ];
 
     renderTestResults(results);
@@ -970,7 +1184,11 @@
       outlookWebUrlPreview: buildOutlookWebUrl(data),
       lastSavedRecordStatus: records[0] ? records[0].status : 'No saved records',
       activeRecordId: activeRecordId,
-      ipcOpenExternalUrlAvailable: !!(window.custodyNote && typeof window.custodyNote.openExternalUrl === 'function'),
+      invokeOutlookWebComposeAvailable: typeof window.invokeOutlookWebCompose === 'function',
+      emailApiOpenAvailable: !!(window.emailAPI && typeof window.emailAPI.open === 'function'),
+      outlookLoginHint: getCurrentLoginHint() || '(none — Edge / PWA may pick the wrong account)',
+      outlookHandler: getCurrentHandler(),
+      outlookDesktopDetected: outlookDesktopDetected,
       outlookComposeUrlStyle: 'owa-path-action-compose',
       signInReminder: 'Outlook Web may ask you to sign in to the email account you want to send from.',
     };

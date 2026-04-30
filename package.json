@@ -23,6 +23,7 @@
     "test:all": "node scripts/test-all.js",
     "test:ci": "node scripts/test-all.js",
     "test:e2e": "playwright test",
+    "test:e2e:edge-cdp": "playwright test tests/e2e/quick-officer-email-edge-cdp.spec.ts",
     "test:unit": "node scripts/run-unit-tests.js",
     "test:deep": "node --test tests/deepAudit.test.js",
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
@@ -30,7 +31,8 @@
     "capture-screenshots": "node scripts/capture-screenshots.js",
     "bundle:sqljs": "node scripts/bundle-sqljs.mjs",
     "security:audit": "node scripts/security-audit.mjs",
-    "security:scan": "node scripts/security-audit.mjs"
+    "security:scan": "node scripts/security-audit.mjs",
+    "email:sample-officer": "node scripts/send-officer-sample-email.mjs"
   },
   "author": "",
   "license": "ISC",
@@ -39,6 +41,7 @@
     "electron": "^28.3.3",
     "electron-builder": "^26.8.1",
     "jsdom": "^29.0.0",
+    "nodemailer": "^8.0.7",
     "pdf-parse": "^1.1.4",
     "playwright": "^1.58.2",
     "png-to-ico": "^3.0.1",

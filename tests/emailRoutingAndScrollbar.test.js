@@ -6,6 +6,7 @@ const path = require('path');
 const appJs = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 const stylesCss = fs.readFileSync(path.join(__dirname, '..', 'styles.css'), 'utf8');
 const emailModalJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'views', 'email-modal.js'), 'utf8');
+const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 const billingJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'views', 'billing.js'), 'utf8');
 const settingsJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'views', 'settings.js'), 'utf8');
 
@@ -71,6 +72,26 @@ describe('Outlook Web email routing', () => {
       (emailModalJs.match(/window\.api\.openExternal/g) || []).length === 0,
       'email-modal must not call openExternal'
     );
+  });
+
+  it('email-modal exports openQuickEmailModal (Records — quick email to officer)', () => {
+    assert.ok(emailModalJs.includes('function openQuickEmailModal'),
+      'openQuickEmailModal must exist for list toolbar');
+    assert.ok(emailModalJs.includes('window.openQuickEmailModal'),
+      'must assign openQuickEmailModal on window');
+    assert.ok(emailModalJs.includes('openEmailModal(null'),
+      'quick path opens modal without record id');
+  });
+
+  it('index.html includes Records toolbar + optional home quick-email card', () => {
+    assert.ok(indexHtml.includes('id="list-quick-email-btn"'));
+    assert.ok(indexHtml.includes('id="home-card-quick-email"'));
+    assert.ok(indexHtml.includes('Quick email to officer'));
+  });
+
+  it('app.js updateAddonUIs controls list-quick-email-btn visibility', () => {
+    assert.ok(appJs.includes('list-quick-email-btn'));
+    assert.ok(appJs.includes('showQuickOfficerEmail'));
   });
 
   it('app.js openOutlookWebCompose uses invokeOutlookWebCompose only', () => {

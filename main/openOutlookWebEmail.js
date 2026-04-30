@@ -54,6 +54,17 @@ function _traceLaunch(event, data) {
   } catch (_) { /* tracing must never break launch */ }
 }
 
+/** Playwright e2e only — writes the exact HTTPS compose URL for external browser verification. */
+function _writeE2eLastComposeUrl(launchUrl) {
+  if (String(process.env.CUSTODYNOTE_E2E_CAPTURE_LAUNCH_URL || '').trim() !== '1') return;
+  try {
+    var base = null;
+    try { base = app && typeof app.getPath === 'function' ? app.getPath('userData') : null; } catch (_) {}
+    if (!base) base = process.cwd();
+    fs.writeFileSync(path.join(base, 'e2e-last-compose-url.txt'), String(launchUrl || ''), 'utf8');
+  } catch (_) { /* must never break launch */ }
+}
+
 function _composeSignature(accountType, launchUrl) {
   var t = String(accountType || '').toLowerCase();
   var raw = String(launchUrl || '');
@@ -120,6 +131,32 @@ function _openUrlViaEdgeCommand(url) {
   });
 }
 
+/* H62 — InPrivate launch. Edge InPrivate windows do not run installed PWAs
+   (the Outlook PWA can't intercept the URL) and have no signed-in browser
+   accounts (no wrong-account hijack). The compose URL with login_hint=…
+   lands in a clean tab and OWA prompts the user to sign in to the hinted
+   M365 account on first use. We resolve a full path to msedge.exe so we
+   can spawn directly without going through cmd.exe (which would split on
+   the URL's `&` query separators). */
+function _openUrlViaEdgeInPrivate(url) {
+  return new Promise((resolve, reject) => {
+    try {
+      const exe = _resolveMsEdgeExecutable();
+      const args = ['--inprivate', '--new-window', url];
+      const child = spawn(exe, args, {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true,
+      });
+      child.once('error', reject);
+      child.unref();
+      resolve();
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 function _copyUrlToClipboardSafe(clipboardApi, url) {
   if (!clipboardApi || typeof clipboardApi.writeText !== 'function') return false;
   try {
@@ -132,6 +169,29 @@ function _launchExternalUrl(url, accountType, deps, shellApi) {
   const isHttps = /^https:\/\//i.test(String(url || ''));
   const browserLauncher = deps && deps.browserLauncher ? deps.browserLauncher : null;
   const clipboardApi = deps && deps.clipboard != null ? deps.clipboard : clipboard;
+  /* H62 — caller (renderer Officer Emails screen) can force an Edge InPrivate
+     launch to bypass Outlook PWA hijacking on Windows. Only valid for HTTPS
+     URLs; mailto: stays on shell.openExternal. */
+  const openMethod = String((deps && deps.openMethod) || '').toLowerCase();
+  if (isHttps && openMethod === 'edge-inprivate') {
+    return _openUrlViaEdgeInPrivate(url).then(() => ({
+      launchUrl: url,
+      launchMethod: 'edge-inprivate',
+    })).catch((edgeErr) => {
+      console.warn('[EMAIL] Edge InPrivate launch failed:', edgeErr && edgeErr.message ? edgeErr.message : edgeErr);
+      _traceLaunch('edge_inprivate_failed', {
+        accountType: accountType,
+        reason: edgeErr && edgeErr.message ? edgeErr.message : String(edgeErr),
+      });
+      /* Fall back to shell.openExternal so the user still sees the link launch
+         somewhere, even if Edge isn't installed. The clipboard fallback below
+         catches the next failure. */
+      return Promise.resolve(shellApi.openExternal(url)).then(() => ({
+        launchUrl: url,
+        launchMethod: 'shell-after-edge-inprivate-failed',
+      })).catch(clipboardFallback);
+    });
+  }
 
   function clipboardFallback(rootCause) {
     const copied = _copyUrlToClipboardSafe(clipboardApi, url);
@@ -250,11 +310,25 @@ async function openOutlookWebEmail(payload, deps = {}) {
     return inferOutlookAccountType(''); // shared default: work / office.com
   })();
   const route = String((safePayload && safePayload.route) || '').trim().toLowerCase();
-  _traceLaunch('resolve_account_type', { accountType: accountType, skipConfirm: !!skipConfirm });
+  /* H62 — capture the user's own work address BEFORE the strip so we can pass
+     it to the URL builder as login_hint. This prevents Edge / the Outlook PWA
+     from hijacking the URL into a wrong-account session (e.g. a Gmail-bound
+     browser session producing blank OWA tabs + a Google sign-in popup). */
+  const loginHint = (function () {
+    var hint = (safePayload && safePayload.feeEarnerEmail) || '';
+    return typeof hint === 'string' ? hint.trim() : '';
+  })();
+  /* H62 — caller can force an Edge InPrivate launch for the OWA route. */
+  const openMethod = (function () {
+    var m = (safePayload && safePayload.openMethod) || (deps && deps.openMethod) || '';
+    return typeof m === 'string' ? m.trim().toLowerCase() : '';
+  })();
+  _traceLaunch('resolve_account_type', { accountType: accountType, skipConfirm: !!skipConfirm, hasLoginHint: !!loginHint, openMethod: openMethod || 'default' });
   // Strip our internal hints from the payload before URL building.
   delete safePayload.accountType;
   delete safePayload.feeEarnerEmail;
   delete safePayload.route;
+  delete safePayload.openMethod;
 
   // Confirmation gate (skipped only for tests / scripted flows).
   let mode = 'open';
@@ -273,13 +347,14 @@ async function openOutlookWebEmail(payload, deps = {}) {
     safePayload.body = ''; // strip privileged content from the URL
   }
 
-  const meta = buildOutlookWebComposeUrlWithMeta(Object.assign({}, safePayload, { accountType: accountType, route: route }));
+  const meta = buildOutlookWebComposeUrlWithMeta(Object.assign({}, safePayload, { accountType: accountType, route: route, loginHint: loginHint }));
   const url = meta.url;
   _traceLaunch('url_built', {
     accountType: accountType,
     host: (function () { try { return new URL(url).hostname; } catch (_) { return ''; } })(),
     path: (function () { try { return new URL(url).pathname; } catch (_) { return ''; } })(),
     hasPathParam: (function () { try { return String(new URL(url).searchParams.get('path') || '') !== ''; } catch (_) { return false; } })(),
+    hasLoginHint: (function () { try { return !!new URL(url).searchParams.get('login_hint'); } catch (_) { return false; } })(),
     len: String(url).length,
     truncated: !!meta.truncated,
     mode: mode,
@@ -307,7 +382,10 @@ async function openOutlookWebEmail(payload, deps = {}) {
   // outlook.cloud.microsoft/mail and lose the compose path.
   const launchUrl = url;
 
-  return _launchExternalUrl(launchUrl, accountType, deps, shellApi).then(function(launchResult) {
+  /* Forward the openMethod into _launchExternalUrl via the deps bag. */
+  const launchDeps = Object.assign({}, deps, { openMethod: openMethod });
+
+  return _launchExternalUrl(launchUrl, accountType, launchDeps, shellApi).then(function(launchResult) {
     const sig = _composeSignature(accountType, launchResult && launchResult.launchUrl);
     _traceLaunch('url_launched', {
       accountType: accountType,
@@ -318,6 +396,7 @@ async function openOutlookWebEmail(payload, deps = {}) {
       path: (function () { try { return new URL(launchResult.launchUrl).pathname; } catch (_) { return ''; } })(),
       hasPathParam: (function () { try { return String(new URL(launchResult.launchUrl).searchParams.get('path') || '') !== ''; } catch (_) { return false; } })(),
     });
+    _writeE2eLastComposeUrl(launchResult && launchResult.launchUrl);
     return {
       ok: true,
       mode: mode,
