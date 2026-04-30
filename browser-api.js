@@ -425,19 +425,29 @@
   window.emailAPI = {
     open: function (payload) {
       var p = payload && typeof payload === 'object' ? payload : {};
-      function enc(v) { return encodeURIComponent(v == null ? '' : v); }
+      function buildComposeQuery(data) {
+        var params = new URLSearchParams();
+        params.set('to', data.to || '');
+        params.set('cc', data.cc || '');
+        params.set('bcc', data.bcc || '');
+        params.set('subject', data.subject || '');
+        params.set('body', data.body || '');
+        return params.toString();
+      }
       var settings = (window._appSettingsCache || {});
       var rawAccountType = String(settings.outlookAccountType || p.accountType || 'personal').toLowerCase();
       var accountType = rawAccountType === 'work' ? 'work'
         : rawAccountType === 'mailto' || rawAccountType === 'desktop' ? 'mailto'
         : 'personal';
 
+      var query = buildComposeQuery(p);
       var url;
       if (accountType === 'work') {
-        url = 'https://outlook.office.com/mail/deeplink/compose'
-            + '?to=' + enc(p.to) + '&cc=' + enc(p.cc) + '&bcc=' + enc(p.bcc)
-            + '&subject=' + enc(p.subject) + '&body=' + enc(p.body);
+        url = (String(p.route || '').toLowerCase() === 'work_alt')
+          ? 'https://outlook.office.com/owa/?path=/mail/action/compose&' + query
+          : 'https://outlook.office.com/mail/deeplink/compose?' + query;
       } else if (accountType === 'mailto') {
+        function enc(v) { return encodeURIComponent(v == null ? '' : v); }
         var hdr = [];
         if (p.cc) hdr.push('cc=' + enc(p.cc));
         if (p.bcc) hdr.push('bcc=' + enc(p.bcc));
@@ -448,9 +458,7 @@
         window.location.href = url;
         return Promise.resolve();
       } else {
-        url = 'https://outlook.live.com/mail/0/deeplink/compose'
-            + '?to=' + enc(p.to) + '&cc=' + enc(p.cc) + '&bcc=' + enc(p.bcc)
-            + '&subject=' + enc(p.subject) + '&body=' + enc(p.body);
+        url = 'https://outlook.live.com/mail/0/deeplink/compose?' + query;
       }
       window.open(url, '_blank', 'noopener');
       return Promise.resolve();

@@ -38,8 +38,12 @@ const systemTemplatesJson = fs.readFileSync(
   'utf8'
 );
 
-const { buildOutlookWebComposeUrl, buildOutlookWebComposeUrlWithMeta } = require('../lib/outlookWebComposeUrl');
+const { buildOutlookComposeUrls, buildOutlookWebComposeUrl, buildOutlookWebComposeUrlWithMeta } = require('../lib/outlookWebComposeUrl');
 const { openOutlookWebEmail, _resetOutlookWebAckForTests } = require('../main/openOutlookWebEmail');
+
+function param(url, key) {
+  return new URL(url).searchParams.get(key);
+}
 
 function createEnv(opts) {
   opts = opts || {};
@@ -252,6 +256,43 @@ describe('Quick Email → Outlook payload transfer', () => {
     assert.ok(errStrip && /valid address|valid email/i.test(errStrip.textContent),
       'error strip must explain the email is invalid');
   });
+
+  it('uses Officer prefix for plain surname and does not duplicate rank if rank already provided', async () => {
+    fillRequired(env, { officerEmail: 'rank@example.uk', oicName: 'Jarvis' });
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks();
+    assert.strictEqual(env.sentPayloads.length, 1);
+    assert.ok(/dear officer jarvis,/i.test(env.sentPayloads[0].body), env.sentPayloads[0].body);
+
+    openModal(env);
+    fillRequired(env, { officerEmail: 'rank2@example.uk', oicName: 'DC Smith' });
+    pickTemplate(env.document, 'system:disclosure');
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks();
+    assert.strictEqual(env.sentPayloads.length, 2);
+    assert.ok(/dear dc smith,/i.test(env.sentPayloads[1].body), env.sentPayloads[1].body);
+    assert.ok(!/dear officer dc smith,/i.test(env.sentPayloads[1].body), env.sentPayloads[1].body);
+  });
+
+  it('send button does not submit a parent form and click is handled once', async () => {
+    fillRequired(env, { officerEmail: 'single@example.uk' });
+    pickTemplate(env.document, 'system:disclosure');
+    var modal = env.document.getElementById('quick-email-modal');
+    var form = env.document.createElement('form');
+    var submitCount = 0;
+    form.addEventListener('submit', function(e) { submitCount += 1; e.preventDefault(); });
+    modal.parentNode.insertBefore(form, modal);
+    form.appendChild(modal);
+
+    const sendBtn = env.document.getElementById('qe-send');
+    const evt = new env.window.MouseEvent('click', { bubbles: true, cancelable: true });
+    sendBtn.dispatchEvent(evt);
+    await tickMicrotasks();
+    assert.strictEqual(submitCount, 0, 'send should not submit parent form');
+    assert.strictEqual(env.sentPayloads.length, 1, 'send handler should forward exactly once');
+    assert.strictEqual(evt.defaultPrevented, true, 'send click should call preventDefault');
+  });
 });
 
 describe('Quick Email → OWA URL builder', () => {
@@ -264,9 +305,9 @@ describe('Quick Email → OWA URL builder', () => {
       body: 'Hello DC Smith,\n\nPlease send disclosure for John Doe at Holborn.',
     });
     assert.ok(url.startsWith('https://outlook.office.com/mail/deeplink/compose'));
-    assert.ok(url.indexOf('to=' + encodeURIComponent('oic@met.police.uk')) !== -1, 'to= missing');
-    assert.ok(url.indexOf('subject=' + encodeURIComponent('Disclosure request: John Doe')) !== -1, 'subject missing');
-    assert.ok(url.indexOf('body=' + encodeURIComponent('Hello DC Smith,\n\nPlease send disclosure for John Doe at Holborn.')) !== -1, 'body missing');
+    assert.strictEqual(param(url, 'to'), 'oic@met.police.uk', 'to= missing');
+    assert.strictEqual(param(url, 'subject'), 'Disclosure request: John Doe', 'subject missing');
+    assert.strictEqual(param(url, 'body'), 'Hello DC Smith,\n\nPlease send disclosure for John Doe at Holborn.', 'body missing');
   });
 
   it('truncates oversized bodies but keeps the subject + recipient intact', () => {
@@ -276,21 +317,70 @@ describe('Quick Email → OWA URL builder', () => {
     });
     assert.strictEqual(meta.truncated, true);
     assert.strictEqual(meta.reason, 'body_too_long');
-    assert.ok(meta.url.indexOf('to=' + encodeURIComponent('a@b.c')) !== -1);
-    assert.ok(meta.url.indexOf('subject=tiny') !== -1);
+    assert.strictEqual(param(meta.url, 'to'), 'a@b.c');
+    assert.strictEqual(param(meta.url, 'subject'), 'tiny');
   });
 
-  it('a Windows microsoft-edge launch URL preserves the OWA query parameters', () => {
-    const url = buildOutlookWebComposeUrl({
-      to: 'oic@met.police.uk',
-      subject: 'Hello',
-      body: 'World',
+  it('buildOutlookComposeUrls returns primary, alternate and personal compose routes', () => {
+    const urls = buildOutlookComposeUrls({
+      to: '30052@kent.police.uk',
+      subject: 'Disclosure request - David Walter - Maidstone - 30/04/2026',
+      body: 'Dear Officer Jarvis,\n\nKind regards,\nRobert Cashman',
     });
-    const launch = 'microsoft-edge:' + url;
-    assert.ok(launch.startsWith('microsoft-edge:https://outlook.office.com/'));
-    assert.ok(launch.indexOf('subject=Hello') !== -1);
-    assert.ok(launch.indexOf('body=World') !== -1);
-    assert.ok(launch.indexOf('to=' + encodeURIComponent('oic@met.police.uk')) !== -1);
+    assert.ok(urls.office365.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.ok(urls.office365Alt.startsWith('https://outlook.office.com/owa/?path=/mail/action/compose&'));
+    assert.ok(urls.personal.startsWith('https://outlook.live.com/mail/0/deeplink/compose?'));
+    assert.strictEqual(param(urls.office365, 'to'), '30052@kent.police.uk');
+    assert.ok(urls.office365.includes('subject='));
+    assert.ok(urls.office365.includes('body='));
+  });
+
+  it('does not use generic inbox/home URLs and keeps compose signature', () => {
+    const url = buildOutlookWebComposeUrl({
+      to: '30052@kent.police.uk',
+      subject: 'Disclosure request - David Walter - Maidstone - 30/04/2026',
+      body: 'Dear Officer Jarvis,\n\nKind regards,\nRobert Cashman',
+      accountType: 'work',
+    });
+    assert.notStrictEqual(url, 'https://outlook.office.com/mail/');
+    assert.notStrictEqual(url, 'https://outlook.live.com/mail/');
+    assert.ok(url.includes('/deeplink/compose'));
+  });
+
+  it('preserves paragraph breaks in decoded body', () => {
+    const body = 'Dear Officer Jarvis,\n\nLine 2.\n\nKind regards,\nRobert Cashman';
+    const url = buildOutlookWebComposeUrl({
+      to: '30052@kent.police.uk',
+      subject: 'Disclosure request - David Walter - Maidstone - 30/04/2026',
+      body: body,
+      accountType: 'work',
+    });
+    const parsed = new URL(url);
+    const decodedBody = parsed.searchParams.get('body') || '';
+    assert.ok(decodedBody.includes('\n\nLine 2.\n\n'));
+  });
+
+  it('route=work_alt generates owa action/compose URL', () => {
+    const url = buildOutlookWebComposeUrl({
+      to: '30052@kent.police.uk',
+      subject: 'S',
+      body: 'B',
+      accountType: 'work',
+      route: 'work_alt',
+    });
+    assert.ok(url.startsWith('https://outlook.office.com/owa/?path=/mail/action/compose&'));
+    assert.strictEqual(param(url, 'to'), '30052@kent.police.uk');
+  });
+
+  it('personal fallback URL starts with outlook.live.com compose path', () => {
+    const url = buildOutlookWebComposeUrl({
+      to: '30052@kent.police.uk',
+      subject: 'S',
+      body: 'B',
+      accountType: 'personal',
+    });
+    assert.ok(url.startsWith('https://outlook.live.com/mail/0/deeplink/compose?'));
+    assert.strictEqual(param(url, 'to'), '30052@kent.police.uk');
   });
 });
 
@@ -321,13 +411,13 @@ describe('Quick Email → main-process end-to-end (regression: typed body must r
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.mode, 'open', 'default mode must be full body, not "no-body"');
     const launchedUrl = opens[0];
-    assert.ok(launchedUrl.includes(encodeURIComponent('Dear DC Smith,')),
+    assert.ok((param(launchedUrl, 'body') || '').includes('Dear DC Smith,'),
       'body greeting must reach Outlook on the default action: ' + launchedUrl.slice(0, 200));
-    assert.ok(launchedUrl.includes(encodeURIComponent('John Doe')),
+    assert.ok((param(launchedUrl, 'body') || '').includes('John Doe'),
       'client name must reach Outlook');
-    assert.ok(launchedUrl.includes(encodeURIComponent('Holborn')),
+    assert.ok((param(launchedUrl, 'body') || '').includes('Holborn'),
       'station must reach Outlook');
-    assert.ok(launchedUrl.includes(encodeURIComponent('Robert Cashman')),
+    assert.ok((param(launchedUrl, 'body') || '').includes('Robert Cashman'),
       'fee earner sign-off must reach Outlook');
   });
 
@@ -343,7 +433,7 @@ describe('Quick Email → main-process end-to-end (regression: typed body must r
     );
     assert.strictEqual(result.ok, true);
     assert.strictEqual(opens.length, 1);
-    assert.ok(opens[0].includes(encodeURIComponent('KEEP_ME_IN_URL')), opens[0]);
+    assert.ok((param(opens[0], 'body') || '').includes('KEEP_ME_IN_URL'), opens[0]);
   });
 });
 
@@ -393,11 +483,11 @@ describe('Quick Email modal — accountType setting selects the right Outlook su
     const launchUrl = env.opens[0];
     assert.ok(launchUrl.startsWith('https://outlook.live.com/mail/0/deeplink/compose'),
       'personal must hit outlook.live.com: ' + launchUrl.slice(0, 200));
-    assert.ok(launchUrl.includes('to=' + encodeURIComponent('oic@met.police.uk')));
-    assert.ok(launchUrl.includes(encodeURIComponent('John Doe')));
-    assert.ok(launchUrl.includes(encodeURIComponent('Holborn')));
+    assert.strictEqual(param(launchUrl, 'to'), 'oic@met.police.uk');
+    assert.ok((param(launchUrl, 'body') || '').includes('John Doe'));
+    assert.ok((param(launchUrl, 'body') || '').includes('Holborn'));
     /* v1.6.4 — bare "Smith" renders as "Officer Smith" via officerSalutation. */
-    assert.ok(launchUrl.includes(encodeURIComponent('Dear Officer Smith,')));
+    assert.ok((param(launchUrl, 'body') || '').includes('Dear Officer Smith,'));
   });
 
   it("setting outlookAccountType='mailto' produces a mailto: URI with subject + body", async () => {
@@ -449,7 +539,39 @@ describe('Quick Email modal — accountType setting selects the right Outlook su
       'work must hit outlook.office.com: ' + launchUrl.slice(0, 200)
     );
     assert.ok(!launchUrl.startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
-    assert.ok(launchUrl.includes(encodeURIComponent('Test Client')));
+    assert.ok((param(launchUrl, 'body') || '').includes('Test Client'));
+  });
+
+  it('Try alternate compose button uses the /owa/?path=/mail/action/compose route', async () => {
+    _resetOutlookWebAckForTests();
+    const env = makeWiredEnv('work');
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@firm.example');
+    setField(env.document, 'clientName', 'Test Client');
+    setField(env.document, 'station', 'Westminster');
+    setField(env.document, 'date', '2026-04-29');
+    setField(env.document, 'time', '14:00');
+    pickTemplate(env.document, 'system:representation');
+    env.document.getElementById('qe-send-alt').click();
+    await tickMicrotasks(8);
+    assert.strictEqual(env.opens.length, 1);
+    assert.ok(env.opens[0].startsWith('https://outlook.office.com/owa/?path=/mail/action/compose&'), env.opens[0]);
+  });
+
+  it('Try personal compose button forces outlook.live.com route even when setting is work', async () => {
+    _resetOutlookWebAckForTests();
+    const env = makeWiredEnv('work');
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@firm.example');
+    setField(env.document, 'clientName', 'Test Client');
+    setField(env.document, 'station', 'Westminster');
+    setField(env.document, 'date', '2026-04-29');
+    setField(env.document, 'time', '14:00');
+    pickTemplate(env.document, 'system:representation');
+    env.document.getElementById('qe-send-personal').click();
+    await tickMicrotasks(8);
+    assert.strictEqual(env.opens.length, 1);
+    assert.ok(env.opens[0].startsWith('https://outlook.live.com/mail/0/deeplink/compose?'), env.opens[0]);
   });
 
   it('ACCEPTANCE: David Walter disclosure opens office.com compose with to/subject/body', async () => {
@@ -480,17 +602,102 @@ describe('Quick Email modal — accountType setting selects the right Outlook su
       'default Quick Email Outlook surface should be office.com compose: ' + launchUrl.slice(0, 200)
     );
     assert.ok(!launchUrl.startsWith('microsoft-edge:'), 'must not use microsoft-edge: wrapper');
-    assert.ok(launchUrl.includes('to=' + encodeURIComponent('30052@kent.police.uk')), 'to param missing');
-    assert.ok(launchUrl.includes('subject=' + encodeURIComponent('Disclosure request - David Walter - Maidstone - 30/04/2026')),
+    assert.strictEqual(param(launchUrl, 'to'), '30052@kent.police.uk', 'to param missing');
+    assert.strictEqual(param(launchUrl, 'subject'), 'Disclosure request - David Walter - Maidstone - 30/04/2026',
       'subject param missing or wrong: ' + launchUrl);
     assert.ok(launchUrl.includes('body='), 'body param missing');
-    assert.ok(launchUrl.includes(encodeURIComponent('Dear Officer Jarvis,')), 'body missing rank-aware salutation');
-    assert.ok(launchUrl.includes(encodeURIComponent('David Walter')), 'body missing client name');
-    assert.ok(launchUrl.includes(encodeURIComponent('Maidstone')), 'body missing station');
-    assert.ok(launchUrl.includes(encodeURIComponent('Common Assault')), 'body missing offence');
-    assert.ok(launchUrl.includes(encodeURIComponent('09:00')), 'body missing 24h time');
+    var decodedBody = param(launchUrl, 'body') || '';
+    assert.ok(decodedBody.includes('Dear Officer Jarvis,'), 'body missing rank-aware salutation');
+    assert.ok(decodedBody.includes('David Walter'), 'body missing client name');
+    assert.ok(decodedBody.includes('Maidstone Police Station'),
+      'body must use full "Maidstone Police Station" wording: ' + decodedBody);
+    assert.ok(decodedBody.includes('Common Assault'), 'body missing offence');
+    assert.ok(decodedBody.includes('09:00'), 'body missing 24h time');
     assert.ok(copyBodyBeforeSend.includes('Dear Officer Jarvis,'), 'Copy button should see same generated body source');
     assert.ok(copyBodyBeforeSend.includes('David Walter'), 'generated body source missing client');
+    assert.ok(copyBodyBeforeSend.includes('Maidstone Police Station'),
+      'Copy body must contain the full "Maidstone Police Station" wording');
+  });
+
+  it('stationLabel: appends "Police Station" only when not already present', () => {
+    const fn = require('../renderer/quick-email-template-render.js'); // ensures module is required for coverage
+    void fn; // file uses IIFE, no exports — call buildStationLabel via global below
+    /* Re-execute the renderer in a sandbox to expose buildStationLabel. */
+    const fs = require('fs');
+    const path = require('path');
+    const vm = require('vm');
+    const ctx = {};
+    vm.createContext(ctx);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'renderer', 'quick-email-template-render.js'), 'utf8'), ctx);
+    assert.strictEqual(ctx.buildStationLabel('Maidstone'), 'Maidstone Police Station');
+    assert.strictEqual(ctx.buildStationLabel('Maidstone Police Station'), 'Maidstone Police Station');
+    assert.strictEqual(ctx.buildStationLabel('Charing Cross Station'), 'Charing Cross Station');
+    assert.strictEqual(ctx.buildStationLabel(''), '');
+    assert.strictEqual(ctx.buildStationLabel('  '), '');
+  });
+
+  it('More routes toggle reveals the alternate route panel when clicked', async () => {
+    _resetOutlookWebAckForTests();
+    const env = makeWiredEnv('work');
+    openModal(env);
+    const panel = env.document.getElementById('quick-email-routes-panel');
+    const toggle = env.document.getElementById('qe-routes-toggle');
+    assert.ok(panel,  'routes panel must exist');
+    assert.ok(toggle, 'routes toggle must exist');
+    assert.strictEqual(panel.style.display, 'none', 'panel must be hidden by default');
+    toggle.click();
+    assert.notStrictEqual(panel.style.display, 'none', 'panel must be visible after toggle');
+    toggle.click();
+    assert.strictEqual(panel.style.display, 'none', 'panel must hide again after second toggle');
+  });
+
+  it('post-send follow-up prompt appears on successful launch and persists working route on Yes', async () => {
+    _resetOutlookWebAckForTests();
+    const env = makeWiredEnv('work');
+    /* Spy on setSettings so we can assert persistence. */
+    const persisted = [];
+    env.window.api.setSettings = (s) => { persisted.push(s); return Promise.resolve(); };
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@firm.example');
+    setField(env.document, 'clientName',   'Persist Client');
+    setField(env.document, 'station',      'Westminster');
+    setField(env.document, 'date',         '2026-04-29');
+    setField(env.document, 'time',         '14:00');
+    pickTemplate(env.document, 'system:representation');
+    env.document.getElementById('qe-send-alt').click();
+    await tickMicrotasks(8);
+    const followup = env.document.getElementById('quick-email-followup');
+    assert.ok(followup, 'followup container must exist');
+    assert.notStrictEqual(followup.style.display, 'none', 'followup must be visible after success');
+    const yesBtn = followup.querySelector('.qe-followup-yes');
+    assert.ok(yesBtn, 'Yes button must be present');
+    yesBtn.click();
+    assert.ok(persisted.length >= 1, 'setSettings should be called when user confirms route');
+    const last = persisted[persisted.length - 1];
+    assert.strictEqual(last.lastWorkingOutlookRoute, 'work_alt');
+    assert.strictEqual(last.lastWorkingOutlookAccountType, 'work');
+  });
+
+  it('persisted route is used as default route on next Send via Outlook Web', async () => {
+    _resetOutlookWebAckForTests();
+    const env = makeWiredEnv('work');
+    env.window._appSettingsCache = Object.assign({}, env.window._appSettingsCache || {}, {
+      outlookAccountType: 'work',
+      lastWorkingOutlookRoute: 'work_alt',
+      lastWorkingOutlookAccountType: 'work',
+    });
+    openModal(env);
+    setField(env.document, 'officerEmail', 'oic@firm.example');
+    setField(env.document, 'clientName',   'Default Route Client');
+    setField(env.document, 'station',      'Westminster');
+    setField(env.document, 'date',         '2026-04-29');
+    setField(env.document, 'time',         '14:00');
+    pickTemplate(env.document, 'system:representation');
+    env.document.getElementById('qe-send').click();
+    await tickMicrotasks(8);
+    assert.strictEqual(env.opens.length, 1, 'one launch expected');
+    assert.ok(env.opens[0].startsWith('https://outlook.office.com/owa/?path=/mail/action/compose&'),
+      'persisted work_alt route should be used by default Send: ' + env.opens[0]);
   });
 });
 

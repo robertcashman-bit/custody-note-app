@@ -34,7 +34,7 @@
       "category": "Disclosure",
       "description": "Ask for disclosure ahead of interview or to take instructions.",
       "subjectTemplate": "Disclosure request - {{clientName}} - {{station}}{{#if date}} - {{date}}{{/if}}",
-      "bodyTemplate": "Dear {{officerSalutation}},\n\nI am instructed in relation to {{clientName}}, who is attending {{station}}{{#if date}} on {{date}}{{/if}}{{#if time24}} at {{time24}}{{/if}}{{#if attendanceType}} as a {{attendanceType}}{{/if}}{{#if offenceType}} in relation to {{offenceType}}{{/if}}.\n\nPlease could you provide disclosure ahead of the interview, or alternatively contact me so that I can take instructions.\n\nKind regards,\n{{feeEarnerName}}",
+      "bodyTemplate": "Dear {{officerSalutation}},\n\nI am instructed in relation to {{clientName}}, who is attending {{stationLabel}}{{#if date}} on {{date}}{{/if}}{{#if time24}} at {{time24}}{{/if}}{{#if attendanceType}} as a {{attendanceType}}{{/if}}{{#if offenceType}} in relation to {{offenceType}}{{/if}}.\n\nPlease could you provide disclosure ahead of the interview, or alternatively contact me so that I can take instructions.\n\nKind regards,\n{{feeEarnerName}}",
       "requiredFields": ["clientName", "station"]
     },
     {

@@ -83,7 +83,23 @@
       out.officerSalutation = buildOfficerSalutation(out.oicName || out.officerName || '');
       out.officer_salutation = out.officerSalutation;
     }
+    /* Derived: stationLabel. Always reads as "<X> Police Station" unless the
+       station name already ends with "Police Station" or "Station". Lets
+       templates write a single canonical phrase ("attending {{stationLabel}}")
+       without duplicating "Station". */
+    if (out.stationLabel == null || String(out.stationLabel).trim() === '') {
+      out.stationLabel = buildStationLabel(out.station || out.policeStation || '');
+      out.station_label = out.stationLabel;
+    }
     return out;
+  }
+
+  function buildStationLabel(rawName) {
+    var s = String(rawName == null ? '' : rawName).trim();
+    if (!s) return '';
+    if (/police\s+station\s*$/i.test(s)) return s;
+    if (/\bstation\s*$/i.test(s)) return s;
+    return s + ' Police Station';
   }
 
   function buildOfficerSalutation(rawName) {
@@ -205,6 +221,7 @@
     oicName:           'Officer name',
     officerSalutation: 'Officer salutation',
     station:           'Police station',
+    stationLabel:      'Police station (full)',
     offenceType:       'Offence',
     feeEarnerName:     'Fee earner name',
     feeEarnerEmail:    'Fee earner email',
@@ -325,4 +342,5 @@
   global.tokensToFriendlyLabels = tokensToFriendlyLabels;
   global.friendlyLabelsToTokens = friendlyLabelsToTokens;
   global.buildOfficerSalutation = buildOfficerSalutation;
+  global.buildStationLabel = buildStationLabel;
 })(typeof window !== 'undefined' ? window : globalThis);

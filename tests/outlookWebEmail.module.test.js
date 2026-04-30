@@ -14,6 +14,10 @@ const {
 } = require('../lib/outlookWebComposeUrl');
 const { openOutlookWebEmail } = require('../main/openOutlookWebEmail');
 
+function q(url, key) {
+  return new URL(url).searchParams.get(key);
+}
+
 describe('buildOutlookWebComposeUrl', () => {
   it('builds OWA deeplink with correct base path', () => {
     const u = buildOutlookWebComposeUrl({
@@ -24,9 +28,9 @@ describe('buildOutlookWebComposeUrl', () => {
       body: 'Line1\nLine2',
     });
     assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
-    assert.ok(u.includes('to=' + encodeURIComponent('a@b.com')));
-    assert.ok(u.includes('subject=' + encodeURIComponent('Hello & welcome')));
-    assert.ok(u.includes('body=' + encodeURIComponent('Line1\nLine2')));
+    assert.strictEqual(q(u, 'to'), 'a@b.com');
+    assert.strictEqual(q(u, 'subject'), 'Hello & welcome');
+    assert.strictEqual(q(u, 'body'), 'Line1\nLine2');
     assert.ok(!u.toLowerCase().includes('mailto'));
   });
 
@@ -38,15 +42,12 @@ describe('buildOutlookWebComposeUrl', () => {
       subject: '?&=#',
       body: '%',
     });
-    assert.strictEqual(
-      u,
-      'https://outlook.office.com/mail/deeplink/compose' +
-        '?to=' + encodeURIComponent('x@y.co.uk') +
-        '&cc=' + encodeURIComponent('a b@c.com') +
-        '&bcc=' + encodeURIComponent('d@e.com') +
-        '&subject=' + encodeURIComponent('?&=#') +
-        '&body=' + encodeURIComponent('%')
-    );
+    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.strictEqual(q(u, 'to'), 'x@y.co.uk');
+    assert.strictEqual(q(u, 'cc'), 'a b@c.com');
+    assert.strictEqual(q(u, 'bcc'), 'd@e.com');
+    assert.strictEqual(q(u, 'subject'), '?&=#');
+    assert.strictEqual(q(u, 'body'), '%');
   });
 });
 
@@ -114,13 +115,13 @@ describe('buildOutlookWebComposeUrl — edge cases', () => {
   it('preserves line breaks in body via encoding', () => {
     const body = 'Line 1\nLine 2\r\nLine 3';
     const u = buildOutlookWebComposeUrl({ to: 'a@b.com', body });
-    assert.ok(u.includes(encodeURIComponent(body)));
+    assert.strictEqual(q(u, 'body'), body);
   });
 
   it('handles very long body (4000+ chars)', () => {
     const body = 'x'.repeat(5000);
     const u = buildOutlookWebComposeUrl({ to: 'a@b.com', body });
-    assert.ok(u.includes(encodeURIComponent(body)));
+    assert.strictEqual(q(u, 'body'), body);
     assert.ok(u.length > 5000);
   });
 
@@ -130,8 +131,8 @@ describe('buildOutlookWebComposeUrl — edge cases', () => {
       subject: 'Café résumé — «test»',
       body: 'Hello 🔒 world £100',
     });
-    assert.ok(u.includes(encodeURIComponent('Café résumé — «test»')));
-    assert.ok(u.includes(encodeURIComponent('Hello 🔒 world £100')));
+    assert.strictEqual(q(u, 'subject'), 'Café résumé — «test»');
+    assert.strictEqual(q(u, 'body'), 'Hello 🔒 world £100');
   });
 
   it('handles multiple recipients in to field (semicolon-separated)', () => {
@@ -142,8 +143,8 @@ describe('buildOutlookWebComposeUrl — edge cases', () => {
       subject: 'Multi',
       body: 'Test',
     });
-    assert.ok(u.includes(encodeURIComponent('a@b.com;c@d.com;e@f.com')));
-    assert.ok(u.includes(encodeURIComponent('g@h.com;i@j.com')));
+    assert.strictEqual(q(u, 'to'), 'a@b.com;c@d.com;e@f.com');
+    assert.strictEqual(q(u, 'cc'), 'g@h.com;i@j.com');
   });
 
   it('never produces a mailto: URL regardless of input', () => {
@@ -193,7 +194,7 @@ describe('openOutlookWebEmail confirmation gate (H02 hardening)', () => {
       }
     );
     assert.strictEqual(calls.length, 1, 'should open the URL');
-    assert.ok(calls[0].includes(encodeURIComponent('sensitive body text')),
+    assert.strictEqual(q(calls[0], 'body'), 'sensitive body text',
       'default action MUST include the body — otherwise the user\'s typed content is silently dropped');
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.mode, 'open');
@@ -334,7 +335,11 @@ describe('buildOutlookWebComposeUrl — multi-account-type support (v1.6.2)', ()
     const body = 'Line 1\nLine 2\r\nLine 3';
     for (const t of ['personal', 'work', 'mailto']) {
       const u = buildOutlookWebComposeUrl({ accountType: t, to: 'a@b.c', body });
-      assert.ok(u.includes(encodeURIComponent(body)), t + ' must preserve newlines: ' + u.slice(0, 200));
+      if (t === 'mailto') {
+        assert.ok(u.includes('body=' + encodeURIComponent(body)), t + ' must preserve newlines: ' + u.slice(0, 200));
+      } else {
+        assert.strictEqual(new URL(u).searchParams.get('body'), body, t + ' must preserve newlines: ' + u.slice(0, 200));
+      }
     }
   });
 
@@ -342,7 +347,11 @@ describe('buildOutlookWebComposeUrl — multi-account-type support (v1.6.2)', ()
     const subject = "R v O'Brien & Co — café";
     for (const t of ['personal', 'work', 'mailto']) {
       const u = buildOutlookWebComposeUrl({ accountType: t, to: 'a@b.c', subject, body: '' });
-      assert.ok(u.includes(encodeURIComponent(subject)), t + ' must encode subject exactly once');
+      if (t === 'mailto') {
+        assert.ok(u.includes('subject=' + encodeURIComponent(subject)), t + ' must encode subject exactly once');
+      } else {
+        assert.strictEqual(new URL(u).searchParams.get('subject'), subject, t + ' must encode subject exactly once');
+      }
       // double-encoding would produce %2520, %2526 etc — none must appear.
       assert.ok(!/%25(2[0-9A-F]|3[0-9A-F])/.test(u), t + ' double-encoded subject: ' + u);
     }
@@ -401,7 +410,7 @@ describe('inferOutlookAccountType — pick a sensible Outlook surface from the u
   });
 });
 
-describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', () => {
+describe('openOutlookWebEmail — account-type plumbing + external launcher rules', () => {
   const { _resetOutlookWebAckForTests } = require('../main/openOutlookWebEmail');
   beforeEach(() => { _resetOutlookWebAckForTests(); });
 
@@ -445,31 +454,7 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
     }
   });
 
-  it('production Windows HTTPS launch uses Edge command-line with the plain compose URL', async () => {
-    const prev = process.platform;
-    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
-    try {
-      const launched = [];
-      const result = await openOutlookWebEmail(
-        { to: 'a@b.c', subject: 'S', body: 'B' },
-        {
-          skipConfirm: true,
-          accountType: 'work',
-          browserLauncher: (u) => { launched.push(u); return Promise.resolve(); },
-        }
-      );
-      assert.strictEqual(launched.length, 1);
-      assert.ok(launched[0].startsWith('https://outlook.office.com/mail/deeplink/compose?'),
-        'browser launcher must receive the plain compose URL: ' + launched[0]);
-      assert.strictEqual(result.launchMethod, 'msedge-cli');
-      assert.strictEqual(result.launchUrl, launched[0]);
-      assert.strictEqual(result.composeSignature, true);
-    } finally {
-      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
-    }
-  });
-
-  it('if Edge command-line launch fails, falls back to shell.openExternal', async () => {
+  it('launches via shell.openExternal by default on Windows HTTPS compose URLs', async () => {
     const prev = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
@@ -480,11 +465,36 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
           shell: spy.shell,
           skipConfirm: true,
           accountType: 'work',
-          browserLauncher: () => Promise.reject(new Error('msedge missing')),
         }
       );
       assert.strictEqual(spy.calls.length, 1);
-      assert.strictEqual(result.launchMethod, 'shell-fallback');
+      assert.ok(spy.calls[0].startsWith('https://outlook.office.com/mail/deeplink/compose?'),
+        'shell must receive the plain compose URL: ' + spy.calls[0]);
+      assert.strictEqual(result.launchMethod, 'shell');
+      assert.strictEqual(result.launchUrl, spy.calls[0]);
+      assert.strictEqual(result.composeSignature, true);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: prev, configurable: true });
+    }
+  });
+
+  it('if shell.openExternal fails, falls back to browser launcher when provided', async () => {
+    const prev = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const launched = [];
+      const result = await openOutlookWebEmail(
+        { to: 'a@b.c', subject: 'S', body: 'B' },
+        {
+          shell: { openExternal: () => Promise.reject(new Error('shell failed')) },
+          skipConfirm: true,
+          accountType: 'work',
+          browserLauncher: (u) => { launched.push(u); return Promise.resolve(); },
+        }
+      );
+      assert.strictEqual(launched.length, 1);
+      assert.ok(launched[0].startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+      assert.strictEqual(result.launchMethod, 'browser-launcher-fallback');
       assert.strictEqual(result.composeSignature, true);
     } finally {
       Object.defineProperty(process, 'platform', { value: prev, configurable: true });
@@ -556,22 +566,22 @@ describe('openOutlookWebEmail — account-type plumbing + Edge-forcing rules', (
     assert.strictEqual(result.accountType, 'personal');
   });
 
-  it('production Windows personal HTTPS launch uses Edge command-line and compose signature', async () => {
+  it('personal compose also uses shell.openExternal by default on Windows', async () => {
     const prev = process.platform;
     Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
     try {
-      const launched = [];
+      const spy = shellSpy();
       const result = await openOutlookWebEmail(
         { to: 'person@example.com', subject: 'S', body: 'B' },
         {
+          shell: spy.shell,
           skipConfirm: true,
           accountType: 'personal',
-          browserLauncher: (u) => { launched.push(u); return Promise.resolve(); },
         }
       );
-      assert.strictEqual(launched.length, 1);
-      assert.ok(launched[0].startsWith('https://outlook.live.com/mail/0/deeplink/compose?'));
-      assert.strictEqual(result.launchMethod, 'msedge-cli');
+      assert.strictEqual(spy.calls.length, 1);
+      assert.ok(spy.calls[0].startsWith('https://outlook.live.com/mail/0/deeplink/compose?'));
+      assert.strictEqual(result.launchMethod, 'shell');
       assert.strictEqual(result.composeSignature, true);
       assert.strictEqual(result.composeReason, 'personal_deeplink_compose');
     } finally {

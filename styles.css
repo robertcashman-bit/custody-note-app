@@ -7569,6 +7569,95 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   flex-wrap: wrap;
 }
 .qe-actions-right { justify-content: flex-end; }
+.qe-actions-debug {
+  display: flex;
+  align-items: center;
+}
+
+/* Inline post-send follow-up prompt — confirms whether Outlook actually
+   opened compose, and persists the working route as default. */
+.qe-followup {
+  margin: 0.5rem 1rem 0;
+  padding: 0.6rem 0.8rem;
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  border-radius: 8px;
+  color: #065f46;
+  font-size: 0.85rem;
+}
+.qe-followup-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem;
+  justify-content: space-between;
+}
+.qe-followup-text { flex: 1 1 auto; }
+.qe-followup-meta { color: #047857; font-size: 0.78rem; margin-left: 0.25rem; }
+.qe-followup-actions { display: flex; gap: 0.4rem; }
+.qe-followup .btn { min-height: 32px; padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+html.dark .qe-followup {
+  background: rgba(6, 78, 59, 0.4);
+  border-color: rgba(110, 231, 183, 0.45);
+  color: #d1fae5;
+}
+html.dark .qe-followup-meta { color: #a7f3d0; }
+
+/* Hidden-by-default alternate routes panel revealed by More routes. */
+.qe-routes-panel {
+  margin: 0.5rem 1rem 0;
+  padding: 0.65rem 0.85rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  color: #1e3a8a;
+  font-size: 0.85rem;
+}
+.qe-routes-title { margin-bottom: 0.45rem; font-weight: 600; }
+.qe-routes-actions {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+}
+html.dark .qe-routes-panel {
+  background: rgba(30, 58, 138, 0.35);
+  border-color: rgba(191, 219, 254, 0.45);
+  color: #dbeafe;
+}
+
+/* Settings pill showing the auto-learned Outlook compose route. */
+.qe-route-pill {
+  display: inline-flex; align-items: center;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+.qe-route-pill--active {
+  background: #dbeafe;
+  color: #1e3a8a;
+  border-color: #93c5fd;
+}
+html.dark .qe-route-pill {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5e1;
+  border-color: rgba(148, 163, 184, 0.3);
+}
+html.dark .qe-route-pill--active {
+  background: rgba(30, 58, 138, 0.45);
+  color: #dbeafe;
+  border-color: rgba(147, 197, 253, 0.55);
+}
+
+/* Tiny link-style button used for "More routes" toggle in the footer. */
+.qe-link-btn {
+  background: transparent;
+  border: none;
+  color: #93c5fd;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.82rem;
+}
+.qe-link-btn:hover { color: #bfdbfe; }
+.qe-link-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
 
 /* All footer buttons get a consistent height + radius so the bar reads
    as one unit. The .btn rules elsewhere stay untouched. */
@@ -7594,6 +7683,13 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
 .qe-actions .btn-ghost:focus-visible {
   outline: 2px solid #60a5fa;
   outline-offset: 2px;
+}
+.qe-actions #qe-send-alt,
+.qe-actions #qe-send-personal,
+.qe-actions #qe-copy-debug-url {
+  min-height: 38px;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.7rem;
 }
 
 /* Hard-validation error strip rendered just above the action bar. */
@@ -7658,6 +7754,7 @@ html.dark .qe-field .wp-trigger:hover { background: rgba(248, 250, 252, 0.08); c
   .qe-actions-left, .qe-actions-right { width: 100%; justify-content: stretch; }
   .qe-actions-left  .btn { flex: 1 1 auto; }
   .qe-actions-right .btn { flex: 1 1 auto; }
+  .qe-actions-debug { width: 100%; }
 }
 
 /* Save / edit inline panels */

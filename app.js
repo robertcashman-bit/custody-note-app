@@ -5129,6 +5129,34 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
+  /* Render the auto-learned Outlook compose route inside the Settings card so
+     the user can see what is currently remembered and reset it from one place.
+     Exposed on window so the Quick Email modal can refresh the pill after a
+     successful "Yes, looks good" persist without a full settings reload. */
+  function _refreshOutlookRouteStatus(s) {
+    var el = document.getElementById('setting-outlook-route-status');
+    var resetBtn = document.getElementById('setting-outlook-route-reset');
+    if (!el) return;
+    s = s || (window._appSettingsCache || {});
+    var route = String(s.lastWorkingOutlookRoute || '').toLowerCase();
+    var account = String(s.lastWorkingOutlookAccountType || '').toLowerCase();
+    if (!route && !account) {
+      el.textContent = 'No preferred route saved yet';
+      el.classList.remove('qe-route-pill--active');
+      if (resetBtn) resetBtn.disabled = true;
+      return;
+    }
+    var label;
+    if (route === 'work_alt') label = 'M365 alternate (owa/action/compose)';
+    else if (route === 'personal' || account === 'personal') label = 'Outlook.com personal';
+    else if (account === 'mailto') label = 'Default email app (mailto)';
+    else label = 'M365 work compose (outlook.office.com)';
+    el.textContent = 'Saved route: ' + label;
+    el.classList.add('qe-route-pill--active');
+    if (resetBtn) resetBtn.disabled = false;
+  }
+  window._refreshOutlookRouteStatus = _refreshOutlookRouteStatus;
+
   function loadSettings() {
     if (!window.api) return;
     loadLicenceSettingsUI();
@@ -5167,6 +5195,7 @@ var REQUIRED_FIELD_KEYS = [
         var raw = String(s.outlookAccountType || '').toLowerCase();
         oat.value = (raw === 'work' || raw === 'mailto') ? raw : 'personal';
       }
+      _refreshOutlookRouteStatus(s);
       const opc = document.getElementById('setting-office-postcode');
       if (opc && document.activeElement !== opc) opc.value = s.officePostcode || '';
       const dm = document.getElementById('setting-dark-mode');
@@ -17373,6 +17402,15 @@ pdfAuditFooterHtml(d, settings) +
       if (v !== 'work' && v !== 'mailto') v = 'personal';
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { outlookAccountType: v });
       window.api.setSettings({ outlookAccountType: v }).then(showSettingsSavedToast).catch(function(err) { console.error('[setSettings]', err); });
+    });
+
+    document.getElementById('setting-outlook-route-reset')?.addEventListener('click', function() {
+      var clear = { lastWorkingOutlookRoute: '', lastWorkingOutlookAccountType: '' };
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, clear);
+      window.api.setSettings(clear).then(function() {
+        _refreshOutlookRouteStatus(window._appSettingsCache);
+        if (typeof showToast === 'function') showToast('Preferred Outlook route cleared.', 'info');
+      }).catch(function(err) { console.error('[setSettings]', err); });
     });
 
     document.querySelectorAll('input[name="fee-earner-sig-mode"]').forEach(function(r) {
