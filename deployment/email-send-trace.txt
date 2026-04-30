@@ -1,6 +1,10 @@
 Custody Note — email / deploy trace
 Generated: 2026-04-30 (automated session)
 
+Installed with the desktop app as deployment/email-send-trace.txt and copied on startup to:
+  %AppData%\custody-note\email-send-trace.txt   (Windows)
+  (alongside email-launch.log in the same folder)
+
 ================================================================================
 1. GIT
 ================================================================================

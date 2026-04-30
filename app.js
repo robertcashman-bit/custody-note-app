@@ -18206,6 +18206,21 @@ pdfAuditFooterHtml(d, settings) +
       if (_locked && e.key === 'Enter') _unlock();
     });
 
+    document.getElementById('help-open-email-send-trace')?.addEventListener('click', function() {
+      if (!window.api || typeof window.api.openEmailSendTrace !== 'function') {
+        if (typeof showToast === 'function') showToast('Email send trace is not available in this environment.', 'warning');
+        return;
+      }
+      window.api.openEmailSendTrace().then(function(r) {
+        if (!r || !r.ok) {
+          if (typeof showToast === 'function') showToast((r && r.error) || 'Could not open trace file', 'warning');
+        }
+      }).catch(function(e) {
+        console.error('[help-open-email-send-trace]', e);
+        if (typeof showToast === 'function') showToast('Could not open trace file', 'error');
+      });
+    });
+
     /* Magic-link session unlock */
     var _magicPollTimer = null;
     var forgotLink = document.getElementById('session-lock-forgot');

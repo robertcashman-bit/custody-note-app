@@ -43,6 +43,23 @@ function getDefaultUserDataPath() {
   }
 }
 
+/** Bundled readme: how Outlook Web email works + where runtime tracing is written. Copied to userData next to email-launch.log. */
+function syncEmailSendTraceToUserData() {
+  try {
+    const src = path.join(__dirname, 'deployment', 'email-send-trace.txt');
+    const dest = path.join(app.getPath('userData'), 'email-send-trace.txt');
+    if (!fs.existsSync(src)) {
+      console.warn('[email-send-trace] Bundled file missing:', src);
+      return { ok: false, error: 'bundled_missing', path: dest };
+    }
+    fs.copyFileSync(src, dest);
+    return { ok: true, path: dest };
+  } catch (e) {
+    console.warn('[email-send-trace] Sync failed:', e && e.message);
+    return { ok: false, error: String(e && e.message ? e.message : e), path: null };
+  }
+}
+
 const DEFAULT_USERDATA_PATH = getDefaultUserDataPath();
 const PORTABLE_USERDATA_PATH = app.isPackaged
   ? path.join(path.dirname(process.execPath), 'userData')
@@ -4204,6 +4221,7 @@ app.whenReady().then(async () => {
   console.log(`[Startup] Custody Note v${app.getVersion()} â€” packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}`);
   try { _securityLog.init(app.getPath('userData')); _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }); }
   catch (_) {}
+  try { syncEmailSendTraceToUserData(); } catch (_) {}
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
@@ -6090,6 +6108,18 @@ ipcMain.handle('open-external', async (_, url) => {
   }
   if (u.startsWith('https://') || u.startsWith('http://')) {
     await shell.openExternal(u);
+  }
+});
+
+ipcMain.handle('open-email-send-trace', async () => {
+  try {
+    const sync = syncEmailSendTraceToUserData();
+    if (!sync.ok || !sync.path) return { ok: false, error: sync.error || 'Could not install trace file' };
+    const err = await shell.openPath(sync.path);
+    if (err) return { ok: false, error: err };
+    return { ok: true, path: sync.path };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? String(e.message) : 'Unknown error' };
   }
 });
 

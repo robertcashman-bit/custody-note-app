@@ -25,7 +25,7 @@ var TEMPLATE_PLACEHOLDERS = [
   { key: 'ALLEGATION',          label: 'Allegation',            description: 'Summary of allegation / offence',        example: 'Assault occasioning ABH' },
   { key: 'DISCLOSURE_SUMMARY',  label: 'Disclosure summary',    description: 'Police disclosure summary',              example: 'CCTV and witness account' },
   { key: 'ADVICE_GIVEN',        label: 'Advice given',          description: 'Summary of advice given to client',      example: 'No comment interview advised' },
-  { key: 'SOLICITOR_NAME',      label: 'Solicitor name',        description: 'Fee earner / solicitor full name',       example: 'Robert Cashman' },
+  { key: 'SOLICITOR_NAME',      label: 'Solicitor name',        description: 'Fee earner / solicitor full name',       example: 'Jane Fee-Earner' },
   { key: 'SOLICITOR_EMAIL',     label: 'Solicitor email',       description: 'Fee earner email address',               example: 'robert@example.com' },
   { key: 'SOLICITOR_PHONE',     label: 'Solicitor phone',       description: 'Fee earner telephone number',            example: '07123 000000' },
   { key: 'FIRM_NAME',           label: 'Firm name',             description: 'Organisation / firm name',               example: 'Defence Legal Services' },

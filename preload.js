@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('api', {
   detectCloudFolders: () => ipcRenderer.invoke('detect-cloud-folders'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
+  openEmailSendTrace: () => ipcRenderer.invoke('open-email-send-trace'),
   createDesktopShortcut: () => ipcRenderer.invoke('create-desktop-shortcut'),
   openAppFolder: () => ipcRenderer.invoke('open-app-folder'),
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),
