@@ -577,8 +577,12 @@
          The InPrivate window has no signed-in browser accounts and no PWA
          interception, so the OWA URL with login_hint=… reaches OWA intact. */
       payload.openMethod = 'edge-inprivate';
+    } else if (handler === 'web') {
+      /* Explicit shell route — prevents main IPC from defaulting Windows to
+         Edge InPrivate when the user chose "Default browser". */
+      payload.openMethod = 'shell';
     }
-    /* handler === 'web' falls through to the default OS-level URL launch. */
+    /* handler === 'web' was explicit above; other handlers fall through. */
 
     if (typeof window.invokeOutlookWebCompose !== 'function') {
       showError('Outlook Web bridge is unavailable. Please restart Custody Note and try again.');
