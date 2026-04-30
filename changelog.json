@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.6.15",
+      "version": "1.6.16",
       "date": "2026-04-30",
       "latest": true,
+      "changes": [
+        "Fix Windows Quick Email: OWA compose opens in Edge InPrivate",
+        "avoids Outlook PWA dropping compose deeplink"
+      ]
+    },
+    {
+      "version": "1.6.15",
+      "date": "2026-04-30",
+      "latest": false,
       "changes": [
         "Officer Emails: remove hardcoded login hint and legacy stored hint",
         "signatures use Settings fee earner or [Your name]",
