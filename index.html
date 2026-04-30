@@ -214,10 +214,10 @@
               <span class="home-card-title">Video Identification Parade</span>
               <span class="home-card-sub">Record VIPER / Code D details, objections and result</span>
             </button>
-            <button type="button" id="home-card-quick-email" class="home-action-card home-card-rose" style="display:none;">
-              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
-              <span class="home-card-title">Quick Email</span>
-              <span class="home-card-sub">Email an officer without creating a record first</span>
+            <button type="button" id="openOfficerEmailsBtn" class="home-action-card officer-email-home-card">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
+              <span class="home-card-title">Officer Emails</span>
+              <span class="home-card-sub">Prepare Outlook Web emails to officers and keep a local record</span>
             </button>
           </div>
 
@@ -406,7 +406,6 @@
         </div>
         <div class="list-toolbar">
           <input type="search" id="list-search" placeholder="Search by name, UFN, station, custody number, date..." class="search-input" aria-label="Search attendance records">
-          <button type="button" id="list-quick-email-btn" class="btn btn-secondary btn-small" title="Email an officer without a record" style="display:none;">&#9993; Quick Email</button>
           <button type="button" id="backup-now-btn" class="btn btn-secondary btn-small" title="Create a backup now">Backup now</button>
         </div>
         <div class="list-filters">
@@ -947,33 +946,6 @@
           <p class="settings-hint" style="margin-top:4px;">Auto-fills the origin postcode for journey-to-station mileage on new records.</p>
           <label style="margin-top:0.75rem;">Your email (PDFs sent here to check)</label>
           <input type="email" id="setting-email" class="settings-input" placeholder="you@example.com">
-          <label style="margin-top:0.75rem;">Quick Email opens in</label>
-          <select id="setting-outlook-account-type" class="settings-input" style="max-width:360px;">
-            <option value="desktop">Outlook desktop draft (recommended — opens compose every time)</option>
-            <option value="personal">Outlook.com (personal — outlook.live.com)</option>
-            <option value="work">Outlook on the web (work / school — outlook.office.com)</option>
-            <option value="mailto">My default email app (system mail handler)</option>
-          </select>
-          <p class="settings-hint" style="margin-top:4px;"><strong>Outlook desktop draft</strong> writes a tiny draft file and opens it in your installed Outlook — every time, no inbox redirects, no URL length limits. Use it if Outlook desktop is installed. The web options send the email through a browser link, which can sometimes land on the inbox depending on your Outlook session.</p>
-
-          <div class="settings-subsection" style="margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border-soft, rgba(148,163,184,0.25));">
-            <label style="display:flex;gap:0.5rem;align-items:flex-start;cursor:pointer;">
-              <input type="checkbox" id="setting-always-use-outlook-web" style="margin-top:4px;flex-shrink:0;">
-              <span>
-                <strong>Always use Outlook on the web (Microsoft 365 work)</strong>
-                <span class="settings-hint" style="display:block;margin-top:2px;">Hard override — ignore Outlook desktop detection, ignore the dropdown above, and always open <code>outlook.office.com</code> in your default browser using the most reliable compose URL (<code>?path=/mail/action/compose</code>). Use this if a desktop draft (.eml) keeps getting handed to Edge/Outlook web instead of opening Outlook desktop.</span>
-              </span>
-            </label>
-          </div>
-
-          <div class="settings-subsection" style="margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border-soft, rgba(148,163,184,0.25));">
-            <label style="display:block;">Preferred Outlook compose route (auto-learned)</label>
-            <p class="settings-hint" style="margin:4px 0 8px 0;">When you confirm <em>Yes, looks good</em> after a Quick Email send, that route is remembered and used by default next time. Use this to clear it if Outlook stops cooperating.</p>
-            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
-              <span id="setting-outlook-route-status" class="qe-route-pill" aria-live="polite">No preferred route saved yet</span>
-              <button type="button" id="setting-outlook-route-reset" class="btn btn-secondary" title="Forget the auto-learned compose route so the next Send uses the default again">Reset preferred route</button>
-            </div>
-          </div>
         </div>
 
         <div class="settings-card" id="desktop-shortcut-card">
@@ -1945,6 +1917,218 @@
         </div>
       </div>
 
+      <!-- OFFICER EMAILS VIEW -->
+      <div id="view-officer-emails" class="view officer-email-page">
+        <div class="officer-email-container">
+          <header class="officer-email-hero">
+            <div class="officer-email-hero-text">
+              <p class="officer-kicker">Custody Note</p>
+              <h1>Officer Emails</h1>
+              <p>Prepare professional officer emails, open them in Outlook on the web, and keep a local record on this device.</p>
+            </div>
+            <div class="officer-email-hero-actions">
+              <button type="button" id="officerBackHomeBtn" class="btn btn-secondary">&larr; Home</button>
+              <button type="button" id="officerOpenOutlookHeroBtn" class="gold-button hero-button">Open in Outlook Web</button>
+            </div>
+          </header>
+
+          <div id="officerEmailError" class="alert error-alert hidden" role="alert"></div>
+          <div id="officerEmailNotice" class="alert notice-alert hidden" role="status"></div>
+
+          <nav class="officer-tabs" aria-label="Officer email sections">
+            <button type="button" class="active" data-officer-tab="details">Details</button>
+            <button type="button" data-officer-tab="compose">Compose</button>
+            <button type="button" data-officer-tab="preview">Preview</button>
+            <button type="button" data-officer-tab="records">Records</button>
+            <button type="button" data-officer-tab="testing">Testing / Debug</button>
+          </nav>
+
+          <div class="officer-email-shell">
+            <div class="officer-main-panel">
+
+              <section id="officerTabDetails" class="officer-tab-panel officer-card">
+                <h2>Details</h2>
+                <p class="section-help">Enter the officer details, client details, attendance note and attendance time. These details feed every email template.</p>
+
+                <div class="officer-grid-two">
+                  <label>
+                    Officer email address
+                    <input id="officerEmailInput" type="email" placeholder="officer.fisher@police.uk" autocomplete="off" spellcheck="false" />
+                  </label>
+                  <label>
+                    Officer surname
+                    <input id="officerSurnameInput" type="text" placeholder="Fisher" autocomplete="off" />
+                  </label>
+                </div>
+
+                <div class="officer-grid-two">
+                  <label>
+                    Officer collar / reference
+                    <input id="officerReferenceInput" type="text" placeholder="Optional" autocomplete="off" />
+                  </label>
+                  <label>
+                    Police station / unit
+                    <input id="policeStationOrUnitInput" type="text" placeholder="Optional" autocomplete="off" />
+                  </label>
+                </div>
+
+                <div class="officer-grid-two">
+                  <label>
+                    Date of attendance
+                    <input id="attendanceDateInput" type="date" />
+                  </label>
+                  <label>
+                    Time of attendance
+                    <input id="attendanceTimeInput" type="time" />
+                  </label>
+                </div>
+
+                <div class="large-button-row">
+                  <button id="officerPrevDayBtn" type="button">Previous day</button>
+                  <button id="officerNextDayBtn" type="button">Next day</button>
+                  <button id="officerTimeMinusBtn" type="button">Time -15</button>
+                  <button id="officerTimePlusBtn" type="button">Time +15</button>
+                  <button id="officerNowBtn" type="button">Now</button>
+                </div>
+
+                <div class="officer-grid-two">
+                  <label>
+                    Client name
+                    <input id="clientNameInput" type="text" placeholder="Client name" autocomplete="off" />
+                  </label>
+                  <label>
+                    Matter / allegation
+                    <input id="matterInput" type="text" placeholder="Assault / theft / harassment etc." autocomplete="off" />
+                  </label>
+                </div>
+
+                <label>
+                  Attendance note / context
+                  <textarea id="attendanceNoteInput" rows="6" placeholder="Brief note to include in the email, if required."></textarea>
+                </label>
+
+                <div class="large-button-row">
+                  <button id="officerContinueComposeBtn" class="gold-button" type="button">Continue to Compose</button>
+                  <button id="officerClearFormBtn" type="button">Clear</button>
+                </div>
+              </section>
+
+              <section id="officerTabCompose" class="officer-tab-panel officer-card hidden">
+                <h2>Compose</h2>
+                <p class="section-help">Pick a template, generate the email, edit it if needed, then open it in Outlook Web for review and sending.</p>
+
+                <label>
+                  Template
+                  <select id="officerTemplateSelect">
+                    <option value="bail_details">Bail details request</option>
+                    <option value="attendance_confirmation">Attendance confirmation</option>
+                    <option value="disclosure_update">Disclosure / update request</option>
+                    <option value="general">General officer email</option>
+                  </select>
+                </label>
+
+                <div class="large-button-row">
+                  <button id="officerGenerateBtn" class="gold-button" type="button">Generate / Refresh</button>
+                  <button id="officerClearSubjectBodyBtn" type="button">Clear Subject / Body</button>
+                </div>
+
+                <label>
+                  Subject
+                  <input id="officerSubjectInput" type="text" placeholder="Email subject" autocomplete="off" />
+                </label>
+
+                <label>
+                  Email body
+                  <textarea id="officerBodyInput" rows="16" placeholder="Email body"></textarea>
+                </label>
+
+                <div class="outlook-info">
+                  Outlook Web will open in your browser. If prompted, sign in to the email account you want to send from. Review the email in Outlook before sending.
+                </div>
+
+                <div class="large-button-row">
+                  <button id="officerOpenOutlookBtn" class="gold-button extra-large-button" type="button">Open in Outlook Web</button>
+                  <button id="officerCopyBodyBtn" type="button">Copy Body</button>
+                  <button id="officerCopyFullBtn" type="button">Copy Full Email</button>
+                  <button id="officerSaveDraftBtn" type="button">Save Draft</button>
+                  <button id="officerMarkSentBtn" class="green-button" type="button">Mark as Sent</button>
+                  <button id="officerCancelBtn" type="button">Cancel</button>
+                </div>
+              </section>
+
+              <section id="officerTabPreview" class="officer-tab-panel officer-card hidden">
+                <h2>Preview</h2>
+                <p class="section-help">Read-only preview of the email Outlook Web will receive.</p>
+
+                <div class="preview-box">
+                  <p><strong>To:</strong> <span id="previewTo">Not entered</span></p>
+                  <p><strong>Officer:</strong> <span id="previewOfficer">Not entered</span></p>
+                  <p><strong>Client:</strong> <span id="previewClient">Not entered</span></p>
+                  <p><strong>Matter:</strong> <span id="previewMatter">Not entered</span></p>
+                  <p><strong>Subject:</strong> <span id="previewSubject">Not generated</span></p>
+                  <pre id="previewBody">Email body will appear here.</pre>
+                </div>
+
+                <div class="large-button-row">
+                  <button id="officerOpenOutlookPreviewBtn" class="gold-button extra-large-button" type="button">Open in Outlook Web</button>
+                  <button id="officerCopyFullPreviewBtn" type="button">Copy Full Email</button>
+                </div>
+              </section>
+
+              <section id="officerTabRecords" class="officer-tab-panel officer-card hidden">
+                <div class="records-header">
+                  <div>
+                    <h2>Records</h2>
+                    <p class="section-help">Saved drafts, emails opened in Outlook Web, sent records and cancelled records. Stored locally on this device.</p>
+                  </div>
+                  <button id="officerClearAllRecordsBtn" class="danger-outline-button" type="button">Clear All Records</button>
+                </div>
+
+                <div id="officerRecordsList" class="record-list">
+                  <p class="muted">No officer email records saved yet.</p>
+                </div>
+              </section>
+
+              <section id="officerTabTesting" class="officer-tab-panel officer-card hidden">
+                <h2>Testing / Debug</h2>
+                <p class="section-help">Use these tools to verify the Outlook Web link, validation, template generation and local record storage before relying on the feature.</p>
+
+                <div class="large-button-row">
+                  <button id="officerRunTestsBtn" class="gold-button" type="button">Run Tests</button>
+                  <button id="officerRunDebugBtn" type="button">Run Debug Check</button>
+                </div>
+
+                <h3>Test Results</h3>
+                <div id="officerTestResults" class="test-list">
+                  <p class="muted">No tests run yet.</p>
+                </div>
+
+                <h3>Debug Output</h3>
+                <pre id="officerDebugOutput" class="debug-output">No debug output yet.</pre>
+              </section>
+            </div>
+
+            <aside class="officer-side-panel">
+              <section class="officer-card compact-card">
+                <h2>Quick Summary</h2>
+                <p><strong>Officer:</strong> <span id="summaryOfficer">Not entered</span></p>
+                <p><strong>Email:</strong> <span id="summaryEmail">Not entered</span></p>
+                <p><strong>Client:</strong> <span id="summaryClient">Not entered</span></p>
+                <p><strong>Matter:</strong> <span id="summaryMatter">Not entered</span></p>
+                <p><strong>Template:</strong> <span id="summaryTemplate">Bail details request</span></p>
+                <p><strong>Records:</strong> <span id="summaryRecords">0</span></p>
+              </section>
+
+              <section class="officer-card compact-card">
+                <h2>Outlook Web</h2>
+                <p>This feature opens Outlook Web in your default browser. If you are not signed in, Outlook will ask you to sign in to the email account you want to send from.</p>
+                <button id="officerOpenOutlookSideBtn" class="gold-button full-width-button" type="button">Open in Outlook Web</button>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </div>
+
     </main>
     <footer class="app-footer">
       <div class="footer-row">
@@ -2161,12 +2345,11 @@
   <!-- Wheel-style ("rotating counter") date/time picker. Self-contained, attaches a 🕑/📅 button next to every native date/time/datetime-local input. Native typing still works. -->
   <script src="renderer/widgets/wheelDateTimePicker.js"></script>
   <script src="app.js"></script>
+  <script src="renderer/officerEmails.js"></script>
   <script src="renderer/views/reports.js"></script>
   <script src="renderer/views/authorities.js"></script>
   <script src="renderer/views/settings.js"></script>
   <script src="renderer/email-templates.js"></script>
-  <script src="renderer/quick-email-template-render.js"></script>
-  <script src="renderer/quickEmailTemplateCatalog.js"></script>
   <script src="renderer/views/email-modal.js"></script>
   <script src="renderer/views/list.js"></script>
   <script src="renderer/csv-exporter.js"></script>
