@@ -122,32 +122,27 @@ function _openUrlViaEdgeCommand(url) {
 
 function _launchExternalUrl(url, accountType, deps, shellApi) {
   const isHttps = /^https:\/\//i.test(String(url || ''));
-  const hasInjectedShell = deps && Object.prototype.hasOwnProperty.call(deps, 'shell');
+  const browserLauncher = deps && deps.browserLauncher ? deps.browserLauncher : null;
 
-  /* v1.6.6: On Robert's Windows install, plain Electron shell.openExternal
-     did not visibly open Outlook at all, while the old microsoft-edge:
-     protocol opened Edge but landed in outlook.cloud.microsoft/mail (Inbox).
-     The most reliable Windows route is launching Edge's command line with
-     the normal HTTPS compose URL. Tests inject `browserLauncher` or `shell`
-     so this never opens a real browser during automation. */
-  if (process.platform === 'win32' && isHttps && (!hasInjectedShell || (deps && deps.browserLauncher))) {
-    const browserLauncher = deps && deps.browserLauncher ? deps.browserLauncher : _openUrlViaEdgeCommand;
-    return Promise.resolve(browserLauncher(url)).then(() => ({
+  /* Prefer shell.openExternal first. It respects the user's default browser
+     and avoids Edge-specific routing quirks that can drop compose deeplinks
+     into the inbox/home surface. Keep the explicit browser launcher only as
+     an optional fallback when shell fails. */
+  if (isHttps) {
+    return Promise.resolve(shellApi.openExternal(url)).then(() => ({
       launchUrl: url,
-      launchMethod: 'msedge-cli',
+      launchMethod: 'shell',
     })).catch((err) => {
-      console.warn('[EMAIL] Edge command launch failed, falling back to shell.openExternal:', err && err.message ? err.message : err);
-      return Promise.resolve(shellApi.openExternal(url)).then(() => ({
+      if (!browserLauncher) throw err;
+      console.warn('[EMAIL] shell.openExternal failed, falling back to browser launcher:', err && err.message ? err.message : err);
+      return Promise.resolve(browserLauncher(url)).then(() => ({
         launchUrl: url,
-        launchMethod: 'shell-fallback',
+        launchMethod: 'browser-launcher-fallback',
       }));
     });
   }
 
-  return Promise.resolve(shellApi.openExternal(url)).then(() => ({
-    launchUrl: url,
-    launchMethod: 'shell',
-  }));
+  return Promise.resolve(shellApi.openExternal(url)).then(() => ({ launchUrl: url, launchMethod: 'shell' }));
 }
 
 async function _confirmOutlookWebDeeplink(dialogApi, parentWindow, payload, accountType) {
@@ -213,10 +208,12 @@ async function openOutlookWebEmail(payload, deps = {}) {
     if (safePayload.feeEarnerEmail) return inferOutlookAccountType(safePayload.feeEarnerEmail);
     return inferOutlookAccountType(''); // shared default: work / office.com
   })();
+  const route = String((safePayload && safePayload.route) || '').trim().toLowerCase();
   _traceLaunch('resolve_account_type', { accountType: accountType, skipConfirm: !!skipConfirm });
   // Strip our internal hints from the payload before URL building.
   delete safePayload.accountType;
   delete safePayload.feeEarnerEmail;
+  delete safePayload.route;
 
   // Confirmation gate (skipped only for tests / scripted flows).
   let mode = 'open';
@@ -235,7 +232,7 @@ async function openOutlookWebEmail(payload, deps = {}) {
     safePayload.body = ''; // strip privileged content from the URL
   }
 
-  const meta = buildOutlookWebComposeUrlWithMeta(Object.assign({}, safePayload, { accountType: accountType }));
+  const meta = buildOutlookWebComposeUrlWithMeta(Object.assign({}, safePayload, { accountType: accountType, route: route }));
   const url = meta.url;
   _traceLaunch('url_built', {
     accountType: accountType,
@@ -245,10 +242,11 @@ async function openOutlookWebEmail(payload, deps = {}) {
     len: String(url).length,
     truncated: !!meta.truncated,
     mode: mode,
+    route: route || 'default',
   });
 
   // M20 — never log subject/body in production.
-  console.log('[EMAIL] Opening Outlook (account=' + accountType + ', len=' + url.length + ', truncated=' + meta.truncated + ', mode=' + mode + ')');
+  console.log('[EMAIL] Opening Outlook (account=' + accountType + ', route=' + (route || 'default') + ', len=' + url.length + ', truncated=' + meta.truncated + ', mode=' + mode + ')');
   if (process && process.env && process.env.NODE_ENV === 'development') {
     console.log('Opening Outlook compose URL:', url);
   }

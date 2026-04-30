@@ -5959,7 +5959,9 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
     }
   } catch (_) { /* settings table not ready — fall back to the payload hint */ }
 
-  const accountType = savedAccountType
+  const forcedAccountType = payload.forceAccountType != null ? String(payload.forceAccountType) : '';
+  const accountType = forcedAccountType
+    || savedAccountType
     || (payload.accountType != null ? String(payload.accountType) : '')
     || ''; // empty → openOutlookWebEmail will infer from feeEarnerEmail or default to 'personal'
 
@@ -5971,6 +5973,7 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
       subject: payload.subject != null ? String(payload.subject) : '',
       body: payload.body != null ? String(payload.body) : '',
       feeEarnerEmail: savedFeeEarnerEmail,
+      route: payload.route != null ? String(payload.route) : '',
     },
     {
       parentWindow: mainWindow || null,

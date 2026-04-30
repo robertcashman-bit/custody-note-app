@@ -34,7 +34,8 @@ function _invokeOutlookEmail(payload) {
      common case for solicitors). Personal Outlook.com users can opt in
      via Settings → Your Details → "Quick Email opens in". */
   var settings = window._appSettingsCache || {};
-  var accountType = String(settings.outlookAccountType || '').toLowerCase();
+  var requestedType = String((payload && payload.accountType) || '').toLowerCase();
+  var accountType = String(requestedType || settings.outlookAccountType || '').toLowerCase();
   if (accountType !== 'personal' && accountType !== 'mailto') accountType = 'work';
   var enriched = Object.assign({}, payload || {}, { accountType: accountType });
   return window.invokeOutlookWebCompose(enriched).then(function(result) {
@@ -368,7 +369,20 @@ function openEmailModal(recordId, recordData, recordStatus) {
           status: recordStatus || 'draft'
         }).catch(function(err) { console.error('[email-modal] Save oicEmail failed:', err); });
       }
-      _openUrl(to, subject, body).catch(function() { /* error toast already shown by _invokeOutlookEmail */ });
+      _openUrl(to, subject, body)
+        .then(function(result) {
+          if (!recordId) return;
+          if (result && (result.cancelled || result.skipped || result.ok === false || result.composeSignature === false)) return;
+          return _saveOfficerEmailLog(recordId, data, recordStatus, _currentTemplateKey(), to)
+            .then(function(saveResult) {
+              if (saveResult && saveResult.ok && typeof refreshList === 'function') refreshList();
+            })
+            .catch(function(err) {
+              console.error('[email-modal] Auto-save officer email log failed:', err);
+              showToast('Outlook opened, but email log history could not be saved', 'warning', 5000);
+            });
+        })
+        .catch(function() { /* error toast already shown by _invokeOutlookEmail */ });
       /* IMPORTANT: do NOT auto-wipe the typed subject/body after handing the
          message to Outlook. Outlook can reject or silently drop the deeplink
          (browser pop-up blockers, mid-flight sign-in, network glitch) and the
@@ -462,7 +476,10 @@ function closeEmailModal() {
 
 /* ── Mark Sent ───────────────────────────────────────────── */
 
-function _markEmailSent(recordId, existingData, recordStatus, templateId, recipientEmail) {
+function _saveOfficerEmailLog(recordId, existingData, recordStatus, templateId, recipientEmail) {
+  if (!recordId || !window.api || typeof window.api.attendanceSave !== 'function') {
+    return Promise.resolve({ skipped: true });
+  }
   var updated = Object.assign({}, existingData, {
     officerEmailStatus:           'sent',
     lastOfficerEmailSentDate:     new Date().toISOString(),
@@ -473,10 +490,20 @@ function _markEmailSent(recordId, existingData, recordStatus, templateId, recipi
 
   var status = recordStatus || 'draft';
 
-  window.api.attendanceSave({ id: recordId, data: updated, status: status })
+  return window.api.attendanceSave({ id: recordId, data: updated, status: status })
     .then(function(result) {
       if (result && result.error) {
-        showToast('Could not save sent status: ' + (result.message || 'Unknown error'), 'error');
+        throw new Error(result.message || 'Unknown error');
+      }
+      return { ok: true, updated: updated };
+    });
+}
+
+function _markEmailSent(recordId, existingData, recordStatus, templateId, recipientEmail) {
+  _saveOfficerEmailLog(recordId, existingData, recordStatus, templateId, recipientEmail)
+    .then(function(result) {
+      if (result && result.skipped) {
+        showToast('Could not save sent status for this view', 'warning');
         return;
       }
       showToast('Marked as sent', 'success');
@@ -844,7 +871,8 @@ function openQuickEmailModal() {
     } else if (def.type === 'textarea') {
       inputHtml = '<textarea id="' + inputId + '" data-qe-field="' + key + '" class="qe-input qe-textarea" rows="2"' + ph + '>' + _escAttr(val) + '</textarea>';
     } else {
-      inputHtml = '<input type="' + def.type + '" id="' + inputId + '" data-qe-field="' + key + '" class="qe-input" value="' + _escAttr(val) + '"' + ph + '>';
+      var wpDisable = (def.type === 'date' || def.type === 'time' || def.type === 'datetime-local') ? ' data-wp-disable="1"' : '';
+      inputHtml = '<input type="' + def.type + '" id="' + inputId + '" data-qe-field="' + key + '"' + wpDisable + ' class="qe-input" value="' + _escAttr(val) + '"' + ph + '>';
     }
     return '<div class="qe-field qe-field-' + key + (req ? ' qe-field-required' : '') + '">' +
              '<label class="qe-label" for="' + inputId + '">' + _escAttr(def.label) + star + '</label>' +
@@ -1309,12 +1337,35 @@ function openQuickEmailModal() {
     return /^[^\s@]+@[^\s@.]+\.[^\s@]{2,}$/.test(v);
   }
 
-  function _sendViaOutlook() {
-    _clearInlineError();
+  function _isQuickEmailDebugEnabled() {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage && window.localStorage.getItem('quickEmailOutlookDebug') === '1') return true;
+    } catch (_) {}
+    try {
+      if (typeof process !== 'undefined' && process && process.env && process.env.NODE_ENV === 'development') return true;
+    } catch (_) {}
+    return false;
+  }
 
-    var to      = (_fields.officerEmail || '').trim();
+  function _buildDebugComposeUrl(route, to, subject, body) {
+    var params = new URLSearchParams();
+    params.set('to', to || '');
+    params.set('cc', '');
+    params.set('bcc', '');
+    params.set('subject', subject || '');
+    params.set('body', body || '');
+    var q = params.toString();
+    if (route === 'personal') return 'https://outlook.live.com/mail/0/deeplink/compose?' + q;
+    if (route === 'work_alt') return 'https://outlook.office.com/owa/?path=/mail/action/compose&' + q;
+    return 'https://outlook.office.com/mail/deeplink/compose?' + q;
+  }
+
+  function _buildDraftFromCurrentState() {
+    var toInput = document.getElementById('qe-field-officerEmail');
+    var to = toInput ? String(toInput.value || '').trim() : String(_fields.officerEmail || '').trim();
+    _fields.officerEmail = to;
     var subject = ((document.getElementById('quick-email-subject') || {}).value || '').trim();
-    var body    = ((document.getElementById('quick-email-body')    || {}).value || '');
+    var body = ((document.getElementById('quick-email-body') || {}).value || '');
 
     /* Hard validation gate (B+C of the v1.6.4 spec). Outlook compose silently
        redirects to the inbox if the URL is malformed or the to-address is
@@ -1327,24 +1378,13 @@ function openQuickEmailModal() {
     }
     var hardRequired = ['clientName', 'station', 'date', 'time'];
     hardRequired.forEach(function(k) {
-      var v = _fields[k];
+      var el = document.getElementById('qe-field-' + k);
+      var v = el ? el.value : _fields[k];
+      _fields[k] = v;
       if (v == null || String(v).trim() === '') {
         problems.push({ field: k, msg: (QUICK_EMAIL_FIELD_DEFS[k] && QUICK_EMAIL_FIELD_DEFS[k].label || k).toLowerCase() + ' is required' });
       }
     });
-    if (problems.length) {
-      var first = problems[0];
-      var firstEl = document.getElementById('qe-field-' + first.field);
-      if (firstEl) firstEl.focus();
-      var lines = problems.map(function(p) { return '<li>' + p.msg.replace(/[<>&]/g, function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&amp;';}) + '</li>'; }).join('');
-      _showInlineError(
-        '<strong>Outlook was not opened.</strong> Please fix the following before sending:' +
-        '<ul style="margin:0.4rem 0 0 1.1rem;padding:0;">' + lines + '</ul>'
-      );
-      _renderMissingStrip();
-      if (typeof showToast === 'function') showToast('Outlook was not opened — add the missing details shown in the modal', 'warning', 5000);
-      return Promise.resolve(); // do NOT open Outlook
-    }
 
     /* Spec: "If subject/body are empty at click time, generate them before
        opening Outlook." If we have an active template and either side is
@@ -1372,19 +1412,165 @@ function openQuickEmailModal() {
       var bodyEl2 = document.getElementById('quick-email-body'); if (bodyEl2) bodyEl2.value = body;
     }
 
+    if (!subject) problems.push({ field: 'subject', msg: 'subject is required' });
+    if (!String(body || '').trim()) problems.push({ field: 'body', msg: 'body is required' });
+
+    return {
+      to: to,
+      subject: subject,
+      body: body,
+      problems: problems
+    };
+  }
+
+  var _sendClickCount = 0;
+
+  /* ── Preferred route persistence + UI toggles ───────── */
+
+  function _getPreferredRoute() {
+    var s = window._appSettingsCache || {};
+    return String(s.lastWorkingOutlookRoute || '');
+  }
+  function _getPreferredAccountType() {
+    var s = window._appSettingsCache || {};
+    var raw = String(s.lastWorkingOutlookAccountType || '').toLowerCase();
+    if (raw === 'work' || raw === 'personal' || raw === 'mailto') return raw;
+    return '';
+  }
+  function _persistPreferredRoute(route, accountType) {
+    if (!window.api || typeof window.api.setSettings !== 'function') return;
+    var update = {
+      lastWorkingOutlookRoute: route || '',
+      lastWorkingOutlookAccountType: accountType || ''
+    };
+    window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, update);
+    window.api.setSettings(update).then(function() {
+      /* Keep the Settings pill (if mounted) in sync without reloading the page. */
+      if (typeof window._refreshOutlookRouteStatus === 'function') {
+        window._refreshOutlookRouteStatus(window._appSettingsCache);
+      }
+    }).catch(function(err) {
+      console.warn('[quick-email] could not persist preferred route', err);
+    });
+  }
+  function _showRoutesPanel(open) {
+    var panel = document.getElementById('quick-email-routes-panel');
+    var toggle = document.getElementById('qe-routes-toggle');
+    if (!panel || !toggle) return;
+    panel.style.display = open ? '' : 'none';
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    toggle.textContent = open ? 'Hide routes' : 'More routes';
+  }
+  function _toggleRoutesPanel() {
+    var panel = document.getElementById('quick-email-routes-panel');
+    if (!panel) return;
+    _showRoutesPanel(panel.style.display === 'none');
+  }
+  function _showFollowupPrompt(routeUsed, accountTypeUsed) {
+    var el = document.getElementById('quick-email-followup');
+    if (!el) return;
+    var routeLabel = routeUsed === 'work_alt' ? 'M365 alternate (owa/action/compose)'
+      : routeUsed === 'personal' ? 'Outlook.com personal'
+      : (accountTypeUsed === 'mailto' ? 'system mailto' : 'M365 work compose');
+    el.innerHTML =
+      '<div class="qe-followup-row">' +
+        '<span class="qe-followup-text">' +
+          'Outlook should now be open. <strong>Did it land on the compose window?</strong> ' +
+          '<span class="qe-followup-meta">(route used: ' + routeLabel + ')</span>' +
+        '</span>' +
+        '<span class="qe-followup-actions">' +
+          '<button type="button" class="btn btn-secondary qe-followup-yes">Yes, looks good</button>' +
+          '<button type="button" class="btn btn-ghost qe-followup-no">No, try another route</button>' +
+        '</span>' +
+      '</div>';
+    el.style.display = '';
+    el.querySelector('.qe-followup-yes').addEventListener('click', function() {
+      _persistPreferredRoute(routeUsed || '', accountTypeUsed || '');
+      el.style.display = 'none';
+      el.innerHTML = '';
+      if (typeof showToast === 'function') showToast('Saved — Quick Email will use this route by default.', 'success');
+    });
+    el.querySelector('.qe-followup-no').addEventListener('click', function() {
+      el.style.display = 'none';
+      el.innerHTML = '';
+      _showRoutesPanel(true);
+      if (typeof showToast === 'function') showToast('Try one of the alternate routes above.', 'info', 4000);
+    });
+  }
+
+  function _sendViaOutlook(ev, routeOverride, accountTypeOverride) {
+    if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+    if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    _clearInlineError();
+    _sendClickCount += 1;
+
+    var draft = _buildDraftFromCurrentState();
+    var to = draft.to;
+    var subject = draft.subject;
+    var body = draft.body;
+    var problems = draft.problems;
+    if (problems.length) {
+      var first = problems[0];
+      var firstEl = document.getElementById('qe-field-' + first.field);
+      if (firstEl) firstEl.focus();
+      var lines = problems.map(function(p) { return '<li>' + p.msg.replace(/[<>&]/g, function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&amp;';}) + '</li>'; }).join('');
+      _showInlineError(
+        '<strong>Outlook was not opened.</strong> Please fix the following before sending:' +
+        '<ul style="margin:0.4rem 0 0 1.1rem;padding:0;">' + lines + '</ul>'
+      );
+      _renderMissingStrip();
+      if (typeof showToast === 'function') showToast('Outlook was not opened — add the missing details shown in the modal', 'warning', 5000);
+      return Promise.resolve(); // do NOT open Outlook
+    }
+
+    if (_isQuickEmailDebugEnabled() && typeof console !== 'undefined' && console.groupCollapsed) {
+      var debugUrl = _buildDebugComposeUrl(routeOverride || 'work_primary', to, subject, body);
+      console.groupCollapsed('Quick Email Outlook Debug');
+      console.log('officerEmail:', to);
+      console.log('subject:', subject);
+      console.log('body:', body);
+      console.log('composeUrl:', debugUrl);
+      console.log('urlLength:', debugUrl.length);
+      console.log('hasComposePath:', debugUrl.indexOf('/deeplink/compose') !== -1 || debugUrl.indexOf('/mail/action/compose') !== -1);
+      console.log('hasTo:', debugUrl.indexOf('to=') !== -1);
+      console.log('hasSubject:', debugUrl.indexOf('subject=') !== -1);
+      console.log('hasBody:', debugUrl.indexOf('body=') !== -1);
+      console.log('sendClickCount:', _sendClickCount);
+      console.log('eventDefaultPrevented:', !!(ev && ev.defaultPrevented));
+      console.log('openMethod:', 'window.invokeOutlookWebCompose -> emailAPI.open');
+      console.groupEnd();
+    }
+
     return _invokeOutlookEmail({
       to:      to,
       cc:      '',
       bcc:     '',
       subject: subject,
-      body:    _truncateBodyForOutlook(body)
+      body:    _truncateBodyForOutlook(body),
+      route: routeOverride || '',
+      accountType: accountTypeOverride || undefined,
+      forceAccountType: accountTypeOverride || undefined,
     }).then(function(result) {
       if (result && (result.cancelled || result.skipped || result.ok === false)) return;
+      var routeUsedFinal = routeOverride || (result && result.route) || '';
+      var accountTypeUsedFinal = accountTypeOverride || (result && result.accountType) || '';
+      if (result && result.composeSignature === false) {
+        _showInlineError(
+          '<strong>Outlook opened but not in compose mode.</strong> ' +
+          'Open <em>More routes</em> below and try the alternate or personal compose route.'
+        );
+        _showRoutesPanel(true);
+        if (typeof showToast === 'function') {
+          showToast('Outlook opened in home/inbox. Try alternate compose under "More routes".', 'warning', 6000);
+        }
+        return;
+      }
       /* IMPORTANT: do NOT auto-clear the form here. Outlook can fail silently
          (pop-up blocker, the user is mid sign-in, etc.) and the user would lose
          everything they typed. The user is in charge of clearing the form via
          the explicit "Clear" button when they are happy the email was sent. */
-      showToast('Opening Outlook compose window. If it does not appear, try again or use Copy.', 'success', 5500);
+      showToast('Opening Outlook compose window. If it does not appear, try again or use Copy.', 'success', 4000);
+      _showFollowupPrompt(routeUsedFinal, accountTypeUsedFinal);
     }).catch(function() {
       /* Error toast is already shown by _invokeOutlookEmail; swallow here so
          the click handler's promise is fully handled. The form is intentionally
@@ -1416,8 +1602,11 @@ function openQuickEmailModal() {
     }
   }
 
-  function _copy() {
-    var body = ((document.getElementById('quick-email-body') || {}).value || '');
+  function _copy(ev) {
+    if (ev && typeof ev.preventDefault === 'function') ev.preventDefault();
+    if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+    var draft = _buildDraftFromCurrentState();
+    var body = draft.body || '';
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(body).then(function() {
         showToast('Email copied to clipboard', 'success');
@@ -1446,6 +1635,11 @@ function openQuickEmailModal() {
 
   function _renderModal() {
     if (!_fields.date) _fields.date = _todayIsoDate();
+    var debugTools = _isQuickEmailDebugEnabled()
+      ? '<div class="qe-actions-debug">' +
+          '<button type="button" id="qe-copy-debug-url" class="btn btn-ghost" title="Copy the exact Outlook compose URL for troubleshooting">Copy Outlook debug URL</button>' +
+        '</div>'
+      : '';
     var html =
       '<div id="quick-email-modal" class="email-oic-overlay qe-overlay" role="dialog" aria-modal="true" aria-label="Quick Email to Officer">' +
         '<div class="email-oic-box qe-box">' +
@@ -1479,6 +1673,16 @@ function openQuickEmailModal() {
             '</div>' +
           '</div>' +
 
+            '<div id="quick-email-followup" class="qe-followup" style="display:none;" role="status" aria-live="polite"></div>' +
+            '<div id="quick-email-routes-panel" class="qe-routes-panel" style="display:none;">' +
+              '<div class="qe-routes-title">If Outlook landed on the inbox or home, try a different compose route:</div>' +
+              '<div class="qe-routes-actions">' +
+                '<button type="button" id="qe-send-alt" class="btn btn-secondary" title="Try Outlook compose alternate route (M365 OWA action/compose)">Try alternate compose</button>' +
+                '<button type="button" id="qe-send-personal" class="btn btn-secondary" title="Try Outlook.com personal compose route">Try personal compose</button>' +
+                debugTools +
+              '</div>' +
+            '</div>' +
+
           '<div class="email-oic-actions qe-actions">' +
             '<div class="qe-actions-left">' +
               '<button type="button" id="qe-send"   class="btn btn-primary">Send via Outlook Web</button>' +
@@ -1486,6 +1690,7 @@ function openQuickEmailModal() {
               '<button type="button" id="qe-save"   class="btn btn-secondary">Save as new template</button>' +
             '</div>' +
             '<div class="qe-actions-right">' +
+              '<button type="button" id="qe-routes-toggle" class="qe-link-btn" title="Show or hide alternate Outlook compose routes" aria-expanded="false">More routes</button>' +
               '<button type="button" id="qe-clear"  class="btn btn-ghost"   title="Reset the form, template choice and message">Clear</button>' +
               '<button type="button" id="qe-cancel" class="btn btn-ghost">Cancel</button>' +
             '</div>' +
@@ -1532,9 +1737,34 @@ function openQuickEmailModal() {
     if (subjEl) subjEl.addEventListener('input', function() { _manualSubject = subjEl.value; });
     if (bodyEl) bodyEl.addEventListener('input', function() { _manualBody    = bodyEl.value; });
 
-    document.getElementById('qe-send').addEventListener('click', _sendViaOutlook);
+    document.getElementById('qe-send').addEventListener('click', function(e) { _sendViaOutlook(e, _getPreferredRoute(), _getPreferredAccountType()); });
+    document.getElementById('qe-send-alt').addEventListener('click', function(e) { _sendViaOutlook(e, 'work_alt', 'work'); });
+    document.getElementById('qe-send-personal').addEventListener('click', function(e) { _sendViaOutlook(e, 'personal', 'personal'); });
+    var routesToggle = document.getElementById('qe-routes-toggle');
+    if (routesToggle) {
+      routesToggle.addEventListener('click', function(e) {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        _toggleRoutesPanel();
+      });
+    }
     document.getElementById('qe-copy').addEventListener('click', _copy);
     document.getElementById('qe-save').addEventListener('click', _openSavePanel);
+    var copyDebugBtn = document.getElementById('qe-copy-debug-url');
+    if (copyDebugBtn) {
+      copyDebugBtn.addEventListener('click', function(e) {
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+        var draft = _buildDraftFromCurrentState();
+        var url = _buildDebugComposeUrl('work_primary', draft.to, draft.subject, _truncateBodyForOutlook(draft.body));
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(function() {
+            showToast('Copied Outlook compose debug URL', 'success');
+          }).catch(function() { _fallbackCopyQuick(url); });
+        } else {
+          _fallbackCopyQuick(url);
+        }
+      });
+    }
     var clearBtn = document.getElementById('qe-clear');
     if (clearBtn) clearBtn.addEventListener('click', _clearForm);
   }

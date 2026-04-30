@@ -954,6 +954,15 @@
             <option value="mailto">My default email app (Outlook desktop, Mail, etc.)</option>
           </select>
           <p class="settings-hint" style="margin-top:4px;">If Quick Email opens but the recipient/subject/body don\u2019t appear, switch this. Most personal Outlook users want <strong>Outlook.com</strong>; firms on Microsoft 365 want <strong>Outlook on the web</strong>; users with Outlook installed locally usually want <strong>default email app</strong>.</p>
+
+          <div class="settings-subsection" style="margin-top:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border-soft, rgba(148,163,184,0.25));">
+            <label style="display:block;">Preferred Outlook compose route (auto-learned)</label>
+            <p class="settings-hint" style="margin:4px 0 8px 0;">When you confirm <em>Yes, looks good</em> after a Quick Email send, that route is remembered and used by default next time. Use this to clear it if Outlook stops cooperating.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+              <span id="setting-outlook-route-status" class="qe-route-pill" aria-live="polite">No preferred route saved yet</span>
+              <button type="button" id="setting-outlook-route-reset" class="btn btn-secondary" title="Forget the auto-learned compose route so the next Send uses the default again">Reset preferred route</button>
+            </div>
+          </div>
         </div>
 
         <div class="settings-card" id="desktop-shortcut-card">
