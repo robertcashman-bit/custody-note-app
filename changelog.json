@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.6.14",
+      "version": "1.6.15",
       "date": "2026-04-30",
       "latest": true,
+      "changes": [
+        "Officer Emails: remove hardcoded login hint and legacy stored hint",
+        "signatures use Settings fee earner or [Your name]",
+        "bundled email-send-trace.txt copied to app data with Help + Testing shortcuts",
+        "privacy fixes in tests and sample script"
+      ]
+    },
+    {
+      "version": "1.6.14",
+      "date": "2026-04-30",
+      "latest": false,
       "changes": [
         "Officer Emails: use OWA path=/mail/action/compose (work alt) so Microsoft 365 new shell opens compose instead of dropping the compose deep link to inbox",
         "open-external-url allowlist accepts both OWA compose URL shapes"
