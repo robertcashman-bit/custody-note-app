@@ -6072,6 +6072,19 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
   const payloadLoginHint = (payload.loginHint != null) ? String(payload.loginHint).trim() : '';
   const loginHint = payloadLoginHint || savedFeeEarnerEmail || '';
 
+  /* Windows + Outlook Web: default browser often routes outlook.office.com to the
+     Outlook PWA, which drops compose deeplinks (blank tab / inbox). Officer Emails
+     sends openMethod edge-inprivate or shell explicitly; Quick Email / Email OIC
+     historically sent neither — default Edge InPrivate here unless the payload
+     already set openMethod (e.g. Officer Emails "Default browser" → shell). */
+  let resolvedOpenMethod = payload.openMethod != null ? String(payload.openMethod).trim().toLowerCase() : '';
+  if (!resolvedOpenMethod && process.platform === 'win32') {
+    const at = String(accountType || '').toLowerCase();
+    if (at !== 'desktop' && at !== 'mailto') {
+      resolvedOpenMethod = 'edge-inprivate';
+    }
+  }
+
   /* Playwright / automation only — native privacy dialog is not drivable from
      browser automation. Set CUSTODYNOTE_E2E_SKIP_OUTLOOK_CONFIRM=1 for e2e. */
   const e2eSkipOutlookConfirm = String(process.env.CUSTODYNOTE_E2E_SKIP_OUTLOOK_CONFIRM || '').trim() === '1';
@@ -6085,9 +6098,7 @@ ipcMain.handle('open-outlook-email', async (event, payload) => {
       body: payload.body != null ? String(payload.body) : '',
       feeEarnerEmail: loginHint,
       route: payload.route != null ? String(payload.route) : '',
-      /* H62 — Officer Emails screen sends 'edge-inprivate' to bypass the
-         Outlook PWA hijack on Windows. */
-      openMethod: payload.openMethod != null ? String(payload.openMethod) : '',
+      openMethod: resolvedOpenMethod,
     },
     {
       parentWindow: mainWindow || null,
