@@ -34,10 +34,21 @@ function _invokeOutlookEmail(payload) {
      common case for solicitors). Personal Outlook.com users can opt in
      via Settings → Your Details → "Quick Email opens in". */
   var settings = window._appSettingsCache || {};
+  var alwaysWeb = String(settings.alwaysUseOutlookWeb || '').toLowerCase() === 'true';
   var requestedType = String((payload && payload.accountType) || (payload && payload.forceAccountType) || '').toLowerCase();
   var accountType = String(requestedType || settings.outlookAccountType || '').toLowerCase();
   if (accountType !== 'personal' && accountType !== 'mailto' && accountType !== 'desktop') accountType = 'work';
+  /* HARD OVERRIDE — when the user has set "Always use Outlook on the web", clobber
+     any account-type / route the rest of the code might have computed. This catches
+     stale lastWorkingOutlookAccountType, accidental .eml routing, and the Edge-PWA
+     opens-OWA-with-broken-URL case that the user reported in v1.6.11. */
   var enriched = Object.assign({}, payload || {}, { accountType: accountType });
+  if (alwaysWeb) {
+    enriched.accountType = 'work';
+    enriched.forceAccountType = 'work';
+    enriched.route = 'work_alt';
+    accountType = 'work'; // keep the local var in sync for the toast text below
+  }
   return window.invokeOutlookWebCompose(enriched).then(function(result) {
     /* Main returns { ok:false, cancelled:true } when the user dismisses the
        privacy dialog — must not show success toasts or callers think Outlook opened. */
@@ -1460,6 +1471,14 @@ function openQuickEmailModal() {
   /* ── Preferred route persistence + UI toggles ───────── */
 
   /* Resolution priority for the primary "Send" button:
+       0. alwaysUseOutlookWeb === 'true' — HARD OVERRIDE. The user explicitly
+          asked to never go via desktop / .eml / mailto and to always open
+          M365 work compose in their default browser. Honour above all else.
+          (This exists because some Windows setups have .eml registered to
+          Edge / Outlook web instead of Outlook desktop, so the .eml draft
+          gets parsed by Edge into a malformed OWA URL and lands the user on
+          the inbox. Forcing the explicit work_alt URL bypasses every flavour
+          of that.)
        1. lastWorkingOutlookAccountType — what the user has previously
           confirmed actually opened compose ("Yes, looks good" on the
           follow-up). Honour their learned preference above all else.
@@ -1473,7 +1492,12 @@ function openQuickEmailModal() {
           opens compose every time.
        4. Otherwise honour the explicit Settings dropdown value
           (work/personal/mailto), or '' to let main process infer. */
+  function _alwaysUseOutlookWebEnabled() {
+    var s = window._appSettingsCache || {};
+    return String(s.alwaysUseOutlookWeb || '').toLowerCase() === 'true';
+  }
   function _getPreferredAccountType() {
+    if (_alwaysUseOutlookWebEnabled()) return 'work';
     var s = window._appSettingsCache || {};
     var lastWorking = String(s.lastWorkingOutlookAccountType || '').toLowerCase();
     if (lastWorking === 'work' || lastWorking === 'personal' || lastWorking === 'mailto' || lastWorking === 'desktop') {
@@ -1487,6 +1511,9 @@ function openQuickEmailModal() {
     return '';
   }
   function _getPreferredRoute() {
+    /* Always-use-Outlook-Web: pin the work_alt URL because /owa/?path=/mail/action/compose
+       is the variant least likely to be normalised back to the inbox. */
+    if (_alwaysUseOutlookWebEnabled()) return 'work_alt';
     var s = window._appSettingsCache || {};
     var lastWorkingRoute = String(s.lastWorkingOutlookRoute || '').toLowerCase();
     if (lastWorkingRoute) return lastWorkingRoute;
@@ -1499,6 +1526,9 @@ function openQuickEmailModal() {
   /* Public, route-label resolver used by the in-modal preview pill so the
      user can see exactly what will happen before clicking Send. */
   function _resolvedRouteLabel() {
+    if (_alwaysUseOutlookWebEnabled()) {
+      return 'Outlook on the web (M365 work — forced)';
+    }
     var route = _getPreferredRoute();
     var account = _getPreferredAccountType();
     if (route === 'desktop' || account === 'desktop') return 'Outlook desktop draft (.eml)';
