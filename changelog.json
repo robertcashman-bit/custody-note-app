@@ -1,9 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.6.11",
+      "date": "2026-04-30",
+      "latest": true,
+      "changes": [
+        "Quick Email: smart-routes to Outlook desktop draft when Outlook is installed (no more landing on the inbox)",
+        "Quick Email: route-preview pill and dynamic Send button label show the resolved Outlook target before you click",
+        "Quick Email: clipboard fallback if both shell.openExternal and the browser launcher fail",
+        "Quick Email: Copy ALL debug URLs button (dev mode) for testing all three compose endpoints",
+        "Bug fixes and reliability improvements"
+      ]
+    },
+    {
       "version": "1.6.10",
       "date": "2026-04-29",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Follow-up fix from installed-app telemetry: work-account Outlook route now uses https://outlook.office.com/mail/deeplink/compose?... again. Runtime logs showed ?path=/mail/action/compose was accepted and launched but still normalized to Outlook home/inbox in this environment.",
         "Kept release-safe diagnostics in <userData>/email-launch.log plus compose-signature checks and warning toasts, so future route normalization issues are visible and traceable.",
