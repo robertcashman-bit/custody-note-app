@@ -420,6 +420,11 @@
 
   window.__CUSTODYNOTE_E2E__ = { skipLicenceGate: false };
 
+  window.custodyNoteBuildInfo = {
+    isPackaged: false,
+    isDevBuild: true,
+  };
+
   /* OWA URL must match lib/outlookWebComposeUrl.js + main/openOutlookWebEmail.js (browser has no IPC).
      Honours the saved outlookAccountType setting (work / personal / mailto). */
   window.emailAPI = {

@@ -62,10 +62,10 @@ const outlookUrlLib = fs.readFileSync(path.join(__dirname, '..', 'lib', 'outlook
 /* ── Outlook Web only (no mailto / no default mail client) ─── */
 
 describe('Outlook Web email routing', () => {
-  it('email-modal uses _invokeOutlookEmail → invokeOutlookWebCompose only', () => {
-    assert.ok(emailModalJs.includes('function _invokeOutlookEmail'),
-      'email-modal must define _invokeOutlookEmail');
-    assert.ok(emailModalJs.includes('invokeOutlookWebCompose'), 'must use invokeOutlookWebCompose');
+  it('email-modal opens drafts via openEmailDraft (mailto + outlook-web)', () => {
+    assert.ok(emailModalJs.includes('openEmailDraft'), 'must call window.openEmailDraft');
+    assert.ok(emailModalJs.includes('email-oic-open-mailto'), 'mailto open button');
+    assert.ok(emailModalJs.includes("'outlook-web'"), 'OWA mode');
     assert.ok(!emailModalJs.includes('openOutlookEmail'), 'no api.openOutlookEmail fallback');
     assert.ok(!emailModalJs.includes('mailto:'), 'email-modal must not contain mailto:');
     assert.ok(

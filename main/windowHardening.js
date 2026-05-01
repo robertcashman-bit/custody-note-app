@@ -19,9 +19,8 @@
  *   • load remote frames or service workers from arbitrary origins.
  *
  * Every external link the user clicks is delegated to shell.openExternal
- * AFTER passing the same allow-list used by main.js (HTTPS or known mailto
- * sentinels only — mailto is also blocked because the app routes email via
- * Outlook Web).
+ * AFTER passing the allow-list (HTTPS http-localhost, or a validated mailto:
+ * draft built by renderer/email-draft-open.js — see isSafeMailtoDraftUrl).
  *
  * Tested values intentionally fail closed: any unknown navigation, any
  * unknown permission, any unknown protocol → denied.
@@ -73,6 +72,29 @@ function isSafeExternalUrl(urlStr) {
     return false;
   }
   return true;
+}
+
+const MAILTO_URL_MAX_LEN = 100000;
+
+/**
+ * Allow user-triggered mailto: drafts from the bundled app only — tight
+ * validation so renderer XSS cannot invoke arbitrary schemes. Delegated to
+ * shell.openExternal (same as https) after will-navigate preventDefault.
+ */
+function isSafeMailtoDraftUrl(urlStr) {
+  if (typeof urlStr !== 'string') return false;
+  if (/[\u0000-\u001F\u007F]/.test(urlStr)) return false;
+  const t = urlStr.trim();
+  if (!t.toLowerCase().startsWith('mailto:')) return false;
+  if (t.length > MAILTO_URL_MAX_LEN) return false;
+  const rest = t.slice('mailto:'.length);
+  const q = rest.indexOf('?');
+  const addrPart = q >= 0 ? rest.slice(0, q) : rest;
+  let decoded = addrPart;
+  try {
+    decoded = decodeURIComponent(addrPart);
+  } catch (_) { /* keep raw */ }
+  return decoded.indexOf('@') > 0 && decoded.indexOf('@') < decoded.length - 1;
 }
 
 /**
@@ -141,6 +163,8 @@ function hardenWindow(win, options) {
       log.warn('[security] Blocked in-place navigation', { url: _redactForLog(urlStr) });
       if (isSafeExternalUrl(urlStr)) {
         Promise.resolve(openExternal(urlStr)).catch(function () {});
+      } else if (isSafeMailtoDraftUrl(urlStr)) {
+        Promise.resolve(openExternal(urlStr)).catch(function () {});
       }
     }
   });
@@ -158,6 +182,8 @@ function hardenWindow(win, options) {
   wc.setWindowOpenHandler(function (details) {
     const target = details && details.url ? String(details.url) : '';
     if (isSafeExternalUrl(target)) {
+      Promise.resolve(openExternal(target)).catch(function () {});
+    } else if (isSafeMailtoDraftUrl(target)) {
       Promise.resolve(openExternal(target)).catch(function () {});
     } else {
       log.warn('[security] Blocked window.open', { url: _redactForLog(target) });
@@ -267,6 +293,7 @@ module.exports = {
   hardenSession,
   isInternalNavigation,
   isSafeExternalUrl,
+  isSafeMailtoDraftUrl,
   ELECTRON_CSP,
   ALLOWED_PERMISSIONS,
 };

@@ -1,31 +1,18 @@
 /* ═══════════════════════════════════════════════════════════
    Officer Emails — vanilla-JS Custody Note feature.
 
-   Prepares standard officer emails and opens them in Outlook on
-   the web (https://outlook.office.com — OWA compose), keeping a
-   local record in localStorage.
-
-   Launching the email goes through the SINGLE app-wide email path:
-       window.invokeOutlookWebCompose({ to, subject, body })
-         -> window.emailAPI.open(...)
-         -> ipcMain.handle('open-outlook-email')
-         -> main/openOutlookWebEmail.js (which is the only module
-            allowed to call the Electron OS-launch API).
-   No parallel IPC channel, no window.open fallback, no URL built
-   in the renderer for launching (the URL builder below is kept
-   ONLY to power the Test/Debug panel previews, which never fire
-   any launch).
+   Primary workflow: {{placeholder}} templates → preview → copy / paste into
+   Outlook (custodyCopyEmailText). Optional: savePendingEmailDraft +
+   openEmailDraft (mailto / Outlook Web) — never sends mail automatically.
 
    This module only manages the inner UI of #view-officer-emails.
-   The home-card click and the back-button click are wired into the
-   existing app.js click delegation (which calls showView), so we do
-   NOT toggle the .view container ourselves — we only manage the
-   inner tab panels and their .hidden state.
    ═══════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
 
   var STORAGE_KEY = 'custody_note_officer_email_records_v2';
+  var SESSION_OPEN_FLAG = 'custodynite_officer_email_open_attempted';
+  var OW_ATTEMPT_KEY = 'custodynite_officer_ow_attempt';
   /* H62 — Outlook sign-in hint. Persisted on this device so Edge / the
      Outlook PWA pick the right account when the active browser session is
      signed in to a different one (e.g. a personal Gmail). First-time empty
@@ -42,90 +29,91 @@
      longer wins on machines where the PWA hijacks .eml files too. */
   var HANDLER_STORAGE_KEY = 'custody_note_officer_email_handler_v2';
   var outlookDesktopDetected = null; // null = unknown, true/false after detection
-  /* Same query string as lib/outlookWebComposeUrl.js office365Alt — survives
-     outlook.cloud.microsoft redirects better than /mail/deeplink/compose for
-     some M365 tenants (inbox landing instead of compose). */
-  var OUTLOOK_WORK_ACTION_COMPOSE =
-    'https://outlook.office.com/owa/?path=/mail/action/compose';
-
   var activeTab = 'details';
   var activeRecordId = null;
   var records = [];
   var initialised = false;
 
-  var templates = {
-    bail_details: {
-      key: 'bail_details',
-      name: 'Bail details request',
-      subject: function (data) {
-        return 'Bail details request – ' + safe(data.clientName, '[Client Name]') + ' – ' + safe(data.matter, '[Matter]');
-      },
-      body: function (data) {
-        var note = (data.attendanceNote || '').trim();
-        return 'Dear Officer ' + safe(data.officerSurname, '[Officer Surname]') + ',\n\n' +
-          'I am writing in relation to ' + safe(data.clientName, '[Client Name]') + ', whom I attended on ' +
-          formatDateForEmail(data.attendanceDate) + ' at ' + safe(data.attendanceTime, '[Time]') +
-          ' in respect of ' + safe(data.matter, '[Matter]') + '.\n\n' +
-          (note ? note + '\n\n' : '') +
-          'Please could you confirm the bail return date, time, and any bail conditions imposed.\n\n' +
-          feeEarnerClosingSignature();
-      },
-    },
+  /** Legacy keys from older builds → current template ids */
+  var LEGACY_TEMPLATE_KEYS = {
+    bail_details: 'request_bail_details',
+    attendance_confirmation: 'request_interview_recording',
+    disclosure_update: 'followup_after_rui',
+    general: 'confirm_representation',
+  };
 
-    attendance_confirmation: {
-      key: 'attendance_confirmation',
-      name: 'Attendance confirmation',
-      subject: function (data) {
-        return 'Attendance confirmation – ' + safe(data.clientName, '[Client Name]') + ' – ' + safe(data.matter, '[Matter]');
-      },
-      body: function (data) {
-        var note = (data.attendanceNote || '').trim();
-        return 'Dear Officer ' + safe(data.officerSurname, '[Officer Surname]') + ',\n\n' +
-          'I write to confirm that I attended upon ' + safe(data.clientName, '[Client Name]') + ' on ' +
-          formatDateForEmail(data.attendanceDate) + ' at ' + safe(data.attendanceTime, '[Time]') +
-          ' in respect of ' + safe(data.matter, '[Matter]') + '.\n\n' +
-          (note ? note + '\n\n' : '') +
-          'Please let me know if you require anything further.\n\n' +
-          feeEarnerClosingSignature();
-      },
+  /**
+   * Placeholder-driven templates ({{fieldName}}). Body excludes closing;
+   * feeEarnerClosingSignature() is appended after merge.
+   */
+  var OFFICER_EMAIL_TEMPLATES = {
+    request_bail_details: {
+      key: 'request_bail_details',
+      name: 'Request Bail Details',
+      subjectTemplate: '{{clientName}} - Bail Details Request',
+      bodyTemplate:
+        'Dear {{officerRank}} {{officerSurname}},\n\n' +
+        'I am writing in relation to {{clientName}}, who was detained at {{policeStation}} on {{interviewDate}} under custody record number {{custodyNumber}}.\n\n' +
+        'The DSCC reference is {{dsccReference}}.\n\n' +
+        'We understand that {{clientName}} was released on police bail. Please could you confirm the bail return date, time, and any bail conditions imposed.',
     },
-
-    /* Bug fix per spec: salutation MUST be "Dear Officer [Surname]," with
-       the comma after the surname and a blank line below it. */
-    disclosure_update: {
-      key: 'disclosure_update',
-      name: 'Disclosure / update request',
-      subject: function (data) {
-        return 'Request for update – ' + safe(data.clientName, '[Client Name]') + ' – ' + safe(data.matter, '[Matter]');
-      },
-      body: function (data) {
-        var note = (data.attendanceNote || '').trim();
-        return 'Dear Officer ' + safe(data.officerSurname, '[Officer Surname]') + ',\n\n' +
-          'I am writing in relation to ' + safe(data.clientName, '[Client Name]') + ', whom I attended on ' +
-          formatDateForEmail(data.attendanceDate) + ' at ' + safe(data.attendanceTime, '[Time]') +
-          ' in respect of ' + safe(data.matter, '[Matter]') + '.\n\n' +
-          (note ? note + '\n\n' : '') +
-          'Please could you provide an update in relation to this matter, including any relevant bail, release, charging, NFA, or further investigation position.\n\n' +
-          feeEarnerClosingSignature();
-      },
+    request_interview_recording: {
+      key: 'request_interview_recording',
+      name: 'Request Interview Recording',
+      subjectTemplate: '{{clientName}} - Interview Recording Request',
+      bodyTemplate:
+        'Dear {{officerRank}} {{officerSurname}},\n\n' +
+        'I am writing in relation to {{clientName}}, who was interviewed at {{policeStation}} on {{interviewDate}}.\n\n' +
+        'Please could you provide a copy of the interview recording, or confirm the process for obtaining it.\n\n' +
+        'The custody record number is {{custodyNumber}} and the DSCC reference is {{dsccReference}}.',
     },
-
-    general: {
-      key: 'general',
-      name: 'General officer email',
-      subject: function (data) {
-        return safe(data.clientName, '[Client Name]') + ' – ' + safe(data.matter, '[Matter]');
-      },
-      body: function (data) {
-        var note = (data.attendanceNote || '').trim();
-        return 'Dear Officer ' + safe(data.officerSurname, '[Officer Surname]') + ',\n\n' +
-          'I am writing in relation to ' + safe(data.clientName, '[Client Name]') + ' in respect of ' +
-          safe(data.matter, '[Matter]') + '.\n\n' +
-          (note ? note + '\n\n' : '') +
-          feeEarnerClosingSignature();
-      },
+    followup_after_rui: {
+      key: 'followup_after_rui',
+      name: 'Follow-up After RUI',
+      subjectTemplate: '{{clientName}} - Case Update Request',
+      bodyTemplate:
+        'Dear {{officerRank}} {{officerSurname}},\n\n' +
+        'I am writing in relation to {{clientName}}, who was interviewed at {{policeStation}} on {{interviewDate}}.\n\n' +
+        'Please could you confirm the current position regarding the investigation and whether any further action is anticipated.\n\n' +
+        'The custody record number is {{custodyNumber}} and the DSCC reference is {{dsccReference}}.',
+    },
+    confirm_representation: {
+      key: 'confirm_representation',
+      name: 'Confirm Representation',
+      subjectTemplate: '{{clientName}} - Confirmation of Representation',
+      bodyTemplate:
+        'Dear {{officerRank}} {{officerSurname}},\n\n' +
+        'I write to confirm that I represent {{clientName}} in relation to this matter.\n\n' +
+        'Please ensure that all future correspondence is sent to me by email.\n\n' +
+        'The custody record number is {{custodyNumber}} and the DSCC reference is {{dsccReference}}.',
     },
   };
+
+  function composeMerge(text, map) {
+    var lib = window.CustodyEmailCompose;
+    var merged = lib && lib.mergeTemplatePlaceholders
+      ? lib.mergeTemplatePlaceholders(text, map)
+      : String(text || '');
+    return lib && lib.normalizeMergedEmailText
+      ? lib.normalizeMergedEmailText(merged)
+      : merged;
+  }
+
+  function buildPlaceholderMapFromForm(data) {
+    data = data || {};
+    var interviewDate = formatDateForEmail(data.attendanceDate);
+    return {
+      officerRank: data.officerRank || '',
+      officerSurname: data.officerSurname || '',
+      clientName: data.clientName || '',
+      policeStation: data.policeStationOrUnit || '',
+      interviewDate: interviewDate,
+      custodyNumber: data.custodyNumber || '',
+      dsccReference: data.dsccReference || '',
+      matter: data.matter || '',
+      attendanceNote: data.attendanceNote || '',
+    };
+  }
 
   function init() {
     if (initialised) return;
@@ -136,8 +124,12 @@
     bindTabs();
     bindFormInputs();
     bindActionButtons();
+    bindDiagnosticsCopyButtons();
+    bindFallbackAndPendingButtons();
+    bindEmailComposeDiagnosticsButtons();
     renderRecords();
     updatePreviewAndSummary();
+    updatePendingAndFallbackUi();
   }
 
   /* Called by app.js when the home card is clicked and the view is shown. */
@@ -185,9 +177,12 @@
   function bindFormInputs() {
     var ids = [
       'officerEmailInput',
+      'officerRankInput',
       'officerSurnameInput',
       'officerReferenceInput',
       'policeStationOrUnitInput',
+      'custodyNumberInput',
+      'dsccReferenceInput',
       'attendanceDateInput',
       'attendanceTimeInput',
       'clientNameInput',
@@ -327,7 +322,8 @@
   function settingsFallbackLoginHint() {
     try {
       var s = window._appSettingsCache || {};
-      return String(s.feeEarnerEmail || s.solicitorEmail || '').trim();
+      /* Same priority as main.js open-outlook-email (fee earner → solicitor → Your email). */
+      return String(s.feeEarnerEmail || s.solicitorEmail || s.email || '').trim();
     } catch (_) {
       return '';
     }
@@ -352,14 +348,24 @@
   function getCurrentLoginHint() {
     var el = $('officerLoginHintInput');
     if (el && typeof el.value === 'string' && el.value.trim()) return el.value.trim();
-    return getStoredLoginHint();
+    var stored = getStoredLoginHint();
+    if (stored) return stored;
+    /* No dedicated hint — use Your Details so OWA / login.microsoftonline.com gets login_hint. */
+    return settingsFallbackLoginHint();
   }
 
   function bindActionButtons() {
-    bindClick('officerOpenOutlookHeroBtn', openInOutlookWeb);
-    bindClick('officerOpenOutlookBtn', openInOutlookWeb);
-    bindClick('officerOpenOutlookPreviewBtn', openInOutlookWeb);
-    bindClick('officerOpenOutlookSideBtn', openInOutlookWeb);
+    bindClick('officerOpenOutlookMailtoHeroBtn', function () { openOfficerDraft('mailto'); });
+    bindClick('officerOpenOutlookHeroBtn', function () { openOfficerDraft('outlook-web'); });
+    bindClick('officerOpenOutlookMailtoBtn', function () { openOfficerDraft('mailto'); });
+    bindClick('officerOpenOutlookBtn', function () { openOfficerDraft('outlook-web'); });
+    bindClick('officerOpenOutlookMailtoPreviewBtn', function () { openOfficerDraft('mailto'); });
+    bindClick('officerOpenOutlookPreviewBtn', function () { openOfficerDraft('outlook-web'); });
+    bindClick('officerOpenOutlookMailtoSideBtn', function () { openOfficerDraft('mailto'); });
+    bindClick('officerOpenOutlookSideBtn', function () { openOfficerDraft('outlook-web'); });
+    bindClick('officerHeroCopyBodyBtn', function () { copyBody(); });
+    bindClick('officerCopyBodyPreviewBtn', function () { copyBody(); });
+    bindClick('officerSideCopyBodyBtn', function () { copyBody(); });
 
     bindClick('officerGenerateBtn', generateFromTemplate);
     bindClick('officerContinueComposeBtn', function () {
@@ -368,6 +374,8 @@
     });
 
     bindClick('officerClearSubjectBodyBtn', clearSubjectBody);
+    bindClick('officerCopyOfficerEmailBtn', copyOfficerEmail);
+    bindClick('officerCopySubjectBtn', copySubject);
     bindClick('officerCopyBodyBtn', copyBody);
     bindClick('officerCopyFullBtn', copyFullEmail);
     bindClick('officerCopyFullPreviewBtn', copyFullEmail);
@@ -430,33 +438,43 @@
   }
 
   function getFormData() {
+    var tk = valueOf('officerTemplateSelect') || 'request_bail_details';
+    if (LEGACY_TEMPLATE_KEYS[tk]) tk = LEGACY_TEMPLATE_KEYS[tk];
     return {
       officerEmail: valueOf('officerEmailInput'),
+      officerRank: valueOf('officerRankInput'),
       officerSurname: valueOf('officerSurnameInput'),
       officerReference: valueOf('officerReferenceInput'),
       policeStationOrUnit: valueOf('policeStationOrUnitInput'),
+      custodyNumber: valueOf('custodyNumberInput'),
+      dsccReference: valueOf('dsccReferenceInput'),
       attendanceDate: valueOf('attendanceDateInput'),
       attendanceTime: valueOf('attendanceTimeInput'),
       clientName: valueOf('clientNameInput'),
       matter: valueOf('matterInput'),
       attendanceNote: valueOf('attendanceNoteInput'),
-      templateKey: valueOf('officerTemplateSelect') || 'bail_details',
+      templateKey: tk,
       subject: valueOf('officerSubjectInput'),
       body: valueOf('officerBodyInput'),
     };
   }
 
   function setFormData(data) {
+    var tk = data.templateKey || 'request_bail_details';
+    if (LEGACY_TEMPLATE_KEYS[tk]) tk = LEGACY_TEMPLATE_KEYS[tk];
     setValue('officerEmailInput', data.officerEmail || '');
+    setValue('officerRankInput', data.officerRank || '');
     setValue('officerSurnameInput', data.officerSurname || '');
     setValue('officerReferenceInput', data.officerReference || '');
     setValue('policeStationOrUnitInput', data.policeStationOrUnit || '');
+    setValue('custodyNumberInput', data.custodyNumber || '');
+    setValue('dsccReferenceInput', data.dsccReference || '');
     setValue('attendanceDateInput', data.attendanceDate || '');
     setValue('attendanceTimeInput', data.attendanceTime || '');
     setValue('clientNameInput', data.clientName || '');
     setValue('matterInput', data.matter || '');
     setValue('attendanceNoteInput', data.attendanceNote || '');
-    setValue('officerTemplateSelect', data.templateKey || 'bail_details');
+    setValue('officerTemplateSelect', tk);
     setValue('officerSubjectInput', data.subject || '');
     setValue('officerBodyInput', data.body || '');
     updatePreviewAndSummary();
@@ -477,11 +495,6 @@
     if (el) el.value = value;
   }
 
-  function safe(value, fallback) {
-    var s = value == null ? '' : String(value);
-    return s.trim() ? s.trim() : fallback;
-  }
-
   /** Closing line for generated templates: fee earner from Settings when set, else neutral placeholder. */
   function feeEarnerClosingSignature() {
     try {
@@ -495,9 +508,9 @@
   function pad2(n) { return String(n).padStart(2, '0'); }
 
   function formatDateForEmail(dateValue) {
-    if (!dateValue) return '[Date]';
+    if (!dateValue) return '';
     var date = new Date(dateValue + 'T00:00:00');
-    if (isNaN(date.getTime())) return '[Date]';
+    if (isNaN(date.getTime())) return '';
     return date.toLocaleDateString('en-GB', {
       weekday: 'long',
       day: '2-digit',
@@ -507,28 +520,182 @@
   }
 
   function getSelectedTemplate() {
-    var key = valueOf('officerTemplateSelect') || 'bail_details';
-    return templates[key] || templates.bail_details;
+    var key = valueOf('officerTemplateSelect') || 'request_bail_details';
+    if (LEGACY_TEMPLATE_KEYS[key]) key = LEGACY_TEMPLATE_KEYS[key];
+    return OFFICER_EMAIL_TEMPLATES[key] || OFFICER_EMAIL_TEMPLATES.request_bail_details;
   }
 
   function generateFromTemplate() {
     var data = getFormData();
     var template = getSelectedTemplate();
-    setValue('officerSubjectInput', template.subject(data));
-    setValue('officerBodyInput', template.body(data));
+    var map = buildPlaceholderMapFromForm(data);
+    var subject = composeMerge(template.subjectTemplate, map);
+    var bodyCore = composeMerge(template.bodyTemplate, map);
+    var body = bodyCore ? bodyCore + '\n\n' + feeEarnerClosingSignature() : feeEarnerClosingSignature();
+    setValue('officerSubjectInput', subject);
+    setValue('officerBodyInput', body);
     showNotice('Email generated from selected template.');
     updatePreviewAndSummary();
   }
 
   function buildOutlookWebUrl(data) {
-    var params = new URLSearchParams({
+    var bodyVal = (typeof data.body === 'string' && data.body !== '')
+      ? data.body
+      : rawValueOf('officerBodyInput');
+    var fn = window.buildOutlookWebComposeLink || window.buildOutlookWebLink;
+    if (typeof fn === 'function') {
+      return fn({
+        to: data.officerEmail || '',
+        cc: '',
+        subject: data.subject || '',
+        body: bodyVal,
+      });
+    }
+    return 'https://outlook.office.com/mail/deeplink/compose?';
+  }
+
+  function buildCurrentDraft(modeHint) {
+    var data = getFormData();
+    var bodyText = rawValueOf('officerBodyInput');
+    return {
       to: data.officerEmail || '',
+      cc: '',
       subject: data.subject || '',
-      body: (typeof data.body === 'string' && data.body !== '')
-        ? data.body
-        : rawValueOf('officerBodyInput'),
-    });
-    return OUTLOOK_WORK_ACTION_COMPOSE + '&' + params.toString();
+      body: bodyText,
+      templateId: data.templateKey || 'request_bail_details',
+      createdAt: new Date().toISOString(),
+      mode: modeHint || '',
+    };
+  }
+
+  function updatePendingAndFallbackUi() {
+    var pending = typeof window.getPendingEmailDraft === 'function' ? window.getPendingEmailDraft() : null;
+    var attempted = false;
+    var owAttempt = false;
+    try {
+      attempted = sessionStorage.getItem(SESSION_OPEN_FLAG) === '1';
+      owAttempt = sessionStorage.getItem(OW_ATTEMPT_KEY) === '1';
+    } catch (_) { /* sessionStorage unavailable */ }
+
+    var signPanel = $('officerEmailSignInPanel');
+    var fb = $('officerEmailFallbackPanel');
+    if (signPanel) {
+      if (owAttempt) signPanel.classList.remove('hidden');
+      else signPanel.classList.add('hidden');
+    }
+    if (fb) {
+      if (attempted || pending) fb.classList.remove('hidden');
+      else fb.classList.add('hidden');
+    }
+
+    var dp = $('officerDiagPending');
+    var dpt = $('officerDiagPendingTime');
+    var dtpl = $('officerDiagTemplate');
+    if (dp) {
+      dp.textContent = pending
+        ? JSON.stringify({
+          to: pending.to,
+          cc: pending.cc,
+          templateId: pending.templateId,
+          mode: pending.mode,
+          subjectPreview: pending.subject ? String(pending.subject).slice(0, 80) : '',
+        }, null, 2)
+        : '(none)';
+    }
+    if (dpt) dpt.textContent = (pending && pending.createdAt) ? pending.createdAt : '—';
+    if (dtpl && isDevDiagnosticsVisible()) {
+      try { dtpl.textContent = getSelectedTemplate().name; } catch (e) { dtpl.textContent = '—'; }
+    }
+  }
+
+  function buildMailtoPreviewUrl(data) {
+    var bodyVal = (typeof data.body === 'string' && data.body !== '')
+      ? data.body
+      : rawValueOf('officerBodyInput');
+    if (typeof window.buildMailtoLink === 'function') {
+      return window.buildMailtoLink({
+        to: data.officerEmail || '',
+        cc: '',
+        subject: data.subject || '',
+        body: bodyVal,
+      });
+    }
+    return '';
+  }
+
+  function isDevDiagnosticsVisible() {
+    try {
+      return !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isDevBuild);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function syncEmailDevDiagnostics() {
+    var wrap = $('officerEmailDevDiagnostics');
+    if (!wrap) return;
+    if (isDevDiagnosticsVisible()) wrap.classList.remove('hidden');
+    else wrap.classList.add('hidden');
+    if (!isDevDiagnosticsVisible()) return;
+    var data = getFormData();
+    var bodyVal = rawValueOf('officerBodyInput');
+    var mailto = typeof window.buildMailtoLink === 'function'
+      ? window.buildMailtoLink({
+        to: data.officerEmail || '',
+        cc: '',
+        subject: data.subject || '',
+        body: bodyVal,
+      })
+      : '';
+    var owa = buildOutlookWebUrl(Object.assign({}, data, { body: bodyVal }));
+    setText('officerDiagTo', data.officerEmail || '(empty)');
+    setText('officerDiagSubject', data.subject || '(empty)');
+    var mEl = $('officerDiagMailto');
+    var oEl = $('officerDiagOwa');
+    if (mEl) mEl.textContent = mailto || '(buildMailtoLink unavailable)';
+    if (oEl) oEl.textContent = owa || '(buildOutlookWebLink unavailable)';
+    var sel = getSelectedTemplate();
+    var tid = $('officerDiagTemplateId');
+    var tname = $('officerDiagTemplate');
+    if (tid) tid.textContent = sel.key || '—';
+    if (tname) tname.textContent = sel.name || '—';
+    var bl = $('officerDiagBodyLen');
+    if (bl) bl.textContent = String((bodyVal || '').length);
+    var clip = $('officerDiagClipboardApi');
+    if (clip) {
+      clip.textContent = String(
+        !!(typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function')
+      );
+    }
+    var sec = $('officerDiagSecureCtx');
+    if (sec) sec.textContent = String(typeof window !== 'undefined' && window.isSecureContext === true);
+  }
+
+  function bindDiagnosticsCopyButtons() {
+    function wire(id, getText, notice) {
+      var el = $(id);
+      if (!el || el.dataset.bound === '1') return;
+      el.dataset.bound = '1';
+      el.addEventListener('click', function () {
+        var data = getFormData();
+        var bodyVal = rawValueOf('officerBodyInput');
+        var text = typeof getText === 'function' ? getText(data, bodyVal) : '';
+        copyWithNotice(text, notice);
+      });
+    }
+    wire('officerDiagCopyBodyBtn', function (_d, bodyVal) { return bodyVal; }, 'Email body copied. You can now paste it into Outlook.');
+    wire('officerDiagCopyMailtoBtn', function (_d, bodyVal) {
+      return typeof window.buildMailtoLink === 'function'
+        ? window.buildMailtoLink({
+          to: valueOf('officerEmailInput'),
+          cc: '',
+          subject: valueOf('officerSubjectInput'),
+          body: bodyVal,
+        })
+        : '';
+    }, 'Mailto link copied.');
+    wire('officerDiagCopyOfficerEmailBtn', function (data) { return data.officerEmail || ''; }, 'Officer email copied.');
+    wire('officerDiagCopySubjectBtn', function (data) { return data.subject || ''; }, 'Subject copied.');
   }
 
   /** True for allowed Officer Emails launch URLs (must match main process). */
@@ -549,63 +716,138 @@
     }
   }
 
-  function openInOutlookWeb() {
-    var validationError = validate();
-    if (validationError) { showError(validationError); return; }
+  /**
+   * @param {'mailto'|'outlook-web'} mode
+   */
+  function openOfficerDraft(mode) {
+    var modeStr = mode === 'mailto' ? 'mailto' : 'outlook-web';
+    var draft = buildCurrentDraft(modeStr);
 
-    var data = getFormData();
-    var handler = getCurrentHandler();
-    var loginHint = getCurrentLoginHint();
-    var payload = {
-      to: data.officerEmail,
-      subject: data.subject,
-      body: (typeof data.body === 'string' && data.body !== '')
-        ? data.body
-        : rawValueOf('officerBodyInput'),
-      /* H62 — passed straight through to main.js's open-outlook-email IPC,
-         which treats payload.loginHint as the highest-priority source for
-         the OWA login_hint param (only meaningful for the web route). */
-      loginHint: loginHint,
-    };
-    if (handler === 'desktop') {
-      /* H62 — main.js routes 'desktop' through openComposeEml.js (.eml draft
-         + shell.openPath). Only useful when .eml is associated with Outlook
-         desktop (NOT the Outlook PWA, which is the common Windows pitfall). */
-      payload.forceAccountType = 'desktop';
-    } else if (handler === 'edge-inprivate') {
-      /* H62 — main.js will spawn msedge.exe --inprivate --new-window <url>.
-         The InPrivate window has no signed-in browser accounts and no PWA
-         interception, so the OWA URL with login_hint=… reaches OWA intact. */
-      payload.openMethod = 'edge-inprivate';
-    } else if (handler === 'web') {
-      /* Explicit shell route — prevents main IPC from defaulting Windows to
-         Edge InPrivate when the user chose "Default browser". */
-      payload.openMethod = 'shell';
-    }
-    /* handler === 'web' was explicit above; other handlers fall through. */
-
-    if (typeof window.invokeOutlookWebCompose !== 'function') {
-      showError('Outlook Web bridge is unavailable. Please restart Custody Note and try again.');
+    if (typeof window.savePendingEmailDraft !== 'function' || typeof window.openEmailDraft !== 'function') {
+      showNotice('Outlook could not be opened automatically. Your email text is still available to copy and paste manually.');
       return;
     }
 
-    window.invokeOutlookWebCompose(payload).then(function (result) {
-      /* invokeOutlookWebCompose dedupes overlapping clicks via an isSending lock; treat as a no-op. */
-      if (result && result.skipped) return;
-      if (result && result.ok === false) {
-        showError('Outlook Web could not be opened: ' +
-          (result.reason || 'unknown reason') + '. The draft is still in the form.');
+    try {
+      window.savePendingEmailDraft(draft);
+      var ok = window.openEmailDraft({
+        to: draft.to,
+        cc: draft.cc,
+        subject: draft.subject,
+        body: draft.body,
+        mode: modeStr,
+      });
+      if (!ok) {
+        showNotice('Outlook could not be opened automatically. Your email text is still available to copy and paste manually.');
+        try { sessionStorage.setItem(SESSION_OPEN_FLAG, '1'); } catch (_) { /* ignore */ }
+        updatePendingAndFallbackUi();
         return;
       }
+
+      try {
+        sessionStorage.setItem(SESSION_OPEN_FLAG, '1');
+        if (modeStr === 'outlook-web') sessionStorage.setItem(OW_ATTEMPT_KEY, '1');
+      } catch (_) { /* sessionStorage unavailable */ }
+
+      updatePendingAndFallbackUi();
+
       var now = new Date().toISOString();
-      var record = buildRecord('Opened in Outlook Web');
+      var statusLabel = modeStr === 'mailto' ? 'Opened in Outlook' : 'Opened in Outlook Web';
+      var record = buildRecord(statusLabel);
       record.openedAt = now;
       record.updatedAt = now;
       upsertRecord(record);
       activeRecordId = record.id;
-      showNotice('Outlook Web will open in your browser. If prompted, sign in to the email account you want to send from. Review the email in Outlook before sending.');
-    }).catch(function (error) {
-      showError('Unable to open Outlook Web: ' + (error && error.message ? error.message : String(error)));
+
+      if (modeStr === 'mailto') {
+        showNotice('Your default mail app should open with this draft. Review the email before sending.');
+      } else {
+        showNotice(
+          'If Outlook asks you to sign in, complete sign-in, then return here and click “Continue opening draft”. ' +
+          'Your draft stays saved in Custody Note until you clear it.'
+        );
+      }
+    } catch (err) {
+      console.error('[officerEmails] openOfficerDraft', err);
+      showNotice('Outlook could not be opened automatically. Your email text is still available to copy and paste manually.');
+      try { sessionStorage.setItem(SESSION_OPEN_FLAG, '1'); } catch (_) { /* ignore */ }
+      updatePendingAndFallbackUi();
+    }
+  }
+
+  function bindFallbackAndPendingButtons() {
+    function bindOnce(id, fn) {
+      var el = $(id);
+      if (!el || el.dataset.bound === '1') return;
+      el.dataset.bound = '1';
+      el.addEventListener('click', fn);
+    }
+    bindOnce('officerContinueDraftBtn', function () {
+      if (typeof window.resumePendingEmailDraft !== 'function') return;
+      window.resumePendingEmailDraft('outlook-web');
+      showNotice('Opening Outlook on the web again with your saved draft…');
+    });
+    bindOnce('officerFbContinueBtn', function () {
+      if (typeof window.resumePendingEmailDraft !== 'function') return;
+      window.resumePendingEmailDraft('outlook-web');
+      showNotice('Opening Outlook on the web again with your saved draft…');
+    });
+    bindOnce('officerFbOpenMailtoBtn', function () {
+      if (typeof window.resumePendingEmailDraft !== 'function') return;
+      window.resumePendingEmailDraft('mailto');
+    });
+    bindOnce('officerFbOpenWebBtn', function () {
+      if (typeof window.resumePendingEmailDraft !== 'function') return;
+      window.resumePendingEmailDraft('outlook-web');
+      showNotice('Opening Outlook on the web again…');
+    });
+    bindOnce('officerFbCopyOfficerEmailBtn', copyOfficerEmail);
+    bindOnce('officerFbCopySubjectBtn', copySubject);
+    bindOnce('officerFbCopyBodyBtn', copyBody);
+    bindOnce('officerFbCopyFullBtn', copyFullEmail);
+    bindOnce('officerClearPendingDraftBtn', function () {
+      if (typeof window.clearPendingEmailDraft === 'function') window.clearPendingEmailDraft();
+      try {
+        sessionStorage.removeItem(SESSION_OPEN_FLAG);
+        sessionStorage.removeItem(OW_ATTEMPT_KEY);
+      } catch (_) { /* ignore */ }
+      updatePendingAndFallbackUi();
+      showNotice('Pending email draft cleared.');
+    });
+    bindOnce('officerDraftOpenedSuccessBtn', function () {
+      if (typeof window.clearPendingEmailDraft === 'function') window.clearPendingEmailDraft();
+      try {
+        sessionStorage.removeItem(SESSION_OPEN_FLAG);
+        sessionStorage.removeItem(OW_ATTEMPT_KEY);
+      } catch (_) { /* ignore */ }
+      updatePendingAndFallbackUi();
+      showNotice('Saved draft cleared. Custody Note did not send any email.');
+    });
+  }
+
+  function bindEmailComposeDiagnosticsButtons() {
+    function bindOnce(id, fn) {
+      var el = $(id);
+      if (!el || el.dataset.boundDiag === '1') return;
+      el.dataset.boundDiag = '1';
+      el.addEventListener('click', fn);
+    }
+    bindOnce('officerDiagTestSavePending', function () {
+      var d = buildCurrentDraft('outlook-web');
+      if (typeof window.savePendingEmailDraft === 'function') window.savePendingEmailDraft(d);
+      updatePendingAndFallbackUi();
+      showNotice('Diagnostics: pending draft saved from current form.');
+    });
+    bindOnce('officerDiagTestResumeWeb', function () {
+      if (typeof window.resumePendingEmailDraft === 'function') window.resumePendingEmailDraft('outlook-web');
+    });
+    bindOnce('officerDiagTestResumeMailto', function () {
+      if (typeof window.resumePendingEmailDraft === 'function') window.resumePendingEmailDraft('mailto');
+    });
+    bindOnce('officerDiagTestClearPending', function () {
+      if (typeof window.clearPendingEmailDraft === 'function') window.clearPendingEmailDraft();
+      updatePendingAndFallbackUi();
+      showNotice('Diagnostics: pending cleared.');
     });
   }
 
@@ -619,17 +861,50 @@
   function getMissingRequiredFields(dataArg) {
     var data = dataArg || getFormData();
     var missing = [];
-    if (!data.officerEmail) missing.push('Officer email');
-    if (data.officerEmail && !isValidEmail(data.officerEmail)) missing.push('Valid officer email');
-    if (!data.officerSurname) missing.push('Officer surname');
-    if (!data.attendanceDate) missing.push('Date of attendance');
-    if (!data.attendanceTime) missing.push('Time of attendance');
-    if (!data.clientName) missing.push('Client name');
-    if (!data.matter) missing.push('Matter');
-    if (!data.subject) missing.push('Subject');
-    var bodyValue = (data.body != null ? String(data.body) : rawValueOf('officerBodyInput'));
+    var bodyValue = data.body != null ? String(data.body) : '';
     if (!bodyValue.trim()) missing.push('Email body');
+    if (!data.subject.trim()) missing.push('Subject');
+    if (data.officerEmail && !isValidEmail(data.officerEmail)) missing.push('Valid officer email');
     return missing;
+  }
+
+  function updateComposeWarnings() {
+    var el = $('officerComposeWarnings');
+    if (!el) return;
+    var data = getFormData();
+    var parts = [];
+    if (!data.officerEmail) {
+      parts.push('Officer email is blank. You can still copy the subject and body.');
+    }
+    if (!data.subject.trim()) {
+      parts.push('Subject is blank. You can still copy the body.');
+    }
+    if (!parts.length) {
+      el.classList.add('hidden');
+      el.innerHTML = '';
+      return;
+    }
+    el.classList.remove('hidden');
+    el.innerHTML = parts.map(function (p) {
+      return '<p style="margin:4px 0;">' + escapeHtml(p) + '</p>';
+    }).join('');
+  }
+
+  function updateCopyButtonStates() {
+    var bodyEmpty = !rawValueOf('officerBodyInput').trim();
+    var ids = [
+      'officerCopyBodyBtn',
+      'officerCopyFullBtn',
+      'officerFbCopyBodyBtn',
+      'officerFbCopyFullBtn',
+      'officerHeroCopyBodyBtn',
+      'officerCopyBodyPreviewBtn',
+      'officerSideCopyBodyBtn',
+    ];
+    for (var i = 0; i < ids.length; i++) {
+      var b = $(ids[i]);
+      if (b) b.disabled = bodyEmpty;
+    }
   }
 
   function isValidEmail(email) {
@@ -681,9 +956,12 @@
       cancelledAt: existing ? existing.cancelledAt : undefined,
       status: status,
       officerEmail: data.officerEmail,
+      officerRank: data.officerRank,
       officerSurname: data.officerSurname,
       officerReference: data.officerReference,
       policeStationOrUnit: data.policeStationOrUnit,
+      custodyNumber: data.custodyNumber,
+      dsccReference: data.dsccReference,
       attendanceDate: data.attendanceDate,
       attendanceTime: data.attendanceTime,
       clientName: data.clientName,
@@ -794,8 +1072,12 @@
       card.querySelector('[data-action="duplicate"]').addEventListener('click', function () { duplicateRecord(record, false); });
       card.querySelector('[data-action="template"]').addEventListener('click', function () { duplicateRecord(record, true); });
       card.querySelector('[data-action="reopen"]').addEventListener('click', function () { reopenRecord(record); });
-      card.querySelector('[data-action="copy-body"]').addEventListener('click', function () { copyText(record.body || '', 'Record body copied.'); });
-      card.querySelector('[data-action="copy-full"]').addEventListener('click', function () { copyText(buildFullEmailText(record), 'Full record email copied.'); });
+      card.querySelector('[data-action="copy-body"]').addEventListener('click', function () {
+        copyWithNotice(record.body || '', 'Record body copied.');
+      });
+      card.querySelector('[data-action="copy-full"]').addEventListener('click', function () {
+        copyWithNotice(buildFullEmailText(record), 'Full record email copied.');
+      });
       card.querySelector('[data-action="mark-sent"]').addEventListener('click', function () { updateRecordStatus(record, 'Marked Sent'); });
       card.querySelector('[data-action="cancel"]').addEventListener('click', function () { updateRecordStatus(record, 'Cancelled'); });
       card.querySelector('[data-action="delete"]').addEventListener('click', function () { deleteRecord(record.id); });
@@ -815,15 +1097,18 @@
     if (blankDetails) {
       setFormData({
         officerEmail: '',
+        officerRank: '',
         officerSurname: '',
         officerReference: '',
         policeStationOrUnit: '',
+        custodyNumber: '',
+        dsccReference: '',
         attendanceDate: '',
         attendanceTime: '',
         clientName: '',
         matter: '',
         attendanceNote: record.attendanceNote || '',
-        templateKey: record.templateKey || 'bail_details',
+        templateKey: record.templateKey || 'request_bail_details',
         subject: record.subject || '',
         body: record.body || '',
       });
@@ -836,42 +1121,45 @@
   }
 
   function reopenRecord(record) {
-    if (typeof window.invokeOutlookWebCompose !== 'function') {
-      showError('Outlook Web bridge is unavailable. Please restart Custody Note and try again.');
+    if (typeof window.openEmailDraft !== 'function') {
+      showError('Email draft helper is unavailable. Please restart Custody Note and try again.');
       return;
     }
-    var payload = {
-      to: record.officerEmail || '',
+    var to = record.officerEmail || '';
+    if (!to || to.indexOf('@') < 0) {
+      showError('Saved record has no valid officer email.');
+      return;
+    }
+    var pendingDraft = {
+      to: to,
+      cc: '',
       subject: record.subject || '',
       body: record.body || '',
-      loginHint: getCurrentLoginHint(),
+      templateId: record.templateKey || '',
+      createdAt: new Date().toISOString(),
+      mode: 'outlook-web',
     };
-    var rh = getCurrentHandler();
-    if (rh === 'desktop') {
-      payload.forceAccountType = 'desktop';
-    } else if (rh === 'edge-inprivate') {
-      payload.openMethod = 'edge-inprivate';
+    if (typeof window.savePendingEmailDraft === 'function') {
+      window.savePendingEmailDraft(pendingDraft);
     }
-    window.invokeOutlookWebCompose(payload).then(function (result) {
-      if (result && result.skipped) return;
-      if (result && result.ok === false) {
-        showError('Outlook Web could not be opened: ' +
-          (result.reason || 'unknown reason') + '.');
-        return;
-      }
-      var now = new Date().toISOString();
-      var updated = Object.assign({}, record, {
-        status: 'Opened in Outlook Web',
-        openedAt: now,
-        updatedAt: now,
-      });
-      upsertRecord(updated);
-      activeRecordId = updated.id;
-      renderRecords();
-      showNotice('Outlook Web opened for saved record.');
-    }).catch(function (error) {
-      showError('Unable to open Outlook Web: ' + (error && error.message ? error.message : String(error)));
+    var ok = window.openEmailDraft({
+      to: to,
+      cc: '',
+      subject: record.subject || '',
+      body: record.body || '',
+      mode: 'outlook-web',
     });
+    if (!ok) return;
+    var now = new Date().toISOString();
+    var updated = Object.assign({}, record, {
+      status: 'Opened in Outlook Web',
+      openedAt: now,
+      updatedAt: now,
+    });
+    upsertRecord(updated);
+    activeRecordId = updated.id;
+    renderRecords();
+    showNotice('Outlook on the web opened for saved record.');
   }
 
   function updateRecordStatus(record, status) {
@@ -894,9 +1182,12 @@
     activeRecordId = null;
     var ids = [
       'officerEmailInput',
+      'officerRankInput',
       'officerSurnameInput',
       'officerReferenceInput',
       'policeStationOrUnitInput',
+      'custodyNumberInput',
+      'dsccReferenceInput',
       'attendanceDateInput',
       'attendanceTimeInput',
       'clientNameInput',
@@ -906,7 +1197,12 @@
       'officerBodyInput',
     ];
     for (var i = 0; i < ids.length; i++) setValue(ids[i], '');
-    setValue('officerTemplateSelect', 'bail_details');
+    setValue('officerTemplateSelect', 'request_bail_details');
+    if (typeof window.clearPendingEmailDraft === 'function') window.clearPendingEmailDraft();
+    try {
+      sessionStorage.removeItem(SESSION_OPEN_FLAG);
+      sessionStorage.removeItem(OW_ATTEMPT_KEY);
+    } catch (_) { /* ignore */ }
     showNotice('Form cleared.');
     updatePreviewAndSummary();
   }
@@ -918,48 +1214,58 @@
     updatePreviewAndSummary();
   }
 
-  function copyBody() {
-    return copyText(rawValueOf('officerBodyInput'), 'Email body copied.');
+  async function copyWithNotice(text, message) {
+    var fn = typeof window.custodyCopyEmailText === 'function' ? window.custodyCopyEmailText : null;
+    if (!fn) {
+      showError('Clipboard helper not loaded. Reload the page.');
+      return false;
+    }
+    try {
+      var ok = await fn(text, typeof window !== 'undefined' ? window : globalThis);
+      if (ok) showNotice(message);
+      else showError('Unable to copy to clipboard.');
+      return ok;
+    } catch (e) {
+      console.error('[officerEmails] copyWithNotice', e);
+      showError('Unable to copy to clipboard.');
+      return false;
+    }
   }
 
-  function copyFullEmail() {
+  async function copyOfficerEmail() {
+    await copyWithNotice(valueOf('officerEmailInput'), 'Officer email copied.');
+  }
+
+  async function copySubject() {
+    await copyWithNotice(valueOf('officerSubjectInput'), 'Subject copied.');
+  }
+
+  async function copyBody() {
+    var raw = rawValueOf('officerBodyInput');
+    if (!String(raw).trim()) {
+      showNotice('Email body is empty — generate from a template or enter text first.');
+      return;
+    }
+    await copyWithNotice(raw, 'Email body copied. You can now paste it into Outlook.');
+  }
+
+  async function copyFullEmail() {
     var data = getFormData();
-    return copyText(buildFullEmailText(data), 'Full email copied.');
+    await copyWithNotice(buildFullEmailText(data), 'Full email copied.');
   }
 
   function buildFullEmailText(data) {
     var bodyText = (data.body && String(data.body)) || rawValueOf('officerBodyInput');
-    return 'To: ' + (data.officerEmail || '') + '\n\n' +
-      'Subject: ' + (data.subject || '') + '\n\n' +
-      'Body:\n' + bodyText;
-  }
-
-  function copyText(text, message) {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      return navigator.clipboard.writeText(String(text == null ? '' : text))
-        .then(function () { showNotice(message); })
-        .catch(function () { fallbackCopy(text, message); });
+    var lib = window.CustodyEmailCompose;
+    if (lib && typeof lib.buildFullEmailClipboardText === 'function') {
+      return lib.buildFullEmailClipboardText({
+        to: data.officerEmail || '',
+        cc: '',
+        subject: data.subject || '',
+        body: bodyText,
+      });
     }
-    fallbackCopy(text, message);
-    return Promise.resolve();
-  }
-
-  function fallbackCopy(text, message) {
-    try {
-      var ta = document.createElement('textarea');
-      ta.value = String(text == null ? '' : text);
-      ta.setAttribute('readonly', '');
-      ta.style.position = 'absolute';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      var ok = document.execCommand && document.execCommand('copy');
-      document.body.removeChild(ta);
-      if (ok) showNotice(message);
-      else showError('Unable to copy to clipboard.');
-    } catch (e) {
-      showError('Unable to copy to clipboard.');
-    }
+    return 'To: ' + (data.officerEmail || '') + '\nSubject: ' + (data.subject || '') + '\n\n' + bodyText;
   }
 
   /* Date arithmetic in UTC so YYYY-MM-DD round-trips do not flip across
@@ -990,18 +1296,22 @@
   function updatePreviewAndSummary() {
     var data = getFormData();
     var template = getSelectedTemplate();
-    setText('previewTo', data.officerEmail || 'Not entered');
-    setText('previewOfficer', data.officerSurname || 'Not entered');
-    setText('previewClient', data.clientName || 'Not entered');
-    setText('previewMatter', data.matter || 'Not entered');
-    setText('previewSubject', data.subject || 'Not generated');
-    setText('previewBody', rawValueOf('officerBodyInput') || 'Email body will appear here.');
+    setText('previewTo', data.officerEmail || '—');
+    setText('previewOfficer', data.officerSurname || '—');
+    setText('previewClient', data.clientName || '—');
+    setText('previewMatter', data.matter || '—');
+    setText('previewSubject', data.subject || '—');
+    setText('previewBody', rawValueOf('officerBodyInput') || '—');
     setText('summaryOfficer', data.officerSurname || 'Not entered');
     setText('summaryEmail', data.officerEmail || 'Not entered');
     setText('summaryClient', data.clientName || 'Not entered');
     setText('summaryMatter', data.matter || 'Not entered');
     setText('summaryTemplate', template.name);
     setText('summaryRecords', String(records.length));
+    updateComposeWarnings();
+    updateCopyButtonStates();
+    syncEmailDevDiagnostics();
+    updatePendingAndFallbackUi();
   }
 
   function setText(id, text) {
@@ -1041,27 +1351,31 @@
   function runTests() {
     var sample = {
       officerEmail: 'officer.fisher@police.uk',
+      officerRank: 'DC',
       officerSurname: 'Fisher',
       officerReference: '1234',
       policeStationOrUnit: 'Kent Police',
+      custodyNumber: 'CN-001',
+      dsccReference: 'DSCC/42',
       attendanceDate: '2026-04-30',
       attendanceTime: '14:30',
       clientName: 'John Smith',
       matter: 'Assault allegation',
-      attendanceNote: 'The client was interviewed under caution.',
-      templateKey: 'bail_details',
+      attendanceNote: '',
+      templateKey: 'request_bail_details',
       subject: '',
       body: '',
     };
-    var template = templates.bail_details;
-    var subject = template.subject(sample);
-    var body = template.body(sample);
+    var tpl = OFFICER_EMAIL_TEMPLATES.request_bail_details;
+    var subject = composeMerge(tpl.subjectTemplate, buildPlaceholderMapFromForm(sample));
+    var bodyCore = composeMerge(tpl.bodyTemplate, buildPlaceholderMapFromForm(sample));
+    var body = bodyCore + '\n\n' + feeEarnerClosingSignature();
     var url = buildOutlookWebUrl({
       officerEmail: sample.officerEmail,
       subject: subject,
       body: body,
     });
-    var copyTextValue = 'To: ' + sample.officerEmail + '\n\nSubject: ' + subject + '\n\nBody:\n' + body;
+    var copyTextValue = 'To: ' + sample.officerEmail + '\nSubject: ' + subject + '\n\n' + body;
     var beforeRecords = records.slice();
 
     var storageRoundTrip = false;
@@ -1072,16 +1386,19 @@
         updatedAt: new Date().toISOString(),
         status: 'Draft',
         officerEmail: sample.officerEmail,
+        officerRank: sample.officerRank,
         officerSurname: sample.officerSurname,
         officerReference: sample.officerReference,
         policeStationOrUnit: sample.policeStationOrUnit,
+        custodyNumber: sample.custodyNumber,
+        dsccReference: sample.dsccReference,
         attendanceDate: sample.attendanceDate,
         attendanceTime: sample.attendanceTime,
         clientName: sample.clientName,
         matter: sample.matter,
         attendanceNote: sample.attendanceNote,
-        templateKey: 'bail_details',
-        templateName: 'Bail details request',
+        templateKey: 'request_bail_details',
+        templateName: 'Request Bail Details',
         subject: subject,
         body: body,
       };
@@ -1124,19 +1441,20 @@
         detail: 'Client name found in body.',
       },
       {
-        name: 'Template inserts matter',
-        passed: body.indexOf('Assault allegation') >= 0,
-        detail: 'Matter found in body.',
+        name: 'Template inserts police station',
+        passed: body.indexOf('Kent Police') >= 0,
+        detail: 'Police station placeholder merged.',
       },
       {
-        name: 'Template inserts attendance note',
-        passed: body.indexOf('The client was interviewed under caution.') >= 0,
-        detail: 'Attendance note found in body.',
+        name: 'Template inserts custody number',
+        passed: body.indexOf('CN-001') >= 0,
+        detail: 'Custody number merged.',
       },
       {
-        name: 'Copy full email contains To, Subject and Body',
-        passed: copyTextValue.indexOf('To:') >= 0 && copyTextValue.indexOf('Subject:') >= 0 && copyTextValue.indexOf('Body:') >= 0,
-        detail: 'Copy format checked.',
+        name: 'Copy full email uses To / Subject / blank line / body (no Body: label)',
+        passed: copyTextValue.indexOf('To:') >= 0 && copyTextValue.indexOf('Subject:') >= 0 &&
+          copyTextValue.indexOf('\n\n') > 0 && copyTextValue.indexOf('Body:') < 0,
+        detail: 'Clipboard format checked.',
       },
       {
         name: 'localStorage can save and load records',
@@ -1154,38 +1472,25 @@
         detail: '10:00 + 15 minutes = ' + timeResult,
       },
       {
-        name: 'Required fields validation works',
+        name: 'Required fields validation works for save/mark (subject + body)',
         passed: getMissingRequiredFields({
-          officerEmail: '',
-          officerSurname: '',
-          attendanceDate: '',
-          attendanceTime: '',
-          clientName: '',
-          matter: '',
           subject: '',
           body: '',
-        }).length > 0,
-        detail: 'Missing fields detected.',
+          officerEmail: '',
+        }).length >= 2,
+        detail: 'Missing subject and body detected.',
       },
       {
-        name: 'Single Outlook path bridge is wired',
-        passed: typeof window.invokeOutlookWebCompose === 'function'
-          && !!(window.emailAPI && typeof window.emailAPI.open === 'function'),
-        detail: 'Renderer reaches main via window.invokeOutlookWebCompose -> window.emailAPI.open -> open-outlook-email IPC.',
+        name: 'Email draft helper (mailto + OWA links) is wired',
+        passed: typeof window.openEmailDraft === 'function'
+          && typeof window.buildMailtoLink === 'function'
+          && typeof window.buildOutlookWebLink === 'function',
+        detail: 'renderer/email-draft-open.js defines openEmailDraft, buildMailtoLink, buildOutlookWebLink.',
       },
       {
-        name: 'Disclosure template salutation has the comma after the surname',
-        passed: /Dear Officer [^,\n]+,\n\n/.test(
-          templates.disclosure_update.body({
-            officerSurname: 'Fisher',
-            clientName: 'John Smith',
-            attendanceDate: '2026-04-30',
-            attendanceTime: '14:30',
-            matter: 'Assault allegation',
-            attendanceNote: '',
-          })
-        ),
-        detail: 'Salutation must read "Dear Officer [Surname],\\n\\n".',
+        name: 'Salutation uses rank and surname with comma',
+        passed: /^Dear DC Fisher,\n\n/.test(bodyCore),
+        detail: 'Dear {{officerRank}} {{officerSurname}},',
       },
     ];
 
@@ -1234,12 +1539,14 @@
       outlookWebUrlPreview: buildOutlookWebUrl(data),
       lastSavedRecordStatus: records[0] ? records[0].status : 'No saved records',
       activeRecordId: activeRecordId,
+      openEmailDraftAvailable: typeof window.openEmailDraft === 'function',
       invokeOutlookWebComposeAvailable: typeof window.invokeOutlookWebCompose === 'function',
       emailApiOpenAvailable: !!(window.emailAPI && typeof window.emailAPI.open === 'function'),
       outlookLoginHint: getCurrentLoginHint() || '(none — Edge / PWA may pick the wrong account)',
       outlookHandler: getCurrentHandler(),
       outlookDesktopDetected: outlookDesktopDetected,
-      outlookComposeUrlStyle: 'owa-path-action-compose',
+      outlookComposeUrlStyle: 'mail/deeplink/compose',
+      mailtoUrlPreview: buildMailtoPreviewUrl(data),
       signInReminder: 'Outlook Web may ask you to sign in to the email account you want to send from.',
     };
     var debug = $('officerDebugOutput');
@@ -1263,12 +1570,14 @@
     /* Internal helpers exposed for ad-hoc renderer-console testing only. */
     _internal: {
       buildOutlookWebUrl: buildOutlookWebUrl,
+      buildMailtoPreviewUrl: buildMailtoPreviewUrl,
       isWorkOutlookComposeUrl: isWorkOutlookComposeUrl,
       adjustDate: adjustDate,
       adjustTime: adjustTime,
       isValidEmail: isValidEmail,
       getMissingRequiredFields: getMissingRequiredFields,
-      templates: templates,
+      templates: OFFICER_EMAIL_TEMPLATES,
+      openOfficerDraft: openOfficerDraft,
     },
   };
 

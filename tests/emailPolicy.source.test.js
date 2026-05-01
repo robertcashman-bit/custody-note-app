@@ -54,8 +54,11 @@ function walkJsHtml(dir) {
    STILL not contain raw mailto: strings — they have to go through emailAPI. */
 const MAILTO_ALLOWED = new Set([
   'lib/outlookWebComposeUrl.js',
+  'lib/emailComposeDraft.js',
   'main/openOutlookWebEmail.js',
+  'main/windowHardening.js',
   'browser-api.js',
+  'renderer/email-draft-open.js',
   /* Functional smoke test that drives the full Quick Email pipeline; it
      asserts mailto: URIs are produced for the desktop-mail account-type
      and so legitimately mentions the literal string. */

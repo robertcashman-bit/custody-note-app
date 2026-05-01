@@ -13,6 +13,7 @@ const assert = require('node:assert');
 const {
   isInternalNavigation,
   isSafeExternalUrl,
+  isSafeMailtoDraftUrl,
   ELECTRON_CSP,
   ALLOWED_PERMISSIONS,
 } = require('../main/windowHardening');
@@ -72,7 +73,7 @@ describe('windowHardening.isSafeExternalUrl', () => {
     assert.strictEqual(isSafeExternalUrl('https://example.com\u0000evil'), false);
   });
 
-  it('rejects mailto: (we route through Outlook Web only)', () => {
+  it('rejects mailto: for isSafeExternalUrl (mailto uses isSafeMailtoDraftUrl)', () => {
     assert.strictEqual(isSafeExternalUrl('mailto:test@example.com'), false);
   });
 
@@ -81,6 +82,27 @@ describe('windowHardening.isSafeExternalUrl', () => {
     assert.strictEqual(isSafeExternalUrl(null), false);
     assert.strictEqual(isSafeExternalUrl(undefined), false);
     assert.strictEqual(isSafeExternalUrl({}), false);
+  });
+});
+
+describe('windowHardening.isSafeMailtoDraftUrl', () => {
+  it('accepts RFC-style mailto with query headers', () => {
+    assert.strictEqual(
+      isSafeMailtoDraftUrl('mailto:a@b.com?subject=' + encodeURIComponent('hello') + '&body=' + encodeURIComponent('line')),
+      true
+    );
+  });
+
+  it('rejects mailto without @ in address part', () => {
+    assert.strictEqual(isSafeMailtoDraftUrl('mailto:not-an-email'), false);
+  });
+
+  it('rejects non-mailto schemes', () => {
+    assert.strictEqual(isSafeMailtoDraftUrl('https://x'), false);
+  });
+
+  it('rejects control characters', () => {
+    assert.strictEqual(isSafeMailtoDraftUrl('mailto:a@b.com\u0000evil'), false);
   });
 });
 
