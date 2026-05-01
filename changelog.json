@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.6.18",
+      "version": "1.6.19",
       "date": "2026-05-01",
       "latest": true,
+      "changes": [
+        "Fix v1.6.18 launch regression where Custody Note opened to a blank window with only 'Run in Electron: npm start'",
+        "root cause was Electron's sandboxed preload failing to resolve a relative require inside app.asar",
+        "the email-compose helper is now inlined into preload.js so window.api / emailAPI are always wired",
+        "Add PII-safe startup diagnostics and an in-app renderer guard so a broken preload bridge cannot silently fake a marketing/demo page",
+        "Add a browser-PWA cleanup helper (scripts/repair-launch-shortcut.ps1) that finds and removes orphaned Chrome/Edge/Brave web-app shortcuts and Apps and Features entries that could hijack the desktop launch"
+      ]
+    },
+    {
+      "version": "1.6.18",
+      "date": "2026-05-01",
+      "latest": false,
       "changes": [
         "Removed the web demo and PWA build entirely",
         "the only supported distribution is the signed Windows installer published to GitHub Releases",
