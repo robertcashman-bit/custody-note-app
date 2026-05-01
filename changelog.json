@@ -1,9 +1,24 @@
 {
   "releases": [
     {
-      "version": "1.6.19",
+      "version": "1.6.20",
       "date": "2026-05-01",
       "latest": true,
+      "changes": [
+        "Officer Emails: copy-and-paste only - removed Open in Outlook / Open in Outlook Web / Reopen Outlook / Continue opening draft / Copy and reopen fallback panel from Hero, Compose, Preview, Side panel and Quick Email modal because the Windows launch path was unreliable (Outlook PWA hijack, Edge sign-in prompts, Default-browser interception)",
+        "Compose tab now shows Copy Email Body, Copy Officer Email, Copy Subject, Copy Full Email + Save Draft, Mark as Sent, Cancel",
+        "Preview tab adds a Copy Subject button",
+        "Records list adds per-record Copy Officer Email and Copy Subject buttons",
+        "Compose Advanced launch options (Edge InPrivate / Outlook desktop / Default browser) and the Outlook sign-in hint field were also removed",
+        "All helper text rewritten to drop sign-in and may-require-sign-in phrasing",
+        "CustodyEmailCompose preload bridge unchanged so any future opt-in launcher can reuse it",
+        "1229 unit tests, 65 audit tests, 73 in-app stress checks all green"
+      ]
+    },
+    {
+      "version": "1.6.19",
+      "date": "2026-05-01",
+      "latest": false,
       "changes": [
         "Fix v1.6.18 launch regression where Custody Note opened to a blank window with only 'Run in Electron: npm start'",
         "root cause was Electron's sandboxed preload failing to resolve a relative require inside app.asar",
