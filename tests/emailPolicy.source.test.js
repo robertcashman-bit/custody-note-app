@@ -54,6 +54,12 @@ function walkJsHtml(dir) {
 const MAILTO_ALLOWED = new Set([
   'lib/outlookWebComposeUrl.js',
   'lib/emailComposeDraft.js',
+  /* v1.6.19: preload.js inlines lib/emailComposeDraft.js because Electron 28's
+     sandboxed preload can't resolve relative require() paths from inside an
+     asar (the v1.6.18 "Run in Electron: npm start" regression). preload.js is
+     a bridge file, not a renderer/UI file — same status as
+     lib/emailComposeDraft.js, hence the same allow-list entry. */
+  'preload.js',
   'main/openOutlookWebEmail.js',
   'main/windowHardening.js',
   'renderer/email-draft-open.js',
