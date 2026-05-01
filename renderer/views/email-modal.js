@@ -1,7 +1,9 @@
 ﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    EMAIL MODAL â€” Officer Email Templates Add-On
    Depends on: buildEmailBody, buildEmailSubject (email-templates.js)
-   Opens drafts via window.openEmailDraft (renderer/email-draft-open.js).
+   v1.6.20: copy-and-paste only - no Outlook launch surfaces. The Quick
+   Email modal exposes Copy Body / Copy Subject / Save as Template /
+   Mark Sent / Clear / Cancel; the user pastes into Outlook themselves.
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 var _EMAIL_TEMPLATES = [
@@ -15,12 +17,6 @@ var _EMAIL_TEMPLATES = [
   { id: 'rui_update_request',             label: 'RUI / Investigation Update Request' },
   { id: 'file_reference_request',         label: 'Reference Confirmation Request' }
 ];
-
-function _truncateBodyForOutlook(body) {
-  var s = String(body || '');
-  if (s.length > 4000) return s.slice(0, 4000) + '\n\n[continued]';
-  return s;
-}
 
 function openEmailModal(recordId, recordData, recordStatus) {
   var stale = document.getElementById('email-oic-modal');
@@ -214,9 +210,8 @@ function openEmailModal(recordId, recordData, recordStatus) {
           '</div>' +
           '<div id="email-oic-missing-warn" class="email-oic-missing-warn" style="display:none"></div>' +
           '<div class="email-oic-actions">' +
-            '<button type="button" id="email-oic-open-mailto" class="btn btn-primary">Open in Outlook</button>' +
-            '<button type="button" id="email-oic-open-app" class="btn btn-primary">Open in Outlook Web</button>' +
-            '<button type="button" id="email-oic-copy"      class="btn btn-secondary">Copy Email</button>' +
+            '<button type="button" id="email-oic-copy"      class="btn btn-primary">Copy Email Body</button>' +
+            '<button type="button" id="email-oic-copy-subject" class="btn btn-secondary">Copy Subject</button>' +
             '<button type="button" id="email-oic-save-tpl"  class="btn btn-secondary">Save as Template</button>' +
             '<button type="button" id="email-oic-mark-sent" class="btn btn-secondary">Mark Sent</button>' +
             '<button type="button" id="email-oic-clear"     class="btn btn-tertiary" title="Reset subject and message to the template defaults">Clear</button>' +
@@ -275,74 +270,39 @@ function openEmailModal(recordId, recordData, recordStatus) {
       _updateMissingWarn();
     });
 
-    function _wireOpenDraft(buttonId, mode) {
-      document.getElementById(buttonId).addEventListener('click', function() {
-        var to      = document.getElementById('email-oic-to').value.trim();
-        var subject = document.getElementById('email-oic-subject').value.trim();
-        var body    = document.getElementById('email-oic-body').value;
-        if (!to) {
-          showToast('Please enter an officer email address first', 'warning');
-          document.getElementById('email-oic-to').focus();
-          return;
-        }
-        if (recordId && to && to !== _oicClean(data.oicEmail) &&
-            window.api && window.api.attendanceSave) {
-          data.oicEmail = to;
-          window.api.attendanceSave({
-            id: recordId,
-            data: Object.assign({}, data),
-            status: recordStatus || 'draft'
-          }).catch(function(err) { console.error('[email-modal] Save oicEmail failed:', err); });
-        }
-        if (typeof window.openEmailDraft !== 'function') {
-          showToast('Email draft helper unavailable.', 'error');
-          return;
-        }
-        var bodyTrunc = _truncateBodyForOutlook(body);
-        var pendingDraft = {
-          to: to,
-          cc: '',
-          subject: subject,
-          body: bodyTrunc,
-          templateId: _currentTemplateKey(),
-          createdAt: new Date().toISOString(),
-          mode: mode,
-        };
-        if (typeof window.savePendingEmailDraft === 'function') {
-          window.savePendingEmailDraft(pendingDraft);
-        }
-        var ok = window.openEmailDraft({
-          to: to,
-          cc: '',
-          subject: subject,
-          body: bodyTrunc,
-          mode: mode,
-        });
-        if (!ok) return;
-        if (typeof showToast === 'function') {
-          if (mode === 'outlook-web') {
-            showToast(
-              'If Outlook asks you to sign in, complete sign-in, then return here — your draft stays saved in Custody Note.',
-              'success',
-              8000
-            );
-          } else {
-            showToast('Opening your mail app…', 'success');
-          }
-        }
-        if (!recordId) return;
-        _saveOfficerEmailLog(recordId, data, recordStatus, _currentTemplateKey(), to)
-          .then(function(saveResult) {
-            if (saveResult && saveResult.ok && typeof refreshList === 'function') refreshList();
+    /* v1.6.20: Quick Email is copy-and-paste only — Open in Outlook /
+       Outlook Web were removed because the launch path was unreliable
+       (Outlook PWA hijack, Edge sign-in prompts, Default-browser
+       interception). The user copies the body / subject and pastes into
+       whatever Outlook surface they prefer. */
+
+    /* Copy Subject — extra surface so users can paste directly into the
+       Outlook subject line without re-typing. */
+    document.getElementById('email-oic-copy-subject').addEventListener('click', function() {
+      var subject = document.getElementById('email-oic-subject').value;
+      if (!String(subject || '').trim()) {
+        if (typeof showToast === 'function') showToast('Subject is empty.', 'warning');
+        return;
+      }
+      var fn = typeof window.custodyCopyEmailText === 'function' ? window.custodyCopyEmailText : null;
+      if (fn) {
+        Promise.resolve(fn(subject, typeof window !== 'undefined' ? window : globalThis))
+          .then(function (ok) {
+            if (ok && typeof showToast === 'function') {
+              showToast('Subject copied. Paste it into the Outlook subject line.', 'success');
+            } else if (!ok) {
+              _fallbackCopy(subject);
+            }
           })
-          .catch(function(err) {
-            console.error('[email-modal] Auto-save officer email log failed:', err);
-            showToast('Draft opened, but email log history could not be saved', 'warning', 5000);
-          });
-      });
-    }
-    _wireOpenDraft('email-oic-open-mailto', 'mailto');
-    _wireOpenDraft('email-oic-open-app', 'outlook-web');
+          .catch(function () { _fallbackCopy(subject); });
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(subject).then(function() {
+          showToast('Subject copied to clipboard', 'success');
+        }).catch(function() { _fallbackCopy(subject); });
+      } else {
+        _fallbackCopy(subject);
+      }
+    });
 
     /* Explicit Clear â€” user-initiated reset of subject + body to the current
        template defaults. We deliberately keep the "To" field untouched so the

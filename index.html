@@ -1899,16 +1899,6 @@
           </details>
 
           <details class="help-section">
-            <summary class="help-heading">Outlook Web email &amp; tracing</summary>
-            <div class="help-content">
-              <p>Officer emails and Quick Email open <strong>Outlook on the web</strong> with a compose link. Runtime technical tracing is appended to <code>email-launch.log</code> in your app data folder (same place as this copy of the readme).</p>
-              <p style="margin-top:0.75rem;">
-                <button type="button" id="help-open-email-send-trace" class="btn btn-secondary btn-small">Open email send trace (readme)</button>
-              </p>
-            </div>
-          </details>
-
-          <details class="help-section">
             <summary class="help-heading">Tips &amp; Shortcuts</summary>
             <div class="help-content">
               <ul>
@@ -1934,23 +1924,16 @@
             <div class="officer-email-hero-text">
               <p class="officer-kicker">Custody Note</p>
               <h1>Officer Emails</h1>
-              <p>Build emails from reusable templates, preview them, and use <strong>Copy Email Body</strong> (or copy the full message) and paste into Outlook. Opening Outlook from the browser is optional and may ask you to sign in.</p>
+              <p>Build emails from reusable templates, preview them, then use the copy buttons and paste into Outlook. No data leaves Custody Note unless you paste and send it yourself.</p>
             </div>
             <div class="officer-email-hero-actions">
               <button type="button" id="officerBackHomeBtn" class="btn btn-secondary">&larr; Home</button>
               <button type="button" id="officerHeroCopyBodyBtn" class="gold-button hero-button officer-email-primary-btn">Copy Email Body</button>
-              <button type="button" id="officerOpenOutlookMailtoHeroBtn" class="btn btn-secondary hero-button">Open in Outlook</button>
-              <button type="button" id="officerOpenOutlookHeroBtn" class="btn btn-secondary hero-button">Open in Outlook Web</button>
             </div>
           </header>
 
           <div id="officerEmailError" class="alert error-alert hidden" role="alert"></div>
           <div id="officerEmailNotice" class="alert notice-alert hidden" role="status"></div>
-          <div id="officerEmailSignInPanel" class="alert notice-alert hidden" role="region" aria-label="Outlook sign-in hint" style="border-left:4px solid #f59e0c;">
-            <p style="margin:0 0 8px;font-weight:600;">Outlook sign-in</p>
-            <p style="margin:0 0 10px;">If Outlook asks you to sign in, complete sign-in, then return here and click <strong>Continue opening draft</strong>. Your email text stays saved in Custody Note until you clear it.</p>
-            <button type="button" id="officerContinueDraftBtn" class="gold-button" style="margin-right:8px;">Continue opening draft</button>
-          </div>
 
           <nav class="officer-tabs" aria-label="Officer email sections">
             <button type="button" class="active" data-officer-tab="details">Details</button>
@@ -2048,7 +2031,7 @@
 
               <section id="officerTabCompose" class="officer-tab-panel officer-card hidden">
                 <h2>Compose</h2>
-                <p class="section-help">Choose a template and click <strong>Generate / Refresh</strong>, then copy the body or full email and paste into Outlook. Use <strong>Open in Outlook</strong> only if you want to try launching a draft automatically.</p>
+                <p class="section-help">Choose a template and click <strong>Generate / Refresh</strong>, then use the copy buttons to put the subject, officer email and body on your clipboard for pasting into Outlook.</p>
 
                 <div id="officerComposeWarnings" class="officer-compose-warnings hidden" role="status" aria-live="polite" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--surface-muted,#f1f5f9);border-left:4px solid #f59e0c;font-size:0.9rem;"></div>
 
@@ -2077,37 +2060,8 @@
                   <textarea id="officerBodyInput" rows="16" placeholder="Email body"></textarea>
                 </label>
 
-                <details class="officer-advanced-details" style="margin:12px 0;">
-                  <summary style="cursor:pointer;font-weight:600;">Advanced: optional browser / Outlook launch options</summary>
-                <fieldset class="officer-handler-fieldset" style="border:1px solid var(--border-color,#e2e8f0);border-radius:8px;padding:10px 14px;margin:8px 0 12px;">
-                  <legend style="padding:0 6px;font-weight:600;">How to open the email</legend>
-                  <div class="settings-radio-group" style="display:flex;flex-direction:column;gap:6px;margin:6px 0;">
-                    <label class="toggle-row" style="margin:0;">
-                      <input type="radio" name="officerOutlookHandler" id="officerHandlerEdgeInPrivate" value="edge-inprivate" checked>
-                      <span><strong>Microsoft Edge &mdash; InPrivate</strong> (recommended on this PC &mdash; bypasses Outlook PWA hijack, no Gmail session, prompts for your work account on first use)</span>
-                    </label>
-                    <label class="toggle-row" style="margin:0;">
-                      <input type="radio" name="officerOutlookHandler" id="officerHandlerDesktop" value="desktop">
-                      <span><strong>Outlook desktop</strong> (writes a draft .eml file and opens it &mdash; only works if .eml is associated with Outlook desktop, not the Outlook PWA)</span>
-                    </label>
-                    <label class="toggle-row" style="margin:0;">
-                      <input type="radio" name="officerOutlookHandler" id="officerHandlerWeb" value="web">
-                      <span><strong>Default browser</strong> (uses your default browser &mdash; on this PC the Outlook PWA may intercept the link and show a blank window)</span>
-                    </label>
-                  </div>
-                  <p id="officerHandlerStatus" class="section-help" style="margin:4px 0 0;">Detecting Outlook desktop…</p>
-                </fieldset>
-                </details>
-
-                <label id="officerLoginHintLabel">
-                  Your work email (used as Outlook sign-in hint)
-                  <input id="officerLoginHintInput" type="email" placeholder="you@firm.co.uk" autocomplete="off" />
-                </label>
-                <p id="officerLoginHintHelp" class="section-help" style="margin-top:-6px;">Only used by the &ldquo;Outlook on the web&rdquo; option above &mdash; tells OWA which account to sign in to, so Edge / the Outlook PWA don&rsquo;t open the link in a different signed-in account (e.g. a personal Gmail). Saved on this device.</p>
-
                 <div class="outlook-info">
-                  <strong>Copy first:</strong> use the copy buttons below and paste into Outlook — this always works.<br>
-                  <strong>Optional — Open in Outlook / Outlook Web:</strong> may open a draft or ask you to sign in; if it fails, your text remains below for copying.
+                  <strong>Copy &amp; paste workflow:</strong> use the copy buttons below, switch to Outlook (desktop or web) and paste. Custody Note never opens Outlook for you and never sends mail on your behalf.
                 </div>
 
                 <div class="large-button-row officer-email-actions-primary">
@@ -2118,30 +2072,10 @@
                   <button id="officerCopySubjectBtn" type="button" class="btn btn-secondary">Copy Subject</button>
                   <button id="officerCopyFullBtn" type="button" class="btn btn-secondary">Copy Full Email</button>
                 </div>
-                <div class="large-button-row officer-email-actions-outlook" style="flex-wrap:wrap;">
-                  <button id="officerOpenOutlookMailtoBtn" type="button" class="btn btn-secondary">Open in Outlook</button>
-                  <button id="officerOpenOutlookBtn" type="button" class="btn btn-secondary">Open in Outlook Web</button>
-                </div>
                 <div class="large-button-row" style="flex-wrap:wrap;margin-top:8px;">
                   <button id="officerSaveDraftBtn" type="button">Save Draft</button>
                   <button id="officerMarkSentBtn" class="green-button" type="button">Mark as Sent</button>
                   <button id="officerCancelBtn" type="button">Cancel</button>
-                </div>
-
-                <div id="officerEmailFallbackPanel" class="officer-email-fallback hidden" style="margin-top:14px;padding:14px;border-radius:8px;border:1px solid var(--border-color,#e2e8f0);background:var(--surface-muted,#f1f5f9);">
-                  <h3 style="margin:0 0 8px;font-size:1rem;">Copy &amp; reopen</h3>
-                  <p class="section-help" style="margin-bottom:10px;">Shown after you try to open Outlook. Use copy buttons if sign-in interrupted the compose window.</p>
-                  <div class="large-button-row" style="flex-wrap:wrap;">
-                    <button type="button" id="officerFbCopyOfficerEmailBtn">Copy Officer Email</button>
-                    <button type="button" id="officerFbCopySubjectBtn">Copy Subject</button>
-                    <button type="button" id="officerFbCopyBodyBtn">Copy Email Body</button>
-                    <button type="button" id="officerFbCopyFullBtn">Copy Full Email</button>
-                    <button type="button" id="officerFbOpenMailtoBtn" class="gold-button">Open in Outlook again</button>
-                    <button type="button" id="officerFbOpenWebBtn" class="gold-button">Open in Outlook Web again</button>
-                    <button type="button" id="officerFbContinueBtn">Continue opening draft</button>
-                    <button type="button" id="officerClearPendingDraftBtn" class="danger-outline-button">Clear pending draft</button>
-                    <button type="button" id="officerDraftOpenedSuccessBtn">Email opened successfully — clear saved draft</button>
-                  </div>
                 </div>
               </section>
 
@@ -2160,9 +2094,8 @@
                   <button id="officerCopyBodyPreviewBtn" class="gold-button extra-large-button officer-email-primary-btn" type="button">Copy Email Body</button>
                 </div>
                 <div class="large-button-row" style="flex-wrap:wrap;">
+                  <button id="officerCopySubjectPreviewBtn" type="button" class="btn btn-secondary">Copy Subject</button>
                   <button id="officerCopyFullPreviewBtn" type="button" class="btn btn-secondary">Copy Full Email</button>
-                  <button id="officerOpenOutlookMailtoPreviewBtn" type="button" class="btn btn-secondary">Open in Outlook</button>
-                  <button id="officerOpenOutlookPreviewBtn" type="button" class="btn btn-secondary">Open in Outlook Web</button>
                 </div>
               </section>
 
@@ -2170,7 +2103,7 @@
                 <div class="records-header">
                   <div>
                     <h2>Records</h2>
-                    <p class="section-help">Saved drafts, emails opened in Outlook Web, sent records and cancelled records. Stored locally on this device.</p>
+                    <p class="section-help">Saved drafts, sent records and cancelled records. Stored locally on this device.</p>
                   </div>
                   <button id="officerClearAllRecordsBtn" class="danger-outline-button" type="button">Clear All Records</button>
                 </div>
@@ -2256,10 +2189,8 @@
 
               <section class="officer-card compact-card">
                 <h2>Copy &amp; paste</h2>
-                <p>Copy the body from Compose or Preview, then paste into Outlook. Optional: try opening a draft link below (may require sign-in).</p>
+                <p>Copy the subject and body from Compose or Preview, switch to Outlook, and paste.</p>
                 <button id="officerSideCopyBodyBtn" class="gold-button full-width-button officer-email-primary-btn" type="button">Copy Email Body</button>
-                <button id="officerOpenOutlookMailtoSideBtn" type="button" class="btn btn-secondary full-width-button" style="margin-top:8px;">Open in Outlook</button>
-                <button id="officerOpenOutlookSideBtn" type="button" class="btn btn-secondary full-width-button" style="margin-top:8px;">Open in Outlook Web</button>
               </section>
             </aside>
           </div>

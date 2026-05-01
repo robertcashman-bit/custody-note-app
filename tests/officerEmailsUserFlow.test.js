@@ -1,8 +1,16 @@
 /**
  * User-flow tests for Officer Emails — fill details, generate from template,
- * then use hero open buttons (mailto + Outlook Web).
+ * then drive the copy buttons.
  *
- * Loads renderer/email-draft-open.js; stubs window.open / location for assertions.
+ * v1.6.20: Officer Emails is copy-and-paste only. The hero / Compose /
+ * Preview / side-panel "Open in Outlook" + "Open in Outlook Web" launch
+ * surfaces were removed because the Windows launch path was unreliable
+ * (Outlook PWA hijack, Edge sign-in prompts, Default-browser
+ * interception). The previous tests for those buttons have been replaced
+ * with copy-button assertions that match the user's actual workflow.
+ *
+ * Loads renderer/email-draft-open.js so the inlined helper module wiring
+ * matches the production preload bridge.
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -17,11 +25,6 @@ const EMAIL_COPY_SRC = fs.readFileSync(path.join(ROOT, 'renderer', 'emailCopy.js
 const EMAIL_DRAFT_SRC = fs.readFileSync(path.join(ROOT, 'renderer', 'email-draft-open.js'), 'utf8');
 const OFFICER_EMAILS_SRC = fs.readFileSync(path.join(ROOT, 'renderer', 'officerEmails.js'), 'utf8');
 
-/**
- * Load renderer scripts with real window/document globals (same pattern as vm tests).
- * officerEmails.js waits for DOMContentLoaded when readyState === 'loading'; jsdom may not
- * replay that after programmatic evaluation, so we call OfficerEmails.init() explicitly.
- */
 function evalRendererInWindow(window, source) {
   new Function('window', 'document', source)(window, window.document);
 }
@@ -34,10 +37,8 @@ function bootOfficerEmailsDom() {
   });
   const { window } = dom;
   window.CustodyEmailCompose = EMAIL_COMPOSE_LIB;
-  /* Minimal stubs — officerEmails init touches these */
   window.confirm = () => false;
   const opens = [];
-  /* jsdom's location is non-configurable; replace with a URL object (supports href = mailto:…). */
   try {
     /* eslint-disable-next-line no-underscore-dangle */
     delete window.location;
@@ -88,80 +89,8 @@ async function flushPromises() {
   await new Promise((r) => setImmediate(r));
 }
 
-describe('Officer Emails — quick hero compose (user flow)', () => {
-  it('fills details, generates template, hero Open in Outlook Web uses deeplink compose URL', async () => {
-    const { window, opens } = bootOfficerEmailsDom();
-
-    byId(window, 'officerEmailInput').value = 'officer.fisher@police.uk';
-    byId(window, 'officerRankInput').value = 'DC';
-    byId(window, 'officerSurnameInput').value = 'Fisher';
-    byId(window, 'officerReferenceInput').value = '1234';
-    byId(window, 'policeStationOrUnitInput').value = 'Kent Police';
-    byId(window, 'custodyNumberInput').value = 'CN-1';
-    byId(window, 'dsccReferenceInput').value = 'DSCC/9';
-    byId(window, 'attendanceDateInput').value = '2026-04-30';
-    byId(window, 'attendanceTimeInput').value = '14:30';
-    byId(window, 'clientNameInput').value = 'John Smith';
-    byId(window, 'matterInput').value = 'Assault allegation';
-    byId(window, 'attendanceNoteInput').value = '';
-    byId(window, 'officerLoginHintInput').value = 'fee.earner@example.com';
-
-    click(window, 'officerGenerateBtn');
-    assert.ok(byId(window, 'officerSubjectInput').value.includes('John Smith'), 'subject should include client');
-    assert.ok(byId(window, 'officerBodyInput').value.includes('Fisher'), 'body should include officer surname');
-
-    click(window, 'officerOpenOutlookHeroBtn');
-    await flushPromises();
-
-    assert.strictEqual(opens.length, 1, 'window.open should run once for OWA');
-    assert.ok(opens[0].url.includes('https://outlook.office.com/mail/deeplink/compose'), opens[0].url);
-    assert.ok(
-      opens[0].url.includes('officer.fisher') && opens[0].url.includes('police.uk'),
-      opens[0].url
-    );
-  });
-
-  it('hero Open in Outlook uses encoded mailto (no window.open)', async () => {
-    const { window, opens } = bootOfficerEmailsDom();
-
-    byId(window, 'officerEmailInput').value = 'officer.fisher@police.uk';
-    byId(window, 'officerRankInput').value = 'DC';
-    byId(window, 'officerSurnameInput').value = 'Fisher';
-    byId(window, 'officerReferenceInput').value = '1234';
-    byId(window, 'policeStationOrUnitInput').value = 'Kent Police';
-    byId(window, 'custodyNumberInput').value = 'CN-1';
-    byId(window, 'dsccReferenceInput').value = 'DSCC/9';
-    byId(window, 'attendanceDateInput').value = '2026-04-30';
-    byId(window, 'attendanceTimeInput').value = '14:30';
-    byId(window, 'clientNameInput').value = 'John Smith';
-    byId(window, 'matterInput').value = 'Assault allegation';
-    byId(window, 'attendanceNoteInput').value = 'Note';
-
-    click(window, 'officerGenerateBtn');
-    const expectedMailto = window.buildMailtoLink({
-      to: 'officer.fisher@police.uk',
-      cc: '',
-      subject: byId(window, 'officerSubjectInput').value,
-      body: byId(window, 'officerBodyInput').value,
-    });
-    click(window, 'officerOpenOutlookMailtoHeroBtn');
-    await flushPromises();
-
-    assert.strictEqual(opens.length, 0, 'mailto must not use window.open');
-    assert.ok(expectedMailto.toLowerCase().startsWith('mailto:'), expectedMailto);
-    assert.ok(expectedMailto.includes('%40'), 'address must be encoded');
-    assert.ok(expectedMailto.includes('subject='), 'subject query param');
-    assert.ok(expectedMailto.includes('body='), 'body query param');
-  });
-
-  it('hero Open with empty form still tries Outlook Web (copy-first workflow does not block Open)', async () => {
-    const { window, opens } = bootOfficerEmailsDom();
-    click(window, 'officerOpenOutlookHeroBtn');
-    await flushPromises();
-    assert.strictEqual(opens.length, 1, 'OWA deeplink should still be attempted');
-  });
-
-  it('Copy Email Body uses clipboard API when body is generated', async () => {
+describe('Officer Emails — copy-only user flow (v1.6.20)', () => {
+  it('hero Copy Email Body copies the generated template body to the clipboard', async () => {
     const { window } = bootOfficerEmailsDom();
     byId(window, 'clientNameInput').value = 'Jane';
     byId(window, 'officerSurnameInput').value = 'Doe';
@@ -171,5 +100,82 @@ describe('Officer Emails — quick hero compose (user flow)', () => {
     click(window, 'officerHeroCopyBodyBtn');
     await flushPromises();
     assert.ok((window.__lastClipboard || '').includes('Jane'), 'clipboard should receive body text');
+  });
+
+  it('Compose Copy Officer Email / Copy Subject / Copy Full Email all hit the clipboard', async () => {
+    const { window } = bootOfficerEmailsDom();
+    byId(window, 'officerEmailInput').value = 'officer.fisher@police.uk';
+    byId(window, 'officerRankInput').value = 'DC';
+    byId(window, 'officerSurnameInput').value = 'Fisher';
+    byId(window, 'policeStationOrUnitInput').value = 'Kent Police';
+    byId(window, 'attendanceDateInput').value = '2026-04-30';
+    byId(window, 'clientNameInput').value = 'John Smith';
+    byId(window, 'matterInput').value = 'Assault';
+
+    click(window, 'officerGenerateBtn');
+
+    click(window, 'officerCopyOfficerEmailBtn');
+    await flushPromises();
+    assert.strictEqual(window.__lastClipboard, 'officer.fisher@police.uk');
+
+    click(window, 'officerCopySubjectBtn');
+    await flushPromises();
+    assert.ok(
+      (window.__lastClipboard || '').includes('John Smith'),
+      'subject clipboard should include client name'
+    );
+
+    click(window, 'officerCopyFullBtn');
+    await flushPromises();
+    assert.ok(
+      (window.__lastClipboard || '').startsWith('To: officer.fisher@police.uk'),
+      'full-email clipboard should start with To: …'
+    );
+    assert.ok(
+      (window.__lastClipboard || '').includes('Subject:'),
+      'full-email clipboard should include Subject: …'
+    );
+  });
+
+  it('No Open-in-Outlook button is present in the rendered DOM after init', () => {
+    const { window } = bootOfficerEmailsDom();
+    const FORBIDDEN_IDS = [
+      'officerOpenOutlookMailtoHeroBtn',
+      'officerOpenOutlookHeroBtn',
+      'officerOpenOutlookMailtoBtn',
+      'officerOpenOutlookBtn',
+      'officerOpenOutlookMailtoPreviewBtn',
+      'officerOpenOutlookPreviewBtn',
+      'officerOpenOutlookMailtoSideBtn',
+      'officerOpenOutlookSideBtn',
+      'officerEmailFallbackPanel',
+      'officerEmailSignInPanel',
+      'officerContinueDraftBtn',
+      'officerFbOpenMailtoBtn',
+      'officerFbOpenWebBtn',
+      'officerClearPendingDraftBtn',
+    ];
+    const stillPresent = FORBIDDEN_IDS.filter((id) => byId(window, id));
+    assert.deepStrictEqual(
+      stillPresent,
+      [],
+      'Outlook-launch IDs leaked back into the DOM: ' + stillPresent.join(', ')
+    );
+  });
+
+  it('Generating the template never calls window.open (Officer Emails never auto-launches a browser)', async () => {
+    const { window, opens } = bootOfficerEmailsDom();
+    byId(window, 'officerEmailInput').value = 'officer.fisher@police.uk';
+    byId(window, 'officerSurnameInput').value = 'Fisher';
+    byId(window, 'clientNameInput').value = 'Jane';
+    byId(window, 'policeStationOrUnitInput').value = 'Station';
+    byId(window, 'attendanceDateInput').value = '2026-05-01';
+    click(window, 'officerGenerateBtn');
+    click(window, 'officerHeroCopyBodyBtn');
+    click(window, 'officerCopySubjectBtn');
+    click(window, 'officerCopyFullBtn');
+    await flushPromises();
+    assert.strictEqual(opens.length, 0, 'copy-only workflow must never open a window/tab');
+    assert.strictEqual(window.location.href, 'http://localhost/', 'copy-only workflow must not navigate location');
   });
 });
