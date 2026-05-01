@@ -2381,10 +2381,38 @@ function createWindow() {
       }
     }, 5000);
   });
+  /* Startup audit: log the EXACT entry path the BrowserWindow loads. Anyone
+     debugging "the app opened a webpage" should be able to confirm from this
+     line that the desktop window loads index.html via file://, not a remote
+     URL. We never call loadURL('https://...') for the main window. */
+  const _startupIndexPath = path.join(__dirname, 'index.html');
+  const _startupIndexFileUrl = require('url').pathToFileURL(_startupIndexPath).href;
+  console.log('[Startup] Loading desktop entry:', _startupIndexFileUrl);
   mainWindow.loadFile('index.html');
   const ses = mainWindow.webContents.session;
   ses.clearCache().catch(() => {});
   ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
+
+  /* Surface preload bundling failures. Without this hook, a missing /
+     mistyped `require()` inside preload.js silently disables every
+     contextBridge — window.api / window.emailAPI / window.custodyNote all
+     become undefined, the licence flow falls through to its "no API" branch,
+     and the user sees an empty shell with a www.custodynote.com link in the
+     splash that LOOKS like a marketing page. We log the failure to stderr
+     and to the renderer (via console-message → renderer's own banner) so
+     it is impossible to miss in start.log. */
+  mainWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
+    const msg = (error && (error.stack || error.message)) ? String(error.stack || error.message) : String(error);
+    console.error('[Startup] preload-error in', preloadPath, '\n' + msg);
+    try {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.executeJavaScript(
+          'window.__custodyNotePreloadError = ' + JSON.stringify({ path: preloadPath, message: msg }) + ';'
+            + 'try { document.dispatchEvent(new CustomEvent("custody-preload-error")); } catch (_) {}'
+        ).catch(() => {});
+      }
+    } catch (_) {}
+  });
   // Defence-in-depth: block navigation away from file://, refuse window.open,
   // deny camera/mic/geolocation/etc., and force CSP/security response headers.
   // None of these is a security boundary on its own — sandbox + contextIsolation
@@ -4219,6 +4247,25 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   console.log(`[Startup] Custody Note v${app.getVersion()} â€” packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}`);
+  /* Extra startup diagnostics. Deliberately NOTHING client-sensitive: no
+     custody data, no client identifiers, no licence key, no email body — only
+     existence flags / paths so the support trail can verify the desktop app
+     loaded a local file URL, not a remote demo/marketing page, and that the
+     local data store is in the expected place. */
+  try {
+    const userDataDir = app.getPath('userData');
+    const dbExpected = path.join(userDataDir, 'app.db');
+    const dbExists = (() => { try { return fs.existsSync(dbExpected); } catch (_) { return false; } })();
+    const isOnline = (() => {
+      try { return require('electron').net.isOnline ? require('electron').net.isOnline() : null; } catch (_) { return null; }
+    })();
+    console.log('[Startup] userData=' + userDataDir
+      + ' dbExists=' + dbExists
+      + ' online=' + (isOnline === null ? 'unknown' : isOnline ? 'true' : 'false')
+      + ' E2E=' + (process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1' ? 'skip-licence' : 'normal'));
+  } catch (e) {
+    console.warn('[Startup] Diagnostics gather failed:', e && e.message);
+  }
   try { _securityLog.init(app.getPath('userData')); _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }); }
   catch (_) {}
   try { syncEmailSendTraceToUserData(); } catch (_) {}
