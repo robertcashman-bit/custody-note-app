@@ -75,11 +75,6 @@ const CRITICAL_FILES = [
     firstLineStartsWith: "const fs = require('fs')",
     mustContain: ['module.exports'],
   },
-  {
-    file: 'browser-api.js',
-    firstLineStartsWith: '',
-    mustContain: ['window.api', 'window.emailAPI'],
-  },
 ];
 
 function readFirstLine(absPath) {

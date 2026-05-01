@@ -4,22 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!--
-    CSP. The same policy now applies to PWA and Electron: sql.js is bundled
-    locally under /vendor/sqljs (see scripts/bundle-sqljs.mjs) so we no
-    longer permit any third-party origin in script-src or connect-src.
-    The Electron main process applies a HEADER-LEVEL CSP that overrides
-    this <meta> tag in the desktop build (windowHardening.js).
+    CSP. The Electron main process applies a HEADER-LEVEL CSP that overrides
+    this <meta> tag in the desktop build (windowHardening.js); this <meta>
+    is the local fallback when index.html is opened directly.
   -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://custodynote.com https://www.custodynote.com; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';">
   <meta http-equiv="Referrer-Policy" content="no-referrer">
   <meta http-equiv="X-Content-Type-Options" content="nosniff">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta name="theme-color" content="#0f172a">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon-192.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon-192.svg">
   <title>Custody Note</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -2472,8 +2466,6 @@
     </div>
     <button type="button" id="scratchpad-toggle" class="scratchpad-fab" title="Quick Notes">&#128221;</button>
   </div>
-  <!-- Browser API layer: in Electron preload sets window.api so this no-ops; in browser it loads sql.js dynamically so the app never blocks on an external script when run from the desktop shortcut -->
-  <script src="browser-api.js"></script>
   <script src="renderer/lib/duplicate-attendance.js"></script>
   <script src="renderer/lib/station-visits.js"></script>
   <!-- ── Module layer (load order matters) ─────────────────────

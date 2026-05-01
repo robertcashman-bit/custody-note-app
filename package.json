@@ -29,7 +29,6 @@
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
     "prepare-trial": "node scripts/prepare-trial.js",
     "capture-screenshots": "node scripts/capture-screenshots.js",
-    "bundle:sqljs": "node scripts/bundle-sqljs.mjs",
     "security:audit": "node scripts/security-audit.mjs",
     "security:scan": "node scripts/security-audit.mjs",
     "email:sample-officer": "node scripts/send-officer-sample-email.mjs"
