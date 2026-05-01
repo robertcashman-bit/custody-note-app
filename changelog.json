@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.6.17",
+      "version": "1.6.18",
       "date": "2026-05-01",
       "latest": true,
+      "changes": [
+        "Removed the web demo and PWA build entirely",
+        "the only supported distribution is the signed Windows installer published to GitHub Releases",
+        "fixes the splash screen redirecting to the web demo warning gate inside the Electron app"
+      ]
+    },
+    {
+      "version": "1.6.17",
+      "date": "2026-05-01",
+      "latest": false,
       "changes": [
         "Officer Emails: copy-and-paste primary workflow with Copy Email Body as the main button",
         "Pending email draft saved before opening Outlook so sign-in interruptions do not lose the email",
