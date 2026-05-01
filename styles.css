@@ -8033,6 +8033,41 @@ html.dark .qe-field .wp-trigger:hover { background: rgba(248, 250, 252, 0.08); c
   color: #1e293b;
 }
 
+.officer-email-page .officer-email-primary-btn {
+  box-shadow: 0 2px 12px rgba(15, 43, 73, 0.18);
+  font-weight: 800;
+}
+.officer-email-page button.officer-email-primary-btn:disabled,
+.officer-email-page button.officer-email-primary-btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.officer-email-page .officer-email-preview-box .officer-preview-block {
+  margin-bottom: 14px;
+}
+.officer-email-page .officer-email-preview-box .officer-preview-label {
+  display: block;
+  font-weight: 700;
+  color: #0b2341;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.officer-email-page .officer-email-preview-box .officer-preview-value {
+  color: #1e293b;
+  line-height: 1.45;
+  word-break: break-word;
+}
+.officer-email-page .officer-email-preview-box .officer-preview-body {
+  margin: 0;
+  margin-top: 6px;
+}
+.officer-email-page .officer-compose-warnings:not(.hidden) {
+  display: block;
+}
+
 .officer-email-page .records-header {
   display: flex;
   justify-content: space-between;

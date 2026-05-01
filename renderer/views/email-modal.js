@@ -1,7 +1,7 @@
 ﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    EMAIL MODAL â€” Officer Email Templates Add-On
    Depends on: buildEmailBody, buildEmailSubject (email-templates.js)
-   Compose opens only via window.invokeOutlookWebCompose â†’ emailAPI.open (main IPC).
+   Opens drafts via window.openEmailDraft (renderer/email-draft-open.js).
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 var _EMAIL_TEMPLATES = [
@@ -22,104 +22,6 @@ function _truncateBodyForOutlook(body) {
   return s;
 }
 
-function _invokeOutlookEmail(payload) {
-  if (typeof window.invokeOutlookWebCompose !== 'function') {
-    return Promise.reject(new Error('Email unavailable'));
-  }
-  /* Forward the saved account-type hint (work | personal | mailto) so the
-     main process picks the right Outlook surface and the dialog wording
-     matches what the user chose in Settings. v1.6.4: default surface is
-     'work' (outlook.office.com/mail/deeplink/compose) â€” that's the URL
-     that actually opens compose for users on M365 firm accounts (the
-     common case for solicitors). Personal Outlook.com users can opt in
-     via Settings â†’ Your Details â†’ "Quick Email opens in". */
-  var settings = window._appSettingsCache || {};
-  var alwaysWeb = String(settings.alwaysUseOutlookWeb || '').toLowerCase() === 'true';
-  var requestedType = String((payload && payload.accountType) || (payload && payload.forceAccountType) || '').toLowerCase();
-  var accountType = String(requestedType || settings.outlookAccountType || '').toLowerCase();
-  if (accountType !== 'personal' && accountType !== 'mailto' && accountType !== 'desktop') accountType = 'work';
-  /* HARD OVERRIDE â€” when the user has set "Always use Outlook on the web", clobber
-     any account-type / route the rest of the code might have computed. This catches
-     stale lastWorkingOutlookAccountType, accidental .eml routing, and the Edge-PWA
-     opens-OWA-with-broken-URL case that the user reported in v1.6.11. */
-  var enriched = Object.assign({}, payload || {}, { accountType: accountType });
-  if (alwaysWeb) {
-    enriched.accountType = 'work';
-    enriched.forceAccountType = 'work';
-    enriched.route = 'work_alt';
-    accountType = 'work'; // keep the local var in sync for the toast text below
-  }
-  return window.invokeOutlookWebCompose(enriched).then(function(result) {
-    /* Main returns { ok:false, cancelled:true } when the user dismisses the
-       privacy dialog â€” must not show success toasts or callers think Outlook opened. */
-    if (result && result.cancelled) {
-      if (typeof showToast === 'function') {
-        showToast(
-          'Outlook was not opened â€” the confirmation dialog was cancelled. Use "Open in Outlook" on that dialog to launch compose.',
-          'warning',
-          6500
-        );
-      }
-      return result;
-    }
-    if (result && result.skipped && result.reason === 'busy') {
-      if (typeof showToast === 'function') {
-        showToast('Already opening an email â€” please wait for it to finish.', 'info', 3500);
-      }
-      return result;
-    }
-    if (result && result.ok === false) {
-      if (typeof showToast === 'function') {
-        showToast('Outlook could not be opened. Try again or use Copy.', 'error', 5500);
-      }
-      return result;
-    }
-    if (result && result.composeSignature === false) {
-      if (typeof showToast === 'function') {
-        showToast(
-          'Outlook opened but did not confirm a compose route (' + (result.composeReason || 'unknown') + '). Please use Copy and report this if it repeats.',
-          'warning',
-          7000
-        );
-      }
-      return result;
-    }
-    if (result && result.launchFailed) {
-      if (typeof showToast === 'function') {
-        if (result.urlCopiedToClipboard) {
-          showToast(
-            'Outlook could not be opened automatically. The compose URL has been copied to your clipboard \u2014 paste it into a new browser tab to send.',
-            'warning',
-            8000
-          );
-        } else {
-          showToast(
-            'Outlook could not be opened and the compose URL could not be copied. Please use Copy and paste into Outlook manually.',
-            'error',
-            8000
-          );
-        }
-      }
-      return result;
-    }
-    var surface = accountType === 'desktop' ? 'Outlook desktop (draft .eml)'
-      : accountType === 'mailto' ? 'your email app'
-      : accountType === 'work' ? 'Outlook on the web'
-      : 'Outlook.com';
-    showToast('Opening ' + surface + 'â€¦', 'success');
-    if (result && result.truncated && result.clipboardCopied) {
-      showToast('Email body was too long for the link â€” full body copied to clipboard, paste it into Outlook.', 'warning', 6000);
-    } else if (result && result.truncated) {
-      showToast('Email body was too long for the link â€” it has been trimmed. Paste the rest manually.', 'warning', 6000);
-    }
-    return result;
-  }).catch(function(err) {
-    console.error('[email-modal]', err);
-    showToast(err && err.message ? err.message : 'Could not open email', 'error');
-    return Promise.reject(err);
-  });
-}
-
 function openEmailModal(recordId, recordData, recordStatus) {
   var stale = document.getElementById('email-oic-modal');
   if (stale) stale.remove();
@@ -137,16 +39,6 @@ function openEmailModal(recordId, recordData, recordStatus) {
     return String(str || '')
       .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
       .replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  function _openUrl(to, subject, body) {
-    return _invokeOutlookEmail({
-      to: String(to || '').trim(),
-      cc: '',
-      bcc: '',
-      subject: subject || '',
-      body: _truncateBodyForOutlook(body),
-    });
   }
 
   function _getOfficerCustomTemplates() {
@@ -322,6 +214,7 @@ function openEmailModal(recordId, recordData, recordStatus) {
           '</div>' +
           '<div id="email-oic-missing-warn" class="email-oic-missing-warn" style="display:none"></div>' +
           '<div class="email-oic-actions">' +
+            '<button type="button" id="email-oic-open-mailto" class="btn btn-primary">Open in Outlook</button>' +
             '<button type="button" id="email-oic-open-app" class="btn btn-primary">Open in Outlook Web</button>' +
             '<button type="button" id="email-oic-copy"      class="btn btn-secondary">Copy Email</button>' +
             '<button type="button" id="email-oic-save-tpl"  class="btn btn-secondary">Save as Template</button>' +
@@ -382,45 +275,74 @@ function openEmailModal(recordId, recordData, recordStatus) {
       _updateMissingWarn();
     });
 
-    document.getElementById('email-oic-open-app').addEventListener('click', function() {
-      var to      = document.getElementById('email-oic-to').value.trim();
-      var subject = document.getElementById('email-oic-subject').value.trim();
-      var body    = document.getElementById('email-oic-body').value;
-      if (!to) {
-        showToast('Please enter an officer email address first', 'warning');
-        document.getElementById('email-oic-to').focus();
-        return;
-      }
-      /* Persist a newly-typed email address back to the record immediately */
-      if (recordId && to && to !== _oicClean(data.oicEmail) &&
-          window.api && window.api.attendanceSave) {
-        data.oicEmail = to;
-        window.api.attendanceSave({
-          id: recordId,
-          data: Object.assign({}, data),
-          status: recordStatus || 'draft'
-        }).catch(function(err) { console.error('[email-modal] Save oicEmail failed:', err); });
-      }
-      _openUrl(to, subject, body)
-        .then(function(result) {
-          if (!recordId) return;
-          if (result && (result.cancelled || result.skipped || result.ok === false || result.composeSignature === false)) return;
-          return _saveOfficerEmailLog(recordId, data, recordStatus, _currentTemplateKey(), to)
-            .then(function(saveResult) {
-              if (saveResult && saveResult.ok && typeof refreshList === 'function') refreshList();
-            })
-            .catch(function(err) {
-              console.error('[email-modal] Auto-save officer email log failed:', err);
-              showToast('Outlook opened, but email log history could not be saved', 'warning', 5000);
-            });
-        })
-        .catch(function() { /* error toast already shown by _invokeOutlookEmail */ });
-      /* IMPORTANT: do NOT auto-wipe the typed subject/body after handing the
-         message to Outlook. Outlook can reject or silently drop the deeplink
-         (browser pop-up blockers, mid-flight sign-in, network glitch) and the
-         user would lose everything they typed. The user can press the
-         "Clear" button below when they are sure the email has been sent. */
-    });
+    function _wireOpenDraft(buttonId, mode) {
+      document.getElementById(buttonId).addEventListener('click', function() {
+        var to      = document.getElementById('email-oic-to').value.trim();
+        var subject = document.getElementById('email-oic-subject').value.trim();
+        var body    = document.getElementById('email-oic-body').value;
+        if (!to) {
+          showToast('Please enter an officer email address first', 'warning');
+          document.getElementById('email-oic-to').focus();
+          return;
+        }
+        if (recordId && to && to !== _oicClean(data.oicEmail) &&
+            window.api && window.api.attendanceSave) {
+          data.oicEmail = to;
+          window.api.attendanceSave({
+            id: recordId,
+            data: Object.assign({}, data),
+            status: recordStatus || 'draft'
+          }).catch(function(err) { console.error('[email-modal] Save oicEmail failed:', err); });
+        }
+        if (typeof window.openEmailDraft !== 'function') {
+          showToast('Email draft helper unavailable.', 'error');
+          return;
+        }
+        var bodyTrunc = _truncateBodyForOutlook(body);
+        var pendingDraft = {
+          to: to,
+          cc: '',
+          subject: subject,
+          body: bodyTrunc,
+          templateId: _currentTemplateKey(),
+          createdAt: new Date().toISOString(),
+          mode: mode,
+        };
+        if (typeof window.savePendingEmailDraft === 'function') {
+          window.savePendingEmailDraft(pendingDraft);
+        }
+        var ok = window.openEmailDraft({
+          to: to,
+          cc: '',
+          subject: subject,
+          body: bodyTrunc,
+          mode: mode,
+        });
+        if (!ok) return;
+        if (typeof showToast === 'function') {
+          if (mode === 'outlook-web') {
+            showToast(
+              'If Outlook asks you to sign in, complete sign-in, then return here — your draft stays saved in Custody Note.',
+              'success',
+              8000
+            );
+          } else {
+            showToast('Opening your mail app…', 'success');
+          }
+        }
+        if (!recordId) return;
+        _saveOfficerEmailLog(recordId, data, recordStatus, _currentTemplateKey(), to)
+          .then(function(saveResult) {
+            if (saveResult && saveResult.ok && typeof refreshList === 'function') refreshList();
+          })
+          .catch(function(err) {
+            console.error('[email-modal] Auto-save officer email log failed:', err);
+            showToast('Draft opened, but email log history could not be saved', 'warning', 5000);
+          });
+      });
+    }
+    _wireOpenDraft('email-oic-open-mailto', 'mailto');
+    _wireOpenDraft('email-oic-open-app', 'outlook-web');
 
     /* Explicit Clear â€” user-initiated reset of subject + body to the current
        template defaults. We deliberately keep the "To" field untouched so the
@@ -446,10 +368,25 @@ function openEmailModal(recordId, recordData, recordStatus) {
       }
     });
 
-    /* Copy */
+    /* Copy — same custodyCopyEmailText helper as Officer Emails (Clipboard API + textarea fallback). */
     document.getElementById('email-oic-copy').addEventListener('click', function() {
       var body = document.getElementById('email-oic-body').value;
-      if (navigator.clipboard && navigator.clipboard.writeText) {
+      if (!String(body || '').trim()) {
+        if (typeof showToast === 'function') showToast('Message is empty.', 'warning');
+        return;
+      }
+      var fn = typeof window.custodyCopyEmailText === 'function' ? window.custodyCopyEmailText : null;
+      if (fn) {
+        Promise.resolve(fn(body, typeof window !== 'undefined' ? window : globalThis))
+          .then(function (ok) {
+            if (ok && typeof showToast === 'function') {
+              showToast('Email body copied. You can now paste it into Outlook.', 'success');
+            } else if (!ok) {
+              _fallbackCopy(body);
+            }
+          })
+          .catch(function () { _fallbackCopy(body); });
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(body).then(function() {
           showToast('Email copied to clipboard', 'success');
         }).catch(function() { _fallbackCopy(body); });

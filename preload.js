@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const custodyEmailComposeDraft = require('./lib/emailComposeDraft');
 
 contextBridge.exposeInMainWorld('api', {
   getSettings: () => ipcRenderer.invoke('get-settings'),
@@ -138,6 +139,15 @@ contextBridge.exposeInMainWorld('api', {
   appUpdateResetLoop: () => ipcRenderer.invoke('app-update-reset-loop'),
   appUpdateDiagnosticInstall: () => ipcRenderer.invoke('app-update-diagnostic-install'),
 });
+
+contextBridge.exposeInMainWorld('custodyNoteBuildInfo', {
+  isPackaged: process.env.CUSTODYNOTE_PACKAGED === '1',
+  /** Dev / unpackaged builds — show extra email diagnostics in Officer Emails. */
+  isDevBuild: process.env.CUSTODYNOTE_PACKAGED !== '1' || process.env.NODE_ENV === 'development',
+});
+
+/** Pending draft + mailto / OWA URL builders (lib/emailComposeDraft.js). Renderer uses localStorage via wrappers in email-draft-open.js */
+contextBridge.exposeInMainWorld('CustodyEmailCompose', custodyEmailComposeDraft);
 
 contextBridge.exposeInMainWorld('emailAPI', {
   open: (payload) => ipcRenderer.invoke('open-outlook-email', payload),
