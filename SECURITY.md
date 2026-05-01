@@ -126,29 +126,21 @@ See `LOGGING_STANDARD.md` for what to log and where. Hard rules:
 
 ---
 
-## 6. The PWA / Vercel deployment
+## 6. Distribution
 
-The Vercel-hosted `https://custody-note.vercel.app` (and the local
-`browser-api.js` fallback) is a **demonstration build** for prospective
-customers. It is **not** safe for any real client data because:
+The only supported distribution channel is the signed Windows installer
+published as a GitHub Release at
+`https://github.com/robertcashman-bit/custody-note-app/releases/latest`.
+The marketing site `https://custodynote.com` links to that release.
+There is no web/PWA build: the app is Electron-only, and any in-browser
+build was removed in May 2026 (along with the Vercel project, the
+`browser-api.js` shim, the `sql.js` browser bundle, and the
+`browser-demo.html` warning gate) so that real client data can only ever
+be entered into the encrypted desktop store.
 
-- Storage is unencrypted IndexedDB (no `safeStorage`, no master key).
-- The browser cannot enforce the same idle lock / OS lock / power-monitor
-  triggers the desktop app uses.
-- Browser extensions, dev-tools, and other tabs can in principle read
-  IndexedDB given the right CSP gaps or compromise.
-- We cannot guarantee no third-party network egress in someone else's
-  browser.
-
-The PWA is gated by `browser-demo.html` which shows a three-checkbox warning
-the user must explicitly acknowledge before `browser-api.js` will initialise
-(see `sessionStorage['cn-web-demo-ack']`). If the gate is bypassed, the app
-refuses to load.
-
-`sql.js` is bundled locally at `vendor/sqljs/` (built by
-`scripts/bundle-sqljs.mjs`); the previous `https://sql.js.org` CDN load was
-removed because it created an exfiltration vector for any browser holding
-client data in IndexedDB.
+In-app updates use `electron-updater` against the same GitHub Releases
+feed (see `package.json` `build.publish.provider: "github"` and
+`updater.js`).
 
 ---
 

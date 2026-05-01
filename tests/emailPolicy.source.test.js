@@ -13,7 +13,6 @@ const PROD_FILES = [
   'preload.js',
   'app.js',
   'index.html',
-  'browser-api.js',
   'renderer/outlook-email-invoke.js',
   'renderer/officerEmails.js',
   'renderer/views/email-modal.js',
@@ -57,7 +56,6 @@ const MAILTO_ALLOWED = new Set([
   'lib/emailComposeDraft.js',
   'main/openOutlookWebEmail.js',
   'main/windowHardening.js',
-  'browser-api.js',
   'renderer/email-draft-open.js',
   /* Functional smoke test that drives the full Quick Email pipeline; it
      asserts mailto: URIs are produced for the desktop-mail account-type
