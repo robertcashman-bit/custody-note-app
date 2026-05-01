@@ -61,17 +61,26 @@ const outlookUrlLib = fs.readFileSync(path.join(__dirname, '..', 'lib', 'outlook
 
 /* ── Outlook Web only (no mailto / no default mail client) ─── */
 
-describe('Outlook Web email routing', () => {
-  it('email-modal opens drafts via openEmailDraft (mailto + outlook-web)', () => {
-    assert.ok(emailModalJs.includes('openEmailDraft'), 'must call window.openEmailDraft');
-    assert.ok(emailModalJs.includes('email-oic-open-mailto'), 'mailto open button');
-    assert.ok(emailModalJs.includes("'outlook-web'"), 'OWA mode');
+describe('Outlook Web email routing — copy-only workflow (v1.6.20)', () => {
+  it('email-modal is copy-and-paste only (no Open-in-Outlook buttons, no openExternal)', () => {
+    /* v1.6.20: the Quick Email modal lost its "Open in Outlook" /
+       "Open in Outlook Web" buttons. The user copies + pastes into
+       Outlook themselves. Forbid every launch-side hook from creeping
+       back in. */
+    assert.ok(!emailModalJs.includes('email-oic-open-mailto'), 'mailto open button must be removed');
+    assert.ok(!emailModalJs.includes('email-oic-open-app'), 'OWA open button must be removed');
+    assert.ok(!emailModalJs.includes('_wireOpenDraft'), '_wireOpenDraft helper must be removed');
+    assert.ok(!emailModalJs.includes('window.openEmailDraft'), 'modal must not call window.openEmailDraft');
     assert.ok(!emailModalJs.includes('openOutlookEmail'), 'no api.openOutlookEmail fallback');
     assert.ok(!emailModalJs.includes('mailto:'), 'email-modal must not contain mailto:');
     assert.ok(
       (emailModalJs.match(/window\.api\.openExternal/g) || []).length === 0,
       'email-modal must not call openExternal'
     );
+    /* The copy + save-template + mark-sent surface stays. */
+    assert.ok(emailModalJs.includes('email-oic-copy"'), 'Copy Email button must remain');
+    assert.ok(emailModalJs.includes('email-oic-copy-subject'), 'Copy Subject button must be present');
+    assert.ok(emailModalJs.includes('email-oic-mark-sent'), 'Mark Sent button must remain');
   });
 
   it('email-modal exports openQuickEmailModal (Records — quick email to officer)', () => {
@@ -103,15 +112,20 @@ describe('Outlook Web email routing', () => {
     assert.ok(!fnBody.includes('mailto:'), 'no mailto in openOutlookWebCompose');
   });
 
-  it('bundled email-send-trace ships with app and Help opens it via IPC', () => {
+  it('bundled email-send-trace ships with app and the dev Testing tab can open it', () => {
+    /* v1.6.20: the user-facing "Outlook Web email & tracing" Help section
+       was removed (no more launches → no support value). The deployment
+       trace file + IPC handler stay so the dev Testing/Debug tab in
+       Officer Emails (officerOpenEmailSendTraceBtn) can still open it
+       when reproducing email issues. */
     const tracePath = path.join(__dirname, '..', 'deployment', 'email-send-trace.txt');
     assert.ok(fs.existsSync(tracePath), 'deployment/email-send-trace.txt must exist');
     const preloadJs = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
     assert.ok(preloadJs.includes('open-email-send-trace'), 'preload invokes open-email-send-trace');
     assert.ok(mainJs.includes("ipcMain.handle('open-email-send-trace'"), 'main registers handler');
     assert.ok(mainJs.includes('syncEmailSendTraceToUserData'), 'startup sync copies trace to userData');
-    assert.ok(indexHtml.includes('help-open-email-send-trace'), 'Help button');
-    assert.ok(indexHtml.includes('officerOpenEmailSendTraceBtn'), 'Officer Emails Testing button');
+    assert.ok(indexHtml.includes('officerOpenEmailSendTraceBtn'), 'Officer Emails Testing button must remain');
+    assert.ok(!indexHtml.includes('help-open-email-send-trace'), 'Help-section trace button removed in v1.6.20');
   });
 
   it('main process exposes open-outlook-email and blocks mailto in open-external', () => {

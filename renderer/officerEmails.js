@@ -125,7 +125,6 @@
     bindFormInputs();
     bindActionButtons();
     bindDiagnosticsCopyButtons();
-    bindFallbackAndPendingButtons();
     bindEmailComposeDiagnosticsButtons();
     renderRecords();
     updatePreviewAndSummary();
@@ -355,14 +354,16 @@
   }
 
   function bindActionButtons() {
-    bindClick('officerOpenOutlookMailtoHeroBtn', function () { openOfficerDraft('mailto'); });
-    bindClick('officerOpenOutlookHeroBtn', function () { openOfficerDraft('outlook-web'); });
-    bindClick('officerOpenOutlookMailtoBtn', function () { openOfficerDraft('mailto'); });
-    bindClick('officerOpenOutlookBtn', function () { openOfficerDraft('outlook-web'); });
-    bindClick('officerOpenOutlookMailtoPreviewBtn', function () { openOfficerDraft('mailto'); });
-    bindClick('officerOpenOutlookPreviewBtn', function () { openOfficerDraft('outlook-web'); });
-    bindClick('officerOpenOutlookMailtoSideBtn', function () { openOfficerDraft('mailto'); });
-    bindClick('officerOpenOutlookSideBtn', function () { openOfficerDraft('outlook-web'); });
+    /* v1.6.20: copy-and-paste only. Every Outlook-launch surface (the two
+       hero buttons, the two compose buttons, the two preview buttons, the
+       two side-panel buttons, the records "re-open" button, the post-fail
+       "Copy & reopen" panel and "Continue draft" button) was removed
+       because the Windows launch path was unreliable (Outlook PWA hijack,
+       Edge sign-in prompts, Default-browser interception, Gmail-session
+       collisions) and gave the user nothing the copy buttons did not
+       already give. The CustodyEmailCompose helpers stay exposed on the
+       preload bridge for any future opt-in surface, but the Officer
+       Emails UI no longer wires any of them. */
     bindClick('officerHeroCopyBodyBtn', function () { copyBody(); });
     bindClick('officerCopyBodyPreviewBtn', function () { copyBody(); });
     bindClick('officerSideCopyBodyBtn', function () { copyBody(); });
@@ -376,6 +377,7 @@
     bindClick('officerClearSubjectBodyBtn', clearSubjectBody);
     bindClick('officerCopyOfficerEmailBtn', copyOfficerEmail);
     bindClick('officerCopySubjectBtn', copySubject);
+    bindClick('officerCopySubjectPreviewBtn', copySubject);
     bindClick('officerCopyBodyBtn', copyBody);
     bindClick('officerCopyFullBtn', copyFullEmail);
     bindClick('officerCopyFullPreviewBtn', copyFullEmail);
@@ -569,24 +571,11 @@
   }
 
   function updatePendingAndFallbackUi() {
+    /* v1.6.20: officerEmailSignInPanel + officerEmailFallbackPanel were
+       deleted with the Open in Outlook flow. The dev diagnostics block
+       below still updates so Test/Debug shows the pending-draft helper
+       state (it is dev-only, hidden in packaged builds). */
     var pending = typeof window.getPendingEmailDraft === 'function' ? window.getPendingEmailDraft() : null;
-    var attempted = false;
-    var owAttempt = false;
-    try {
-      attempted = sessionStorage.getItem(SESSION_OPEN_FLAG) === '1';
-      owAttempt = sessionStorage.getItem(OW_ATTEMPT_KEY) === '1';
-    } catch (_) { /* sessionStorage unavailable */ }
-
-    var signPanel = $('officerEmailSignInPanel');
-    var fb = $('officerEmailFallbackPanel');
-    if (signPanel) {
-      if (owAttempt) signPanel.classList.remove('hidden');
-      else signPanel.classList.add('hidden');
-    }
-    if (fb) {
-      if (attempted || pending) fb.classList.remove('hidden');
-      else fb.classList.add('hidden');
-    }
 
     var dp = $('officerDiagPending');
     var dpt = $('officerDiagPendingTime');
@@ -714,115 +703,6 @@
     } catch (e) {
       return false;
     }
-  }
-
-  /**
-   * @param {'mailto'|'outlook-web'} mode
-   */
-  function openOfficerDraft(mode) {
-    var modeStr = mode === 'mailto' ? 'mailto' : 'outlook-web';
-    var draft = buildCurrentDraft(modeStr);
-
-    if (typeof window.savePendingEmailDraft !== 'function' || typeof window.openEmailDraft !== 'function') {
-      showNotice('Outlook could not be opened automatically. Your email text is still available to copy and paste manually.');
-      return;
-    }
-
-    try {
-      window.savePendingEmailDraft(draft);
-      var ok = window.openEmailDraft({
-        to: draft.to,
-        cc: draft.cc,
-        subject: draft.subject,
-        body: draft.body,
-        mode: modeStr,
-      });
-      if (!ok) {
-        showNotice('Outlook could not be opened automatically. Your email text is still available to copy and paste manually.');
-        try { sessionStorage.setItem(SESSION_OPEN_FLAG, '1'); } catch (_) { /* ignore */ }
-        updatePendingAndFallbackUi();
-        return;
-      }
-
-      try {
-        sessionStorage.setItem(SESSION_OPEN_FLAG, '1');
-        if (modeStr === 'outlook-web') sessionStorage.setItem(OW_ATTEMPT_KEY, '1');
-      } catch (_) { /* sessionStorage unavailable */ }
-
-      updatePendingAndFallbackUi();
-
-      var now = new Date().toISOString();
-      var statusLabel = modeStr === 'mailto' ? 'Opened in Outlook' : 'Opened in Outlook Web';
-      var record = buildRecord(statusLabel);
-      record.openedAt = now;
-      record.updatedAt = now;
-      upsertRecord(record);
-      activeRecordId = record.id;
-
-      if (modeStr === 'mailto') {
-        showNotice('Your default mail app should open with this draft. Review the email before sending.');
-      } else {
-        showNotice(
-          'If Outlook asks you to sign in, complete sign-in, then return here and click “Continue opening draft”. ' +
-          'Your draft stays saved in Custody Note until you clear it.'
-        );
-      }
-    } catch (err) {
-      console.error('[officerEmails] openOfficerDraft', err);
-      showNotice('Outlook could not be opened automatically. Your email text is still available to copy and paste manually.');
-      try { sessionStorage.setItem(SESSION_OPEN_FLAG, '1'); } catch (_) { /* ignore */ }
-      updatePendingAndFallbackUi();
-    }
-  }
-
-  function bindFallbackAndPendingButtons() {
-    function bindOnce(id, fn) {
-      var el = $(id);
-      if (!el || el.dataset.bound === '1') return;
-      el.dataset.bound = '1';
-      el.addEventListener('click', fn);
-    }
-    bindOnce('officerContinueDraftBtn', function () {
-      if (typeof window.resumePendingEmailDraft !== 'function') return;
-      window.resumePendingEmailDraft('outlook-web');
-      showNotice('Opening Outlook on the web again with your saved draft…');
-    });
-    bindOnce('officerFbContinueBtn', function () {
-      if (typeof window.resumePendingEmailDraft !== 'function') return;
-      window.resumePendingEmailDraft('outlook-web');
-      showNotice('Opening Outlook on the web again with your saved draft…');
-    });
-    bindOnce('officerFbOpenMailtoBtn', function () {
-      if (typeof window.resumePendingEmailDraft !== 'function') return;
-      window.resumePendingEmailDraft('mailto');
-    });
-    bindOnce('officerFbOpenWebBtn', function () {
-      if (typeof window.resumePendingEmailDraft !== 'function') return;
-      window.resumePendingEmailDraft('outlook-web');
-      showNotice('Opening Outlook on the web again…');
-    });
-    bindOnce('officerFbCopyOfficerEmailBtn', copyOfficerEmail);
-    bindOnce('officerFbCopySubjectBtn', copySubject);
-    bindOnce('officerFbCopyBodyBtn', copyBody);
-    bindOnce('officerFbCopyFullBtn', copyFullEmail);
-    bindOnce('officerClearPendingDraftBtn', function () {
-      if (typeof window.clearPendingEmailDraft === 'function') window.clearPendingEmailDraft();
-      try {
-        sessionStorage.removeItem(SESSION_OPEN_FLAG);
-        sessionStorage.removeItem(OW_ATTEMPT_KEY);
-      } catch (_) { /* ignore */ }
-      updatePendingAndFallbackUi();
-      showNotice('Pending email draft cleared.');
-    });
-    bindOnce('officerDraftOpenedSuccessBtn', function () {
-      if (typeof window.clearPendingEmailDraft === 'function') window.clearPendingEmailDraft();
-      try {
-        sessionStorage.removeItem(SESSION_OPEN_FLAG);
-        sessionStorage.removeItem(OW_ATTEMPT_KEY);
-      } catch (_) { /* ignore */ }
-      updatePendingAndFallbackUi();
-      showNotice('Saved draft cleared. Custody Note did not send any email.');
-    });
   }
 
   function bindEmailComposeDiagnosticsButtons() {
@@ -1061,7 +941,8 @@
           '<button type="button" data-action="edit">Edit</button>' +
           '<button type="button" data-action="duplicate">Duplicate</button>' +
           '<button type="button" data-action="template">Use as Template</button>' +
-          '<button type="button" data-action="reopen">Reopen Outlook</button>' +
+          '<button type="button" data-action="copy-officer">Copy Officer Email</button>' +
+          '<button type="button" data-action="copy-subject">Copy Subject</button>' +
           '<button type="button" data-action="copy-body">Copy Body</button>' +
           '<button type="button" data-action="copy-full">Copy Full</button>' +
           '<button type="button" data-action="mark-sent">Mark Sent</button>' +
@@ -1071,7 +952,12 @@
       card.querySelector('[data-action="edit"]').addEventListener('click', function () { loadRecord(record); });
       card.querySelector('[data-action="duplicate"]').addEventListener('click', function () { duplicateRecord(record, false); });
       card.querySelector('[data-action="template"]').addEventListener('click', function () { duplicateRecord(record, true); });
-      card.querySelector('[data-action="reopen"]').addEventListener('click', function () { reopenRecord(record); });
+      card.querySelector('[data-action="copy-officer"]').addEventListener('click', function () {
+        copyWithNotice(record.officerEmail || '', 'Officer email copied.');
+      });
+      card.querySelector('[data-action="copy-subject"]').addEventListener('click', function () {
+        copyWithNotice(record.subject || '', 'Subject copied.');
+      });
       card.querySelector('[data-action="copy-body"]').addEventListener('click', function () {
         copyWithNotice(record.body || '', 'Record body copied.');
       });
@@ -1120,48 +1006,6 @@
     setActiveTab('details');
   }
 
-  function reopenRecord(record) {
-    if (typeof window.openEmailDraft !== 'function') {
-      showError('Email draft helper is unavailable. Please restart Custody Note and try again.');
-      return;
-    }
-    var to = record.officerEmail || '';
-    if (!to || to.indexOf('@') < 0) {
-      showError('Saved record has no valid officer email.');
-      return;
-    }
-    var pendingDraft = {
-      to: to,
-      cc: '',
-      subject: record.subject || '',
-      body: record.body || '',
-      templateId: record.templateKey || '',
-      createdAt: new Date().toISOString(),
-      mode: 'outlook-web',
-    };
-    if (typeof window.savePendingEmailDraft === 'function') {
-      window.savePendingEmailDraft(pendingDraft);
-    }
-    var ok = window.openEmailDraft({
-      to: to,
-      cc: '',
-      subject: record.subject || '',
-      body: record.body || '',
-      mode: 'outlook-web',
-    });
-    if (!ok) return;
-    var now = new Date().toISOString();
-    var updated = Object.assign({}, record, {
-      status: 'Opened in Outlook Web',
-      openedAt: now,
-      updatedAt: now,
-    });
-    upsertRecord(updated);
-    activeRecordId = updated.id;
-    renderRecords();
-    showNotice('Outlook on the web opened for saved record.');
-  }
-
   function updateRecordStatus(record, status) {
     var now = new Date().toISOString();
     var updated = Object.assign({}, record, { status: status, updatedAt: now });
@@ -1199,10 +1043,6 @@
     for (var i = 0; i < ids.length; i++) setValue(ids[i], '');
     setValue('officerTemplateSelect', 'request_bail_details');
     if (typeof window.clearPendingEmailDraft === 'function') window.clearPendingEmailDraft();
-    try {
-      sessionStorage.removeItem(SESSION_OPEN_FLAG);
-      sessionStorage.removeItem(OW_ATTEMPT_KEY);
-    } catch (_) { /* ignore */ }
     showNotice('Form cleared.');
     updatePreviewAndSummary();
   }
@@ -1577,7 +1417,6 @@
       isValidEmail: isValidEmail,
       getMissingRequiredFields: getMissingRequiredFields,
       templates: OFFICER_EMAIL_TEMPLATES,
-      openOfficerDraft: openOfficerDraft,
     },
   };
 
