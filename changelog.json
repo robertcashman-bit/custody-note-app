@@ -1,9 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.6.17",
+      "date": "2026-05-01",
+      "latest": true,
+      "changes": [
+        "Officer Emails: copy-and-paste primary workflow with Copy Email Body as the main button",
+        "Pending email draft saved before opening Outlook so sign-in interruptions do not lose the email",
+        "Continue opening draft fallback panel after Outlook is launched",
+        "Four placeholder-driven officer email templates (Request Bail Details, Request Interview Recording, Follow-up After RUI, Confirm Representation)",
+        "Clipboard API with textarea fallback for non-secure contexts"
+      ]
+    },
+    {
       "version": "1.6.16",
       "date": "2026-04-30",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix Windows Quick Email: OWA compose opens in Edge InPrivate",
         "avoids Outlook PWA dropping compose deeplink"
