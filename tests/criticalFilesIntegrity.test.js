@@ -54,7 +54,6 @@ const CRITICAL_FILES = [
     firstLineStartsWith: "const { contextBridge",
     mustContain: [
       "contextBridge.exposeInMainWorld('api'",
-      "contextBridge.exposeInMainWorld('emailAPI'",
       "contextBridge.exposeInMainWorld('custodyNoteBuildInfo'",
       "contextBridge.exposeInMainWorld('CustodyEmailCompose'",
     ],

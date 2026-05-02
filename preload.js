@@ -10,7 +10,7 @@ const { contextBridge, ipcRenderer } = require('electron');
        Unable to load preload script: …\app.asar\preload.js
        Error: module not found: ./lib/emailComposeDraft
    The result is that EVERY contextBridge.exposeInMainWorld call below is
-   skipped, window.api / window.emailAPI / window.custodyNote are undefined
+   skipped, window.api / window.custodyNoteBuildInfo / window.custodyNote are undefined
    in the renderer, and app.js init() shows a "Run in Electron: npm start"
    placeholder instead of the real app — exactly the v1.6.18 symptom that
    prompted this audit.
@@ -227,7 +227,6 @@ contextBridge.exposeInMainWorld('api', {
   detectCloudFolders: () => ipcRenderer.invoke('detect-cloud-folders'),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   openPath: (filePath) => ipcRenderer.invoke('open-path', filePath),
-  openEmailSendTrace: () => ipcRenderer.invoke('open-email-send-trace'),
   createDesktopShortcut: () => ipcRenderer.invoke('create-desktop-shortcut'),
   openAppFolder: () => ipcRenderer.invoke('open-app-folder'),
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),
@@ -333,17 +332,9 @@ contextBridge.exposeInMainWorld('custodyNoteBuildInfo', {
   preloadModuleErrors: [],
 });
 
-/** Pending draft + mailto / OWA URL builders (lib/emailComposeDraft.js). Renderer uses localStorage via wrappers in email-draft-open.js */
+/** Template merge + pending-draft helpers (lib/emailComposeDraft inlined). Renderer:
+    renderer/email-pending-globals.js exposes save/get/clear pending draft only. */
 contextBridge.exposeInMainWorld('CustodyEmailCompose', custodyEmailComposeDraft);
-
-contextBridge.exposeInMainWorld('emailAPI', {
-  open: (payload) => ipcRenderer.invoke('open-outlook-email', payload),
-  /* Returns { installed: boolean, exePath: string|null }. The renderer uses
-     this to default the Outlook compose surface to 'desktop' on Windows
-     when Outlook is installed locally — bypasses every web URL routing
-     issue by writing a draft .eml the OS hands to Outlook. */
-  detectOutlookDesktop: () => ipcRenderer.invoke('detect-outlook-desktop'),
-});
 
 /* Playwright / automated tests: fresh userData has no licence — allow skipping the sign-in overlay when env is set.
    H27 — never expose the E2E hook in packaged installers, even if a user

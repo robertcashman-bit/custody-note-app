@@ -1,6 +1,5 @@
 /**
- * DevTools helper: verify emailAPI / invokeOutlookWebCompose are present.
- * Custody Note uses Outlook Web only — no preferredEmailClient / mailto builders.
+ * DevTools helper: verify CustodyEmailCompose + clipboard-oriented helpers (v1.6.21).
  */
 const http = require('http');
 const WebSocket = require('ws');
@@ -57,13 +56,14 @@ async function run() {
   await connect(page.webSocketDebuggerUrl);
   await send('Runtime.enable', {});
 
-  console.log('=== Outlook Web compose debug ===\n');
+  console.log('=== Email / clipboard debug (v1.6.21) ===\n');
 
-  const apiOpen = await evaluate('typeof (window.emailAPI && window.emailAPI.open)');
-  const invokeOpen = await evaluate('typeof (window.invokeOutlookWebCompose)');
-  console.log('emailAPI.open:', apiOpen, '| invokeOutlookWebCompose:', invokeOpen);
-
-  console.log('\nCompose uses invokeOutlookWebCompose → emailAPI.open (single-flight guard in outlook-email-invoke.js).');
+  const merge = await evaluate('typeof (window.CustodyEmailCompose && window.CustodyEmailCompose.mergeTemplatePlaceholders)');
+  const pending = await evaluate('typeof window.getPendingEmailDraft');
+  const copyHelper = await evaluate('typeof window.custodyCopyEmailText');
+  console.log('CustodyEmailCompose.mergeTemplatePlaceholders:', merge);
+  console.log('getPendingEmailDraft:', pending);
+  console.log('custodyCopyEmailText:', copyHelper);
 
   ws.close();
 }

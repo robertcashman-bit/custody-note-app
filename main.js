@@ -43,23 +43,6 @@ function getDefaultUserDataPath() {
   }
 }
 
-/** Bundled readme: how Outlook Web email works + where runtime tracing is written. Copied to userData next to email-launch.log. */
-function syncEmailSendTraceToUserData() {
-  try {
-    const src = path.join(__dirname, 'deployment', 'email-send-trace.txt');
-    const dest = path.join(app.getPath('userData'), 'email-send-trace.txt');
-    if (!fs.existsSync(src)) {
-      console.warn('[email-send-trace] Bundled file missing:', src);
-      return { ok: false, error: 'bundled_missing', path: dest };
-    }
-    fs.copyFileSync(src, dest);
-    return { ok: true, path: dest };
-  } catch (e) {
-    console.warn('[email-send-trace] Sync failed:', e && e.message);
-    return { ok: false, error: String(e && e.message ? e.message : e), path: null };
-  }
-}
-
 const DEFAULT_USERDATA_PATH = getDefaultUserDataPath();
 const PORTABLE_USERDATA_PATH = app.isPackaged
   ? path.join(path.dirname(process.execPath), 'userData')
@@ -83,26 +66,6 @@ const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-i
 const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
 const { createBackupScheduler } = require('./main/backupScheduler');
-const { openOutlookWebEmail } = require('./main/openOutlookWebEmail');
-const { openComposeEml } = require('./main/openComposeEml');
-
-/** Heuristic: is Outlook desktop installed on this machine? Used by the
- *  renderer to default the Quick Email surface to 'desktop' on Windows. */
-function detectOutlookDesktop() {
-  if (process.platform !== 'win32') return { installed: false, exePath: null };
-  const candidates = [
-    process.env.PROGRAMFILES && require('path').join(process.env.PROGRAMFILES, 'Microsoft Office', 'root', 'Office16', 'OUTLOOK.EXE'),
-    process.env['PROGRAMFILES(X86)'] && require('path').join(process.env['PROGRAMFILES(X86)'], 'Microsoft Office', 'root', 'Office16', 'OUTLOOK.EXE'),
-    process.env.PROGRAMFILES && require('path').join(process.env.PROGRAMFILES, 'Microsoft Office', 'Office16', 'OUTLOOK.EXE'),
-    process.env['PROGRAMFILES(X86)'] && require('path').join(process.env['PROGRAMFILES(X86)'], 'Microsoft Office', 'Office16', 'OUTLOOK.EXE'),
-    process.env.PROGRAMFILES && require('path').join(process.env.PROGRAMFILES, 'Microsoft Office', 'root', 'Office15', 'OUTLOOK.EXE'),
-    process.env['PROGRAMFILES(X86)'] && require('path').join(process.env['PROGRAMFILES(X86)'], 'Microsoft Office', 'root', 'Office15', 'OUTLOOK.EXE'),
-  ].filter(Boolean);
-  for (const p of candidates) {
-    try { if (require('fs').existsSync(p)) return { installed: true, exePath: p }; } catch (_) {}
-  }
-  return { installed: false, exePath: null };
-}
 const { hardenWindow, hardenSession, isSafeExternalUrl } = require('./main/windowHardening');
 const _securityLog = require('./main/securityLog');
 const _safeLog = require('./lib/safeLog');
@@ -2395,7 +2358,7 @@ function createWindow() {
 
   /* Surface preload bundling failures. Without this hook, a missing /
      mistyped `require()` inside preload.js silently disables every
-     contextBridge — window.api / window.emailAPI / window.custodyNote all
+     contextBridge — window.api / window.custodyNoteBuildInfo / window.custodyNote all
      become undefined, the licence flow falls through to its "no API" branch,
      and the user sees an empty shell with a www.custodynote.com link in the
      splash that LOOKS like a marketing page. We log the failure to stderr
@@ -4268,7 +4231,6 @@ app.whenReady().then(async () => {
   }
   try { _securityLog.init(app.getPath('userData')); _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }); }
   catch (_) {}
-  try { syncEmailSendTraceToUserData(); } catch (_) {}
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
@@ -6048,136 +6010,15 @@ ipcMain.handle('photos-duplicate-folder', (_, { fromId, toId }) => {
   }
 });
 
-ipcMain.handle('open-outlook-email', async (event, payload) => {
-  if (!payload || typeof payload !== 'object') {
-    throw new Error('Missing email payload');
-  }
-  // Read the user's chosen Outlook surface from settings. Renderer also
-  // sends a hint in the payload (so the dialog wording matches what the
-  // user just confirmed), but the saved setting wins for safety.
-  let savedAccountType = '';
-  let savedFeeEarnerEmail = '';
-  /* H62 — also read the user-facing "Your email" field (settings key "email")
-     so the user's address can be passed to OWA as login_hint without their
-     having to fill a second field. Priority: feeEarnerEmail > solicitorEmail
-     > email. */
-  let savedSelfEmail = '';
-  try {
-    const rows = dbAll('SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)', [
-      'outlookAccountType', 'feeEarnerEmail', 'solicitorEmail', 'email',
-    ]);
-    for (const r of rows) {
-      if (r.key === 'outlookAccountType') savedAccountType = String(r.value || '').trim();
-      if (r.key === 'feeEarnerEmail' && !savedFeeEarnerEmail) savedFeeEarnerEmail = String(r.value || '').trim();
-      if (r.key === 'solicitorEmail' && !savedFeeEarnerEmail) savedFeeEarnerEmail = String(r.value || '').trim();
-      if (r.key === 'email') savedSelfEmail = String(r.value || '').trim();
-    }
-    if (!savedFeeEarnerEmail && savedSelfEmail) savedFeeEarnerEmail = savedSelfEmail;
-  } catch (_) { /* settings table not ready — fall back to the payload hint */ }
-
-  const forcedAccountType = payload.forceAccountType != null ? String(payload.forceAccountType) : '';
-  const accountType = forcedAccountType
-    || savedAccountType
-    || (payload.accountType != null ? String(payload.accountType) : '')
-    || ''; // empty → openOutlookWebEmail will infer from feeEarnerEmail or default to 'personal'
-
-  /* 'desktop' route → write a draft .eml file with X-Unsent: 1 and let the
-     OS hand it to the .eml-registered app (Outlook desktop on Windows).
-     This bypasses every flavour of Outlook Web URL routing and reliably
-     opens the compose window pre-populated. */
-  if (String(accountType).toLowerCase() === 'desktop') {
-    try {
-      const result = await openComposeEml({
-        to: payload.to != null ? String(payload.to) : '',
-        cc: payload.cc != null ? String(payload.cc) : '',
-        bcc: payload.bcc != null ? String(payload.bcc) : '',
-        subject: payload.subject != null ? String(payload.subject) : '',
-        body: payload.body != null ? String(payload.body) : '',
-      });
-      return Object.assign({}, result, {
-        mode: 'open',
-        truncated: false,
-        accountType: 'desktop',
-      });
-    } catch (err) {
-      console.error('[open-outlook-email] desktop .eml route failed:', err && err.message ? err.message : err);
-      return {
-        ok: false,
-        accountType: 'desktop',
-        composeSignature: false,
-        composeReason: 'eml_open_failed',
-        reason: err && err.message ? err.message : 'unknown_error',
-      };
-    }
-  }
-
-  /* H62 — pick the most specific login_hint we have. Renderer-supplied
-     payload.loginHint wins (it's the most direct user signal — e.g. a
-     dedicated field on the Officer Emails screen). Otherwise fall back to
-     the user's saved address (savedFeeEarnerEmail already includes the
-     "email" settings field as a fallback). */
-  const payloadLoginHint = (payload.loginHint != null) ? String(payload.loginHint).trim() : '';
-  const loginHint = payloadLoginHint || savedFeeEarnerEmail || '';
-
-  /* Windows + Outlook Web: default browser often routes outlook.office.com to the
-     Outlook PWA, which drops compose deeplinks (blank tab / inbox). Officer Emails
-     sends openMethod edge-inprivate or shell explicitly; Quick Email / Email OIC
-     historically sent neither — default Edge InPrivate here unless the payload
-     already set openMethod (e.g. Officer Emails "Default browser" → shell). */
-  let resolvedOpenMethod = payload.openMethod != null ? String(payload.openMethod).trim().toLowerCase() : '';
-  if (!resolvedOpenMethod && process.platform === 'win32') {
-    const at = String(accountType || '').toLowerCase();
-    if (at !== 'desktop' && at !== 'mailto') {
-      resolvedOpenMethod = 'edge-inprivate';
-    }
-  }
-
-  /* Playwright / automation only — native privacy dialog is not drivable from
-     browser automation. Set CUSTODYNOTE_E2E_SKIP_OUTLOOK_CONFIRM=1 for e2e. */
-  const e2eSkipOutlookConfirm = String(process.env.CUSTODYNOTE_E2E_SKIP_OUTLOOK_CONFIRM || '').trim() === '1';
-
-  return openOutlookWebEmail(
-    {
-      to: payload.to != null ? String(payload.to) : '',
-      cc: payload.cc != null ? String(payload.cc) : '',
-      bcc: payload.bcc != null ? String(payload.bcc) : '',
-      subject: payload.subject != null ? String(payload.subject) : '',
-      body: payload.body != null ? String(payload.body) : '',
-      feeEarnerEmail: loginHint,
-      route: payload.route != null ? String(payload.route) : '',
-      openMethod: resolvedOpenMethod,
-    },
-    {
-      parentWindow: mainWindow || null,
-      accountType: accountType || undefined,
-      skipConfirm: e2eSkipOutlookConfirm,
-    }
-  );
-});
-
-ipcMain.handle('detect-outlook-desktop', async () => detectOutlookDesktop());
-
 ipcMain.handle('open-external', async (_, url) => {
   if (typeof url !== 'string') return;
   const u = url.trim();
   if (u.toLowerCase().startsWith('mailto:')) {
-    console.warn('[open-external] Blocked mailto (use Outlook Web via open-outlook-email):', u.slice(0, 120));
+    console.warn('[open-external] Blocked mailto (copy subject/body in the app, then paste into your mail client):', u.slice(0, 120));
     return;
   }
   if (u.startsWith('https://') || u.startsWith('http://')) {
     await shell.openExternal(u);
-  }
-});
-
-ipcMain.handle('open-email-send-trace', async () => {
-  try {
-    const sync = syncEmailSendTraceToUserData();
-    if (!sync.ok || !sync.path) return { ok: false, error: sync.error || 'Could not install trace file' };
-    const err = await shell.openPath(sync.path);
-    if (err) return { ok: false, error: err };
-    return { ok: true, path: sync.path };
-  } catch (e) {
-    return { ok: false, error: e && e.message ? String(e.message) : 'Unknown error' };
   }
 });
 

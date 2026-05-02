@@ -1,6 +1,6 @@
 /**
- * Policy: no mailto in production sources; single email IPC path.
- * Hard rule: the ONLY permitted email trigger is Outlook Web compose.
+ * Policy: no raw mailto: in UI sources; no renderer shell.openExternal.
+ * v1.6.21: no Outlook Web compose IPC — copy-and-paste only.
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -13,7 +13,7 @@ const PROD_FILES = [
   'preload.js',
   'app.js',
   'index.html',
-  'renderer/outlook-email-invoke.js',
+  'renderer/email-pending-globals.js',
   'renderer/officerEmails.js',
   'renderer/views/email-modal.js',
   'renderer/views/billing.js',
@@ -47,27 +47,13 @@ function walkJsHtml(dir) {
   return results;
 }
 
-/* v1.6.2: mailto: is now an opt-in Outlook surface (Settings → "My default email
-   app"), so the URL builders and the browser fallback are allowed to emit it.
-   Other renderer/UI files (templates, list/billing/settings views, etc.) must
-   STILL not contain raw mailto: strings — they have to go through emailAPI. */
+/* mailto: literals only in URL-builder libraries, preload inline, hardening, main. */
 const MAILTO_ALLOWED = new Set([
-  'lib/outlookWebComposeUrl.js',
   'lib/emailComposeDraft.js',
-  /* v1.6.19: preload.js inlines lib/emailComposeDraft.js because Electron 28's
-     sandboxed preload can't resolve relative require() paths from inside an
-     asar (the v1.6.18 "Run in Electron: npm start" regression). preload.js is
-     a bridge file, not a renderer/UI file — same status as
-     lib/emailComposeDraft.js, hence the same allow-list entry. */
   'preload.js',
-  'main/openOutlookWebEmail.js',
   'main/windowHardening.js',
-  'renderer/email-draft-open.js',
-  /* Functional smoke test that drives the full Quick Email pipeline; it
-     asserts mailto: URIs are produced for the desktop-mail account-type
-     and so legitimately mentions the literal string. */
   'scripts/smoke-quick-email-asuser.js',
-  'main.js', // contains the open-external mailto block
+  'main.js',
 ]);
 
 describe('Email policy — production sources', () => {
@@ -133,15 +119,10 @@ describe('Email policy — production sources', () => {
     assert.deepStrictEqual(bad, [], 'Direct email client invocation in renderer:\n' + bad.join('\n'));
   });
 
-  it('preload does not expose openOutlookEmail on window.api', () => {
+  it('preload does not expose emailAPI or openOutlookEmail', () => {
     const preloadJs = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
-    assert.ok(!preloadJs.includes('openOutlookEmail'), 'use emailAPI.open only');
-  });
-
-  it('main wires open-outlook-email to main/openOutlookWebEmail.js', () => {
-    const mainJs = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
-    assert.ok(mainJs.includes("require('./main/openOutlookWebEmail')"));
-    assert.ok(mainJs.includes("ipcMain.handle('open-outlook-email'"));
+    assert.ok(!preloadJs.includes('openOutlookEmail'));
+    assert.ok(!preloadJs.includes("exposeInMainWorld('emailAPI'"));
   });
 
   it('main.js blocks mailto in open-external handler', () => {
@@ -153,13 +134,5 @@ describe('Email policy — production sources', () => {
     assert.ok(slice.includes('open-external'), 'mailto block must be inside open-external handler');
   });
 
-  it('lib/outlookWebComposeUrl.js uses correct OWA base URL', () => {
-    const lib = fs.readFileSync(path.join(root, 'lib', 'outlookWebComposeUrl.js'), 'utf8');
-    assert.ok(lib.includes("outlook.office.com"),
-      'work Outlook host must be outlook.office.com');
-    assert.ok(lib.includes('/mail/deeplink/compose'),
-      'canonical compose route must include /mail/deeplink/compose');
-    assert.ok(lib.includes('encodeURIComponent'), 'must use encodeURIComponent for safety');
-  });
 });
 

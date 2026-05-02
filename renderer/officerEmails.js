@@ -2,8 +2,8 @@
    Officer Emails — vanilla-JS Custody Note feature.
 
    Primary workflow: {{placeholder}} templates → preview → copy / paste into
-   Outlook (custodyCopyEmailText). Optional: savePendingEmailDraft +
-   openEmailDraft (mailto / Outlook Web) — never sends mail automatically.
+   Outlook (custodyCopyEmailText). v1.6.21: copy-and-paste only — no mail
+   client launch. Pending-draft helpers remain for dev diagnostics.
 
    This module only manages the inner UI of #view-officer-emails.
    ═══════════════════════════════════════════════════════════ */
@@ -11,24 +11,6 @@
   'use strict';
 
   var STORAGE_KEY = 'custody_note_officer_email_records_v2';
-  var SESSION_OPEN_FLAG = 'custodynite_officer_email_open_attempted';
-  var OW_ATTEMPT_KEY = 'custodynite_officer_ow_attempt';
-  /* H62 — Outlook sign-in hint. Persisted on this device so Edge / the
-     Outlook PWA pick the right account when the active browser session is
-     signed in to a different one (e.g. a personal Gmail). First-time empty
-     field may pre-fill from Settings (fee earner / solicitor email) only —
-     never a hardcoded address. User can edit on the Compose tab. */
-  var LOGIN_HINT_STORAGE_KEY = 'custody_note_officer_email_login_hint_v1';
-  /* Removed legacy mistaken default — migrate old localStorage so no install keeps it. */
-  var LEGACY_LOGIN_HINT_TO_STRIP = 'cashmanr@tuckerssolicitors.com';
-  /* H62 — Outlook handler choice. 'edge-inprivate' (default) spawns Edge
-     in InPrivate mode so the OWA URL bypasses the Outlook PWA hijack.
-     'desktop' writes an .eml draft (only useful when .eml is associated
-     with Outlook desktop, NOT the Outlook PWA). 'web' uses the default
-     browser. v2: bumped from v1 so the previous 'desktop' default no
-     longer wins on machines where the PWA hijacks .eml files too. */
-  var HANDLER_STORAGE_KEY = 'custody_note_officer_email_handler_v2';
-  var outlookDesktopDetected = null; // null = unknown, true/false after detection
   var activeTab = 'details';
   var activeRecordId = null;
   var records = [];
@@ -178,7 +160,6 @@
       'officerEmailInput',
       'officerRankInput',
       'officerSurnameInput',
-      'officerReferenceInput',
       'policeStationOrUnitInput',
       'custodyNumberInput',
       'dsccReferenceInput',
@@ -197,173 +178,11 @@
       el.addEventListener('input', updatePreviewAndSummary);
       el.addEventListener('change', updatePreviewAndSummary);
     }
-
-    /* Login-hint field: pre-fill from localStorage, else Settings email, then
-       auto-save on every change so the user only types it once. */
-    var loginHintEl = $('officerLoginHintInput');
-    if (loginHintEl) {
-      stripLegacyLoginHintIfPresent();
-      var initialHint = getStoredLoginHint();
-      if (!initialHint) initialHint = settingsFallbackLoginHint();
-      loginHintEl.value = initialHint;
-      loginHintEl.addEventListener('input', function () {
-        saveLoginHint(loginHintEl.value);
-        updatePreviewAndSummary();
-      });
-      loginHintEl.addEventListener('change', function () {
-        saveLoginHint(loginHintEl.value);
-        updatePreviewAndSummary();
-      });
-    }
-
-    /* Handler radios: pre-select from localStorage, default to 'desktop'.
-       Auto-detect whether Outlook desktop is installed and reflect in the
-       inline status hint. */
-    var stored = getStoredHandler();
-    /* H62 — default to Edge InPrivate. Outlook desktop is unreliable on
-       Windows machines where .eml is associated with the Outlook PWA, and
-       the default-browser route is unreliable wherever the PWA intercepts
-       outlook.office.com. Edge InPrivate has neither problem. */
-    var initial = stored || 'edge-inprivate';
-    setHandlerRadio(initial);
-    bindHandlerRadios();
-    syncLoginHintVisibility();
-    detectOutlookDesktopAndUpdate();
-  }
-
-  var VALID_HANDLERS = ['edge-inprivate', 'desktop', 'web'];
-
-  function getStoredHandler() {
-    try {
-      var v = window.localStorage.getItem(HANDLER_STORAGE_KEY);
-      if (VALID_HANDLERS.indexOf(v) >= 0) return v;
-    } catch (_) { /* localStorage unavailable */ }
-    return null;
-  }
-
-  function saveHandler(value) {
-    try {
-      if (VALID_HANDLERS.indexOf(value) >= 0) {
-        window.localStorage.setItem(HANDLER_STORAGE_KEY, value);
-      }
-    } catch (_) { /* localStorage unavailable */ }
-  }
-
-  function getCurrentHandler() {
-    var checked = document.querySelector('input[name="officerOutlookHandler"]:checked');
-    if (checked && VALID_HANDLERS.indexOf(checked.value) >= 0) return checked.value;
-    return getStoredHandler() || 'edge-inprivate';
-  }
-
-  function setHandlerRadio(value) {
-    var e = $('officerHandlerEdgeInPrivate');
-    var d = $('officerHandlerDesktop');
-    var w = $('officerHandlerWeb');
-    if (e) e.checked = (value === 'edge-inprivate');
-    if (d) d.checked = (value === 'desktop');
-    if (w) w.checked = (value === 'web');
-  }
-
-  function bindHandlerRadios() {
-    var ids = ['officerHandlerEdgeInPrivate', 'officerHandlerDesktop', 'officerHandlerWeb'];
-    function onChange() {
-      var val = getCurrentHandler();
-      saveHandler(val);
-      syncLoginHintVisibility();
-      updatePreviewAndSummary();
-    }
-    for (var i = 0; i < ids.length; i++) {
-      var el = $(ids[i]);
-      if (el) el.addEventListener('change', onChange);
-    }
-  }
-
-  function syncLoginHintVisibility() {
-    var label = $('officerLoginHintLabel');
-    var help = $('officerLoginHintHelp');
-    /* Login-hint matters for any browser-based route (Edge InPrivate uses the
-       same OWA URL with login_hint=…). Hide only for the desktop .eml route. */
-    var visible = getCurrentHandler() !== 'desktop';
-    if (label) label.style.display = visible ? '' : 'none';
-    if (help) help.style.display = visible ? '' : 'none';
-  }
-
-  function detectOutlookDesktopAndUpdate() {
-    var status = $('officerHandlerStatus');
-    if (!window.emailAPI || typeof window.emailAPI.detectOutlookDesktop !== 'function') {
-      outlookDesktopDetected = false;
-      if (status) status.textContent = 'Outlook desktop detection unavailable in this build.';
-      return;
-    }
-    Promise.resolve(window.emailAPI.detectOutlookDesktop()).then(function (result) {
-      outlookDesktopDetected = !!(result && result.installed);
-      if (!status) return;
-      if (outlookDesktopDetected) {
-        status.textContent = 'Outlook desktop detected on this PC. Edge InPrivate is still the most reliable on Windows when the Outlook PWA is also installed.';
-      } else {
-        status.textContent = 'Outlook desktop was NOT detected. Use Edge InPrivate (recommended) or Default browser above.';
-      }
-    }).catch(function () {
-      outlookDesktopDetected = false;
-      if (status) status.textContent = 'Outlook desktop detection failed (assume not installed).';
-    });
-  }
-
-  function stripLegacyLoginHintIfPresent() {
-    try {
-      var v = window.localStorage.getItem(LOGIN_HINT_STORAGE_KEY);
-      if (typeof v === 'string' && v.trim().toLowerCase() === LEGACY_LOGIN_HINT_TO_STRIP.toLowerCase()) {
-        window.localStorage.removeItem(LOGIN_HINT_STORAGE_KEY);
-      }
-    } catch (_) { /* localStorage unavailable */ }
-  }
-
-  function settingsFallbackLoginHint() {
-    try {
-      var s = window._appSettingsCache || {};
-      /* Same priority as main.js open-outlook-email (fee earner → solicitor → Your email). */
-      return String(s.feeEarnerEmail || s.solicitorEmail || s.email || '').trim();
-    } catch (_) {
-      return '';
-    }
-  }
-
-  function getStoredLoginHint() {
-    try {
-      var v = window.localStorage.getItem(LOGIN_HINT_STORAGE_KEY);
-      if (typeof v === 'string' && v.trim()) return v.trim();
-    } catch (_) { /* localStorage unavailable */ }
-    return '';
-  }
-
-  function saveLoginHint(value) {
-    var v = String(value == null ? '' : value).trim();
-    try {
-      if (v) window.localStorage.setItem(LOGIN_HINT_STORAGE_KEY, v);
-      else window.localStorage.removeItem(LOGIN_HINT_STORAGE_KEY);
-    } catch (_) { /* localStorage unavailable */ }
-  }
-
-  function getCurrentLoginHint() {
-    var el = $('officerLoginHintInput');
-    if (el && typeof el.value === 'string' && el.value.trim()) return el.value.trim();
-    var stored = getStoredLoginHint();
-    if (stored) return stored;
-    /* No dedicated hint — use Your Details so OWA / login.microsoftonline.com gets login_hint. */
-    return settingsFallbackLoginHint();
   }
 
   function bindActionButtons() {
-    /* v1.6.20: copy-and-paste only. Every Outlook-launch surface (the two
-       hero buttons, the two compose buttons, the two preview buttons, the
-       two side-panel buttons, the records "re-open" button, the post-fail
-       "Copy & reopen" panel and "Continue draft" button) was removed
-       because the Windows launch path was unreliable (Outlook PWA hijack,
-       Edge sign-in prompts, Default-browser interception, Gmail-session
-       collisions) and gave the user nothing the copy buttons did not
-       already give. The CustodyEmailCompose helpers stay exposed on the
-       preload bridge for any future opt-in surface, but the Officer
-       Emails UI no longer wires any of them. */
+    /* v1.6.20+ copy-and-paste only. v1.6.21 removed main-process Outlook IPC,
+       emailAPI bridge, and window mailto/OWA launch helpers. */
     bindClick('officerHeroCopyBodyBtn', function () { copyBody(); });
     bindClick('officerCopyBodyPreviewBtn', function () { copyBody(); });
     bindClick('officerSideCopyBodyBtn', function () { copyBody(); });
@@ -388,7 +207,6 @@
     bindClick('officerClearAllRecordsBtn', clearAllRecords);
     bindClick('officerRunTestsBtn', runTests);
     bindClick('officerRunDebugBtn', runDebugCheck);
-    bindClick('officerOpenEmailSendTraceBtn', openEmailSendTraceReadme);
 
     bindClick('officerPrevDayBtn', function () {
       var input = $('attendanceDateInput');
@@ -446,7 +264,6 @@
       officerEmail: valueOf('officerEmailInput'),
       officerRank: valueOf('officerRankInput'),
       officerSurname: valueOf('officerSurnameInput'),
-      officerReference: valueOf('officerReferenceInput'),
       policeStationOrUnit: valueOf('policeStationOrUnitInput'),
       custodyNumber: valueOf('custodyNumberInput'),
       dsccReference: valueOf('dsccReferenceInput'),
@@ -467,7 +284,6 @@
     setValue('officerEmailInput', data.officerEmail || '');
     setValue('officerRankInput', data.officerRank || '');
     setValue('officerSurnameInput', data.officerSurname || '');
-    setValue('officerReferenceInput', data.officerReference || '');
     setValue('policeStationOrUnitInput', data.policeStationOrUnit || '');
     setValue('custodyNumberInput', data.custodyNumber || '');
     setValue('dsccReferenceInput', data.dsccReference || '');
@@ -540,22 +356,6 @@
     updatePreviewAndSummary();
   }
 
-  function buildOutlookWebUrl(data) {
-    var bodyVal = (typeof data.body === 'string' && data.body !== '')
-      ? data.body
-      : rawValueOf('officerBodyInput');
-    var fn = window.buildOutlookWebComposeLink || window.buildOutlookWebLink;
-    if (typeof fn === 'function') {
-      return fn({
-        to: data.officerEmail || '',
-        cc: '',
-        subject: data.subject || '',
-        body: bodyVal,
-      });
-    }
-    return 'https://outlook.office.com/mail/deeplink/compose?';
-  }
-
   function buildCurrentDraft(modeHint) {
     var data = getFormData();
     var bodyText = rawValueOf('officerBodyInput');
@@ -597,21 +397,6 @@
     }
   }
 
-  function buildMailtoPreviewUrl(data) {
-    var bodyVal = (typeof data.body === 'string' && data.body !== '')
-      ? data.body
-      : rawValueOf('officerBodyInput');
-    if (typeof window.buildMailtoLink === 'function') {
-      return window.buildMailtoLink({
-        to: data.officerEmail || '',
-        cc: '',
-        subject: data.subject || '',
-        body: bodyVal,
-      });
-    }
-    return '';
-  }
-
   function isDevDiagnosticsVisible() {
     try {
       return !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isDevBuild);
@@ -628,21 +413,8 @@
     if (!isDevDiagnosticsVisible()) return;
     var data = getFormData();
     var bodyVal = rawValueOf('officerBodyInput');
-    var mailto = typeof window.buildMailtoLink === 'function'
-      ? window.buildMailtoLink({
-        to: data.officerEmail || '',
-        cc: '',
-        subject: data.subject || '',
-        body: bodyVal,
-      })
-      : '';
-    var owa = buildOutlookWebUrl(Object.assign({}, data, { body: bodyVal }));
     setText('officerDiagTo', data.officerEmail || '(empty)');
     setText('officerDiagSubject', data.subject || '(empty)');
-    var mEl = $('officerDiagMailto');
-    var oEl = $('officerDiagOwa');
-    if (mEl) mEl.textContent = mailto || '(buildMailtoLink unavailable)';
-    if (oEl) oEl.textContent = owa || '(buildOutlookWebLink unavailable)';
     var sel = getSelectedTemplate();
     var tid = $('officerDiagTemplateId');
     var tname = $('officerDiagTemplate');
@@ -673,36 +445,8 @@
       });
     }
     wire('officerDiagCopyBodyBtn', function (_d, bodyVal) { return bodyVal; }, 'Email body copied. You can now paste it into Outlook.');
-    wire('officerDiagCopyMailtoBtn', function (_d, bodyVal) {
-      return typeof window.buildMailtoLink === 'function'
-        ? window.buildMailtoLink({
-          to: valueOf('officerEmailInput'),
-          cc: '',
-          subject: valueOf('officerSubjectInput'),
-          body: bodyVal,
-        })
-        : '';
-    }, 'Mailto link copied.');
     wire('officerDiagCopyOfficerEmailBtn', function (data) { return data.officerEmail || ''; }, 'Officer email copied.');
     wire('officerDiagCopySubjectBtn', function (data) { return data.subject || ''; }, 'Subject copied.');
-  }
-
-  /** True for allowed Officer Emails launch URLs (must match main process). */
-  function isWorkOutlookComposeUrl(url) {
-    if (typeof url !== 'string' || !url) return false;
-    try {
-      var u = new URL(url);
-      if (u.protocol !== 'https:' || u.hostname.toLowerCase() !== 'outlook.office.com') {
-        return false;
-      }
-      if (u.pathname === '/mail/deeplink/compose') return true;
-      if (u.pathname === '/owa' || u.pathname === '/owa/') {
-        return u.searchParams.get('path') === '/mail/action/compose';
-      }
-      return false;
-    } catch (e) {
-      return false;
-    }
   }
 
   function bindEmailComposeDiagnosticsButtons() {
@@ -713,16 +457,10 @@
       el.addEventListener('click', fn);
     }
     bindOnce('officerDiagTestSavePending', function () {
-      var d = buildCurrentDraft('outlook-web');
+      var d = buildCurrentDraft('saved');
       if (typeof window.savePendingEmailDraft === 'function') window.savePendingEmailDraft(d);
       updatePendingAndFallbackUi();
       showNotice('Diagnostics: pending draft saved from current form.');
-    });
-    bindOnce('officerDiagTestResumeWeb', function () {
-      if (typeof window.resumePendingEmailDraft === 'function') window.resumePendingEmailDraft('outlook-web');
-    });
-    bindOnce('officerDiagTestResumeMailto', function () {
-      if (typeof window.resumePendingEmailDraft === 'function') window.resumePendingEmailDraft('mailto');
     });
     bindOnce('officerDiagTestClearPending', function () {
       if (typeof window.clearPendingEmailDraft === 'function') window.clearPendingEmailDraft();
@@ -775,8 +513,6 @@
     var ids = [
       'officerCopyBodyBtn',
       'officerCopyFullBtn',
-      'officerFbCopyBodyBtn',
-      'officerFbCopyFullBtn',
       'officerHeroCopyBodyBtn',
       'officerCopyBodyPreviewBtn',
       'officerSideCopyBodyBtn',
@@ -838,7 +574,6 @@
       officerEmail: data.officerEmail,
       officerRank: data.officerRank,
       officerSurname: data.officerSurname,
-      officerReference: data.officerReference,
       policeStationOrUnit: data.policeStationOrUnit,
       custodyNumber: data.custodyNumber,
       dsccReference: data.dsccReference,
@@ -985,7 +720,6 @@
         officerEmail: '',
         officerRank: '',
         officerSurname: '',
-        officerReference: '',
         policeStationOrUnit: '',
         custodyNumber: '',
         dsccReference: '',
@@ -1028,7 +762,6 @@
       'officerEmailInput',
       'officerRankInput',
       'officerSurnameInput',
-      'officerReferenceInput',
       'policeStationOrUnitInput',
       'custodyNumberInput',
       'dsccReferenceInput',
@@ -1193,7 +926,6 @@
       officerEmail: 'officer.fisher@police.uk',
       officerRank: 'DC',
       officerSurname: 'Fisher',
-      officerReference: '1234',
       policeStationOrUnit: 'Kent Police',
       custodyNumber: 'CN-001',
       dsccReference: 'DSCC/42',
@@ -1210,11 +942,6 @@
     var subject = composeMerge(tpl.subjectTemplate, buildPlaceholderMapFromForm(sample));
     var bodyCore = composeMerge(tpl.bodyTemplate, buildPlaceholderMapFromForm(sample));
     var body = bodyCore + '\n\n' + feeEarnerClosingSignature();
-    var url = buildOutlookWebUrl({
-      officerEmail: sample.officerEmail,
-      subject: subject,
-      body: body,
-    });
     var copyTextValue = 'To: ' + sample.officerEmail + '\nSubject: ' + subject + '\n\n' + body;
     var beforeRecords = records.slice();
 
@@ -1228,7 +955,6 @@
         officerEmail: sample.officerEmail,
         officerRank: sample.officerRank,
         officerSurname: sample.officerSurname,
-        officerReference: sample.officerReference,
         policeStationOrUnit: sample.policeStationOrUnit,
         custodyNumber: sample.custodyNumber,
         dsccReference: sample.dsccReference,
@@ -1255,16 +981,6 @@
     var timeResult = adjustTime('10:00', 15);
 
     var results = [
-      {
-        name: 'Outlook URL is outlook.office.com work compose',
-        passed: isWorkOutlookComposeUrl(url),
-        detail: url,
-      },
-      {
-        name: 'Outlook URL contains to, subject and body',
-        passed: url.indexOf('to=') >= 0 && url.indexOf('subject=') >= 0 && url.indexOf('body=') >= 0,
-        detail: 'Checked URL query parameters.',
-      },
       {
         name: 'Email validation rejects invalid email',
         passed: !isValidEmail('not-an-email'),
@@ -1321,11 +1037,9 @@
         detail: 'Missing subject and body detected.',
       },
       {
-        name: 'Email draft helper (mailto + OWA links) is wired',
-        passed: typeof window.openEmailDraft === 'function'
-          && typeof window.buildMailtoLink === 'function'
-          && typeof window.buildOutlookWebLink === 'function',
-        detail: 'renderer/email-draft-open.js defines openEmailDraft, buildMailtoLink, buildOutlookWebLink.',
+        name: 'CustodyEmailCompose template merge is wired (preload)',
+        passed: !!(window.CustodyEmailCompose && typeof window.CustodyEmailCompose.mergeTemplatePlaceholders === 'function'),
+        detail: 'preload exposes CustodyEmailCompose for {{placeholder}} merging.',
       },
       {
         name: 'Salutation uses rank and surname with comma',
@@ -1353,19 +1067,6 @@
     });
   }
 
-  function openEmailSendTraceReadme() {
-    if (!window.api || typeof window.api.openEmailSendTrace !== 'function') {
-      showNotice('Email send trace is not available here.');
-      return;
-    }
-    window.api.openEmailSendTrace().then(function (r) {
-      if (!r || !r.ok) showNotice((r && r.error) || 'Could not open trace file.');
-      else showNotice('Opened email-send-trace.txt (app data folder).');
-    }).catch(function () {
-      showNotice('Could not open trace file.');
-    });
-  }
-
   function runDebugCheck() {
     var data = getFormData();
     var missing = getMissingRequiredFields(data);
@@ -1376,18 +1077,11 @@
       missingRequiredFields: missing,
       savedRecordCount: records.length,
       localStorageAvailable: isStorageAvailable(),
-      outlookWebUrlPreview: buildOutlookWebUrl(data),
       lastSavedRecordStatus: records[0] ? records[0].status : 'No saved records',
       activeRecordId: activeRecordId,
-      openEmailDraftAvailable: typeof window.openEmailDraft === 'function',
-      invokeOutlookWebComposeAvailable: typeof window.invokeOutlookWebCompose === 'function',
-      emailApiOpenAvailable: !!(window.emailAPI && typeof window.emailAPI.open === 'function'),
-      outlookLoginHint: getCurrentLoginHint() || '(none — Edge / PWA may pick the wrong account)',
-      outlookHandler: getCurrentHandler(),
-      outlookDesktopDetected: outlookDesktopDetected,
-      outlookComposeUrlStyle: 'mail/deeplink/compose',
-      mailtoUrlPreview: buildMailtoPreviewUrl(data),
-      signInReminder: 'Outlook Web may ask you to sign in to the email account you want to send from.',
+      custodyEmailComposeAvailable: !!(window.CustodyEmailCompose && typeof window.CustodyEmailCompose.mergeTemplatePlaceholders === 'function'),
+      pendingDraftGlobalsAvailable: typeof window.getPendingEmailDraft === 'function',
+      note: 'v1.6.21 — copy-and-paste only; no Outlook IPC or emailAPI bridge.',
     };
     var debug = $('officerDebugOutput');
     if (debug) debug.textContent = JSON.stringify(output, null, 2);
@@ -1409,9 +1103,6 @@
     onShow: onShow,
     /* Internal helpers exposed for ad-hoc renderer-console testing only. */
     _internal: {
-      buildOutlookWebUrl: buildOutlookWebUrl,
-      buildMailtoPreviewUrl: buildMailtoPreviewUrl,
-      isWorkOutlookComposeUrl: isWorkOutlookComposeUrl,
       adjustDate: adjustDate,
       adjustTime: adjustTime,
       isValidEmail: isValidEmail,

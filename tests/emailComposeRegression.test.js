@@ -22,15 +22,15 @@ describe('Email compose regression', () => {
     assert.ok(!src.includes('graph.microsoft.com'), 'no Graph send');
   });
 
-  it('officerEmails uses pending draft + openEmailDraft (no auto-send)', () => {
+  it('officerEmails can persist pending draft for dev diagnostics (no mail launch)', () => {
     const src = fs.readFileSync(path.join(ROOT, 'renderer', 'officerEmails.js'), 'utf8');
-    assert.ok(src.includes('savePendingEmailDraft'), 'saves pending before open');
-    assert.ok(src.includes('openEmailDraft'), 'opens via draft helper');
+    assert.ok(src.includes('savePendingEmailDraft'), 'pending draft save in diagnostics');
+    assert.ok(!src.includes('openEmailDraft'), 'openEmailDraft not wired in officer emails (v1.6.21)');
   });
 
-  it('index.html loads clipboard helper then email draft glue', () => {
+  it('index.html loads clipboard helper then pending-draft globals', () => {
     const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
     assert.ok(html.includes('renderer/emailCopy.js'));
-    assert.ok(html.includes('renderer/email-draft-open.js'));
+    assert.ok(html.includes('renderer/email-pending-globals.js'));
   });
 });

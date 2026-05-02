@@ -1,6 +1,6 @@
 {
   "name": "custody-note",
-  "version": "1.6.20",
+  "version": "1.6.21",
   "lastUpdated": "2026-05-01",
   "buildTime": "2026-05-01T19:57:19.553Z",
   "description": "Custody Note – LAA-compliant custody note app",
@@ -23,7 +23,6 @@
     "test:all": "node scripts/test-all.js",
     "test:ci": "node scripts/test-all.js",
     "test:e2e": "playwright test",
-    "test:e2e:edge-cdp": "playwright test tests/e2e/quick-officer-email-edge-cdp.spec.ts",
     "test:unit": "node scripts/run-unit-tests.js",
     "test:deep": "node --test tests/deepAudit.test.js",
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
@@ -82,7 +81,6 @@
       "include": "build/installer.nsh"
     },
     "files": [
-      "deployment/email-send-trace.txt",
       "**/*",
       "!dist",
       "!.git",
