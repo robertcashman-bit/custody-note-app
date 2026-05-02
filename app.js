@@ -13363,25 +13363,51 @@ pdfAuditFooterHtml(d, settings) +
     });
   }
 
-  function openOutlookWebCompose(toEmail, subject, body) {
+  function copyTextToClipboardWithFeedback(text, successMessage) {
+    successMessage = successMessage || 'Copied to clipboard';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).then(function() {
+        showToast(successMessage, 'success');
+        return true;
+      }).catch(function() {
+        showToast('Could not copy to clipboard', 'error');
+        return false;
+      });
+    }
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(successMessage, 'success');
+      return Promise.resolve(true);
+    } catch (_) {
+      showToast('Could not copy to clipboard', 'error');
+      return Promise.resolve(false);
+    }
+  }
+
+  /** Copy-only replacement for legacy Outlook Web compose launch (v1.6.21). */
+  function copyOutlookComposeFields(toEmail, subject, body, opts) {
+    opts = opts || {};
     var to = String(toEmail || '').trim();
-    if (!to) {
+    if (!to && !opts.allowEmptyTo) {
       showToast('Add a recipient email address first.', 'error');
-      return;
+      return Promise.resolve(false);
     }
     var bodyStr = String(body || '');
     if (bodyStr.length > 4000) bodyStr = bodyStr.slice(0, 4000) + '\n\n[continued]';
-    var payload = { to: to, cc: '', bcc: '', subject: subject || '', body: bodyStr };
-    if (typeof window.invokeOutlookWebCompose !== 'function') {
-      showToast('Email unavailable', 'error');
-      return;
-    }
-    window.invokeOutlookWebCompose(payload).then(function() {
-      showToast('Opening Outlook Web…', 'success');
-    }).catch(function(err) {
-      console.error('[email]', err);
-      showToast(err && err.message ? err.message : 'Could not open email', 'error');
-    });
+    var lines = [];
+    if (to) lines.push('To: ' + to);
+    lines.push('Subject: ' + String(subject || ''));
+    lines.push('');
+    lines.push(bodyStr);
+    var msg = opts.successToast || 'Copied — paste into Outlook';
+    return copyTextToClipboardWithFeedback(lines.join('\n'), msg);
   }
 
   function closeAttendancePickerModal() {
@@ -14973,16 +14999,6 @@ pdfAuditFooterHtml(d, settings) +
     /* First-launch setup check: hide splash immediately so user can complete setup */
     window._emailTemplatesAddonEnabled = false;
     window._billingDefaults = {};
-
-    /* Pre-warm Outlook-desktop detection so the Quick Email modal's primary
-       Send button never has to await it on first click. The detection IPC is
-       cheap (a few synchronous fs.existsSync calls in main) but the round
-       trip is async; firing it at boot makes the result reliably cached. */
-    if (window.emailAPI && typeof window.emailAPI.detectOutlookDesktop === 'function' && !window._outlookDesktopDetectPromise) {
-      window._outlookDesktopDetectPromise = window.emailAPI.detectOutlookDesktop()
-        .then(function(d) { window._outlookDesktopDetect = d || { installed: false, exePath: null }; return window._outlookDesktopDetect; })
-        .catch(function() { window._outlookDesktopDetect = { installed: false, exePath: null }; return window._outlookDesktopDetect; });
-    }
 
     window.api.getSettings().then(function(s) {
       window._appSettingsCache = s || {};
@@ -16913,20 +16929,9 @@ pdfAuditFooterHtml(d, settings) +
       if (contactBtn) {
         e.preventDefault();
         e.stopPropagation();
-        var payload = {
-          to: 'robertcashman@defencelegalservices.com',
-          cc: '',
-          bcc: '',
-          subject: 'Custody Note Enquiry',
-          body: '',
-        };
-        if (typeof window.invokeOutlookWebCompose !== 'function') {
-          showToast('Could not open email', 'error');
-          return;
-        }
-        window.invokeOutlookWebCompose(payload)
-          .then(function() { showToast('Opening Outlook Web…', 'success'); })
-          .catch(function() { showToast('Could not open email', 'error'); });
+        copyOutlookComposeFields('robertcashman@defencelegalservices.com', 'Custody Note Enquiry', '', {
+          successToast: 'Copied — paste into Outlook to send',
+        });
         return;
       }
       var link = e.target?.closest?.('.splash-advert-link');
@@ -17344,14 +17349,10 @@ pdfAuditFooterHtml(d, settings) +
       var subject = 'Custody Note – custody notes app for police station reps';
       var body =
         'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload: ' + shareAppUrl + '\n\n30-day free trial, no credit card.';
-      var payload = { to: '', cc: '', bcc: '', subject: subject, body: body };
-      if (typeof window.invokeOutlookWebCompose !== 'function') {
-        showToast('Could not open email', 'error');
-        return;
-      }
-      window.invokeOutlookWebCompose(payload)
-        .then(function() { showToast('Opening Outlook Web…', 'success'); })
-        .catch(function(err) { showToast(err && err.message ? err.message : 'Could not open email', 'error'); });
+      copyOutlookComposeFields('', subject, body, {
+        allowEmptyTo: true,
+        successToast: 'Copied — paste into Outlook or any mail client',
+      });
     });
 
     const settingsFields = [
@@ -17816,8 +17817,9 @@ pdfAuditFooterHtml(d, settings) +
           '.\n\nFile: ' + fileName +
           '\n\nKind regards'
         );
-        openOutlookWebCompose(email, subjRaw, bodyRaw);
-        showToast('Emailing to ' + recipientLabel + ' (' + email + '). Attach: ' + fileName, 'success', 5000);
+        copyOutlookComposeFields(email, subjRaw, bodyRaw, {
+          successToast: 'Copied — paste into Outlook and attach ' + fileName,
+        });
       });
     });
 
@@ -18204,21 +18206,6 @@ pdfAuditFooterHtml(d, settings) +
     }
     document.addEventListener('keydown', function(e) {
       if (_locked && e.key === 'Enter') _unlock();
-    });
-
-    document.getElementById('help-open-email-send-trace')?.addEventListener('click', function() {
-      if (!window.api || typeof window.api.openEmailSendTrace !== 'function') {
-        if (typeof showToast === 'function') showToast('Email send trace is not available in this environment.', 'warning');
-        return;
-      }
-      window.api.openEmailSendTrace().then(function(r) {
-        if (!r || !r.ok) {
-          if (typeof showToast === 'function') showToast((r && r.error) || 'Could not open trace file', 'warning');
-        }
-      }).catch(function(e) {
-        console.error('[help-open-email-send-trace]', e);
-        if (typeof showToast === 'function') showToast('Could not open trace file', 'error');
-      });
     });
 
     /* Magic-link session unlock */

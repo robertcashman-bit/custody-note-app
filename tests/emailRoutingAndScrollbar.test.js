@@ -56,12 +56,11 @@ describe('Custom form scrollbar', () => {
 });
 
 const mainJs = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-const openOutlookModule = fs.readFileSync(path.join(__dirname, '..', 'main', 'openOutlookWebEmail.js'), 'utf8');
-const outlookUrlLib = fs.readFileSync(path.join(__dirname, '..', 'lib', 'outlookWebComposeUrl.js'), 'utf8');
+const preloadJs = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
 
-/* ── Outlook Web only (no mailto / no default mail client) ─── */
+/* ── Copy-and-paste email (v1.6.21: no Outlook IPC) ─── */
 
-describe('Outlook Web email routing — copy-only workflow (v1.6.20)', () => {
+describe('Email routing — copy-and-paste only (v1.6.21)', () => {
   it('email-modal is copy-and-paste only (no Open-in-Outlook buttons, no openExternal)', () => {
     /* v1.6.20: the Quick Email modal lost its "Open in Outlook" /
        "Open in Outlook Web" buttons. The user copies + pastes into
@@ -103,39 +102,30 @@ describe('Outlook Web email routing — copy-only workflow (v1.6.20)', () => {
     assert.ok(appJs.includes('showQuickOfficerEmail'));
   });
 
-  it('app.js openOutlookWebCompose uses invokeOutlookWebCompose only', () => {
-    const fnIdx = appJs.indexOf('function openOutlookWebCompose(');
-    assert.ok(fnIdx > -1, 'openOutlookWebCompose must exist');
-    const fnBody = appJs.slice(fnIdx, fnIdx + 1200);
-    assert.ok(fnBody.includes('invokeOutlookWebCompose'), 'must use invokeOutlookWebCompose');
-    assert.ok(!fnBody.includes('openOutlookEmail'), 'no api.openOutlookEmail');
-    assert.ok(!fnBody.includes('mailto:'), 'no mailto in openOutlookWebCompose');
+  it('app.js uses clipboard copy for contact/share/LAA email (no invokeOutlookWebCompose)', () => {
+    assert.ok(appJs.includes('function copyOutlookComposeFields('), 'copyOutlookComposeFields must exist');
+    assert.ok(!appJs.includes('invokeOutlookWebCompose'), 'invokeOutlookWebCompose removed in v1.6.21');
+    assert.ok(!appJs.includes('function openOutlookWebCompose('), 'openOutlookWebCompose removed');
   });
 
-  it('bundled email-send-trace ships with app and the dev Testing tab can open it', () => {
-    /* v1.6.20: the user-facing "Outlook Web email & tracing" Help section
-       was removed (no more launches → no support value). The deployment
-       trace file + IPC handler stay so the dev Testing/Debug tab in
-       Officer Emails (officerOpenEmailSendTraceBtn) can still open it
-       when reproducing email issues. */
-    const tracePath = path.join(__dirname, '..', 'deployment', 'email-send-trace.txt');
-    assert.ok(fs.existsSync(tracePath), 'deployment/email-send-trace.txt must exist');
-    const preloadJs = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
-    assert.ok(preloadJs.includes('open-email-send-trace'), 'preload invokes open-email-send-trace');
-    assert.ok(mainJs.includes("ipcMain.handle('open-email-send-trace'"), 'main registers handler');
-    assert.ok(mainJs.includes('syncEmailSendTraceToUserData'), 'startup sync copies trace to userData');
-    assert.ok(indexHtml.includes('officerOpenEmailSendTraceBtn'), 'Officer Emails Testing button must remain');
-    assert.ok(!indexHtml.includes('help-open-email-send-trace'), 'Help-section trace button removed in v1.6.20');
+  it('index.html loads pending-draft globals only (no outlook-invoke or draft-open scripts)', () => {
+    assert.ok(indexHtml.includes('renderer/email-pending-globals.js'));
+    assert.ok(!indexHtml.includes('renderer/email-draft-open.js'));
+    assert.ok(!indexHtml.includes('renderer/outlook-email-invoke.js'));
   });
 
-  it('main process exposes open-outlook-email and blocks mailto in open-external', () => {
-    assert.ok(mainJs.includes("ipcMain.handle('open-outlook-email'"), 'IPC handler present');
-    assert.ok(mainJs.includes("require('./main/openOutlookWebEmail')"), 'delegates to module');
-    assert.ok(openOutlookModule.includes('const launchUrl = url'), 'OWA opens as plain HTTPS compose URL');
-    assert.ok(!openOutlookModule.includes("'microsoft-edge:' + url"), 'Windows must not wrap OWA with microsoft-edge:');
-    assert.ok(outlookUrlLib.includes('outlook.office.com'), 'OWA host in lib/outlookWebComposeUrl.js');
-    assert.ok(outlookUrlLib.includes('/mail/deeplink/compose'), 'OWA compose route in lib/outlookWebComposeUrl.js');
+  it('main process does not expose Outlook compose IPC; mailto still blocked in open-external', () => {
+    assert.ok(!mainJs.includes("ipcMain.handle('open-outlook-email'"), 'open-outlook-email IPC removed');
+    assert.ok(!mainJs.includes("require('./main/openOutlookWebEmail')"));
+    assert.ok(!mainJs.includes("ipcMain.handle('detect-outlook-desktop'"));
+    assert.ok(!mainJs.includes("ipcMain.handle('open-email-send-trace'"));
     assert.ok(mainJs.includes("u.toLowerCase().startsWith('mailto:')"), 'mailto blocked in open-external');
+  });
+
+  it('preload does not expose emailAPI bridge', () => {
+    assert.ok(!preloadJs.includes("exposeInMainWorld('emailAPI'"), 'emailAPI bridge removed');
+    assert.ok(!preloadJs.includes('open-email-send-trace'));
+    assert.ok(preloadJs.includes("exposeInMainWorld('CustodyEmailCompose'"), 'template merge bridge remains');
   });
 
   it('email-templates.js has no mailto or multi-client builders', () => {

@@ -63,7 +63,7 @@
         If the preload script never ran (e.g. esbuild bundling failed because
         a `lib/*.js` file referenced in preload.js is missing), every
         contextBridge.exposeInMainWorld call is skipped and window.api,
-        window.emailAPI, window.custodyNoteBuildInfo are all undefined.
+        window.custodyNoteBuildInfo are undefined.
         Without this guard the user sees the splash → faded splash → empty
         shell with a "www.custodynote.com" link inside the splash advert,
         which can be mistaken for a marketing page. We surface a clear,

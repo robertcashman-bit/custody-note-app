@@ -26,9 +26,8 @@
  *
  *   1. preload.js MUST NOT require any relative path. The only allowed
  *      requires are 'electron' and Node built-ins.
- *   2. preload.js MUST expose the four bridges main.js + the renderer
- *      expect: api, emailAPI, custodyNoteBuildInfo, CustodyEmailCompose,
- *      custodyNote.
+ *   2. preload.js MUST expose the bridges main + renderer expect (no emailAPI):
+ *      api, custodyNoteBuildInfo, CustodyEmailCompose, custodyNote.
  *   3. preload.js MUST publish custodyNoteBuildInfo.preloadOk so the
  *      renderer's preload-failure guard in init-events.js can detect a
  *      broken preload.
@@ -93,7 +92,6 @@ describe('preload.js integrity', () => {
     const src = fs.readFileSync(PRELOAD_PATH, 'utf8');
     const required = [
       "contextBridge.exposeInMainWorld('api'",
-      "contextBridge.exposeInMainWorld('emailAPI'",
       "contextBridge.exposeInMainWorld('custodyNoteBuildInfo'",
       "contextBridge.exposeInMainWorld('CustodyEmailCompose'",
       "contextBridge.exposeInMainWorld('custodyNote'",

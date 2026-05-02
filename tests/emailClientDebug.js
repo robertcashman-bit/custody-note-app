@@ -1,5 +1,5 @@
 /**
- * DevTools helper: verify Outlook Web email path (no mailto / no preferred-client picker).
+ * DevTools helper: verify copy-and-paste email bridge (v1.6.21).
  * Requires Electron with remote debugging on port 9222 and the app window open.
  */
 const http = require('http');
@@ -52,13 +52,13 @@ async function run() {
   await connect(page.webSocketDebuggerUrl);
   await send('Runtime.enable', {});
 
-  console.log('=== Outlook Web email debug ===\n');
+  console.log('=== Email bridge debug (v1.6.21) ===\n');
 
-  const emailOpen = await evaluate('typeof (window.emailAPI && window.emailAPI.open)');
-  console.log('window.emailAPI.open:', emailOpen);
+  const ce = await evaluate('typeof (window.CustodyEmailCompose && window.CustodyEmailCompose.mergeTemplatePlaceholders)');
+  console.log('CustodyEmailCompose.mergeTemplatePlaceholders:', ce);
 
-  const invokeOpen = await evaluate('typeof (window.invokeOutlookWebCompose)');
-  console.log('window.invokeOutlookWebCompose:', invokeOpen);
+  const copyHelper = await evaluate('typeof window.custodyCopyEmailText');
+  console.log('custodyCopyEmailText:', copyHelper);
 
   const openExt = await evaluate('typeof (window.api && window.api.openExternal)');
   console.log('window.api.openExternal (non-email links only):', openExt);

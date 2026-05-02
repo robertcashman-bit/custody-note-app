@@ -211,7 +211,7 @@
             <button type="button" id="openOfficerEmailsBtn" class="home-action-card officer-email-home-card">
               <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
               <span class="home-card-title">Officer Emails</span>
-              <span class="home-card-sub">Templates and copy-and-paste emails to officers — optional Outlook links</span>
+              <span class="home-card-sub">Templates and copy-and-paste emails to officers</span>
             </button>
             <button type="button" id="home-card-quick-email" class="home-action-card officer-email-home-card" style="display:none;" title="Requires Officer Email Templates add-on enabled in Settings">
               <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
@@ -405,7 +405,7 @@
         </div>
         <div class="list-toolbar">
           <input type="search" id="list-search" placeholder="Search by name, UFN, station, custody number, date..." class="search-input" aria-label="Search attendance records">
-          <button type="button" id="list-quick-email-btn" class="btn btn-primary btn-small" style="display:none;" title="Compose email to officer (Outlook Web)">Quick email to officer</button>
+          <button type="button" id="list-quick-email-btn" class="btn btn-primary btn-small" style="display:none;" title="Compose email to officer from a template">Quick email to officer</button>
           <button type="button" id="backup-now-btn" class="btn btn-secondary btn-small" title="Create a backup now">Backup now</button>
         </div>
         <div class="list-filters">
@@ -1341,7 +1341,7 @@
               </div>
             </div>
           </div>
-          <p class="settings-hint" style="margin-top:0.75rem;">Officer and solicitor email actions open <strong>Outlook Web</strong> (Microsoft 365) in your browser &mdash; sign in with your work or school account if prompted.</p>
+          <p class="settings-hint" style="margin-top:0.75rem;">Officer and solicitor email actions use <strong>copy and paste</strong> &mdash; the app never opens a mail client for you. Paste into Outlook (desktop or web) yourself.</p>
 
           <div style="margin-top:1.25rem;">
             <strong>Custom Email Templates</strong>
@@ -1967,21 +1967,15 @@
                     <input id="officerSurnameInput" type="text" placeholder="Fisher" autocomplete="off" />
                   </label>
                   <label>
-                    Officer collar / reference
-                    <input id="officerReferenceInput" type="text" placeholder="Optional" autocomplete="off" />
-                  </label>
-                </div>
-
-                <div class="officer-grid-two">
-                  <label>
                     Police station / unit
                     <input id="policeStationOrUnitInput" type="text" placeholder="Optional" autocomplete="off" />
                   </label>
-                  <label>
-                    Custody record number
-                    <input id="custodyNumberInput" type="text" placeholder="Optional" autocomplete="off" />
-                  </label>
                 </div>
+
+                <label>
+                  Custody record number
+                  <input id="custodyNumberInput" type="text" placeholder="Optional" autocomplete="off" />
+                </label>
 
                 <label>
                   DSCC reference
@@ -2115,12 +2109,11 @@
 
               <section id="officerTabTesting" class="officer-tab-panel officer-card hidden">
                 <h2>Testing / Debug</h2>
-                <p class="section-help">Use these tools to verify the Outlook Web link, validation, template generation and local record storage before relying on the feature.</p>
+                <p class="section-help">Use these tools to verify validation, template generation and local record storage before relying on the feature.</p>
 
                 <div class="large-button-row">
                   <button id="officerRunTestsBtn" class="gold-button" type="button">Run Tests</button>
                   <button id="officerRunDebugBtn" type="button">Run Debug Check</button>
-                  <button id="officerOpenEmailSendTraceBtn" type="button" title="Opens bundled readme copied to app data">Email send trace</button>
                 </div>
 
                 <h3>Test Results</h3>
@@ -2132,16 +2125,12 @@
                 <pre id="officerDebugOutput" class="debug-output">No debug output yet.</pre>
 
                 <div id="officerEmailDevDiagnostics" class="officer-email-dev-diagnostics hidden" style="margin-top:1rem;padding:12px;border-radius:8px;border:1px dashed var(--border-color,#cbd5e1);background:#f8fafc;">
-                  <h3 style="margin-top:0;">Email link diagnostics (development build)</h3>
-                  <p class="section-help" style="margin-bottom:8px;">Recipient, subject, encoded mailto and Outlook Web URLs built from the current form.</p>
+                  <h3 style="margin-top:0;">Compose diagnostics (development build)</h3>
+                  <p class="section-help" style="margin-bottom:8px;">Recipient, subject and template details from the current form.</p>
                   <p><strong>Recipient</strong></p>
                   <pre id="officerDiagTo" class="debug-output" style="white-space:pre-wrap;">—</pre>
                   <p><strong>Subject</strong></p>
                   <pre id="officerDiagSubject" class="debug-output" style="white-space:pre-wrap;">—</pre>
-                  <p><strong>Generated mailto link</strong></p>
-                  <pre id="officerDiagMailto" class="debug-output" style="white-space:pre-wrap;word-break:break-all;">—</pre>
-                  <p><strong>Generated Outlook Web link</strong></p>
-                  <pre id="officerDiagOwa" class="debug-output" style="white-space:pre-wrap;word-break:break-all;">—</pre>
                   <p><strong>Selected template</strong></p>
                   <pre id="officerDiagTemplate" class="debug-output">—</pre>
                   <p><strong>Pending draft</strong></p>
@@ -2157,18 +2146,15 @@
                   <p><strong>Secure context</strong></p>
                   <pre id="officerDiagSecureCtx" class="debug-output">—</pre>
 
-                  <h4 style="margin:14px 0 8px;">Email Compose Diagnostics</h4>
-                  <p class="section-help">Manual checks for pending draft and compose links (development build).</p>
+                  <h4 style="margin:14px 0 8px;">Pending draft storage</h4>
+                  <p class="section-help">Manual checks for local pending-draft round-trip (development build).</p>
                   <div class="large-button-row" style="flex-wrap:wrap;">
                     <button type="button" id="officerDiagTestSavePending">Test: save pending from form</button>
-                    <button type="button" id="officerDiagTestResumeWeb">Test: resume Outlook Web</button>
-                    <button type="button" id="officerDiagTestResumeMailto">Test: resume mailto</button>
                     <button type="button" id="officerDiagTestClearPending">Test: clear pending</button>
                   </div>
 
                   <div class="large-button-row" style="flex-wrap:wrap;">
                     <button type="button" id="officerDiagCopyBodyBtn">Copy email body</button>
-                    <button type="button" id="officerDiagCopyMailtoBtn">Copy full mailto link</button>
                     <button type="button" id="officerDiagCopyOfficerEmailBtn">Copy officer email</button>
                     <button type="button" id="officerDiagCopySubjectBtn">Copy subject</button>
                   </div>
@@ -2407,8 +2393,7 @@
   ──────────────────────────────────────────────────────────── -->
   <script src="renderer/toast.js"></script>
   <script src="renderer/emailCopy.js"></script>
-  <script src="renderer/email-draft-open.js"></script>
-  <script src="renderer/outlook-email-invoke.js"></script>
+  <script src="renderer/email-pending-globals.js"></script>
   <script src="renderer/licence.js"></script>
   <!-- Wheel-style ("rotating counter") date/time picker. Self-contained, attaches a 🕑/📅 button next to every native date/time/datetime-local input. Native typing still works. -->
   <script src="renderer/widgets/wheelDateTimePicker.js"></script>

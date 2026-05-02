@@ -9,8 +9,7 @@
  * interception). The previous tests for those buttons have been replaced
  * with copy-button assertions that match the user's actual workflow.
  *
- * Loads renderer/email-draft-open.js so the inlined helper module wiring
- * matches the production preload bridge.
+ * Loads renderer/email-pending-globals.js (pending draft) + emailCopy.js.
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -22,7 +21,7 @@ const ROOT = path.join(__dirname, '..');
 const INDEX_HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const EMAIL_COMPOSE_LIB = require(path.join(ROOT, 'lib', 'emailComposeDraft.js'));
 const EMAIL_COPY_SRC = fs.readFileSync(path.join(ROOT, 'renderer', 'emailCopy.js'), 'utf8');
-const EMAIL_DRAFT_SRC = fs.readFileSync(path.join(ROOT, 'renderer', 'email-draft-open.js'), 'utf8');
+const EMAIL_PENDING_SRC = fs.readFileSync(path.join(ROOT, 'renderer', 'email-pending-globals.js'), 'utf8');
 const OFFICER_EMAILS_SRC = fs.readFileSync(path.join(ROOT, 'renderer', 'officerEmails.js'), 'utf8');
 
 function evalRendererInWindow(window, source) {
@@ -64,12 +63,8 @@ function bootOfficerEmailsDom() {
     },
   };
   window.isSecureContext = true;
-  window.emailAPI = {
-    detectOutlookDesktop: () => Promise.resolve({ installed: false }),
-    open: () => Promise.resolve({ ok: true }),
-  };
   evalRendererInWindow(window, EMAIL_COPY_SRC);
-  evalRendererInWindow(window, EMAIL_DRAFT_SRC);
+  evalRendererInWindow(window, EMAIL_PENDING_SRC);
   evalRendererInWindow(window, OFFICER_EMAILS_SRC);
   window.OfficerEmails.init();
   return { dom, window, opens };
@@ -154,6 +149,7 @@ describe('Officer Emails — copy-only user flow (v1.6.20)', () => {
       'officerFbOpenMailtoBtn',
       'officerFbOpenWebBtn',
       'officerClearPendingDraftBtn',
+      'officerOpenEmailSendTraceBtn',
     ];
     const stillPresent = FORBIDDEN_IDS.filter((id) => byId(window, id));
     assert.deepStrictEqual(

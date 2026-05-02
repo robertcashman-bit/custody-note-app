@@ -20,7 +20,7 @@
  *
  * Every external link the user clicks is delegated to shell.openExternal
  * AFTER passing the allow-list (HTTPS http-localhost, or a validated mailto:
- * draft built by renderer/email-draft-open.js — see isSafeMailtoDraftUrl).
+ * draft string — see isSafeMailtoDraftUrl in this file).
  *
  * Tested values intentionally fail closed: any unknown navigation, any
  * unknown permission, any unknown protocol → denied.

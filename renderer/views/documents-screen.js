@@ -627,18 +627,34 @@ function _wfEmailForm(formId, meta) {
 
   if (window.api && window.api.previewPdfBase64) {
     window.api.previewPdfBase64({ base64: doc.base64, filename: doc.filename || formId + '.pdf' }).then(function (result) {
-      if (result && result.path && window.emailAPI && window.emailAPI.open) {
-        window.emailAPI.open({
-          subject: subject,
-          body: body,
-          attachments: [result.path],
-        }).then(function () {
-          showToast('Email opened with ' + doc.label + ' attached', 'success');
+      if (result && result.path) {
+        var clip =
+          'Subject: ' + subject + '\n\n' +
+          body + '\n\n' +
+          'Attach this file: ' + result.path;
+        function copyOk() {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            return navigator.clipboard.writeText(clip);
+          }
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = clip;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            return Promise.resolve();
+          } catch (_) {
+            return Promise.reject(new Error('copy'));
+          }
+        }
+        copyOk().then(function () {
+          showToast(doc.label + ': subject, body and attachment path copied. Paste into Outlook and attach the file.', 'success', 7000);
         }).catch(function () {
-          showToast('Could not open email client. File saved to: ' + result.path, 'info', 6000);
+          showToast(doc.label + ' saved to: ' + result.path + ' — attach manually in your mail client.', 'info', 8000);
         });
-      } else if (result && result.path) {
-        showToast(doc.label + ' saved to temp folder. Attach manually from: ' + result.path, 'info', 6000);
       }
     });
   } else {

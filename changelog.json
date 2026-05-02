@@ -1,9 +1,23 @@
 {
   "releases": [
     {
-      "version": "1.6.20",
+      "version": "1.6.21",
       "date": "2026-05-01",
       "latest": true,
+      "changes": [
+        "Removed bundled email-send-trace.txt, Help/Testing shortcuts, preload api.openEmailSendTrace and main IPC — stale documentation for removed Outlook launch paths",
+        "Removed dead Outlook stack: open-outlook-email IPC, Main openOutlookWebEmail.js / openComposeEml.js, lib/outlookWebComposeUrl.js, renderer email-draft-open.js and outlook-email-invoke.js, detect-outlook-desktop IPC, preload emailAPI bridge",
+        "Copy-only everywhere: Settings splash Contact Us, Share App email, LAA form email button and Documents workflow email now copy To/Subject/Body to clipboard instead of invoking Outlook Web",
+        "Officer Emails: dropped Officer collar/reference field, Outlook handler/login-hint/detect-outlook dev wiring, mailto/OWA URL diagnostics, Email send trace button; simplified Testing tab and dev diagnostics",
+        "email-pending-globals.js exposes only save/get/clear pending draft; CustodyEmailCompose remains for {{placeholder}} merge",
+        "Deleted obsolete unit tests (outlookWebEmail.module, openComposeEml) and Playwright quick-officer-email specs + edge CDP helpers",
+        "Unit tests and email policy sources updated for v1.6.21"
+      ]
+    },
+    {
+      "version": "1.6.20",
+      "date": "2026-05-01",
+      "latest": false,
       "changes": [
         "Officer Emails: copy-and-paste only - removed Open in Outlook / Open in Outlook Web / Reopen Outlook / Continue opening draft / Copy and reopen fallback panel from Hero, Compose, Preview, Side panel and Quick Email modal because the Windows launch path was unreliable (Outlook PWA hijack, Edge sign-in prompts, Default-browser interception)",
         "Compose tab now shows Copy Email Body, Copy Officer Email, Copy Subject, Copy Full Email + Save Draft, Mark as Sent, Cancel",

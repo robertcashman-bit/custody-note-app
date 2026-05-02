@@ -64,6 +64,8 @@ describe('Email compose UI (source) — v1.6.20 copy-only workflow', () => {
       'officerHandlerWeb',
       'officerHandlerStatus',
       'officerLoginHintInput',
+      'officerOpenEmailSendTraceBtn',
+      'officerReferenceInput',
     ];
     const present = FORBIDDEN_IDS.filter((id) => html.includes('id="' + id + '"'));
     assert.deepStrictEqual(
