@@ -7866,6 +7866,38 @@ html.dark .qe-field .wp-trigger:hover { background: rgba(248, 250, 252, 0.08); c
   font-size: 1.05rem;
 }
 
+/* Secondary hero button — slightly less prominent than the primary "Copy Email Body" so the gold call-to-action stays clear, but still big enough to be obvious. */
+.officer-email-page .hero-button--subject {
+  min-width: 170px;
+  min-height: 56px;
+  font-size: 0.98rem;
+  background: #fde68a;
+  color: #0b2341;
+}
+.officer-email-page .hero-button--subject:hover { background: #fcd34d; }
+.officer-email-page .hero-button--subject:disabled { background: #f1f5f9; color: #94a3b8; cursor: not-allowed; }
+
+/* Inline copy buttons next to subject inputs/values. */
+.officer-email-page .officer-subject-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.officer-email-page .officer-subject-label { flex: 1; }
+.officer-email-page .officer-inline-copy-btn {
+  white-space: nowrap;
+  min-height: 38px;
+  padding: 6px 14px;
+}
+.officer-email-page .officer-inline-copy-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.officer-email-page .officer-preview-block--with-copy {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  align-items: center;
+  gap: 10px;
+}
+.officer-email-page .officer-preview-block--with-copy .officer-preview-value { margin: 0; }
+
 .officer-email-page .alert {
   padding: 14px 16px;
   border-radius: 14px;
