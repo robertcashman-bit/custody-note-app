@@ -7898,6 +7898,83 @@ html.dark .qe-field .wp-trigger:hover { background: rgba(248, 250, 252, 0.08); c
 }
 .officer-email-page .officer-preview-block--with-copy .officer-preview-value { margin: 0; }
 
+/* ── Manage templates… row + modal ──────────────────────────── */
+.officer-email-page .officer-template-row { display: flex; gap: 10px; align-items: flex-end; }
+.officer-email-page .officer-template-label { flex: 1; }
+.officer-email-page .officer-manage-templates-btn { white-space: nowrap; min-height: 38px; padding: 6px 14px; }
+
+.officer-tpl-mgr-overlay {
+  position: fixed; inset: 0; z-index: 10080;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem; overflow-y: auto;
+}
+.officer-tpl-mgr-box {
+  background: #ffffff; color: #0f172a;
+  border-radius: 12px; box-shadow: 0 16px 48px rgba(0,0,0,0.25);
+  width: 100%; max-width: 1080px; max-height: calc(100vh - 2rem);
+  display: flex; flex-direction: column;
+}
+html.dark .officer-tpl-mgr-box { background: #1e293b; color: #e2e8f0; }
+.officer-tpl-mgr-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0.85rem 1.1rem; border-bottom: 1px solid rgba(148,163,184,0.35);
+}
+.officer-tpl-mgr-head h2 { margin: 0; font-size: 1.15rem; }
+.officer-tpl-mgr-head-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.officer-tpl-mgr-body {
+  display: flex; gap: 1rem; padding: 1rem;
+  min-height: 460px; overflow: hidden;
+}
+.officer-tpl-mgr-side { flex: 0 0 280px; display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+.officer-tpl-mgr-side-head { display: flex; align-items: center; justify-content: space-between; }
+.officer-tpl-mgr-side-head h3 { margin: 0; font-size: 0.95rem; }
+.officer-tpl-mgr-list {
+  list-style: none; padding: 0; margin: 0;
+  border: 1px solid rgba(148,163,184,0.35); border-radius: 8px;
+  background: #f8fafc; overflow-y: auto; flex: 1;
+}
+html.dark .officer-tpl-mgr-list { background: #0f172a; }
+.officer-tpl-mgr-item {
+  padding: 0.55rem 0.7rem; cursor: pointer; border-bottom: 1px solid rgba(148,163,184,0.25);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.officer-tpl-mgr-item:last-child { border-bottom: none; }
+.officer-tpl-mgr-item:hover, .officer-tpl-mgr-item:focus-visible { background: #e2e8f0; outline: none; }
+html.dark .officer-tpl-mgr-item:hover, html.dark .officer-tpl-mgr-item:focus-visible { background: #334155; }
+.officer-tpl-mgr-item.active { background: #dbeafe; border-left: 3px solid #2563eb; padding-left: calc(0.7rem - 3px); }
+html.dark .officer-tpl-mgr-item.active { background: #1e3a5f; }
+.officer-tpl-mgr-item-name { font-weight: 700; font-size: 0.9rem; }
+.officer-tpl-mgr-item-subject { font-size: 0.78rem; line-height: 1.3; word-break: break-word; }
+.officer-tpl-mgr-empty { padding: 0.5rem; font-size: 0.85rem; }
+
+.officer-tpl-mgr-edit { flex: 1; display: flex; flex-direction: column; gap: 0.6rem; min-width: 0; overflow-y: auto; padding-right: 4px; }
+.officer-tpl-mgr-edit h3 { margin: 0; font-size: 1rem; }
+.officer-tpl-mgr-edit label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 0.82rem; }
+.officer-tpl-mgr-edit input[type="text"], .officer-tpl-mgr-edit textarea {
+  font: inherit; padding: 8px 10px; border: 1px solid rgba(148,163,184,0.5);
+  border-radius: 6px; background: #ffffff; color: inherit; width: 100%; box-sizing: border-box;
+}
+html.dark .officer-tpl-mgr-edit input[type="text"], html.dark .officer-tpl-mgr-edit textarea { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+.officer-tpl-mgr-edit textarea { font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, Consolas, monospace; line-height: 1.4; }
+.officer-tpl-mgr-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+.officer-tpl-mgr-placeholders { margin: 4px 0; }
+.officer-tpl-mgr-placeholders summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+.officer-tpl-mgr-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.officer-tpl-mgr-chip {
+  padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(148,163,184,0.5);
+  background: #f1f5f9; color: #0b1a36; font-family: ui-monospace, "SFMono-Regular", "Cascadia Mono", Menlo, monospace;
+  font-size: 0.78rem; cursor: pointer;
+}
+.officer-tpl-mgr-chip:hover { background: #dbeafe; }
+html.dark .officer-tpl-mgr-chip { background: #0f172a; color: #e2e8f0; border-color: #334155; }
+html.dark .officer-tpl-mgr-chip:hover { background: #1e3a5f; }
+
+@media (max-width: 900px) {
+  .officer-tpl-mgr-body { flex-direction: column; }
+  .officer-tpl-mgr-side { flex: none; max-height: 220px; }
+}
+
 .officer-email-page .alert {
   padding: 14px 16px;
   border-radius: 14px;
