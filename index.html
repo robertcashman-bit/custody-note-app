@@ -2030,15 +2030,18 @@
 
                 <div id="officerComposeWarnings" class="officer-compose-warnings hidden" role="status" aria-live="polite" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--surface-muted,#f1f5f9);border-left:4px solid #f59e0c;font-size:0.9rem;"></div>
 
-                <label>
-                  Template
-                  <select id="officerTemplateSelect">
-                    <option value="request_bail_details">Request Bail Details</option>
-                    <option value="request_interview_recording">Request Interview Recording</option>
-                    <option value="followup_after_rui">Follow-up After RUI</option>
-                    <option value="confirm_representation">Confirm Representation</option>
-                  </select>
-                </label>
+                <div class="officer-template-row">
+                  <label class="officer-template-label">
+                    Template
+                    <select id="officerTemplateSelect">
+                      <option value="request_bail_details">Request Bail Details</option>
+                      <option value="request_interview_recording">Request Interview Recording</option>
+                      <option value="followup_after_rui">Follow-up After RUI</option>
+                      <option value="confirm_representation">Confirm Representation</option>
+                    </select>
+                  </label>
+                  <button type="button" id="officerManageTemplatesBtn" class="btn btn-secondary officer-manage-templates-btn" title="Add, edit, duplicate or delete email templates">Manage templates…</button>
+                </div>
 
                 <div class="large-button-row">
                   <button id="officerGenerateBtn" class="gold-button" type="button">Generate / Refresh</button>
@@ -2406,6 +2409,9 @@
   <!-- Wheel-style ("rotating counter") date/time picker. Self-contained, attaches a 🕑/📅 button next to every native date/time/datetime-local input. Native typing still works. -->
   <script src="renderer/widgets/wheelDateTimePicker.js"></script>
   <script src="app.js"></script>
+  <!-- Officer email templates — user-editable store + manager modal. Must load BEFORE officerEmails.js so init() can wire the store. -->
+  <script src="renderer/officerEmailTemplatesStore.js"></script>
+  <script src="renderer/officerEmailTemplatesManager.js"></script>
   <script src="renderer/officerEmails.js"></script>
   <script src="renderer/views/reports.js"></script>
   <script src="renderer/views/authorities.js"></script>

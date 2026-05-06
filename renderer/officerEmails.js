@@ -25,8 +25,12 @@
   };
 
   /**
-   * Placeholder-driven templates ({{fieldName}}). Body excludes closing;
-   * feeEarnerClosingSignature() is appended after merge.
+   * Built-in seed templates ({{fieldName}} placeholders). At runtime the
+   * Officer Emails screen reads templates from OfficerEmailTemplatesStore
+   * (settings-backed JSON), not from this constant — every template is
+   * fully user-editable via the Manage templates… modal. This constant is
+   * preserved for first-run seeding, the Restore defaults action, and the
+   * regression test that pins the export name.
    */
   var OFFICER_EMAIL_TEMPLATES = {
     request_bail_details: {
@@ -102,6 +106,13 @@
     var screen = document.getElementById('view-officer-emails');
     if (!screen) return;
     initialised = true;
+    /* Initialise the user-editable template store. Seeds with the built-ins
+       on first install, then every template is fully editable / deletable. */
+    if (window.OfficerEmailTemplatesStore && typeof window.OfficerEmailTemplatesStore.init === 'function') {
+      try { window.OfficerEmailTemplatesStore.init(); } catch (_) { /* still functional below */ }
+      window.OfficerEmailTemplatesStore.subscribe(function () { refreshTemplateDropdown(); });
+    }
+    refreshTemplateDropdown();
     records = loadRecords();
     bindTabs();
     bindFormInputs();
@@ -111,6 +122,34 @@
     renderRecords();
     updatePreviewAndSummary();
     updatePendingAndFallbackUi();
+  }
+
+  /** Rebuild the Compose Template <select> from the user-editable store. */
+  function refreshTemplateDropdown() {
+    var sel = $('officerTemplateSelect');
+    if (!sel) return;
+    var prev = sel.value;
+    var rows = (window.OfficerEmailTemplatesStore && typeof window.OfficerEmailTemplatesStore.list === 'function')
+      ? window.OfficerEmailTemplatesStore.list()
+      : Object.keys(OFFICER_EMAIL_TEMPLATES).map(function (k) {
+          var t = OFFICER_EMAIL_TEMPLATES[k];
+          return { key: t.key, name: t.name, subjectTemplate: t.subjectTemplate, bodyTemplate: t.bodyTemplate };
+        });
+    if (!rows.length) {
+      sel.innerHTML = '<option value="">No templates — click Manage templates… to add one</option>';
+      sel.disabled = true;
+      return;
+    }
+    sel.disabled = false;
+    sel.innerHTML = rows.map(function (t) {
+      var key = String(t.key || '');
+      var name = String(t.name || 'Untitled');
+      return '<option value="' + key.replace(/"/g, '&quot;') + '">' + name.replace(/</g, '&lt;') + '</option>';
+    }).join('');
+    var keys = rows.map(function (r) { return r.key; });
+    if (keys.indexOf(prev) >= 0) sel.value = prev;
+    else sel.value = rows[0].key;
+    updatePreviewAndSummary();
   }
 
   /* Called by app.js when the home card is clicked and the view is shown. */
@@ -212,6 +251,16 @@
     bindClick('officerClearAllRecordsBtn', clearAllRecords);
     bindClick('officerRunTestsBtn', runTests);
     bindClick('officerRunDebugBtn', runDebugCheck);
+
+    /* Open the user-editable template manager. After it closes, the dropdown
+       refreshes via the store's subscribe() — no Outlook surfaces involved. */
+    bindClick('officerManageTemplatesBtn', function () {
+      if (typeof window.openOfficerEmailTemplatesManager === 'function') {
+        window.openOfficerEmailTemplatesManager({ onChange: refreshTemplateDropdown });
+      } else {
+        showError('Template manager could not load. Please reload the page.');
+      }
+    });
 
     bindClick('officerPrevDayBtn', function () {
       var input = $('attendanceDateInput');
@@ -343,8 +392,18 @@
   }
 
   function getSelectedTemplate() {
-    var key = valueOf('officerTemplateSelect') || 'request_bail_details';
+    var key = valueOf('officerTemplateSelect') || '';
     if (LEGACY_TEMPLATE_KEYS[key]) key = LEGACY_TEMPLATE_KEYS[key];
+    /* Prefer the user-editable store. */
+    if (window.OfficerEmailTemplatesStore && typeof window.OfficerEmailTemplatesStore.list === 'function') {
+      var rows = window.OfficerEmailTemplatesStore.list();
+      if (rows.length) {
+        var found = null;
+        for (var i = 0; i < rows.length; i++) { if (rows[i].key === key) { found = rows[i]; break; } }
+        return found || rows[0];
+      }
+    }
+    /* Fallback to the seed constant for tests / boot-time race. */
     return OFFICER_EMAIL_TEMPLATES[key] || OFFICER_EMAIL_TEMPLATES.request_bail_details;
   }
 
