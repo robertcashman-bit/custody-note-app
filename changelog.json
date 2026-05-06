@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.6.22",
+      "date": "2026-05-06",
+      "latest": true,
+      "changes": [
+        "Officer Emails: subject line can now be copied from a prominent hero button, plus inline Copy buttons next to the Subject input on Compose and the Subject value on Preview",
+        "Officer Emails: templates are fully user-editable via a Manage templates… modal — add, edit, duplicate, cancel edits, delete with confirm, and Restore defaults",
+        "the four built-in templates are now seed data, every template can be modified or removed",
+        "Tests: 31 passing officer-email unit and integration tests covering the store, manager, subject-copy, and existing copy-only flow"
+      ]
+    },
+    {
       "version": "1.6.21",
       "date": "2026-05-01",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Removed bundled email-send-trace.txt, Help/Testing shortcuts, preload api.openEmailSendTrace and main IPC — stale documentation for removed Outlook launch paths",
         "Removed dead Outlook stack: open-outlook-email IPC, Main openOutlookWebEmail.js / openComposeEml.js, lib/outlookWebComposeUrl.js, renderer email-draft-open.js and outlook-email-invoke.js, detect-outlook-desktop IPC, preload emailAPI bridge",
