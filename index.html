@@ -1928,6 +1928,7 @@
             </div>
             <div class="officer-email-hero-actions">
               <button type="button" id="officerBackHomeBtn" class="btn btn-secondary">&larr; Home</button>
+              <button type="button" id="officerHeroCopySubjectBtn" class="gold-button hero-button hero-button--subject officer-email-secondary-btn" title="Copy the email subject line">Copy Subject</button>
               <button type="button" id="officerHeroCopyBodyBtn" class="gold-button hero-button officer-email-primary-btn">Copy Email Body</button>
             </div>
           </header>
@@ -2044,10 +2045,13 @@
                   <button id="officerClearSubjectBodyBtn" type="button">Clear Subject / Body</button>
                 </div>
 
-                <label>
-                  Subject
-                  <input id="officerSubjectInput" type="text" placeholder="Email subject" autocomplete="off" />
-                </label>
+                <div class="officer-subject-row">
+                  <label class="officer-subject-label">
+                    Subject
+                    <input id="officerSubjectInput" type="text" placeholder="Email subject" autocomplete="off" />
+                  </label>
+                  <button type="button" id="officerInlineCopySubjectBtn" class="btn btn-secondary officer-inline-copy-btn" title="Copy this subject line">Copy</button>
+                </div>
 
                 <label>
                   Email body
@@ -2079,7 +2083,11 @@
 
                 <div class="preview-box officer-email-preview-box">
                   <div class="officer-preview-block"><span class="officer-preview-label">To:</span><div id="previewTo" class="officer-preview-value">—</div></div>
-                  <div class="officer-preview-block"><span class="officer-preview-label">Subject:</span><div id="previewSubject" class="officer-preview-value">—</div></div>
+                  <div class="officer-preview-block officer-preview-block--with-copy">
+                    <span class="officer-preview-label">Subject:</span>
+                    <div id="previewSubject" class="officer-preview-value">—</div>
+                    <button type="button" id="officerInlineCopySubjectPreviewBtn" class="btn btn-secondary officer-inline-copy-btn" title="Copy this subject line">Copy</button>
+                  </div>
                   <div class="officer-preview-block"><span class="officer-preview-label">Body:</span><pre id="previewBody" class="officer-preview-body">—</pre></div>
                 </div>
                 <p class="section-help" style="margin-top:10px;"><strong>Officer:</strong> <span id="previewOfficer">—</span> · <strong>Client:</strong> <span id="previewClient">—</span> · <strong>Matter:</strong> <span id="previewMatter">—</span></p>
