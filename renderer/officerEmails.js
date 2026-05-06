@@ -187,6 +187,11 @@
     bindClick('officerCopyBodyPreviewBtn', function () { copyBody(); });
     bindClick('officerSideCopyBodyBtn', function () { copyBody(); });
 
+    /* Subject copy entry-points: hero, inline next to Compose Subject input, inline next to Preview Subject value. */
+    bindClick('officerHeroCopySubjectBtn', function () { copySubject(); });
+    bindClick('officerInlineCopySubjectBtn', function () { copySubject(); });
+    bindClick('officerInlineCopySubjectPreviewBtn', function () { copySubject(); });
+
     bindClick('officerGenerateBtn', generateFromTemplate);
     bindClick('officerContinueComposeBtn', function () {
       generateFromTemplate();
@@ -510,16 +515,28 @@
 
   function updateCopyButtonStates() {
     var bodyEmpty = !rawValueOf('officerBodyInput').trim();
-    var ids = [
+    var bodyIds = [
       'officerCopyBodyBtn',
       'officerCopyFullBtn',
       'officerHeroCopyBodyBtn',
       'officerCopyBodyPreviewBtn',
       'officerSideCopyBodyBtn',
     ];
-    for (var i = 0; i < ids.length; i++) {
-      var b = $(ids[i]);
+    for (var i = 0; i < bodyIds.length; i++) {
+      var b = $(bodyIds[i]);
       if (b) b.disabled = bodyEmpty;
+    }
+    var subjectEmpty = !valueOf('officerSubjectInput');
+    var subjIds = [
+      'officerCopySubjectBtn',
+      'officerCopySubjectPreviewBtn',
+      'officerHeroCopySubjectBtn',
+      'officerInlineCopySubjectBtn',
+      'officerInlineCopySubjectPreviewBtn',
+    ];
+    for (var j = 0; j < subjIds.length; j++) {
+      var s = $(subjIds[j]);
+      if (s) s.disabled = subjectEmpty;
     }
   }
 
