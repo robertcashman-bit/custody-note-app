@@ -3977,13 +3977,12 @@ const ADMIN_EMAILS_LOCAL = (process.env.CUSTODY_ADMIN_EMAILS || '')
   .filter(Boolean);
 
 function computeLicenceStatus(data) {
-  const noAddons = { quickfile: false, emailAddon: false };
+  const noAddons = { quickfile: false };
   if (!data || !data.key) return { status: 'none', message: 'No licence activated', addons: noAddons };
   const isAdmin = data.email && ADMIN_EMAILS_LOCAL.includes(data.email.toLowerCase());
   const isAddonValid = (exp) => exp && new Date(exp).getTime() > Date.now();
   const addons = {
     quickfile: isAdmin || isAddonValid(data.entitlements?.quickfile?.expiresAt),
-    emailAddon: isAdmin || isAddonValid(data.entitlements?.emailAddon?.expiresAt),
   };
   if (data.status === 'revoked' || data.status === 'invalid') {
     return { status: 'revoked', message: 'Licence has been revoked. Please enter a new licence key or contact support.', key: data.key, email: data.email, addons, entitlements: data.entitlements || null };
@@ -4031,7 +4030,7 @@ ipcMain.handle('licence:status', () => {
     return {
       status: 'error',
       message: 'Stored licence could not be read. Custody Note will not replace it automatically.',
-      addons: { quickfile: false, emailAddon: false },
+      addons: { quickfile: false },
       enforced,
     };
   }

@@ -15,9 +15,8 @@ Use a **paid / active subscription** test account on **production** (`custodynot
 2. In **Settings → Licence**, status should be **active** (or expiring soon), not **grace** / **invalid**.
 3. Open **Settings** and scroll to:
    - **QuickFile** — the **locked** panel should be **hidden** and QuickFile fields **visible** when entitlements are present.
-   - **Officer email** (or equivalent) — same: **unlocked** when `emailAddon` is entitled.
 
-If add-ons stay locked but the subscription is active, check **main process logs** for `/api/licence/validate` errors and confirm the site returns `entitlements.quickfile` / `entitlements.emailAddon` with future `expiresAt` (see network from a manual API check below).
+If QuickFile stays locked but the subscription is active, check **main process logs** for `/api/licence/validate` errors and confirm the site returns `entitlements.quickfile` with a future `expiresAt` (see network from a manual API check below).
 
 ## 3. Optional: API check (curl)
 
@@ -30,7 +29,7 @@ curl -sS -X POST "https://custodynote.com/api/licence/validate" ^
   -d "{\"machineId\":\"smoke-test-machine\",\"appVersion\":\"1.0.0\"}"
 ```
 
-Expect JSON with `"valid": true`, `"entitlements": { "quickfile": { "expiresAt": "..." }, "emailAddon": { "expiresAt": "..." } }` for an active subscription.
+Expect JSON with `"valid": true` and `"entitlements": { "quickfile": { "expiresAt": "..." } }` for an active subscription with the QuickFile add-on.
 
 ## 4. Regression: licence key path
 

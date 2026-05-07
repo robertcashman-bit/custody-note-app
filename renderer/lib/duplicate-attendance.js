@@ -346,14 +346,6 @@
       'invoiceNotes',
     ],
 
-    /* Q. Officer email log */
-    email: [
-      'officerEmailStatus',
-      'lastOfficerEmailSentDate',
-      'lastOfficerEmailTemplateUsed',
-      'lastOfficerEmailRecipient',
-    ],
-
     /* S. Workflow timestamps / lock/archive flags / conversion provenance */
     workflow: [
       'billingProcessCompletedAt',
