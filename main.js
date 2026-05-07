@@ -1343,6 +1343,8 @@ async function initDb() {
 
   _safeAddColumn('police_stations', "scheme TEXT DEFAULT ''");
   _safeAddColumn('police_stations', "region TEXT DEFAULT ''");
+  _safeAddColumn('police_stations', "scheme_code TEXT DEFAULT ''");
+  _safeAddColumn('police_stations', "kind TEXT DEFAULT 'station'");
 
   db.run(`
     CREATE TABLE IF NOT EXISTS firms (
@@ -1485,6 +1487,7 @@ async function initDb() {
   }
 
   loadStationsFromFile();
+  try { migrateSchemeIdsToSchemeCodes(); } catch (e) { console.error('[migrateSchemeIdsToSchemeCodes] failed:', e && e.message); }
   // Bound audit_log row growth before any user activity (defaults to 90 days,
   // tunable via settings.auditLogRetentionDays).
   try { pruneOldAuditLog(); } catch (_) {}
@@ -1508,15 +1511,61 @@ function loadStationsFromFile() {
     try {
       const existing = dbGet('SELECT id FROM police_stations WHERE name = ? AND code = ?', [s.name || '', s.code || '']);
       if (existing) {
-        db.run('UPDATE police_stations SET scheme = ?, region = ? WHERE id = ?',
-          [s.scheme || '', s.region || '', existing.id]);
+        db.run('UPDATE police_stations SET scheme = ?, region = ?, scheme_code = ?, kind = ? WHERE id = ?',
+          [s.scheme || '', s.region || '', s.schemeCode || '', s.kind || 'station', existing.id]);
       } else {
-        db.run('INSERT OR IGNORE INTO police_stations (name, code, scheme, region) VALUES (?, ?, ?, ?)',
-          [s.name || '', s.code || '', s.scheme || '', s.region || '']);
+        db.run('INSERT OR IGNORE INTO police_stations (name, code, scheme, region, scheme_code, kind) VALUES (?, ?, ?, ?, ?, ?)',
+          [s.name || '', s.code || '', s.scheme || '', s.region || '', s.schemeCode || '', s.kind || 'station']);
       }
     } catch (_) {}
   }
   try { db.run('COMMIT'); } catch (_) {}
+}
+
+// One-shot migration: legacy records had data.schemeId set to the station code
+// (e.g. "RD003") instead of the LAA 4-digit scheme code (e.g. "1131").
+// This rewrites schemeId on every attendance row where it still matches the
+// station-id pattern AND we can resolve a scheme_code from police_stations.
+// Idempotent: marks completion in settings so it only runs once per machine.
+function migrateSchemeIdsToSchemeCodes() {
+  const FLAG_KEY = 'schemeIdBackfillCompletedAt';
+  const flagRow = dbGet('SELECT value FROM settings WHERE key = ?', [FLAG_KEY]);
+  if (flagRow && flagRow.value) return;
+
+  const stationByCode = new Map();
+  for (const r of dbAll('SELECT code, scheme_code FROM police_stations WHERE scheme_code IS NOT NULL AND scheme_code != ""')) {
+    stationByCode.set(String(r.code).toUpperCase(), r.scheme_code);
+  }
+
+  const STATION_ID_RE = /^[A-Z]{2}\d{3}[A-Z]?$/;
+  const rows = dbAll("SELECT id, data FROM attendances WHERE data LIKE '%\"schemeId\"%'");
+  let updated = 0;
+  let scanned = 0;
+
+  try { db.run('BEGIN TRANSACTION'); } catch (_) {}
+  for (const row of rows) {
+    scanned++;
+    let parsed;
+    try { parsed = JSON.parse(row.data); } catch (_) { continue; }
+    if (!parsed || typeof parsed !== 'object') continue;
+    const cur = String(parsed.schemeId || '').trim().toUpperCase();
+    if (!cur || !STATION_ID_RE.test(cur)) continue;
+    const schemeCode = stationByCode.get(cur);
+    if (!schemeCode || schemeCode === cur) continue;
+    parsed.schemeId = schemeCode;
+    try {
+      db.run('UPDATE attendances SET data = ?, updated_at = datetime(\'now\') WHERE id = ?',
+        [JSON.stringify(parsed), row.id]);
+      updated++;
+    } catch (_) {}
+  }
+  try { db.run('COMMIT'); } catch (_) {}
+
+  try {
+    db.run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+      [FLAG_KEY, new Date().toISOString()]);
+  } catch (_) {}
+  console.log('[migrateSchemeIdsToSchemeCodes] scanned=' + scanned + ' updated=' + updated);
 }
 
 /* â”€â”€â”€ SMART BACKUP SYSTEM â”€â”€â”€ */
@@ -5018,7 +5067,16 @@ ipcMain.handle('supervisor-approve', (_, { id, note, credential }) => {
 });
 
 ipcMain.handle('stations-list', () => {
-  return dbAll('SELECT id, name, code, scheme, region FROM police_stations ORDER BY region, name');
+  const rows = dbAll('SELECT id, name, code, scheme, region, scheme_code, kind FROM police_stations ORDER BY region, name');
+  return rows.map(r => ({
+    id: r.id,
+    name: r.name,
+    code: r.code,
+    scheme: r.scheme,
+    region: r.region,
+    schemeCode: r.scheme_code || '',
+    kind: r.kind || 'station',
+  }));
 });
 
 ipcMain.handle('stations-replace', (_, stations) => {
@@ -5027,8 +5085,8 @@ ipcMain.handle('stations-replace', (_, stations) => {
     db.run('BEGIN');
     db.run('DELETE FROM police_stations');
     for (const s of stations) {
-      db.run('INSERT INTO police_stations (name, code, scheme, region) VALUES (?, ?, ?, ?)',
-        [s.name || '', s.code || '', s.scheme || '', s.region || '']);
+      db.run('INSERT INTO police_stations (name, code, scheme, region, scheme_code, kind) VALUES (?, ?, ?, ?, ?, ?)',
+        [s.name || '', s.code || '', s.scheme || '', s.region || '', s.schemeCode || '', s.kind || 'station']);
     }
     db.run('COMMIT');
   } catch (e) {
@@ -7065,19 +7123,43 @@ ipcMain.handle('laa-open-official-template', async (_, formType) => {
 });
 
 /* â”€â”€â”€ QuickFile API: import firms directory â”€â”€â”€ */
-function getQuickFileAuth() {
+function getQuickFileSettingsStatus() {
   const rows = dbAll('SELECT key, value FROM settings');
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const accountNumber = (settings.quickfileAccountNumber || '').trim();
   const apiKey = (settings.quickfileApiKey || '').trim();
   const applicationId = (settings.quickfileAppId || '').trim();
-  if (!accountNumber || !apiKey || !applicationId) {
-    throw new Error('QuickFile not configured. Add account number, API key and application ID in Settings.');
+  const missing = [];
+  if (!accountNumber) missing.push('Account number');
+  if (!apiKey) missing.push('API key');
+  if (!applicationId) missing.push('Application ID');
+  return {
+    accountNumber,
+    apiKey,
+    applicationId,
+    missing,
+    lengths: {
+      account: accountNumber.length,
+      apiKey: apiKey.length,
+      applicationId: applicationId.length,
+    },
+  };
+}
+
+function getQuickFileAuth() {
+  const status = getQuickFileSettingsStatus();
+  if (status.missing.length) {
+    throw new Error('QuickFile not configured \u2014 missing in Settings: ' + status.missing.join(', ') + '.');
   }
   const submissionNumber = 'cn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
-  const hashInput = accountNumber + apiKey + submissionNumber;
+  const hashInput = status.accountNumber + status.apiKey + submissionNumber;
   const md5Value = crypto.createHash('md5').update(hashInput, 'utf8').digest('hex').toLowerCase();
-  return { accountNumber, submissionNumber, md5Value, applicationId };
+  return {
+    accountNumber: status.accountNumber,
+    submissionNumber,
+    md5Value,
+    applicationId: status.applicationId,
+  };
 }
 
 function quickFileRequest(apiPath, bodyContent) {
@@ -7271,6 +7353,11 @@ ipcMain.handle('quickfile-test-connection', async () => {
     ok: true,
     sampleCount: records.length,
   };
+});
+
+ipcMain.handle('quickfile-settings-status', () => {
+  const status = getQuickFileSettingsStatus();
+  return { missing: status.missing, lengths: status.lengths };
 });
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

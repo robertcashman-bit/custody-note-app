@@ -248,37 +248,18 @@ function _wfDocNoteFinalised() {
 function _wfBuildDocFooter(footer) {
   var genCount = Object.keys(_wfGeneratedDocs).length;
   var countBadge = genCount > 0 ? ' <span class="wf-gen-count-badge">' + genCount + ' form' + (genCount > 1 ? 's' : '') + ' ready</span>' : '';
-  var archived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
-  var canArchive = _wfDocNoteFinalised() && !archived;
-  /* Archive lives on every finish-matter screen so the user can file the
-   * matter away without being forced through the next workflow steps once
-   * the note is finalised. Same gating + same flow as steps 2 and 3 (the
-   * QuickFile guard, completion timestamps, save, and archive call all live
-   * inside _wfRunArchiveFromWorkflow). */
-  var archiveBtnHtml = canArchive
-    ? '<button type="button" id="wf-doc-archive" class="btn btn-primary wf-btn-next-action">Archive</button>'
-    : '';
-
+  /* Step 1 has ONE forward action: continue to step 2. Per-step Archive was
+   * removed so the workflow is strictly linear (Documents \u2192 Invoice \u2192
+   * Review/Archive). Users who want to archive without finishing can still
+   * Close out and use the form header's "Archive matter" action. */
   footer.innerHTML =
     '<button type="button" id="wf-doc-back" class="btn btn-secondary btn-small">Close</button>' +
     '<span class="wf-footer-info">' + countBadge + '</span>' +
     '<span class="wf-footer-spacer"></span>' +
-    archiveBtnHtml +
-    '<button type="button" id="wf-doc-next" class="btn btn-primary wf-btn-next-action">Next: QuickFile invoice &#9654;</button>';
+    '<button type="button" id="wf-doc-next" class="btn btn-primary wf-btn-next-action">Next: Invoice &#9654;</button>';
 
   document.getElementById('wf-doc-back').addEventListener('click', closeWorkflow);
   document.getElementById('wf-doc-next').addEventListener('click', _wfGoNext);
-
-  var archBtn = document.getElementById('wf-doc-archive');
-  if (archBtn) {
-    archBtn.addEventListener('click', function () {
-      if (typeof window._wfRunArchiveFromWorkflow === 'function') {
-        window._wfRunArchiveFromWorkflow();
-      } else {
-        showToast('Archive is not available — open Review and complete step.', 'error');
-      }
-    });
-  }
 }
 
 function _wfBindDocEvents(meta) {

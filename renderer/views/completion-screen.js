@@ -96,6 +96,10 @@ function _wfRenderCompletionStep(body, footer) {
 }
 
 function _wfBuildCompletionFooter(footer, ctx) {
+  /* Final step: ONE primary forward action (Archive & close), Export PDF
+   * as a secondary side-action, Back to revisit step 2. The duplicate
+   * "Close" button was removed \u2014 if Archive isn't ready (note not yet
+   * finalised) Back is the way out. */
   var canArchive = ctx.canArchive;
 
   var html =
@@ -104,16 +108,14 @@ function _wfBuildCompletionFooter(footer, ctx) {
     '<span class="wf-footer-spacer"></span>';
 
   if (canArchive) {
-    html += '<button type="button" id="wf-complete-archive" class="btn btn-primary wf-btn-next-action">Archive</button>';
+    html += '<button type="button" id="wf-complete-archive" class="btn btn-primary wf-btn-next-action">Archive &amp; close</button>';
+  } else {
+    html += '<button type="button" class="btn btn-secondary btn-small" disabled title="Finalise the note before archiving">Archive &amp; close (locked)</button>';
   }
-
-  html +=
-    '<button type="button" id="wf-complete-close" class="btn btn-secondary btn-small">Close</button>';
 
   footer.innerHTML = html;
 
   document.getElementById('wf-complete-back').addEventListener('click', _wfGoBack);
-  document.getElementById('wf-complete-close').addEventListener('click', closeWorkflow);
   var exportBillingBtn = document.getElementById('wf-export-billing-pdf');
   if (exportBillingBtn) {
     exportBillingBtn.addEventListener('click', function () {

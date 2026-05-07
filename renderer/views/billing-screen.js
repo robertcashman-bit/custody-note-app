@@ -151,19 +151,11 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
     var gSteps = [];
     if (opts.hasExistingInvoice) {
       gSteps.push({ text: 'Invoice already created. Review below or create another if needed.', done: true });
-      gSteps.push({ text: 'Click <strong>Next: Review &amp; complete</strong> to continue.', done: false });
+      gSteps.push({ text: 'Click <strong>Continue to Review &amp; complete</strong> to move on.', done: false });
     } else {
       gSteps.push({ text: 'Check the charges and amounts are correct (edit if needed).', done: false });
       gSteps.push({ text: 'Tick all 3 checkboxes under <strong>Review Confirmation</strong> below to unlock the QuickFile button.', done: false });
-      gSteps.push({ text: 'Click <strong>Send Bill to QuickFile</strong> to upload this invoice to your QuickFile account.', done: false });
-      gSteps.push({ text: 'Or click <strong>Next: complete without invoice</strong> if invoicing was handled separately.', done: false });
-    }
-    var archivedGuide = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
-    if (_wfBillingNoteFinalised() && !archivedGuide) {
-      gSteps.push({
-        text: 'When finished: use <strong>Archive &amp; close</strong> in the footer to file the matter away, or <strong>Close</strong> to exit without archiving.',
-        done: false,
-      });
+      gSteps.push({ text: 'Click <strong>Send Bill to QuickFile</strong> to upload this invoice to your QuickFile account, or use <strong>Continue without invoice</strong> if invoicing was handled separately.', done: false });
     }
     billingGuideHtml = '<div class="wf-action-guide"><h4 class="wf-action-guide-title">What to do on this step</h4><ol class="wf-action-guide-list">';
     gSteps.forEach(function (s) {
@@ -346,41 +338,33 @@ function _wfBillingNoteFinalised() {
 }
 
 function _wfBuildBillingFooter(footer, meta, opts) {
+  /* Step 2 has ONE forward button (label depends on QuickFile state),
+   * plus Back and Close. Per-step Archive removed so the workflow stays
+   * strictly linear. Skip-invoice and next-complete were redundant
+   * variations of the same forward action and have been merged. */
   var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
-  var archived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
-  var canArchiveFromBilling = _wfBillingNoteFinalised() && !archived;
-  var showNextBtn = opts.hasExistingInvoice || !qfConfigured;
-  var nextCompleteBtn = showNextBtn
-    ? '<button type="button" id="wf-bill-next-complete" class="btn btn-primary wf-btn-next-action">Next: Review &amp; complete &#9654;</button>'
-    : '';
-  var skipInvoiceBtn = '';
-  if (qfConfigured && !opts.hasExistingInvoice) {
-    skipInvoiceBtn =
-      '<button type="button" id="wf-bill-skip-invoice" class="btn btn-secondary btn-small">Next: complete without invoice &#9654;</button>';
-  }
-  var createBtnHtml = '';
-  if (qfConfigured && !opts.hasExistingInvoice) {
-    createBtnHtml =
-      '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create wf-btn-next-action" disabled>' +
+  var primaryBtnHtml = '';
+  if (!qfConfigured) {
+    primaryBtnHtml =
+      '<button type="button" id="wf-bill-create" class="btn btn-primary wf-btn-next-action" data-mode="skip">' +
+        'Continue without invoice &#9654;' +
+      '</button>';
+  } else if (opts.hasExistingInvoice) {
+    primaryBtnHtml =
+      '<button type="button" id="wf-bill-create" class="btn btn-primary wf-btn-next-action" data-mode="next">' +
+        'Continue to Review &amp; complete &#9654;' +
+      '</button>';
+  } else {
+    primaryBtnHtml =
+      '<button type="button" id="wf-bill-create" class="btn btn-primary btn-billing-create wf-btn-next-action" data-mode="send" disabled>' +
         '&#128274; Send Bill to QuickFile &mdash; tick all 3 checkboxes first' +
       '</button>';
-  } else if (qfConfigured && opts.hasExistingInvoice) {
-    createBtnHtml =
-      '<button type="button" id="wf-bill-create" class="btn btn-secondary btn-billing-create" disabled>' +
-        '&#9888; Send Another Invoice to QuickFile' +
-      '</button>';
   }
-  var archiveBtnHtml = canArchiveFromBilling
-    ? '<button type="button" id="wf-bill-archive" class="btn btn-primary wf-btn-next-action">Archive &amp; close</button>'
-    : '';
 
   footer.innerHTML =
     '<button type="button" id="wf-bill-back" class="btn btn-secondary btn-small">&#9664; Back</button>' +
     '<span class="wf-footer-spacer"></span>' +
-    createBtnHtml +
-    nextCompleteBtn +
-    skipInvoiceBtn +
-    archiveBtnHtml +
+    primaryBtnHtml +
     '<button type="button" id="wf-bill-close" class="btn btn-secondary btn-small">Close</button>';
 
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
@@ -389,37 +373,19 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   var createBtn = document.getElementById('wf-bill-create');
   if (createBtn) {
     createBtn.addEventListener('click', function () {
-      _wfHandleCreateInvoice(meta, opts);
-    });
-  }
-
-  var nextComplete = document.getElementById('wf-bill-next-complete');
-  if (nextComplete) {
-    nextComplete.addEventListener('click', function () {
-      if (typeof _wfGoNext === 'function') _wfGoNext();
-    });
-  }
-
-  var skipInvoice = document.getElementById('wf-bill-skip-invoice');
-  if (skipInvoice) {
-    skipInvoice.addEventListener('click', function () {
-      if (typeof showConfirm === 'function') {
-        showConfirm('No QuickFile invoice will be created for this matter.\n\nContinue to review and complete?').then(function (ok) {
-          if (ok && typeof _wfGoNext === 'function') _wfGoNext();
-        });
+      var mode = createBtn.dataset.mode || 'send';
+      if (mode === 'send') {
+        _wfHandleCreateInvoice(meta, opts);
+      } else if (mode === 'skip') {
+        if (typeof showConfirm === 'function') {
+          showConfirm('No QuickFile invoice will be created for this matter.\n\nContinue to review and complete?').then(function (ok) {
+            if (ok && typeof _wfGoNext === 'function') _wfGoNext();
+          });
+        } else if (typeof _wfGoNext === 'function') {
+          _wfGoNext();
+        }
       } else {
         if (typeof _wfGoNext === 'function') _wfGoNext();
-      }
-    });
-  }
-
-  var archiveBill = document.getElementById('wf-bill-archive');
-  if (archiveBill) {
-    archiveBill.addEventListener('click', function () {
-      if (typeof window._wfRunArchiveFromWorkflow === 'function') {
-        window._wfRunArchiveFromWorkflow();
-      } else {
-        showToast('Archive is not available — open Review and complete step.', 'error');
       }
     });
   }

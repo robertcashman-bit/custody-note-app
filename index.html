@@ -616,7 +616,7 @@
             <button type="button" id="form-backup-now-btn" class="btn btn-small btn-backup-now" title="Save &amp; backup now">&#128190; Backup</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
-            <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent" title="Documents, QuickFile invoice, and mark office work complete">Finish matter</button>
+            <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent" title="Primary action for the current record (Finalise / Finish matter / Archive)" style="display:none;">Finalise</button>
             <button type="button" id="sections-index-btn" class="btn btn-sections">Sections</button>
           </div>
         </div>
@@ -717,7 +717,7 @@
           <div id="section-progress-bar" class="section-progress-bar" style="display:none;"></div>
           <button type="button" id="form-sections-btn" class="bottom-btn sections-btn" title="Jump to section"><span id="form-section-indicator">Section 1/9</span></button>
           <button type="button" id="form-save-exit" class="bottom-btn save-btn" title="Save and exit (Ctrl+S)" style="display:none;">Save</button>
-          <button type="button" id="bottom-bar-finish-pill" class="bottom-btn finish-pill" style="display:none;" title="Finalise / Finish matter / Archive">Finalise</button>
+          <button type="button" id="bottom-bar-finish-pill" class="bottom-btn finish-pill" style="display:none !important;" title="Replaced by the primary action button in the form header" aria-hidden="true"></button>
           <button type="button" id="form-next" class="bottom-btn next-btn" title="Next section (Ctrl+&#8594;)">Next &#9654;</button>
         </div>
       </div>
@@ -2233,7 +2233,7 @@
         <span class="bottom-nav-icon">&#127970;</span>
         <span class="bottom-nav-label">Firms</span>
       </button>
-      <button type="button" class="bottom-nav-btn bottom-nav-bill-matter" data-nav="matter-billing" title="Billing &mdash; finish matter, QuickFile invoice, and archive (current record)">
+      <button type="button" class="bottom-nav-btn bottom-nav-bill-matter" data-nav="matter-billing" title="Billing &mdash; replaced by the primary action button in the form header" style="display:none;" aria-hidden="true">
         <span class="bottom-nav-icon">&#128203;</span>
         <span class="bottom-nav-label">Billing</span>
       </button>
