@@ -262,7 +262,10 @@ function parseCasenotePdfTextToRecordData(pdfText) {
     data.pncDisclosed = yn(extractOne(disclosureBlock, [/^PNC\/pre-cons disclosed\?\s*(Yes|No)\b/im]));
     data.samplesDisclosed = extractOne(disclosureBlock, [/^Samples \(disclosed\)\?\s*([^\n]+)$/im]);
     data.cautionAvailable = yn(extractOne(disclosureBlock, [/^Caution\/out-of-court offered\?\s*(Yes|No)\b/im]));
-    data.clothingShoesSeized = yn(extractOne(disclosureBlock, [/^Clothing\/shoes\/phone seized\?\s*(Yes|No)\b/im]));
+    data.clothingShoesSeized = yn(extractOne(disclosureBlock, [
+      /^Clothing\/shoes seized\?\s*(Yes|No)\b/im,
+      /^Clothing\/shoes\/phone seized\?\s*(Yes|No)\b/im,
+    ]));
     data.disclosureReInjuries = extractOne(disclosureBlock, [/^Injuries \(disclosure\)\s*([^\n]+)$/im]);
 
     // PACE search 1 line in this PDF style

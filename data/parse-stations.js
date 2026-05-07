@@ -43,7 +43,21 @@ const HEADER_LINES = [
 ];
 
 async function main() {
-  const buf = fs.readFileSync(__dirname + '/crime-lower-jan26.pdf');
+  const pdfArg = process.argv[2];
+  const candidates = pdfArg
+    ? [pdfArg]
+    : ['crime-lower-feb-2025.pdf', 'crime-lower-jan26.pdf'];
+  let pdfFile = null;
+  for (const c of candidates) {
+    const p = c.startsWith('/') || /^[A-Za-z]:/.test(c) ? c : __dirname + '/' + c;
+    if (fs.existsSync(p)) { pdfFile = p; break; }
+  }
+  if (!pdfFile) {
+    console.error('No PDF found. Tried:', candidates.join(', '));
+    process.exit(1);
+  }
+  console.log('Parsing:', pdfFile);
+  const buf = fs.readFileSync(pdfFile);
   const data = await pdfParse(buf);
   const text = data.text;
 
@@ -86,14 +100,24 @@ async function main() {
     const rawName = nameBuffer.replace(/\s+/g, ' ').trim();
     nameBuffer = '';
     if (!rawName || !stationId) return;
-    if (rawName.includes('NON-POLICE STATION') || rawName.includes('NON- POLICE STATION')) return;
+
+    const isNonPoliceVenue = /NON[\s-]+POLICE\s+STATION/i.test(rawName);
+    let displayName;
+    if (isNonPoliceVenue) {
+      const cleaned = rawName.replace(/\s*NON[\s-]+POLICE\s+STATION\s*/i, ' ').replace(/\s+/g, ' ').trim();
+      const baseName = cleaned || (currentScheme || 'Scheme venue');
+      displayName = toTitleCase(baseName) + ' (non-police venue)';
+    } else {
+      displayName = toTitleCase(rawName);
+    }
 
     stations.push({
-      name: toTitleCase(rawName),
+      name: displayName,
       code: stationId,
       scheme: currentScheme,
       schemeCode: currentSchemeCode,
       region: getRegion(stationId),
+      kind: isNonPoliceVenue ? 'venue' : 'station',
     });
   }
 

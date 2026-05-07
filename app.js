@@ -670,7 +670,7 @@ var LAA = {
 
         { key: '_h_property', label: 'Property & Belongings', type: 'sectionHeading', defaultCollapsed: true },
         { key: 'propertyTaken', label: 'Property taken on arrival?', type: 'select', options: ['Yes','No','Unknown'] },
-        { key: 'propertyList', label: 'Property list', type: 'textarea', placeholder: 'e.g. Cash \u00a345, iPhone, house keys, wallet, documents', cols: 2, showIf: { field: 'propertyTaken', values: ['Yes','Unknown'] } },
+        { key: 'propertyList', label: 'Property list', type: 'textarea', placeholder: 'e.g. Cash \u00a345, watch, house keys, wallet, documents', cols: 2, showIf: { field: 'propertyTaken', values: ['Yes','Unknown'] } },
         { key: 'propertyReturned', label: 'Property returned on release?', type: 'select', options: ['Yes','No','Partial','N/A'], showIf: { field: 'propertyTaken', value: 'Yes' } },
         { key: 'propertyNotes', label: 'Property notes', type: 'textarea', placeholder: 'Missing items, disputes, items retained as exhibits', cols: 2, showIf: { field: 'propertyTaken', values: ['Yes','Unknown'] } },
       ],
@@ -743,18 +743,20 @@ var LAA = {
         { key: 'writtenEvidenceDetails', label: 'What disclosed / notes', type: 'textarea', placeholder: 'e.g. MG11 statements, witness statements, documents', cols: 2, showIf: { field: 'writtenEvidence', value: 'Yes' } },
         { key: 'exhibitsToInspect', label: 'Exhibits / physical evidence to inspect?', type: 'select', options: ['Yes','No'] },
         { key: 'exhibitsInspected', label: 'Inspected?', type: 'select', options: ['Yes','No','Not yet','Refused','Not applicable'], showIf: { field: 'exhibitsToInspect', value: 'Yes' } },
-        { key: 'exhibitsNotes', label: 'What was inspected / notes', type: 'text', placeholder: 'e.g. Knife, phone, clothing', cols: 2, showIf: { field: 'exhibitsToInspect', value: 'Yes' } },
+        { key: 'exhibitsNotes', label: 'What was inspected / notes', type: 'text', placeholder: 'e.g. Knife, clothing, documents', cols: 2, showIf: { field: 'exhibitsToInspect', value: 'Yes' } },
         { key: '_h_pnc_searches', label: 'PNC & searches', type: 'sectionHeading' },
         { key: 'pncDisclosed', label: 'PNC / previous convictions disclosed?', type: 'select', options: ['Yes','No'] },
         { key: 'pncNotes', label: 'Previous convictions – details if disclosed', type: 'textarea', placeholder: 'e.g. List convictions and dates', cols: 2, showIf: { field: 'pncDisclosed', value: 'Yes' } },
         { key: '_pace_searches', label: 'PACE searches (s18, s32, s54, person, property, vehicle)', type: 'multiPaceSearch' },
         { key: '_h_forensics', label: 'Forensics & seized items', type: 'sectionHeading', defaultCollapsed: true },
+        { key: '_n_phone_redirect', label: 'For phones, laptops or other electronic devices, use the Device seizure block below.', type: 'sectionNote' },
         { key: 'samplesDisclosed', label: 'Samples (DNA, fingerprints, etc.) disclosed?', type: 'select', options: ['Yes','No','Not applicable'] },
         { key: '_forensic_samples', label: 'Forensic samples – type and what was done', type: 'multiForensicSample' },
-        { key: 'clothingShoesSeized', label: 'Clothing / shoes / phone seized?', type: 'select', options: ['Yes','No'] },
-        { key: 'clothingShoesSeizedWhat', label: 'What was seized?', type: 'text', placeholder: 'e.g. Trainers, jacket, iPhone', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
+        { key: 'clothingShoesSeized', label: 'Clothing / shoes seized?', type: 'select', options: ['Yes','No'] },
+        { key: 'clothingShoesSeizedWhat', label: 'What was seized?', type: 'text', placeholder: 'e.g. Trainers, jacket, hat', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
         { key: 'clothingShoesSeizedNotes', label: 'Seizure notes', type: 'textarea', placeholder: 'Condition, replacement clothing given, etc.', showIf: { field: 'clothingShoesSeized', value: 'Yes' } },
         { key: '_h_device_seizure', label: 'Device seizure', type: 'sectionHeading', defaultCollapsed: true },
+        { key: '_n_device_seizure_intro', label: 'Single canonical record for any electronic device (phone, tablet, laptop, etc.).', type: 'sectionNote' },
         { key: 'deviceSeized', label: 'Electronic device(s) seized?', type: 'select', options: ['No','Yes'] },
         { key: 'deviceType', label: 'Device type(s)', type: 'text', placeholder: 'e.g. iPhone 15, Samsung Galaxy, laptop, tablet', cols: 2, showIf: { field: 'deviceSeized', value: 'Yes' } },
         { key: 'devicePinRequested', label: 'PIN / passcode requested?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'deviceSeized', value: 'Yes' } },
@@ -1519,7 +1521,7 @@ var LAA = {
         { key: 'writtenEvidenceDetails', label: 'What disclosed / notes', type: 'textarea', placeholder: 'e.g. MG11 statements, witness statements, documents', cols: 2, showIf: { field: 'writtenEvidence', value: 'Yes' } },
         { key: 'exhibitsToInspect', label: 'Exhibits / physical evidence to inspect?', type: 'select', options: ['Yes','No'] },
         { key: 'exhibitsInspected', label: 'Inspected?', type: 'select', options: ['Yes','No','Not yet','Refused','Not applicable'], showIf: { field: 'exhibitsToInspect', value: 'Yes' } },
-        { key: 'exhibitsNotes', label: 'What was inspected / notes', type: 'text', placeholder: 'e.g. Knife, phone, clothing', cols: 2, showIf: { field: 'exhibitsToInspect', value: 'Yes' } },
+        { key: 'exhibitsNotes', label: 'What was inspected / notes', type: 'text', placeholder: 'e.g. Knife, clothing, documents', cols: 2, showIf: { field: 'exhibitsToInspect', value: 'Yes' } },
         { key: '_h_pnc', label: 'PNC', type: 'sectionHeading' },
         { key: 'pncDisclosed', label: 'PNC / previous convictions disclosed?', type: 'select', options: ['Yes','No'] },
         { key: 'pncNotes', label: 'Previous convictions \u2013 details if disclosed', type: 'textarea', placeholder: 'e.g. List convictions and dates', cols: 2, showIf: { field: 'pncDisclosed', value: 'Yes' } },
@@ -4494,7 +4496,7 @@ var REQUIRED_FIELD_KEYS = [
     if (stId) {
       data.policeStationId = stId;
       const st = stations.find(s => String(s.id) === stId);
-      if (st) { data.policeStationName = st.name + ' (' + st.scheme + ')'; data.policeStationCode = st.code; data.schemeId = st.code; }
+      if (st) { data.policeStationName = st.name + ' (' + st.scheme + ')'; data.policeStationCode = st.code; data.schemeId = st.schemeCode || st.code; }
     }
     if (!data.surname && !data.forename) {
       showToast('Please enter at least a client name', 'error');
@@ -5905,6 +5907,13 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  function _formatQuickFileLengthsLine(lengths) {
+    if (!lengths) return '';
+    return 'Account number: ' + (lengths.account || 0) + ' chars'
+      + ' \u2022 API key: ' + (lengths.apiKey || 0) + ' chars'
+      + ' \u2022 Application ID: ' + (lengths.applicationId || 0) + ' chars';
+  }
+
   function testQuickFileConnection() {
     const btn = document.getElementById('btn-test-qf-connection');
     const importBtn = document.getElementById('btn-import-qf-clients');
@@ -5925,17 +5934,33 @@ var REQUIRED_FIELD_KEYS = [
       if (importBtn) importBtn.disabled = true;
       if (resyncBtn) resyncBtn.disabled = true;
       setQuickFileStatusMessage('');
-      return window.api.quickfileTestConnection().then(function(result) {
-        var sampleCount = Number(result && result.sampleCount) || 0;
-        var msg = sampleCount > 0
-          ? 'QuickFile connection successful. Directory access is working.'
-          : 'QuickFile connection successful. The API responded, but no client rows were returned in the sample check.';
-        setQuickFileStatusMessage(msg);
-        showToast('QuickFile connection successful', 'success');
-      }).catch(function(err) {
-        var message = err && err.message ? err.message : String(err);
-        setQuickFileStatusMessage(message);
-        showToast('QuickFile connection failed: ' + message, 'error');
+
+      var statusPromise = (window.api && typeof window.api.quickfileSettingsStatus === 'function')
+        ? window.api.quickfileSettingsStatus().catch(function() { return null; })
+        : Promise.resolve(null);
+
+      return statusPromise.then(function(status) {
+        if (status && Array.isArray(status.missing) && status.missing.length) {
+          var missingMsg = 'QuickFile not configured \u2014 missing in Settings: ' + status.missing.join(', ') + '.';
+          setQuickFileStatusMessage(missingMsg);
+          showToast(missingMsg, 'error', 6500);
+          return;
+        }
+        var lengthsLine = status ? _formatQuickFileLengthsLine(status.lengths) : '';
+        return window.api.quickfileTestConnection().then(function(result) {
+          var sampleCount = Number(result && result.sampleCount) || 0;
+          var success = sampleCount > 0
+            ? 'QuickFile connection successful. Directory access is working.'
+            : 'QuickFile connection successful. The API responded, but no client rows were returned in the sample check.';
+          var msg = lengthsLine ? (lengthsLine + ' \u2014 ' + success) : success;
+          setQuickFileStatusMessage(msg);
+          showToast('QuickFile connection successful', 'success');
+        }).catch(function(err) {
+          var message = err && err.message ? err.message : String(err);
+          var combined = lengthsLine ? (lengthsLine + ' \u2014 ' + message) : message;
+          setQuickFileStatusMessage(combined);
+          showToast('QuickFile connection failed: ' + message, 'error', 6500);
+        });
       }).finally(function() {
         if (btn) {
           btn.disabled = false;
@@ -6585,40 +6610,63 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  // C1: Mirror Finalise / Finish matter / Archive into the bottom bar so the
-  // duty solicitor never has to scroll to Section 9 to finish the case.
+  // The bottom-bar finish pill is permanently retired (was a morphing
+  // 4-state button; replaced by the explicit, always-visible primary action
+  // button in the form header — see updateBillingPanelHeaderBtn).
+  // Function is kept (no-op) because other code calls it.
   function updateBottomBarFinishPill() {
     var pill = document.getElementById('bottom-bar-finish-pill');
-    if (!pill) return;
-    var label = '';
-    var action = '';
-    var cls = 'bottom-btn finish-pill';
-    if (!currentAttendanceId) {
+    if (pill) {
       pill.style.display = 'none';
+      pill.removeAttribute('data-pill-action');
+    }
+    updateBillingPanelHeaderBtn();
+  }
+
+  // Header primary-action button (#billing-panel-btn) — the SINGLE entry
+  // point for finishing a record. Morphs by record state so the user always
+  // sees one obvious next-step button regardless of which section they are on.
+  //   draft           -> "Finalise"            -> validateBeforeFinalise()
+  //   finalised       -> "Finish matter"       -> promptBeforeOpeningBilling()
+  //   completed       -> "Archive matter"      -> form-archive-btn handler
+  //   archived        -> hidden
+  //   no record open  -> hidden
+  function updateBillingPanelHeaderBtn() {
+    var btn = document.getElementById('billing-panel-btn');
+    if (!btn) return;
+    if (!currentAttendanceId || currentRecordArchived) {
+      btn.style.display = 'none';
+      btn.removeAttribute('data-action');
       return;
     }
-    if (currentRecordArchived) {
-      label = 'Archived';
-      action = 'unarchive';
-      cls += ' state-archived';
-    } else if (currentRecordStatus === 'completed') {
-      label = 'Archive';
+    var label = '';
+    var action = '';
+    var cls = 'btn btn-small btn-accent';
+    var titleText = '';
+    if (currentRecordStatus === 'completed') {
+      label = 'Archive matter';
       action = 'archive';
       cls += ' state-complete';
+      titleText = 'Office work is marked complete \u2014 archive to clear from the active list';
     } else if (currentRecordStatus === 'finalised') {
-      label = 'Finish matter';
+      var hasInvoice = !!(
+        (formData && (formData.quickfile_invoice_id || formData.quickfileInvoiceNumber || formData.quickfileInvoiceUrl))
+      );
+      label = hasInvoice ? 'Continue finish matter' : 'Finish matter';
       action = 'finishMatter';
       cls += ' state-finalised';
+      titleText = 'Open the 3-step Finish matter screen (documents \u2192 invoice \u2192 archive)';
     } else {
       label = 'Finalise';
       action = 'finalise';
       cls += ' state-draft';
+      titleText = 'Lock the record before billing \u2014 runs validation first';
     }
-    pill.style.display = '';
-    pill.textContent = label;
-    pill.className = cls;
-    pill.dataset.pillAction = action;
-    pill.title = 'Quick access — equivalent to the button in Section 9 (' + label + ')';
+    btn.style.display = '';
+    btn.textContent = label;
+    btn.className = cls;
+    btn.dataset.action = action;
+    btn.title = titleText;
   }
   window.updateBottomBarFinishPill = updateBottomBarFinishPill;
 
@@ -6740,6 +6788,10 @@ var REQUIRED_FIELD_KEYS = [
     var warningsWrap = document.getElementById('billing-readiness-warnings-wrap');
     var openBtn = document.getElementById('billing-readiness-open');
     if (!list || !panel || !statusEl || !summaryEl || !warningsWrap || !openBtn) return;
+    // The panel is now informational only \u2014 the only action button lives in
+    // the form header (#billing-panel-btn). Hide the duplicate CTA so users
+    // don't have two competing buttons that do the same thing.
+    openBtn.style.display = 'none';
     var w = getBillingReadinessWarnings();
     var hasInvoice = !!(
       (formData.quickfile_invoice_id && String(formData.quickfile_invoice_id).trim()) ||
@@ -6784,7 +6836,15 @@ var REQUIRED_FIELD_KEYS = [
     }
     statusEl.className = 'billing-readiness-status ' + statusClass;
     statusEl.textContent = statusText;
-    summaryEl.textContent = summary;
+    var hint = '';
+    if (currentRecordStatus === 'completed') {
+      hint = ' Use the Archive matter button at the top of the screen when ready.';
+    } else if (currentRecordStatus === 'finalised') {
+      hint = ' Use the Finish matter button at the top of the screen to continue.';
+    } else {
+      hint = ' Use the Finalise button at the top of the screen when the note is ready.';
+    }
+    summaryEl.textContent = (summary + hint).trim();
     var listHtml = w.map(function(msg) { return '<li>' + esc(msg) + '</li>'; }).join('');
     list.innerHTML = listHtml;
     warningsWrap.style.display = w.length ? '' : 'none';
@@ -8779,7 +8839,7 @@ var REQUIRED_FIELD_KEYS = [
           const foundInp = document.createElement('input');
           foundInp.type = 'text';
           foundInp.className = 'form-input';
-          foundInp.placeholder = 'e.g. Mobile phone, keys, cash';
+          foundInp.placeholder = 'e.g. Wallet, keys, cash';
           foundInp.value = ent.whatFound || '';
           foundInp.addEventListener('input', function () { formData.paceSearches[idx].whatFound = this.value; });
           foundWrap.appendChild(foundInp);
@@ -10501,8 +10561,8 @@ var REQUIRED_FIELD_KEYS = [
           formData.policeStationId = String(r.station.id);
           formData.policeStationName = r.station.name + ' (' + r.station.scheme + ')';
           formData.policeStationCode = r.station.code;
-          formData.schemeId = r.station.code;
-          setFieldValue('schemeId', r.station.code);
+          formData.schemeId = r.station.schemeCode || r.station.code;
+          setFieldValue('schemeId', formData.schemeId);
           sugList.classList.remove('open');
           saveRecentStation(r.station.id);
           autoFillMileageFromStation(r.station.id);
@@ -12332,8 +12392,8 @@ row('PNC/pre-cons disclosed?', d.pncDisclosed) + (d.pncNotes ? row('Previous con
     ((d.paceSearches && d.paceSearches.length) ? d.paceSearches.filter(function(ps) { return (ps.searchType || '').trim() || (ps.whatFound || '').trim(); }).map(function(ps, i) { return row('PACE search ' + (i + 1), (ps.searchType || '') + (ps.whatFound ? ': ' + ps.whatFound : '')); }).join('') : '') +
     row('Samples (disclosed)?', d.samplesDisclosed) +
     ((d.forensicSamples && d.forensicSamples.length) ? d.forensicSamples.map(function(fs, i) { return row('Forensic sample ' + (i + 1), (fs.sampleType || '') + (fs.whatDone ? ' \u2013 ' + fs.whatDone : '') + (fs.notes ? ' (' + fs.notes + ')' : '')); }).join('') : '') +
-row('Caution/out-of-court offered?', d.cautionAvailable) + row('Clothing/shoes/phone seized?', d.clothingShoesSeized) +
-row('Clothing/shoes/phone — what was seized', d.clothingShoesSeizedWhat) + row('Clothing/shoes/phone — seizure notes', d.clothingShoesSeizedNotes) +
+row('Caution/out-of-court offered?', d.cautionAvailable) + row('Clothing/shoes seized?', d.clothingShoesSeized) +
+row('Clothing/shoes — what was seized', d.clothingShoesSeizedWhat) + row('Clothing/shoes — seizure notes', d.clothingShoesSeizedNotes) +
 row('Electronic device(s) seized', d.deviceSeized) + row('Device type(s)', d.deviceType) + row('Device PIN requested', d.devicePinRequested) + row('Device PIN provided', d.devicePinProvided) +
 row('Device data extraction consent', d.deviceExtractionConsent) + row('Device RIPA / s.49', d.deviceRIPAAuthority) + row('Device seizure notes', d.deviceNotes) +
 row('Special warning given', d.specialWarningGiven) + row('Special warning type', (d.specialWarningType || '').replace(/\|/g, ', ')) + row('Special warning details', d.specialWarningDetails) + row('Special warning — advice to client', d.specialWarningAdvice) +
@@ -15161,7 +15221,18 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('sections-index-btn')?.addEventListener('click', openSectionsIndex);
     document.getElementById('sections-index-close')?.addEventListener('click', closeSectionsIndex);
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
-    document.getElementById('billing-panel-btn')?.addEventListener('click', () => { promptBeforeOpeningBilling(); });
+    document.getElementById('billing-panel-btn')?.addEventListener('click', function () {
+      var action = (this && this.dataset && this.dataset.action) || 'finalise';
+      if (action === 'finalise') {
+        if (typeof validateBeforeFinalise === 'function') {
+          validateBeforeFinalise();
+        } else if (typeof saveForm === 'function') {
+          saveForm('finalised');
+        }
+      } else {
+        promptBeforeOpeningBilling();
+      }
+    });
     document.getElementById('kb-help-btn')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
     document.getElementById('form-duplicate-btn')?.addEventListener('click', function() {
       if (!currentAttendanceId) { showToast('Save the record first', 'info'); return; }

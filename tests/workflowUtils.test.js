@@ -398,9 +398,15 @@ describe('Billing screen source', () => {
     assert.ok(billingScreenSrc.includes('wf-doc-sel-list'));
   });
 
-  it('has next step to review when already invoiced', () => {
-    assert.ok(billingScreenSrc.includes('wf-bill-next-complete'));
-    assert.ok(billingScreenSrc.includes('Review &amp; complete'));
+  it('has next step to review when already invoiced (merged into primary)', () => {
+    /* The 3 forward variations on Step 2 (Send / Skip / Next) were merged
+     * into ONE contextual primary button (#wf-bill-create with data-mode).
+     * When an invoice already exists the primary button label flips to
+     * "Continue to Review & complete" with data-mode="next". */
+    assert.ok(!billingScreenSrc.includes('wf-bill-next-complete'),
+      'wf-bill-next-complete was merged into the contextual #wf-bill-create primary');
+    assert.ok(billingScreenSrc.includes('Continue to Review &amp; complete'));
+    assert.ok(billingScreenSrc.includes('data-mode="next"'));
   });
 
   it('has review confirmation checklist', () => {

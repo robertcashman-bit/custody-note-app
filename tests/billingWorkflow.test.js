@@ -744,7 +744,7 @@ describe('QuickFile auth generation', () => {
   });
 
   it('constructs MD5 from accountNumber + apiKey + submissionNumber', () => {
-    assert.ok(mainJs.includes("accountNumber + apiKey + submissionNumber"));
+    assert.ok(mainJs.includes("status.accountNumber + status.apiKey + submissionNumber"));
     assert.ok(mainJs.includes("createHash('md5')"));
   });
 

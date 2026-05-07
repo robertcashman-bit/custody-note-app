@@ -337,13 +337,18 @@ describe('Step 2: Billing screen — QuickFile-configured path', () => {
     assert.ok(billingScreenJs.includes("'&#10003; Send Bill to QuickFile'"));
   });
 
-  it('shows "Next: Review & complete" when invoice already exists or QF not configured', () => {
-    assert.ok(billingScreenJs.includes('opts.hasExistingInvoice || !qfConfigured'));
-    assert.ok(billingScreenJs.includes('Next: Review &amp; complete'));
+  /* The 3 forward variations on Step 2 (Send / Skip / Next) were merged
+   * into ONE contextual primary button (#wf-bill-create with data-mode)
+   * so the user always sees a single forward action. The label flips by
+   * QuickFile state. */
+  it('shows "Continue to Review & complete" forward action when invoice already exists', () => {
+    assert.ok(billingScreenJs.includes('Continue to Review &amp; complete'));
+    assert.ok(billingScreenJs.includes('data-mode="next"'));
   });
 
-  it('shows "Send Another Invoice to QuickFile" label when existing invoice present', () => {
-    assert.ok(billingScreenJs.includes('Send Another Invoice to QuickFile'));
+  it('shows "Continue without invoice" forward action when QF not configured', () => {
+    assert.ok(billingScreenJs.includes('Continue without invoice'));
+    assert.ok(billingScreenJs.includes('data-mode="skip"'));
   });
 
   it('detects existing invoice via quickfile_invoice_id in invoice status', () => {
@@ -351,44 +356,32 @@ describe('Step 2: Billing screen — QuickFile-configured path', () => {
   });
 });
 
-describe('Step 2: Billing screen — skip invoice path', () => {
-  it('shows "Next: complete without invoice" button when QF configured and no existing invoice', () => {
-    assert.ok(billingScreenJs.includes('wf-bill-skip-invoice'));
-    assert.ok(billingScreenJs.includes('complete without invoice'));
+describe('Step 2: Billing screen — skip invoice path (merged into primary)', () => {
+  /* Skip-invoice was a separate secondary button (#wf-bill-skip-invoice).
+   * It has been merged into the contextual primary button on Step 2 so
+   * users see ONE forward action. These tests assert (a) the old
+   * separate button is gone and (b) the new merged behaviour works. */
+  it('separate #wf-bill-skip-invoice button has been removed', () => {
+    assert.ok(!billingScreenJs.includes('wf-bill-skip-invoice'),
+      'wf-bill-skip-invoice was merged into the contextual primary button (#wf-bill-create with data-mode="skip")');
   });
 
-  it('skip button only appears when QF is on and no existing invoice', () => {
-    const idx = billingScreenJs.indexOf('wf-bill-skip-invoice');
-    assert.ok(idx !== -1);
-    const before = billingScreenJs.substring(Math.max(0, idx - 200), idx);
-    assert.ok(before.includes('qfConfigured') && before.includes('!opts.hasExistingInvoice'));
-  });
-
-  it('skip button uses secondary styling (not primary action)', () => {
-    const idx = billingScreenJs.indexOf('wf-bill-skip-invoice');
-    const line = billingScreenJs.substring(Math.max(0, idx - 150), idx + 60);
-    assert.ok(line.includes('btn-secondary'));
-    assert.ok(!line.includes('wf-btn-next-action'));
-  });
-
-  it('skip button shows confirmation dialog before advancing', () => {
-    const idx = billingScreenJs.indexOf("getElementById('wf-bill-skip-invoice')");
-    assert.ok(idx !== -1, 'skip button event wiring not found');
-    const block = billingScreenJs.substring(idx, idx + 400);
-    assert.ok(block.includes('showConfirm'), 'should use showConfirm for confirmation');
-    assert.ok(block.includes('No QuickFile invoice'), 'confirmation message should explain no invoice');
-    assert.ok(block.includes('_wfGoNext'), 'should advance to next step on confirm');
-  });
-
-  it('skip button is not rendered when invoice already exists', () => {
+  it('primary button uses data-mode="skip" when QF is not configured', () => {
     const fnIdx = billingScreenJs.indexOf('function _wfBuildBillingFooter');
     assert.ok(fnIdx !== -1);
-    const fnBlock = billingScreenJs.substring(fnIdx, fnIdx + 1200);
-    assert.ok(fnBlock.includes('wf-bill-skip-invoice'), 'skip button HTML should be in footer builder');
-    const skipIdx = fnBlock.indexOf('wf-bill-skip-invoice');
-    const before = fnBlock.substring(0, skipIdx);
-    assert.ok(before.includes('!opts.hasExistingInvoice'),
-      'skip button should be conditional on no existing invoice');
+    const fnBlock = billingScreenJs.substring(fnIdx, fnIdx + 2000);
+    assert.ok(fnBlock.includes('data-mode="skip"'), 'skip mode should be set when !qfConfigured');
+    assert.ok(fnBlock.includes('Continue without invoice'), 'skip label should be Continue without invoice');
+  });
+
+  it('clicking primary button in skip mode shows confirmation before advancing', () => {
+    const idx = billingScreenJs.indexOf("createBtn.dataset.mode || 'send'");
+    assert.ok(idx !== -1, 'merged primary-button click handler not found');
+    const block = billingScreenJs.substring(idx, idx + 600);
+    assert.ok(block.includes("'skip'"), 'handler must branch on the skip mode');
+    assert.ok(block.includes('showConfirm'), 'skip path should use showConfirm');
+    assert.ok(block.includes('No QuickFile invoice'), 'confirmation message should explain no invoice');
+    assert.ok(block.includes('_wfGoNext'), 'should advance to next step on confirm');
   });
 });
 
@@ -406,43 +399,38 @@ describe('Step 2: Billing screen — action guide', () => {
 
   it('guide differs when invoice already exists', () => {
     assert.ok(billingScreenJs.includes('Invoice already created'));
-    assert.ok(billingScreenJs.includes('Next: Review &amp; complete'));
+    assert.ok(billingScreenJs.includes('Continue to Review &amp; complete'));
   });
 
-  it('guide mentions skip-invoice path when no existing invoice', () => {
-    assert.ok(billingScreenJs.includes('complete without invoice'));
+  it('guide mentions the merged skip-invoice path when no existing invoice', () => {
+    assert.ok(billingScreenJs.includes('Continue without invoice'));
     assert.ok(billingScreenJs.includes('invoicing was handled separately'));
-  });
-
-  it('guide mentions Archive & close and Close when note is finalised', () => {
-    assert.ok(billingScreenJs.includes('Archive &amp; close'));
-    assert.ok(billingScreenJs.includes('<strong>Close</strong> to exit without archiving'));
   });
 });
 
-describe('Step 2: Billing screen — archive from billing step', () => {
+describe('Steps 1-2: Per-step Archive removed (linear workflow)', () => {
+  /* The linear finish-matter flow (Documents \u2192 Invoice \u2192 Review/Archive)
+   * means Archive only lives on Step 3. The per-step Archive buttons that
+   * used to be on Steps 1 and 2 were removed because they let users skip
+   * over invoice review. Users who need to file a matter without invoicing
+   * use the form header's "Archive matter" action instead. */
   it('exposes archive handler on window from completion screen', () => {
     assert.ok(completionJs.includes('window._wfRunArchiveFromWorkflow = _wfRunArchiveFromWorkflow'));
   });
 
-  it('billing footer builds wf-bill-archive when canArchiveFromBilling', () => {
-    assert.ok(billingScreenJs.includes('wf-bill-archive'));
-    assert.ok(billingScreenJs.includes('canArchiveFromBilling'));
-    assert.ok(billingScreenJs.includes('window._wfRunArchiveFromWorkflow'));
+  it('Step 2 (billing) no longer renders a per-step Archive button', () => {
+    assert.ok(!billingScreenJs.includes('wf-bill-archive'),
+      'wf-bill-archive removed: per-step Archive on Step 2 was confusing because it bypassed invoice review');
   });
 
-  /* User asked for an Archive button on EVERY finish-this-matter screen
-   * so a finalised matter can be filed away without forcing the next step.
-   * Step 1 (Documents) had no archive button; lock it in here. */
-  it('Step 1: documents footer builds wf-doc-archive when note finalised + not archived', () => {
-    assert.ok(documentsJs.includes('wf-doc-archive'),
-      'Documents step must show an Archive button so users can archive directly from step 1');
-    assert.ok(documentsJs.includes('_wfDocNoteFinalised'),
-      'Archive on documents step must gate on the note being finalised');
-    assert.ok(documentsJs.includes('currentRecordArchived'),
-      'Archive on documents step must hide when the record is already archived');
-    assert.ok(documentsJs.includes('window._wfRunArchiveFromWorkflow'),
-      'Documents archive must reuse the shared QuickFile-guarded archive flow');
+  it('Step 1 (documents) no longer renders a per-step Archive button', () => {
+    assert.ok(!documentsJs.includes('wf-doc-archive'),
+      'wf-doc-archive removed: per-step Archive on Step 1 was confusing because it bypassed invoice review');
+  });
+
+  it('Step 3 (completion) is the only step with Archive', () => {
+    assert.ok(completionJs.includes('id="wf-complete-archive"'),
+      'Step 3 must keep its Archive button \u2014 it is the sole archive entry point inside the workflow');
   });
 
   it('refreshes matter meta after async billing loads so firm name is not stale', () => {
@@ -767,10 +755,12 @@ describe('Step 3: Completion screen — actions', () => {
     assert.ok(completionJs.includes('exportBillingSummaryPdf'));
   });
 
-  it('footer has Archive and Close', () => {
+  it('footer has Archive (Close removed for linear flow)', () => {
     assert.ok(completionJs.includes('id="wf-complete-archive"'));
-    assert.ok(completionJs.includes('id="wf-complete-close"'));
-    assert.ok(completionJs.includes('>Archive</button>'));
+    assert.ok(!completionJs.includes('id="wf-complete-close"'),
+      'wf-complete-close was removed \u2014 Step 3 is final, users go Back if they need to bail');
+    assert.ok(completionJs.includes('Archive &amp; close</button>'),
+      'Primary action label updated to "Archive & close"');
   });
 
   it('primary action buttons use wf-btn-next-action class', () => {
