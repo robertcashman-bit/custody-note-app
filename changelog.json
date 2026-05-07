@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.6.23",
+      "version": "1.6.24",
       "date": "2026-05-07",
       "latest": true,
+      "changes": [
+        "Published installer build of v1.6.23 (which was version-bumped in metadata only). Bundles the Officer Emails removal - Quick Email, Email OIC and Officer Emails surfaces are gone (UI, IPC, templates, helpers, styles, tests). Licence-request emails, firm contact emails and other unrelated email fields are unchanged.",
+        "Auto-updates from v1.6.22 jump straight to v1.6.24.",
+        "Finish matter: Start billing process button is disabled in markup until the Finish matter screen runs readiness logic - avoids an enabled orphan control before navigation."
+      ]
+    },
+    {
+      "version": "1.6.23",
+      "date": "2026-05-07",
+      "latest": false,
       "changes": [
         "Remove the Quick Email / Email OIC / Officer Emails feature in full (UI, IPC, templates, helpers, styles, tests). The app no longer composes or sends officer mail",
         "licence-request emails, firm contact emails, and other unrelated email fields are unchanged. Auto-updates from v1.6.22.",
