@@ -1,9 +1,23 @@
 {
   "releases": [
     {
+      "version": "1.6.23",
+      "date": "2026-05-07",
+      "latest": true,
+      "changes": [
+        "Remove the Quick Email / Email OIC / Officer Emails feature in full (UI, IPC, templates, helpers, styles, tests). The app no longer composes or sends officer mail",
+        "licence-request emails, firm contact emails, and other unrelated email fields are unchanged. Auto-updates from v1.6.22.",
+        "Settings: removes the Officer Email Templates add-on row, the Custom Email Templates editor, and the OIC entitlement labels.",
+        "Records list: removes the Email OIC button, OIC Sent badge, and the Quick email to officer toolbar entry-point.",
+        "Home: removes the Officer Emails and Quick email to officer cards.",
+        "Internal: drops preload's CustodyEmailCompose bridge, ~870 lines of officer-email CSS, send-officer-sample-email script, and the email-launch.log diagnostic.",
+        "Finish matter: Start billing process is disabled in markup until the Finish matter screen runs readiness logic — avoids an enabled orphan button before navigation and keeps the in-app smoke test green."
+      ]
+    },
+    {
       "version": "1.6.22",
       "date": "2026-05-06",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Officer Emails: subject line can now be copied from a prominent hero button, plus inline Copy buttons next to the Subject input on Compose and the Subject value on Preview",
         "Officer Emails: templates are fully user-editable via a Manage templates… modal — add, edit, duplicate, cancel edits, delete with confirm, and Restore defaults",
