@@ -1,5 +1,5 @@
 /* ─── STATE ─── */
-var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', 'matter-billing': 'view-matter-billing', 'officer-emails': 'view-officer-emails' };
+var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', 'matter-billing': 'view-matter-billing' };
 var currentAttendanceId = null;
 var stations = [];
 var firms = [];
@@ -3377,7 +3377,7 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function updateLicenceFooterBadge(st) {
-    if (st && st.addons) window._addons = st.addons; else window._addons = { quickfile: false, emailAddon: false };
+    if (st && st.addons) window._addons = st.addons; else window._addons = { quickfile: false };
     var badge = document.getElementById('licence-footer-badge');
     if (!badge) return;
     if (!st || !st.key) {
@@ -3410,7 +3410,7 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function updateAddonUIs(st) {
-    var addons = (st && st.addons) ? st.addons : { quickfile: false, emailAddon: false };
+    var addons = (st && st.addons) ? st.addons : { quickfile: false };
     var qfLocked = document.getElementById('quickfile-settings-locked');
     var qfContent = document.getElementById('quickfile-settings-content');
     if (qfLocked && qfContent) {
@@ -3423,31 +3423,17 @@ var REQUIRED_FIELD_KEYS = [
       qfFirmsLocked.style.display = addons.quickfile ? 'none' : '';
       qfFirmsContent.style.display = addons.quickfile ? '' : 'none';
     }
-    var emailLocked = document.getElementById('addon-email-locked');
-    var emailContent = document.getElementById('addon-email-content');
-    if (emailLocked && emailContent) {
-      emailLocked.style.display = addons.emailAddon ? 'none' : '';
-      emailContent.style.display = addons.emailAddon ? '' : 'none';
-    }
 
     var modulesList = document.getElementById('modules-list');
     var modulesEmpty = document.getElementById('modules-installed-empty');
     if (modulesList) {
       var installed = [];
       if (addons.quickfile) installed.push('QuickFile');
-      if (addons.emailAddon) installed.push('Officer Email Templates');
       modulesList.innerHTML = installed.length
         ? '<ul style="margin:0.4rem 0 0 1.1rem;line-height:1.7;"><li>' + installed.join('</li><li>') + '</li></ul>'
         : '';
       if (modulesEmpty) modulesEmpty.style.display = installed.length ? 'none' : '';
     }
-
-    var showQuickOfficerEmail =
-      !!(addons.emailAddon && window._emailTemplatesAddonEnabled);
-    var qeBtn = document.getElementById('list-quick-email-btn');
-    if (qeBtn) qeBtn.style.display = showQuickOfficerEmail ? '' : 'none';
-    var homeQe = document.getElementById('home-card-quick-email');
-    if (homeQe) homeQe.style.display = showQuickOfficerEmail ? '' : 'none';
   }
 
   function updateHomeLicenceCard() {
@@ -3475,9 +3461,8 @@ var REQUIRED_FIELD_KEYS = [
       var hintWrap = document.getElementById('home-subscription-features-hint');
       if (hintWrap) {
         var badStatus = st && (st.status === 'expired' || st.status === 'grace_expired');
-        var hasEmailAddon = st && st.addons && st.addons.emailAddon;
         var eligible = st && st.key && !badStatus && (st.isTrial || st.status === 'active' || st.status === 'expiring_soon');
-        hintWrap.style.display = (eligible && !hasEmailAddon) ? '' : 'none';
+        hintWrap.style.display = eligible ? '' : 'none';
       }
     }).catch(function() {
       if (card) card.style.display = 'none';
@@ -5222,34 +5207,6 @@ var REQUIRED_FIELD_KEYS = [
       var aif = document.getElementById('setting-auto-import-folder');
       if (aif) aif.value = s.autoImportFolder || '';
 
-      var oetToggle = document.getElementById('setting-officer-email-templates');
-      if (oetToggle) {
-        oetToggle.checked = s.officerEmailTemplatesEnabled === 'true';
-        if (!oetToggle._oetListenerAttached) {
-          oetToggle._oetListenerAttached = true;
-          oetToggle.addEventListener('change', function() {
-            var enabled = oetToggle.checked;
-            window._emailTemplatesAddonEnabled = enabled;
-            if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
-            if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
-            window.api.setSettings({ officerEmailTemplatesEnabled: enabled ? 'true' : 'false' })
-              .then(function() {
-                showToast('Officer Email Templates ' + (enabled ? 'enabled' : 'disabled'), 'success');
-                if (typeof refreshList === 'function') refreshList();
-              })
-              .catch(function() {
-                oetToggle.checked = !enabled;
-                window._emailTemplatesAddonEnabled = !enabled;
-                if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
-                if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
-                showToast('Failed to save add-on setting', 'error');
-              });
-          });
-        }
-      }
-      window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
-      if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
-
       var idleEl = document.getElementById('setting-idle-timeout');
       if (idleEl) {
         idleEl.value = s.idleTimeoutMinutes || '0';
@@ -5531,7 +5488,6 @@ var REQUIRED_FIELD_KEYS = [
       suggestionsForumUrl: document.getElementById('suggestions-forum-url')?.value?.trim() || '',
       autoImportEnabled: document.getElementById('setting-auto-import-enabled')?.checked ? 'true' : 'false',
       autoImportFolder: document.getElementById('setting-auto-import-folder')?.value?.trim() || '',
-      officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
       idleTimeoutMinutes: document.getElementById('setting-idle-timeout')?.value || '0',
     }).then(() => window.api.getSettings()).then(function(s) {
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
@@ -5541,8 +5497,6 @@ var REQUIRED_FIELD_KEYS = [
         mileageRate: parseFloat(s.billingMileageRate) || 0.45,
         vatRate: _normaliseVatRate(s.billingVatRate, 0.20),
       };
-      window._emailTemplatesAddonEnabled = document.getElementById('setting-officer-email-templates')?.checked || false;
-      if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
       showToast('Settings saved', 'success');
     }).catch(function(e) { showToast('Failed to save settings', 'error'); console.error('[saveSettings]', e); });
   }
@@ -14504,8 +14458,6 @@ pdfAuditFooterHtml(d, settings) +
       btn.style.display = onForm && currentAttendanceId ? '' : 'none';
     };
 
-    var _customEmailTemplatesCache = null;
-
     document.addEventListener('licence-activated', function () {
       updateHomeLicenceCard();
       updateGearLicenceItem();
@@ -14768,21 +14720,6 @@ pdfAuditFooterHtml(d, settings) +
             e.preventDefault();
             if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
             openQuickCapture();
-            return;
-          case 'openOfficerEmailsBtn':
-            e.preventDefault();
-            showView('officer-emails');
-            if (window.OfficerEmails && typeof window.OfficerEmails.onShow === 'function') {
-              window.OfficerEmails.onShow();
-            }
-            return;
-          case 'officerBackHomeBtn':
-            e.preventDefault();
-            showView('home');
-            return;
-          case 'home-card-quick-email':
-            e.preventDefault();
-            if (typeof openQuickEmailModal === 'function') openQuickEmailModal();
             return;
           case 'home-focus-open':
             e.preventDefault();
@@ -15057,7 +14994,6 @@ pdfAuditFooterHtml(d, settings) +
     });
 
     /* First-launch setup check: hide splash immediately so user can complete setup */
-    window._emailTemplatesAddonEnabled = false;
     window._billingDefaults = {};
 
     window.api.getSettings().then(function(s) {
@@ -15069,30 +15005,7 @@ pdfAuditFooterHtml(d, settings) +
         mileageRate: parseFloat(s.billingMileageRate) || 0.45,
         vatRate: _normaliseVatRate(s.billingVatRate, 0.20),
       };
-      window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
       if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
-      /* Custom email templates: SQLite settings (JSON) + migrate from localStorage once */
-      var json = s.customEmailTemplatesJson;
-      if (json && String(json).trim()) {
-        try {
-          _customEmailTemplatesCache = JSON.parse(json);
-        } catch (e) {
-          _customEmailTemplatesCache = [];
-        }
-      } else {
-        try {
-          var leg = localStorage.getItem('cn-custom-email-templates');
-          if (leg && leg !== '[]') {
-            _customEmailTemplatesCache = JSON.parse(leg);
-            window.api.setSettings({ customEmailTemplatesJson: JSON.stringify(_customEmailTemplatesCache) }).catch(function() {});
-            localStorage.removeItem('cn-custom-email-templates');
-          } else {
-            _customEmailTemplatesCache = [];
-          }
-        } catch (e2) {
-          _customEmailTemplatesCache = [];
-        }
-      }
       if (!s.dsccPin || !s.feeEarnerNameDefault) {
         hideSplash();
         initFirstLaunchModal();
@@ -15336,9 +15249,6 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
     document.getElementById('form-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
     document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
-    document.getElementById('list-quick-email-btn')?.addEventListener('click', function() {
-      if (typeof openQuickEmailModal === 'function') openQuickEmailModal();
-    });
     document.getElementById('settings-quick-backup')?.addEventListener('click', function() { handleBackupNowClick(this); });
     document.getElementById('settings-quick-cloud')?.addEventListener('click', function() {
       var btn = this;
@@ -15603,213 +15513,6 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('list-sort')?.addEventListener('change', (e) => { listSortMode = e.target.value; listPage = 1; refreshList(); });
     document.getElementById('list-mode-filter')?.addEventListener('change', (e) => { listTypeFilter = e.target.value; listPage = 1; refreshList(); });
 
-    /* ── Custom email templates ── */
-    function _normalizeTemplateScope(scope) {
-      return scope === 'officer' || scope === 'solicitor' ? scope : 'all';
-    }
-    function _newEmailTemplateId() {
-      try {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) return 'cn-etpl-' + crypto.randomUUID();
-      } catch (_) {}
-      return 'cn-etpl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 11);
-    }
-    /** Stable id for legacy templates without id (same name+subject prefix → same id). */
-    function _legacyEmailTemplateId(tpl) {
-      tpl = tpl || {};
-      var base = String(tpl.name || '') + '\n' + String(tpl.subject || '').slice(0, 120) + '\n' + String(tpl.body || '').slice(0, 160);
-      var h = 2166136261;
-      for (var i = 0; i < base.length; i++) {
-        h ^= base.charCodeAt(i);
-        h = Math.imul(h, 16777619);
-      }
-      return 'cn-etpl-legacy-' + (h >>> 0).toString(16);
-    }
-    function _normalizeCustomTemplate(tpl) {
-      tpl = tpl || {};
-      var subject = tpl.subject || '';
-      var body = tpl.body || '';
-      var requiredFields = Array.isArray(tpl.requiredFields) ? tpl.requiredFields.slice() : null;
-      if (requiredFields == null && typeof window.extractQuickEmailPlaceholderKeys === 'function') {
-        requiredFields = window.extractQuickEmailPlaceholderKeys(subject, body);
-      } else if (requiredFields == null) {
-        requiredFields = [];
-      }
-      var id = tpl.id;
-      if (!id) id = _legacyEmailTemplateId(tpl);
-      var createdAt = tpl.createdAt || new Date(0).toISOString();
-      var updatedAt = tpl.updatedAt || createdAt;
-      return {
-        id: id,
-        name: tpl.name || '',
-        subject: subject,
-        body: body,
-        scope: _normalizeTemplateScope(tpl.scope),
-        requiredFields: requiredFields,
-        category: typeof tpl.category === 'string' && tpl.category.trim() ? tpl.category.trim() : 'Other',
-        description: typeof tpl.description === 'string' ? tpl.description : '',
-        archived: tpl.archived === true,
-        createdAt: createdAt,
-        updatedAt: updatedAt
-      };
-    }
-    function _getCustomTemplates() {
-      var raw = _customEmailTemplatesCache;
-      if (raw == null) {
-        try {
-          return JSON.parse(localStorage.getItem('cn-custom-email-templates') || '[]').map(_normalizeCustomTemplate);
-        } catch (_) { return []; }
-      }
-      return (raw || []).map(_normalizeCustomTemplate);
-    }
-    function _saveCustomTemplates(tpls) {
-      tpls = (tpls || []).map(_normalizeCustomTemplate);
-      _customEmailTemplatesCache = tpls;
-      var json = JSON.stringify(tpls);
-      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { customEmailTemplatesJson: json });
-      if (window.api && window.api.setSettings) {
-        window.api.setSettings({ customEmailTemplatesJson: json }).catch(function(e) { console.error('[customEmailTemplates]', e); });
-      }
-      try { localStorage.removeItem('cn-custom-email-templates'); } catch (_) {}
-    }
-    window._getCustomEmailTemplates = _getCustomTemplates;
-    window._saveCustomEmailTemplates = _saveCustomTemplates;
-
-    /* ── System (built-in) email-template overrides + deletions ──
-       Lets the user edit or remove every built-in Quick Email template.
-       The bundled JSON file (data/quick-email-templates.json) is treated
-       as factory defaults; per-user changes live in app settings so they
-       survive updates and can be reset with one click.
-       ────────────────────────────────────────────────────────────────── */
-    function _getSystemEmailOverrides() {
-      var raw = (window._appSettingsCache && window._appSettingsCache.systemEmailTemplateOverridesJson) || '';
-      if (!raw) return {};
-      try {
-        var parsed = JSON.parse(raw);
-        return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
-      } catch (_) { return {}; }
-    }
-    function _saveSystemEmailOverrides(overrides) {
-      var safe = (overrides && typeof overrides === 'object' && !Array.isArray(overrides)) ? overrides : {};
-      var json = JSON.stringify(safe);
-      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { systemEmailTemplateOverridesJson: json });
-      if (window.api && window.api.setSettings) {
-        window.api.setSettings({ systemEmailTemplateOverridesJson: json }).catch(function(e) { console.error('[systemEmailOverrides]', e); });
-      }
-    }
-    function _getDeletedSystemEmailIds() {
-      var raw = (window._appSettingsCache && window._appSettingsCache.deletedSystemEmailTemplateIdsJson) || '';
-      if (!raw) return [];
-      try {
-        var parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed.filter(function(x) { return typeof x === 'string' && x.length; }) : [];
-      } catch (_) { return []; }
-    }
-    function _saveDeletedSystemEmailIds(ids) {
-      var safe = Array.isArray(ids) ? ids.filter(function(x) { return typeof x === 'string' && x.length; }) : [];
-      var dedup = []; safe.forEach(function(id) { if (dedup.indexOf(id) === -1) dedup.push(id); });
-      var json = JSON.stringify(dedup);
-      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { deletedSystemEmailTemplateIdsJson: json });
-      if (window.api && window.api.setSettings) {
-        window.api.setSettings({ deletedSystemEmailTemplateIdsJson: json }).catch(function(e) { console.error('[deletedSystemEmailIds]', e); });
-      }
-    }
-    function _resetSystemEmailCustomizations() {
-      _saveSystemEmailOverrides({});
-      _saveDeletedSystemEmailIds([]);
-    }
-    window._getSystemEmailOverrides = _getSystemEmailOverrides;
-    window._saveSystemEmailOverrides = _saveSystemEmailOverrides;
-    window._getDeletedSystemEmailIds = _getDeletedSystemEmailIds;
-    window._saveDeletedSystemEmailIds = _saveDeletedSystemEmailIds;
-    window._resetSystemEmailCustomizations = _resetSystemEmailCustomizations;
-
-    function _renderCustomTemplatesList() {
-      var listEl = document.getElementById('custom-templates-list');
-      if (!listEl) return;
-      var tpls = _getCustomTemplates();
-      if (!tpls.length) { listEl.innerHTML = '<p class="settings-hint" style="color:#94a3b8;">No custom templates yet.</p>'; return; }
-      listEl.innerHTML = '';
-      tpls.forEach(function(t, idx) {
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:0.5rem;padding:0.3rem 0;border-bottom:1px solid #f1f5f9;';
-        var scopeLabel = t.scope === 'solicitor'
-          ? 'Instructing solicitor only'
-          : (t.scope === 'officer' ? 'Officer emails only' : 'Use anywhere');
-        row.innerHTML = '<span style="flex:1;font-size:0.9rem;">' + esc(t.name) + ' <span style="color:#64748b;font-size:0.8rem;">(' + esc(scopeLabel) + ')</span></span>' +
-          '<button type="button" class="btn-small ct-edit" data-idx="' + idx + '">Edit</button>' +
-          '<button type="button" class="btn-small ct-del" data-idx="' + idx + '">Remove</button>';
-        row.querySelector('.ct-edit').addEventListener('click', function() {
-          var tpl = _getCustomTemplates()[idx];
-          if (!tpl) return;
-          _editingTemplateIdx = idx;
-          document.getElementById('new-template-name').value = tpl.name || '';
-          document.getElementById('new-template-scope').value = _normalizeTemplateScope(tpl.scope);
-          document.getElementById('new-template-subject').value = tpl.subject || '';
-          document.getElementById('new-template-body').value = tpl.body || '';
-          var ed = document.getElementById('custom-template-editor');
-          if (ed) ed.style.display = '';
-        });
-        row.querySelector('.ct-del').addEventListener('click', function() {
-          var updated = _getCustomTemplates();
-          updated.splice(idx, 1);
-          _saveCustomTemplates(updated);
-          _renderCustomTemplatesList();
-        });
-        listEl.appendChild(row);
-      });
-    }
-    _renderCustomTemplatesList();
-
-    var _editingTemplateIdx = -1;
-    document.getElementById('btn-add-custom-template')?.addEventListener('click', function() {
-      _editingTemplateIdx = -1;
-      document.getElementById('new-template-name').value = '';
-      document.getElementById('new-template-scope').value = 'all';
-      document.getElementById('new-template-subject').value = '';
-      document.getElementById('new-template-body').value = '';
-      var ed = document.getElementById('custom-template-editor');
-      if (ed) ed.style.display = '';
-    });
-    document.getElementById('btn-cancel-custom-template')?.addEventListener('click', function() {
-      var ed = document.getElementById('custom-template-editor');
-      if (ed) ed.style.display = 'none';
-    });
-    document.getElementById('btn-save-custom-template')?.addEventListener('click', function() {
-      var name = (document.getElementById('new-template-name').value || '').trim();
-      var scope = _normalizeTemplateScope(document.getElementById('new-template-scope').value || 'all');
-      var subject = (document.getElementById('new-template-subject').value || '').trim();
-      var body = (document.getElementById('new-template-body').value || '').trim();
-      if (!name) { showToast('Enter a template name', 'error'); return; }
-      if (!subject || !body) { showToast('Subject and body are required', 'error'); return; }
-      var tpls = _getCustomTemplates();
-      var nowIso = new Date().toISOString();
-      var prev = (_editingTemplateIdx >= 0 && _editingTemplateIdx < tpls.length) ? tpls[_editingTemplateIdx] : null;
-      var reqFields = typeof window.extractQuickEmailPlaceholderKeys === 'function'
-        ? window.extractQuickEmailPlaceholderKeys(subject, body)
-        : [];
-      var nextTemplate = {
-        id: prev && prev.id ? prev.id : _newEmailTemplateId(),
-        name: name,
-        subject: subject,
-        body: body,
-        scope: scope,
-        requiredFields: reqFields,
-        category: prev && prev.category ? prev.category : '',
-        createdAt: prev && prev.createdAt ? prev.createdAt : nowIso,
-        updatedAt: nowIso
-      };
-      if (_editingTemplateIdx >= 0 && _editingTemplateIdx < tpls.length) tpls[_editingTemplateIdx] = nextTemplate;
-      else tpls.push(nextTemplate);
-      _saveCustomTemplates(tpls);
-      _editingTemplateIdx = -1;
-      document.getElementById('new-template-name').value = '';
-      document.getElementById('new-template-scope').value = 'all';
-      document.getElementById('new-template-subject').value = '';
-      document.getElementById('new-template-body').value = '';
-      document.getElementById('custom-template-editor').style.display = 'none';
-      _renderCustomTemplatesList();
-      showToast('Template saved', 'success');
-    });
     document.getElementById('list-density-toggle')?.addEventListener('click', () => {
       const ul = document.getElementById('attendance-list');
       if (ul) ul.classList.toggle('compact');

@@ -140,7 +140,6 @@ function _getGeneratedDocuments(data) {
   var docs = [];
   docs.push({ name: 'Attendance Note PDF', type: 'attendance', available: true });
   docs.push({ name: 'Applicant Declaration (pre-filled PDF)', type: 'declaration', available: true });
-  if (data.officerEmailStatus === 'sent') docs.push({ name: 'Officer Email Copy', type: 'email', available: true });
   if (data.disclosure || data.disclosureSummary) docs.push({ name: 'Disclosure Summary', type: 'disclosure', available: true });
   return docs;
 }
