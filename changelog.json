@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.7.0",
+      "date": "2026-05-08",
+      "latest": true,
+      "changes": [
+        "Restore Billing button in bottom navigation"
+      ]
+    },
+    {
       "version": "1.6.24",
       "date": "2026-05-07",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Published installer build of v1.6.23 (which was version-bumped in metadata only). Bundles the Officer Emails removal - Quick Email, Email OIC and Officer Emails surfaces are gone (UI, IPC, templates, helpers, styles, tests). Licence-request emails, firm contact emails and other unrelated email fields are unchanged.",
         "Auto-updates from v1.6.22 jump straight to v1.6.24.",
