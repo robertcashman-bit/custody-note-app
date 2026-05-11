@@ -6312,7 +6312,6 @@ var REQUIRED_FIELD_KEYS = [
       showView('new');
       if (typeof window.syncFormDuplicateButtonVisibility === 'function') window.syncFormDuplicateButtonVisibility();
       maybeDepartureNudge();
-      if (typeof window.refreshOfficerEmails === 'function') window.refreshOfficerEmails();
       return;
     }
     
@@ -6351,7 +6350,6 @@ var REQUIRED_FIELD_KEYS = [
       showView('new');
       if (typeof window.syncFormDuplicateButtonVisibility === 'function') window.syncFormDuplicateButtonVisibility();
       maybeDepartureNudge();
-      if (typeof window.refreshOfficerEmails === 'function') window.refreshOfficerEmails();
     }).catch(function(err) {
       if (requestToken !== _openAttendanceToken || currentAttendanceId !== id) return;
       showToast('Could not open record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
