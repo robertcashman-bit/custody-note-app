@@ -7,6 +7,18 @@ import { expect, type Page } from '@playwright/test';
  * Fresh `CUSTODYNOTE_TEST_USERDATA` has no fee earner / DSCC PIN, so `initFirstLaunchModal`
  * shows the welcome wizard and it blocks bottom-nav clicks until dismissed.
  */
+/** Close Email OIC modal if open (e.g. previous test left it open). */
+export async function dismissEmailOicModalIfPresent(page: Page): Promise<void> {
+  const modal = page.locator('#email-oic-modal');
+  try {
+    await modal.waitFor({ state: 'visible', timeout: 2000 });
+  } catch {
+    return;
+  }
+  await page.locator('#email-oic-cancel').click();
+  await expect(page.locator('#email-oic-modal')).toHaveCount(0, { timeout: 8000 });
+}
+
 export async function dismissFirstLaunchModalIfPresent(page: Page): Promise<void> {
   const skip = page.locator('#fl-skip');
   try {
@@ -16,6 +28,41 @@ export async function dismissFirstLaunchModalIfPresent(page: Page): Promise<void
   }
   await skip.click();
   await page.locator('#first-launch-modal').waitFor({ state: 'hidden', timeout: 15000 });
+}
+
+/**
+ * Officer Email Templates add-on + home/list quick-email controls are hidden unless licensed.
+ * Mirror production `updateAddonUIs` flags and un-hide toolbar/home nodes for Playwright.
+ */
+export async function enableQuickOfficerEmailUi(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const w = window as unknown as {
+      _addons?: { quickfile?: boolean; emailAddon?: boolean };
+      _emailTemplatesAddonEnabled?: boolean;
+    };
+    w._addons = w._addons || { quickfile: false, emailAddon: false };
+    w._addons.emailAddon = true;
+    w._emailTemplatesAddonEnabled = true;
+    const listBtn = document.getElementById('list-quick-email-btn');
+    const homeCard = document.getElementById('home-card-quick-email');
+    if (listBtn) {
+      listBtn.style.removeProperty('display');
+      listBtn.style.display = 'inline-block';
+    }
+    if (homeCard) {
+      homeCard.style.removeProperty('display');
+      homeCard.style.display = '';
+    }
+  });
+}
+
+/**
+ * Forces buildOutlookWebComposeUrlWithMeta to truncate: email-modal caps IPC body at 4000 chars,
+ * so padding must use characters that **expand** in the query string (e.g. `&` → `%26`).
+ * Plain spaces fit within the OWA URL soft limit at 4000 chars — no truncation, no clipboard copy.
+ */
+export function officerBodyForcingLongComposeUrl(marker: string): string {
+  return `${marker}\n` + '&'.repeat(12_000);
 }
 
 export function systemClipboardReadable(): boolean {

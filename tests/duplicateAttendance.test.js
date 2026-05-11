@@ -165,6 +165,10 @@ function makeFixture() {
     quickfile_invoice_number: 'INV1', quickfileInvoiceUrl: 'http://x',
     invoiceNumberRef: 'INV1', invoiceNotes: 'paid',
 
+    /* Q. Email log */
+    officerEmailStatus: 'sent', lastOfficerEmailSentDate: '2025-01-02',
+    lastOfficerEmailTemplateUsed: 'Bail', lastOfficerEmailRecipient: 'pc@x',
+
     /* S. Workflow / provenance */
     billingProcessCompletedAt: '2025-01-03T10:00:00Z',
     officeWorkCompletedAt: '2025-01-03T11:00:00Z',
@@ -304,6 +308,10 @@ const CLEARED_FIELDS = [
   /* P. Billing */
   'quickfile_invoice_id', 'quickfileInvoiceNumber', 'quickfile_invoice_number',
   'quickfileInvoiceUrl', 'invoiceNumberRef', 'invoiceNotes',
+
+  /* Q. Email log */
+  'officerEmailStatus', 'lastOfficerEmailSentDate',
+  'lastOfficerEmailTemplateUsed', 'lastOfficerEmailRecipient',
 
   /* S. Workflow / provenance */
   'billingProcessCompletedAt', 'officeWorkCompletedAt',

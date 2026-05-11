@@ -4,6 +4,14 @@
    real implementations and broke office postcode persistence).
    ═══════════════════════════════════════════════════════ */
 
+function _updateAddonStatusLabel() {
+  var lbl = document.getElementById('officer-email-templates-status');
+  if (!lbl) return;
+  var enabled = window._emailTemplatesAddonEnabled;
+  lbl.textContent = enabled ? 'Enabled' : 'Disabled';
+  lbl.className   = 'addon-status ' + (enabled ? 'addon-status-on' : 'addon-status-off');
+}
+
 /* ── Advanced settings toggle ── */
 (function() {
   var toggle = document.getElementById('settings-advanced-toggle');
