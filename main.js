@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu, powerMonitor, clipboard } = require('electron');
 const os = require('os');
 const path = require('path');
 /* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use). */
@@ -8018,5 +8018,246 @@ ipcMain.handle('attendance-invoice-status', (_, attendanceId) => {
     [attendanceId]
   );
   return row || {};
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   v1.8.0 — Reliable Outlook launch (Officer Emails / Quick Email)
+
+   Replaces the historically broken auto-launch path (v1.6.10–v1.6.16) with a
+   user-selectable send method whose handler is chosen explicitly. The four
+   methods + the rationale for each are documented in lib/outlookLaunch.js.
+
+   IPCs:
+     - officer-emails:detect-mail-client → registry-based detection
+     - officer-emails:send                → dispatch to chosen launcher
+     - officer-emails:show-launch-log     → opens the diagnostic log
+   ═══════════════════════════════════════════════════════════════════════════ */
+const _outlookLaunch = require('./lib/outlookLaunch');
+
+function _outlookGetUserDataPath() {
+  try {
+    return app.getPath('userData');
+  } catch (_) {
+    return getFallbackAppDataRoot();
+  }
+}
+
+function _outlookGetLogPath() {
+  return path.join(_outlookGetUserDataPath(), 'email-launch.log');
+}
+
+function _outlookGetEmlOutputDir() {
+  const dir = path.join(_outlookGetUserDataPath(), 'outlook-drafts');
+  try { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
+  return dir;
+}
+
+/**
+ * Append one PII-safe line to email-launch.log. Bounded write; never throws.
+ */
+function _outlookAppendLog(entry) {
+  try {
+    const line = _outlookLaunch.formatLogLine(entry);
+    fs.appendFileSync(_outlookGetLogPath(), line + '\r\n', 'utf8');
+  } catch (_) { /* logging is best-effort */ }
+}
+
+/**
+ * Detect Outlook desktop install + default mailto handler via the Windows
+ * registry (read-only `reg query`, no native deps). Cached per process.
+ */
+let _outlookDetectionCache = null;
+function _outlookDetectMailClient() {
+  if (_outlookDetectionCache) return _outlookDetectionCache;
+  const result = {
+    platform: process.platform,
+    outlookDesktopInstalled: false,
+    defaultMailtoApp: null,
+    detectedAt: new Date().toISOString(),
+  };
+  if (process.platform !== 'win32') {
+    _outlookDetectionCache = result;
+    return result;
+  }
+  const { execFileSync } = require('child_process');
+  /* Helper: run reg.exe quietly, return stdout or null on any error. */
+  function regQuery(args) {
+    try {
+      const out = execFileSync('reg.exe', args, {
+        encoding: 'utf8',
+        windowsHide: true,
+        timeout: 3000,
+      });
+      return out;
+    } catch (_) { return null; }
+  }
+  /* Outlook desktop: any of these registry locations indicates an install.
+     We use multiple probes because Outlook 2016/2019/365 use different keys
+     and the "new" Outlook (Microsoft.Outlook) registers differently again. */
+  const outlookProbes = [
+    ['query', 'HKLM\\SOFTWARE\\Clients\\Mail\\Microsoft Outlook', '/ve'],
+    ['query', 'HKCR\\Outlook.Application', '/ve'],
+    ['query', 'HKCR\\Outlook.File.msg', '/ve'],
+  ];
+  for (const probe of outlookProbes) {
+    if (regQuery(probe)) { result.outlookDesktopInstalled = true; break; }
+  }
+  /* Default mailto handler ProgId. The user's explicit UserChoice trumps
+     the system default. Reading just the ProgId is enough — we don't need
+     to resolve the actual exe. */
+  const userChoice = regQuery([
+    'query',
+    'HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\mailto\\UserChoice',
+    '/v', 'ProgId',
+  ]);
+  if (userChoice) {
+    const m = userChoice.match(/ProgId\s+REG_SZ\s+(.+)\r?\n/);
+    if (m) result.defaultMailtoApp = m[1].trim();
+  }
+  if (!result.defaultMailtoApp) {
+    const sysDefault = regQuery([
+      'query',
+      'HKLM\\SOFTWARE\\Classes\\mailto\\shell\\open\\command',
+      '/ve',
+    ]);
+    if (sysDefault) {
+      const m = sysDefault.match(/REG_(?:EXPAND_)?SZ\s+(.+)\r?\n/);
+      if (m) result.defaultMailtoApp = m[1].trim().slice(0, 200);
+    }
+  }
+  result.recommendedMethod = _outlookLaunch.recommendSendMethod(result);
+  _outlookDetectionCache = result;
+  return result;
+}
+
+ipcMain.handle('officer-emails:detect-mail-client', () => {
+  /* Re-detect on every call — Outlook install / mailto association can change
+     during a session. Cache only within ~5s to avoid registry thrash on rapid
+     polls. */
+  const now = Date.now();
+  if (_outlookDetectionCache && _outlookDetectionCache._cachedAt && (now - _outlookDetectionCache._cachedAt) < 5000) {
+    return _outlookDetectionCache;
+  }
+  _outlookDetectionCache = null;
+  const r = _outlookDetectMailClient();
+  r._cachedAt = now;
+  return r;
+});
+
+/**
+ * Dispatch a send request to the chosen launcher. NEVER chains across methods
+ * on failure (chaining was the v1.6.10–v1.6.16 root cause of "Outlook opens,
+ * then Edge opens, then nothing"). On launch failure, copies subject + body
+ * to the system clipboard so the user can paste manually.
+ *
+ * Payload: { method: 'outlook-desktop'|'outlook-web'|'default-mailto'|'copy-only',
+ *            to, subject, body }
+ *
+ * Returns: { ok: boolean, method, error?: string, fellbackToClipboard?: boolean }
+ */
+ipcMain.handle('officer-emails:send', async (_, payload) => {
+  const start = Date.now();
+  payload = payload || {};
+  const method = String(payload.method || '').trim();
+  const validation = _outlookLaunch.validatePayload(payload);
+  if (!validation.ok) {
+    _outlookAppendLog({
+      method: method || '?',
+      ok: false,
+      error: 'invalid-payload: ' + validation.error,
+      redacted: _outlookLaunch.redactForLog(payload),
+      durationMs: Date.now() - start,
+    });
+    return { ok: false, method, error: validation.error };
+  }
+  if (!_outlookLaunch.SEND_METHODS.includes(method)) {
+    _outlookAppendLog({
+      method,
+      ok: false,
+      error: 'unknown-method',
+      redacted: _outlookLaunch.redactForLog(payload),
+      durationMs: Date.now() - start,
+    });
+    return { ok: false, method, error: 'Unknown send method: ' + method };
+  }
+
+  /* Attempt the chosen launch; capture any failure message verbatim. */
+  let launchError = null;
+  try {
+    if (method === 'outlook-desktop') {
+      const eml = _outlookLaunch.buildEmlContent(payload);
+      const dir = _outlookGetEmlOutputDir();
+      const fname = 'draft-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + '.eml';
+      const fpath = path.join(dir, fname);
+      fs.writeFileSync(fpath, eml, { encoding: 'utf8' });
+      /* shell.openPath returns '' on success, error string on failure. */
+      const openErr = await shell.openPath(fpath);
+      if (openErr) launchError = String(openErr);
+    } else if (method === 'outlook-web') {
+      const url = _outlookLaunch.buildOwaComposeUrl(payload);
+      /* isSafeExternalUrl is the existing allowlist guard from windowHardening. */
+      if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
+        launchError = 'URL rejected by safety guard';
+      } else {
+        await shell.openExternal(url);
+      }
+    } else if (method === 'default-mailto') {
+      const uri = _outlookLaunch.buildMailtoUri(payload);
+      /* shell.openExternal handles mailto: by handing it to the system
+         default mailto handler — no browser involved, no &-truncation. */
+      await shell.openExternal(uri);
+    } else if (method === 'copy-only') {
+      /* No launch — main process owns the clipboard write so we have one
+         consistent path (the renderer Copy buttons use a separate helper). */
+      const fullText = 'Subject: ' + String(payload.subject || '').trim()
+        + '\r\n\r\n' + String(payload.body || '');
+      clipboard.writeText(fullText);
+    }
+  } catch (err) {
+    launchError = (err && err.message) ? err.message : String(err);
+  }
+
+  if (launchError) {
+    /* Auto-fallback to clipboard so the user always has the email available
+       to paste into whatever surface they prefer. NEVER chain to another
+       launcher — that was the v1.6.10–v1.6.16 trap. */
+    let fellbackToClipboard = false;
+    try {
+      const fullText = 'Subject: ' + String(payload.subject || '').trim()
+        + '\r\n\r\n' + String(payload.body || '');
+      clipboard.writeText(fullText);
+      fellbackToClipboard = true;
+    } catch (_) {}
+    _outlookAppendLog({
+      method,
+      ok: false,
+      error: launchError,
+      redacted: _outlookLaunch.redactForLog(payload),
+      durationMs: Date.now() - start,
+    });
+    return { ok: false, method, error: launchError, fellbackToClipboard };
+  }
+
+  _outlookAppendLog({
+    method,
+    ok: true,
+    redacted: _outlookLaunch.redactForLog(payload),
+    durationMs: Date.now() - start,
+  });
+  return { ok: true, method };
+});
+
+ipcMain.handle('officer-emails:show-launch-log', async () => {
+  const p = _outlookGetLogPath();
+  try {
+    if (!fs.existsSync(p)) {
+      fs.writeFileSync(p, '# CustodyNote email launch log\r\n# PII-safe — only domain + lengths logged\r\n', 'utf8');
+    }
+    const err = await shell.openPath(p);
+    if (err) return { ok: false, error: String(err) };
+    return { ok: true, path: p };
+  } catch (err) {
+    return { ok: false, error: (err && err.message) ? err.message : String(err) };
+  }
 });
 

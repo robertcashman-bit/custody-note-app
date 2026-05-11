@@ -238,6 +238,7 @@
     });
 
     bindClick('officerClearSubjectBodyBtn', clearSubjectBody);
+    bindClick('officerSendBtn', sendOfficerEmail);
     bindClick('officerCopyOfficerEmailBtn', copyOfficerEmail);
     bindClick('officerCopySubjectBtn', copySubject);
     bindClick('officerCopySubjectPreviewBtn', copySubject);
@@ -878,6 +879,69 @@
       console.error('[officerEmails] copyWithNotice', e);
       showError('Unable to copy to clipboard.');
       return false;
+    }
+  }
+
+  /* v1.8.0 — Send button: opens the email in the user's chosen mail client.
+     The launch path lives in main.js (`officer-emails:send` IPC) so all four
+     methods (Outlook desktop / Outlook web / mailto / copy-only) and the
+     PII-safe diagnostic log share one code path. On launch failure the main
+     process auto-copies subject+body to the clipboard so the user always
+     has a fallback. NEVER chains across methods (that was the v1.6.10–
+     v1.6.16 trap that produced "Outlook opens, then Edge opens, then
+     nothing happens" reports). */
+  async function sendOfficerEmail() {
+    var sendBtn = document.getElementById('officerSendBtn');
+    var to = String(valueOf('officerEmailInput') || '').trim();
+    var subject = String(valueOf('officerSubjectInput') || '').trim();
+    var body = String(rawValueOf('officerBodyInput') || '');
+    if (!to) { showNotice('Officer email address is required before sending.'); return; }
+    if (!subject) { showNotice('Subject is empty.'); return; }
+    if (!String(body).trim()) { showNotice('Body is empty — pick a template or enter text first.'); return; }
+    if (!window.api || !window.api.officerEmails || typeof window.api.officerEmails.send !== 'function') {
+      showNotice('Send is unavailable in this build. Use Copy Email Body and paste manually.');
+      return;
+    }
+    var method = (window._quickEmailMethod || 'auto');
+    try {
+      if (method === 'auto') {
+        var det = await window.api.officerEmails.detectMailClient();
+        method = (det && det.recommendedMethod) || 'outlook-web';
+      }
+    } catch (_) { method = 'outlook-web'; }
+    if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Opening...'; }
+    try {
+      var result = await window.api.officerEmails.send({ method: method, to: to, subject: subject, body: body });
+      if (result && result.ok) {
+        var label = ({
+          'outlook-desktop': 'Opening Outlook desktop draft...',
+          'outlook-web': 'Opening Outlook on the web...',
+          'default-mailto': 'Opening default mail app...',
+          'copy-only': 'Email copied to clipboard.',
+        })[method] || 'Sent.';
+        if (typeof showToast === 'function') showToast(label, 'success');
+      } else {
+        var msg = (result && result.error) ? result.error : 'Could not open mail client.';
+        if (result && result.fellbackToClipboard) {
+          if (typeof showToast === 'function') {
+            showToast('Could not open ' + method + ' — email copied to clipboard. Paste into your mail client.', 'warning', 6000);
+          } else {
+            showNotice('Could not open ' + method + ' — email copied to clipboard.');
+          }
+        } else if (typeof showToast === 'function') {
+          showToast('Send failed: ' + msg, 'error', 6000);
+        } else {
+          showNotice('Send failed: ' + msg);
+        }
+      }
+    } catch (err) {
+      if (typeof showToast === 'function') {
+        showToast('Send error: ' + ((err && err.message) || 'unknown'), 'error');
+      } else {
+        showNotice('Send error: ' + ((err && err.message) || 'unknown'));
+      }
+    } finally {
+      if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
     }
   }
 

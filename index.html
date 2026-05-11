@@ -1341,7 +1341,25 @@
               </div>
             </div>
           </div>
-          <p class="settings-hint" style="margin-top:0.75rem;">Officer and solicitor email actions use <strong>copy and paste</strong> &mdash; the app never opens a mail client for you. Paste into Outlook (desktop or web) yourself.</p>
+          <p class="settings-hint" style="margin-top:0.75rem;">Officer and solicitor email actions always offer <strong>copy and paste</strong> as the primary action. The optional <strong>Send</strong> button below uses the launch method you select here.</p>
+
+          <!-- v1.8.0: Quick Email send-method selector. Replaces the historically broken
+               auto-launch path with explicit user choice. See lib/outlookLaunch.js. -->
+          <div style="margin-top:0.75rem;display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+            <label for="setting-quick-email-method" style="margin:0;font-weight:600;">Send button opens in</label>
+            <select id="setting-quick-email-method" class="settings-input" style="flex:1;min-width:220px;max-width:320px;">
+              <option value="auto">Auto-detect (recommended)</option>
+              <option value="outlook-desktop">Outlook desktop (.eml file)</option>
+              <option value="outlook-web">Outlook on the web (M365)</option>
+              <option value="default-mailto">Default mail app (mailto:)</option>
+              <option value="copy-only">Copy only — no launch</option>
+            </select>
+          </div>
+          <p class="settings-hint" id="quick-email-method-detection" style="margin-top:0.4rem;font-size:0.82rem;color:var(--text-secondary,#475569);">Detecting installed mail apps...</p>
+          <div style="margin-top:0.4rem;display:flex;flex-wrap:wrap;gap:0.5rem;">
+            <button type="button" id="btn-redetect-mail-client" class="btn btn-secondary btn-small">Re-detect</button>
+            <button type="button" id="btn-show-email-launch-log" class="btn btn-secondary btn-small" title="Open the diagnostic log (PII-safe — only domains and lengths are logged)">Send diagnostics log</button>
+          </div>
 
           <div style="margin-top:1.25rem;">
             <strong>Custom Email Templates</strong>
@@ -2065,7 +2083,8 @@
                   <strong>Copy &amp; paste workflow:</strong> use the copy buttons below, switch to Outlook (desktop or web) and paste. Custody Note never opens Outlook for you and never sends mail on your behalf.
                 </div>
 
-                <div class="large-button-row officer-email-actions-primary">
+                <div class="large-button-row officer-email-actions-primary" style="flex-wrap:wrap;gap:0.5rem;">
+                  <button id="officerSendBtn" class="green-button extra-large-button officer-email-primary-btn" type="button" title="Open this email in your chosen mail client (set in Settings &rarr; Add-Ons &rarr; Send button opens in)">Send</button>
                   <button id="officerCopyBodyBtn" class="gold-button extra-large-button officer-email-primary-btn" type="button">Copy Email Body</button>
                 </div>
                 <div class="large-button-row officer-email-actions-secondary" style="flex-wrap:wrap;">

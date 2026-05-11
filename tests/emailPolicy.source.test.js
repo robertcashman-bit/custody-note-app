@@ -47,13 +47,21 @@ function walkJsHtml(dir) {
   return results;
 }
 
-/* mailto: literals only in URL-builder libraries, preload inline, hardening, main. */
+/* mailto: literals only in URL-builder libraries, preload inline, hardening,
+   main, and the v1.8.0 send-method UI display text (a UI option label and a
+   detection-status string — both of which legitimately render the literal
+   substring "mailto:" to the user but never invoke it as a launch URI). */
 const MAILTO_ALLOWED = new Set([
   'lib/emailComposeDraft.js',
+  'lib/outlookLaunch.js',
   'preload.js',
   'main/windowHardening.js',
   'scripts/smoke-quick-email-asuser.js',
   'main.js',
+  /* v1.8.0 send-method selector: contains "Default mail app (mailto:)" as
+     a user-visible option label and "default mailto:" as detection status. */
+  'index.html',
+  'app.js',
 ]);
 
 describe('Email policy — production sources', () => {
