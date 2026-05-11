@@ -206,6 +206,13 @@ contextBridge.exposeInMainWorld('api', {
   loadReferenceData: () => ipcRenderer.invoke('load-reference-data'),
   saveCsv: (payload) => ipcRenderer.invoke('save-csv', payload),
   backupNow: () => ipcRenderer.invoke('backup-now'),
+  /* v1.8.0 - Reliable Outlook launch (Officer Emails / Quick Email).
+     See lib/outlookLaunch.js + main.js IPC handlers. */
+  officerEmails: {
+    detectMailClient: () => ipcRenderer.invoke('officer-emails:detect-mail-client'),
+    send: (payload) => ipcRenderer.invoke('officer-emails:send', payload),
+    showLaunchLog: () => ipcRenderer.invoke('officer-emails:show-launch-log'),
+  },
   flushAndBackup: () => ipcRenderer.invoke('flush-and-backup'),
   backupStatus: () => ipcRenderer.invoke('backup-status'),
   onBackupStatusChanged: (cb) => ipcRenderer.on('backup-status-changed', (_, data) => cb(data)),

@@ -5250,6 +5250,81 @@ var REQUIRED_FIELD_KEYS = [
       window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
       if (typeof _updateAddonStatusLabel === 'function') _updateAddonStatusLabel();
 
+      /* v1.8.0 — Quick Email send-method selector. Persisted as a string so
+         it stays a flat key/value alongside the other email settings. */
+      var qemEl = document.getElementById('setting-quick-email-method');
+      if (qemEl) {
+        var savedMethod = (s.quickEmailMethod || 'auto').toString();
+        var validMethods = ['auto', 'outlook-desktop', 'outlook-web', 'default-mailto', 'copy-only'];
+        if (validMethods.indexOf(savedMethod) === -1) savedMethod = 'auto';
+        qemEl.value = savedMethod;
+        window._quickEmailMethod = savedMethod;
+        if (!qemEl._qemListenerAttached) {
+          qemEl._qemListenerAttached = true;
+          qemEl.addEventListener('change', function() {
+            window._quickEmailMethod = qemEl.value;
+            window.api.setSettings({ quickEmailMethod: qemEl.value }).then(function() {
+              if (typeof showToast === 'function') showToast('Send method saved.', 'success');
+            }).catch(function() {
+              if (typeof showToast === 'function') showToast('Could not save send method.', 'error');
+            });
+          });
+        }
+
+        /* Auto-detect on Settings load — show what was found so the user can
+           tell whether the auto-detect 'will pick' Outlook desktop / web /
+           mailto / copy. Cached in main for ~5s so this is cheap. */
+        var detectEl = document.getElementById('quick-email-method-detection');
+        var redetectBtn = document.getElementById('btn-redetect-mail-client');
+        var logBtn = document.getElementById('btn-show-email-launch-log');
+        function _renderDetection(d) {
+          if (!detectEl) return;
+          if (!d || d.platform !== 'win32') {
+            detectEl.textContent = 'Detection only runs on Windows. Auto-detect will fall back to Outlook on the web.';
+            return;
+          }
+          var bits = [];
+          bits.push(d.outlookDesktopInstalled ? 'Outlook desktop: installed' : 'Outlook desktop: not detected');
+          if (d.defaultMailtoApp) {
+            bits.push('default mailto: ' + d.defaultMailtoApp);
+          } else {
+            bits.push('default mailto: none');
+          }
+          bits.push('auto would pick: ' + (d.recommendedMethod || 'outlook-web'));
+          detectEl.textContent = bits.join(' \u2022 ');
+        }
+        if (window.api.officerEmails && typeof window.api.officerEmails.detectMailClient === 'function') {
+          window.api.officerEmails.detectMailClient().then(_renderDetection).catch(function() {
+            if (detectEl) detectEl.textContent = 'Detection failed. Auto-detect will fall back to Outlook on the web.';
+          });
+        }
+        if (redetectBtn && !redetectBtn._qemListenerAttached) {
+          redetectBtn._qemListenerAttached = true;
+          redetectBtn.addEventListener('click', function() {
+            if (detectEl) detectEl.textContent = 'Detecting...';
+            if (window.api.officerEmails && typeof window.api.officerEmails.detectMailClient === 'function') {
+              window.api.officerEmails.detectMailClient().then(_renderDetection).catch(function() {
+                if (detectEl) detectEl.textContent = 'Detection failed.';
+              });
+            }
+          });
+        }
+        if (logBtn && !logBtn._qemListenerAttached) {
+          logBtn._qemListenerAttached = true;
+          logBtn.addEventListener('click', function() {
+            if (window.api.officerEmails && typeof window.api.officerEmails.showLaunchLog === 'function') {
+              window.api.officerEmails.showLaunchLog().then(function(r) {
+                if (r && r.ok) {
+                  if (typeof showToast === 'function') showToast('Opened email-launch.log.', 'info');
+                } else if (typeof showToast === 'function') {
+                  showToast('Could not open log: ' + ((r && r.error) || 'unknown'), 'error');
+                }
+              });
+            }
+          });
+        }
+      }
+
       var idleEl = document.getElementById('setting-idle-timeout');
       if (idleEl) {
         idleEl.value = s.idleTimeoutMinutes || '0';
@@ -5532,6 +5607,7 @@ var REQUIRED_FIELD_KEYS = [
       autoImportEnabled: document.getElementById('setting-auto-import-enabled')?.checked ? 'true' : 'false',
       autoImportFolder: document.getElementById('setting-auto-import-folder')?.value?.trim() || '',
       officerEmailTemplatesEnabled: document.getElementById('setting-officer-email-templates')?.checked ? 'true' : 'false',
+      quickEmailMethod: document.getElementById('setting-quick-email-method')?.value || 'auto',
       idleTimeoutMinutes: document.getElementById('setting-idle-timeout')?.value || '0',
     }).then(() => window.api.getSettings()).then(function(s) {
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s || {});
@@ -15070,6 +15146,10 @@ pdfAuditFooterHtml(d, settings) +
         vatRate: _normaliseVatRate(s.billingVatRate, 0.20),
       };
       window._emailTemplatesAddonEnabled = s.officerEmailTemplatesEnabled === 'true';
+      /* v1.8.0 — quick email send method (Settings > Add-Ons > Send button opens in). */
+      var _qem = (s.quickEmailMethod || 'auto').toString();
+      var _qemValid = ['auto', 'outlook-desktop', 'outlook-web', 'default-mailto', 'copy-only'];
+      window._quickEmailMethod = (_qemValid.indexOf(_qem) === -1) ? 'auto' : _qem;
       if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
       /* Custom email templates: SQLite settings (JSON) + migrate from localStorage once */
       var json = s.customEmailTemplatesJson;

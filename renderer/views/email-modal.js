@@ -210,7 +210,8 @@ function openEmailModal(recordId, recordData, recordStatus) {
           '</div>' +
           '<div id="email-oic-missing-warn" class="email-oic-missing-warn" style="display:none"></div>' +
           '<div class="email-oic-actions">' +
-            '<button type="button" id="email-oic-copy"      class="btn btn-primary">Copy Email Body</button>' +
+            '<button type="button" id="email-oic-send"      class="btn btn-primary" title="Open the email in your chosen mail client (set in Settings &rarr; Add-Ons &rarr; Send button opens in)">Send</button>' +
+            '<button type="button" id="email-oic-copy"      class="btn btn-secondary">Copy Email Body</button>' +
             '<button type="button" id="email-oic-copy-subject" class="btn btn-secondary">Copy Subject</button>' +
             '<button type="button" id="email-oic-save-tpl"  class="btn btn-secondary">Save as Template</button>' +
             '<button type="button" id="email-oic-mark-sent" class="btn btn-secondary">Mark Sent</button>' +
@@ -358,6 +359,65 @@ function openEmailModal(recordId, recordData, recordStatus) {
     /* Save as Template */
     document.getElementById('email-oic-save-tpl')?.addEventListener('click', function() {
       _saveAsTemplate('email-oic-modal');
+    });
+
+    /* v1.8.0 — Send button: dispatches via the user's selected method
+       (Settings > Add-Ons > Send button opens in). NEVER chains across
+       methods on failure (chaining was the v1.6.10–v1.6.16 root cause).
+       On launch failure, the main process auto-copies subject+body to the
+       clipboard so the user always has a way to send it. */
+    document.getElementById('email-oic-send').addEventListener('click', async function() {
+      var sendBtn = document.getElementById('email-oic-send');
+      var to = document.getElementById('email-oic-to').value.trim();
+      var subject = document.getElementById('email-oic-subject').value.trim();
+      var body = document.getElementById('email-oic-body').value;
+      if (!to) {
+        if (typeof showToast === 'function') showToast('Recipient (To) is empty.', 'warning');
+        return;
+      }
+      if (!subject) {
+        if (typeof showToast === 'function') showToast('Subject is empty.', 'warning');
+        return;
+      }
+      if (!String(body || '').trim()) {
+        if (typeof showToast === 'function') showToast('Message is empty.', 'warning');
+        return;
+      }
+      if (!window.api || !window.api.officerEmails || typeof window.api.officerEmails.send !== 'function') {
+        if (typeof showToast === 'function') showToast('Send is unavailable in this build. Use Copy.', 'error');
+        return;
+      }
+      var method = (window._quickEmailMethod || 'auto');
+      try {
+        if (method === 'auto') {
+          var det = await window.api.officerEmails.detectMailClient();
+          method = (det && det.recommendedMethod) || 'outlook-web';
+        }
+      } catch (_) { method = 'outlook-web'; }
+      if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = 'Opening...'; }
+      try {
+        var result = await window.api.officerEmails.send({ method: method, to: to, subject: subject, body: body });
+        if (result && result.ok) {
+          var label = ({
+            'outlook-desktop': 'Opening Outlook desktop draft...',
+            'outlook-web': 'Opening Outlook on the web...',
+            'default-mailto': 'Opening default mail app...',
+            'copy-only': 'Email copied to clipboard.',
+          })[method] || 'Sent.';
+          if (typeof showToast === 'function') showToast(label, 'success');
+        } else {
+          var msg = (result && result.error) ? result.error : 'Could not open mail client.';
+          if (result && result.fellbackToClipboard) {
+            if (typeof showToast === 'function') showToast('Could not open ' + method + ' — email copied to clipboard. Paste into your mail client.', 'warning', 6000);
+          } else if (typeof showToast === 'function') {
+            showToast('Send failed: ' + msg, 'error', 6000);
+          }
+        }
+      } catch (err) {
+        if (typeof showToast === 'function') showToast('Send error: ' + ((err && err.message) || 'unknown'), 'error');
+      } finally {
+        if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = 'Send'; }
+      }
     });
 
     /* Mark Sent */
