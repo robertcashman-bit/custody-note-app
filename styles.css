@@ -7035,3 +7035,274 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   border-left-width: 3px;
   border-left-color: var(--primary);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OFFICER EMAILS — right-hand drawer
+   ───────────────────────────────────────────────────────────────────────────
+   Slide-over panel for the Officer Emails feature. The drawer overlays the
+   right side of the viewport so the main custody-note form is never reflowed
+   when the user opens it; on narrow viewports the drawer covers the form
+   entirely. All styles are scoped to `.officer-email-*` classes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.officer-email-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  z-index: 1099;
+}
+.officer-email-backdrop.hidden { display: none; }
+
+.officer-email-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 460px;
+  max-width: 100vw;
+  z-index: 1100;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: -16px 0 32px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 0.92rem;
+  color: var(--text, inherit);
+}
+.officer-email-panel.hidden { display: none; }
+@media (max-width: 540px) {
+  .officer-email-panel { width: 100vw; border-left: none; }
+}
+
+.officer-email-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+.officer-email-panel-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.officer-email-panel-subtitle {
+  margin: 0;
+  padding: 0.55rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  line-height: 1.45;
+}
+
+.officer-email-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.9rem 1rem 1.25rem;
+}
+
+.officer-email-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.officer-email-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.officer-email-field label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.officer-email-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  margin-left: 0.35rem;
+}
+.officer-email-field input,
+.officer-email-field select,
+.officer-email-field textarea {
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  box-sizing: border-box;
+}
+.officer-email-field textarea {
+  resize: vertical;
+  min-height: 2.2rem;
+  font-family: inherit;
+}
+.officer-email-field input:focus,
+.officer-email-field select:focus,
+.officer-email-field textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: var(--focus-ring);
+}
+.officer-email-field-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+}
+
+.officer-email-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.officer-email-actions-secondary {
+  margin-top: 0.1rem;
+}
+.officer-email-outlook-actions {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed var(--border);
+}
+
+.officer-email-warning {
+  margin: 0.3rem 0 0;
+  padding: 0.55rem 0.7rem;
+  background: color-mix(in srgb, var(--surface) 75%, #fde68a 25%);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, #f59e0b 40%);
+  color: #92400e;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.officer-email-warning-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.officer-email-list-section {
+  margin-top: 1rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+}
+.officer-email-list-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.officer-email-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.officer-email-list-empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.officer-email-draft-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  background: var(--surface-raised);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.officer-email-draft-card-active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary) inset;
+}
+.officer-email-draft-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.officer-email-draft-card-type {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.officer-email-draft-card-line {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.officer-email-draft-card-label {
+  font-weight: 600;
+  color: inherit;
+}
+.officer-email-draft-card-meta {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+.officer-email-draft-card-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  margin-top: 0.2rem;
+}
+
+.officer-email-status {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: color-mix(in srgb, var(--surface) 80%, var(--primary) 20%);
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, var(--primary) 30%);
+}
+.officer-email-status-draft {
+  background: color-mix(in srgb, var(--surface) 88%, var(--text-muted) 12%);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.officer-email-status-ready_for_outlook {
+  background: color-mix(in srgb, var(--surface) 78%, #2563eb 22%);
+  color: #1d4ed8;
+  border-color: color-mix(in srgb, var(--border) 60%, #2563eb 40%);
+}
+.officer-email-status-opened_in_outlook {
+  background: color-mix(in srgb, var(--surface) 78%, #0891b2 22%);
+  color: #0e7490;
+  border-color: color-mix(in srgb, var(--border) 60%, #0891b2 40%);
+}
+.officer-email-status-sent_manually {
+  background: color-mix(in srgb, var(--surface) 80%, #16a34a 20%);
+  color: #15803d;
+  border-color: color-mix(in srgb, var(--border) 60%, #16a34a 40%);
+}
+.officer-email-status-cancelled {
+  background: color-mix(in srgb, var(--surface) 84%, #6b7280 16%);
+  color: #4b5563;
+  border-color: var(--border);
+}
+
+body.officer-email-open {
+  /* Hint to event handlers that the drawer is owning Escape; no layout change. */
+}
+@media print {
+  .officer-email-panel,
+  .officer-email-backdrop { display: none !important; }
+}

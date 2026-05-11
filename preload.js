@@ -130,6 +130,19 @@ contextBridge.exposeInMainWorld('api', {
   onSyncStatusChanged: (cb) => ipcRenderer.on('sync-status-changed', (_, data) => cb(data)),
   onRecordsUpdatedFromSync: (cb) => ipcRenderer.on('records-updated-from-sync', (_, data) => cb(data)),
   onSyncConflictsDetected: (cb) => ipcRenderer.on('sync-conflicts-detected', (_, data) => cb(data)),
+  /* Officer email drafts — Outlook Web compose only; never sends. */
+  officerEmails: {
+    listDrafts: (custodyNoteId) => ipcRenderer.invoke('officer-emails:list', custodyNoteId),
+    createDraft: (draftData) => ipcRenderer.invoke('officer-emails:create', draftData),
+    updateDraft: (draftId, draftData) => ipcRenderer.invoke('officer-emails:update', draftId, draftData),
+    duplicateDraft: (draftId) => ipcRenderer.invoke('officer-emails:duplicate', draftId),
+    cancelDraft: (draftId) => ipcRenderer.invoke('officer-emails:cancel', draftId),
+    deleteDraft: (draftId) => ipcRenderer.invoke('officer-emails:delete', draftId),
+    markOpenedInOutlook: (draftId) => ipcRenderer.invoke('officer-emails:mark-opened', draftId),
+    markSentManually: (draftId) => ipcRenderer.invoke('officer-emails:mark-sent', draftId),
+    openOutlookDraft: (draftId) => ipcRenderer.invoke('officer-emails:open-in-outlook', draftId),
+    clipboardWrite: (text) => ipcRenderer.invoke('officer-emails:clipboard-write', text),
+  },
   /* Auto-update */
   onAppUpdateStatus: (cb) => ipcRenderer.on('app-update-status', (_, data) => cb(data)),
   appUpdateInstall: () => ipcRenderer.invoke('app-update-install'),

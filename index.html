@@ -605,6 +605,7 @@
             <button type="button" id="form-backup-now-btn" class="btn btn-small btn-backup-now" title="Save &amp; backup now">&#128190; Backup</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
+            <button type="button" id="officer-emails-btn" class="btn btn-small" title="Officer Emails — prepare drafts to open in Outlook Web (manual send only)">&#128231; Emails</button>
             <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent" title="Primary action for the current record (Finalise / Finish matter / Archive)" style="display:none;">Finalise</button>
             <button type="button" id="sections-index-btn" class="btn btn-sections">Sections</button>
           </div>
@@ -2044,6 +2045,113 @@
       </div>
     </div>
 
+    <!-- Officer Emails right-hand drawer (toggled from form header). Prepares
+         Outlook Web compose URLs only; never sends; no Outlook credentials. -->
+    <aside id="officer-emails-drawer" class="officer-email-panel hidden" aria-hidden="true" aria-labelledby="officer-emails-title">
+      <div class="officer-email-panel-header">
+        <h2 id="officer-emails-title" class="officer-email-panel-title">Officer Emails</h2>
+        <button type="button" id="officer-emails-close" class="btn btn-small btn-secondary" aria-label="Close Officer Emails panel">Close</button>
+      </div>
+      <p class="officer-email-panel-subtitle">Prepare a draft, then open Outlook Web to review and send manually. No passwords or codes are stored.</p>
+      <div id="officer-emails-no-note" class="officer-email-warning" style="display:none;">
+        Save the custody note before creating email drafts.
+      </div>
+      <div id="officer-emails-body" class="officer-email-panel-body" style="display:none;">
+        <form id="officer-email-form" class="officer-email-form" autocomplete="off">
+          <div class="officer-email-field">
+            <label for="oe-template-type">Email type</label>
+            <select id="oe-template-type">
+              <option value="disclosure_confirm_attendance">Disclosure / confirm attendance</option>
+              <option value="custody_log_request">Custody log request</option>
+              <option value="chase_disclosure">Chase disclosure</option>
+              <option value="confirm_matter_effective">Confirm matter is effective</option>
+              <option value="request_officer_contact">Request officer contact details</option>
+              <option value="request_update_after_delay">Request update after delay</option>
+              <option value="bail_details_request">Bail details request</option>
+              <option value="voluntary_interview_confirmation">Voluntary interview confirmation</option>
+              <option value="free_text">Free text email</option>
+            </select>
+          </div>
+          <div class="officer-email-field">
+            <label for="oe-to-email">Recipient email</label>
+            <input type="email" id="oe-to-email" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="officer-email-field">
+            <label for="oe-recipient-name">Recipient name <span class="officer-email-hint">(blank → "Officer" / "DDO")</span></label>
+            <input type="text" id="oe-recipient-name" autocomplete="off" />
+          </div>
+          <div class="officer-email-field-grid">
+            <div class="officer-email-field">
+              <label for="oe-client-name">Client name</label>
+              <input type="text" id="oe-client-name" autocomplete="off" />
+            </div>
+            <div class="officer-email-field">
+              <label for="oe-attendance-date">Date</label>
+              <input type="date" id="oe-attendance-date" />
+            </div>
+          </div>
+          <div class="officer-email-field">
+            <label for="oe-police-station">Police station</label>
+            <input type="text" id="oe-police-station" autocomplete="off" />
+          </div>
+          <div class="officer-email-field">
+            <label for="oe-offence">Offence / allegation</label>
+            <input type="text" id="oe-offence" autocomplete="off" />
+          </div>
+          <div class="officer-email-field">
+            <label for="oe-extra-note">Extra note (optional)</label>
+            <textarea id="oe-extra-note" rows="2"></textarea>
+          </div>
+          <div id="oe-bail-fields" class="officer-email-field-grid" style="display:none;">
+            <div class="officer-email-field">
+              <label for="oe-bail-return-date">Bail return date</label>
+              <input type="date" id="oe-bail-return-date" />
+            </div>
+            <div class="officer-email-field">
+              <label for="oe-bail-conditions">Bail conditions</label>
+              <textarea id="oe-bail-conditions" rows="2"></textarea>
+            </div>
+          </div>
+          <div class="officer-email-field">
+            <label for="oe-user-email">My email (optional)</label>
+            <input type="email" id="oe-user-email" autocomplete="off" spellcheck="false" />
+          </div>
+          <div class="officer-email-field">
+            <label for="oe-subject">Subject <span class="officer-email-hint">(editable)</span></label>
+            <input type="text" id="oe-subject" autocomplete="off" />
+          </div>
+          <div class="officer-email-field">
+            <label for="oe-body">Body</label>
+            <textarea id="oe-body" rows="10" spellcheck="true"></textarea>
+          </div>
+          <div id="oe-warnings" class="officer-email-warning" style="display:none;"></div>
+          <div class="officer-email-actions">
+            <button type="button" id="oe-save" class="btn btn-primary">Save draft</button>
+            <button type="button" id="oe-new" class="btn btn-secondary">New draft</button>
+            <button type="button" id="oe-duplicate" class="btn btn-secondary" style="display:none;">Duplicate</button>
+            <button type="button" id="oe-cancel" class="btn btn-secondary" style="display:none;">Cancel draft</button>
+            <button type="button" id="oe-delete" class="btn btn-danger" style="display:none;">Delete</button>
+          </div>
+          <div class="officer-email-actions officer-email-actions-secondary">
+            <button type="button" id="oe-copy-recipient" class="btn btn-secondary btn-small">Copy recipient</button>
+            <button type="button" id="oe-copy-subject" class="btn btn-secondary btn-small">Copy subject</button>
+            <button type="button" id="oe-copy-body" class="btn btn-secondary btn-small">Copy body</button>
+          </div>
+          <div class="officer-email-actions officer-email-outlook-actions">
+            <button type="button" id="oe-open-outlook" class="btn btn-primary">Open in Outlook Web</button>
+            <button type="button" id="oe-mark-sent" class="btn btn-secondary" style="display:none;">Mark as sent manually</button>
+          </div>
+        </form>
+        <div class="officer-email-list-section">
+          <h3 class="officer-email-list-title">Saved drafts for this custody note</h3>
+          <div id="officer-emails-list" class="officer-email-list">
+            <p class="officer-email-list-empty">No drafts yet.</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+    <div id="officer-emails-backdrop" class="officer-email-backdrop hidden" aria-hidden="true"></div>
+
     <!-- Floating scratchpad -->
     <div id="scratchpad" class="scratchpad hidden">
       <div class="scratchpad-header">
@@ -2084,6 +2192,7 @@
   <script src="renderer/views/billing-screen.js"></script>
   <script src="renderer/views/completion-screen.js"></script>
   <script src="renderer/views/station-mileage-admin.js"></script>
+  <script src="renderer/views/officer-emails.js"></script>
   <!-- laa-forms.js: CRM14 HTML summary for billing previews; CRM1–3 & declaration use official PDFs via IPC -->
   <script src="renderer/audit-log.js"></script>
   <script src="renderer/templateSystem/placeholders.js"></script>
