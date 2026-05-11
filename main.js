@@ -1465,6 +1465,33 @@ async function initDb() {
   );`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_billing_audit_att ON billing_audit_log(attendance_id);`);
 
+  /* ─── Officer email drafts (Outlook Web compose, never sends automatically) ─── */
+  db.run(`CREATE TABLE IF NOT EXISTS officer_email_drafts (
+    id TEXT PRIMARY KEY,
+    custody_note_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    template_type TEXT NOT NULL,
+    to_email TEXT DEFAULT '',
+    recipient_name TEXT DEFAULT '',
+    client_name TEXT DEFAULT '',
+    police_station TEXT DEFAULT '',
+    offence TEXT DEFAULT '',
+    attendance_date TEXT DEFAULT '',
+    extra_note TEXT DEFAULT '',
+    bail_return_date TEXT DEFAULT '',
+    bail_conditions TEXT DEFAULT '',
+    user_email_address TEXT DEFAULT '',
+    subject TEXT DEFAULT '',
+    body TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    opened_in_outlook_at TEXT,
+    sent_manually_confirmed_at TEXT,
+    cancelled_at TEXT,
+    deleted_at TEXT
+  );`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_custody_note_id ON officer_email_drafts (custody_note_id);`);
+
   /* â”€â”€â”€ Cross-device sync columns â”€â”€â”€ */
   _safeAddColumn('attendances', "sync_id TEXT DEFAULT NULL");
   _safeAddColumn('attendances', "sync_dirty INTEGER DEFAULT 1");
@@ -5127,6 +5154,321 @@ ipcMain.handle('firm-set-default', (_, id) => {
   dbRun('UPDATE firms SET is_default = 1 WHERE id = ?', [id]);
   markDbDirty();
   return true;
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OFFICER EMAIL DRAFTS — Outlook Web compose only (single-path, manual send)
+   ═══════════════════════════════════════════════════════════════════════════
+   No Outlook credentials, MFA codes, or passwords are stored anywhere. The
+   only side effect is `shell.openExternal(outlookComposeUrl)` from the
+   `officer-emails:open-in-outlook` handler — never from the renderer. */
+const officerEmailTpl = require('./lib/officerEmailTemplates');
+
+const OFFICER_EMAIL_FIELD_LIMITS = Object.freeze({
+  toEmail: 320,            // RFC 5321 max
+  recipientName: 200,
+  clientName: 200,
+  policeStation: 200,
+  offence: 500,
+  attendanceDate: 64,
+  extraNote: 2000,
+  bailReturnDate: 64,
+  bailConditions: 2000,
+  userEmailAddress: 320,
+  subject: 998,            // RFC 5322 max line length
+  body: 50000,
+});
+
+function _isNonEmptyStr(v) {
+  return typeof v === 'string' && v.length > 0 && v.length <= 200;
+}
+
+function _validateCustodyNoteId(id) {
+  if (!_isNonEmptyStr(id)) {
+    throw new Error('custodyNoteId is required');
+  }
+}
+
+function _validateDraftId(id) {
+  if (typeof id !== 'string' || id.length === 0 || id.length > 64) {
+    throw new Error('draftId is required');
+  }
+  // Allow our own UUIDs and crypto.randomUUID output. Block anything weird.
+  if (!/^[A-Za-z0-9_\-]+$/.test(id)) {
+    throw new Error('draftId is malformed');
+  }
+}
+
+/** Coerce + truncate inbound draft data so the renderer cannot DoS the DB
+ *  with megabyte-sized strings, and only known fields ever reach SQLite. */
+function _sanitiseOfficerEmailDraft(input) {
+  const src = input && typeof input === 'object' ? input : {};
+  const out = {
+    templateType: '',
+    toEmail: '',
+    recipientName: '',
+    clientName: '',
+    policeStation: '',
+    offence: '',
+    attendanceDate: '',
+    extraNote: '',
+    bailReturnDate: '',
+    bailConditions: '',
+    userEmailAddress: '',
+    subject: '',
+    body: '',
+  };
+  const tt = typeof src.templateType === 'string' ? src.templateType : '';
+  out.templateType = officerEmailTpl.TEMPLATE_TYPES.includes(tt) ? tt : 'disclosure_confirm_attendance';
+  const keys = Object.keys(OFFICER_EMAIL_FIELD_LIMITS);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    let v = src[k];
+    if (v === null || v === undefined) v = '';
+    if (typeof v !== 'string') v = String(v);
+    if (v.length > OFFICER_EMAIL_FIELD_LIMITS[k]) {
+      throw new Error('Field "' + k + '" exceeds maximum length (' + OFFICER_EMAIL_FIELD_LIMITS[k] + ')');
+    }
+    out[k] = v;
+  }
+  return out;
+}
+
+function _newOfficerEmailDraftId() {
+  if (typeof crypto.randomUUID === 'function') return 'oe_' + crypto.randomUUID();
+  return 'oe_' + crypto.randomBytes(16).toString('hex');
+}
+
+const OFFICER_EMAIL_COLUMNS = [
+  'id', 'custody_note_id', 'status', 'template_type',
+  'to_email', 'recipient_name', 'client_name', 'police_station',
+  'offence', 'attendance_date', 'extra_note', 'bail_return_date',
+  'bail_conditions', 'user_email_address', 'subject', 'body',
+  'created_at', 'updated_at',
+  'opened_in_outlook_at', 'sent_manually_confirmed_at',
+  'cancelled_at', 'deleted_at',
+];
+
+function _officerEmailRowToCamel(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    custodyNoteId: row.custody_note_id,
+    status: row.status,
+    templateType: row.template_type,
+    toEmail: row.to_email || '',
+    recipientName: row.recipient_name || '',
+    clientName: row.client_name || '',
+    policeStation: row.police_station || '',
+    offence: row.offence || '',
+    attendanceDate: row.attendance_date || '',
+    extraNote: row.extra_note || '',
+    bailReturnDate: row.bail_return_date || '',
+    bailConditions: row.bail_conditions || '',
+    userEmailAddress: row.user_email_address || '',
+    subject: row.subject || '',
+    body: row.body || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    openedInOutlookAt: row.opened_in_outlook_at || null,
+    sentManuallyConfirmedAt: row.sent_manually_confirmed_at || null,
+    cancelledAt: row.cancelled_at || null,
+    deletedAt: row.deleted_at || null,
+  };
+}
+
+function _getOfficerEmailDraftById(draftId) {
+  return dbGet(
+    'SELECT ' + OFFICER_EMAIL_COLUMNS.join(', ') +
+    ' FROM officer_email_drafts WHERE id = ?',
+    [draftId]
+  );
+}
+
+ipcMain.handle('officer-emails:list', (_, custodyNoteId) => {
+  _validateCustodyNoteId(custodyNoteId);
+  const rows = dbAll(
+    'SELECT ' + OFFICER_EMAIL_COLUMNS.join(', ') +
+    " FROM officer_email_drafts WHERE custody_note_id = ? AND status <> 'deleted'" +
+    ' ORDER BY updated_at DESC',
+    [String(custodyNoteId)]
+  );
+  return rows.map(_officerEmailRowToCamel);
+});
+
+ipcMain.handle('officer-emails:create', (_, payload) => {
+  const p = payload && typeof payload === 'object' ? payload : {};
+  _validateCustodyNoteId(p.custodyNoteId);
+  const data = _sanitiseOfficerEmailDraft(p);
+  const id = _newOfficerEmailDraftId();
+  const now = new Date().toISOString();
+  dbRun(
+    'INSERT INTO officer_email_drafts (' +
+    'id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, ' +
+    'offence, attendance_date, extra_note, bail_return_date, bail_conditions, user_email_address, ' +
+    'subject, body, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [
+      id, String(p.custodyNoteId), 'draft', data.templateType,
+      data.toEmail, data.recipientName, data.clientName, data.policeStation,
+      data.offence, data.attendanceDate, data.extraNote, data.bailReturnDate,
+      data.bailConditions, data.userEmailAddress, data.subject, data.body,
+      now, now,
+    ]
+  );
+  return _officerEmailRowToCamel(_getOfficerEmailDraftById(id));
+});
+
+ipcMain.handle('officer-emails:update', (_, draftId, payload) => {
+  _validateDraftId(draftId);
+  const existing = _getOfficerEmailDraftById(draftId);
+  if (!existing) throw new Error('Draft not found');
+  if (existing.deleted_at) throw new Error('Cannot edit a deleted draft');
+  const data = _sanitiseOfficerEmailDraft(payload);
+  // Status: callers may set "draft" or "ready_for_outlook"; other status
+  // transitions go through dedicated handlers. Reject anything else.
+  let nextStatus = existing.status;
+  if (payload && typeof payload.status === 'string') {
+    if (payload.status === 'draft' || payload.status === 'ready_for_outlook') {
+      nextStatus = payload.status;
+    }
+  }
+  const now = new Date().toISOString();
+  dbRun(
+    'UPDATE officer_email_drafts SET ' +
+    'status=?, template_type=?, to_email=?, recipient_name=?, client_name=?, police_station=?, ' +
+    'offence=?, attendance_date=?, extra_note=?, bail_return_date=?, bail_conditions=?, ' +
+    'user_email_address=?, subject=?, body=?, updated_at=? WHERE id=?',
+    [
+      nextStatus, data.templateType,
+      data.toEmail, data.recipientName, data.clientName, data.policeStation,
+      data.offence, data.attendanceDate, data.extraNote, data.bailReturnDate,
+      data.bailConditions, data.userEmailAddress, data.subject, data.body,
+      now, draftId,
+    ]
+  );
+  return _officerEmailRowToCamel(_getOfficerEmailDraftById(draftId));
+});
+
+ipcMain.handle('officer-emails:duplicate', (_, draftId) => {
+  _validateDraftId(draftId);
+  const existing = _getOfficerEmailDraftById(draftId);
+  if (!existing) throw new Error('Draft not found');
+  const newId = _newOfficerEmailDraftId();
+  const now = new Date().toISOString();
+  dbRun(
+    'INSERT INTO officer_email_drafts (' +
+    'id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, ' +
+    'offence, attendance_date, extra_note, bail_return_date, bail_conditions, user_email_address, ' +
+    'subject, body, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [
+      newId, existing.custody_note_id, 'draft', existing.template_type,
+      existing.to_email || '', existing.recipient_name || '', existing.client_name || '',
+      existing.police_station || '', existing.offence || '', existing.attendance_date || '',
+      existing.extra_note || '', existing.bail_return_date || '', existing.bail_conditions || '',
+      existing.user_email_address || '', existing.subject || '', existing.body || '',
+      now, now,
+    ]
+  );
+  return _officerEmailRowToCamel(_getOfficerEmailDraftById(newId));
+});
+
+ipcMain.handle('officer-emails:cancel', (_, draftId) => {
+  _validateDraftId(draftId);
+  const existing = _getOfficerEmailDraftById(draftId);
+  if (!existing) throw new Error('Draft not found');
+  const now = new Date().toISOString();
+  dbRun(
+    'UPDATE officer_email_drafts SET status=?, cancelled_at=?, updated_at=? WHERE id=?',
+    ['cancelled', now, now, draftId]
+  );
+  return _officerEmailRowToCamel(_getOfficerEmailDraftById(draftId));
+});
+
+ipcMain.handle('officer-emails:delete', (_, draftId) => {
+  _validateDraftId(draftId);
+  const existing = _getOfficerEmailDraftById(draftId);
+  if (!existing) throw new Error('Draft not found');
+  const now = new Date().toISOString();
+  dbRun(
+    'UPDATE officer_email_drafts SET status=?, deleted_at=?, updated_at=? WHERE id=?',
+    ['deleted', now, now, draftId]
+  );
+  return { ok: true };
+});
+
+ipcMain.handle('officer-emails:mark-opened', (_, draftId) => {
+  _validateDraftId(draftId);
+  const existing = _getOfficerEmailDraftById(draftId);
+  if (!existing) throw new Error('Draft not found');
+  const now = new Date().toISOString();
+  dbRun(
+    'UPDATE officer_email_drafts SET status=?, opened_in_outlook_at=?, updated_at=? WHERE id=?',
+    ['opened_in_outlook', now, now, draftId]
+  );
+  return _officerEmailRowToCamel(_getOfficerEmailDraftById(draftId));
+});
+
+ipcMain.handle('officer-emails:mark-sent', (_, draftId) => {
+  _validateDraftId(draftId);
+  const existing = _getOfficerEmailDraftById(draftId);
+  if (!existing) throw new Error('Draft not found');
+  const now = new Date().toISOString();
+  dbRun(
+    'UPDATE officer_email_drafts SET status=?, sent_manually_confirmed_at=?, updated_at=? WHERE id=?',
+    ['sent_manually', now, now, draftId]
+  );
+  return _officerEmailRowToCamel(_getOfficerEmailDraftById(draftId));
+});
+
+/* Single authoritative path for opening Outlook Web compose. Builds the URL
+   server-side from the stored draft (renderer never supplies the URL) and
+   calls shell.openExternal exactly once. Hard-pinned host check kept here
+   as a belt-and-braces guard in case officerEmailTpl ever changes. */
+let _openOutlookDraftInFlight = false;
+ipcMain.handle('officer-emails:open-in-outlook', async (_, draftId) => {
+  if (_openOutlookDraftInFlight) {
+    console.warn('[officer-emails:open-in-outlook] duplicate call suppressed');
+    return { ok: false, error: 'Another Outlook compose is already opening' };
+  }
+  _openOutlookDraftInFlight = true;
+  try {
+    _validateDraftId(draftId);
+    const row = _getOfficerEmailDraftById(draftId);
+    if (!row) throw new Error('Draft not found');
+    if (row.deleted_at) throw new Error('Cannot open a deleted draft');
+    const url = officerEmailTpl.buildOutlookComposeUrl({
+      to: row.to_email || '',
+      subject: row.subject || '',
+      body: row.body || '',
+    });
+    if (!url.startsWith('https://outlook.office.com/mail/deeplink/compose')) {
+      throw new Error('Refusing to open non-Outlook-Web URL');
+    }
+    console.log('[officer-emails] opening Outlook Web compose for draft', draftId,
+      'host=outlook.office.com bodyLen=' + (row.body ? row.body.length : 0));
+    await shell.openExternal(url);
+    return { ok: true };
+  } catch (err) {
+    console.error('[officer-emails:open-in-outlook] failed:', err && err.message ? err.message : err);
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  } finally {
+    _openOutlookDraftInFlight = false;
+  }
+});
+
+/* Clipboard fallback: only invoked by the renderer when navigator.clipboard
+   refuses (e.g. document not focused, sandboxed contexts). Renderer must call
+   it explicitly per user click — we never write the clipboard automatically. */
+ipcMain.handle('officer-emails:clipboard-write', (_, text) => {
+  try {
+    if (typeof text !== 'string') return { ok: false, error: 'text must be a string' };
+    if (text.length > 100000) return { ok: false, error: 'text too long' };
+    const { clipboard } = require('electron');
+    clipboard.writeText(text);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
 });
 
 ipcMain.handle('generate-ufn', (_, dateStr) => {
