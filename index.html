@@ -208,6 +208,16 @@
               <span class="home-card-title">Video Identification Parade</span>
               <span class="home-card-sub">Record VIPER / Code D details, objections and result</span>
             </button>
+            <button type="button" id="openOfficerEmailsBtn" class="home-action-card officer-email-home-card">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
+              <span class="home-card-title">Officer Emails</span>
+              <span class="home-card-sub">Templates and copy-and-paste emails to officers</span>
+            </button>
+            <button type="button" id="home-card-quick-email" class="home-action-card officer-email-home-card" style="display:none;" title="Requires Officer Email Templates add-on enabled in Settings">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
+              <span class="home-card-title">Quick email to officer</span>
+              <span class="home-card-sub">Email OIC from a template without opening a record first</span>
+            </button>
           </div>
 
           <!-- Update Available Banner (shows when an update is downloading or ready) -->
@@ -395,6 +405,7 @@
         </div>
         <div class="list-toolbar">
           <input type="search" id="list-search" placeholder="Search by name, UFN, station, custody number, date..." class="search-input" aria-label="Search attendance records">
+          <button type="button" id="list-quick-email-btn" class="btn btn-primary btn-small" style="display:none;" title="Compose email to officer from a template">Quick email to officer</button>
           <button type="button" id="backup-now-btn" class="btn btn-secondary btn-small" title="Create a backup now">Backup now</button>
         </div>
         <div class="list-filters">
@@ -1307,6 +1318,55 @@
           <p class="settings-hint">The app checks the folder periodically and imports the newest files first.</p>
         </div>
 
+        <!-- Add-Ons -->
+        <div class="settings-card" id="settings-addons-card">
+          <h2>Add-Ons</h2>
+          <p class="settings-hint" style="margin-bottom:1rem;">Optional modules that extend CustodyNote. Toggle to enable or disable instantly &mdash; no save required.</p>
+          <div class="addon-row" id="addon-officer-email-row">
+            <div id="addon-email-locked" class="addon-locked-message" style="display:none;">
+              <p>Officer Email Templates add-on requires a licence. Buy it on the website to enable the Email OIC feature.</p>
+              <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy Email add-on</a>
+            </div>
+            <div id="addon-email-content">
+              <div class="addon-info">
+                <strong>Officer Email Templates</strong>
+                <p class="addon-desc">Generate pre-filled emails to the Officer in Charge directly from the Records list. Includes three templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up.</p>
+              </div>
+              <div class="addon-toggle-group">
+                <label class="toggle-row" for="setting-officer-email-templates">
+                  <span>Enable</span>
+                  <input type="checkbox" id="setting-officer-email-templates">
+                </label>
+                <span id="officer-email-templates-status" class="addon-status addon-status-off">Disabled</span>
+              </div>
+            </div>
+          </div>
+          <p class="settings-hint" style="margin-top:0.75rem;">Officer and solicitor email actions use <strong>copy and paste</strong> &mdash; the app never opens a mail client for you. Paste into Outlook (desktop or web) yourself.</p>
+
+          <div style="margin-top:1.25rem;">
+            <strong>Custom Email Templates</strong>
+            <p class="settings-hint">Add your own templates. Use <code>{{clientName}}</code>, <code>{{contactName}}</code>, <code>{{firmName}}</code>, <code>{{station}}</code>, <code>{{date}}</code>, <code>{{outcome}}</code>, <code>{{nextStep}}</code>, <code>{{followUp}}</code>, <code>{{attendanceType}}</code>, <code>{{feeEarnerName}}</code>, <code>{{ourFileNumber}}</code>, <code>{{ufn}}</code>, <code>{{oicName}}</code>, or <code>{{offenceType}}</code> as placeholders. Scope controls where the template appears.</p>
+            <div id="custom-templates-list" style="margin-bottom:0.75rem;"></div>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.5rem;">
+              <input type="text" id="new-template-name" class="settings-input" placeholder="Template name" style="flex:2;min-width:140px;">
+              <button type="button" id="btn-add-custom-template" class="btn btn-secondary btn-small">+ Add template</button>
+            </div>
+            <div id="custom-template-editor" style="display:none;margin-top:0.5rem;">
+              <select id="new-template-scope" class="settings-input" style="width:100%;margin-bottom:0.4rem;">
+                <option value="all">Use anywhere</option>
+                <option value="officer">Officer emails only</option>
+                <option value="solicitor">Instructing solicitor emails only</option>
+              </select>
+              <input type="text" id="new-template-subject" class="settings-input" placeholder="Subject (use {{placeholders}})" style="width:100%;margin-bottom:0.4rem;">
+              <textarea id="new-template-body" class="settings-input" rows="5" placeholder="Body text (use {{placeholders}})" style="width:100%;font-size:0.88rem;font-family:inherit;"></textarea>
+              <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
+                <button type="button" id="btn-save-custom-template" class="btn btn-primary btn-small">Save template</button>
+                <button type="button" id="btn-cancel-custom-template" class="btn btn-secondary btn-small">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
         </div><!-- end advanced tab panel -->
 
         <div class="settings-tab-panel" data-stab-panel="support">
@@ -1857,6 +1917,283 @@
         </div>
       </div>
 
+      <!-- OFFICER EMAILS VIEW -->
+      <div id="view-officer-emails" class="view officer-email-page">
+        <div class="officer-email-container">
+          <header class="officer-email-hero">
+            <div class="officer-email-hero-text">
+              <p class="officer-kicker">Custody Note</p>
+              <h1>Officer Emails</h1>
+              <p>Build emails from reusable templates, preview them, then use the copy buttons and paste into Outlook. No data leaves Custody Note unless you paste and send it yourself.</p>
+            </div>
+            <div class="officer-email-hero-actions">
+              <button type="button" id="officerBackHomeBtn" class="btn btn-secondary">&larr; Home</button>
+              <button type="button" id="officerHeroCopySubjectBtn" class="gold-button hero-button hero-button--subject officer-email-secondary-btn" title="Copy the email subject line">Copy Subject</button>
+              <button type="button" id="officerHeroCopyBodyBtn" class="gold-button hero-button officer-email-primary-btn">Copy Email Body</button>
+            </div>
+          </header>
+
+          <div id="officerEmailError" class="alert error-alert hidden" role="alert"></div>
+          <div id="officerEmailNotice" class="alert notice-alert hidden" role="status"></div>
+
+          <nav class="officer-tabs" aria-label="Officer email sections">
+            <button type="button" class="active" data-officer-tab="details">Details</button>
+            <button type="button" data-officer-tab="compose">Compose</button>
+            <button type="button" data-officer-tab="preview">Preview</button>
+            <button type="button" data-officer-tab="records">Records</button>
+            <button type="button" data-officer-tab="testing">Testing / Debug</button>
+          </nav>
+
+          <div class="officer-email-shell">
+            <div class="officer-main-panel">
+
+              <section id="officerTabDetails" class="officer-tab-panel officer-card">
+                <h2>Details</h2>
+                <p class="section-help">Enter the officer details, client details, attendance note and attendance time. These details feed every email template.</p>
+
+                <div class="officer-grid-two">
+                  <label>
+                    Officer email address
+                    <input id="officerEmailInput" type="email" placeholder="officer.fisher@police.uk" autocomplete="off" spellcheck="false" />
+                  </label>
+                  <label>
+                    Officer rank
+                    <input id="officerRankInput" type="text" placeholder="e.g. DC, Insp" autocomplete="off" />
+                  </label>
+                </div>
+
+                <div class="officer-grid-two">
+                  <label>
+                    Officer surname
+                    <input id="officerSurnameInput" type="text" placeholder="Fisher" autocomplete="off" />
+                  </label>
+                  <label>
+                    Police station / unit
+                    <input id="policeStationOrUnitInput" type="text" placeholder="Optional" autocomplete="off" />
+                  </label>
+                </div>
+
+                <label>
+                  Custody record number
+                  <input id="custodyNumberInput" type="text" placeholder="Optional" autocomplete="off" />
+                </label>
+
+                <label>
+                  DSCC reference
+                  <input id="dsccReferenceInput" type="text" placeholder="Optional" autocomplete="off" />
+                </label>
+
+                <div class="officer-grid-two">
+                  <label>
+                    Date of attendance
+                    <input id="attendanceDateInput" type="date" />
+                  </label>
+                  <label>
+                    Time of attendance
+                    <input id="attendanceTimeInput" type="time" />
+                  </label>
+                </div>
+
+                <div class="large-button-row">
+                  <button id="officerPrevDayBtn" type="button">Previous day</button>
+                  <button id="officerNextDayBtn" type="button">Next day</button>
+                  <button id="officerTimeMinusBtn" type="button">Time -15</button>
+                  <button id="officerTimePlusBtn" type="button">Time +15</button>
+                  <button id="officerNowBtn" type="button">Now</button>
+                </div>
+
+                <div class="officer-grid-two">
+                  <label>
+                    Client name
+                    <input id="clientNameInput" type="text" placeholder="Client name" autocomplete="off" />
+                  </label>
+                  <label>
+                    Matter / allegation
+                    <input id="matterInput" type="text" placeholder="Assault / theft / harassment etc." autocomplete="off" />
+                  </label>
+                </div>
+
+                <label>
+                  Attendance note / context
+                  <textarea id="attendanceNoteInput" rows="6" placeholder="Brief note to include in the email, if required."></textarea>
+                </label>
+
+                <div class="large-button-row">
+                  <button id="officerContinueComposeBtn" class="gold-button" type="button">Continue to Compose</button>
+                  <button id="officerClearFormBtn" type="button">Clear</button>
+                </div>
+              </section>
+
+              <section id="officerTabCompose" class="officer-tab-panel officer-card hidden">
+                <h2>Compose</h2>
+                <p class="section-help">Choose a template and click <strong>Generate / Refresh</strong>, then use the copy buttons to put the subject, officer email and body on your clipboard for pasting into Outlook.</p>
+
+                <div id="officerComposeWarnings" class="officer-compose-warnings hidden" role="status" aria-live="polite" style="margin-bottom:12px;padding:10px 12px;border-radius:8px;background:var(--surface-muted,#f1f5f9);border-left:4px solid #f59e0c;font-size:0.9rem;"></div>
+
+                <div class="officer-template-row">
+                  <label class="officer-template-label">
+                    Template
+                    <select id="officerTemplateSelect">
+                      <option value="request_bail_details">Request Bail Details</option>
+                      <option value="request_interview_recording">Request Interview Recording</option>
+                      <option value="followup_after_rui">Follow-up After RUI</option>
+                      <option value="confirm_representation">Confirm Representation</option>
+                    </select>
+                  </label>
+                  <button type="button" id="officerManageTemplatesBtn" class="btn btn-secondary officer-manage-templates-btn" title="Add, edit, duplicate or delete email templates">Manage templates…</button>
+                </div>
+
+                <div class="large-button-row">
+                  <button id="officerGenerateBtn" class="gold-button" type="button">Generate / Refresh</button>
+                  <button id="officerClearSubjectBodyBtn" type="button">Clear Subject / Body</button>
+                </div>
+
+                <div class="officer-subject-row">
+                  <label class="officer-subject-label">
+                    Subject
+                    <input id="officerSubjectInput" type="text" placeholder="Email subject" autocomplete="off" />
+                  </label>
+                  <button type="button" id="officerInlineCopySubjectBtn" class="btn btn-secondary officer-inline-copy-btn" title="Copy this subject line">Copy</button>
+                </div>
+
+                <label>
+                  Email body
+                  <textarea id="officerBodyInput" rows="16" placeholder="Email body"></textarea>
+                </label>
+
+                <div class="outlook-info">
+                  <strong>Copy &amp; paste workflow:</strong> use the copy buttons below, switch to Outlook (desktop or web) and paste. Custody Note never opens Outlook for you and never sends mail on your behalf.
+                </div>
+
+                <div class="large-button-row officer-email-actions-primary">
+                  <button id="officerCopyBodyBtn" class="gold-button extra-large-button officer-email-primary-btn" type="button">Copy Email Body</button>
+                </div>
+                <div class="large-button-row officer-email-actions-secondary" style="flex-wrap:wrap;">
+                  <button id="officerCopyOfficerEmailBtn" type="button" class="btn btn-secondary">Copy Officer Email</button>
+                  <button id="officerCopySubjectBtn" type="button" class="btn btn-secondary">Copy Subject</button>
+                  <button id="officerCopyFullBtn" type="button" class="btn btn-secondary">Copy Full Email</button>
+                </div>
+                <div class="large-button-row" style="flex-wrap:wrap;margin-top:8px;">
+                  <button id="officerSaveDraftBtn" type="button">Save Draft</button>
+                  <button id="officerMarkSentBtn" class="green-button" type="button">Mark as Sent</button>
+                  <button id="officerCancelBtn" type="button">Cancel</button>
+                </div>
+              </section>
+
+              <section id="officerTabPreview" class="officer-tab-panel officer-card hidden">
+                <h2>Preview</h2>
+                <p class="section-help">Exact fields you can copy and paste into Outlook. Additional case details are still shown in the Details tab.</p>
+
+                <div class="preview-box officer-email-preview-box">
+                  <div class="officer-preview-block"><span class="officer-preview-label">To:</span><div id="previewTo" class="officer-preview-value">—</div></div>
+                  <div class="officer-preview-block officer-preview-block--with-copy">
+                    <span class="officer-preview-label">Subject:</span>
+                    <div id="previewSubject" class="officer-preview-value">—</div>
+                    <button type="button" id="officerInlineCopySubjectPreviewBtn" class="btn btn-secondary officer-inline-copy-btn" title="Copy this subject line">Copy</button>
+                  </div>
+                  <div class="officer-preview-block"><span class="officer-preview-label">Body:</span><pre id="previewBody" class="officer-preview-body">—</pre></div>
+                </div>
+                <p class="section-help" style="margin-top:10px;"><strong>Officer:</strong> <span id="previewOfficer">—</span> · <strong>Client:</strong> <span id="previewClient">—</span> · <strong>Matter:</strong> <span id="previewMatter">—</span></p>
+
+                <div class="large-button-row officer-email-actions-primary">
+                  <button id="officerCopyBodyPreviewBtn" class="gold-button extra-large-button officer-email-primary-btn" type="button">Copy Email Body</button>
+                </div>
+                <div class="large-button-row" style="flex-wrap:wrap;">
+                  <button id="officerCopySubjectPreviewBtn" type="button" class="btn btn-secondary">Copy Subject</button>
+                  <button id="officerCopyFullPreviewBtn" type="button" class="btn btn-secondary">Copy Full Email</button>
+                </div>
+              </section>
+
+              <section id="officerTabRecords" class="officer-tab-panel officer-card hidden">
+                <div class="records-header">
+                  <div>
+                    <h2>Records</h2>
+                    <p class="section-help">Saved drafts, sent records and cancelled records. Stored locally on this device.</p>
+                  </div>
+                  <button id="officerClearAllRecordsBtn" class="danger-outline-button" type="button">Clear All Records</button>
+                </div>
+
+                <div id="officerRecordsList" class="record-list">
+                  <p class="muted">No officer email records saved yet.</p>
+                </div>
+              </section>
+
+              <section id="officerTabTesting" class="officer-tab-panel officer-card hidden">
+                <h2>Testing / Debug</h2>
+                <p class="section-help">Use these tools to verify validation, template generation and local record storage before relying on the feature.</p>
+
+                <div class="large-button-row">
+                  <button id="officerRunTestsBtn" class="gold-button" type="button">Run Tests</button>
+                  <button id="officerRunDebugBtn" type="button">Run Debug Check</button>
+                </div>
+
+                <h3>Test Results</h3>
+                <div id="officerTestResults" class="test-list">
+                  <p class="muted">No tests run yet.</p>
+                </div>
+
+                <h3>Debug Output</h3>
+                <pre id="officerDebugOutput" class="debug-output">No debug output yet.</pre>
+
+                <div id="officerEmailDevDiagnostics" class="officer-email-dev-diagnostics hidden" style="margin-top:1rem;padding:12px;border-radius:8px;border:1px dashed var(--border-color,#cbd5e1);background:#f8fafc;">
+                  <h3 style="margin-top:0;">Compose diagnostics (development build)</h3>
+                  <p class="section-help" style="margin-bottom:8px;">Recipient, subject and template details from the current form.</p>
+                  <p><strong>Recipient</strong></p>
+                  <pre id="officerDiagTo" class="debug-output" style="white-space:pre-wrap;">—</pre>
+                  <p><strong>Subject</strong></p>
+                  <pre id="officerDiagSubject" class="debug-output" style="white-space:pre-wrap;">—</pre>
+                  <p><strong>Selected template</strong></p>
+                  <pre id="officerDiagTemplate" class="debug-output">—</pre>
+                  <p><strong>Pending draft</strong></p>
+                  <pre id="officerDiagPending" class="debug-output">—</pre>
+                  <p><strong>Pending draft saved at</strong></p>
+                  <pre id="officerDiagPendingTime" class="debug-output">—</pre>
+                  <p><strong>Selected template id</strong></p>
+                  <pre id="officerDiagTemplateId" class="debug-output">—</pre>
+                  <p><strong>Generated body length</strong></p>
+                  <pre id="officerDiagBodyLen" class="debug-output">—</pre>
+                  <p><strong>Clipboard API available</strong></p>
+                  <pre id="officerDiagClipboardApi" class="debug-output">—</pre>
+                  <p><strong>Secure context</strong></p>
+                  <pre id="officerDiagSecureCtx" class="debug-output">—</pre>
+
+                  <h4 style="margin:14px 0 8px;">Pending draft storage</h4>
+                  <p class="section-help">Manual checks for local pending-draft round-trip (development build).</p>
+                  <div class="large-button-row" style="flex-wrap:wrap;">
+                    <button type="button" id="officerDiagTestSavePending">Test: save pending from form</button>
+                    <button type="button" id="officerDiagTestClearPending">Test: clear pending</button>
+                  </div>
+
+                  <div class="large-button-row" style="flex-wrap:wrap;">
+                    <button type="button" id="officerDiagCopyBodyBtn">Copy email body</button>
+                    <button type="button" id="officerDiagCopyOfficerEmailBtn">Copy officer email</button>
+                    <button type="button" id="officerDiagCopySubjectBtn">Copy subject</button>
+                  </div>
+                </div>
+              </section>
+            </div>
+
+            <aside class="officer-side-panel">
+              <section class="officer-card compact-card">
+                <h2>Quick Summary</h2>
+                <p><strong>Officer:</strong> <span id="summaryOfficer">Not entered</span></p>
+                <p><strong>Email:</strong> <span id="summaryEmail">Not entered</span></p>
+                <p><strong>Client:</strong> <span id="summaryClient">Not entered</span></p>
+                <p><strong>Matter:</strong> <span id="summaryMatter">Not entered</span></p>
+                <p><strong>Template:</strong> <span id="summaryTemplate">Request Bail Details</span></p>
+                <p><strong>Records:</strong> <span id="summaryRecords">0</span></p>
+              </section>
+
+              <section class="officer-card compact-card">
+                <h2>Copy &amp; paste</h2>
+                <p>Copy the subject and body from Compose or Preview, switch to Outlook, and paste.</p>
+                <button id="officerSideCopyBodyBtn" class="gold-button full-width-button officer-email-primary-btn" type="button">Copy Email Body</button>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </div>
+
     </main>
     <footer class="app-footer">
       <div class="footer-row">
@@ -2066,13 +2403,21 @@
        4. csv-exporter — override CSV functions from app.js
   ──────────────────────────────────────────────────────────── -->
   <script src="renderer/toast.js"></script>
+  <script src="renderer/emailCopy.js"></script>
+  <script src="renderer/email-pending-globals.js"></script>
   <script src="renderer/licence.js"></script>
   <!-- Wheel-style ("rotating counter") date/time picker. Self-contained, attaches a 🕑/📅 button next to every native date/time/datetime-local input. Native typing still works. -->
   <script src="renderer/widgets/wheelDateTimePicker.js"></script>
   <script src="app.js"></script>
+  <!-- Officer email templates — user-editable store + manager modal. Must load BEFORE officerEmails.js so init() can wire the store. -->
+  <script src="renderer/officerEmailTemplatesStore.js"></script>
+  <script src="renderer/officerEmailTemplatesManager.js"></script>
+  <script src="renderer/officerEmails.js"></script>
   <script src="renderer/views/reports.js"></script>
   <script src="renderer/views/authorities.js"></script>
   <script src="renderer/views/settings.js"></script>
+  <script src="renderer/email-templates.js"></script>
+  <script src="renderer/views/email-modal.js"></script>
   <script src="renderer/views/list.js"></script>
   <script src="renderer/csv-exporter.js"></script>
   <script src="renderer/laa-forms.js"></script>

@@ -29,7 +29,8 @@
     "prepare-trial": "node scripts/prepare-trial.js",
     "capture-screenshots": "node scripts/capture-screenshots.js",
     "security:audit": "node scripts/security-audit.mjs",
-    "security:scan": "node scripts/security-audit.mjs"
+    "security:scan": "node scripts/security-audit.mjs",
+    "email:sample-officer": "node scripts/send-officer-sample-email.mjs"
   },
   "author": "",
   "license": "ISC",
