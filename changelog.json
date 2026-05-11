@@ -1,9 +1,23 @@
 {
   "releases": [
     {
-      "version": "1.7.1",
+      "version": "1.8.0",
       "date": "2026-05-11",
       "latest": true,
+      "changes": [
+        "Officer Emails relaunched with reliable Outlook launch: choose how the Send button opens — Outlook desktop (.eml draft), Outlook on the web (M365 deeplink), default mail app (mailto:), or copy-only",
+        "Settings > Email shows what auto-detect found on this machine (Outlook desktop install, default mailto handler) and includes a Re-detect button + diagnostics log",
+        "Always-on Copy Subject / Copy Body / Copy Email / Copy Full buttons on Quick Email and Officer Emails — the email content is never lost even if the launch fails",
+        "PII-safe email-launch.log records every send attempt (domains and lengths only — no addresses, subjects or bodies)",
+        "Restored every pre-v1.6.23 surface: Officer Emails home card, Email OIC button on each record in the list, standalone Officer Emails view with Templates / Drafts / Compose tabs, Settings toggle for the Officer Email Templates add-on",
+        "1205/1205 unit tests pass",
+        "renderer smoke test (73 checks) passes"
+      ]
+    },
+    {
+      "version": "1.7.1",
+      "date": "2026-05-11",
+      "latest": false,
       "changes": [
         "Officer Emails restored: per-record right-hand drawer prepares Outlook Web compose drafts for the current custody note (manual send only)",
         "copy/paste-only workflow with Copy Subject + Copy Body + Open in Outlook Web",
