@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.7.1",
+      "date": "2026-05-11",
+      "latest": true,
+      "changes": [
+        "Officer Emails restored: per-record right-hand drawer prepares Outlook Web compose drafts for the current custody note (manual send only)",
+        "copy/paste-only workflow with Copy Subject + Copy Body + Open in Outlook Web",
+        "full lifecycle (draft -> opened -> sent / cancelled)",
+        "1121/1121 unit tests pass including new officerEmailTemplates suite"
+      ]
+    },
+    {
       "version": "1.7.0",
       "date": "2026-05-08",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Restore Billing button in bottom navigation"
       ]
