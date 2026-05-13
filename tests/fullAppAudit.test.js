@@ -23,12 +23,12 @@ test('main.js: import merge by file number excludes archived drafts', () => {
   );
 });
 
-test('main.js: open-external only allows http(s)', () => {
+test('main.js: open-external uses isSafeExternalUrl allowlist', () => {
   const main = readFileSync(path.join(APP_ROOT, 'main.js'), 'utf8');
   const idx = main.indexOf("ipcMain.handle('open-external'");
   assert.ok(idx !== -1);
-  const slice = main.slice(idx, idx + 400);
-  assert.ok(slice.includes("startsWith('https://')") && slice.includes("startsWith('http://')"));
+  const slice = main.slice(idx, idx + 500);
+  assert.ok(slice.includes('isSafeExternalUrl'), 'open-external must validate with isSafeExternalUrl');
   assert.ok(slice.includes('mailto'), 'mailto should be blocked or warned');
 });
 

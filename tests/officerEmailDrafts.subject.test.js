@@ -18,6 +18,19 @@ describe('officerEmailDrafts — subject line', () => {
     assert.ok(s.includes(SUBJECT_SUFFIX.chase_disclosure), s);
   });
 
+  it('uses the user-facing Disclosure / confirm attendance label', () => {
+    const s = generateOfficerEmailSubject({
+      clientName: 'John Smith',
+      policeStation: 'Tonbridge Police Station',
+      offence: 'Assault',
+      templateType: 'disclosure_confirm_attendance',
+    });
+    assert.strictEqual(
+      s,
+      'John Smith - Tonbridge Police Station - Assault - Disclosure / confirm attendance'
+    );
+  });
+
   it('uses placeholders when fields missing', () => {
     const s = generateOfficerEmailSubject({
       clientName: '',
@@ -28,5 +41,6 @@ describe('officerEmailDrafts — subject line', () => {
     assert.ok(s.includes('[Client Name]'), s);
     assert.ok(s.includes('[Police Station]'), s);
     assert.ok(s.includes('[Offence]'), s);
+    assert.ok(!/undefined|null|NaN/.test(s), s);
   });
 });
