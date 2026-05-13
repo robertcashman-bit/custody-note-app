@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.2",
+      "version": "1.9.3",
       "date": "2026-05-13",
       "latest": true,
+      "changes": [
+        "Officer Emails right-panel module and workflow hardening",
+        "QuickFile settings configured-state fix",
+        "CRM1 gender checkbox reset fix",
+        "Billing/finalise/list workflow regression fixes"
+      ]
+    },
+    {
+      "version": "1.9.2",
+      "date": "2026-05-13",
+      "latest": false,
       "changes": [
         "Restore Officer Emails to the right-hand form panel",
         "Set officer email drafts ready for Outlook on save",
