@@ -8051,6 +8051,14 @@ ipcMain.handle('attendance-invoice-status', (_, attendanceId) => {
   return row || {};
 });
 
+function _officerDraftStatusAfterSave(apiLike, previousStatus) {
+  const ps = String(previousStatus || 'draft');
+  if (ps === 'sent_manually' || ps === 'cancelled' || ps === 'deleted') return ps;
+  if (ps === 'opened_in_outlook') return 'opened_in_outlook';
+  const ov = officerEmailDrafts.validateOpenOutlookFields(apiLike);
+  return ov.ok ? 'ready_for_outlook' : 'draft';
+}
+
 function _officerDraftRowToApi(r) {
   if (!r) return null;
   return {
@@ -8110,6 +8118,10 @@ ipcMain.handle('officer-email-drafts-create', (_, payload) => {
   const n = v.normalized;
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const st = _officerDraftStatusAfterSave(
+    { toEmail: n.toEmail, subject: n.subject, body: n.body },
+    'draft'
+  );
   dbRun(
     `INSERT INTO officer_email_drafts (
       id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, offence,
@@ -8117,7 +8129,7 @@ ipcMain.handle('officer-email-drafts-create', (_, payload) => {
       created_at, updated_at
     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
-      id, n.custodyNoteId, 'draft', n.templateType || 'disclosure_confirm_attendance',
+      id, n.custodyNoteId, st, n.templateType || 'disclosure_confirm_attendance',
       n.toEmail, n.recipientName, n.clientName, n.policeStation, n.offence,
       n.attendanceDate, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
       n.subject, n.body, now, now,
@@ -8140,16 +8152,20 @@ ipcMain.handle('officer-email-drafts-update', (_, draftId, payload) => {
   if (!v.ok) return { ok: false, errors: v.errors };
   const n = v.normalized;
   const now = new Date().toISOString();
+  const st = _officerDraftStatusAfterSave(
+    { toEmail: n.toEmail, subject: n.subject, body: n.body },
+    existing.status
+  );
   dbRun(
     `UPDATE officer_email_drafts SET
       template_type=?, to_email=?, recipient_name=?, client_name=?, police_station=?, offence=?,
       attendance_date=?, extra_note=?, bail_return_date=?, bail_conditions=?, user_email_address=?,
-      subject=?, body=?, updated_at=?
+      subject=?, body=?, status=?, updated_at=?
      WHERE id=?`,
     [
       n.templateType, n.toEmail, n.recipientName, n.clientName, n.policeStation, n.offence,
       n.attendanceDate, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
-      n.subject, n.body, now, String(draftId),
+      n.subject, n.body, st, now, String(draftId),
     ]
   );
   markDbDirty();
@@ -8163,6 +8179,10 @@ ipcMain.handle('officer-email-drafts-duplicate', (_, draftId) => {
   if (!src || src.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
+  const dupSt = _officerDraftStatusAfterSave(
+    { toEmail: src.to_email, subject: src.subject, body: src.body },
+    'draft'
+  );
   dbRun(
     `INSERT INTO officer_email_drafts (
       id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, offence,
@@ -8170,7 +8190,7 @@ ipcMain.handle('officer-email-drafts-duplicate', (_, draftId) => {
       created_at, updated_at
     ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
-      id, src.custody_note_id, 'draft', src.template_type,
+      id, src.custody_note_id, dupSt, src.template_type,
       src.to_email, src.recipient_name, src.client_name, src.police_station, src.offence,
       src.attendance_date, src.extra_note, src.bail_return_date, src.bail_conditions, src.user_email_address,
       src.subject, src.body, now, now,

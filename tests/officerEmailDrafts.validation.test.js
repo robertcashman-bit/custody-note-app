@@ -33,6 +33,8 @@ describe('officerEmailDrafts — validation', () => {
     assert.strictEqual(canTransitionStatus('draft', 'opened_in_outlook'), true);
     assert.strictEqual(canTransitionStatus('draft', 'sent_manually'), false);
     assert.strictEqual(canTransitionStatus('opened_in_outlook', 'sent_manually'), true);
+    assert.strictEqual(canTransitionStatus('ready_for_outlook', 'draft'), true);
+    assert.strictEqual(canTransitionStatus('ready_for_outlook', 'opened_in_outlook'), true);
   });
 
   it('isLikelyEmailAddress basic check', () => {
@@ -43,5 +45,7 @@ describe('officerEmailDrafts — validation', () => {
   it('isLikelyProfessionalEmail allowlists gov/police', () => {
     assert.strictEqual(isLikelyProfessionalEmail('o@met.police.uk'), true);
     assert.strictEqual(isLikelyProfessionalEmail('x@example.com'), false);
+    assert.strictEqual(isLikelyProfessionalEmail('x@example.com', ['example.com']), true);
+    assert.strictEqual(isLikelyProfessionalEmail('x@sub.example.com', ['example.com']), true);
   });
 });

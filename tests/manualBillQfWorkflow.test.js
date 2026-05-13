@@ -356,32 +356,31 @@ describe('Step 2: Billing screen — QuickFile-configured path', () => {
   });
 });
 
-describe('Step 2: Billing screen — skip invoice path (merged into primary)', () => {
+describe('Step 2: Billing screen — skip invoice path', () => {
   /* Skip-invoice was a separate secondary button (#wf-bill-skip-invoice).
-   * It has been merged into the contextual primary button on Step 2 so
-   * users see ONE forward action. These tests assert (a) the old
-   * separate button is gone and (b) the new merged behaviour works. */
+   * The old secondary skip button stays removed. When QuickFile is not
+   * configured, the single forward action is the explicit Review & complete
+   * button required by the workflow E2E tests. */
   it('separate #wf-bill-skip-invoice button has been removed', () => {
     assert.ok(!billingScreenJs.includes('wf-bill-skip-invoice'),
-      'wf-bill-skip-invoice was merged into the contextual primary button (#wf-bill-create with data-mode="skip")');
+      'wf-bill-skip-invoice should stay removed; #wf-bill-next-complete is the single forward action');
   });
 
-  it('primary button uses data-mode="skip" when QF is not configured', () => {
+  it('next-complete button uses data-mode="skip" when QF is not configured', () => {
     const fnIdx = billingScreenJs.indexOf('function _wfBuildBillingFooter');
     assert.ok(fnIdx !== -1);
     const fnBlock = billingScreenJs.substring(fnIdx, fnIdx + 2000);
+    assert.ok(fnBlock.includes('id="wf-bill-next-complete"'), 'manual billing path should expose #wf-bill-next-complete');
     assert.ok(fnBlock.includes('data-mode="skip"'), 'skip mode should be set when !qfConfigured');
-    assert.ok(fnBlock.includes('Continue without invoice'), 'skip label should be Continue without invoice');
+    assert.ok(fnBlock.includes('Next: Review &amp; complete'), 'skip label should be Next: Review & complete');
   });
 
-  it('clicking primary button in skip mode shows confirmation before advancing', () => {
+  it('clicking next-complete in skip mode advances directly', () => {
     const idx = billingScreenJs.indexOf("createBtn.dataset.mode || 'send'");
     assert.ok(idx !== -1, 'merged primary-button click handler not found');
     const block = billingScreenJs.substring(idx, idx + 600);
     assert.ok(block.includes("'skip'"), 'handler must branch on the skip mode');
-    assert.ok(block.includes('showConfirm'), 'skip path should use showConfirm');
-    assert.ok(block.includes('No QuickFile invoice'), 'confirmation message should explain no invoice');
-    assert.ok(block.includes('_wfGoNext'), 'should advance to next step on confirm');
+    assert.ok(block.includes('_wfGoNext'), 'should advance to next step');
   });
 });
 

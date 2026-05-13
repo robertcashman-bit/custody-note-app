@@ -346,8 +346,8 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   var primaryBtnHtml = '';
   if (!qfConfigured) {
     primaryBtnHtml =
-      '<button type="button" id="wf-bill-create" class="btn btn-primary wf-btn-next-action" data-mode="skip">' +
-        'Continue without invoice &#9654;' +
+      '<button type="button" id="wf-bill-next-complete" class="btn btn-primary wf-btn-next-action" data-mode="skip">' +
+        'Next: Review &amp; complete &#9654;' +
       '</button>';
   } else if (opts.hasExistingInvoice) {
     primaryBtnHtml =
@@ -370,20 +370,14 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
   document.getElementById('wf-bill-close').addEventListener('click', closeWorkflow);
 
-  var createBtn = document.getElementById('wf-bill-create');
+  var createBtn = document.getElementById('wf-bill-create') || document.getElementById('wf-bill-next-complete');
   if (createBtn) {
     createBtn.addEventListener('click', function () {
       var mode = createBtn.dataset.mode || 'send';
       if (mode === 'send') {
         _wfHandleCreateInvoice(meta, opts);
       } else if (mode === 'skip') {
-        if (typeof showConfirm === 'function') {
-          showConfirm('No QuickFile invoice will be created for this matter.\n\nContinue to review and complete?').then(function (ok) {
-            if (ok && typeof _wfGoNext === 'function') _wfGoNext();
-          });
-        } else if (typeof _wfGoNext === 'function') {
-          _wfGoNext();
-        }
+        if (typeof _wfGoNext === 'function') _wfGoNext();
       } else {
         if (typeof _wfGoNext === 'function') _wfGoNext();
       }
@@ -415,6 +409,7 @@ function _wfBindBillingEvents(meta, opts) {
   var reviewStatusEl = document.getElementById('wf-review-status');
   if (checkboxes && checkboxes.length) {
     function updateBtn() {
+      if (!createBtn || createBtn.dataset.mode !== 'send') return;
       var allChecked = true;
       var checkedCount = 0;
       checkboxes.forEach(function (cb) { if (cb.checked) checkedCount++; else allChecked = false; });
