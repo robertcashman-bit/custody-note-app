@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.1",
+      "version": "1.9.2",
       "date": "2026-05-13",
       "latest": true,
+      "changes": [
+        "Restore Officer Emails to the right-hand form panel",
+        "Set officer email drafts ready for Outlook on save",
+        "Fix list and finish-matter workflow regressions found by release tests"
+      ]
+    },
+    {
+      "version": "1.9.1",
+      "date": "2026-05-13",
+      "latest": false,
       "changes": [
         "Officer Emails: moved from the right-hand context column into its own full-width standalone section directly below the custody note form, with its own heading and intro line",
         "same templates, drafts and Outlook Web flow as v1.9.0"
