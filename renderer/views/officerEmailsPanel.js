@@ -1,4 +1,4 @@
-/* Officer Emails — right-hand context panel (v1.9). Depends on window.api.officerEmails, formData, currentAttendanceId, showToast, showConfirm. */
+/* Officer Emails — standalone section below the form (v1.9). Depends on window.api.officerEmails, formData, currentAttendanceId, showToast, showConfirm. */
 (function (global) {
   'use strict';
 
@@ -56,7 +56,6 @@
   function buildShell() {
     if (!host) return;
     host.innerHTML =
-      '<div class="form-panel-card-label">Officer Emails</div>' +
       '<p id="oep-locked" class="officer-email-panel-hint hidden">Save the custody note before creating email drafts.</p>' +
       '<div id="oep-main" class="officer-email-panel-inner">' +
       '<div class="officer-email-form">' +

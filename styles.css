@@ -7062,10 +7062,34 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   border-left-color: var(--primary);
 }
 
-/* ═══ Officer Emails — right context panel (v1.9) ═══ */
-.officer-email-panel-host.form-panel-card,
+/* ═══ Officer Emails — standalone section (v1.9) ═══ */
+.officer-emails-standalone-section {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1rem 1.25rem 1.25rem;
+  margin: 0;
+  border-top: 2px solid color-mix(in srgb, var(--primary) 22%, var(--border) 78%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 88%, var(--bg) 12%), var(--surface-muted));
+}
+.officer-emails-section-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--primary);
+}
+.officer-emails-section-lead {
+  margin: 0 0 0.85rem;
+  max-width: 52rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--on-surface-muted, #64748b);
+}
+.officer-emails-standalone-section .officer-email-panel-host.form-panel-card,
 .officer-email-panel.form-panel-card {
   min-height: 0;
+  max-width: 56rem;
 }
 .officer-email-panel-inner {
   display: flex;
@@ -7201,5 +7225,12 @@ html.dark .officer-email-warning {
   background: rgba(120, 53, 15, 0.35);
   border-color: #b45309;
   color: #fcd34d;
+}
+html.dark .officer-emails-standalone-section {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 75%, #0f172a 25%), var(--surface-muted));
+  border-top-color: color-mix(in srgb, var(--primary) 35%, var(--border) 65%);
+}
+html.dark .officer-emails-section-lead {
+  color: var(--on-surface-muted, #94a3b8);
 }
 
