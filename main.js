@@ -6106,8 +6106,14 @@ ipcMain.handle('open-external', async (_, url) => {
     console.warn('[open-external] Blocked mailto (copy subject/body in the app, then paste into your mail client):', u.slice(0, 120));
     return;
   }
-  if (u.startsWith('https://') || u.startsWith('http://')) {
+  if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(u)) {
+    console.warn('[open-external] Blocked URL (allowlist):', u.slice(0, 120));
+    return;
+  }
+  try {
     await shell.openExternal(u);
+  } catch (err) {
+    console.warn('[open-external] failed:', err && err.message ? err.message : err);
   }
 });
 
@@ -8051,11 +8057,27 @@ ipcMain.handle('attendance-invoice-status', (_, attendanceId) => {
   return row || {};
 });
 
+function _officerEmailExtraDomainsFromSettings() {
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key = 'email'");
+    if (!row || row.value == null || row.value === '') return [];
+    const em = String(row.value).trim();
+    const at = em.lastIndexOf('@');
+    if (at < 1) return [];
+    const dom = em.slice(at + 1).toLowerCase();
+    return dom ? [dom] : [];
+  } catch (_) {
+    return [];
+  }
+}
+
 function _officerDraftStatusAfterSave(apiLike, previousStatus) {
   const ps = String(previousStatus || 'draft');
   if (ps === 'sent_manually' || ps === 'cancelled' || ps === 'deleted') return ps;
   if (ps === 'opened_in_outlook') return 'opened_in_outlook';
-  const ov = officerEmailDrafts.validateOpenOutlookFields(apiLike);
+  const ov = officerEmailDrafts.validateOpenOutlookFields(apiLike, {
+    extraDomains: _officerEmailExtraDomainsFromSettings(),
+  });
   return ov.ok ? 'ready_for_outlook' : 'draft';
 }
 
@@ -8275,8 +8297,15 @@ ipcMain.handle('officer-email-drafts-mark-sent-manually', (_, draftId) => {
 ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   if (!draftId) return { ok: false, errors: ['draftId required'] };
   const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
-  if (!row || row.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
-  const ov = officerEmailDrafts.validateOpenOutlookFields(row);
+  if (!row) return { ok: false, errors: ['Draft not found'] };
+  if (row.status === 'deleted') return { ok: false, errors: ['This draft has been deleted and cannot be opened in Outlook.'] };
+  if (row.status === 'cancelled') return { ok: false, errors: ['This draft has been cancelled and cannot be opened in Outlook.'] };
+  if (!officerEmailDrafts.canTransitionStatus(row.status, 'opened_in_outlook') && row.status !== 'opened_in_outlook') {
+    return { ok: false, errors: ['Invalid status transition'] };
+  }
+  const ov = officerEmailDrafts.validateOpenOutlookFields(row, {
+    extraDomains: _officerEmailExtraDomainsFromSettings(),
+  });
   if (!ov.ok) return { ok: false, errors: ov.errors };
   const url = officerEmailDrafts.buildOutlookComposeUrl({
     toEmail: row.to_email,
@@ -8296,7 +8325,7 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   const now = new Date().toISOString();
   if (row.status === 'opened_in_outlook') {
     dbRun(`UPDATE officer_email_drafts SET opened_in_outlook_at=?, updated_at=? WHERE id=?`, [now, now, String(draftId)]);
-  } else if (officerEmailDrafts.canTransitionStatus(row.status, 'opened_in_outlook')) {
+  } else {
     dbRun(
       `UPDATE officer_email_drafts SET status='opened_in_outlook', opened_in_outlook_at=?, updated_at=? WHERE id=?`,
       [now, now, String(draftId)]

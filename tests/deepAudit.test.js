@@ -81,10 +81,9 @@ describe('2 · Electron Security Config', () => {
     assert.ok(!indexSrc.toLowerCase().includes('<webview'), '<webview> tag found in index.html');
   });
 
-  it('open-external handler validates URL protocol', () => {
-    const hasHttps = mainSrc.includes("startsWith('https://')") || mainSrc.includes('startsWith("https://")');
-    const hasHttp = mainSrc.includes("startsWith('http://')") || mainSrc.includes('startsWith("http://")');
-    assert.ok(hasHttps || hasHttp, 'open-external handler missing http/https validation');
+  it('open-external handler validates URL via allowlist', () => {
+    const hasSafe = mainSrc.includes('isSafeExternalUrl');
+    assert.ok(hasSafe, 'open-external handler must use isSafeExternalUrl');
   });
 });
 
