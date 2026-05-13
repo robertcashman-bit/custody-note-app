@@ -58,6 +58,41 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --win --publish always
 
+      - name: Publish release after updater assets are ready
+        working-directory: custody-note-app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          $requiredAssets = @(
+            "Custody-Note-Setup-$version.exe",
+            "Custody-Note-Setup-$version.exe.blockmap",
+            "latest.yml"
+          )
+
+          for ($attempt = 1; $attempt -le 20; $attempt++) {
+            $release = gh release view $tag --repo $env:GITHUB_REPOSITORY --json isDraft,assets | ConvertFrom-Json
+            $assetNames = @($release.assets | ForEach-Object { $_.name })
+            $missingAssets = @($requiredAssets | Where-Object { $assetNames -notcontains $_ })
+
+            if ($missingAssets.Count -eq 0) {
+              if ($release.isDraft) {
+                gh release edit $tag --repo $env:GITHUB_REPOSITORY --draft=false
+                Write-Host "Published $tag after updater assets were uploaded."
+              } else {
+                Write-Host "$tag is already published and updater assets are present."
+              }
+              exit 0
+            }
+
+            Write-Host "Waiting for updater assets on $tag (attempt $attempt): $($missingAssets -join ', ')"
+            Start-Sleep -Seconds 5
+          }
+
+          throw "Timed out waiting for updater assets on $tag."
+
   # ─── Job 2: Sync website changelog and deploy to Vercel ──────────────────────
   # Optional — continue-on-error means a missing GH_PAT/VERCEL_TOKEN won't fail
   # the overall workflow. The release job above always runs independently.

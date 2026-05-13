@@ -216,6 +216,7 @@ contextBridge.exposeInMainWorld('api', {
     markOpenedInOutlook: (id) => ipcRenderer.invoke('officer-email-drafts-mark-opened', id),
     markSentManually: (id) => ipcRenderer.invoke('officer-email-drafts-mark-sent-manually', id),
     openOutlookDraft: (id) => ipcRenderer.invoke('officer-email-drafts-open-outlook', id),
+    openOneOffOutlook: (fields) => ipcRenderer.invoke('officer-email-drafts-open-one-off-outlook', fields),
     copyText: (text) => ipcRenderer.invoke('officer-email-drafts-copy', text),
     buildPreview: (fields) => ipcRenderer.invoke('officer-email-drafts-preview', fields),
   },

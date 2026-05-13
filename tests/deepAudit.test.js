@@ -34,6 +34,14 @@ describe('1 · Packaging & Config Consistency', () => {
     assert.ok(typeof pkg.build.publish.repo === 'string' && pkg.build.publish.repo.length > 0);
   });
 
+  it('GitHub releases stay draft until updater assets are uploaded', () => {
+    assert.equal(pkg.build.publish.releaseType, 'draft');
+    const workflowSrc = readFile('.github/workflows/release-publish.yml');
+    assert.ok(workflowSrc.includes('Publish release after updater assets are ready'));
+    assert.ok(workflowSrc.includes('latest.yml'));
+    assert.ok(workflowSrc.includes('gh release edit $tag'));
+  });
+
   it('build.nsis config exists', () => {
     assert.ok(pkg.build.nsis, 'nsis block missing from build config');
   });

@@ -8347,6 +8347,30 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
 });
 
+ipcMain.handle('officer-email-drafts-open-one-off-outlook', async (_, fields) => {
+  const n = officerEmailDrafts.normaliseOfficerEmailDraft(fields || {});
+  const ov = officerEmailDrafts.validateOpenOutlookFields(n, {
+    extraDomains: _officerEmailExtraDomainsFromSettings(),
+  });
+  if (!ov.ok) return { ok: false, errors: ov.errors };
+  const url = officerEmailDrafts.buildOutlookComposeUrl({
+    toEmail: n.toEmail,
+    subject: n.subject,
+    body: n.body,
+  });
+  if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
+    return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
+  }
+  try {
+    await shell.openExternal(url);
+  } catch (err) {
+    const msg = (err && err.message) ? err.message : String(err);
+    console.warn('[officer-email-drafts-open-one-off-outlook] failed');
+    return { ok: false, errors: [msg || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
+  }
+  return { ok: true };
+});
+
 ipcMain.handle('officer-email-drafts-copy', (_, text) => {
   try {
     clipboard.writeText(text != null ? String(text) : '');
