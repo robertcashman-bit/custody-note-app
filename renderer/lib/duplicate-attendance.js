@@ -346,7 +346,7 @@
       'invoiceNotes',
     ],
 
-    /* Q. Officer email log */
+    /* Q. Legacy officer-email JSON flags (no longer used; drafts live in officer_email_drafts) */
     email: [
       'officerEmailStatus',
       'lastOfficerEmailSentDate',

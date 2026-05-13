@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.8.0",
+      "version": "1.9.0",
       "date": "2026-05-11",
       "latest": true,
+      "changes": [
+        "Officer Emails rebuilt to match product spec: right-hand panel in the custody note (#form-context-panel), nine fixed templates, no forbidden fields (rank/DSCC/custody ref removed from this flow)",
+        "New encrypted table officer_email_drafts with full draft lifecycle; main-process IPC officer-email-drafts-* (list/get/create/update/duplicate/cancel/delete/mark opened/mark sent/open Outlook/copy/preview)",
+        "Outlook Web compose only — URL built in main; renderer calls openOutlookDraft(id); user sends manually. Removed v1.8.0 auto-launch stack (lib/outlookLaunch.js, officer-emails:* IPC, email-launch helpers)",
+        "Deleted legacy modules and tests: renderer/officerEmails.js, officerEmailTemplates*, email-templates.js, email-modal.js, email-pending-globals.js, data/email-templates.json, docs/officer-email-improvements.md, smoke/send-officer scripts, and the old officer-email / quick-email / outlookLaunch test files",
+        "Stripped list Email OIC + OIC badge, billing Officer Email Copy row, Add-Ons officer-templates settings card, home cards, ~800 lines of obsolete CSS (.email-oic-*, .quick-email-*, .qe-*, old .officer-email-page)",
+        "Added lib/officerEmailDrafts.js (pure rules) + six node:test unit files under tests/officerEmailDrafts.*"
+      ]
+    },
+    {
+      "version": "1.8.0",
+      "date": "2026-05-11",
+      "latest": false,
       "changes": [
         "Officer Emails relaunched with reliable Outlook launch: choose how the Send button opens — Outlook desktop (.eml draft), Outlook on the web (M365 deeplink), default mail app (mailto:), or copy-only",
         "Settings > Email shows what auto-detect found on this machine (Outlook desktop install, default mailto handler) and includes a Re-detect button + diagnostics log",

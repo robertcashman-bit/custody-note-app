@@ -1,6 +1,6 @@
 {
   "name": "custody-note",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "lastUpdated": "2026-05-11",
   "buildTime": "2026-05-11T22:06:14.985Z",
   "description": "Custody Note – LAA-compliant custody note app",
@@ -29,8 +29,7 @@
     "prepare-trial": "node scripts/prepare-trial.js",
     "capture-screenshots": "node scripts/capture-screenshots.js",
     "security:audit": "node scripts/security-audit.mjs",
-    "security:scan": "node scripts/security-audit.mjs",
-    "email:sample-officer": "node scripts/send-officer-sample-email.mjs"
+    "security:scan": "node scripts/security-audit.mjs"
   },
   "author": "",
   "license": "ISC",
