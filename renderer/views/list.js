@@ -44,6 +44,7 @@ function refreshList() {
 
   window.api.attendanceSearch(searchParams).then(function(result) {
     var total = (result && result.total) || 0;
+    var rows = (result && Array.isArray(result.rows)) ? result.rows : [];
     if (result && result.page) listPage = result.page;
 
     ul.innerHTML = '';

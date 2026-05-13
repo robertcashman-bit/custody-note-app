@@ -1,4 +1,4 @@
-/* Officer Emails — standalone section below the form (v1.9). Depends on window.api.officerEmails, formData, currentAttendanceId, showToast, showConfirm. */
+/* Officer Emails — right-hand context panel (v1.9). Depends on window.api.officerEmails, formData, currentAttendanceId, showToast, showConfirm, showChoice. */
 (function (global) {
   'use strict';
 
@@ -56,6 +56,7 @@
   function buildShell() {
     if (!host) return;
     host.innerHTML =
+      '<div class="form-panel-card-label">Officer Emails</div>' +
       '<p id="oep-locked" class="officer-email-panel-hint hidden">Save the custody note before creating email drafts.</p>' +
       '<div id="oep-main" class="officer-email-panel-inner">' +
       '<div class="officer-email-form">' +
@@ -162,16 +163,35 @@
       if (sel) sel.dataset.oepLast = next;
       return;
     }
-    if (typeof showConfirm !== 'function') {
-      generateFromTemplate(false);
-      if (sel) sel.dataset.oepLast = next;
+    if (typeof window.showChoice !== 'function') {
+      if (typeof showConfirm !== 'function') {
+        generateFromTemplate(false);
+        if (sel) sel.dataset.oepLast = next;
+        return;
+      }
+      showConfirm(
+        'Changing template may overwrite your edited subject and body. Continue?',
+        'Change template'
+      ).then(function (ok) {
+        if (!ok) {
+          if (sel) sel.value = prev || 'disclosure_confirm_attendance';
+          syncBailVisibility();
+          return;
+        }
+        generateFromTemplate(true);
+        if (sel) sel.dataset.oepLast = sel.value;
+      });
       return;
     }
-    showConfirm(
-      'Changing template will regenerate the subject and body and discard your manual edits to those fields.\n\nCancel keeps your current email text and restores the previous template.',
-      'Change template'
-    ).then(function (ok) {
-      if (!ok) {
+    window.showChoice(
+      'Changing template may overwrite your edited subject and body.',
+      'Change template',
+      [
+        { id: 'keep', label: 'Keep current draft', variant: 'primary' },
+        { id: 'apply', label: 'Apply new template', variant: 'secondary' },
+      ]
+    ).then(function (choice) {
+      if (choice !== 'apply') {
         if (sel) sel.value = prev || 'disclosure_confirm_attendance';
         syncBailVisibility();
         return;
@@ -276,44 +296,67 @@
     });
   }
 
+  function runCancelDraft(id) {
+    window.api.officerEmails.cancelDraft(id).then(function (res) {
+      if (res && res.ok) {
+        if (typeof showToast === 'function') showToast('Draft cancelled', 'info');
+        if (selectedDraftId === id) newDraft();
+        loadDrafts();
+      }
+    });
+  }
+
   function cancelDraft() {
     if (!selectedDraftId) return;
+    if (typeof window.showChoice === 'function') {
+      window.showChoice('Cancel this draft?', 'Cancel draft', [
+        { id: 'keep', label: 'Keep Draft', variant: 'primary' },
+        { id: 'cancel', label: 'Cancel Draft', variant: 'danger' },
+      ]).then(function (choice) {
+        if (choice !== 'cancel') return;
+        runCancelDraft(selectedDraftId);
+      });
+      return;
+    }
     if (typeof showConfirm !== 'function') return;
     showConfirm('Cancel this draft?', 'Cancel draft').then(function (ok) {
       if (!ok) return;
-      window.api.officerEmails.cancelDraft(selectedDraftId).then(function (res) {
-        if (res && res.ok) {
-          if (typeof showToast === 'function') showToast('Draft cancelled', 'info');
-          newDraft();
-          loadDrafts();
-        }
-      });
+      runCancelDraft(selectedDraftId);
+    });
+  }
+
+  function runDeleteDraft(id) {
+    window.api.officerEmails.deleteDraft(id).then(function (res) {
+      if (res && res.ok) {
+        if (typeof showToast === 'function') showToast('Draft deleted', 'info');
+        if (selectedDraftId === id) newDraft();
+        loadDrafts();
+      }
     });
   }
 
   function deleteDraft() {
     if (!selectedDraftId) return;
+    if (typeof window.showChoice === 'function') {
+      window.showChoice('Are you sure you want to delete this draft?', 'Delete draft', [
+        { id: 'abort', label: 'Cancel', variant: 'secondary' },
+        { id: 'del', label: 'Delete Draft', variant: 'danger' },
+      ]).then(function (choice) {
+        if (choice !== 'del') return;
+        runDeleteDraft(selectedDraftId);
+      });
+      return;
+    }
     if (typeof showConfirm !== 'function') return;
     showConfirm('Are you sure you want to delete this draft?', 'Delete draft').then(function (ok) {
       if (!ok) return;
-      window.api.officerEmails.deleteDraft(selectedDraftId).then(function (res) {
-        if (res && res.ok) {
-          if (typeof showToast === 'function') showToast('Draft deleted', 'info');
-          newDraft();
-          loadDrafts();
-        }
-      });
+      runDeleteDraft(selectedDraftId);
     });
   }
 
   function markSentClicked() {
     if (!selectedDraftId) { if (typeof showToast === 'function') showToast('Save the draft first.', 'error'); return; }
-    if (typeof showConfirm !== 'function') return;
-    showConfirm(
-      'Only mark this as sent if you have sent it manually in Outlook Web.',
-      'Mark as sent'
-    ).then(function (ok) {
-      if (!ok) return;
+    function doMark() {
       window.api.officerEmails.markSentManually(selectedDraftId).then(function (res) {
         if (res && res.ok) {
           if (typeof showToast === 'function') showToast('Marked as sent manually', 'success');
@@ -322,6 +365,28 @@
           showToast((res && res.errors && res.errors[0]) || 'Invalid status', 'error');
         }
       });
+    }
+    if (typeof window.showChoice === 'function') {
+      window.showChoice(
+        'Only mark this as sent if you have sent it manually in Outlook Web.',
+        'Mark as sent',
+        [
+          { id: 'keep', label: 'Keep as-is', variant: 'secondary' },
+          { id: 'sent', label: 'Mark as sent manually', variant: 'primary' },
+        ]
+      ).then(function (choice) {
+        if (choice !== 'sent') return;
+        doMark();
+      });
+      return;
+    }
+    if (typeof showConfirm !== 'function') return;
+    showConfirm(
+      'Only mark this as sent if you have sent it manually in Outlook Web.',
+      'Mark as sent'
+    ).then(function (ok) {
+      if (!ok) return;
+      doMark();
     });
   }
 
@@ -344,9 +409,7 @@
       'You are about to open this email in Outlook Web.\n\nTo:\n' + to + '\n\nSubject:\n' + sub + '\n\n' +
       (warnings.length ? warnings.join('\n\n') + '\n\n' : '') +
       'This app will not send the email. You must review and send it manually in Outlook Web.';
-    if (typeof showConfirm !== 'function') return;
-    showConfirm(msg, 'Open Outlook Web').then(function (ok) {
-      if (!ok) return;
+    function doOpen() {
       window.api.officerEmails.openOutlookDraft(selectedDraftId).then(function (res) {
         if (!res || !res.ok) {
           if (typeof showToast === 'function') {
@@ -357,12 +420,41 @@
         if (typeof showToast === 'function') showToast('Opened in browser — complete send in Outlook', 'success', 5000);
         loadDrafts();
       });
+    }
+    if (typeof window.showChoice === 'function') {
+      window.showChoice(msg, 'Open Outlook Web', [
+        { id: 'abort', label: 'Cancel', variant: 'secondary' },
+        { id: 'open', label: 'Open Outlook Web', variant: 'primary' },
+      ]).then(function (choice) {
+        if (choice !== 'open') return;
+        doOpen();
+      });
+      return;
+    }
+    if (typeof showConfirm !== 'function') return;
+    showConfirm(msg, 'Open Outlook Web').then(function (ok) {
+      if (!ok) return;
+      doOpen();
     });
+  }
+
+  function feeEarnerEmailDomain() {
+    try {
+      var em = (window._appSettingsCache && window._appSettingsCache.email) || '';
+      em = String(em).trim();
+      var at = em.lastIndexOf('@');
+      if (at < 1) return '';
+      return em.slice(at + 1).toLowerCase();
+    } catch (_) {
+      return '';
+    }
   }
 
   function isProfessionalDomain(email) {
     var d = (email.split('@')[1] || '').toLowerCase();
     if (!d) return false;
+    var firmDom = feeEarnerEmailDomain();
+    if (firmDom && (d === firmDom || d.endsWith('.' + firmDom))) return true;
     var roots = ['police.uk', 'met.police.uk', 'kent.police.uk', 'cps.gov.uk', 'justice.gov.uk', 'gov.uk', 'judiciary.uk', 'mod.gov.uk', 'nhs.net', 'nhs.uk'];
     for (var i = 0; i < roots.length; i++) {
       if (d === roots[i] || d.endsWith('.' + roots[i])) return true;
@@ -426,7 +518,7 @@
       rows.forEach(function (d) {
         if (d.status === 'deleted') return;
         var card = document.createElement('div');
-        card.className = 'officer-email-draft-card';
+        card.className = 'officer-email-draft-card' + (d.status === 'cancelled' ? ' officer-email-draft-card--muted' : '');
         var st = STATUS_LABELS[d.status] || d.status;
         var updated = d.updatedAt ? String(d.updatedAt).slice(0, 16).replace('T', ' ') : '';
         var tplLabel = d.templateType;
@@ -438,11 +530,13 @@
         }
         card.innerHTML =
           '<div class="officer-email-draft-card-title">' + esc(tplLabel) + '</div>' +
+          '<div class="officer-email-draft-to">' + esc(d.toEmail || '—') + '</div>' +
           '<div class="officer-email-draft-meta">' + esc(st) + ' · ' + esc(updated) + '</div>' +
           '<div class="officer-email-draft-sub">' + esc(d.subject || '—') + '</div>' +
           '<div class="officer-email-draft-actions">' +
           '<button type="button" class="btn-small" data-act="load">Load</button>' +
           '<button type="button" class="btn-small" data-act="dup" data-id="' + esc(d.id) + '">Duplicate</button>' +
+          '<button type="button" class="btn-small" data-act="del" data-id="' + esc(d.id) + '">Delete</button>' +
           '</div>';
         card.querySelector('[data-act="load"]').addEventListener('click', function () {
           loadDraftIntoForm(d);
@@ -455,6 +549,26 @@
               loadDrafts();
             }
           });
+        });
+        card.querySelector('[data-act="del"]').addEventListener('click', function () {
+          var did = d.id;
+          function go() {
+            runDeleteDraft(did);
+          }
+          if (typeof window.showChoice === 'function') {
+            window.showChoice('Are you sure you want to delete this draft?', 'Delete draft', [
+              { id: 'abort', label: 'Cancel', variant: 'secondary' },
+              { id: 'del', label: 'Delete Draft', variant: 'danger' },
+            ]).then(function (choice) {
+              if (choice === 'del') go();
+            });
+          } else if (typeof showConfirm === 'function') {
+            showConfirm('Are you sure you want to delete this draft?', 'Delete draft').then(function (ok) {
+              if (ok) go();
+            });
+          } else {
+            go();
+          }
         });
         els.drafts.appendChild(card);
       });

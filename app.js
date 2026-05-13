@@ -6572,17 +6572,37 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  // The bottom-bar finish pill is permanently retired (was a morphing
-  // 4-state button; replaced by the explicit, always-visible primary action
-  // button in the form header — see updateBillingPanelHeaderBtn).
-  // Function is kept (no-op) because other code calls it.
   function updateBottomBarFinishPill() {
     var pill = document.getElementById('bottom-bar-finish-pill');
-    if (pill) {
-      pill.style.display = 'none';
-      pill.removeAttribute('data-pill-action');
-    }
     updateBillingPanelHeaderBtn();
+    if (!pill) return;
+    if (!currentAttendanceId || currentRecordArchived) {
+      pill.style.display = 'none';
+      pill.setAttribute('aria-hidden', 'true');
+      pill.removeAttribute('data-pill-action');
+      return;
+    }
+    var label = 'Finalise';
+    var action = 'finalise';
+    var cls = 'bottom-btn finish-pill state-draft';
+    var titleText = 'Finalise the attendance note';
+    if (currentRecordStatus === 'completed') {
+      label = 'Archive matter';
+      action = 'archive';
+      cls = 'bottom-btn finish-pill state-complete';
+      titleText = 'Archive this completed matter';
+    } else if (currentRecordStatus === 'finalised') {
+      label = 'Finish matter';
+      action = 'finishMatter';
+      cls = 'bottom-btn finish-pill state-finalised';
+      titleText = 'Open Finish matter';
+    }
+    pill.style.display = '';
+    pill.removeAttribute('aria-hidden');
+    pill.textContent = label;
+    pill.className = cls;
+    pill.dataset.pillAction = action;
+    pill.title = titleText;
   }
 
   // Header primary-action button (#billing-panel-btn) — the SINGLE entry
