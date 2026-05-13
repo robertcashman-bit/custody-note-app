@@ -4894,10 +4894,23 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function getQuickFileSettingsPayload() {
+    var accEl = document.getElementById('setting-quickfile-account');
+    var keyEl = document.getElementById('setting-quickfile-apikey');
+    var appEl = document.getElementById('setting-quickfile-appid');
+    var acc = accEl ? String(accEl.value || '').trim() : '';
+    var key = keyEl ? String(keyEl.value || '').trim() : '';
+    var app = appEl ? String(appEl.value || '').trim() : '';
+    /** Before Settings is opened, inputs can still be empty while `_appSettingsCache` is already filled from startup `getSettings` — treat as configured for billing/workflow (same as main process DB). */
+    if (!acc && !key && !app) {
+      var c = window._appSettingsCache || {};
+      acc = String(c.quickfileAccountNumber || '').trim();
+      key = String(c.quickfileApiKey || '').trim();
+      app = String(c.quickfileAppId || '').trim();
+    }
     return {
-      quickfileAccountNumber: document.getElementById('setting-quickfile-account')?.value?.trim() || '',
-      quickfileApiKey: document.getElementById('setting-quickfile-apikey')?.value?.trim() || '',
-      quickfileAppId: document.getElementById('setting-quickfile-appid')?.value?.trim() || '',
+      quickfileAccountNumber: acc,
+      quickfileApiKey: key,
+      quickfileAppId: app,
     };
   }
 
@@ -15028,6 +15041,15 @@ pdfAuditFooterHtml(d, settings) +
 
     window.api.getSettings().then(function(s) {
       window._appSettingsCache = s || {};
+      s = s || {};
+      (function hydrateQuickFileSettingsInputs() {
+        var qfAcc = document.getElementById('setting-quickfile-account');
+        if (qfAcc) qfAcc.value = s.quickfileAccountNumber || '';
+        var qfKey = document.getElementById('setting-quickfile-apikey');
+        if (qfKey) qfKey.value = s.quickfileApiKey || '';
+        var qfApp = document.getElementById('setting-quickfile-appid');
+        if (qfApp) qfApp.value = s.quickfileAppId || '';
+      })();
       applyFeeEarnerSigModeUI(s.feeEarnerSigMode || 'draw');
       updateFeeEarnerSigPreview(s.feeEarnerSigMaster || '');
       window._billingDefaults = {
