@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.1",
+      "date": "2026-05-13",
+      "latest": true,
+      "changes": [
+        "Officer Emails: moved from the right-hand context column into its own full-width standalone section directly below the custody note form, with its own heading and intro line",
+        "same templates, drafts and Outlook Web flow as v1.9.0"
+      ]
+    },
+    {
       "version": "1.9.0",
       "date": "2026-05-11",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Officer Emails rebuilt to match product spec: right-hand panel in the custody note (#form-context-panel), nine fixed templates, no forbidden fields (rank/DSCC/custody ref removed from this flow)",
         "New encrypted table officer_email_drafts with full draft lifecycle; main-process IPC officer-email-drafts-* (list/get/create/update/duplicate/cancel/delete/mark opened/mark sent/open Outlook/copy/preview)",
