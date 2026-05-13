@@ -69,6 +69,7 @@ const { createBackupScheduler } = require('./main/backupScheduler');
 const { hardenWindow, hardenSession, isSafeExternalUrl } = require('./main/windowHardening');
 const _securityLog = require('./main/securityLog');
 const _safeLog = require('./lib/safeLog');
+const officerEmailDrafts = require('./lib/officerEmailDrafts');
 
 let mainWindow;
 let db;
@@ -1329,6 +1330,36 @@ async function initDb() {
       status TEXT DEFAULT 'draft'
     );
   `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS officer_email_drafts (
+      id TEXT PRIMARY KEY,
+      custody_note_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      template_type TEXT NOT NULL,
+      to_email TEXT DEFAULT '',
+      recipient_name TEXT DEFAULT '',
+      client_name TEXT DEFAULT '',
+      police_station TEXT DEFAULT '',
+      offence TEXT DEFAULT '',
+      attendance_date TEXT DEFAULT '',
+      extra_note TEXT DEFAULT '',
+      bail_return_date TEXT DEFAULT '',
+      bail_conditions TEXT DEFAULT '',
+      user_email_address TEXT DEFAULT '',
+      subject TEXT DEFAULT '',
+      body TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      opened_in_outlook_at TEXT,
+      sent_manually_confirmed_at TEXT,
+      cancelled_at TEXT,
+      deleted_at TEXT
+    );
+  `);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_custody_note_id ON officer_email_drafts (custody_note_id);`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_status ON officer_email_drafts (status);`);
+  db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_updated_at ON officer_email_drafts (updated_at);`);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS police_stations (
@@ -8020,243 +8051,264 @@ ipcMain.handle('attendance-invoice-status', (_, attendanceId) => {
   return row || {};
 });
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   v1.8.0 — Reliable Outlook launch (Officer Emails / Quick Email)
-
-   Replaces the historically broken auto-launch path (v1.6.10–v1.6.16) with a
-   user-selectable send method whose handler is chosen explicitly. The four
-   methods + the rationale for each are documented in lib/outlookLaunch.js.
-
-   IPCs:
-     - officer-emails:detect-mail-client → registry-based detection
-     - officer-emails:send                → dispatch to chosen launcher
-     - officer-emails:show-launch-log     → opens the diagnostic log
-   ═══════════════════════════════════════════════════════════════════════════ */
-const _outlookLaunch = require('./lib/outlookLaunch');
-
-function _outlookGetUserDataPath() {
-  try {
-    return app.getPath('userData');
-  } catch (_) {
-    return getFallbackAppDataRoot();
-  }
-}
-
-function _outlookGetLogPath() {
-  return path.join(_outlookGetUserDataPath(), 'email-launch.log');
-}
-
-function _outlookGetEmlOutputDir() {
-  const dir = path.join(_outlookGetUserDataPath(), 'outlook-drafts');
-  try { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); } catch (_) {}
-  return dir;
-}
-
-/**
- * Append one PII-safe line to email-launch.log. Bounded write; never throws.
- */
-function _outlookAppendLog(entry) {
-  try {
-    const line = _outlookLaunch.formatLogLine(entry);
-    fs.appendFileSync(_outlookGetLogPath(), line + '\r\n', 'utf8');
-  } catch (_) { /* logging is best-effort */ }
-}
-
-/**
- * Detect Outlook desktop install + default mailto handler via the Windows
- * registry (read-only `reg query`, no native deps). Cached per process.
- */
-let _outlookDetectionCache = null;
-function _outlookDetectMailClient() {
-  if (_outlookDetectionCache) return _outlookDetectionCache;
-  const result = {
-    platform: process.platform,
-    outlookDesktopInstalled: false,
-    defaultMailtoApp: null,
-    detectedAt: new Date().toISOString(),
+function _officerDraftRowToApi(r) {
+  if (!r) return null;
+  return {
+    id: r.id,
+    custodyNoteId: r.custody_note_id,
+    status: r.status,
+    templateType: r.template_type,
+    toEmail: r.to_email,
+    recipientName: r.recipient_name,
+    clientName: r.client_name,
+    policeStation: r.police_station,
+    offence: r.offence,
+    attendanceDate: r.attendance_date,
+    extraNote: r.extra_note,
+    bailReturnDate: r.bail_return_date,
+    bailConditions: r.bail_conditions,
+    userEmailAddress: r.user_email_address,
+    subject: r.subject,
+    body: r.body,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    openedInOutlookAt: r.opened_in_outlook_at,
+    sentManuallyConfirmedAt: r.sent_manually_confirmed_at,
+    cancelledAt: r.cancelled_at,
+    deletedAt: r.deleted_at,
   };
-  if (process.platform !== 'win32') {
-    _outlookDetectionCache = result;
-    return result;
-  }
-  const { execFileSync } = require('child_process');
-  /* Helper: run reg.exe quietly, return stdout or null on any error. */
-  function regQuery(args) {
-    try {
-      const out = execFileSync('reg.exe', args, {
-        encoding: 'utf8',
-        windowsHide: true,
-        timeout: 3000,
-      });
-      return out;
-    } catch (_) { return null; }
-  }
-  /* Outlook desktop: any of these registry locations indicates an install.
-     We use multiple probes because Outlook 2016/2019/365 use different keys
-     and the "new" Outlook (Microsoft.Outlook) registers differently again. */
-  const outlookProbes = [
-    ['query', 'HKLM\\SOFTWARE\\Clients\\Mail\\Microsoft Outlook', '/ve'],
-    ['query', 'HKCR\\Outlook.Application', '/ve'],
-    ['query', 'HKCR\\Outlook.File.msg', '/ve'],
-  ];
-  for (const probe of outlookProbes) {
-    if (regQuery(probe)) { result.outlookDesktopInstalled = true; break; }
-  }
-  /* Default mailto handler ProgId. The user's explicit UserChoice trumps
-     the system default. Reading just the ProgId is enough — we don't need
-     to resolve the actual exe. */
-  const userChoice = regQuery([
-    'query',
-    'HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\mailto\\UserChoice',
-    '/v', 'ProgId',
-  ]);
-  if (userChoice) {
-    const m = userChoice.match(/ProgId\s+REG_SZ\s+(.+)\r?\n/);
-    if (m) result.defaultMailtoApp = m[1].trim();
-  }
-  if (!result.defaultMailtoApp) {
-    const sysDefault = regQuery([
-      'query',
-      'HKLM\\SOFTWARE\\Classes\\mailto\\shell\\open\\command',
-      '/ve',
-    ]);
-    if (sysDefault) {
-      const m = sysDefault.match(/REG_(?:EXPAND_)?SZ\s+(.+)\r?\n/);
-      if (m) result.defaultMailtoApp = m[1].trim().slice(0, 200);
-    }
-  }
-  result.recommendedMethod = _outlookLaunch.recommendSendMethod(result);
-  _outlookDetectionCache = result;
-  return result;
 }
 
-ipcMain.handle('officer-emails:detect-mail-client', () => {
-  /* Re-detect on every call — Outlook install / mailto association can change
-     during a session. Cache only within ~5s to avoid registry thrash on rapid
-     polls. */
-  const now = Date.now();
-  if (_outlookDetectionCache && _outlookDetectionCache._cachedAt && (now - _outlookDetectionCache._cachedAt) < 5000) {
-    return _outlookDetectionCache;
-  }
-  _outlookDetectionCache = null;
-  const r = _outlookDetectMailClient();
-  r._cachedAt = now;
-  return r;
+function _officerEmailAudit(custodyNoteId, action) {
+  const idNum = parseInt(String(custodyNoteId), 10);
+  const aid = Number.isFinite(idNum) ? idNum : null;
+  const now = new Date().toISOString();
+  try {
+    db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [aid, action, now]);
+  } catch (_) { /* best-effort */ }
+}
+
+ipcMain.handle('officer-email-drafts-list', (_, custodyNoteId) => {
+  if (custodyNoteId == null || custodyNoteId === '') return [];
+  const cid = String(custodyNoteId);
+  const rows = dbAll(
+    `SELECT * FROM officer_email_drafts WHERE custody_note_id = ? AND status != 'deleted' ORDER BY updated_at DESC`,
+    [cid]
+  );
+  return rows.map(_officerDraftRowToApi);
 });
 
-/**
- * Dispatch a send request to the chosen launcher. NEVER chains across methods
- * on failure (chaining was the v1.6.10–v1.6.16 root cause of "Outlook opens,
- * then Edge opens, then nothing"). On launch failure, copies subject + body
- * to the system clipboard so the user can paste manually.
- *
- * Payload: { method: 'outlook-desktop'|'outlook-web'|'default-mailto'|'copy-only',
- *            to, subject, body }
- *
- * Returns: { ok: boolean, method, error?: string, fellbackToClipboard?: boolean }
- */
-ipcMain.handle('officer-emails:send', async (_, payload) => {
-  const start = Date.now();
-  payload = payload || {};
-  const method = String(payload.method || '').trim();
-  const validation = _outlookLaunch.validatePayload(payload);
-  if (!validation.ok) {
-    _outlookAppendLog({
-      method: method || '?',
-      ok: false,
-      error: 'invalid-payload: ' + validation.error,
-      redacted: _outlookLaunch.redactForLog(payload),
-      durationMs: Date.now() - start,
-    });
-    return { ok: false, method, error: validation.error };
-  }
-  if (!_outlookLaunch.SEND_METHODS.includes(method)) {
-    _outlookAppendLog({
-      method,
-      ok: false,
-      error: 'unknown-method',
-      redacted: _outlookLaunch.redactForLog(payload),
-      durationMs: Date.now() - start,
-    });
-    return { ok: false, method, error: 'Unknown send method: ' + method };
-  }
+ipcMain.handle('officer-email-drafts-get', (_, draftId) => {
+  if (!draftId) return null;
+  const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
+  return _officerDraftRowToApi(row);
+});
 
-  /* Attempt the chosen launch; capture any failure message verbatim. */
-  let launchError = null;
-  try {
-    if (method === 'outlook-desktop') {
-      const eml = _outlookLaunch.buildEmlContent(payload);
-      const dir = _outlookGetEmlOutputDir();
-      const fname = 'draft-' + Date.now() + '-' + crypto.randomBytes(4).toString('hex') + '.eml';
-      const fpath = path.join(dir, fname);
-      fs.writeFileSync(fpath, eml, { encoding: 'utf8' });
-      /* shell.openPath returns '' on success, error string on failure. */
-      const openErr = await shell.openPath(fpath);
-      if (openErr) launchError = String(openErr);
-    } else if (method === 'outlook-web') {
-      const url = _outlookLaunch.buildOwaComposeUrl(payload);
-      /* isSafeExternalUrl is the existing allowlist guard from windowHardening. */
-      if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
-        launchError = 'URL rejected by safety guard';
-      } else {
-        await shell.openExternal(url);
-      }
-    } else if (method === 'default-mailto') {
-      const uri = _outlookLaunch.buildMailtoUri(payload);
-      /* shell.openExternal handles mailto: by handing it to the system
-         default mailto handler — no browser involved, no &-truncation. */
-      await shell.openExternal(uri);
-    } else if (method === 'copy-only') {
-      /* No launch — main process owns the clipboard write so we have one
-         consistent path (the renderer Copy buttons use a separate helper). */
-      const fullText = 'Subject: ' + String(payload.subject || '').trim()
-        + '\r\n\r\n' + String(payload.body || '');
-      clipboard.writeText(fullText);
-    }
-  } catch (err) {
-    launchError = (err && err.message) ? err.message : String(err);
-  }
+ipcMain.handle('officer-email-drafts-create', (_, payload) => {
+  const v = officerEmailDrafts.validateOfficerEmailDraft(payload || {}, { mode: 'create' });
+  if (!v.ok) return { ok: false, errors: v.errors };
+  const n = v.normalized;
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  dbRun(
+    `INSERT INTO officer_email_drafts (
+      id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, offence,
+      attendance_date, extra_note, bail_return_date, bail_conditions, user_email_address, subject, body,
+      created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      id, n.custodyNoteId, 'draft', n.templateType || 'disclosure_confirm_attendance',
+      n.toEmail, n.recipientName, n.clientName, n.policeStation, n.offence,
+      n.attendanceDate, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
+      n.subject, n.body, now, now,
+    ]
+  );
+  markDbDirty();
+  _officerEmailAudit(n.custodyNoteId, 'officer_email_draft_create');
+  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [id])) };
+});
 
-  if (launchError) {
-    /* Auto-fallback to clipboard so the user always has the email available
-       to paste into whatever surface they prefer. NEVER chain to another
-       launcher — that was the v1.6.10–v1.6.16 trap. */
-    let fellbackToClipboard = false;
-    try {
-      const fullText = 'Subject: ' + String(payload.subject || '').trim()
-        + '\r\n\r\n' + String(payload.body || '');
-      clipboard.writeText(fullText);
-      fellbackToClipboard = true;
-    } catch (_) {}
-    _outlookAppendLog({
-      method,
-      ok: false,
-      error: launchError,
-      redacted: _outlookLaunch.redactForLog(payload),
-      durationMs: Date.now() - start,
-    });
-    return { ok: false, method, error: launchError, fellbackToClipboard };
-  }
+ipcMain.handle('officer-email-drafts-update', (_, draftId, payload) => {
+  if (!draftId) return { ok: false, errors: ['draftId required'] };
+  const existing = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
+  if (!existing || existing.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
+  const cur = _officerDraftRowToApi(existing);
+  const merged = Object.assign({}, cur, payload || {});
+  merged.custodyNoteId = cur.custodyNoteId;
+  merged.status = cur.status;
+  const v = officerEmailDrafts.validateOfficerEmailDraft(merged, { mode: 'update' });
+  if (!v.ok) return { ok: false, errors: v.errors };
+  const n = v.normalized;
+  const now = new Date().toISOString();
+  dbRun(
+    `UPDATE officer_email_drafts SET
+      template_type=?, to_email=?, recipient_name=?, client_name=?, police_station=?, offence=?,
+      attendance_date=?, extra_note=?, bail_return_date=?, bail_conditions=?, user_email_address=?,
+      subject=?, body=?, updated_at=?
+     WHERE id=?`,
+    [
+      n.templateType, n.toEmail, n.recipientName, n.clientName, n.policeStation, n.offence,
+      n.attendanceDate, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
+      n.subject, n.body, now, String(draftId),
+    ]
+  );
+  markDbDirty();
+  _officerEmailAudit(existing.custody_note_id, 'officer_email_draft_update');
+  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
+});
 
-  _outlookAppendLog({
-    method,
-    ok: true,
-    redacted: _outlookLaunch.redactForLog(payload),
-    durationMs: Date.now() - start,
+ipcMain.handle('officer-email-drafts-duplicate', (_, draftId) => {
+  if (!draftId) return { ok: false, errors: ['draftId required'] };
+  const src = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
+  if (!src || src.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  dbRun(
+    `INSERT INTO officer_email_drafts (
+      id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, offence,
+      attendance_date, extra_note, bail_return_date, bail_conditions, user_email_address, subject, body,
+      created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      id, src.custody_note_id, 'draft', src.template_type,
+      src.to_email, src.recipient_name, src.client_name, src.police_station, src.offence,
+      src.attendance_date, src.extra_note, src.bail_return_date, src.bail_conditions, src.user_email_address,
+      src.subject, src.body, now, now,
+    ]
+  );
+  markDbDirty();
+  _officerEmailAudit(src.custody_note_id, 'officer_email_draft_duplicate');
+  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [id])) };
+});
+
+ipcMain.handle('officer-email-drafts-cancel', (_, draftId) => {
+  if (!draftId) return { ok: false, errors: ['draftId required'] };
+  const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
+  if (!row || row.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
+  if (!officerEmailDrafts.canTransitionStatus(row.status, 'cancelled')) {
+    return { ok: false, errors: ['Invalid status transition'] };
+  }
+  const now = new Date().toISOString();
+  dbRun(
+    `UPDATE officer_email_drafts SET status='cancelled', cancelled_at=?, updated_at=? WHERE id=?`,
+    [now, now, String(draftId)]
+  );
+  markDbDirty();
+  _officerEmailAudit(row.custody_note_id, 'officer_email_draft_cancel');
+  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
+});
+
+ipcMain.handle('officer-email-drafts-delete', (_, draftId) => {
+  if (!draftId) return { ok: false, errors: ['draftId required'] };
+  const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
+  if (!row || row.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
+  if (!officerEmailDrafts.canTransitionStatus(row.status, 'deleted')) {
+    return { ok: false, errors: ['Invalid status transition'] };
+  }
+  const now = new Date().toISOString();
+  dbRun(
+    `UPDATE officer_email_drafts SET status='deleted', deleted_at=?, updated_at=? WHERE id=?`,
+    [now, now, String(draftId)]
+  );
+  markDbDirty();
+  _officerEmailAudit(row.custody_note_id, 'officer_email_draft_delete');
+  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
+});
+
+ipcMain.handle('officer-email-drafts-mark-opened', (_, draftId) => {
+  if (!draftId) return { ok: false, errors: ['draftId required'] };
+  const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
+  if (!row || row.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
+  const now = new Date().toISOString();
+  if (row.status === 'opened_in_outlook') {
+    dbRun(`UPDATE officer_email_drafts SET opened_in_outlook_at=?, updated_at=? WHERE id=?`, [now, now, String(draftId)]);
+  } else if (officerEmailDrafts.canTransitionStatus(row.status, 'opened_in_outlook')) {
+    dbRun(
+      `UPDATE officer_email_drafts SET status='opened_in_outlook', opened_in_outlook_at=?, updated_at=? WHERE id=?`,
+      [now, now, String(draftId)]
+    );
+  } else {
+    return { ok: false, errors: ['Invalid status transition'] };
+  }
+  markDbDirty();
+  _officerEmailAudit(row.custody_note_id, 'officer_email_draft_mark_opened');
+  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
+});
+
+ipcMain.handle('officer-email-drafts-mark-sent-manually', (_, draftId) => {
+  if (!draftId) return { ok: false, errors: ['draftId required'] };
+  const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
+  if (!row || row.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
+  if (!officerEmailDrafts.canTransitionStatus(row.status, 'sent_manually')) {
+    return { ok: false, errors: ['Invalid status transition'] };
+  }
+  const now = new Date().toISOString();
+  dbRun(
+    `UPDATE officer_email_drafts SET status='sent_manually', sent_manually_confirmed_at=?, updated_at=? WHERE id=?`,
+    [now, now, String(draftId)]
+  );
+  markDbDirty();
+  _officerEmailAudit(row.custody_note_id, 'officer_email_draft_mark_sent');
+  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
+});
+
+ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
+  if (!draftId) return { ok: false, errors: ['draftId required'] };
+  const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
+  if (!row || row.status === 'deleted') return { ok: false, errors: ['Draft not found'] };
+  const ov = officerEmailDrafts.validateOpenOutlookFields(row);
+  if (!ov.ok) return { ok: false, errors: ov.errors };
+  const url = officerEmailDrafts.buildOutlookComposeUrl({
+    toEmail: row.to_email,
+    subject: row.subject,
+    body: row.body,
   });
-  return { ok: true, method };
+  if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
+    return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
+  }
+  try {
+    await shell.openExternal(url);
+  } catch (err) {
+    const msg = (err && err.message) ? err.message : String(err);
+    console.warn('[officer-email-drafts-open-outlook] failed');
+    return { ok: false, errors: [msg || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
+  }
+  const now = new Date().toISOString();
+  if (row.status === 'opened_in_outlook') {
+    dbRun(`UPDATE officer_email_drafts SET opened_in_outlook_at=?, updated_at=? WHERE id=?`, [now, now, String(draftId)]);
+  } else if (officerEmailDrafts.canTransitionStatus(row.status, 'opened_in_outlook')) {
+    dbRun(
+      `UPDATE officer_email_drafts SET status='opened_in_outlook', opened_in_outlook_at=?, updated_at=? WHERE id=?`,
+      [now, now, String(draftId)]
+    );
+  }
+  markDbDirty();
+  _officerEmailAudit(row.custody_note_id, 'officer_email_draft_open_outlook');
+  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
 });
 
-ipcMain.handle('officer-emails:show-launch-log', async () => {
-  const p = _outlookGetLogPath();
+ipcMain.handle('officer-email-drafts-copy', (_, text) => {
   try {
-    if (!fs.existsSync(p)) {
-      fs.writeFileSync(p, '# CustodyNote email launch log\r\n# PII-safe — only domain + lengths logged\r\n', 'utf8');
-    }
-    const err = await shell.openPath(p);
-    if (err) return { ok: false, error: String(err) };
-    return { ok: true, path: p };
+    clipboard.writeText(text != null ? String(text) : '');
+    return { ok: true };
   } catch (err) {
+    return { ok: false, error: (err && err.message) ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('officer-email-drafts-preview', (_, fields) => {
+  try {
+    const f = fields || {};
+    const subject = officerEmailDrafts.generateOfficerEmailSubject(f);
+    let body = officerEmailDrafts.generateOfficerEmailBody(f);
+    body = officerEmailDrafts.insertExtraNote(body, f.extraNote);
+    return {
+      ok: true,
+      subject: officerEmailDrafts.trimMax(subject, officerEmailDrafts.MAX_LENGTHS.subject),
+      body: officerEmailDrafts.trimMax(body, officerEmailDrafts.MAX_LENGTHS.body),
+    };
+  } catch (err) {
+    console.warn('[officer-email-drafts-preview] failed');
     return { ok: false, error: (err && err.message) ? err.message : String(err) };
   }
 });

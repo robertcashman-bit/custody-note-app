@@ -18,8 +18,7 @@ const { contextBridge, ipcRenderer } = require('electron');
    Inlining the helper here is the only stable fix for sandbox + asar:
        • No relative require, so esbuild has nothing to resolve.
        • lib/emailComposeDraft.js still exists for plain-Node consumers
-         (tests/emailComposeDraft.module.test.js,
-          tests/officerEmailsUserFlow.test.js) which DON'T have the
+         (tests/emailComposeDraft.module.test.js) which DON'T have the
          asar/sandbox limitation. tests/preloadInlinedHelperParity.test.js
          keeps the inlined block in lock-step with that file.
        • No behaviour change: the same export shape is re-exposed via
@@ -206,12 +205,19 @@ contextBridge.exposeInMainWorld('api', {
   loadReferenceData: () => ipcRenderer.invoke('load-reference-data'),
   saveCsv: (payload) => ipcRenderer.invoke('save-csv', payload),
   backupNow: () => ipcRenderer.invoke('backup-now'),
-  /* v1.8.0 - Reliable Outlook launch (Officer Emails / Quick Email).
-     See lib/outlookLaunch.js + main.js IPC handlers. */
   officerEmails: {
-    detectMailClient: () => ipcRenderer.invoke('officer-emails:detect-mail-client'),
-    send: (payload) => ipcRenderer.invoke('officer-emails:send', payload),
-    showLaunchLog: () => ipcRenderer.invoke('officer-emails:show-launch-log'),
+    listDrafts: (custodyNoteId) => ipcRenderer.invoke('officer-email-drafts-list', custodyNoteId),
+    getDraft: (id) => ipcRenderer.invoke('officer-email-drafts-get', id),
+    createDraft: (data) => ipcRenderer.invoke('officer-email-drafts-create', data),
+    updateDraft: (id, data) => ipcRenderer.invoke('officer-email-drafts-update', id, data),
+    duplicateDraft: (id) => ipcRenderer.invoke('officer-email-drafts-duplicate', id),
+    cancelDraft: (id) => ipcRenderer.invoke('officer-email-drafts-cancel', id),
+    deleteDraft: (id) => ipcRenderer.invoke('officer-email-drafts-delete', id),
+    markOpenedInOutlook: (id) => ipcRenderer.invoke('officer-email-drafts-mark-opened', id),
+    markSentManually: (id) => ipcRenderer.invoke('officer-email-drafts-mark-sent-manually', id),
+    openOutlookDraft: (id) => ipcRenderer.invoke('officer-email-drafts-open-outlook', id),
+    copyText: (text) => ipcRenderer.invoke('officer-email-drafts-copy', text),
+    buildPreview: (fields) => ipcRenderer.invoke('officer-email-drafts-preview', fields),
   },
   flushAndBackup: () => ipcRenderer.invoke('flush-and-backup'),
   backupStatus: () => ipcRenderer.invoke('backup-status'),
@@ -330,7 +336,7 @@ contextBridge.exposeInMainWorld('api', {
 
 contextBridge.exposeInMainWorld('custodyNoteBuildInfo', {
   isPackaged: process.env.CUSTODYNOTE_PACKAGED === '1',
-  /** Dev / unpackaged builds — show extra email diagnostics in Officer Emails. */
+  /** Dev / unpackaged builds — may expose extra diagnostics elsewhere. */
   isDevBuild: process.env.CUSTODYNOTE_PACKAGED !== '1' || process.env.NODE_ENV === 'development',
   /** Always true in this build because the email helper is now inlined in
       preload.js (no relative require to fail). Kept on the bridge so the
@@ -340,8 +346,7 @@ contextBridge.exposeInMainWorld('custodyNoteBuildInfo', {
   preloadModuleErrors: [],
 });
 
-/** Template merge + pending-draft helpers (lib/emailComposeDraft inlined). Renderer:
-    renderer/email-pending-globals.js exposes save/get/clear pending draft only. */
+/** Template merge + pending-draft helpers (lib/emailComposeDraft inlined). */
 contextBridge.exposeInMainWorld('CustodyEmailCompose', custodyEmailComposeDraft);
 
 /* Playwright / automated tests: fresh userData has no licence — allow skipping the sign-in overlay when env is set.

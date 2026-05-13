@@ -1,6 +1,6 @@
 /**
  * Policy: no raw mailto: in UI sources; no renderer shell.openExternal.
- * v1.6.21: no Outlook Web compose IPC — copy-and-paste only.
+ * Officer Emails (v1.9) uses Outlook Web deeplink built in main only.
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -13,20 +13,18 @@ const PROD_FILES = [
   'preload.js',
   'app.js',
   'index.html',
-  'renderer/email-pending-globals.js',
-  'renderer/officerEmails.js',
-  'renderer/views/email-modal.js',
   'renderer/views/billing.js',
-  'renderer/email-templates.js',
   'renderer/views/list.js',
   'renderer/views/settings.js',
   'renderer/views/reports.js',
   'renderer/views/authorities.js',
   'renderer/views/station-mileage-admin.js',
+  'renderer/views/officerEmailsPanel.js',
   'renderer/templateSystem/templateEngine.js',
   'renderer/templateSystem/templateManager.js',
   'renderer/templateSystem/templateStore.js',
   'renderer/templateSystem/placeholders.js',
+  'lib/officerEmailDrafts.js',
 ];
 
 const SKIP_DIRS = ['node_modules', '.git', 'dist', 'playwright-report', 'test-results'];
@@ -53,13 +51,10 @@ function walkJsHtml(dir) {
    substring "mailto:" to the user but never invoke it as a launch URI). */
 const MAILTO_ALLOWED = new Set([
   'lib/emailComposeDraft.js',
-  'lib/outlookLaunch.js',
   'preload.js',
   'main/windowHardening.js',
-  'scripts/smoke-quick-email-asuser.js',
   'main.js',
-  /* v1.8.0 send-method selector: contains "Default mail app (mailto:)" as
-     a user-visible option label and "default mailto:" as detection status. */
+  /* Legacy UI copy may still mention mailto: as plain text in labels/help. */
   'index.html',
   'app.js',
 ]);

@@ -41,10 +41,8 @@ function refreshList() {
     sortField: sort.sortField,
     sortDir: sort.sortDir,
   };
-  var emailAddonEntitled = window._addons && window._addons.emailAddon && window._emailTemplatesAddonEnabled;
 
   window.api.attendanceSearch(searchParams).then(function(result) {
-    var rows = (result && result.rows) || [];
     var total = (result && result.total) || 0;
     if (result && result.page) listPage = result.page;
 
@@ -101,16 +99,6 @@ function refreshList() {
         ? '<button type="button" class="btn-list-action unarchive-btn" title="Restore from archive — record returns to the main Records list" data-id="' + esc(String(r.id)) + '">Unarchive</button>'
         : '<button type="button" class="btn-list-action archive-btn" title="Hide from main list — use Archived filter to find later" data-id="' + esc(String(r.id)) + '">Archive</button>';
 
-      /* Officer Email Templates add-on — Email OIC button + Sent badge (gated on licence entitlement + user setting) */
-      var emailOicBtn  = '';
-      var oicSentBadge = '';
-      if (emailAddonEntitled) {
-        emailOicBtn = '<button type="button" class="btn-list-action email-oic-btn" title="Email Officer in Charge" data-id="' + esc(String(r.id)) + '">Email OIC</button>';
-        if (d.officerEmailStatus === 'sent') {
-          oicSentBadge = ' <span class="badge badge-oic-sent" title="OIC email sent on ' + esc(d.lastOfficerEmailSentDate ? new Date(d.lastOfficerEmailSentDate).toLocaleDateString('en-GB') : '') + '">&#9993; Sent</span>';
-        }
-      }
-
       var li = document.createElement('li');
       if (isDeletedView) {
         li.innerHTML =
@@ -133,11 +121,10 @@ function refreshList() {
             '<div class="meta">' + esc(meta) + '</div>' +
           '</div>' +
           '<div class="list-item-actions">' +
-            '<div class="list-item-badges">' +
+              '<div class="list-item-badges">' +
               '<span class="badge ' + esc(st) + '" title="' + esc(statusTitle) + '">' + esc(st) + '</span>' +
               approved +
               archivedBadge +
-              oicSentBadge +
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
               archiveBtn +
@@ -145,7 +132,6 @@ function refreshList() {
               '<button type="button" class="btn-list-action dup-btn" title="Duplicate for another client (same session)" data-id="' + esc(String(r.id)) + '">Duplicate</button>' +
               '<button type="button" class="btn-list-action pdf-btn" title="Export PDF to Desktop" data-id="' + esc(String(r.id)) + '">PDF</button>' +
               '<button type="button" class="btn-list-action delete-btn" title="Delete this record" data-id="' + esc(String(r.id)) + '">Delete</button>' +
-              emailOicBtn +
             '</div>' +
           '</div>';
       }
@@ -170,17 +156,9 @@ function refreshList() {
         li.querySelector('.delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteAttendance(r.id, title); });
         if (r.archived_at && li.querySelector('.unarchive-btn')) {
           li.querySelector('.unarchive-btn').addEventListener('click', function(e) { e.stopPropagation(); unarchiveAttendance(r.id); });
-        } else if (!r.archived_at && li.querySelector('.archive-btn')) {
+        } else         if (!r.archived_at && li.querySelector('.archive-btn')) {
           li.querySelector('.archive-btn').addEventListener('click', function(e) { e.stopPropagation(); archiveAttendance(r.id, title); });
         }
-      }
-      if (emailAddonEntitled && li.querySelector('.email-oic-btn')) {
-        li.querySelector('.email-oic-btn').addEventListener('click', (function(rowData, rowStatus) {
-          return function(e) {
-            e.stopPropagation();
-            openEmailModal(r.id, rowData, rowStatus);
-          };
-        })(d, r.status));
       }
       ul.appendChild(li);
     });
