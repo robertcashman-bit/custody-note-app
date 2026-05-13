@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.3",
+      "version": "1.9.4",
       "date": "2026-05-13",
       "latest": true,
+      "changes": [
+        "Officer Emails: restored a separate Home screen panel for one-off officer emails without needing a saved custody note",
+        "One-off officer emails can generate the existing templates, copy recipient/subject/body, and open Outlook Web for manual sending",
+        "Release publishing now keeps GitHub releases as drafts until the Windows installer, blockmap, and latest.yml updater metadata are uploaded"
+      ]
+    },
+    {
+      "version": "1.9.3",
+      "date": "2026-05-13",
+      "latest": false,
       "changes": [
         "Officer Emails right-panel module and workflow hardening",
         "QuickFile settings configured-state fix",

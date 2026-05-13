@@ -188,6 +188,11 @@
               <span class="home-card-title">Quick Capture</span>
               <span class="home-card-sub">Quickly capture initial case details</span>
             </button>
+            <button type="button" id="home-card-officer-emails" class="home-action-card home-card-green">
+              <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/><path d="M7 19v-2a3 3 0 013-3h4a3 3 0 013 3v2"/></svg></span>
+              <span class="home-card-title">Officer Emails</span>
+              <span class="home-card-sub">Prepare one-off emails for officers</span>
+            </button>
             <button type="button" id="home-card-video-capture" class="home-action-card home-card-blue">
               <span class="home-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></span>
               <span class="home-card-title">Video Capture</span>
@@ -823,6 +828,18 @@
           <div id="authority-fill-form"></div>
           <button type="button" id="authority-fill-generate" class="btn btn-primary" style="width:100%;margin-top:0.75rem;">Generate PDF</button>
         </div>
+      </div>
+
+      <!-- OFFICER EMAILS VIEW -->
+      <div id="view-officer-emails" class="view">
+        <div class="firms-page-header">
+          <button type="button" id="officer-emails-back-btn" class="btn btn-secondary">&larr; Home</button>
+          <div>
+            <h2 style="margin:0;color:var(--primary);">Officer Emails</h2>
+            <p class="settings-hint" style="margin:0.25rem 0 0;">Prepare a one-off email, copy the details, or open it in Outlook Web. The app does not send emails automatically.</p>
+          </div>
+        </div>
+        <div id="officer-emails-standalone-host" class="officer-email-standalone"></div>
       </div>
 
       <!-- SETTINGS VIEW -->
@@ -2063,6 +2080,7 @@
   <script src="renderer/widgets/wheelDateTimePicker.js"></script>
   <script src="app.js"></script>
   <script src="renderer/views/officerEmailsPanel.js"></script>
+  <script src="renderer/views/officerEmailsStandalone.js"></script>
   <script src="renderer/views/reports.js"></script>
   <script src="renderer/views/authorities.js"></script>
   <script src="renderer/views/settings.js"></script>

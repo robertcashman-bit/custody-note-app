@@ -1,5 +1,5 @@
 /* ─── STATE ─── */
-var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', help: 'view-help', 'station-mileage': 'view-station-mileage', 'matter-billing': 'view-matter-billing' };
+var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', 'officer-emails': 'view-officer-emails', help: 'view-help', 'station-mileage': 'view-station-mileage', 'matter-billing': 'view-matter-billing' };
 var currentAttendanceId = null;
 var stations = [];
 var firms = [];
@@ -14764,6 +14764,13 @@ pdfAuditFooterHtml(d, settings) +
             if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
             openQuickCapture();
             return;
+          case 'home-card-officer-emails':
+            e.preventDefault();
+            showView('officer-emails');
+            if (window.OfficerEmailsStandalone && typeof window.OfficerEmailsStandalone.focusFirstField === 'function') {
+              setTimeout(function () { window.OfficerEmailsStandalone.focusFirstField(); }, 80);
+            }
+            return;
           case 'home-focus-open':
             e.preventDefault();
             if (t.dataset.id) {
@@ -14796,7 +14803,7 @@ pdfAuditFooterHtml(d, settings) +
           case 'qc-cancel': e.preventDefault(); goBack(); return;
           case 'qc-save': e.preventDefault(); saveQuickCapture(false); return;
           case 'qc-expand': e.preventDefault(); saveQuickCapture(true); return;
-          case 'firms-back-btn': case 'reports-back-btn': case 'authorities-back-btn': case 'settings-back-btn': case 'help-back-btn': case 'station-mileage-back-btn': case 'matter-billing-back-btn': e.preventDefault(); goBack(); return;
+          case 'firms-back-btn': case 'reports-back-btn': case 'authorities-back-btn': case 'officer-emails-back-btn': case 'settings-back-btn': case 'help-back-btn': case 'station-mileage-back-btn': case 'matter-billing-back-btn': e.preventDefault(); goBack(); return;
           default: break;
         }
       }, true);
@@ -18162,6 +18169,9 @@ function safeInit() {
     init();
     if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.init === 'function') {
       try { window.OfficerEmailsPanel.init(); } catch (e) { console.error('[OfficerEmailsPanel.init]', e); }
+    }
+    if (window.OfficerEmailsStandalone && typeof window.OfficerEmailsStandalone.init === 'function') {
+      try { window.OfficerEmailsStandalone.init(); } catch (e) { console.error('[OfficerEmailsStandalone.init]', e); }
     }
     _showPinTipIfNeeded();
     _initCloseGuard();
