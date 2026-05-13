@@ -6806,14 +6806,25 @@ function fillCRM1(form, d) {
   safeCheck(form, 'CheckBox89', ms === 'Cohabiting');
   safeCheck(form, 'CheckBox11', ms === 'Widowed');
 
-  const g = d.gender || '';
-  safeCheck(form, 'CheckBox12', g === 'Male');
-  safeCheck(form, 'CheckBox14', g === 'Female');
-  safeCheck(form, 'CheckBox1', g === 'Prefer not to say');
+  /** Gender (CRM1 v16): checkbox defaults on the PDF can leave the wrong sex ticked if we only
+   * safeCheck('…', true); safeCheck does nothing when false. Clear all sex options every time
+   * (Male = CheckBox12, Female = CheckBox14 in field order — see LAA CRM1 Feb 2025). */
+  const gRaw = String(d.gender || '').trim().toLowerCase();
+  safeUncheck(form, 'CheckBox12');
+  safeUncheck(form, 'CheckBox14');
+  safeUncheck(form, 'CheckBox1');
+  const gMale = gRaw === 'male' || gRaw === 'm';
+  const gFemale = gRaw === 'female' || gRaw === 'f';
+  const gPnts = /^prefer\b/.test(gRaw) || gRaw === 'prefer not to say' || gRaw.includes('prefer not');
+  safeCheck(form, 'CheckBox12', gMale);
+  safeCheck(form, 'CheckBox14', gFemale);
+  safeCheck(form, 'CheckBox1', gPnts);
 
   fillCRM1EqualOpportunities(form, d);
 
   const under18 = d.juvenileVulnerable === 'Juvenile';
+  safeUncheck(form, 'Client under 18 checkbox');
+  safeUncheck(form, 'Client not under 18 checkbox');
   safeCheck(form, 'Client under 18 checkbox', under18);
   safeCheck(form, 'Client not under 18 checkbox', !under18);
 

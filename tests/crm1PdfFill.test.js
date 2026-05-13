@@ -35,6 +35,15 @@ describe('CRM1 PDF fill (main.js)', () => {
     assert.ok(mainSrc.includes("safeCheck(form, 'CheckBox9', !onBenefit)"), 'No tick must be CheckBox9');
   });
 
+  it('clears CRM1 sex checkboxes before applying gender (avoids PDF default wrong tick)', () => {
+    const start = mainSrc.indexOf('function fillCRM1');
+    assert.ok(start >= 0);
+    const head = mainSrc.slice(start, start + 5200);
+    assert.match(head, /safeUncheck\(form, 'CheckBox12'\)[\s\S]*safeUncheck\(form, 'CheckBox14'\)/);
+    assert.ok(head.includes("safeUncheck(form, 'CheckBox1')"), 'prefer-not-say / blank row must reset');
+    assert.ok(head.includes("gMale") && head.includes("gFemale"), 'gender must normalise before tick');
+  });
+
   it('converts annual gross figures to weekly for CRM1 income boxes', () => {
     assert.ok(mainSrc.includes('poundsAnnualToWeeklyOrEmpty'), 'weekly conversion helper expected');
     assert.ok(mainSrc.includes("safeSet(form, 'Partner_if_living_with_t_', wkPartner)"), 'partner box must be weekly £');
