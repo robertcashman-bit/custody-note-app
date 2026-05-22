@@ -3,15 +3,15 @@
   'use strict';
 
   var TEMPLATE_OPTIONS = [
-    { value: 'disclosure_confirm_attendance', label: 'Disclosure / confirm attendance' },
-    { value: 'custody_log_request', label: 'Custody log request' },
-    { value: 'chase_disclosure', label: 'Chase disclosure' },
-    { value: 'confirm_matter_effective', label: 'Confirm matter is effective' },
-    { value: 'request_officer_contact_details', label: 'Request officer contact details' },
-    { value: 'request_update_after_delay', label: 'Request update after delay' },
-    { value: 'bail_details_request', label: 'Bail details request' },
-    { value: 'voluntary_interview_confirmation', label: 'Voluntary interview confirmation' },
-    { value: 'free_text_email', label: 'Free text email' },
+    { value: 'disclosure_confirm_attendance', label: 'Confirm attendance and request disclosure' },
+    { value: 'confirm_matter_effective', label: 'Confirm matter effective' },
+    { value: 'chase_disclosure', label: 'Request disclosure urgently' },
+    { value: 'request_officer_contact_details', label: 'OIC / officer contact details' },
+    { value: 'custody_log_request', label: 'Request custody record' },
+    { value: 'request_update_after_delay', label: 'Update following delay' },
+    { value: 'bail_details_request', label: 'Police bail — confirm details' },
+    { value: 'voluntary_interview_confirmation', label: 'Voluntary interview — confirm and disclosure' },
+    { value: 'free_text_email', label: 'Custom message (blank)' },
   ];
 
   var host = null;

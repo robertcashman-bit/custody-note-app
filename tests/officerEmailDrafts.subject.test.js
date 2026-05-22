@@ -18,7 +18,7 @@ describe('officerEmailDrafts — subject line', () => {
     assert.ok(s.includes(SUBJECT_SUFFIX.chase_disclosure), s);
   });
 
-  it('uses the user-facing Disclosure / confirm attendance label', () => {
+  it('uses the user-facing confirm attendance subject suffix', () => {
     const s = generateOfficerEmailSubject({
       clientName: 'John Smith',
       policeStation: 'Tonbridge Police Station',
@@ -27,7 +27,7 @@ describe('officerEmailDrafts — subject line', () => {
     });
     assert.strictEqual(
       s,
-      'John Smith - Tonbridge Police Station - Assault - Disclosure / confirm attendance'
+      'John Smith - Tonbridge Police Station - Assault - Confirm attendance — disclosure'
     );
   });
 

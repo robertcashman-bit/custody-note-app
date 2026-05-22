@@ -14,9 +14,9 @@ describe('officerEmailDrafts — body', () => {
     offence: 'Theft',
   };
 
-  it('uses placeholder sentence when My email address is empty', () => {
+  it('uses reply-to sentence when My email address is empty', () => {
     const b = generateOfficerEmailBody(Object.assign({}, base, { userEmailAddress: '' }));
-    assert.ok(b.includes('send disclosure to me at the email address below.'), b);
+    assert.ok(b.includes('Please send initial disclosure by reply to this email.'), b);
     assert.ok(!b.includes('@'), b);
   });
 
@@ -24,7 +24,7 @@ describe('officerEmailDrafts — body', () => {
     const b = generateOfficerEmailBody(
       Object.assign({}, base, { userEmailAddress: ' me@firm.example ' })
     );
-    assert.ok(b.includes('send disclosure to me at me@firm.example.'), b);
-    assert.ok(!b.includes('at the email address below'), b);
+    assert.ok(b.includes('Please send initial disclosure to me at me@firm.example.'), b);
+    assert.ok(!b.includes('by reply to this email'), b);
   });
 });
