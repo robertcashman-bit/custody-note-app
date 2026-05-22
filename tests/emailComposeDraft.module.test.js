@@ -136,10 +136,10 @@ describe('Outlook Web compose link', () => {
       subject: 'Subj',
       body: 'Body',
     });
-    assert.ok(u.startsWith('https://outlook.office.com/mail/deeplink/compose?'));
+    assert.ok(u.startsWith('https://outlook.office.com/mail/0/deeplink/compose?'));
   });
 
-  it('includes to, cc, subject and body via URLSearchParams', () => {
+  it('includes to, cc, subject and body in query (decoded via URL)', () => {
     const u = buildOutlookWebComposeLink({
       to: 'a@b.c',
       cc: 'c@d.e',
@@ -193,7 +193,10 @@ describe('Pending draft storage', () => {
     var opens = [];
     var loc = null;
     var win = {
-      open: function (url) { opens.push(url); },
+      open: function (url) {
+        opens.push(url);
+        return {};
+      },
       location: { set href(v) { loc = v; }, get href() { return loc || ''; } },
     };
     savePendingEmailDraft({
@@ -207,13 +210,13 @@ describe('Pending draft storage', () => {
     var ok = resumePendingEmailDraft('outlook-web', mem, { window: win });
     assert.strictEqual(ok, true);
     assert.strictEqual(opens.length, 1);
-    assert.ok(opens[0].includes('outlook.office.com/mail/deeplink/compose'));
+    assert.ok(opens[0].includes('outlook.office.com/mail/0/deeplink/compose'));
   });
 
   it('pending draft remains after first open attempt (storage untouched)', () => {
     savePendingEmailDraft({ to: 'a@b.c', subject: '', body: '', templateId: '' }, mem);
     openEmailDraft({ to: 'a@b.c', subject: '', body: '' }, 'outlook-web', {
-      window: { open: function () {}, location: { href: '' } },
+      window: { open: function () { return {}; }, location: { href: '' } },
     });
     assert.ok(getPendingEmailDraft(mem));
   });
@@ -250,11 +253,36 @@ describe('openEmailDraft (mock env)', () => {
   it('outlook-web calls window.open', () => {
     var opened = [];
     var win = {
-      open: function (u) { opened.push(u); },
+      open: function (u) {
+        opened.push(u);
+        return {};
+      },
       location: {},
     };
-    openEmailDraft({ to: 'a@b.c', subject: 's', body: 'b' }, 'outlook-web', { window: win });
+    var ok = openEmailDraft({ to: 'a@b.c', subject: 's', body: 'b' }, 'outlook-web', { window: win });
+    assert.strictEqual(ok, true);
     assert.strictEqual(opened.length, 1);
+  });
+
+  it('outlook-web returns false when window.open returns null (popup blocked)', () => {
+    var logged = [];
+    var origErr = console.error;
+    console.error = function (msg) {
+      logged.push(msg);
+    };
+    try {
+      var win = {
+        open: function () {
+          return null;
+        },
+        location: {},
+      };
+      var ok = openEmailDraft({ to: 'a@b.c', subject: 's', body: 'b' }, 'outlook-web', { window: win });
+      assert.strictEqual(ok, false);
+      assert.ok(logged.length >= 1, 'expected console.error');
+    } finally {
+      console.error = origErr;
+    }
   });
 });
 

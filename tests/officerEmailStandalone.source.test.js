@@ -33,6 +33,22 @@ describe('Officer Emails standalone view', () => {
   it('opens one-off Outlook compose without requiring a custody note draft', () => {
     assert.ok(main.includes("'officer-email-drafts-open-one-off-outlook'"));
     assert.ok(main.includes('normaliseOfficerEmailDraft(fields || {})'));
-    assert.ok(main.includes('buildOutlookComposeUrl'));
+    assert.ok(main.includes('truncateOutlookComposeForShellOpen'));
+  });
+
+  it('includes attendance time field in standalone form', () => {
+    assert.ok(standalone.includes('id="oes-time"'));
+    assert.ok(standalone.includes('attendanceTime'));
+  });
+});
+
+describe('Officer Emails custody-note panel', () => {
+  const panel = read('renderer/views/officerEmailsPanel.js');
+
+  it('includes attendance time and clear fields controls', () => {
+    assert.ok(panel.includes('id="oep-time"'));
+    assert.ok(panel.includes('id="oep-clear"'));
+    assert.ok(panel.includes('attendanceTime'));
+    assert.ok(panel.includes('timeArrival'));
   });
 });

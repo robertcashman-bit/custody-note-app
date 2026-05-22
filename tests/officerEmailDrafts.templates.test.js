@@ -29,6 +29,27 @@ describe('officerEmailDrafts — template bodies', () => {
     assert.ok(b.includes('Robert Cashman'), b);
   });
 
+  it('includes attendance time in body when set', () => {
+    const withTime = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'disclosure_confirm_attendance', attendanceTime: '14:30' })
+    );
+    assert.ok(withTime.includes('2025-01-01 at 14:30'), withTime);
+
+    const withoutTime = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'disclosure_confirm_attendance', attendanceTime: '' })
+    );
+    assert.ok(withoutTime.includes('on 2025-01-01 in relation'), withoutTime);
+    assert.ok(!withoutTime.includes(' at 14:30'), withoutTime);
+  });
+
+  it('custody_log_request adds Time line when attendance time set', () => {
+    const b = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'custody_log_request', attendanceTime: '09:15' })
+    );
+    assert.ok(b.includes('Date: 2025-01-01'), b);
+    assert.ok(b.includes('Time: 09:15'), b);
+  });
+
   it('custody_log_request uses DDO default when recipient empty', () => {
     const b = generateOfficerEmailBody(Object.assign({}, base, { templateType: 'custody_log_request' }));
     assert.ok(b.includes('Dear DDO'), b);

@@ -33,7 +33,8 @@
  *      broken preload.
  *   4. The inlined helper block MUST export the same function names as
  *      lib/emailComposeDraft.js (parity), so tests/emailComposeDraft.module.test.js
- *      and the inlined preload helper cannot drift.
+ *      and the inlined preload helper cannot drift. tests/preloadOutlookWebComposeParity.test.js
+ *      additionally locks the OWA deeplink URL algorithm to lib/outlookWebCompose.js.
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');

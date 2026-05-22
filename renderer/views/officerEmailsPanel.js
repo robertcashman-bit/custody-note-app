@@ -28,6 +28,7 @@
   var lastAttachedCustodyNoteId = null;
   var lastGenSig = '';
   var dirtySubjectBody = false;
+  var autoGenerateTimer = null;
   var els = {};
 
   function esc(s) {
@@ -67,6 +68,7 @@
       '<label class="officer-email-field"><span>Client name</span><input type="text" id="oep-client" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Police station</span><input type="text" id="oep-station" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Date</span><input type="text" id="oep-date" autocomplete="off" /></label>' +
+      '<label class="officer-email-field"><span>Attendance time</span><input type="text" id="oep-time" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Offence / allegation</span><input type="text" id="oep-offence" autocomplete="off" /></label>' +
       '<div id="oep-bail-fields" class="officer-email-bail-fields hidden">' +
       '<label class="officer-email-field"><span>Bail return date</span><input type="text" id="oep-bail-date" autocomplete="off" /></label>' +
@@ -79,6 +81,7 @@
       '</div>' +
       '<div class="officer-email-actions">' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-new">New draft</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" id="oep-clear">Clear fields</button>' +
       '<button type="button" class="btn btn-primary btn-small" id="oep-gen">Generate / Refresh</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-save">Save draft</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-dup">Duplicate</button>' +
@@ -87,6 +90,7 @@
       '</div>' +
       '<div class="officer-email-actions officer-email-actions-outlook">' +
       '<button type="button" class="btn btn-primary btn-small" id="oep-open">Open in Outlook Web</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" id="oep-copy-link">Copy Outlook link</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-copy-to">Copy Recipient</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-copy-sub">Copy Subject</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-copy-body">Copy Body</button>' +
@@ -115,6 +119,7 @@
       client: host.querySelector('#oep-client'),
       station: host.querySelector('#oep-station'),
       date: host.querySelector('#oep-date'),
+      time: host.querySelector('#oep-time'),
       offence: host.querySelector('#oep-offence'),
       bailWrap: host.querySelector('#oep-bail-fields'),
       bailDate: host.querySelector('#oep-bail-date'),
@@ -134,14 +139,20 @@
         dirtySubjectBody = true;
       });
     });
+    ['recipient', 'client', 'station', 'date', 'time', 'offence', 'extra', 'userEmail', 'bailDate', 'bailCond'].forEach(function (key) {
+      if (!els[key]) return;
+      els[key].addEventListener('input', scheduleAutoGenerate);
+    });
 
     host.querySelector('#oep-new').addEventListener('click', newDraft);
+    host.querySelector('#oep-clear').addEventListener('click', clearForm);
     host.querySelector('#oep-gen').addEventListener('click', function () { generateFromTemplate(false); });
     host.querySelector('#oep-save').addEventListener('click', saveDraft);
     host.querySelector('#oep-dup').addEventListener('click', duplicateDraft);
     host.querySelector('#oep-cancel').addEventListener('click', cancelDraft);
     host.querySelector('#oep-del').addEventListener('click', deleteDraft);
     host.querySelector('#oep-open').addEventListener('click', openOutlookClicked);
+    host.querySelector('#oep-copy-link').addEventListener('click', copyOutlookLinkClicked);
     host.querySelector('#oep-copy-to').addEventListener('click', function () { copyField(els.to.value, 'Copied.'); });
     host.querySelector('#oep-copy-sub').addEventListener('click', function () { copyField(els.subject.value, 'Copied.'); });
     host.querySelector('#oep-copy-body').addEventListener('click', function () { copyField(els.body.value, 'Copied.'); });
@@ -210,6 +221,7 @@
       clientName: els.client.value,
       policeStation: els.station.value,
       attendanceDate: els.date.value,
+      attendanceTime: els.time ? els.time.value : '',
       offence: els.offence.value,
       extraNote: els.extra.value,
       bailReturnDate: els.bailDate ? els.bailDate.value : '',
@@ -220,23 +232,56 @@
     };
   }
 
+  function scheduleAutoGenerate() {
+    if (dirtySubjectBody) return;
+    if (autoGenerateTimer) clearTimeout(autoGenerateTimer);
+    autoGenerateTimer = setTimeout(function () {
+      autoGenerateTimer = null;
+      generateFromTemplate(false);
+    }, 120);
+  }
+
   function applyPrefillFromMatter() {
     var fd = getFormDataSafe();
     var name = [fd.forename, fd.surname].filter(Boolean).join(' ').trim();
     if (!els.client.value.trim() && name) els.client.value = name;
     if (!els.station.value.trim() && fd.policeStationName) els.station.value = fd.policeStationName;
     if (!els.date.value.trim() && fd.date) els.date.value = fd.date;
+    if (els.time && !els.time.value.trim()) {
+      var arrivalTime = fd.timeArrival || fd.timeArrivalStation || '';
+      if (arrivalTime) els.time.value = String(arrivalTime).trim();
+    }
     if (!els.offence.value.trim() && fd.offenceSummary) els.offence.value = fd.offenceSummary;
   }
 
+  function clearForm() {
+    Object.keys(els).forEach(function (key) {
+      if (!els[key] || !('value' in els[key])) return;
+      if (key === 'template') return;
+      els[key].value = '';
+    });
+    if (els.template) {
+      els.template.value = 'disclosure_confirm_attendance';
+      els.template.dataset.oepLast = els.template.value;
+    }
+    selectedDraftId = null;
+    dirtySubjectBody = false;
+    syncBailVisibility();
+    applyPrefillFromMatter();
+    generateFromTemplate(true);
+    if (els.to) els.to.focus();
+  }
+
   function generateFromTemplate(forceApply) {
-    if (!window.api || !window.api.officerEmails || !window.api.officerEmails.buildPreview) return;
+    if (!window.api || !window.api.officerEmails || !window.api.officerEmails.buildPreview) {
+      return Promise.resolve({ ok: false, error: 'Officer email preview is not available.' });
+    }
     var f = collectFields();
     f.extraNote = f.extraNote;
-    window.api.officerEmails.buildPreview(f).then(function (res) {
+    return window.api.officerEmails.buildPreview(f).then(function (res) {
       if (!res || !res.ok) {
         if (typeof showToast === 'function') showToast((res && res.error) || 'Could not build preview', 'error');
-        return;
+        return res || { ok: false, error: 'Could not build preview' };
       }
       if (forceApply || !dirtySubjectBody) {
         els.subject.value = res.subject || '';
@@ -244,6 +289,11 @@
         dirtySubjectBody = false;
         lastGenSig = (res.subject || '') + '\n' + (res.body || '');
       }
+      return res;
+    }).catch(function (err) {
+      if (typeof showToast === 'function') showToast('Could not build preview. Please try Generate / Refresh.', 'error', 7000);
+      try { console.error('[officerEmailsPanel] buildPreview failed', err); } catch (_) {}
+      return { ok: false, error: (err && err.message) || String(err) };
     });
   }
 
@@ -395,6 +445,16 @@
   }
 
   function openOutlookClicked() {
+    if (!dirtySubjectBody) {
+      generateFromTemplate(true).then(function (res) {
+        if (res && res.ok) openOutlookClickedAfterPreview();
+      });
+      return;
+    }
+    openOutlookClickedAfterPreview();
+  }
+
+  function openOutlookClickedAfterPreview() {
     var to = els.to.value.trim();
     var sub = els.subject.value.trim();
     var bod = els.body.value.trim();
@@ -419,34 +479,171 @@
       'You are about to open this email in Outlook Web.\n\nTo:\n' + to + '\n\nSubject:\n' + sub + '\n\n' +
       (warnings.length ? warnings.join('\n\n') + '\n\n' : '') +
       'This app will not send the email. You must review and send it manually in Outlook Web.';
+    function reportFatal(label, detail) {
+      var fallback = 'Outlook Web could not be opened. The email content is still in the draft — try Copy Outlook link.';
+      if (detail) fallback = fallback + ' (' + detail + ')';
+      if (typeof showToast === 'function') showToast(fallback, 'error', 9000);
+      else if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(fallback);
+      try { console.warn('[officerEmailsPanel] ' + label + ': showToast undefined, fell back to alert/no-op'); } catch (_) {}
+    }
     function doOpen() {
-      window.api.officerEmails.openOutlookDraft(selectedDraftId).then(function (res) {
+      var promise;
+      try {
+        promise = window.api.officerEmails.openOutlookDraft(selectedDraftId);
+      } catch (syncErr) {
+        try { console.error('[officerEmailsPanel] openOutlookDraft threw synchronously', syncErr); } catch (_) {}
+        reportFatal('openOutlookDraft sync throw', (syncErr && syncErr.message) || String(syncErr));
+        return;
+      }
+      if (!promise || typeof promise.then !== 'function') {
+        try { console.error('[officerEmailsPanel] openOutlookDraft returned non-promise', promise); } catch (_) {}
+        reportFatal('openOutlookDraft returned non-promise', 'IPC bridge unavailable');
+        return;
+      }
+      promise.then(function (res) {
+        try { console.info('[officerEmailsPanel] openOutlookDraft resolved', res); } catch (_) {}
         if (!res || !res.ok) {
-          if (typeof showToast === 'function') {
-            showToast((res && res.errors && res.errors[0]) || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.', 'error', 7000);
-          }
+          var errMsg = (res && res.errors && res.errors[0]) || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.';
+          if (typeof showToast === 'function') showToast(errMsg, 'error', 7000);
+          else if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(errMsg);
+          else try { console.warn('[officerEmailsPanel] openOutlookDraft not-ok with no toast/alert', res); } catch (_) {}
           return;
         }
-        if (typeof showToast === 'function') showToast('Opened in browser — complete send in Outlook', 'success', 5000);
+        if (typeof showToast === 'function') {
+          var openedMsg = 'Opened in browser — complete send in Outlook';
+          if (res.truncated) {
+            openedMsg =
+              'Opened in browser. The message was long, so the full email was copied to your clipboard before opening Outlook — paste into the body if needed.';
+          }
+          showToast(openedMsg, 'success', res.truncated ? 9000 : 5000);
+        } else {
+          try { console.warn('[officerEmailsPanel] openOutlookDraft ok but showToast undefined'); } catch (_) {}
+        }
         loadDrafts();
+      }).catch(function (err) {
+        try { console.error('[officerEmailsPanel] openOutlookDraft rejected', err); } catch (_) {}
+        reportFatal('openOutlookDraft rejected', (err && err.message) || String(err));
       });
     }
+    function afterConfirm() {
+      doOpen();
+    }
     saveDraft({ silent: true }).then(function (saved) {
-      if (!saved || !saved.ok || !selectedDraftId) return;
+      if (!saved || !saved.ok || !selectedDraftId) {
+        try { console.warn('[officerEmailsPanel] openOutlook aborted: saveDraft state', { saved: saved, selectedDraftId: selectedDraftId }); } catch (_) {}
+        if (saved && saved.ok && !selectedDraftId) {
+          if (typeof showToast === 'function') showToast('Draft saved but no draft id was returned, so Outlook Web cannot open. Please reopen the panel and try again.', 'error', 9000);
+          else reportFatal('saveDraft ok but selectedDraftId empty', 'no draft id returned');
+        }
+        return;
+      }
       if (typeof window.showChoice === 'function') {
         window.showChoice(msg, 'Open Outlook Web', [
           { id: 'abort', label: 'Cancel', variant: 'secondary' },
           { id: 'open', label: 'Open Outlook Web', variant: 'primary' },
         ]).then(function (choice) {
           if (choice !== 'open') return;
-          doOpen();
+          afterConfirm();
+        }).catch(function (err) {
+          try { console.error('[officerEmailsPanel] showChoice rejected', err); } catch (_) {}
+          reportFatal('showChoice rejected', (err && err.message) || String(err));
         });
         return;
       }
-      if (typeof showConfirm !== 'function') return;
+      if (typeof showConfirm !== 'function') {
+        try { console.warn('[officerEmailsPanel] showChoice and showConfirm both undefined; using window.confirm fallback'); } catch (_) {}
+        var ok = false;
+        try {
+          ok = (typeof window !== 'undefined' && typeof window.confirm === 'function')
+            ? window.confirm(msg)
+            : true;
+        } catch (_) { ok = true; }
+        if (ok) afterConfirm();
+        return;
+      }
       showConfirm(msg, 'Open Outlook Web').then(function (ok) {
         if (!ok) return;
-        doOpen();
+        afterConfirm();
+      }).catch(function (err) {
+        try { console.error('[officerEmailsPanel] showConfirm rejected', err); } catch (_) {}
+        reportFatal('showConfirm rejected', (err && err.message) || String(err));
+      });
+    }).catch(function (err) {
+      try { console.error('[officerEmailsPanel] saveDraft rejected before Outlook open', err); } catch (_) {}
+      reportFatal('saveDraft rejected', (err && err.message) || String(err));
+    });
+  }
+
+  function copyOutlookLinkClicked() {
+    if (!dirtySubjectBody) {
+      generateFromTemplate(true).then(function (res) {
+        if (res && res.ok) copyOutlookLinkClickedAfterPreview();
+      });
+      return;
+    }
+    copyOutlookLinkClickedAfterPreview();
+  }
+
+  function copyOutlookLinkClickedAfterPreview() {
+    var to = els.to.value.trim();
+    var sub = els.subject.value.trim();
+    var bod = els.body.value.trim();
+    if (!to) {
+      if (typeof showToast === 'function') showToast('Please enter a recipient email address.', 'error', 5000);
+      return;
+    }
+    if (!sub) {
+      if (typeof showToast === 'function') showToast('Please enter a subject before copying the link.', 'error', 5000);
+      return;
+    }
+    if (!bod) {
+      if (typeof showToast === 'function') showToast('Please enter an email body before copying the link.', 'error', 5000);
+      return;
+    }
+    if (!selectedDraftId) {
+      if (typeof showToast === 'function') showToast('Save the draft first.', 'error', 5000);
+      return;
+    }
+    if (!window.api || !window.api.officerEmails || !window.api.officerEmails.getComposeUrl) {
+      if (typeof showToast === 'function') showToast('Copy Outlook link is not available.', 'error');
+      return;
+    }
+    function onCopied(truncated) {
+      var msg = 'Outlook compose link copied to clipboard.';
+      if (truncated) {
+        msg +=
+          ' The link is shortened for Windows URL limits; use Open in Outlook Web to copy the full message to the clipboard automatically.';
+      }
+      if (typeof showToast === 'function') showToast(msg, 'success', truncated ? 9000 : 4000);
+    }
+    saveDraft({ silent: true }).then(function (saved) {
+      if (!saved || !saved.ok || !selectedDraftId) return;
+      window.api.officerEmails.getComposeUrl({ draftId: selectedDraftId }).then(function (res) {
+        if (!res || !res.ok) {
+          if (typeof showToast === 'function') {
+            showToast((res && res.errors && res.errors[0]) || 'Could not build Outlook link.', 'error', 7000);
+          }
+          return;
+        }
+        var url = res.url != null ? String(res.url) : '';
+        var truncated = !!res.truncated;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(function () {
+            onCopied(truncated);
+          }).catch(function () {
+            if (window.api.officerEmails.copyText) {
+              window.api.officerEmails.copyText(url).then(function (r) {
+                if (r && r.ok) onCopied(truncated);
+                else if (typeof showToast === 'function') showToast('Could not copy link.', 'error');
+              });
+            }
+          });
+        } else if (window.api.officerEmails.copyText) {
+          window.api.officerEmails.copyText(url).then(function (r) {
+            if (r && r.ok) onCopied(truncated);
+            else if (typeof showToast === 'function') showToast('Could not copy link.', 'error');
+          });
+        }
       });
     });
   }
@@ -507,6 +704,7 @@
     els.client.value = d.clientName || '';
     els.station.value = d.policeStation || '';
     els.date.value = d.attendanceDate || '';
+    if (els.time) els.time.value = d.attendanceTime || '';
     els.offence.value = d.offence || '';
     els.extra.value = d.extraNote || '';
     els.bailDate.value = d.bailReturnDate || '';
