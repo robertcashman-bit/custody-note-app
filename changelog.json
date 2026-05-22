@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.5",
+      "date": "2026-05-22",
+      "latest": true,
+      "changes": [
+        "Officer Emails: Attendance time field on custody-note panel and one-off screen, included in generated email bodies",
+        "Clear fields button on custody-note panel",
+        "Outlook Web compose hardening and tests"
+      ]
+    },
+    {
       "version": "1.9.4",
       "date": "2026-05-13",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Officer Emails: restored a separate Home screen panel for one-off officer emails without needing a saved custody note",
         "One-off officer emails can generate the existing templates, copy recipient/subject/body, and open Outlook Web for manual sending",
