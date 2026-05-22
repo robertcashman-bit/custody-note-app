@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.5",
+      "version": "1.9.6",
       "date": "2026-05-22",
       "latest": true,
+      "changes": [
+        "Officer email templates: clearer dropdown labels and subject lines",
+        "improved body wording for all nine templates",
+        "workflow-friendly template order in the email type list"
+      ]
+    },
+    {
+      "version": "1.9.5",
+      "date": "2026-05-22",
+      "latest": false,
       "changes": [
         "Officer Emails: Attendance time field on custody-note panel and one-off screen, included in generated email bodies",
         "Clear fields button on custody-note panel",
