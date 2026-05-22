@@ -70,6 +70,8 @@ const { hardenWindow, hardenSession, isSafeExternalUrl } = require('./main/windo
 const _securityLog = require('./main/securityLog');
 const _safeLog = require('./lib/safeLog');
 const officerEmailDrafts = require('./lib/officerEmailDrafts');
+const outlookWebCompose = require('./lib/outlookWebCompose');
+const openExternalUrlModule = require('./lib/openExternalUrl');
 
 let mainWindow;
 let db;
@@ -1343,6 +1345,7 @@ async function initDb() {
       police_station TEXT DEFAULT '',
       offence TEXT DEFAULT '',
       attendance_date TEXT DEFAULT '',
+      attendance_time TEXT DEFAULT '',
       extra_note TEXT DEFAULT '',
       bail_return_date TEXT DEFAULT '',
       bail_conditions TEXT DEFAULT '',
@@ -1360,6 +1363,7 @@ async function initDb() {
   db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_custody_note_id ON officer_email_drafts (custody_note_id);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_status ON officer_email_drafts (status);`);
   db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_updated_at ON officer_email_drafts (updated_at);`);
+  _safeAddColumn('officer_email_drafts', "attendance_time TEXT DEFAULT ''");
 
   db.run(`
     CREATE TABLE IF NOT EXISTS police_stations (
@@ -8105,6 +8109,7 @@ function _officerDraftRowToApi(r) {
     policeStation: r.police_station,
     offence: r.offence,
     attendanceDate: r.attendance_date,
+    attendanceTime: r.attendance_time,
     extraNote: r.extra_note,
     bailReturnDate: r.bail_return_date,
     bailConditions: r.bail_conditions,
@@ -8158,13 +8163,13 @@ ipcMain.handle('officer-email-drafts-create', (_, payload) => {
   dbRun(
     `INSERT INTO officer_email_drafts (
       id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, offence,
-      attendance_date, extra_note, bail_return_date, bail_conditions, user_email_address, subject, body,
+      attendance_date, attendance_time, extra_note, bail_return_date, bail_conditions, user_email_address, subject, body,
       created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, n.custodyNoteId, st, n.templateType || 'disclosure_confirm_attendance',
       n.toEmail, n.recipientName, n.clientName, n.policeStation, n.offence,
-      n.attendanceDate, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
+      n.attendanceDate, n.attendanceTime, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
       n.subject, n.body, now, now,
     ]
   );
@@ -8192,12 +8197,12 @@ ipcMain.handle('officer-email-drafts-update', (_, draftId, payload) => {
   dbRun(
     `UPDATE officer_email_drafts SET
       template_type=?, to_email=?, recipient_name=?, client_name=?, police_station=?, offence=?,
-      attendance_date=?, extra_note=?, bail_return_date=?, bail_conditions=?, user_email_address=?,
+      attendance_date=?, attendance_time=?, extra_note=?, bail_return_date=?, bail_conditions=?, user_email_address=?,
       subject=?, body=?, status=?, updated_at=?
      WHERE id=?`,
     [
       n.templateType, n.toEmail, n.recipientName, n.clientName, n.policeStation, n.offence,
-      n.attendanceDate, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
+      n.attendanceDate, n.attendanceTime, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
       n.subject, n.body, st, now, String(draftId),
     ]
   );
@@ -8219,13 +8224,13 @@ ipcMain.handle('officer-email-drafts-duplicate', (_, draftId) => {
   dbRun(
     `INSERT INTO officer_email_drafts (
       id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, offence,
-      attendance_date, extra_note, bail_return_date, bail_conditions, user_email_address, subject, body,
+      attendance_date, attendance_time, extra_note, bail_return_date, bail_conditions, user_email_address, subject, body,
       created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, src.custody_note_id, dupSt, src.template_type,
       src.to_email, src.recipient_name, src.client_name, src.police_station, src.offence,
-      src.attendance_date, src.extra_note, src.bail_return_date, src.bail_conditions, src.user_email_address,
+      src.attendance_date, src.attendance_time, src.extra_note, src.bail_return_date, src.bail_conditions, src.user_email_address,
       src.subject, src.body, now, now,
     ]
   );
@@ -8305,6 +8310,59 @@ ipcMain.handle('officer-email-drafts-mark-sent-manually', (_, draftId) => {
   return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
 });
 
+ipcMain.handle('officer-email-drafts-compose-url', (_, payload) => {
+  const p = payload || {};
+  let to;
+  let subject;
+  let body;
+  if (p.draftId != null && String(p.draftId).trim() !== '') {
+    const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(p.draftId)]);
+    if (!row) return { ok: false, errors: ['Draft not found'] };
+    if (row.status === 'deleted') {
+      return { ok: false, errors: ['This draft has been deleted and cannot be opened in Outlook.'] };
+    }
+    if (row.status === 'cancelled') {
+      return { ok: false, errors: ['This draft has been cancelled and cannot be opened in Outlook.'] };
+    }
+    const ov = officerEmailDrafts.validateOpenOutlookFields(row, {
+      extraDomains: _officerEmailExtraDomainsFromSettings(),
+    });
+    if (!ov.ok) return { ok: false, errors: ov.errors };
+    to = row.to_email;
+    subject = row.subject;
+    body = row.body;
+  } else if (p.fields && typeof p.fields === 'object') {
+    const n = officerEmailDrafts.normaliseOfficerEmailDraft(p.fields);
+    const ov = officerEmailDrafts.validateOpenOutlookFields(n, {
+      extraDomains: _officerEmailExtraDomainsFromSettings(),
+    });
+    if (!ov.ok) return { ok: false, errors: ov.errors };
+    to = n.toEmail;
+    subject = n.subject;
+    body = n.body;
+  } else {
+    return { ok: false, errors: ['draftId or fields is required'] };
+  }
+  const toT = officerEmailDrafts.trimMax(to, officerEmailDrafts.MAX_LENGTHS.toEmail);
+  const subT = officerEmailDrafts.trimMax(subject, officerEmailDrafts.MAX_LENGTHS.subject);
+  const bodyT = officerEmailDrafts.str(body);
+  const composed = outlookWebCompose.truncateOutlookComposeForShellOpen({
+    to: toT,
+    cc: '',
+    subject: subT,
+    body: bodyT,
+  });
+  if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(composed.url)) {
+    return { ok: false, errors: ['Could not build a safe Outlook Web link.'] };
+  }
+  return {
+    ok: true,
+    url: composed.url,
+    truncated: composed.truncated,
+    urlLength: composed.url.length,
+  };
+});
+
 ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   if (!draftId) return { ok: false, errors: ['draftId required'] };
   const row = dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)]);
@@ -8318,19 +8376,35 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
     extraDomains: _officerEmailExtraDomainsFromSettings(),
   });
   if (!ov.ok) return { ok: false, errors: ov.errors };
-  const url = officerEmailDrafts.buildOutlookComposeUrl({
-    toEmail: row.to_email,
-    subject: row.subject,
-    body: row.body,
+  const toT = officerEmailDrafts.trimMax(row.to_email, officerEmailDrafts.MAX_LENGTHS.toEmail);
+  const subT = officerEmailDrafts.trimMax(row.subject, officerEmailDrafts.MAX_LENGTHS.subject);
+  const bodyT = officerEmailDrafts.str(row.body);
+  const { url, truncated, fullPlainTextForClipboard } = outlookWebCompose.truncateOutlookComposeForShellOpen({
+    to: toT,
+    cc: '',
+    subject: subT,
+    body: bodyT,
   });
   if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
+    console.warn('[officer-email-drafts-open-outlook] isSafeExternalUrl rejected url', { urlLength: url.length });
     return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
   }
+  if (truncated) {
+    try {
+      clipboard.writeText(fullPlainTextForClipboard);
+    } catch (clipErr) {
+      console.warn('[officer-email-drafts-open-outlook] clipboard write failed', clipErr);
+    }
+  }
+  let openMethod = null;
   try {
-    await shell.openExternal(url);
+    console.info('[officer-email-drafts-open-outlook] invoking openExternalUrl', { urlLength: url.length, truncated: !!truncated });
+    const openRes = await openExternalUrlModule.openExternalUrl(url, { electronShell: shell });
+    openMethod = openRes && openRes.method ? openRes.method : null;
+    console.info('[officer-email-drafts-open-outlook] openExternalUrl resolved', openRes);
   } catch (err) {
     const msg = (err && err.message) ? err.message : String(err);
-    console.warn('[officer-email-drafts-open-outlook] failed');
+    console.warn('[officer-email-drafts-open-outlook] openExternalUrl failed', msg);
     return { ok: false, errors: [msg || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
   }
   const now = new Date().toISOString();
@@ -8344,7 +8418,13 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   }
   markDbDirty();
   _officerEmailAudit(row.custody_note_id, 'officer_email_draft_open_outlook');
-  return { ok: true, draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])) };
+  return {
+    ok: true,
+    draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])),
+    truncated,
+    urlLength: url.length,
+    openMethod,
+  };
 });
 
 ipcMain.handle('officer-email-drafts-open-one-off-outlook', async (_, fields) => {
@@ -8353,22 +8433,39 @@ ipcMain.handle('officer-email-drafts-open-one-off-outlook', async (_, fields) =>
     extraDomains: _officerEmailExtraDomainsFromSettings(),
   });
   if (!ov.ok) return { ok: false, errors: ov.errors };
-  const url = officerEmailDrafts.buildOutlookComposeUrl({
-    toEmail: n.toEmail,
-    subject: n.subject,
-    body: n.body,
+  const toT = officerEmailDrafts.trimMax(n.toEmail, officerEmailDrafts.MAX_LENGTHS.toEmail);
+  const subT = officerEmailDrafts.trimMax(n.subject, officerEmailDrafts.MAX_LENGTHS.subject);
+  const bodyT = officerEmailDrafts.str(n.body);
+  const composed = outlookWebCompose.truncateOutlookComposeForShellOpen({
+    to: toT,
+    cc: '',
+    subject: subT,
+    body: bodyT,
   });
+  const url = composed.url;
   if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
+    console.warn('[officer-email-drafts-open-one-off-outlook] isSafeExternalUrl rejected url', { urlLength: url.length });
     return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
   }
+  if (composed.truncated) {
+    try {
+      clipboard.writeText(composed.fullPlainTextForClipboard);
+    } catch (clipErr) {
+      console.warn('[officer-email-drafts-open-one-off-outlook] clipboard fallback failed:', clipErr && clipErr.message);
+    }
+  }
+  let oneOffOpenMethod = null;
   try {
-    await shell.openExternal(url);
+    console.info('[officer-email-drafts-open-one-off-outlook] invoking openExternalUrl', { urlLength: url.length, truncated: !!composed.truncated });
+    const openRes = await openExternalUrlModule.openExternalUrl(url, { electronShell: shell });
+    oneOffOpenMethod = openRes && openRes.method ? openRes.method : null;
+    console.info('[officer-email-drafts-open-one-off-outlook] openExternalUrl resolved', openRes);
   } catch (err) {
     const msg = (err && err.message) ? err.message : String(err);
-    console.warn('[officer-email-drafts-open-one-off-outlook] failed');
+    console.warn('[officer-email-drafts-open-one-off-outlook] openExternalUrl failed', msg);
     return { ok: false, errors: [msg || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
   }
-  return { ok: true };
+  return { ok: true, truncated: composed.truncated, urlLength: composed.url.length, openMethod: oneOffOpenMethod };
 });
 
 ipcMain.handle('officer-email-drafts-copy', (_, text) => {

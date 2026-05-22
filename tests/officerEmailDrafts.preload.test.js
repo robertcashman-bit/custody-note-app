@@ -19,6 +19,7 @@ describe('preload — officerEmails IPC wiring', () => {
     'officer-email-drafts-delete',
     'officer-email-drafts-mark-opened',
     'officer-email-drafts-mark-sent-manually',
+    'officer-email-drafts-compose-url',
     'officer-email-drafts-open-outlook',
     'officer-email-drafts-open-one-off-outlook',
     'officer-email-drafts-copy',
@@ -36,6 +37,6 @@ describe('preload — officerEmails IPC wiring', () => {
     assert.ok(src.includes('listDrafts:'), 'listDrafts');
     assert.ok(src.includes('openOutlookDraft:'), 'openOutlookDraft');
     assert.ok(src.includes('openOneOffOutlook:'), 'openOneOffOutlook');
-    assert.ok(src.includes('buildPreview:'), 'buildPreview');
+    assert.ok(src.includes('getComposeUrl:'), 'getComposeUrl');
   });
 });

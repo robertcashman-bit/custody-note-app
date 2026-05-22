@@ -52,6 +52,15 @@ describe('officerEmailDrafts — validation', () => {
     assert.strictEqual(isLikelyProfessionalEmail('x@sub.example.com', ['example.com']), true);
   });
 
+  it('truncates attendanceTime to max length on normalise', () => {
+    const v = validateOfficerEmailDraft(
+      { custodyNoteId: '1', templateType: 'chase_disclosure', attendanceTime: 'x'.repeat(51) },
+      { mode: 'create' }
+    );
+    assert.strictEqual(v.ok, true);
+    assert.strictEqual(v.normalized.attendanceTime.length, 50);
+  });
+
   it('validateOpenOutlookFields requires professional recipient (with optional firm domains)', () => {
     const bad = validateOpenOutlookFields(
       { toEmail: 'a@gmail.com', subject: 'Subj', body: 'Hi' },

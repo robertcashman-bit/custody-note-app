@@ -17,6 +17,7 @@
   var host = null;
   var els = {};
   var dirtySubjectBody = false;
+  var autoGenerateTimer = null;
 
   function buildShell() {
     if (!host) return;
@@ -32,6 +33,7 @@
       '<label class="officer-email-field"><span>Client name</span><input type="text" id="oes-client" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Police station</span><input type="text" id="oes-station" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Date</span><input type="text" id="oes-date" autocomplete="off" /></label>' +
+      '<label class="officer-email-field"><span>Attendance time</span><input type="text" id="oes-time" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Offence / allegation</span><input type="text" id="oes-offence" autocomplete="off" /></label>' +
       '<div id="oes-bail-fields" class="officer-email-bail-fields hidden">' +
       '<label class="officer-email-field"><span>Bail return date</span><input type="text" id="oes-bail-date" autocomplete="off" /></label>' +
@@ -51,6 +53,7 @@
       '<label class="officer-email-field"><span>Email body</span><textarea id="oes-body" rows="18"></textarea></label>' +
       '<div class="officer-email-actions officer-email-actions-outlook">' +
       '<button type="button" class="btn btn-primary btn-small" id="oes-open">Open in Outlook Web</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" id="oes-copy-owa">Copy Outlook link</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oes-copy-to">Copy Recipient</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oes-copy-sub">Copy Subject</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oes-copy-body">Copy Body</button>' +
@@ -75,6 +78,7 @@
       client: host.querySelector('#oes-client'),
       station: host.querySelector('#oes-station'),
       date: host.querySelector('#oes-date'),
+      time: host.querySelector('#oes-time'),
       offence: host.querySelector('#oes-offence'),
       bailWrap: host.querySelector('#oes-bail-fields'),
       bailDate: host.querySelector('#oes-bail-date'),
@@ -88,9 +92,14 @@
     els.template.addEventListener('change', onTemplateChange);
     els.subject.addEventListener('input', function () { dirtySubjectBody = true; });
     els.body.addEventListener('input', function () { dirtySubjectBody = true; });
+    ['recipient', 'client', 'station', 'date', 'time', 'offence', 'extra', 'userEmail', 'bailDate', 'bailCond'].forEach(function (key) {
+      if (!els[key]) return;
+      els[key].addEventListener('input', scheduleAutoGenerate);
+    });
     host.querySelector('#oes-clear').addEventListener('click', clearForm);
     host.querySelector('#oes-gen').addEventListener('click', function () { generateFromTemplate(true); });
     host.querySelector('#oes-open').addEventListener('click', openOutlookClicked);
+    host.querySelector('#oes-copy-owa').addEventListener('click', copyOutlookLinkClicked);
     host.querySelector('#oes-copy-to').addEventListener('click', function () { copyField(els.to.value, 'Recipient copied.'); });
     host.querySelector('#oes-copy-sub').addEventListener('click', function () { copyField(els.subject.value, 'Subject copied.'); });
     host.querySelector('#oes-copy-body').addEventListener('click', function () { copyField(els.body.value, 'Body copied.'); });
@@ -104,6 +113,7 @@
       clientName: els.client.value,
       policeStation: els.station.value,
       attendanceDate: els.date.value,
+      attendanceTime: els.time ? els.time.value : '',
       offence: els.offence.value,
       extraNote: els.extra.value,
       bailReturnDate: els.bailDate ? els.bailDate.value : '',
@@ -148,18 +158,34 @@
     });
   }
 
+  function scheduleAutoGenerate() {
+    if (dirtySubjectBody) return;
+    if (autoGenerateTimer) clearTimeout(autoGenerateTimer);
+    autoGenerateTimer = setTimeout(function () {
+      autoGenerateTimer = null;
+      generateFromTemplate(false);
+    }, 120);
+  }
+
   function generateFromTemplate(forceApply) {
-    if (!window.api || !window.api.officerEmails || !window.api.officerEmails.buildPreview) return;
-    window.api.officerEmails.buildPreview(collectFields()).then(function (res) {
+    if (!window.api || !window.api.officerEmails || !window.api.officerEmails.buildPreview) {
+      return Promise.resolve({ ok: false, error: 'Officer email preview is not available.' });
+    }
+    return window.api.officerEmails.buildPreview(collectFields()).then(function (res) {
       if (!res || !res.ok) {
         if (typeof showToast === 'function') showToast((res && res.error) || 'Could not build preview', 'error');
-        return;
+        return res || { ok: false, error: 'Could not build preview' };
       }
       if (forceApply || !dirtySubjectBody) {
         els.subject.value = res.subject || '';
         els.body.value = res.body || '';
         dirtySubjectBody = false;
       }
+      return res;
+    }).catch(function (err) {
+      if (typeof showToast === 'function') showToast('Could not build preview. Please try Generate / Refresh.', 'error', 7000);
+      try { console.error('[officerEmailsStandalone] buildPreview failed', err); } catch (_) {}
+      return { ok: false, error: (err && err.message) || String(err) };
     });
   }
 
@@ -211,6 +237,16 @@
   }
 
   function openOutlookClicked() {
+    if (!dirtySubjectBody) {
+      generateFromTemplate(true).then(function (res) {
+        if (res && res.ok) openOutlookClickedAfterPreview();
+      });
+      return;
+    }
+    openOutlookClickedAfterPreview();
+  }
+
+  function openOutlookClickedAfterPreview() {
     var f = collectFields();
     var to = String(f.toEmail || '').trim();
     var sub = String(f.subject || '').trim();
@@ -235,15 +271,49 @@
       (warnings.length ? warnings.join('\n\n') + '\n\n' : '') +
       'Custody Note will not send the email. You must review and send it manually in Outlook Web.';
 
+    function reportFatal(label, detail) {
+      var fallback = 'Outlook Web could not be opened. The email content is still in the form — try Copy Outlook link.';
+      if (detail) fallback = fallback + ' (' + detail + ')';
+      if (typeof showToast === 'function') showToast(fallback, 'error', 9000);
+      else if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(fallback);
+      try { console.warn('[officerEmailsStandalone] ' + label + ': showToast undefined, fell back to alert/no-op'); } catch (_) {}
+    }
     function go() {
-      window.api.officerEmails.openOneOffOutlook(f).then(function (res) {
+      var promise;
+      try {
+        promise = window.api.officerEmails.openOneOffOutlook(f);
+      } catch (syncErr) {
+        try { console.error('[officerEmailsStandalone] openOneOffOutlook threw synchronously', syncErr); } catch (_) {}
+        reportFatal('openOneOffOutlook sync throw', (syncErr && syncErr.message) || String(syncErr));
+        return;
+      }
+      if (!promise || typeof promise.then !== 'function') {
+        try { console.error('[officerEmailsStandalone] openOneOffOutlook returned non-promise', promise); } catch (_) {}
+        reportFatal('openOneOffOutlook returned non-promise', 'IPC bridge unavailable');
+        return;
+      }
+      promise.then(function (res) {
+        try { console.info('[officerEmailsStandalone] openOneOffOutlook resolved', res); } catch (_) {}
         if (!res || !res.ok) {
-          if (typeof showToast === 'function') {
-            showToast((res && res.errors && res.errors[0]) || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.', 'error', 7000);
-          }
+          var errMsg = (res && res.errors && res.errors[0]) || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.';
+          if (typeof showToast === 'function') showToast(errMsg, 'error', 7000);
+          else if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(errMsg);
+          else try { console.warn('[officerEmailsStandalone] openOneOffOutlook not-ok with no toast/alert', res); } catch (_) {}
           return;
         }
-        if (typeof showToast === 'function') showToast('Opened in browser - complete send in Outlook', 'success', 5000);
+        if (typeof showToast === 'function') {
+          var openedMsg = 'Opened in browser - complete send in Outlook';
+          if (res.truncated) {
+            openedMsg =
+              'Opened in browser. The message was long, so the full email was copied to your clipboard before opening Outlook — paste into the body if needed.';
+          }
+          showToast(openedMsg, 'success', res.truncated ? 9000 : 5000);
+        } else {
+          try { console.warn('[officerEmailsStandalone] openOneOffOutlook ok but showToast undefined'); } catch (_) {}
+        }
+      }).catch(function (err) {
+        try { console.error('[officerEmailsStandalone] openOneOffOutlook rejected', err); } catch (_) {}
+        reportFatal('openOneOffOutlook rejected', (err && err.message) || String(err));
       });
     }
 
@@ -253,12 +323,96 @@
         { id: 'open', label: 'Open Outlook Web', variant: 'primary' },
       ]).then(function (choice) {
         if (choice === 'open') go();
+      }).catch(function (err) {
+        try { console.error('[officerEmailsStandalone] showChoice rejected', err); } catch (_) {}
+        reportFatal('showChoice rejected', (err && err.message) || String(err));
       });
       return;
     }
-    if (typeof showConfirm !== 'function') return;
+    if (typeof showConfirm !== 'function') {
+      try { console.warn('[officerEmailsStandalone] showChoice and showConfirm both undefined; using window.confirm fallback'); } catch (_) {}
+      var ok = false;
+      try {
+        ok = (typeof window !== 'undefined' && typeof window.confirm === 'function')
+          ? window.confirm(msg)
+          : true;
+      } catch (_) { ok = true; }
+      if (ok) go();
+      return;
+    }
     showConfirm(msg, 'Open Outlook Web').then(function (ok) {
       if (ok) go();
+    }).catch(function (err) {
+      try { console.error('[officerEmailsStandalone] showConfirm rejected', err); } catch (_) {}
+      reportFatal('showConfirm rejected', (err && err.message) || String(err));
+    });
+  }
+
+  function copyOutlookLinkClicked() {
+    if (!dirtySubjectBody) {
+      generateFromTemplate(true).then(function (res) {
+        if (res && res.ok) copyOutlookLinkClickedAfterPreview();
+      });
+      return;
+    }
+    copyOutlookLinkClickedAfterPreview();
+  }
+
+  function copyOutlookLinkClickedAfterPreview() {
+    var f = collectFields();
+    var to = String(f.toEmail || '').trim();
+    var sub = String(f.subject || '').trim();
+    var bod = String(f.body || '').trim();
+    if (!to) {
+      if (typeof showToast === 'function') showToast('Please enter a recipient email address.', 'error', 5000);
+      return;
+    }
+    if (!sub) {
+      if (typeof showToast === 'function') showToast('Please enter a subject before copying the link.', 'error', 5000);
+      return;
+    }
+    if (!bod) {
+      if (typeof showToast === 'function') showToast('Please enter an email body before copying the link.', 'error', 5000);
+      return;
+    }
+    if (!window.api || !window.api.officerEmails || !window.api.officerEmails.getComposeUrl) {
+      if (typeof showToast === 'function') showToast('Copy Outlook link is not available.', 'error');
+      return;
+    }
+    function onCopied(truncated) {
+      var msg = 'Outlook compose link copied to clipboard.';
+      if (truncated) {
+        msg +=
+          ' The link is shortened for Windows URL limits; use Open in Outlook Web to copy the full message to the clipboard automatically.';
+      }
+      if (typeof showToast === 'function') showToast(msg, 'success', truncated ? 9000 : 4000);
+    }
+    window.api.officerEmails.getComposeUrl({ fields: f }).then(function (res) {
+      if (!res || !res.ok) {
+        if (typeof showToast === 'function') {
+          showToast((res && res.errors && res.errors[0]) || 'Could not build Outlook link.', 'error', 7000);
+        }
+        return;
+      }
+      var url = res.url != null ? String(res.url) : '';
+      var truncated = !!res.truncated;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(function () {
+          onCopied(truncated);
+        }).catch(function () {
+          if (window.api.officerEmails.copyText) {
+            window.api.officerEmails.copyText(url).then(function (r) {
+              if (r && r.ok) onCopied(truncated);
+              else if (typeof showToast === 'function') showToast('Could not copy link.', 'error');
+            });
+          }
+        });
+      } else if (window.api.officerEmails.copyText) {
+        window.api.officerEmails.copyText(url).then(function (r) {
+          if (r && r.ok) onCopied(truncated);
+          else if (typeof showToast === 'function') showToast('Could not copy link.', 'error');
+        });
+      }
     });
   }
 

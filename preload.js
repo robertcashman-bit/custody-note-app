@@ -19,8 +19,9 @@ const { contextBridge, ipcRenderer } = require('electron');
        • No relative require, so esbuild has nothing to resolve.
        • lib/emailComposeDraft.js still exists for plain-Node consumers
          (tests/emailComposeDraft.module.test.js) which DON'T have the
-         asar/sandbox limitation. tests/preloadInlinedHelperParity.test.js
-         keeps the inlined block in lock-step with that file.
+         asar/sandbox limitation. tests/preloadIntegrity.test.js asserts
+         export name parity; tests/preloadOutlookWebComposeParity.test.js keeps
+         the inlined OWA compose URL builder aligned with lib/outlookWebCompose.js.
        • No behaviour change: the same export shape is re-exposed via
          contextBridge.exposeInMainWorld('CustodyEmailCompose', …) below.
 */
@@ -58,14 +59,38 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
     return 'mailto:' + encodeURIComponent(to || '') + (parts.length ? '?' + parts.join('&') : '');
   }
 
+  /* Must mirror lib/outlookWebCompose.js (see tests/preloadOutlookWebComposeParity.test.js). */
+  function normalizeBodyToCrlf(body) {
+    return String(body == null ? '' : body)
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .replace(/\n/g, '\r\n');
+  }
+
+  function buildOutlookWebComposeUrl(fields) {
+    var f = fields || {};
+    var toS = String(f.to != null ? f.to : '').trim();
+    var ccS = String(f.cc != null ? f.cc : '');
+    var subS = String(f.subject != null ? f.subject : '');
+    var bodS = normalizeBodyToCrlf(f.body != null ? f.body : '');
+    var parts = [];
+    if (toS) parts.push('to=' + encodeURIComponent(toS));
+    if (String(ccS).trim()) parts.push('cc=' + encodeURIComponent(ccS));
+    if (subS) parts.push('subject=' + encodeURIComponent(subS));
+    if (bodS) parts.push('body=' + encodeURIComponent(bodS));
+    return parts.length
+      ? 'https://outlook.office.com/mail/0/deeplink/compose?' + parts.join('&')
+      : 'https://outlook.office.com/mail/0/deeplink/compose';
+  }
+
   function buildOutlookWebComposeLink(draft) {
     var d = normalizeDraft(draft);
-    var q = new URLSearchParams();
-    if (d.to) q.set('to', d.to);
-    if (d.cc) q.set('cc', d.cc);
-    if (d.subject) q.set('subject', d.subject);
-    if (d.body) q.set('body', d.body.replace(/\n/g, '\r\n'));
-    return 'https://outlook.office.com/mail/deeplink/compose?' + q.toString();
+    return buildOutlookWebComposeUrl({
+      to: d.to,
+      cc: d.cc,
+      subject: d.subject,
+      body: d.body,
+    });
   }
 
   function savePendingEmailDraft(draft, storage) {
@@ -130,10 +155,14 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
 
     try {
       if (m === 'outlook-web') {
-        win.open(link, '_blank', 'noopener,noreferrer');
-      } else {
-        win.location.href = link;
+        var opened = win.open(link, '_blank', 'noopener,noreferrer');
+        if (!opened) {
+          console.error('openEmailDraft: browser blocked popup (window.open returned null)');
+          return false;
+        }
+        return true;
       }
+      win.location.href = link;
       return true;
     } catch (error) {
       console.error('openEmailDraft:', error);
@@ -217,6 +246,7 @@ contextBridge.exposeInMainWorld('api', {
     markSentManually: (id) => ipcRenderer.invoke('officer-email-drafts-mark-sent-manually', id),
     openOutlookDraft: (id) => ipcRenderer.invoke('officer-email-drafts-open-outlook', id),
     openOneOffOutlook: (fields) => ipcRenderer.invoke('officer-email-drafts-open-one-off-outlook', fields),
+    getComposeUrl: (payload) => ipcRenderer.invoke('officer-email-drafts-compose-url', payload),
     copyText: (text) => ipcRenderer.invoke('officer-email-drafts-copy', text),
     buildPreview: (fields) => ipcRenderer.invoke('officer-email-drafts-preview', fields),
   },

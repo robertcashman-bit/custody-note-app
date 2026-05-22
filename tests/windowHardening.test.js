@@ -52,7 +52,7 @@ describe('windowHardening.isInternalNavigation', () => {
 describe('windowHardening.isSafeExternalUrl', () => {
   it('accepts https:// URLs', () => {
     assert.strictEqual(isSafeExternalUrl('https://custodynote.com'), true);
-    assert.strictEqual(isSafeExternalUrl('https://outlook.office.com/mail/deeplink/compose?subject=hi'), true);
+    assert.strictEqual(isSafeExternalUrl('https://outlook.office.com/mail/0/deeplink/compose?subject=hi'), true);
   });
 
   it('accepts http://localhost only', () => {
