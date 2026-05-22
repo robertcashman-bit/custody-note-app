@@ -237,12 +237,12 @@ describe('officerEmailsStandalone — behavioural error surfacing (jsdom)', () =
     const { win, calls } = bootStandaloneDom(
       () => Promise.resolve({ ok: true, truncated: false, urlLength: 200 }),
       {
-        subject: '[Client Name] - [Police Station] - [Offence] - Disclosure / confirm attendance',
-        body: 'Dear Officer,\n\nI have been given the case of [Client Name] to cover at [Police Station] on [Date] in relation to an allegation of [Offence].',
+        subject: '[Client Name] - [Police Station] - [Offence] - Confirm attendance — disclosure',
+        body: 'Dear Officer,\n\nI have been instructed to represent [Client Name] at [Police Station] on [Date] in relation to an allegation of [Offence].',
         buildPreview: (fields) => Promise.resolve({
           ok: true,
-          subject: fields.clientName + ' - ' + fields.policeStation + ' - ' + fields.offence + ' - Disclosure / confirm attendance',
-          body: 'Dear Officer,\n\nI have been given the case of ' + fields.clientName + ' to cover at ' + fields.policeStation + ' on ' + fields.attendanceDate + ' in relation to an allegation of ' + fields.offence + '.',
+          subject: fields.clientName + ' - ' + fields.policeStation + ' - ' + fields.offence + ' - Confirm attendance — disclosure',
+          body: 'Dear Officer,\n\nI have been instructed to represent ' + fields.clientName + ' at ' + fields.policeStation + ' on ' + fields.attendanceDate + ' in relation to an allegation of ' + fields.offence + '.',
         }),
       }
     );
@@ -256,7 +256,7 @@ describe('officerEmailsStandalone — behavioural error surfacing (jsdom)', () =
 
     assert.strictEqual(calls.openOneOffOutlook.length, 1);
     const fields = calls.openOneOffOutlook[0];
-    assert.strictEqual(fields.subject, 'Joe Bloggs - Tonbridge - Theft - Disclosure / confirm attendance');
+    assert.strictEqual(fields.subject, 'Joe Bloggs - Tonbridge - Theft - Confirm attendance — disclosure');
     assert.ok(fields.body.includes('Joe Bloggs'), fields.body);
     assert.ok(fields.body.includes('Tonbridge'), fields.body);
     assert.ok(fields.body.includes('15.05.26'), fields.body);

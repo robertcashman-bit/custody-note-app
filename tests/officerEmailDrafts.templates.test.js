@@ -53,14 +53,21 @@ describe('officerEmailDrafts — template bodies', () => {
   it('custody_log_request uses DDO default when recipient empty', () => {
     const b = generateOfficerEmailBody(Object.assign({}, base, { templateType: 'custody_log_request' }));
     assert.ok(b.includes('Dear DDO'), b);
-    assert.ok(b.includes('custody log'), b.toLowerCase());
+    assert.ok(b.includes('custody record'), b.toLowerCase());
+  });
+
+  it('chase_disclosure includes attendance when date or time set', () => {
+    const b = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'chase_disclosure', attendanceTime: '10:00' })
+    );
+    assert.ok(b.includes('The attendance is listed for 2025-01-01 at 10:00'), b);
   });
 
   it('bail_details_request has four shape variants', () => {
     const none = generateOfficerEmailBody(
       Object.assign({}, base, { templateType: 'bail_details_request', bailReturnDate: '', bailConditions: '' })
     );
-    assert.ok(none.includes('bail return date'), none.toLowerCase());
+    assert.ok(none.includes('bail return date and time'), none.toLowerCase());
 
     const both = generateOfficerEmailBody(
       Object.assign({}, base, {
@@ -85,7 +92,7 @@ describe('officerEmailDrafts — template bodies', () => {
 
   it('free_text_email contains placeholder', () => {
     const b = generateOfficerEmailBody(Object.assign({}, base, { templateType: 'free_text_email' }));
-    assert.ok(b.includes('[Type message here]'), b);
+    assert.ok(b.includes('[Type your message here]'), b);
   });
 
   it('insertExtraNote goes before Many thanks when present', () => {
