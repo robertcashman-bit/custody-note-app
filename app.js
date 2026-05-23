@@ -15626,7 +15626,8 @@ pdfAuditFooterHtml(d, settings) +
       var email = window._appSettingsCache && window._appSettingsCache.email ? window._appSettingsCache.email : undefined;
       window.api.licenceEmailKey({ email: email }).then(function(r) {
         btn.disabled = false;
-        showToast(r.ok ? 'Licence key sent to your email' : (r.error || 'Failed'), r.ok ? 'info' : 'error');
+        var sent = r.ok && r.sent !== false;
+        showToast(sent ? (r.message || 'Licence key sent to your email') : (r.error || r.message || 'Failed to send'), sent ? 'info' : 'error');
       }).catch(function(e) { btn.disabled = false; showToast('Failed to send', 'error'); console.error('[email-key]', e); });
     });
     document.getElementById('btn-licence-deactivate-device')?.addEventListener('click', function() {
@@ -15684,7 +15685,7 @@ pdfAuditFooterHtml(d, settings) +
           resultEl.textContent = 'Expired — ' + (status.message || 'Subscription has expired.');
           resultEl.style.color = '#dc2626';
         } else if (status.status === 'already_used') {
-          resultEl.textContent = 'Already used — ' + (status.message || 'Licence is in use on 2 devices.');
+          resultEl.textContent = 'Already used — ' + (status.message || 'Licence is in use on the maximum number of devices.');
           resultEl.style.color = '#dc2626';
         } else if (status.status === 'invalid' || status.status === 'revoked') {
           resultEl.textContent = 'Invalid — ' + (status.message || 'Licence key is not valid.');
@@ -15785,16 +15786,20 @@ pdfAuditFooterHtml(d, settings) +
         if (btn) { btn.disabled = false; btn.textContent = 'Verify now'; }
       });
     });
-    document.getElementById('home-cloud-backup-cta')?.addEventListener('click', function() {
-      var cta = document.getElementById('home-cloud-backup-cta');
+    document.getElementById('home-cloud-backup-warning')?.addEventListener('click', function(e) {
+      var t = e.target;
+      if (!t || t.id !== 'home-cloud-backup-cta') return;
       if (!window.api.cloudBackupCheckEntitlement) return;
-      if (cta) { cta.disabled = true; cta.textContent = 'Checking…'; }
+      t.disabled = true;
+      t.textContent = 'Checking…';
       window.api.cloudBackupCheckEntitlement().then(function() {
         if (window.api.cloudBackupStatus) return window.api.cloudBackupStatus();
       }).then(function() {
-        if (cta) { cta.disabled = false; cta.textContent = 'Verify now →'; }
+        t.disabled = false;
+        t.textContent = 'Go to Settings \u2192';
       }).catch(function() {
-        if (cta) { cta.disabled = false; cta.textContent = 'Verify now →'; }
+        t.disabled = false;
+        t.textContent = 'Go to Settings \u2192';
       });
     });
     document.getElementById('home-cloud-backup-dismiss')?.addEventListener('click', function() {
@@ -16256,6 +16261,27 @@ pdfAuditFooterHtml(d, settings) +
       triggerUpdateCheck();
     });
 
+    function applyCloudBackupReasonCopy(data) {
+      var settingsCta = ' <button type="button" id="home-cloud-backup-cta" style="background:none;border:none;padding:0;color:#1e40af;cursor:pointer;font-size:0.8rem;text-decoration:underline;font-weight:600;">Go to Settings &rarr;</button>';
+      var reasonEl = document.getElementById('cloud-backup-unavailable-reason');
+      var homeReasonEl = document.getElementById('home-cloud-backup-reason');
+      var trialHtml = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> to enable it.';
+      var defaultSettingsHtml = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com</a>, then sign in or enter your licence key in Settings \u203a Licence.';
+      var defaultHomeHtml = 'Cloud backup is included with paid subscriptions — your data is currently backed up locally only.' + settingsCta;
+      if (data && data.isTrial) {
+        if (reasonEl) reasonEl.innerHTML = trialHtml;
+        if (homeReasonEl) homeReasonEl.innerHTML = trialHtml + settingsCta;
+        return;
+      }
+      if (data && data.lastError) {
+        if (reasonEl) reasonEl.textContent = 'Cloud backup verification failed: ' + data.lastError + '. Check your internet connection and try again.';
+        if (homeReasonEl) homeReasonEl.innerHTML = 'Cloud backup is not active: ' + data.lastError + '.' + settingsCta;
+        return;
+      }
+      if (reasonEl) reasonEl.innerHTML = defaultSettingsHtml;
+      if (homeReasonEl) homeReasonEl.innerHTML = defaultHomeHtml;
+    }
+
     // Cloud backup status listener
     if (window.api.onCloudBackupStatusChanged) {
       window.api.onCloudBackupStatusChanged(function(data) {
@@ -16301,17 +16327,7 @@ pdfAuditFooterHtml(d, settings) +
           if (checking) checking.style.display = 'none';
           if (notSub) notSub.style.display = '';
           if (isSub) isSub.style.display = 'none';
-          // Update the reason text based on licence status
-          var reasonEl = document.getElementById('cloud-backup-unavailable-reason');
-          if (reasonEl) {
-            if (data && data.isTrial) {
-              reasonEl.innerHTML = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> to enable it.';
-            } else if (data && data.lastError) {
-              reasonEl.textContent = 'Cloud backup verification failed: ' + data.lastError + '. Check your internet connection and try again.';
-            } else {
-              reasonEl.innerHTML = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com</a>, then sign in or enter your licence key in Settings \u203a Licence.';
-            }
-          }
+          applyCloudBackupReasonCopy(data);
           var cloudSt2 = document.getElementById('backup-dest-cloud-status');
           if (cloudSt2) { cloudSt2.textContent = 'Not active — local backup only'; cloudSt2.style.color = '#d97706'; }
           if (data && data.lastError && errEl) {
@@ -16346,6 +16362,7 @@ pdfAuditFooterHtml(d, settings) +
               if (homeWarning) homeWarning.style.display = '';
             }
           }
+          applyCloudBackupReasonCopy(status);
           if (window.api.getSettings) {
             window.api.getSettings().then(function(s) { applyHomeCloudBannerVisibility(s); }).catch(function() { applyHomeCloudBannerVisibility(null); });
           } else {
@@ -16790,8 +16807,13 @@ pdfAuditFooterHtml(d, settings) +
         msg.textContent = 'Sending…';
         msg.style.color = '';
         window.custodyNote.requestLicenceEmail(email).then(function(res) {
-          msg.textContent = res && res.message ? res.message : 'If that email exists in our system, your licence code has been sent.';
-          msg.style.color = 'var(--success-color,#16a34a)';
+          if (res && res.success === false) {
+            msg.textContent = res.message || 'Could not send email. Try again or contact support.';
+            msg.style.color = '#dc2626';
+          } else {
+            msg.textContent = res && res.message ? res.message : 'If that email exists in our system, your licence code has been sent.';
+            msg.style.color = 'var(--success-color,#16a34a)';
+          }
           btn.disabled = false;
         }).catch(function(e) {
           msg.textContent = 'Could not connect. Please try again later.';

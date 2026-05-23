@@ -1898,32 +1898,44 @@ async function fetchManagedCloudCredentials() {
   return null;
 }
 
+function emitCloudBackupStatus(overrides) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const lic = readLicenceData();
+  const payload = {
+    enabled: _cloudBackupEnabled,
+    isTrial: !!(lic && lic.isTrial),
+    lastError: _lastManagedCloudError || null,
+    lastSuccess: _lastManagedCloudSuccess || null,
+  };
+  if (overrides && typeof overrides === 'object') {
+    Object.assign(payload, overrides);
+  }
+  mainWindow.webContents.send('cloud-backup-status-changed', payload);
+}
+
 async function checkCloudBackupEntitlement() {
   const data = readLicenceData();
   const isTrial = !!(data && data.isTrial);
   const hasAuth = !!(data && data.authToken);
   if (!data || (!data.key && !hasAuth)) {
     _cloudBackupEnabled = false;
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, isTrial: false });
-    }
+    _lastManagedCloudError = null;
+    emitCloudBackupStatus({ enabled: false, isTrial: false, lastError: null });
     return;
   }
   if (isTrial && !hasAuth) {
     _cloudBackupEnabled = false;
+    _lastManagedCloudError = null;
     console.info('[CloudBackup] Skipping entitlement check â€” trial licence active. Cloud backup not included.');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, isTrial: true });
-    }
+    emitCloudBackupStatus({ enabled: false, isTrial: true, lastError: null });
     return;
   }
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) {
     _cloudBackupEnabled = false;
+    _lastManagedCloudError = 'Cannot reach licence server.';
     console.warn('[CloudBackup] No API URL configured');
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, isTrial: false });
-    }
+    emitCloudBackupStatus({ enabled: false, isTrial: false });
     return;
   }
   try {
@@ -1943,13 +1955,11 @@ async function checkCloudBackupEntitlement() {
       if (resp.entitlements !== undefined) data.entitlements = resp.entitlements;
       writeLicenceData(data);
       console.warn('[CloudBackup] Entitlement blocked:', _lastManagedCloudError);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('cloud-backup-status-changed', {
-          enabled: false,
-          isTrial: !!resp.isTrial,
-          lastError: _lastManagedCloudError,
-        });
-      }
+      emitCloudBackupStatus({
+        enabled: false,
+        isTrial: !!resp.isTrial,
+        lastError: _lastManagedCloudError,
+      });
       return;
     }
     _cloudBackupEnabled = !!(resp && resp.cloudBackup);
@@ -1975,9 +1985,7 @@ async function checkCloudBackupEntitlement() {
       console.error('[CloudBackup] Entitlement check failed and no valid cache:', err && err.message ? err.message : err);
     }
   }
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('cloud-backup-status-changed', { enabled: _cloudBackupEnabled, isTrial: false });
-  }
+  emitCloudBackupStatus();
 }
 
 /** Map AWS/SDK errors to user-friendly codes; return { message, code, correlationId }. */
@@ -4154,6 +4162,7 @@ ipcMain.handle('licence:validate', async () => {
     if (result.entitlements !== undefined) data.entitlements = result.entitlements;
     writeLicenceData(data);
     retrySyncQueueAfterLicenceSuccess();
+    checkCloudBackupEntitlement().catch(() => {});
   } else if (result.valid === false) {
     const serverStatus = result.serverStatus || 'revoked';
     if (serverStatus === 'expired') data.expiresAt = result.expiresAt || data.expiresAt;
@@ -4181,10 +4190,17 @@ ipcMain.handle('licence:email-key', async (_, params) => {
   else return { ok: false, error: 'No licence key or email' };
   try {
     const resp = await httpPost(`${apiUrl}/api/licence/email-key`, payload, { headers: _getAuthHeaders() });
-    if (resp.error) return { ok: false, error: resp.error };
-    return { ok: true, message: resp.message || "If an account exists, we've sent your key." };
+    if (resp.error) return { ok: false, sent: false, error: resp.error };
+    if (resp.ok === false) {
+      return { ok: false, sent: false, error: resp.error || 'Could not send email' };
+    }
+    return {
+      ok: true,
+      sent: resp.sent !== false,
+      message: resp.message || "If an account exists, we've sent your key.",
+    };
   } catch (e) {
-    return { ok: false, error: e && e.message ? e.message : 'Failed to send email' };
+    return { ok: false, sent: false, error: e && e.message ? e.message : 'Failed to send email' };
   }
 });
 

@@ -106,13 +106,26 @@ function registerLicenceIpc(app) {
     }
     const baseUrl = getServerBaseUrl();
     try {
-      await httpPostForgot(baseUrl, email);
+      const resp = await httpPostForgot(baseUrl, email);
+      if (resp && resp.ok === false) {
+        return {
+          success: false,
+          message: resp.error || 'Could not send email. Try again or contact support.',
+        };
+      }
+      return {
+        success: true,
+        message: (resp && resp.message) || GENERIC_SUCCESS.message,
+      };
     } catch (e) {
       if (process.env.NODE_ENV === 'development') {
         console.warn('[Licence] Forgot-key request failed:', e.message);
       }
+      return {
+        success: false,
+        message: 'Could not connect. Please try again later.',
+      };
     }
-    return GENERIC_SUCCESS;
   });
 
   ipcMain.handle('custody:adminLogin', async (event, password) => {
