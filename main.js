@@ -1965,7 +1965,8 @@ async function checkCloudBackupEntitlement() {
     _cloudBackupEnabled = !!(resp && resp.cloudBackup);
     _lastManagedCloudError = _cloudBackupEnabled
       ? null
-      : ((resp && (resp.message || resp.error)) || 'Cloud backup is not enabled for this licence.');
+      : ((resp && (resp.backupMessage || resp.message || resp.error)) ||
+        'Cloud backup is not enabled for this licence.');
     console.info('[CloudBackup] Entitlement result: cloudBackup=' + _cloudBackupEnabled + ' valid=' + !!(resp && resp.valid));
     if (resp && resp.expiresAt) data.expiresAt = resp.expiresAt;
     data.cachedCloudBackup = _cloudBackupEnabled;
@@ -4172,7 +4173,15 @@ ipcMain.handle('licence:validate', async () => {
     status.message = result.message || status.message || 'Licence is not valid';
     return { valid: false, status };
   }
-  return { valid: result.valid !== false, status: computeLicenceStatus(data) };
+  if (result.offline) {
+    return {
+      valid: null,
+      offline: true,
+      status: computeLicenceStatus(data),
+      message: result.message || 'Could not reach validation server',
+    };
+  }
+  return { valid: result.valid === true, status: computeLicenceStatus(data) };
 });
 
 ipcMain.handle('licence:deactivate', () => {
@@ -4182,25 +4191,50 @@ ipcMain.handle('licence:deactivate', () => {
 
 ipcMain.handle('licence:email-key', async (_, params) => {
   const apiUrl = getManagedCloudApiUrl();
-  if (!apiUrl) return { ok: false, error: 'Cannot reach licence server' };
+  if (!apiUrl) return { ok: false, sent: false, error: 'Cannot reach licence server' };
   const data = readLicenceData();
-  const payload = {};
-  if (params && params.email) payload.email = params.email.trim();
-  else if (data && data.key) payload.key = data.key;
-  else return { ok: false, error: 'No licence key or email' };
+  const { buildLicenceEmailKeyPayload } = require('./main/licenceEmailKeyPayload');
+  const payload = buildLicenceEmailKeyPayload(data, params);
+  if (!payload.key && !payload.email) {
+    return { ok: false, sent: false, error: 'No licence key or account email on this device' };
+  }
+  const correlationId = 'cn-' + Date.now().toString(36);
   try {
     const resp = await httpPost(`${apiUrl}/api/licence/email-key`, payload, { headers: _getAuthHeaders() });
-    if (resp.error) return { ok: false, sent: false, error: resp.error };
+    console.info('[licence:email-key]', {
+      correlationId: resp.correlationId || correlationId,
+      ok: resp.ok,
+      sent: resp.sent,
+      lookup: payload.key ? 'licence_key' : 'email',
+    });
+    if (resp.error && resp.ok !== true) {
+      return { ok: false, sent: false, error: resp.error, correlationId: resp.correlationId || correlationId };
+    }
     if (resp.ok === false) {
-      return { ok: false, sent: false, error: resp.error || 'Could not send email' };
+      return {
+        ok: false,
+        sent: false,
+        error: resp.error || 'Could not send email',
+        correlationId: resp.correlationId || correlationId,
+      };
+    }
+    if (resp.sent === false) {
+      return {
+        ok: false,
+        sent: false,
+        error: resp.error || 'Email was not sent',
+        correlationId: resp.correlationId || correlationId,
+      };
     }
     return {
       ok: true,
-      sent: resp.sent !== false,
+      sent: true,
       message: resp.message || "If an account exists, we've sent your key.",
+      correlationId: resp.correlationId || correlationId,
     };
   } catch (e) {
-    return { ok: false, sent: false, error: e && e.message ? e.message : 'Failed to send email' };
+    console.error('[licence:email-key]', correlationId, e && e.message ? e.message : e);
+    return { ok: false, sent: false, error: e && e.message ? e.message : 'Failed to send email', correlationId };
   }
 });
 

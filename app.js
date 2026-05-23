@@ -15623,8 +15623,7 @@ pdfAuditFooterHtml(d, settings) +
       if (!window.api.licenceEmailKey) return;
       var btn = this;
       btn.disabled = true;
-      var email = window._appSettingsCache && window._appSettingsCache.email ? window._appSettingsCache.email : undefined;
-      window.api.licenceEmailKey({ email: email }).then(function(r) {
+      window.api.licenceEmailKey({}).then(function(r) {
         btn.disabled = false;
         var sent = r.ok && r.sent !== false;
         showToast(sent ? (r.message || 'Licence key sent to your email') : (r.error || r.message || 'Failed to send'), sent ? 'info' : 'error');
@@ -15678,7 +15677,10 @@ pdfAuditFooterHtml(d, settings) +
         if (btn) btn.disabled = false;
         if (!r) { resultEl.textContent = 'Network error'; resultEl.style.color = '#dc2626'; return; }
         var status = r.status || {};
-        if (r.valid === true) {
+        if (r.offline || r.valid === null) {
+          resultEl.textContent = r.message || 'Could not reach validation server. Check your internet connection and try again.';
+          resultEl.style.color = '#d97706';
+        } else if (r.valid === true) {
           resultEl.textContent = 'Valid — licence is active.';
           resultEl.style.color = '#059669';
         } else if (status.status === 'expired') {
