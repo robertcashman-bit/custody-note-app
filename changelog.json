@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.9.7",
+      "date": "2026-05-23",
+      "latest": true,
+      "changes": [
+        "Cloud backup: show real licence/device-limit errors instead of generic local-only state on multi-PC installs."
+      ]
+    },
+    {
       "version": "1.9.6",
       "date": "2026-05-22",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Officer email templates: clearer dropdown labels and subject lines",
         "improved body wording for all nine templates",
