@@ -1933,7 +1933,29 @@ async function checkCloudBackupEntitlement() {
       machineId: getMachineId(),
       appVersion: app.getVersion() || '0.0.0',
     }, { headers: authHeaders });
+    if (resp && resp.valid === false) {
+      _cloudBackupEnabled = false;
+      _lastManagedCloudError = resp.message || resp.error || 'Licence validation failed. Check your licence and try again.';
+      if (resp.expiresAt) data.expiresAt = resp.expiresAt;
+      if (resp.email) data.email = resp.email;
+      if (resp.status) data.status = resp.status;
+      if (resp.isTrial !== undefined) data.isTrial = !!resp.isTrial;
+      if (resp.entitlements !== undefined) data.entitlements = resp.entitlements;
+      writeLicenceData(data);
+      console.warn('[CloudBackup] Entitlement blocked:', _lastManagedCloudError);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('cloud-backup-status-changed', {
+          enabled: false,
+          isTrial: !!resp.isTrial,
+          lastError: _lastManagedCloudError,
+        });
+      }
+      return;
+    }
     _cloudBackupEnabled = !!(resp && resp.cloudBackup);
+    _lastManagedCloudError = _cloudBackupEnabled
+      ? null
+      : ((resp && (resp.message || resp.error)) || 'Cloud backup is not enabled for this licence.');
     console.info('[CloudBackup] Entitlement result: cloudBackup=' + _cloudBackupEnabled + ' valid=' + !!(resp && resp.valid));
     if (resp && resp.expiresAt) data.expiresAt = resp.expiresAt;
     data.cachedCloudBackup = _cloudBackupEnabled;
