@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.7",
+      "version": "1.9.8",
       "date": "2026-05-23",
       "latest": true,
+      "changes": [
+        "Cloud backup entitlement re-checked after licence validate",
+        "home banner shows real server error",
+        "licence email only reports success when sent"
+      ]
+    },
+    {
+      "version": "1.9.7",
+      "date": "2026-05-23",
+      "latest": false,
       "changes": [
         "Cloud backup: show real licence/device-limit errors instead of generic local-only state on multi-PC installs."
       ]
