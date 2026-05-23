@@ -1939,12 +1939,11 @@ async function checkCloudBackupEntitlement() {
     return;
   }
   try {
-    const authHeaders = _getAuthHeaders();
-    const resp = await httpPost(`${apiUrl}/api/licence/validate`, {
+    const resp = await postLicenceValidateRequest({
       key: data.key,
       machineId: getMachineId(),
       appVersion: app.getVersion() || '0.0.0',
-    }, { headers: authHeaders });
+    });
     if (resp && resp.valid === false) {
       _cloudBackupEnabled = false;
       _lastManagedCloudError = resp.message || resp.error || 'Licence validation failed. Check your licence and try again.';
@@ -4001,12 +4000,35 @@ function _getAuthHeaders() {
   return {};
 }
 
+async function postLicenceValidateRequest(body) {
+  const url = getLicenceValidationUrl();
+  if (!url) return null;
+  const authHeaders = _getAuthHeaders();
+  try {
+    return await httpPost(url, body, { headers: authHeaders });
+  } catch (e) {
+    if (e && e.statusCode === 401 && authHeaders.Authorization && body.key && String(body.key).trim()) {
+      const data = readLicenceData();
+      if (data && data.authToken) {
+        delete data.authToken;
+        delete data.refreshToken;
+        writeLicenceData(data);
+      }
+      return await httpPost(url, body, {});
+    }
+    throw e;
+  }
+}
+
 async function validateLicenceOnline(key, machineId) {
   const url = getLicenceValidationUrl();
   if (!url) return { valid: true, offline: true };
   try {
-    const authHeaders = _getAuthHeaders();
-    const resp = await httpPost(url, { key, machineId, appVersion: app.getVersion() || '0.0.0' }, { headers: authHeaders });
+    const resp = await postLicenceValidateRequest({
+      key,
+      machineId,
+      appVersion: app.getVersion() || '0.0.0',
+    });
     return {
       valid: !!resp.valid,
       expiresAt: resp.expiresAt || null,
