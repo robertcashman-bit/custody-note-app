@@ -20,6 +20,7 @@
     "sync-website": "node scripts/sync-website.mjs",
     "build:icon": "node scripts/build-icon.mjs",
     "test": "node scripts/smoke-test.js",
+    "smoke:licence-backup": "node ../custody-note-website/scripts/smoke-licence-backup.mjs",
     "test:all": "node scripts/test-all.js",
     "test:ci": "node scripts/test-all.js",
     "test:e2e": "playwright test",
