@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.8",
+      "version": "1.9.9",
       "date": "2026-05-23",
       "latest": true,
+      "changes": [
+        "Email my key uses licence key not practice email",
+        "backup entitlement from server status",
+        "honest offline validate"
+      ]
+    },
+    {
+      "version": "1.9.8",
+      "date": "2026-05-23",
+      "latest": false,
       "changes": [
         "Cloud backup entitlement re-checked after licence validate",
         "home banner shows real server error",
