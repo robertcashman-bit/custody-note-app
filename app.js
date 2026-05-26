@@ -3454,7 +3454,7 @@ var REQUIRED_FIELD_KEYS = [
       if (st && st.isTrial) {
         var trialDays = st.daysRemaining != null ? ' \u2014 ' + st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : '';
         if (titleEl) titleEl.textContent = 'Free trial' + trialDays;
-        if (subEl) subEl.innerHTML = 'Enter your paid licence key to activate cloud backup and full access. <strong>custodynote.com/buy</strong>';
+        if (subEl) subEl.innerHTML = 'Enter your paid licence key to activate cloud backup and full access. <strong>custodynote.com/pricing</strong>';
         if (btnEl) btnEl.textContent = 'Enter licence key \u2192';
       } else {
         if (titleEl) titleEl.textContent = 'Enter your licence key';
@@ -5262,7 +5262,7 @@ var REQUIRED_FIELD_KEYS = [
           if (isSub) isSub.style.display = 'none';
           if (reasonEl) {
             if (status && status.isTrial) {
-              reasonEl.innerHTML = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> to enable it.';
+              reasonEl.innerHTML = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/pricing</a> to enable it.';
             } else if (status && status.lastError) {
               reasonEl.textContent = 'Cloud backup verification failed: ' + status.lastError + '. Check your internet connection and try again.';
             } else {
@@ -16267,7 +16267,7 @@ pdfAuditFooterHtml(d, settings) +
       var settingsCta = ' <button type="button" id="home-cloud-backup-cta" style="background:none;border:none;padding:0;color:#1e40af;cursor:pointer;font-size:0.8rem;text-decoration:underline;font-weight:600;">Go to Settings &rarr;</button>';
       var reasonEl = document.getElementById('cloud-backup-unavailable-reason');
       var homeReasonEl = document.getElementById('home-cloud-backup-reason');
-      var trialHtml = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/buy" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/buy</a> to enable it.';
+      var trialHtml = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/pricing</a> to enable it.';
       var defaultSettingsHtml = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com</a>, then sign in or enter your licence key in Settings \u203a Licence.';
       var defaultHomeHtml = 'Cloud backup is included with paid subscriptions — your data is currently backed up locally only.' + settingsCta;
       if (data && data.isTrial) {
@@ -16489,7 +16489,7 @@ pdfAuditFooterHtml(d, settings) +
           icon = '⚠️'; color = '#d97706';
           line1 = 'Trial licence active — ' + (st.daysRemaining != null ? st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : 'expires ' + new Date(st.expiresAt).toLocaleDateString('en-GB'));
           line2 = 'Enter a paid licence key in Settings › Licence to activate cloud backup and remove this notice.';
-          line3 = 'Get a licence at custodynote.com/buy';
+          line3 = 'Get a licence at custodynote.com/pricing';
         } else if (st.status === 'active') {
           icon = '✅'; color = '#059669';
           line1 = 'Licence active';
@@ -16498,12 +16498,12 @@ pdfAuditFooterHtml(d, settings) +
         } else if (st.status === 'expiring_soon') {
           icon = '⚠️'; color = '#d97706';
           line1 = 'Expiring soon — ' + (st.daysRemaining || '') + ' days remaining';
-          line2 = 'Renew at custodynote.com/buy';
+          line2 = 'Renew at custodynote.com/pricing';
           line3 = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
         } else if (st.status === 'expired' || st.status === 'grace_expired') {
           icon = '❌'; color = '#dc2626';
           line1 = 'Licence expired';
-          line2 = st.message || 'Renew your subscription at custodynote.com/buy';
+          line2 = st.message || 'Renew your subscription at custodynote.com/pricing';
           line3 = '';
         } else if (st.status === 'revoked') {
           icon = '❌'; color = '#dc2626';
@@ -16536,10 +16536,10 @@ pdfAuditFooterHtml(d, settings) +
           if (l2El) l2El.textContent = data.lastSuccess ? 'Last upload: ' + new Date(data.lastSuccess).toLocaleString('en-GB') : 'Backup active — no uploads yet this session';
         } else if (data.isTrial) {
           setBlock('sysstat-backup-icon','ℹ️','#2563eb','sysstat-backup-line1','Local backup only — trial licence','sysstat-backup-line2','');
-          if (l2El) l2El.textContent = 'Cloud backup is not included in the free trial. Subscribe at custodynote.com/buy to enable it.';
+          if (l2El) l2El.textContent = 'Cloud backup is not included in the free trial. Subscribe at custodynote.com/pricing to enable it.';
         } else {
           setBlock('sysstat-backup-icon','⚠️','#d97706','sysstat-backup-line1','Local backup only','sysstat-backup-line2','');
-          var reason = data.lastError || 'Cloud backup requires a paid subscription. Subscribe at custodynote.com/buy.';
+          var reason = data.lastError || 'Cloud backup requires a paid subscription. Subscribe at custodynote.com/pricing.';
           if (l2El) l2El.textContent = reason;
         }
       }

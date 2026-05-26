@@ -121,7 +121,7 @@ created by `prepare-trial.js`.
 
 1. Start a trial from custodynote.com/trial
 2. Enter the trial key in the app — verify licence validation works
-3. Subscribe with cloud backup via custodynote.com/buy?plan=cloud
+3. Subscribe via [custodynote.com/pricing](https://custodynote.com/pricing)
 4. Enter the paid licence key — verify cloud backup activates
 5. Make a change in the app — verify backup uploads to S3 within 2 minutes
 6. Check S3 bucket — verify files exist under `backups/{hash}/`
