@@ -20,6 +20,12 @@ describe('subscribe links', () => {
     }
   });
 
+  it('reports new local trials to the licence server when packaged', () => {
+    const mainJs = fs.readFileSync(path.join(ROOT, 'main.js'), 'utf8');
+    assert.match(mainJs, /reportTrialStartedToServer/);
+    assert.match(mainJs, /\/api\/stats\/trial-started/);
+  });
+
   it('cloud-backup-subscribe opens pricing on the licence server', () => {
     const mainJs = fs.readFileSync(path.join(ROOT, 'main.js'), 'utf8');
     assert.match(mainJs, /`\$\{apiUrl\}\/pricing/);
