@@ -1,8 +1,8 @@
 {
   "name": "custody-note",
-  "version": "1.9.10",
-  "lastUpdated": "2026-05-23",
-  "buildTime": "2026-05-23T14:34:05.320Z",
+  "version": "1.9.11",
+  "lastUpdated": "2026-05-25",
+  "buildTime": "2026-05-25T20:10:00.000Z",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
   "scripts": {
@@ -30,13 +30,18 @@
     "prepare-trial": "node scripts/prepare-trial.js",
     "capture-screenshots": "node scripts/capture-screenshots.js",
     "security:audit": "node scripts/security-audit.mjs",
-    "security:scan": "node scripts/security-audit.mjs"
+    "security:scan": "node scripts/security-audit.mjs",
+    "build:icns": "node scripts/build-icns.mjs",
+    "build:mac": "npm run verify:release && npm run build:icns && electron-builder --mac && npm run verify:built-asar",
+    "build:mac:signed": "npm run verify:release && npm run build:icns && node scripts/build-mac-signed.mjs && npm run verify:built-asar",
+    "verify:mac:cert": "security find-identity -v -p codesigning",
+    "start:mac": "electron ."
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "electron": "^28.3.3",
+    "electron": "^42.2.0",
     "electron-builder": "^26.8.1",
     "jsdom": "^29.0.0",
     "nodemailer": "^8.0.7",
@@ -64,8 +69,42 @@
     "win": {
       "icon": "custody-note.ico",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
+    },
+    "mac": {
+      "icon": "build/custody-note.icns",
+      "category": "public.app-category.business",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "artifactName": "Custody-Note-${version}-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "Custody Note ${version}",
+      "icon": "build/custody-note.icns",
+      "artifactName": "Custody-Note-${version}-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": true,
@@ -78,7 +117,8 @@
       "menuCategory": "Custody Note",
       "shortcutName": "Custody Note",
       "deleteAppDataOnUninstall": false,
-      "include": "build/installer.nsh"
+      "include": "build/installer.nsh",
+      "artifactName": "Custody-Note-Setup-${version}.${ext}"
     },
     "files": [
       "**/*",

@@ -43,6 +43,54 @@ function getDefaultUserDataPath() {
   }
 }
 
+/* macOS application menu. On macOS, hiding the menu bar entirely (which
+ * is what setApplicationMenu(null) does on Windows) also disables the
+ * standard Cmd+Q / Cmd+W / Cmd+C / Cmd+V / Cmd+A keyboard shortcuts and
+ * input-method editing in text fields. Apps that omit the menu therefore
+ * feel broken to mac users. We supply a minimal menu using only built-in
+ * Electron roles, which respects the existing `before-quit` handlers
+ * (database flush, security log) because role:'quit' goes through the
+ * normal app.quit() path. This function is only called when
+ * process.platform === 'darwin'; on Windows the menu is still suppressed
+ * exactly as before. */
+function buildMacAppMenu() {
+  const appName = app.getName();
+  const template = [
+    {
+      label: appName,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' },
+        { role: 'close' },
+      ],
+    },
+  ];
+  return Menu.buildFromTemplate(template);
+}
+
 const DEFAULT_USERDATA_PATH = getDefaultUserDataPath();
 const PORTABLE_USERDATA_PATH = app.isPackaged
   ? path.join(path.dirname(process.execPath), 'userData')
@@ -4412,7 +4460,11 @@ app.whenReady().then(async () => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
-  Menu.setApplicationMenu(null);
+  if (process.platform === 'darwin') {
+    Menu.setApplicationMenu(buildMacAppMenu());
+  } else {
+    Menu.setApplicationMenu(null);
+  }
 
   function getCliArgValue(name) {
     const idx = process.argv.indexOf(name);
