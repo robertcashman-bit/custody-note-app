@@ -52,10 +52,10 @@ describe('defaultBrowserCandidatesWindows', () => {
     };
     const list = mod.defaultBrowserCandidatesWindows(env);
     const joined = list.join('|');
-    assert.ok(joined.includes(path.join('Google', 'Chrome', 'Application', 'chrome.exe')), 'chrome.exe candidate missing');
-    assert.ok(joined.includes(path.join('Microsoft', 'Edge', 'Application', 'msedge.exe')), 'msedge.exe candidate missing');
-    assert.ok(joined.includes(path.join('Mozilla Firefox', 'firefox.exe')), 'firefox.exe candidate missing');
-    assert.ok(joined.includes(path.join('BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe')), 'brave.exe candidate missing');
+    assert.ok(joined.includes(path.win32.join('Google', 'Chrome', 'Application', 'chrome.exe')), 'chrome.exe candidate missing');
+    assert.ok(joined.includes(path.win32.join('Microsoft', 'Edge', 'Application', 'msedge.exe')), 'msedge.exe candidate missing');
+    assert.ok(joined.includes(path.win32.join('Mozilla Firefox', 'firefox.exe')), 'firefox.exe candidate missing');
+    assert.ok(joined.includes(path.win32.join('BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe')), 'brave.exe candidate missing');
   });
   it('skips entries whose env var is missing', () => {
     const list = mod.defaultBrowserCandidatesWindows({});
@@ -70,13 +70,13 @@ describe('findDefaultBrowserExeWindows', () => {
     'LOCALAPPDATA': 'C:\\Users\\u\\AppData\\Local',
   };
   it('returns the first existing browser exe', () => {
-    const chrome = path.join('C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe');
+    const chrome = path.win32.join('C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe');
     const fileExists = (p) => p === chrome;
     assert.strictEqual(mod.findDefaultBrowserExeWindows({ env, fileExists }), chrome);
   });
   it('prefers Program Files\\Google\\Chrome over the (x86) fallback', () => {
-    const chrome64 = path.join('C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe');
-    const chrome86 = path.join('C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe');
+    const chrome64 = path.win32.join('C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe');
+    const chrome86 = path.win32.join('C:\\Program Files (x86)', 'Google', 'Chrome', 'Application', 'chrome.exe');
     const fileExists = (p) => p === chrome64 || p === chrome86;
     assert.strictEqual(mod.findDefaultBrowserExeWindows({ env, fileExists }), chrome64);
   });
@@ -110,7 +110,7 @@ describe('openExternalUrl', () => {
   it('on win32 + Outlook URL + Chrome present: spawns Chrome directly, does NOT call shell.openExternal', async () => {
     const shell = makeShell();
     const spawnCtl = makeSpawn();
-    const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+    const chrome = path.win32.join('C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe');
     const res = await mod.openExternalUrl('https://outlook.office.com/mail/0/deeplink/compose?to=a@b.c', {
       electronShell: shell,
       platform: 'win32',
@@ -179,7 +179,7 @@ describe('openExternalUrl', () => {
 
   it('falls back to shell.openExternal when spawn throws', async () => {
     const shell = makeShell();
-    const chrome = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+    const chrome = path.win32.join('C:\\Program Files', 'Google', 'Chrome', 'Application', 'chrome.exe');
     const res = await mod.openExternalUrl('https://outlook.office.com/x', {
       electronShell: shell,
       platform: 'win32',
