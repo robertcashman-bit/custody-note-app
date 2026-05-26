@@ -5477,7 +5477,7 @@ ipcMain.handle('cloud-backup-subscribe', async () => {
   if (!apiUrl) return { ok: false, error: 'Cannot reach server' };
   const data = readLicenceData();
   const email = data && data.email ? data.email : '';
-  const url = `${apiUrl}/buy?plan=cloud${email ? '&email=' + encodeURIComponent(email) : ''}`;
+  const url = `${apiUrl}/pricing${email ? '?email=' + encodeURIComponent(email) : ''}`;
   await shell.openExternal(url);
   return { ok: true };
 });
