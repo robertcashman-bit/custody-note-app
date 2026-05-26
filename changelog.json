@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.11",
+      "date": "2026-05-25",
+      "latest": true,
+      "changes": [
+        "First macOS edition — signed and notarised for Apple Silicon and Intel Macs",
+        "Download from custodynote.com/download (Mac and Windows)",
+        "Automatic updates on Mac and Windows when a new version is published"
+      ]
+    },
+    {
       "version": "1.9.10",
       "date": "2026-05-23",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Licence validate retries without expired account token",
         "clears stale session when falling back to licence key"

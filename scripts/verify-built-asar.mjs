@@ -31,7 +31,7 @@
  * be released — re-run the build (after freeing disk space if needed).
  */
 import { spawnSync } from 'child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -65,12 +65,31 @@ function findBuiltAsars() {
     fail(`dist/ not found at ${distRoot} — did electron-builder actually run?`);
   }
   const candidates = [];
-  for (const d of ['win-unpacked', 'win-ia32-unpacked', 'win-arm64-unpacked', 'mac', 'linux-unpacked']) {
+
+  /* Windows / Linux: app.asar is at <platform-unpacked>/resources/app.asar */
+  for (const d of ['win-unpacked', 'win-ia32-unpacked', 'win-arm64-unpacked', 'linux-unpacked']) {
     const a = join(distRoot, d, 'resources', 'app.asar');
     if (existsSync(a)) candidates.push(a);
   }
+
+  /* macOS: app.asar is inside the .app bundle at
+   * <platform-unpacked>/<productName>.app/Contents/Resources/app.asar.
+   * We discover the .app name dynamically so this script does not need
+   * to be edited if the productName changes. */
+  for (const d of ['mac', 'mac-arm64']) {
+    const macUnpacked = join(distRoot, d);
+    if (!existsSync(macUnpacked)) continue;
+    let appName = null;
+    try {
+      appName = readdirSync(macUnpacked).find((n) => n.endsWith('.app')) || null;
+    } catch (_) { /* ignore */ }
+    if (!appName) continue;
+    const a = join(macUnpacked, appName, 'Contents', 'Resources', 'app.asar');
+    if (existsSync(a)) candidates.push(a);
+  }
+
   if (candidates.length === 0) {
-    fail(`no built app.asar found under ${distRoot}/<platform-unpacked>/resources/app.asar`);
+    fail(`no built app.asar found under ${distRoot}/<platform-unpacked>/resources/app.asar (or mac .app bundle)`);
   }
   return candidates;
 }
