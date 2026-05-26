@@ -3847,6 +3847,18 @@ const LICENCE_GRACE_DAYS = 7;
 const LICENCE_REVALIDATE_HOURS = 24;
 const TRIAL_DAYS = 30;
 
+/** One anonymous ping when a packaged install starts its local trial (no case data). */
+function reportTrialStartedToServer() {
+  if (!app.isPackaged) return;
+  const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return;
+  httpPost(`${apiUrl}/api/stats/trial-started`, {
+    machineId: getMachineId(),
+    platform: process.platform,
+    appVersion: app.getVersion(),
+  }, { timeout: 8000 }).catch(function () {});
+}
+
 function getLicencePath() {
   return path.join(app.getPath('userData'), LICENCE_FILE);
 }
@@ -4185,6 +4197,7 @@ ipcMain.handle('licence:status', () => {
       isTrial: true,
     };
     writeLicenceData(data);
+    reportTrialStartedToServer();
   }
   const result = computeLicenceStatus(data);
   result.enforced = enforced;

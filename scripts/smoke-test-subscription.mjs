@@ -145,6 +145,32 @@ async function main() {
     fail('POST /api/auth/magic-link', e.message);
   }
 
+  // Admin stats — requires secret
+  try {
+    const admin = await get('/api/admin/stats');
+    if (admin.status === 401) {
+      pass('GET /api/admin/stats', 'requires admin secret');
+    } else {
+      fail('GET /api/admin/stats', `expected 401, got ${admin.status}`);
+    }
+  } catch (e) {
+    fail('GET /api/admin/stats', e.message);
+  }
+
+  // Tracked download redirect
+  try {
+    const dl = await fetch(`${BASE}/api/stats/download?platform=windows`, { redirect: 'manual' });
+    if (dl.status === 302 && dl.headers.get('location')?.includes('github.com')) {
+      pass('GET /api/stats/download', 'redirects to GitHub');
+    } else if (dl.status === 302) {
+      pass('GET /api/stats/download', 'redirects (302)');
+    } else {
+      fail('GET /api/stats/download', `HTTP ${dl.status}`);
+    }
+  } catch (e) {
+    fail('GET /api/stats/download', e.message);
+  }
+
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} passed`);
   if (failed.length) {
