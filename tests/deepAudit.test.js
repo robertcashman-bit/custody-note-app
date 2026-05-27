@@ -34,12 +34,16 @@ describe('1 · Packaging & Config Consistency', () => {
     assert.ok(typeof pkg.build.publish.repo === 'string' && pkg.build.publish.repo.length > 0);
   });
 
-  it('GitHub releases stay draft until updater assets are uploaded', () => {
+  it('GitHub releases stay draft until cross-platform updater assets are uploaded', () => {
     assert.equal(pkg.build.publish.releaseType, 'draft');
     const workflowSrc = readFile('.github/workflows/release-publish.yml');
-    assert.ok(workflowSrc.includes('Publish release after updater assets are ready'));
+    // Dedicated publish-release job waits for the full Windows + Mac asset
+    // set, then flips draft → live. Asserting both feeds + the gh-cli edit
+    // protects the gating from a Windows-only regression.
+    assert.ok(workflowSrc.includes('publish-release:'));
     assert.ok(workflowSrc.includes('latest.yml'));
-    assert.ok(workflowSrc.includes('gh release edit $tag'));
+    assert.ok(workflowSrc.includes('latest-mac.yml'));
+    assert.ok(/gh release edit\s+"\$TAG"/.test(workflowSrc));
   });
 
   it('build.nsis config exists', () => {
