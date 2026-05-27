@@ -62,6 +62,19 @@ const SIGNING_CERT_FILE = join(SIGNING_STAGING_DIR, 'cert.pem');
 const SIGNING_ASSETS_PRESENT =
   existsSync(SIGNING_KEY_FILE) && existsSync(SIGNING_CERT_FILE);
 
+/* In CI (GitHub Actions runner) the certificate is imported directly into a
+ * temporary keychain by the workflow step before this script runs. The temp
+ * keychain is in the search list and pre-trusted for codesign, so we don't
+ * need the ephemeral .p12 dance and we don't need to warn about Keychain
+ * prompts — they cannot fire because partition-list is already set. */
+const IS_CI = !!process.env.CI || !!process.env.GITHUB_ACTIONS;
+
+/* CN_PUBLISH=always makes the build also upload artefacts (and latest-mac.yml)
+ * to the matching GitHub Release via electron-builder's standard GitHub
+ * publisher. Used by the release-publish.yml workflow so the Mac job can push
+ * its outputs to the same draft release the Windows job populates. */
+const PUBLISH_MODE = process.env.CN_PUBLISH || null;
+
 function fail(msg) {
   console.error(`[build:mac:signed] FAIL: ${msg}`);
   process.exit(1);
@@ -246,6 +259,13 @@ if (SIGNING_ASSETS_PRESENT) {
   process.env.CSC_LINK = p12Path;
   process.env.CSC_KEY_PASSWORD = p12Pass;
   info(`built ephemeral signing p12 at ${p12Path} — electron-builder will use its own temp keychain (no codesign prompts)`);
+} else if (IS_CI) {
+  info(
+    `CI detected: Developer ID certificate is expected to be pre-imported into a ` +
+    `temporary keychain by the workflow (with partition-list set so codesign can ` +
+    `use it without prompts). The "security find-identity" check above confirmed ` +
+    `it is present.`
+  );
 } else {
   info(
     `~/.cn-signing/{devid.key,cert.pem} not present — falling back to the ` +
@@ -265,16 +285,22 @@ const config = {
  * the much smaller validation script above.
  * ──────────────────────────────────────────────────────────────────────── */
 
+if (PUBLISH_MODE) {
+  info(`CN_PUBLISH=${PUBLISH_MODE} — electron-builder will upload artefacts and latest-mac.yml to the matching GitHub release.`);
+}
+
 info('starting electron-builder (signing + notarisation can take 5–15 minutes)…');
 const electronBuilder = await import('electron-builder');
 const { build, Platform } = electronBuilder;
 
 let artefacts;
 try {
-  artefacts = await build({
+  const buildOpts = {
     targets: Platform.MAC.createTarget(),
     config,
-  });
+  };
+  if (PUBLISH_MODE) buildOpts.publish = PUBLISH_MODE;
+  artefacts = await build(buildOpts);
 } catch (e) {
   fail(`electron-builder failed: ${e && e.message ? e.message : String(e)}`);
 } finally {
