@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.9.12",
+      "version": "1.9.13",
       "date": "2026-05-27",
       "latest": true,
+      "changes": [
+        "Release pipeline now builds, signs, notarises and publishes both the Windows installer and the macOS arm64+x64 .dmg/.zip in parallel from CI",
+        "no user-visible changes"
+      ]
+    },
+    {
+      "version": "1.9.12",
+      "date": "2026-05-27",
+      "latest": false,
       "changes": [
         "Form subsections expanded by default with completion status chips",
         "optional compact collapse in Settings",
