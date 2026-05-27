@@ -467,6 +467,12 @@ describe('11 · Dead Code & Broken References', () => {
       const m = (cmd || '').match(/^node\s+([\w./\-]+\.(?:js|mjs|cjs))/);
       if (m) {
         const scriptFile = m[1];
+        // Skip developer-convenience scripts that point at sibling repos
+        // (e.g. ../custody-note-website/...). Those resolve on a developer
+        // machine where both repos sit alongside each other, but not in CI
+        // where only this repo is checked out. Treating them as "broken"
+        // creates false negatives that block every CI run.
+        if (scriptFile.startsWith('../') || scriptFile.startsWith('..\\')) continue;
         const fullPath = path.join(ROOT, scriptFile);
         if (!fs.existsSync(fullPath)) broken.push(`${name}: ${scriptFile}`);
       }
