@@ -322,7 +322,7 @@ function initUpdater(options) {
     const isSilent = !options.diagnostic;
     logger.info(
       `Invoking autoUpdater.quitAndInstall(isSilent=${isSilent}, isForceRunAfter=true) ` +
-      '— installer will be spawned then app.exit(0) on nextTick'
+      `[platform=${process.platform}]`
     );
     try {
       autoUpdater.quitAndInstall(isSilent, true);
@@ -330,13 +330,34 @@ function initUpdater(options) {
       logger.error('quitAndInstall threw:', err && err.message ? err.message : err);
     }
 
-    // quitAndInstall() spawns the detached NSIS process synchronously, then
-    // requests a graceful quit. Use nextTick so the spawn completes, then
-    // hard-exit to drop our file handles before the uninstall step runs.
-    process.nextTick(() => {
-      logger.info('app.exit(0) after quitAndInstall (nextTick) — releasing file handles for installer');
-      app.exit(0);
-    });
+    /* Platform-specific quit handling.
+     *
+     * Windows (NSIS): quitAndInstall() synchronously spawns the installer
+     * .exe with detached:true. The child process is fully forked before
+     * quitAndInstall returns, so hard-exiting on nextTick is safe and
+     * RECOMMENDED — it drops our file handles before the installer's
+     * uninstall step runs, avoiding file-lock failures.
+     *
+     * macOS (Squirrel.Mac): quitAndInstall() calls Electron's native
+     * autoUpdater, which schedules the install for AFTER the natural
+     * before-quit → will-quit → quit lifecycle. Squirrel.Mac spawns its
+     * ShipIt helper during that quit flow. Hard-exiting here BYPASSES
+     * the lifecycle, so Squirrel never spawns ShipIt and the update is
+     * silently dropped — visible only as "Failed version transition
+     * expected=X actual=Y" on the next launch. We must let the native
+     * quit flow complete on its own.
+     *
+     * This pattern was responsible for every Mac auto-update silently
+     * failing pre-fix (v1.9.10 → v1.9.11, v1.9.11 → v1.9.13, etc.).
+     */
+    if (process.platform === 'win32') {
+      process.nextTick(() => {
+        logger.info('app.exit(0) after quitAndInstall (nextTick) — releasing file handles for Windows installer');
+        app.exit(0);
+      });
+    } else {
+      logger.info('quitAndInstall handed off — letting native Squirrel.Mac quit flow complete (do NOT app.exit here)');
+    }
 
     return { ok: true };
   }

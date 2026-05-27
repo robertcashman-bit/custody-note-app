@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.9.13",
+      "version": "1.9.14",
       "date": "2026-05-27",
       "latest": true,
+      "changes": [
+        "Fix macOS auto-update silent failure: app.exit(0) after quitAndInstall was bypassing Squirrel.Mac's quit lifecycle so ShipIt never ran and the new version was never installed — every Mac auto-update silently dropped. Now only Windows hard-exits",
+        "Mac lets the native quit flow complete."
+      ]
+    },
+    {
+      "version": "1.9.13",
+      "date": "2026-05-27",
+      "latest": false,
       "changes": [
         "Release pipeline now builds, signs, notarises and publishes both the Windows installer and the macOS arm64+x64 .dmg/.zip in parallel from CI",
         "no user-visible changes"
