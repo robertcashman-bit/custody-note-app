@@ -157,9 +157,16 @@ async function main() {
     fail('GET /api/admin/stats', e.message);
   }
 
-  // Tracked download redirect
+  // Tracked download redirect (skip owner email — smoke / CI should not alert)
   try {
-    const dl = await fetch(`${BASE}/api/stats/download?platform=windows`, { redirect: 'manual' });
+    const smokeSecret = process.env.CRON_SECRET || process.env.STATS_SMOKE_SECRET || '';
+    const dlHeaders = smokeSecret
+      ? { 'X-Custody-Note-Skip-Notify': smokeSecret }
+      : {};
+    const dl = await fetch(`${BASE}/api/stats/download?platform=windows`, {
+      redirect: 'manual',
+      headers: dlHeaders,
+    });
     if (dl.status === 302 && dl.headers.get('location')?.includes('github.com')) {
       pass('GET /api/stats/download', 'redirects to GitHub');
     } else if (dl.status === 302) {
