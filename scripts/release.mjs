@@ -229,18 +229,52 @@ async function main() {
     if (!skipVerify) {
       const latestUrl = 'https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/latest';
       let latestVersion = null;
+      let latestAssetNames = [];
       for (const delayMs of [3000, 5000, 8000]) {
         await new Promise((r) => setTimeout(r, delayMs));
         const latestRes = await fetch(latestUrl, { headers: ghApiHeaders });
         if (!latestRes.ok) continue;
         const latestData = await latestRes.json();
         latestVersion = String(latestData.tag_name || '').replace(/^v/, '');
+        latestAssetNames = (latestData.assets || []).map((a) => a.name);
         if (latestVersion === newVersion) break;
       }
       if (latestVersion !== newVersion) {
         console.warn(`Warning: GitHub latest is v${latestVersion || 'unknown'}, expected v${newVersion}. Proceeding with website deploy.`);
       } else {
         console.log(`GitHub latest release verified: v${latestVersion}`);
+      }
+
+      // Guard: if "latest" lacks latest-mac.yml, Mac auto-updater on previous versions
+      // will fail on every startup. Auto-demote to prerelease so /releases/latest
+      // falls back to the previous full release until the Mac assets are uploaded.
+      const allowMacBreakage = argv.includes('--allow-missing-mac-assets');
+      const hasMacFeed = latestAssetNames.includes('latest-mac.yml');
+      if (latestVersion === newVersion && !hasMacFeed && !allowMacBreakage) {
+        console.warn(
+          `\nWARNING: Release v${newVersion} has no latest-mac.yml. Mac auto-update would break for v${newVersion - 1} users.`
+        );
+        console.warn('Demoting v' + newVersion + ' to prerelease so /releases/latest returns the previous full release.');
+        try {
+          const idRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/tags/v${newVersion}`, { headers: ghApiHeaders });
+          if (idRes.ok) {
+            const rel = await idRes.json();
+            const patchRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/${rel.id}`, {
+              method: 'PATCH',
+              headers: ghApiHeaders,
+              body: JSON.stringify({ prerelease: true, make_latest: 'false' }),
+            });
+            if (patchRes.ok) {
+              console.warn('Demoted to prerelease. To finish the release: build Mac assets locally (npm run build:mac:signed),');
+              console.warn('upload them to the v' + newVersion + ' release, then PATCH prerelease=false via GitHub API.');
+              console.warn('Or re-run release with --allow-missing-mac-assets to skip this guard.');
+            } else {
+              console.warn('Failed to PATCH release to prerelease:', patchRes.status);
+            }
+          }
+        } catch (e) {
+          console.warn('Demote-to-prerelease failed:', e && e.message ? e.message : e);
+        }
       }
     }
   } else {
