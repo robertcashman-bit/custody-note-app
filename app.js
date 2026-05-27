@@ -5179,6 +5179,7 @@ var REQUIRED_FIELD_KEYS = [
       var sbv = document.getElementById('scrollbar-size-val');
       if (sbv) { sbv.textContent = (s.scrollbarScale || '1') + 'x'; }
       applyDensity(s.displayDensity || 'compact');
+      applyFormSubsectionsMode(s.formSubsectionsMode === 'compact' ? 'compact' : 'expanded');
       var layoutMode = document.getElementById('setting-layout-mode');
       if (layoutMode) layoutMode.value = s.layoutMode || 'standard';
       var navMode = document.getElementById('setting-nav-mode');
@@ -6529,6 +6530,7 @@ var REQUIRED_FIELD_KEYS = [
     updateSectionIndicator();
     const form = document.getElementById('attendance-form');
     if (form) form.scrollTop = 0;
+    refreshAllSubsectionHeadingChips();
   }
 
   /** True when the note is finalised — user may archive (handover timestamps are set on archive if missing). */
@@ -8074,13 +8076,154 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function _countFieldsUnderHeading(h) {
-    var count = 0;
-    var sib = h.nextElementSibling;
-    while (sib && !sib.classList.contains('section-heading')) {
-      if (sib.classList.contains('form-group')) count++;
+    return _getFormGroupsUnderHeading(h).length;
+  }
+
+  var _formSubsectionsMode = 'expanded';
+  var _subsectionChipTimer = null;
+
+  function getFormSubsectionsMode() {
+    return _formSubsectionsMode === 'compact' ? 'compact' : 'expanded';
+  }
+
+  function applyFormSubsectionsMode(mode) {
+    _formSubsectionsMode = mode === 'compact' ? 'compact' : 'expanded';
+    document.documentElement.classList.toggle('subsections-compact', _formSubsectionsMode === 'compact');
+    document.documentElement.classList.toggle('subsections-expanded', _formSubsectionsMode !== 'compact');
+    document.querySelectorAll('.subsections-mode-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-subsections-mode') === _formSubsectionsMode);
+    });
+    var form = document.getElementById('attendance-form');
+    if (!form) return;
+    form.querySelectorAll('.section-heading').forEach(function(h) {
+      _applySubsectionHeadingMode(h);
+    });
+    refreshAllSubsectionHeadingChips();
+  }
+
+  function initFormSubsectionsMode() {
+    window.api.getSettings().then(function(s) {
+      var stored = s && s.formSubsectionsMode;
+      applyFormSubsectionsMode(stored === 'compact' ? 'compact' : 'expanded');
+    }).catch(function() {
+      applyFormSubsectionsMode('expanded');
+    });
+  }
+
+  function _getHeadingBlockStart(h) {
+    var parent = h.parentElement;
+    if (parent && parent.dataset && parent.dataset.showIfField) return parent;
+    return h;
+  }
+
+  function _isNextSectionHeadingBlock(sib) {
+    if (!sib) return false;
+    if (sib.classList.contains('section-heading')) return true;
+    return !!(sib.querySelector && sib.querySelector('.section-heading'));
+  }
+
+  function _getFormGroupsUnderHeading(h) {
+    var groups = [];
+    var sib = _getHeadingBlockStart(h).nextElementSibling;
+    while (sib && !_isNextSectionHeadingBlock(sib)) {
+      if (sib.classList.contains('form-group')) {
+        var showWrap = sib.closest('[data-show-if-field]');
+        if (!showWrap || showWrap.style.display !== 'none') groups.push(sib);
+      }
       sib = sib.nextElementSibling;
     }
-    return count;
+    return groups;
+  }
+
+  function _fieldKeyFromFormGroup(g) {
+    var el = g.querySelector('[name]');
+    return el && el.name ? el.name : null;
+  }
+
+  function _computeHeadingCompletion(h) {
+    var groups = _getFormGroupsUnderHeading(h);
+    var total = 0;
+    var filled = 0;
+    groups.forEach(function(g) {
+      var key = _fieldKeyFromFormGroup(g);
+      if (!key) return;
+      total++;
+      if (hasMeaningfulFieldValue(formData[key])) filled++;
+    });
+    return { total: total, filled: filled };
+  }
+
+  function _formatHeadingStatusChip(completion) {
+    if (!completion.total) return '';
+    if (completion.filled === completion.total) return 'Complete · ' + completion.filled + '/' + completion.total;
+    if (!completion.filled) return 'Not started';
+    return completion.filled + '/' + completion.total + ' complete';
+  }
+
+  function _applyHeadingStatusChip(h) {
+    var chip = h.querySelector('.section-status-chip');
+    if (!chip) return;
+    if (getFormSubsectionsMode() === 'compact') {
+      chip.textContent = '';
+      chip.className = 'section-status-chip section-status-chip--hidden';
+      return;
+    }
+    var c = _computeHeadingCompletion(h);
+    var state = !c.filled ? 'empty' : (c.filled === c.total ? 'complete' : 'partial');
+    chip.className = 'section-status-chip state-' + state;
+    chip.textContent = _formatHeadingStatusChip(c);
+  }
+
+  function _setHeadingFieldsCollapsed(h, collapsed) {
+    var hint = h.querySelector('.section-collapsed-hint');
+    var sib = _getHeadingBlockStart(h).nextElementSibling;
+    while (sib && !_isNextSectionHeadingBlock(sib)) {
+      sib.classList.toggle('collapsed', collapsed);
+      sib.style.display = collapsed ? 'none' : '';
+      sib = sib.nextElementSibling;
+    }
+    h.classList.toggle('collapsed', collapsed);
+    if (hint) {
+      if (collapsed && getFormSubsectionsMode() === 'compact') {
+        var n = _countFieldsUnderHeading(h);
+        hint.textContent = n + ' field' + (n !== 1 ? 's' : '') + ' hidden';
+      } else {
+        hint.textContent = '';
+      }
+    }
+  }
+
+  function _applySubsectionHeadingMode(h) {
+    var compact = getFormSubsectionsMode() === 'compact';
+    var wantCollapsed = compact && h.dataset.defaultCollapsed === '1';
+    _setHeadingFieldsCollapsed(h, wantCollapsed);
+    var toggle = h.querySelector('.section-toggle');
+    if (toggle) toggle.style.display = compact ? '' : 'none';
+    h.classList.toggle('section-heading--static', !compact);
+    h.classList.toggle('section-heading--collapsible', compact);
+    _applyHeadingStatusChip(h);
+  }
+
+  function _attachSubsectionHeadingClick(h) {
+    if (h.dataset.subsectionClickBound === '1') return;
+    h.dataset.subsectionClickBound = '1';
+    h.addEventListener('click', function() {
+      if (getFormSubsectionsMode() !== 'compact') return;
+      var isCollapsed = h.classList.contains('collapsed');
+      _setHeadingFieldsCollapsed(h, !isCollapsed);
+    });
+  }
+
+  function refreshAllSubsectionHeadingChips() {
+    document.querySelectorAll('#attendance-form .section-heading').forEach(_applyHeadingStatusChip);
+  }
+
+  function scheduleRefreshSubsectionHeadingChips() {
+    if (_subsectionChipTimer) clearTimeout(_subsectionChipTimer);
+    _subsectionChipTimer = setTimeout(function() {
+      _subsectionChipTimer = null;
+      refreshAllSubsectionHeadingChips();
+    }, 120);
   }
 
   /**
@@ -8202,12 +8345,19 @@ var REQUIRED_FIELD_KEYS = [
   function renderField(f, data, grid) {
     if (f.type === 'sectionHeading') {
       const h = document.createElement('h3');
-      h.className = 'section-heading';
+      h.className = 'section-heading section-heading--static';
+      if (f.key) h.dataset.headingKey = f.key;
+      if (f.defaultCollapsed) h.dataset.defaultCollapsed = '1';
 
       var labelSpan = document.createElement('span');
       labelSpan.className = 'section-heading-label';
       labelSpan.textContent = f.label;
       h.appendChild(labelSpan);
+
+      var chip = document.createElement('span');
+      chip.className = 'section-status-chip state-empty';
+      chip.setAttribute('aria-live', 'polite');
+      h.appendChild(chip);
 
       var hint = document.createElement('span');
       hint.className = 'section-collapsed-hint';
@@ -8218,34 +8368,11 @@ var REQUIRED_FIELD_KEYS = [
       toggle.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>';
       h.appendChild(toggle);
 
-      if (f.defaultCollapsed) h.classList.add('collapsed');
+      _attachSubsectionHeadingClick(h);
 
-      h.addEventListener('click', () => {
-        h.classList.toggle('collapsed');
-        var isCollapsed = h.classList.contains('collapsed');
-        var sib = h.nextElementSibling;
-        while (sib && !sib.classList.contains('section-heading')) {
-          sib.classList.toggle('collapsed', isCollapsed);
-          sib.style.display = isCollapsed ? 'none' : '';
-          sib = sib.nextElementSibling;
-        }
-        var fieldCount = _countFieldsUnderHeading(h);
-        hint.textContent = isCollapsed ? (fieldCount + ' field' + (fieldCount !== 1 ? 's' : '') + ' hidden') : '';
-      });
       const wrap = f.showIf ? document.createElement('div') : null;
       if (wrap) { wrap.style.gridColumn = '1 / -1'; wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); wrap.appendChild(h); grid.appendChild(wrap); } else grid.appendChild(h);
-      if (f.defaultCollapsed) {
-        requestAnimationFrame(() => {
-          var sib = h.nextElementSibling;
-          while (sib && !sib.classList.contains('section-heading')) {
-            sib.classList.add('collapsed');
-            sib.style.display = 'none';
-            sib = sib.nextElementSibling;
-          }
-          var fieldCount = _countFieldsUnderHeading(h);
-          hint.textContent = fieldCount + ' field' + (fieldCount !== 1 ? 's' : '') + ' hidden';
-        });
-      }
+      requestAnimationFrame(function() { _applySubsectionHeadingMode(h); });
       return;
     }
     if (f.type === 'sectionNote') {
@@ -10946,6 +11073,7 @@ var REQUIRED_FIELD_KEYS = [
       if (formData.passportedBenefit !== 'Unknown') { formData.passportedBenefit = 'Unknown'; setFieldValue('passportedBenefit', 'Unknown'); }
     }
 
+    scheduleRefreshSubsectionHeadingChips();
   }
 
   /* ─── MULTI-INTERVIEW ─── */
@@ -11194,6 +11322,7 @@ var REQUIRED_FIELD_KEYS = [
         delete formData._duplicateFreshClient;
       }
     }
+    scheduleRefreshSubsectionHeadingChips();
   }
 
   function collectStationVisitData(form) {
@@ -15079,6 +15208,7 @@ pdfAuditFooterHtml(d, settings) +
     initFontSize();
     initScrollbarSize();
     initDensity();
+    initFormSubsectionsMode();
     initLayoutPreferences();
     initPanelResizers();
     initKeyboardShortcuts();
@@ -17357,6 +17487,14 @@ pdfAuditFooterHtml(d, settings) +
         var density = btn.getAttribute('data-density') || 'default';
         applyDensity(density);
         window.api.setSettings({ displayDensity: density }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
+      });
+    });
+
+    document.querySelectorAll('.subsections-mode-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var mode = btn.getAttribute('data-subsections-mode') === 'compact' ? 'compact' : 'expanded';
+        applyFormSubsectionsMode(mode);
+        window.api.setSettings({ formSubsectionsMode: mode }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
       });
     });
 

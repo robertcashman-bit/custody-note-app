@@ -2379,6 +2379,54 @@ html.dark .grounds-card .checkbox-item.grounds-option:hover {
   opacity: 0; transition: opacity 0.2s ease;
 }
 .section-heading.collapsed .section-collapsed-hint { opacity: 1; }
+
+/* Bullseye-style: expanded subsections — static dividers + completion chips */
+.section-heading--static {
+  cursor: default;
+}
+.subsections-expanded .section-heading--static:hover {
+  background: var(--section-bg);
+}
+.subsections-expanded .section-heading--static .section-toggle {
+  display: none !important;
+}
+.section-heading-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.section-status-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-left: auto;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.section-status-chip--hidden {
+  display: none;
+}
+.section-status-chip.state-empty {
+  color: var(--text-muted, #64748b);
+  background: color-mix(in srgb, var(--text-muted, #64748b) 12%, transparent 88%);
+}
+.section-status-chip.state-partial {
+  color: var(--warning-text, #b45309);
+  background: color-mix(in srgb, var(--warning-text, #b45309) 14%, transparent 86%);
+}
+.section-status-chip.state-complete {
+  color: var(--success-text, #15803d);
+  background: color-mix(in srgb, var(--success-text, #15803d) 14%, transparent 86%);
+}
+.subsections-compact .section-heading--collapsible {
+  cursor: pointer;
+}
+.subsections-compact .section-heading--collapsible:hover {
+  background: color-mix(in srgb, var(--primary) 8%, var(--section-bg) 92%);
+}
+
 .collapsible-group { transition: max-height 0.2s ease; overflow: hidden; }
 .collapsible-group.collapsed { max-height: 0 !important; }
 

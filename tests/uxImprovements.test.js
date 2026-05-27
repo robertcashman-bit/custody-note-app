@@ -96,18 +96,19 @@ describe('Conflict Certification — auto date', () => {
   });
 });
 
-describe('UX — progressive disclosure (defaultCollapsed)', () => {
+describe('UX — Bullseye-style form subsections', () => {
 
-  it('renderField supports defaultCollapsed property on sectionHeading', () => {
+  it('renderField renders static headings with status chips', () => {
     const renderIdx = appJsSource.indexOf('function renderField(');
     assert.ok(renderIdx !== -1, 'renderField must exist');
-    const renderBlock = appJsSource.substring(renderIdx, renderIdx + 1500);
-    assert.ok(renderBlock.includes('defaultCollapsed'), 'renderField must handle defaultCollapsed');
-    assert.ok(renderBlock.includes("h.classList.add('collapsed')"), 'must add collapsed class when defaultCollapsed');
+    const renderBlock = appJsSource.substring(renderIdx, renderIdx + 2200);
+    assert.ok(renderBlock.includes('section-heading--static'), 'section headings default to static');
+    assert.ok(renderBlock.includes('section-status-chip'), 'section headings include status chip');
+    assert.ok(renderBlock.includes('_applySubsectionHeadingMode'), 'must apply subsection mode after render');
   });
 
-  it('secondary sections default to collapsed', () => {
-    const secondarySections = [
+  it('optional blocks keep defaultCollapsed for compact mode only', () => {
+    const optionalSections = [
       '_h_pace_reviews',
       '_h_strip_search',
       '_h_property',
@@ -115,13 +116,20 @@ describe('UX — progressive disclosure (defaultCollapsed)', () => {
       '_h_device_seizure',
       '_h_special_warnings',
     ];
-    secondarySections.forEach(key => {
+    optionalSections.forEach(key => {
       const re = new RegExp("key:\\s*'" + key + "'.*defaultCollapsed:\\s*true");
-      assert.ok(re.test(appJsSource), key + ' must have defaultCollapsed: true');
+      assert.ok(re.test(appJsSource), key + ' must retain defaultCollapsed for compact mode');
     });
   });
 
-  it('primary sections do NOT default to collapsed', () => {
+  it('expanded mode is default with completion helpers', () => {
+    assert.ok(appJsSource.includes('function _computeHeadingCompletion'), '_computeHeadingCompletion must exist');
+    assert.ok(appJsSource.includes('function refreshAllSubsectionHeadingChips'), 'chip refresh helper must exist');
+    assert.ok(appJsSource.includes("formSubsectionsMode"), 'settings must persist formSubsectionsMode');
+    assert.ok(appJsSource.includes("applyFormSubsectionsMode('expanded')"), 'default subsection mode is expanded');
+  });
+
+  it('primary sections do NOT use defaultCollapsed', () => {
     const primarySections = [
       '_h_referral',
       '_h_arrest',
@@ -145,11 +153,17 @@ describe('CSS — UX improvements', () => {
     assert.ok(parseFloat(match[1]) >= 1, 'form-group margin-bottom should be >= 1rem');
   });
 
-  it('section-heading has hover state', () => {
+  it('section-heading has hover state (compact collapsible mode)', () => {
     assert.ok(
-      stylesCssSource.includes('.section-heading:hover'),
-      'section-heading must have :hover styles'
+      stylesCssSource.includes('.section-heading:hover') || stylesCssSource.includes('.section-heading--collapsible:hover'),
+      'section-heading must have :hover styles for collapsible mode'
     );
+  });
+
+  it('expanded subsection mode uses static headings and status chips', () => {
+    assert.ok(stylesCssSource.includes('.section-heading--static'), 'static subsection headings');
+    assert.ok(stylesCssSource.includes('.section-status-chip'), 'subsection completion chips');
+    assert.ok(stylesCssSource.includes('.subsections-expanded'), 'expanded subsection mode class');
   });
 
   it('section-note has visual distinction (padding + border-left)', () => {
