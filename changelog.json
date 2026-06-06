@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.15",
+      "date": "2026-06-06",
+      "latest": true,
+      "changes": [
+        "Widen attendance form on laptop with compact sidebar rail and summary drawer",
+        "Hide duplicate section navigation when left sidebar is active"
+      ]
+    },
+    {
       "version": "1.9.14",
       "date": "2026-05-27",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix macOS auto-update silent failure: app.exit(0) after quitAndInstall was bypassing Squirrel.Mac's quit lifecycle so ShipIt never ran and the new version was never installed — every Mac auto-update silently dropped. Now only Windows hard-exits",
         "Mac lets the native quit flow complete."
