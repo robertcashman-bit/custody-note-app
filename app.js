@@ -14261,6 +14261,54 @@ pdfAuditFooterHtml(d, settings) +
   /* ═══════════════════════════════════════════════
      VISUAL LAYOUT PREFERENCES
      ═══════════════════════════════════════════════ */
+  var LAYOUT_SIDEBAR_MIN = 1200;
+  var LAYOUT_SIDEBAR_COMPACT_MAX = 1499;
+  var LAYOUT_CONTEXT_DOCK_MIN = 1500;
+  var _layoutSettingsCache = null;
+  var _layoutResizeBound = false;
+
+  function isSidebarNavActive(settings, width) {
+    var navMode = (settings && settings.navMode) || 'auto';
+    var forceThreeCol = !!(settings && settings.forceThreeCol === 'true');
+    if (forceThreeCol) return true;
+    if (navMode === 'topbar') return false;
+    return width >= LAYOUT_SIDEBAR_MIN;
+  }
+
+  function isContextPanelCollapsed(settings, width) {
+    if (!settings || settings.showContextPanel === 'false') return true;
+    var pref = settings.contextPanelCollapsed;
+    if (pref === 'true') return true;
+    if (pref === 'false') return false;
+    return width < LAYOUT_CONTEXT_DOCK_MIN;
+  }
+
+  function updateResponsiveLayoutClasses(settings) {
+    var root = document.documentElement;
+    var s = settings || _layoutSettingsCache || {};
+    var width = window.innerWidth || document.documentElement.clientWidth || 0;
+    var sidebarActive = isSidebarNavActive(s, width);
+    var compactSidebar = sidebarActive && width <= LAYOUT_SIDEBAR_COMPACT_MAX;
+    var contextCollapsed = isContextPanelCollapsed(s, width);
+    var contextOpen = !contextCollapsed && s.showContextPanel !== 'false';
+    var contextDocked = contextOpen && width >= LAYOUT_CONTEXT_DOCK_MIN;
+
+    root.classList.toggle('sidebar-nav-active', sidebarActive);
+    root.classList.toggle('sidebar-compact', compactSidebar);
+    root.classList.toggle('context-panel-open', contextOpen);
+    root.classList.toggle('context-panel-docked', contextDocked);
+    root.classList.toggle('context-panel-drawer', contextOpen && !contextDocked);
+
+    var toggleBtn = document.getElementById('form-context-panel-toggle');
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-expanded', contextOpen ? 'true' : 'false');
+      toggleBtn.classList.toggle('active', contextOpen);
+      toggleBtn.textContent = contextOpen ? 'Summary \u25BE' : 'Summary';
+    }
+    var backdrop = document.getElementById('form-context-panel-backdrop');
+    if (backdrop) backdrop.hidden = !(contextOpen && !contextDocked);
+  }
+
   function applyLayoutPreferences(settings) {
     var root = document.documentElement;
     var layoutMode = (settings && settings.layoutMode) || 'standard';
@@ -14268,12 +14316,13 @@ pdfAuditFooterHtml(d, settings) +
     var widgetsMode = (settings && settings.homeWidgetsMode) || 'expanded';
     var navMode = (settings && settings.navMode) || 'auto';
 
+    _layoutSettingsCache = settings || {};
+
     root.classList.remove('layout-mode-standard', 'layout-mode-wide', 'layout-mode-focus', 'layout-mode-tablet');
     root.classList.add('layout-mode-' + layoutMode);
     root.classList.remove('nav-mode-auto', 'nav-mode-sidebar', 'nav-mode-topbar');
     root.classList.add('nav-mode-' + navMode);
 
-    root.classList.toggle('context-panel-open', !settings || settings.showContextPanel !== 'false');
     root.classList.toggle('force-three-col', !!(settings && settings.forceThreeCol === 'true'));
     root.classList.toggle('section-accents-enabled', !settings || settings.sectionAccents !== 'false');
     root.classList.toggle('sticky-section-headings', !settings || settings.stickySectionHeadings !== 'false');
@@ -14294,7 +14343,31 @@ pdfAuditFooterHtml(d, settings) +
       btn.classList.toggle('active', btn.getAttribute('data-layout-mode') === layoutMode);
     });
 
+    updateResponsiveLayoutClasses(settings);
     if (typeof restorePanelWidths === 'function') restorePanelWidths(settings);
+
+    if (!_layoutResizeBound) {
+      _layoutResizeBound = true;
+      window.addEventListener('resize', debounce(function() {
+        updateResponsiveLayoutClasses(_layoutSettingsCache);
+      }, 120));
+    }
+  }
+
+  function setContextPanelCollapsed(collapsed) {
+    if (!window.api || !window.api.setSettings) {
+      if (_layoutSettingsCache) {
+        _layoutSettingsCache.contextPanelCollapsed = collapsed ? 'true' : 'false';
+        applyLayoutPreferences(_layoutSettingsCache);
+      }
+      return;
+    }
+    window.api.setSettings({ contextPanelCollapsed: collapsed ? 'true' : 'false' }).then(function() {
+      return window.api.getSettings();
+    }).then(function(s) {
+      _layoutSettingsCache = s || {};
+      applyLayoutPreferences(s || {});
+    });
   }
 
   function initLayoutPreferences() {
@@ -14433,6 +14506,10 @@ pdfAuditFooterHtml(d, settings) +
       btn.appendChild(dot);
       var num = visibleIdx + 1;
       var label = sec.title.replace(/^\d+\.\s*/, '');
+      var numWrap = document.createElement('span');
+      numWrap.className = 'sidebar-num';
+      numWrap.textContent = String(num);
+      btn.appendChild(numWrap);
       var textWrap = document.createElement('span');
       textWrap.className = 'sidebar-text';
       textWrap.textContent = num + '. ' + label;
@@ -15322,6 +15399,14 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('form-sections-btn')?.addEventListener('click', openSectionsIndex);
     document.getElementById('sections-index-btn')?.addEventListener('click', openSectionsIndex);
     document.getElementById('sections-index-close')?.addEventListener('click', closeSectionsIndex);
+    document.getElementById('form-context-panel-toggle')?.addEventListener('click', function() {
+      var width = window.innerWidth || document.documentElement.clientWidth || 0;
+      var collapsed = isContextPanelCollapsed(_layoutSettingsCache || {}, width);
+      setContextPanelCollapsed(!collapsed);
+    });
+    document.getElementById('form-context-panel-backdrop')?.addEventListener('click', function() {
+      setContextPanelCollapsed(true);
+    });
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('billing-panel-btn')?.addEventListener('click', function () {
       var action = (this && this.dataset && this.dataset.action) || 'finalise';

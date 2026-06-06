@@ -211,3 +211,39 @@ describe('CSS — UX improvements', () => {
     assert.ok(bodyMatch, 'html, body must have overflow: hidden');
   });
 });
+
+describe('Form layout — de-squash side panels', () => {
+  const indexHtmlPath = path.join(__dirname, '..', 'index.html');
+  const indexHtmlSource = fs.readFileSync(indexHtmlPath, 'utf8');
+
+  it('hides top section bar when left sidebar/rail is active', () => {
+    assert.ok(
+      stylesCssSource.includes('html.sidebar-nav-active #section-index-bar'),
+      'sidebar-nav-active must hide duplicate section-index-bar'
+    );
+  });
+
+  it('defines compact sidebar rail styles for medium widths', () => {
+    assert.ok(stylesCssSource.includes('html.sidebar-compact .form-section-sidebar'), 'compact rail styles must exist');
+    assert.ok(appJsSource.includes('LAYOUT_SIDEBAR_COMPACT_MAX'), 'compact breakpoint constant must exist');
+  });
+
+  it('uses 1500px threshold for docked context panel', () => {
+    assert.ok(stylesCssSource.includes('min-width: 1500px'), 'context panel dock breakpoint must be 1500px');
+    assert.ok(appJsSource.includes('LAYOUT_CONTEXT_DOCK_MIN = 1500'), 'context dock constant must be 1500');
+  });
+
+  it('provides summary drawer toggle and backdrop in the form header', () => {
+    assert.ok(indexHtmlSource.includes('id="form-context-panel-toggle"'), 'summary toggle button must exist');
+    assert.ok(indexHtmlSource.includes('id="form-context-panel-backdrop"'), 'drawer backdrop must exist');
+    assert.ok(appJsSource.includes('setContextPanelCollapsed'), 'collapse helper must exist');
+  });
+
+  it('hides duplicate section status card when sidebar navigation is active', () => {
+    assert.ok(
+      stylesCssSource.includes('html.sidebar-nav-active .form-panel-card--section-status'),
+      'section status card must hide when sidebar is active'
+    );
+    assert.ok(indexHtmlSource.includes('form-panel-card--section-status'), 'section status card marker class must exist');
+  });
+});

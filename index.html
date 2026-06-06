@@ -601,6 +601,7 @@
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
             <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent" title="Primary action for the current record (Finalise / Finish matter / Archive)" style="display:none;">Finalise</button>
+            <button type="button" id="form-context-panel-toggle" class="btn btn-small" title="Show or hide matter summary panel" aria-expanded="false" aria-controls="form-context-panel">Summary</button>
             <button type="button" id="sections-index-btn" class="btn btn-sections">Sections</button>
           </div>
         </div>
@@ -654,6 +655,7 @@
           </div>
         </div>
 
+        <div id="form-context-panel-backdrop" class="form-context-panel-backdrop" hidden></div>
         <div class="form-layout-wrap">
           <div id="form-section-sidebar" class="form-section-sidebar"></div>
           <div class="panel-resizer" data-target="sidebar"></div>
@@ -666,7 +668,7 @@
                 <div class="form-panel-empty">Open a matter to see the key facts here.</div>
               </div>
             </div>
-            <div class="form-panel-card">
+            <div class="form-panel-card form-panel-card--section-status">
               <div class="form-panel-card-label">Section Status</div>
               <div id="form-panel-section-status" class="form-panel-stack">
                 <div class="form-panel-empty">Section progress will appear here.</div>
@@ -1051,7 +1053,7 @@
                 <input type="checkbox" id="setting-show-context-panel">
               </label>
               <label class="toggle-row" style="margin-top:0.9rem;">
-                <span>Always show three-column layout<br><small style="font-weight:400;opacity:0.75;">Forces the section list (left) and matter summary (right) to stay visible on smaller screens. The middle form column will be narrower.</small></span>
+                <span>Always show three-column layout<br><small style="font-weight:400;opacity:0.75;">Keeps the left section list visible on smaller screens using a compact rail. The right summary opens as a slide-out drawer so the form stays wider.</small></span>
                 <input type="checkbox" id="setting-force-three-col">
               </label>
               <label class="toggle-row" style="margin-top:0.9rem;">
