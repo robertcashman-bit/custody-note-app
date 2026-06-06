@@ -3417,12 +3417,16 @@ var REQUIRED_FIELD_KEYS = [
 
   function updateAddonUIs(st) {
     var addons = (st && st.addons) ? st.addons : { quickfile: false, emailAddon: false };
-    var qfLocked = document.getElementById('quickfile-settings-locked');
-    var qfContent = document.getElementById('quickfile-settings-content');
-    if (qfLocked && qfContent) {
-      qfLocked.style.display = addons.quickfile ? 'none' : '';
-      qfContent.style.display = addons.quickfile ? '' : 'none';
+    /* Invoicing credentials + connection test are always available — only the
+     * optional "import firms directory" feature requires the QuickFile add-on. */
+    var qfImportLocked = document.getElementById('qf-import-addon-locked');
+    var qfImportSection = document.getElementById('qf-import-addon-section');
+    if (qfImportLocked && qfImportSection) {
+      qfImportLocked.style.display = addons.quickfile ? 'none' : '';
+      qfImportSection.style.display = addons.quickfile ? '' : 'none';
     }
+    var qfContent = document.getElementById('quickfile-settings-content');
+    if (qfContent) qfContent.style.display = '';
     var qfFirmsLocked = document.getElementById('qf-firms-locked');
     var qfFirmsContent = document.getElementById('qf-firms-content');
     if (qfFirmsLocked && qfFirmsContent) {
@@ -4943,7 +4947,9 @@ var REQUIRED_FIELD_KEYS = [
     if (!window.api || !window.api.setSettings) return Promise.reject(new Error('Settings are not available'));
     const settings = getQuickFileSettingsPayload();
     return window.api.setSettings(settings).then(function() {
+      window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
       if (showFeedback !== false) showSettingsSavedToast();
+      if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
       return settings;
     });
   }
@@ -17826,6 +17832,47 @@ pdfAuditFooterHtml(d, settings) +
     }, 3000);
   }
 
+  /** Shared CRM1 pre-submit summary — used by the LAA menu AND the billing Step 1 generate button. */
+  function promptCrm1ValidationBeforeGenerate(data) {
+    return new Promise(function (resolve) {
+      if (typeof window.Crm1Validation === 'undefined' || typeof showChoice !== 'function') {
+        resolve(true);
+        return;
+      }
+      var result = window.Crm1Validation.validateCrm1Data(data);
+      if (result.ok && (!result.warnings || !result.warnings.length)) {
+        resolve(true);
+        return;
+      }
+      var lines = [];
+      if (result.errors.length) {
+        lines.push('Please fix these before submitting CRM1:');
+        result.errors.forEach(function (e) { lines.push('  \u2022 ' + e.label + ': ' + e.message); });
+      }
+      if (result.warnings.length) {
+        if (lines.length) lines.push('');
+        lines.push('Will be left blank on the form (optional):');
+        result.warnings.forEach(function (w) { lines.push('  \u2022 ' + w.label + ': ' + w.message); });
+      }
+      var opts;
+      if (result.errors.length) {
+        opts = [
+          { id: 'fix', label: 'Go back and fix (' + result.errors.length + ' to fix)', variant: 'primary' },
+          { id: 'anyway', label: 'Generate draft anyway', variant: 'secondary' },
+        ];
+      } else {
+        opts = [
+          { id: 'anyway', label: 'Generate CRM1 now', variant: 'primary' },
+          { id: 'fix', label: 'Go back and complete optional fields', variant: 'secondary' },
+        ];
+      }
+      showChoice(lines.join('\n'), 'CRM1 \u2014 check before submitting', opts).then(function (choice) {
+        resolve(choice === 'anyway');
+      });
+    });
+  }
+  window.promptCrm1ValidationBeforeGenerate = promptCrm1ValidationBeforeGenerate;
+
   function openLaaForm(formType, sourceData) {
     var data = sourceData || formData || {};
     var formNames = {
@@ -17854,41 +17901,11 @@ pdfAuditFooterHtml(d, settings) +
       }
     };
 
-    // Pre-submit validation summary for CRM1 — surface specific, field-level
-    // problems before generating the official PDF so we never silently produce
-    // a blank/wrong form. Warnings are advisory; errors require an explicit
-    // "generate draft anyway" choice.
-    if (formType === 'crm1' && typeof window.Crm1Validation !== 'undefined' && typeof showChoice === 'function') {
-      var result = window.Crm1Validation.validateCrm1Data(data);
-      if (!result.ok || (result.warnings && result.warnings.length)) {
-        var lines = [];
-        if (result.errors.length) {
-          lines.push('Please fix these before submitting CRM1:');
-          result.errors.forEach(function (e) { lines.push('  \u2022 ' + e.label + ': ' + e.message); });
-        }
-        if (result.warnings.length) {
-          if (lines.length) lines.push('');
-          lines.push('Will be left blank on the form (optional):');
-          result.warnings.forEach(function (w) { lines.push('  \u2022 ' + w.label + ': ' + w.message); });
-        }
-        var opts;
-        if (result.errors.length) {
-          opts = [
-            { id: 'fix', label: 'Go back and fix (' + result.errors.length + ' to fix)', variant: 'primary' },
-            { id: 'anyway', label: 'Generate draft anyway', variant: 'secondary' },
-          ];
-        } else {
-          opts = [
-            { id: 'anyway', label: 'Generate CRM1 now', variant: 'primary' },
-            { id: 'fix', label: 'Go back and complete optional fields', variant: 'secondary' },
-          ];
-        }
-        showChoice(lines.join('\n'), 'CRM1 \u2014 check before submitting', opts).then(function (choice) {
-          if (choice === 'anyway') proceed();
-          // 'fix' or dismissed: do nothing, user returns to the form.
-        });
-        return;
-      }
+    if (formType === 'crm1') {
+      promptCrm1ValidationBeforeGenerate(data).then(function (ok) {
+        if (ok) proceed();
+      });
+      return;
     }
 
     proceed();

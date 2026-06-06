@@ -983,13 +983,9 @@
         <div class="settings-tab-panel" data-stab-panel="integrations">
         <div class="settings-section-label">Integrations</div>
         <div class="settings-card" id="quickfile-settings-card">
-          <h2>QuickFile Directory Import</h2>
-          <div id="quickfile-settings-locked" class="addon-locked-message" style="display:none;">
-            <p>QuickFile add-on requires a licence. Buy it on the website to import your client directory from QuickFile.</p>
-            <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy QuickFile add-on</a>
-          </div>
+          <h2>QuickFile invoicing &amp; directory</h2>
           <div id="quickfile-settings-content">
-            <p class="settings-hint">Connect your QuickFile account to import your client directory into <strong>Firms You Work For</strong> and to send invoices. Imported entries map to firm name, contact name, email and telephone, and can still be edited afterwards.</p>
+            <p class="settings-hint">Enter your QuickFile API credentials here to <strong>send invoices</strong> from the billing workflow. Credentials are stored on <strong>this computer only</strong> &mdash; enter them once on each machine you use.</p>
 
             <div id="qf-connection-status" class="qf-connection-status" role="status" aria-live="polite">
               <span class="qf-status-dot" id="qf-status-dot"></span>
@@ -1009,9 +1005,15 @@
             <div style="display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:0.9rem;">
               <button type="button" id="btn-save-qf-settings" class="btn btn-secondary">Save QuickFile settings</button>
               <button type="button" id="btn-save-test-qf" class="btn btn-secondary">Save and test QuickFile</button>
-              <button type="button" id="btn-save-import-qf" class="btn btn-primary">Save and import firms now</button>
             </div>
-            <p class="settings-hint" style="margin-top:0.55rem;">Use <strong>Save and import firms now</strong> for the quickest setup. It saves these details and jumps straight to the firm import. Your three credentials are stored on <strong>this computer only</strong> &mdash; set them up once per machine.</p>
+            <div id="qf-import-addon-locked" class="addon-locked-message" style="display:none;margin-top:0.9rem;">
+              <p>The optional <strong>import firms from QuickFile</strong> feature requires a QuickFile add-on licence. Invoicing still works once your three credentials above are saved and tested.</p>
+              <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy QuickFile add-on</a>
+            </div>
+            <div id="qf-import-addon-section" style="margin-top:0.9rem;">
+              <button type="button" id="btn-save-import-qf" class="btn btn-primary">Save and import firms now</button>
+              <p class="settings-hint" style="margin-top:0.55rem;">Optional: import your QuickFile client directory into <strong>Firms You Work For</strong>.</p>
+            </div>
           </div>
         </div>
 

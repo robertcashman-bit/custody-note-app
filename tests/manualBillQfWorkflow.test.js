@@ -471,9 +471,11 @@ describe('Step 2: Billing screen — data loading', () => {
   });
 
   it('falls back to defaults if data load fails (catch handler)', () => {
-    const catchIdx = billingScreenJs.indexOf('.catch(function');
-    assert.ok(catchIdx > 0, 'Must have Promise.all catch handler');
-    const catchBody = billingScreenJs.slice(catchIdx, catchIdx + 800);
+    const allIdx = billingScreenJs.indexOf('Promise.all([');
+    assert.ok(allIdx > 0, 'Must use Promise.all for billing data load');
+    const catchIdx = billingScreenJs.indexOf('}).catch(function ()', allIdx);
+    assert.ok(catchIdx > allIdx, 'Must have Promise.all catch handler');
+    const catchBody = billingScreenJs.slice(catchIdx, catchIdx + 1200);
     assert.ok(catchBody.includes('_wfRenderBillingBody'), 'Catch still renders billing body');
   });
 

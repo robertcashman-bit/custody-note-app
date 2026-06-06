@@ -324,7 +324,7 @@ describe('Voluntary form and outcome statuses', () => {
   });
 
   it('settings and firms UI include QuickFile import controls', () => {
-    assert.ok(indexHtmlSource.includes('QuickFile Directory Import'), 'settings should include QuickFile credentials section');
+    assert.ok(indexHtmlSource.includes('QuickFile invoicing'), 'settings should include QuickFile credentials section');
     assert.ok(indexHtmlSource.includes('setting-quickfile-account'), 'settings should include QuickFile account input');
     assert.ok(indexHtmlSource.includes('setting-quickfile-apikey'), 'settings should include QuickFile API key input');
     assert.ok(indexHtmlSource.includes('setting-quickfile-appid'), 'settings should include QuickFile application ID input');

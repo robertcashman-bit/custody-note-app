@@ -33,9 +33,9 @@ describe('v1.5.10 — Billing review confirmation card is gated on QuickFile con
     );
   });
 
-  it('A "QuickFile not configured" notice card is rendered when !qfConfigured', () => {
+  it('A QuickFile not-set-up notice card is rendered when !qfConfigured', () => {
     assert.match(billingScreen, /wf-qf-not-configured-card/);
-    assert.match(billingScreen, /QuickFile not configured/);
+    assert.match(billingScreen, /QuickFile not set up on this computer/);
     assert.match(
       billingScreen,
       /!qfConfigured[\s\S]*?wf-qf-not-configured-card/,
