@@ -3216,6 +3216,9 @@ var REQUIRED_FIELD_KEYS = [
 
     var isForm = (name === 'new');
     document.body.classList.toggle('form-active', isForm);
+    if (isForm && typeof updateResponsiveLayoutClasses === 'function') {
+      updateResponsiveLayoutClasses(_layoutSettingsCache);
+    }
     if (!isForm) {
       var hft = document.getElementById('header-form-title');
       if (hft) hft.textContent = '';
@@ -7486,15 +7489,53 @@ var REQUIRED_FIELD_KEYS = [
     window.addEventListener('mouseup', onMouseUp);
   }
 
+  function clearPanelInlineWidths(target) {
+    var sb = document.getElementById('form-section-sidebar');
+    var cp = document.getElementById('form-context-panel');
+    if (!target || target === 'sidebar') {
+      if (sb) {
+        sb.style.width = '';
+        sb.style.minWidth = '';
+        sb.style.maxWidth = '';
+      }
+    }
+    if (!target || target === 'context-panel') {
+      if (cp) {
+        cp.style.width = '';
+        cp.style.minWidth = '';
+        cp.style.maxWidth = '';
+      }
+    }
+  }
+
   function restorePanelWidths(settings) {
     if (!settings) return;
-    if (settings.sidebarWidth) {
-      var sb = document.getElementById('form-section-sidebar');
-      if (sb) sb.style.width = settings.sidebarWidth + 'px';
+    var width = window.innerWidth || document.documentElement.clientWidth || 0;
+    var sidebarActive = isSidebarNavActive(settings, width);
+    var compactSidebar = sidebarActive && width <= LAYOUT_SIDEBAR_COMPACT_MAX;
+    var contextCollapsed = isContextPanelCollapsed(settings, width);
+    var contextOpen = !contextCollapsed && settings.showContextPanel !== 'false';
+    var contextDocked = contextOpen && width >= LAYOUT_CONTEXT_DOCK_MIN;
+    var sb = document.getElementById('form-section-sidebar');
+    var cp = document.getElementById('form-context-panel');
+
+    if (sb) {
+      if (compactSidebar) {
+        clearPanelInlineWidths('sidebar');
+      } else if (settings.sidebarWidth) {
+        sb.style.width = settings.sidebarWidth + 'px';
+      } else {
+        sb.style.width = '';
+      }
     }
-    if (settings.contextPanelWidth) {
-      var cp = document.getElementById('form-context-panel');
-      if (cp) cp.style.width = settings.contextPanelWidth + 'px';
+    if (cp) {
+      if (!contextDocked) {
+        clearPanelInlineWidths('context-panel');
+      } else if (settings.contextPanelWidth) {
+        cp.style.width = settings.contextPanelWidth + 'px';
+      } else {
+        cp.style.width = '';
+      }
     }
   }
 
@@ -14307,6 +14348,8 @@ pdfAuditFooterHtml(d, settings) +
     }
     var backdrop = document.getElementById('form-context-panel-backdrop');
     if (backdrop) backdrop.hidden = !(contextOpen && !contextDocked);
+
+    if (typeof restorePanelWidths === 'function') restorePanelWidths(s);
   }
 
   function applyLayoutPreferences(settings) {
@@ -14344,7 +14387,6 @@ pdfAuditFooterHtml(d, settings) +
     });
 
     updateResponsiveLayoutClasses(settings);
-    if (typeof restorePanelWidths === 'function') restorePanelWidths(settings);
 
     if (!_layoutResizeBound) {
       _layoutResizeBound = true;

@@ -246,4 +246,17 @@ describe('Form layout — de-squash side panels', () => {
     );
     assert.ok(indexHtmlSource.includes('form-panel-card--section-status'), 'section status card marker class must exist');
   });
+
+  it('lets the form use full width when sidebar navigation is active', () => {
+    assert.ok(
+      stylesCssSource.includes('html.sidebar-nav-active .attendance-form { max-width: none; }'),
+      'form must not be capped at 1100px when sidebars are visible'
+    );
+  });
+
+  it('restorePanelWidths respects compact and drawer layout modes', () => {
+    assert.ok(appJsSource.includes('function clearPanelInlineWidths'), 'must clear saved inline widths in compact/drawer modes');
+    assert.ok(appJsSource.includes('compactSidebar)'), 'restorePanelWidths must check compact sidebar');
+    assert.ok(appJsSource.includes('contextDocked'), 'restorePanelWidths must check docked context panel');
+  });
 });
