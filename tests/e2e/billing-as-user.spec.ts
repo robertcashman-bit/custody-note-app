@@ -224,8 +224,8 @@ test('user can drive a finalised matter through Finish matter > billing > review
   const cardTitles = await page.locator('.wf-billing .wf-card-title').allTextContents();
   const joined = cardTitles.join(' | ');
   expect(joined, `cards rendered: ${joined}`).toMatch(/Invoice Details/);
-  expect(joined).toMatch(/Charges/);
-  expect(joined).toMatch(/QuickFile Preview/);
+  expect(joined).toMatch(/Your invoice/);
+  expect(joined).toMatch(/Invoice total \(QuickFile preview\)/);
   expect(joined).toMatch(/Invoice Narrative/);
 
   /* Charges form — every input present and editable. */
