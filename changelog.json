@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.9.15",
+      "version": "1.9.16",
       "date": "2026-06-06",
       "latest": true,
+      "changes": [
+        "Fix Windows form layout parity with Mac using compact rail and drawer modes",
+        "Clear saved panel widths that were overriding compact sidebar on laptop screens"
+      ]
+    },
+    {
+      "version": "1.9.15",
+      "date": "2026-06-06",
+      "latest": false,
       "changes": [
         "Widen attendance form on laptop with compact sidebar rail and summary drawer",
         "Hide duplicate section navigation when left sidebar is active"
