@@ -15,14 +15,18 @@ var INVOICE_STATUSES = {
   INVOICE_READY: 'invoice_ready',
   INVOICED: 'invoiced',
   SENT: 'sent',
+  FAILED: 'failed',
+  PAID: 'paid',
   ARCHIVED: 'archived',
 };
 
 var INVOICE_STATUS_LABELS = {
   draft: 'Draft',
-  invoice_ready: 'Ready',
+  invoice_ready: 'Ready to bill',
   invoiced: 'Invoiced',
-  sent: 'Sent',
+  sent: 'Sent to QuickFile',
+  failed: 'Send failed',
+  paid: 'Paid',
   archived: 'Archived',
 };
 
@@ -138,6 +142,8 @@ function getInvoiceStatusClass(status) {
   switch (status) {
     case 'invoiced': return 'wf-status--invoiced';
     case 'sent': return 'wf-status--sent';
+    case 'paid': return 'wf-status--paid';
+    case 'failed': return 'wf-status--failed';
     case 'archived': return 'wf-status--archived';
     case 'invoice_ready': return 'wf-status--ready';
     default: return 'wf-status--draft';

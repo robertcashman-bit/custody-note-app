@@ -3320,6 +3320,27 @@ html.dark .btn-tertiary:hover { background: rgba(255,255,255,0.06); color: var(-
 .setting-row { display: flex; gap: 0.5rem; align-items: center; max-width: 500px; }
 .setting-row input { flex: 1; }
 .settings-hint { font-size: 0.82rem; color: var(--text-muted); margin: 0.5rem 0; }
+
+/* QuickFile connection status panel */
+.qf-connection-status {
+  display: flex; gap: 0.6rem; align-items: flex-start;
+  padding: 0.7rem 0.85rem; margin: 0.4rem 0 0.9rem 0;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--input-bg);
+}
+.qf-connection-status[data-tone="ok"]    { border-color: #16a34a; background: rgba(22,163,74,0.08); }
+.qf-connection-status[data-tone="error"] { border-color: #dc2626; background: rgba(220,38,38,0.08); }
+.qf-connection-status[data-tone="warn"]  { border-color: #d97706; background: rgba(217,119,6,0.08); }
+.qf-connection-status[data-tone="info"]  { border-color: #2563eb; background: rgba(37,99,235,0.08); }
+.qf-status-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; flex: 0 0 auto; background: #94a3b8; }
+.qf-status-dot--ok    { background: #16a34a; }
+.qf-status-dot--error { background: #dc2626; }
+.qf-status-dot--warn  { background: #d97706; }
+.qf-status-dot--info  { background: #2563eb; }
+.qf-status-headline { font-weight: 600; margin: 0 0 0.15rem 0; }
+.qf-status-detail { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
+.qf-status-instructions { margin: 0.4rem 0 0 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--text-muted); }
+.qf-status-instructions li { margin: 0.15rem 0; }
 .settings-path-display {
   font-size: 0.85rem; color: var(--on-surface);
   background: var(--input-bg); padding: 0.4rem 0.6rem;

@@ -6729,6 +6729,7 @@ ipcMain.handle('print-pdf-file', async (_, filePath) => {
 /* â”€â”€â”€ LAA Official PDF prefill â”€â”€â”€ */
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const laaCrm1Fill = require('./lib/laaCrm1Fill');
+const quickfileClient = require('./lib/quickfileClient');
 
 const LAA_FORM_FILES = {
   crm1: 'crm1-v16-feb-2025.pdf',
@@ -7174,18 +7175,12 @@ function getQuickFileSettingsStatus() {
 
 function getQuickFileAuth() {
   const status = getQuickFileSettingsStatus();
-  if (status.missing.length) {
-    throw new Error('QuickFile not configured \u2014 missing in Settings: ' + status.missing.join(', ') + '.');
-  }
-  const submissionNumber = 'cn-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
-  const hashInput = status.accountNumber + status.apiKey + submissionNumber;
-  const md5Value = crypto.createHash('md5').update(hashInput, 'utf8').digest('hex').toLowerCase();
-  return {
+  // A fresh submission number + MD5 is built for every request (no token reuse).
+  return quickfileClient.buildQuickFileAuth({
     accountNumber: status.accountNumber,
-    submissionNumber,
-    md5Value,
+    apiKey: status.apiKey,
     applicationId: status.applicationId,
-  };
+  });
 }
 
 function quickFileRequest(apiPath, bodyContent) {
@@ -7221,32 +7216,14 @@ function quickFileRequest(apiPath, bodyContent) {
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', () => {
           const raw = String(data || '');
-          if (!raw.trim()) {
-            return reject(new Error('QuickFile returned empty response (HTTP ' + res.statusCode + ')'));
+          try {
+            resolve(quickfileClient.parseQuickFileResponse(res.statusCode, raw));
+          } catch (parseErr) {
+            if (/parse error/i.test(parseErr.message)) {
+              console.error('[QuickFile] Response not valid JSON | HTTP:', res.statusCode, '| length:', raw.length, '| head:', raw.slice(0, 800));
+            }
+            reject(parseErr);
           }
-          let json;
-          try { json = JSON.parse(raw); } catch (_) { json = null; }
-          if (json?.Errors) {
-            const errs = json.Errors.Error || json.Errors;
-            const errArr = Array.isArray(errs) ? errs : [errs];
-            const msgs = errArr.map(e => (typeof e === 'object' && e !== null) ? (e.Message || e.Detail || JSON.stringify(e)) : String(e));
-            return reject(new Error(msgs.join('; ')));
-          }
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            return reject(new Error('QuickFile HTTP ' + res.statusCode + ': ' + raw.slice(0, 300)));
-          }
-          if (!json) {
-            console.error('[QuickFile] Response not valid JSON | HTTP:', res.statusCode, '| length:', raw.length, '| head:', raw.slice(0, 800));
-            return reject(new Error('QuickFile response parse error (HTTP ' + res.statusCode + ')'));
-          }
-          const rootKey = Object.keys(json).find((k) => typeof json[k] === 'object' && json[k]?.Header);
-          const msg = rootKey ? json[rootKey] : (json?.payload?.Message || json?.Message || json);
-          const header = msg?.Header;
-          if (header?.Status === 'Error') {
-            const errMsg = header?.StatusMessage || header?.ErrorMessage || msg?.Body?.ErrorMessage || 'Unknown QuickFile error';
-            return reject(new Error(String(errMsg)));
-          }
-          resolve(msg?.Body || {});
         });
       }
     );
@@ -7365,25 +7342,69 @@ ipcMain.handle('quickfile-fetch-clients', async () => {
   return { clients };
 });
 
+/* Persist the outcome of a real QuickFile health check so the connection panel
+ * can show a reliable state across app restarts and on every machine. We only
+ * ever write the three status keys here — never the credential keys — so a
+ * failed/timed-out API call can never corrupt saved QuickFile credentials. */
+function recordQuickFileConnectionResult(ok, errorMessage) {
+  const nowIso = new Date().toISOString();
+  try {
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileLastConnectionCheckedAt', nowIso]);
+    if (ok) {
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileLastConnectionOkAt', nowIso]);
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileLastConnectionError', '']);
+    } else {
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileLastConnectionError', String(errorMessage || 'Unknown error').slice(0, 500)]);
+    }
+    markDbDirty();
+  } catch (e) {
+    console.warn('[QuickFile] could not persist connection result:', e && e.message);
+  }
+}
+
 ipcMain.handle('quickfile-test-connection', async () => {
-  const body = await quickFileRequest('/1_2/client/search', {
-    SearchParameters: {
-      ReturnCount: 1,
-      Offset: 0,
-      OrderResultsBy: 'CompanyName',
-      OrderDirection: 'ASC',
-    },
-  });
-  const records = quickFileExtractRecords(body);
-  return {
-    ok: true,
-    sampleCount: records.length,
-  };
+  try {
+    const body = await quickFileRequest('/1_2/client/search', {
+      SearchParameters: {
+        ReturnCount: 1,
+        Offset: 0,
+        OrderResultsBy: 'CompanyName',
+        OrderDirection: 'ASC',
+      },
+    });
+    const records = quickFileExtractRecords(body);
+    recordQuickFileConnectionResult(true, '');
+    return {
+      ok: true,
+      sampleCount: records.length,
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    recordQuickFileConnectionResult(false, msg);
+    throw err; // surface the real reason to the renderer
+  }
 });
 
 ipcMain.handle('quickfile-settings-status', () => {
   const status = getQuickFileSettingsStatus();
   return { missing: status.missing, lengths: status.lengths };
+});
+
+/* Reliable, DB-backed connection facts for the status panel. Reads only the
+ * settings table (per-machine source of truth) — independent of any renderer
+ * state, so it is consistent on every machine and after every restart. */
+ipcMain.handle('quickfile-connection-state', () => {
+  const status = getQuickFileSettingsStatus();
+  const rows = dbAll('SELECT key, value FROM settings');
+  const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  return {
+    missing: status.missing,
+    lengths: status.lengths,
+    lastOkAt: settings.quickfileLastConnectionOkAt || '',
+    lastError: settings.quickfileLastConnectionError || '',
+    lastCheckedAt: settings.quickfileLastConnectionCheckedAt || '',
+  };
 });
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
