@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.18",
+      "version": "1.9.19",
       "date": "2026-06-06",
       "latest": true,
+      "changes": [
+        "Fix QuickFile credentials always visible in Settings (invoicing no longer hidden behind the directory-import add-on lock)",
+        "Fix billing Step 2 reading QuickFile credentials from the database on this computer, not empty Settings form fields — stops false 'not configured' when credentials are already saved",
+        "Fix CRM1 pre-submit validation on the billing Step 1 Generate button (the path most users actually use)",
+        "Billing not-configured card now explains per-machine storage and offers Test connection / Open settings actions"
+      ]
+    },
+    {
+      "version": "1.9.18",
+      "date": "2026-06-06",
+      "latest": false,
       "changes": [
         "QuickFile: new connection status panel in Settings showing connected / saved-but-untested / not-set-up / last-test-failed, with a real connection test and clear reconnect steps",
         "QuickFile: explains that credentials are stored on each computer separately, so the app no longer looks 'disconnected' on another machine without explanation",

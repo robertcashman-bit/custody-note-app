@@ -33,12 +33,19 @@ function _wfRenderBillingStep(body, footer) {
     stationId && window.api && window.api.stationMileageGet ? window.api.stationMileageGet(stationId) : Promise.resolve(null),
     recordId && window.api && window.api.attendanceInvoiceStatus ? window.api.attendanceInvoiceStatus(recordId) : Promise.resolve({}),
     recordId && window.api && window.api.billingAuditLogGet ? window.api.billingAuditLogGet(recordId) : Promise.resolve([]),
+    /* Read QuickFile credentials from the DB (main process) — not empty Settings form fields. */
+    window.api && window.api.getSettings ? window.api.getSettings() : Promise.resolve({}),
+    window.api && window.api.quickfileConnectionState ? window.api.quickfileConnectionState() : Promise.resolve(null),
   ]).then(function (results) {
     meta = _wfMatterMeta();
     data = meta.data;
     var stationMileage = results[0];
     var invoiceStatus = results[1] || {};
     var auditLog = results[2] || [];
+    var dbSettings = results[3] || {};
+    var qfConnection = results[4];
+    _wfHydrateQuickFileSettingsCache(dbSettings);
+    var qfConfigured = _wfIsQuickFileConfigured(dbSettings, qfConnection);
     var hasExisting = !!(invoiceStatus.quickfile_invoice_id);
 
     if (stationMileage && stationMileage.mileage_from_base != null && !miles) {
@@ -74,6 +81,8 @@ function _wfRenderBillingStep(body, footer) {
       invoiceStatus: invoiceStatus,
       hasExistingInvoice: hasExisting,
       auditLog: auditLog,
+      qfConfigured: qfConfigured,
+      qfConnection: qfConnection,
     };
 
     _wfRenderBillingBody(body, footer, meta, _wfBillingOpts);
@@ -87,9 +96,37 @@ function _wfRenderBillingStep(body, footer) {
       parkingAmount: parking, vatRate: vatRate,
       narrative: _buildInvoiceNarrative(meta.clientName, meta.stationName, meta.attendanceDate, meta.offenceSummary),
       invoiceTitle: invoiceTitle, invoiceStatus: {}, hasExistingInvoice: false, auditLog: [],
+      qfConfigured: (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured(),
+      qfConnection: null,
     };
     _wfRenderBillingBody(body, footer, meta, _wfBillingOpts);
   });
+}
+
+/** Keep renderer cache + hidden Settings inputs in sync with the SQLite DB. */
+function _wfHydrateQuickFileSettingsCache(settings) {
+  if (!settings || typeof settings !== 'object') return;
+  window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
+  var pairs = [
+    ['setting-quickfile-account', 'quickfileAccountNumber'],
+    ['setting-quickfile-apikey', 'quickfileApiKey'],
+    ['setting-quickfile-appid', 'quickfileAppId'],
+  ];
+  pairs.forEach(function (pair) {
+    var el = document.getElementById(pair[0]);
+    if (el && !String(el.value || '').trim()) el.value = settings[pair[1]] || '';
+  });
+}
+
+/** Authoritative QuickFile configured check: DB-backed IPC first, then cache fallback. */
+function _wfIsQuickFileConfigured(dbSettings, qfConnection) {
+  if (qfConnection && Array.isArray(qfConnection.missing)) {
+    return qfConnection.missing.length === 0;
+  }
+  var s = dbSettings || window._appSettingsCache || {};
+  return !!(String(s.quickfileAccountNumber || '').trim()
+    && String(s.quickfileApiKey || '').trim()
+    && String(s.quickfileAppId || '').trim());
 }
 
 function _wfRenderBillingBody(body, footer, meta, opts) {
@@ -140,7 +177,8 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
     auditHtml += '</div></details>';
   }
 
-  var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
+  var qfConfigured = opts.qfConfigured === true;
+  var qfConn = opts.qfConnection || null;
   var screenTitle = qfConfigured ? 'Step 2 &mdash; Your invoice' : 'Step 2 &mdash; Billing review';
   var screenSub = qfConfigured
     ? 'Set the fixed fee, mileage and parking you will bill the instructing firm, then send to QuickFile. Section 9 time on the attendance note is for your LAA claim only &mdash; it does not set these amounts.'
@@ -248,16 +286,20 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
       (!qfConfigured
         ? (
           '<div class="wf-card wf-qf-not-configured-card">' +
-            '<h4 class="wf-card-title">&#9881; QuickFile not configured</h4>' +
+            '<h4 class="wf-card-title">&#9881; QuickFile not set up on this computer</h4>' +
             '<p class="wf-qf-not-configured-text">' +
-              'Sending invoices to QuickFile is disabled because your QuickFile credentials ' +
-              '(Account Number, API Key and Application ID) are not set. You can still review ' +
-              'the billing details above and continue to <strong>Review &amp; complete</strong>; ' +
-              'invoicing for this matter will need to be handled outside the app.' +
+              (qfConn && qfConn.missing && qfConn.missing.length
+                ? ('Missing: <strong>' + _wfEsc(qfConn.missing.join(', ')) + '</strong>. ')
+                : '') +
+              'QuickFile credentials are stored on <strong>this computer only</strong> &mdash; ' +
+              'they do not sync from other machines. Open Settings, enter your Account Number, ' +
+              'API Key and Application ID, then click <strong>Save and test QuickFile</strong>. ' +
+              'You can still review billing above and continue to <strong>Review &amp; complete</strong> without invoicing here.' +
             '</p>' +
-            '<button type="button" id="wf-bill-open-qf-settings" class="btn btn-secondary btn-small">' +
-              'Open QuickFile settings' +
-            '</button>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem;">' +
+              '<button type="button" id="wf-bill-open-qf-settings" class="btn btn-secondary btn-small">Open QuickFile settings</button>' +
+              '<button type="button" id="wf-bill-test-qf-connection" class="btn btn-secondary btn-small">Test QuickFile connection</button>' +
+            '</div>' +
           '</div>'
         )
         : ''
@@ -365,7 +407,7 @@ function _wfBuildBillingFooter(footer, meta, opts) {
    * plus Back and Close. Per-step Archive removed so the workflow stays
    * strictly linear. Skip-invoice and next-complete were redundant
    * variations of the same forward action and have been merged. */
-  var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
+  var qfConfigured = opts.qfConfigured === true;
   var primaryBtnHtml = '';
   if (!qfConfigured) {
     primaryBtnHtml =
@@ -466,6 +508,24 @@ function _wfBindBillingEvents(meta, opts) {
       } else {
         showToast('Open Settings to add your QuickFile Account Number, API Key and Application ID.', 'info', 6000);
       }
+    });
+  }
+
+  var testQfBtn = document.getElementById('wf-bill-test-qf-connection');
+  if (testQfBtn) {
+    testQfBtn.addEventListener('click', function () {
+      var refresh = function () {
+        if (typeof _wfRenderCurrentStep === 'function') _wfRenderCurrentStep();
+      };
+      if (typeof hasQuickFileSettingsConfigured === 'function' && hasQuickFileSettingsConfigured()
+          && typeof window.testQuickFileConnection === 'function') {
+        var p = window.testQuickFileConnection();
+        if (p && typeof p.then === 'function') {
+          p.finally(refresh);
+          return;
+        }
+      }
+      refresh();
     });
   }
 

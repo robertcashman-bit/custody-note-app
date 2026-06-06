@@ -39,4 +39,10 @@ describe('CRM1 pre-submit validation wiring', () => {
     assert.ok(MAIN.includes('fieldMisses:'), 'main must return a fieldMisses count');
     assert.ok(MAIN.includes('missedFields:'), 'main must return the missed field names');
   });
+
+  it('billing Step 1 generate uses the shared CRM1 pre-submit summary', () => {
+    const DOC = fs.readFileSync(path.join(root, 'renderer', 'views', 'documents-screen.js'), 'utf8');
+    assert.ok(DOC.includes('promptCrm1ValidationBeforeGenerate'), 'documents-screen must call shared validator');
+    assert.ok(DOC.includes("formId === 'crm1'"), 'validation gated to CRM1 in workflow');
+  });
 });

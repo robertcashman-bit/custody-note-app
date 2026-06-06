@@ -52,6 +52,13 @@ describe('QuickFile connection panel (renderer)', () => {
     assert.ok(HTML.includes('id="qf-connection-status"'), 'status panel missing');
     assert.ok(HTML.includes('renderer/lib/quickfileConnectionState.js'), 'helper script not loaded');
     assert.ok(/this computer only/i.test(HTML), 'must explain per-machine credential storage');
+    assert.ok(HTML.includes('qf-import-addon-section'), 'import add-on gated separately from credentials');
+  });
+
+  it('billing-screen reads QuickFile config from the DB before rendering', () => {
+    const BILLING = fs.readFileSync(path.join(root, 'renderer', 'views', 'billing-screen.js'), 'utf8');
+    assert.ok(BILLING.includes('quickfileConnectionState'), 'must fetch DB-backed connection state');
+    assert.ok(BILLING.includes('_wfIsQuickFileConfigured'), 'must not rely on empty Settings form fields alone');
   });
 
   it('app.js renders the panel via the shared derivation helper and refreshes after a test', () => {

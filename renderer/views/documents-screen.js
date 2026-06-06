@@ -388,31 +388,51 @@ function _wfGenerateForm(formId, meta, btn) {
   btn.disabled = true;
   btn.textContent = 'Generating...';
 
-  if (form.type === 'laa') {
-    _wfGenerateLaaForm(formId, meta).then(function (result) {
-      btn.disabled = false;
-      btn.textContent = origText;
-      if (result.error) {
-        showToast('Failed to generate ' + form.label + ': ' + result.error, 'error');
-      } else {
-        _wfGeneratedDocs[formId] = { base64: result.base64, size: result.size, label: form.label, filename: _wfFormFilename(formId, meta) };
-        showToast(form.label + ' generated successfully', 'success');
-        _wfRenderCurrentStep();
-      }
+  var runGenerate = function () {
+    if (form.type === 'laa') {
+      _wfGenerateLaaForm(formId, meta).then(function (result) {
+        btn.disabled = false;
+        btn.textContent = origText;
+        if (result.error) {
+          showToast('Failed to generate ' + form.label + ': ' + result.error, 'error');
+        } else {
+          if (result.fieldMisses && result.fieldMisses > 0) {
+            var fieldList = (result.missedFields || []).slice(0, 5).join(', ');
+            showToast(
+              result.fieldMisses + ' field(s) on ' + form.label + ' could not be filled' +
+              (fieldList ? ' (' + fieldList + ')' : '') + '. Check the PDF carefully.',
+              'warning', 8000
+            );
+          }
+          _wfGeneratedDocs[formId] = { base64: result.base64, size: result.size, label: form.label, filename: _wfFormFilename(formId, meta) };
+          showToast(form.label + ' generated successfully', 'success');
+          _wfRenderCurrentStep();
+        }
+      });
+    } else if (form.type === 'html') {
+      _wfGenerateHtmlForm(formId, meta).then(function (result) {
+        btn.disabled = false;
+        btn.textContent = origText;
+        if (result.error) {
+          showToast('Failed to generate ' + form.label + ': ' + result.error, 'error');
+        } else {
+          _wfGeneratedDocs[formId] = { base64: result.base64, size: result.size, label: form.label, filename: _wfFormFilename(formId, meta) };
+          showToast(form.label + ' generated successfully', 'success');
+          _wfRenderCurrentStep();
+        }
+      });
+    }
+  };
+
+  if (formId === 'crm1' && typeof window.promptCrm1ValidationBeforeGenerate === 'function') {
+    window.promptCrm1ValidationBeforeGenerate(meta.data || {}).then(function (ok) {
+      if (ok) runGenerate();
+      else { btn.disabled = false; btn.textContent = origText; }
     });
-  } else if (form.type === 'html') {
-    _wfGenerateHtmlForm(formId, meta).then(function (result) {
-      btn.disabled = false;
-      btn.textContent = origText;
-      if (result.error) {
-        showToast('Failed to generate ' + form.label + ': ' + result.error, 'error');
-      } else {
-        _wfGeneratedDocs[formId] = { base64: result.base64, size: result.size, label: form.label, filename: _wfFormFilename(formId, meta) };
-        showToast(form.label + ' generated successfully', 'success');
-        _wfRenderCurrentStep();
-      }
-    });
+    return;
   }
+
+  runGenerate();
 }
 
 function _wfGenerateLaaForm(formId, meta) {
