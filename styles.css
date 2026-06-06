@@ -4666,6 +4666,7 @@ html.dark #admin-dash-stats > div > div:first-child { color: #f1f5f9 !important;
 /* ═══ RESPONSIVE: LARGE SCREEN (min 1200px) ═══ */
 @media (min-width: 1200px) {
   .attendance-form { max-width: 1100px; }
+  html.sidebar-nav-active .attendance-form { max-width: none; }
   .qc-form { max-width: 900px; margin-left: auto; margin-right: auto; }
   #view-settings { max-width: 1000px; margin-left: auto; margin-right: auto; }
   #view-firms { max-width: 1100px; margin-left: auto; margin-right: auto; }
@@ -5916,7 +5917,12 @@ html.sidebar-compact .form-section-sidebar .sidebar-section-btn:hover .sidebar-t
 html.sidebar-compact .form-section-sidebar .sidebar-section-btn:focus-visible .sidebar-text {
   display: block;
 }
-html.sidebar-compact .panel-resizer[data-target="sidebar"] { width: 8px; }
+html.sidebar-compact .panel-resizer[data-target="sidebar"] {
+  width: 8px;
+  pointer-events: none;
+  cursor: default;
+}
+html.sidebar-compact .panel-resizer[data-target="sidebar"]::after { display: none; }
 
 /* Hide duplicate section status when sidebar/rail already shows progress dots */
 html.sidebar-nav-active .form-panel-card--section-status { display: none; }
