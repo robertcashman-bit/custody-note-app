@@ -1,0 +1,67 @@
+/**
+ * Unit tests for QuickFile connection-state derivation (renderer/lib/quickfileConnectionState.js).
+ *
+ * These verify the app describes the QuickFile link from DB-backed facts
+ * (configured credentials + last real health-check result), NOT from fragile
+ * browser state, and that "not connected" is only shown when credentials are
+ * actually missing or a real test actually failed.
+ */
+const { describe, it } = require('node:test');
+const assert = require('node:assert');
+const { deriveQuickFileConnectionState } = require('../renderer/lib/quickfileConnectionState');
+
+describe('deriveQuickFileConnectionState', () => {
+  it('reports not_configured with specific missing fields + reconnect instructions', () => {
+    const s = deriveQuickFileConnectionState({ missing: ['Account number', 'API key'] });
+    assert.strictEqual(s.state, 'not_configured');
+    assert.strictEqual(s.ok, false);
+    assert.strictEqual(s.configured, false);
+    assert.match(s.detail, /Account number, API key/);
+    assert.ok(s.instructions.some((i) => /another machine/i.test(i)), 'must explain per-machine storage');
+    assert.ok(s.instructions.length >= 2, 'must give reconnect steps');
+  });
+
+  it('reports configured_untested when all credentials present but never tested', () => {
+    const s = deriveQuickFileConnectionState({ missing: [], lengths: { account: 5, apiKey: 32, applicationId: 10 } });
+    assert.strictEqual(s.state, 'configured_untested');
+    assert.strictEqual(s.ok, false);
+    assert.strictEqual(s.configured, true);
+    assert.match(s.detail, /Test QuickFile connection/i);
+  });
+
+  it('reports connected (ok=true) after a successful test with the verified time', () => {
+    const s = deriveQuickFileConnectionState({ missing: [], lastOkAt: '2026-06-06T10:00:00.000Z' });
+    assert.strictEqual(s.state, 'connected');
+    assert.strictEqual(s.ok, true);
+    assert.match(s.headline, /Connected/);
+    assert.match(s.detail, /Last verified/);
+  });
+
+  it('reports error with the failure reason + reconnect instructions when last test failed', () => {
+    const s = deriveQuickFileConnectionState({
+      missing: [],
+      lastError: 'QuickFile HTTP 401: invalid credentials',
+      lastCheckedAt: '2026-06-06T10:00:00.000Z',
+    });
+    assert.strictEqual(s.state, 'error');
+    assert.strictEqual(s.ok, false);
+    assert.match(s.detail, /401/);
+    assert.ok(s.instructions.length >= 1, 'error state must give recovery steps');
+  });
+
+  it('prefers a fresh failure over a stale success (lastError wins)', () => {
+    const s = deriveQuickFileConnectionState({
+      missing: [],
+      lastOkAt: '2026-06-01T10:00:00.000Z',
+      lastError: 'Network timeout',
+      lastCheckedAt: '2026-06-06T10:00:00.000Z',
+    });
+    assert.strictEqual(s.state, 'error');
+  });
+
+  it('never claims connected when credentials are missing, even with a stale lastOkAt', () => {
+    const s = deriveQuickFileConnectionState({ missing: ['API key'], lastOkAt: '2026-06-01T10:00:00.000Z' });
+    assert.strictEqual(s.state, 'not_configured');
+    assert.strictEqual(s.ok, false);
+  });
+});

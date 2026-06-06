@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.17",
+      "version": "1.9.18",
       "date": "2026-06-06",
       "latest": true,
+      "changes": [
+        "QuickFile: new connection status panel in Settings showing connected / saved-but-untested / not-set-up / last-test-failed, with a real connection test and clear reconnect steps",
+        "QuickFile: explains that credentials are stored on each computer separately, so the app no longer looks 'disconnected' on another machine without explanation",
+        "QuickFile: a failed connection test no longer affects your saved account details, and billing now shows a clear recovery action if sending to QuickFile fails",
+        "CRM1: a pre-submit check now lists exactly which client details are missing or invalid before the form is produced, and warns if any boxes could not be filled (no more silent blank forms)"
+      ]
+    },
+    {
+      "version": "1.9.17",
+      "date": "2026-06-06",
+      "latest": false,
       "changes": [
         "Fix CRM1 form filling the wrong boxes: gender (male/female/prefer not to say) and marital status (cohabiting/widowed) now tick the correct checkboxes on the official LAA template",
         "Fix CRM1 benefits page: the two means questions (Guarantee Pension Credit / Universal Credit, and other passporting benefits) are now answered correctly and weekly income is only shown when not passported",

@@ -650,9 +650,13 @@ describe('Step 2: Billing screen — invoice creation', () => {
     assert.ok(billingScreenJs.includes("' failed'"));
   });
 
-  it('on failure: shows error toast', () => {
+  it('on failure: shows a clear error with a recovery action (single handler)', () => {
     assert.ok(billingScreenJs.includes('Send to QuickFile failed:'));
-    assert.ok(billingScreenJs.includes('Send to QuickFile error:'));
+    assert.ok(billingScreenJs.includes('function _wfShowInvoiceFailure'));
+    // Both the result-not-ok branch and the catch branch route through the
+    // single recovery handler so the message + retry guidance is consistent.
+    const calls = (billingScreenJs.match(/_wfShowInvoiceFailure\(/g) || []).length;
+    assert.ok(calls >= 3, 'expected definition + two call sites, found ' + calls);
   });
 });
 

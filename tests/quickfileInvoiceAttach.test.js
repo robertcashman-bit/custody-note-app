@@ -99,18 +99,21 @@ describe('Document_Upload field completeness', () => {
 });
 
 describe('QuickFile error parsing for attachment failures', () => {
-  it('quickFileRequest extracts Errors.Error array from response JSON', () => {
-    const fnStart = mainJs.indexOf('function quickFileRequest(');
-    assert.ok(fnStart > -1, 'quickFileRequest must exist');
-    const fnBlock = mainJs.slice(fnStart, fnStart + 2000);
-    assert.ok(fnBlock.includes('json.Errors.Error || json.Errors'), 'Must extract Errors.Error array');
-    assert.ok(fnBlock.includes('Array.isArray(errs)'), 'Must handle both array and single error');
+  // Response parsing now lives in the shared, unit-tested lib/quickfileClient.js
+  // (see tests/quickfileClient.test.js). main.js delegates to it.
+  const clientJs = fs.readFileSync(path.join(root, 'lib', 'quickfileClient.js'), 'utf8');
+
+  it('main.js delegates response parsing to the shared quickfile client', () => {
+    assert.ok(mainJs.includes('quickfileClient.parseQuickFileResponse'), 'main must use the shared parser');
+  });
+
+  it('parseQuickFileResponse extracts Errors.Error array from response JSON', () => {
+    assert.ok(clientJs.includes('json.Errors.Error || json.Errors'), 'Must extract Errors.Error array');
+    assert.ok(clientJs.includes('Array.isArray(errs)'), 'Must handle both array and single error');
   });
 
   it('error messages are joined with semicolons for multi-error responses', () => {
-    const fnStart = mainJs.indexOf('function quickFileRequest(');
-    const fnBlock = mainJs.slice(fnStart, fnStart + 2000);
-    assert.ok(fnBlock.includes("msgs.join('; ')"), 'Must join multiple errors with semicolons');
+    assert.ok(clientJs.includes("msgs.join('; ')"), 'Must join multiple errors with semicolons');
   });
 
   it('attachment error is captured and logged in create-invoice handler', () => {

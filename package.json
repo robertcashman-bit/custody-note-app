@@ -1,8 +1,8 @@
 {
   "name": "custody-note",
-  "version": "1.9.17",
+  "version": "1.9.18",
   "lastUpdated": "2026-06-06",
-  "buildTime": "2026-06-06T14:03:02.699Z",
+  "buildTime": "2026-06-06T16:55:00.000Z",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
   "scripts": {

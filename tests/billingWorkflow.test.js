@@ -11,6 +11,8 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const mainJs = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+// QuickFile auth + response parsing now lives in this shared, unit-tested module.
+const quickfileClientJs = fs.readFileSync(path.join(root, 'lib', 'quickfileClient.js'), 'utf8');
 const preloadJs = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -611,11 +613,11 @@ describe('QuickFile input validation', () => {
   });
 
   it('checks HTTP status in QuickFile response handler', () => {
-    assert.ok(mainJs.includes('QuickFile HTTP'));
+    assert.ok(quickfileClientJs.includes('QuickFile HTTP'));
   });
 
   it('handles empty QuickFile response', () => {
-    assert.ok(mainJs.includes('QuickFile returned empty response'));
+    assert.ok(quickfileClientJs.includes('QuickFile returned empty response'));
   });
 });
 
@@ -739,13 +741,13 @@ describe('validateQuickFileInvoicePayload — preflight checks', () => {
 
 describe('QuickFile auth generation', () => {
   it('generates unique SubmissionNumber per call', () => {
-    assert.ok(mainJs.includes("'cn-' + Date.now()"));
-    assert.ok(mainJs.includes("Math.random().toString(36)"));
+    assert.ok(quickfileClientJs.includes("'cn-' + Date.now()"));
+    assert.ok(quickfileClientJs.includes("Math.random().toString(36)"));
   });
 
   it('constructs MD5 from accountNumber + apiKey + submissionNumber', () => {
-    assert.ok(mainJs.includes("status.accountNumber + status.apiKey + submissionNumber"));
-    assert.ok(mainJs.includes("createHash('md5')"));
+    assert.ok(quickfileClientJs.includes('accountNumber + apiKey + submissionNumber'));
+    assert.ok(quickfileClientJs.includes("createHash('md5')"));
   });
 
   it('includes ApplicationID in auth header', () => {
@@ -755,21 +757,19 @@ describe('QuickFile auth generation', () => {
 
 describe('QuickFile error parsing — structured errors before HTTP status', () => {
   it('parses JSON before checking HTTP status code', () => {
-    const fnStart = mainJs.indexOf('function quickFileRequest(');
-    const fnBlock = mainJs.slice(fnStart, fnStart + 2000);
-    const jsonParseIdx = fnBlock.indexOf('JSON.parse');
-    const httpCheckIdx = fnBlock.indexOf('res.statusCode < 200');
-    assert.ok(jsonParseIdx > 0, 'JSON.parse should exist in quickFileRequest');
-    assert.ok(httpCheckIdx > 0, 'HTTP status check should exist in quickFileRequest');
+    const jsonParseIdx = quickfileClientJs.indexOf('JSON.parse');
+    const httpCheckIdx = quickfileClientJs.indexOf('statusCode < 200');
+    assert.ok(jsonParseIdx > 0, 'JSON.parse should exist in the quickfile client');
+    assert.ok(httpCheckIdx > 0, 'HTTP status check should exist in the quickfile client');
     assert.ok(jsonParseIdx < httpCheckIdx, 'JSON parsing must happen before HTTP status rejection');
   });
 
   it('extracts Errors.Error array from QuickFile responses', () => {
-    assert.ok(mainJs.includes('json.Errors.Error || json.Errors'));
+    assert.ok(quickfileClientJs.includes('json.Errors.Error || json.Errors'));
   });
 
   it('handles Header.Status === Error responses', () => {
-    assert.ok(mainJs.includes("header?.Status === 'Error'"));
+    assert.ok(quickfileClientJs.includes("header.Status === 'Error'"));
   });
 });
 

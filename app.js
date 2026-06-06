@@ -5166,6 +5166,7 @@ var REQUIRED_FIELD_KEYS = [
       if (qfKey) qfKey.value = s.quickfileApiKey || '';
       const qfApp = document.getElementById('setting-quickfile-appid');
       if (qfApp) qfApp.value = s.quickfileAppId || '';
+      if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
       const opc = document.getElementById('setting-office-postcode');
@@ -5732,6 +5733,52 @@ var REQUIRED_FIELD_KEYS = [
     if (statusEl) statusEl.textContent = message || '';
   }
 
+  /* Reliable QuickFile connection status panel. Reads DB-backed facts from the
+   * main process (configured credentials + last real health-check result) and
+   * renders a clear state via the shared QuickFileConnectionState helper, so we
+   * never show a bare "not connected" based on fragile renderer state. */
+  function refreshQuickFileConnectionPanel() {
+    const panel = document.getElementById('qf-connection-status');
+    if (!panel || typeof window.QuickFileConnectionState === 'undefined') return;
+    const headlineEl = document.getElementById('qf-status-headline');
+    const detailEl = document.getElementById('qf-status-detail');
+    const instrEl = document.getElementById('qf-status-instructions');
+    const dotEl = document.getElementById('qf-status-dot');
+
+    const render = function (facts) {
+      const s = window.QuickFileConnectionState.deriveQuickFileConnectionState(facts || { missing: ['Account number', 'API key', 'Application ID'] });
+      panel.setAttribute('data-state', s.state);
+      panel.setAttribute('data-tone', s.tone);
+      if (dotEl) dotEl.className = 'qf-status-dot qf-status-dot--' + s.tone;
+      if (headlineEl) headlineEl.textContent = s.headline;
+      if (detailEl) detailEl.textContent = s.detail || '';
+      if (instrEl) {
+        instrEl.innerHTML = '';
+        (s.instructions || []).forEach(function (line) {
+          const li = document.createElement('li');
+          li.textContent = line;
+          instrEl.appendChild(li);
+        });
+      }
+      return s;
+    };
+
+    if (!window.api || typeof window.api.quickfileConnectionState !== 'function') {
+      // Fall back to the locally-known config presence (still reliable: DB cache).
+      const cfg = getQuickFileSettingsPayload();
+      const missing = [];
+      if (!cfg.quickfileAccountNumber) missing.push('Account number');
+      if (!cfg.quickfileApiKey) missing.push('API key');
+      if (!cfg.quickfileAppId) missing.push('Application ID');
+      render({ missing: missing });
+      return;
+    }
+    window.api.quickfileConnectionState().then(render).catch(function () {
+      render(null);
+    });
+  }
+  window.refreshQuickFileConnectionPanel = refreshQuickFileConnectionPanel;
+
   function refreshQuickFileImportMeta() {
     if (!window.api || !window.api.getSettings) return;
     window.api.getSettings().then(function(settings) {
@@ -5933,6 +5980,8 @@ var REQUIRED_FIELD_KEYS = [
           var combined = lengthsLine ? (lengthsLine + ' \u2014 ' + message) : message;
           setQuickFileStatusMessage(combined);
           showToast('QuickFile connection failed: ' + message, 'error', 6500);
+        }).finally(function() {
+          refreshQuickFileConnectionPanel();
         });
       }).finally(function() {
         if (btn) {
@@ -15336,6 +15385,7 @@ pdfAuditFooterHtml(d, settings) +
         var qfApp = document.getElementById('setting-quickfile-appid');
         if (qfApp) qfApp.value = s.quickfileAppId || '';
       })();
+      if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
       applyFeeEarnerSigModeUI(s.feeEarnerSigMode || 'draw');
       updateFeeEarnerSigPreview(s.feeEarnerSigMaster || '');
       window._billingDefaults = {
@@ -17790,17 +17840,58 @@ pdfAuditFooterHtml(d, settings) +
       return;
     }
 
-    var needsClientSig = !data.clientSig;
-    var needsFeeEarnerSig = !getEffectiveFeeEarnerSig(data);
-    var sigQueue = [];
-    if (needsClientSig) sigQueue.push({ sigKey: 'clientSig', label: 'Client Signature — ' + title });
-    if (needsFeeEarnerSig) sigQueue.push({ sigKey: 'feeEarnerSig', label: 'Fee Earner Signature — ' + title });
+    var proceed = function () {
+      var needsClientSig = !data.clientSig;
+      var needsFeeEarnerSig = !getEffectiveFeeEarnerSig(data);
+      var sigQueue = [];
+      if (needsClientSig) sigQueue.push({ sigKey: 'clientSig', label: 'Client Signature — ' + title });
+      if (needsFeeEarnerSig) sigQueue.push({ sigKey: 'feeEarnerSig', label: 'Fee Earner Signature — ' + title });
 
-    if (sigQueue.length > 0) {
-      collectSignaturesThenGenerate(sigQueue, 0, data, formType, title);
-    } else {
-      generateLaaFormPdf(formType, title, data);
+      if (sigQueue.length > 0) {
+        collectSignaturesThenGenerate(sigQueue, 0, data, formType, title);
+      } else {
+        generateLaaFormPdf(formType, title, data);
+      }
+    };
+
+    // Pre-submit validation summary for CRM1 — surface specific, field-level
+    // problems before generating the official PDF so we never silently produce
+    // a blank/wrong form. Warnings are advisory; errors require an explicit
+    // "generate draft anyway" choice.
+    if (formType === 'crm1' && typeof window.Crm1Validation !== 'undefined' && typeof showChoice === 'function') {
+      var result = window.Crm1Validation.validateCrm1Data(data);
+      if (!result.ok || (result.warnings && result.warnings.length)) {
+        var lines = [];
+        if (result.errors.length) {
+          lines.push('Please fix these before submitting CRM1:');
+          result.errors.forEach(function (e) { lines.push('  \u2022 ' + e.label + ': ' + e.message); });
+        }
+        if (result.warnings.length) {
+          if (lines.length) lines.push('');
+          lines.push('Will be left blank on the form (optional):');
+          result.warnings.forEach(function (w) { lines.push('  \u2022 ' + w.label + ': ' + w.message); });
+        }
+        var opts;
+        if (result.errors.length) {
+          opts = [
+            { id: 'fix', label: 'Go back and fix (' + result.errors.length + ' to fix)', variant: 'primary' },
+            { id: 'anyway', label: 'Generate draft anyway', variant: 'secondary' },
+          ];
+        } else {
+          opts = [
+            { id: 'anyway', label: 'Generate CRM1 now', variant: 'primary' },
+            { id: 'fix', label: 'Go back and complete optional fields', variant: 'secondary' },
+          ];
+        }
+        showChoice(lines.join('\n'), 'CRM1 \u2014 check before submitting', opts).then(function (choice) {
+          if (choice === 'anyway') proceed();
+          // 'fix' or dismissed: do nothing, user returns to the form.
+        });
+        return;
+      }
     }
+
+    proceed();
   }
   window.openLaaForm = openLaaForm;
 
@@ -17892,6 +17983,16 @@ pdfAuditFooterHtml(d, settings) +
       if (result.error) {
         showToast('PDF error: ' + result.error, 'error');
         return;
+      }
+      // Don't fail silently if the official template renamed/dropped fields:
+      // tell the user exactly how many boxes couldn't be filled.
+      if (result.fieldMisses && result.fieldMisses > 0) {
+        var fieldList = (result.missedFields || []).slice(0, 5).join(', ');
+        showToast(
+          result.fieldMisses + ' field(s) on ' + title + ' could not be filled' +
+          (fieldList ? ' (' + fieldList + ')' : '') + '. Please check the PDF carefully.',
+          'warning', 8000
+        );
       }
       showPdfPreview(result.path, title, data, formType);
     }).catch(function(err) {

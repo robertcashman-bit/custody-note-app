@@ -684,14 +684,28 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
         _wfRenderCurrentStep();
       }
     } else {
-      showToast('Send to QuickFile failed: ' + (result.error || 'Unknown error'), 'error', 8000);
+      _wfShowInvoiceFailure(result.error || 'Unknown error');
     }
   } catch (err) {
     console.error('[billing] Invoice creation failed:', err);
-    showToast('Send to QuickFile error: ' + (err.message || String(err)), 'error', 8000);
+    _wfShowInvoiceFailure(err && err.message ? err.message : String(err));
   } finally {
     if (createBtn) { createBtn.disabled = false; createBtn.textContent = opts.hasExistingInvoice ? '\u26A0 Send Another Invoice to QuickFile' : 'Send Bill to QuickFile'; }
   }
+}
+
+/**
+ * Show a clear, actionable recovery message when sending to QuickFile fails.
+ * The record is NOT marked invoiced (nothing was created), so the user can
+ * safely fix the cause and press the button again — no duplicate is created.
+ */
+function _wfShowInvoiceFailure(reason) {
+  var msg = String(reason || 'Unknown error');
+  var looksLikeConnection = /not configured|auth|credential|401|403|HTTP 5\d\d|timeout|ENOTFOUND|ECONN|network|parse error|empty response/i.test(msg);
+  var action = looksLikeConnection
+    ? ' Check Settings \u2192 QuickFile and click "Test QuickFile connection", then press Send again.'
+    : ' Nothing was sent \u2014 fix the issue above and press "Send Bill to QuickFile" again.';
+  showToast('Send to QuickFile failed: ' + msg + '.' + action, 'error', 9000);
 }
 
 /**

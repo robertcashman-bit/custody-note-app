@@ -989,7 +989,17 @@
             <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy QuickFile add-on</a>
           </div>
           <div id="quickfile-settings-content">
-            <p class="settings-hint">Connect your QuickFile account to import your client directory into <strong>Firms You Work For</strong>. Imported entries map to firm name, contact name, email and telephone, and can still be edited afterwards.</p>
+            <p class="settings-hint">Connect your QuickFile account to import your client directory into <strong>Firms You Work For</strong> and to send invoices. Imported entries map to firm name, contact name, email and telephone, and can still be edited afterwards.</p>
+
+            <div id="qf-connection-status" class="qf-connection-status" role="status" aria-live="polite">
+              <span class="qf-status-dot" id="qf-status-dot"></span>
+              <div class="qf-status-text">
+                <p class="qf-status-headline" id="qf-status-headline">Checking QuickFile connection&hellip;</p>
+                <p class="qf-status-detail" id="qf-status-detail"></p>
+                <ul class="qf-status-instructions" id="qf-status-instructions"></ul>
+              </div>
+            </div>
+
             <label>Account number</label>
             <input type="text" id="setting-quickfile-account" class="settings-input" placeholder="Your QuickFile account number" autocomplete="off">
             <label>API key</label>
@@ -1001,7 +1011,7 @@
               <button type="button" id="btn-save-test-qf" class="btn btn-secondary">Save and test QuickFile</button>
               <button type="button" id="btn-save-import-qf" class="btn btn-primary">Save and import firms now</button>
             </div>
-            <p class="settings-hint" style="margin-top:0.55rem;">Use <strong>Save and import firms now</strong> for the quickest setup. It saves these details and jumps straight to the firm import.</p>
+            <p class="settings-hint" style="margin-top:0.55rem;">Use <strong>Save and import firms now</strong> for the quickest setup. It saves these details and jumps straight to the firm import. Your three credentials are stored on <strong>this computer only</strong> &mdash; set them up once per machine.</p>
           </div>
         </div>
 
@@ -2075,6 +2085,8 @@
   </div>
   <script src="renderer/lib/duplicate-attendance.js"></script>
   <script src="renderer/lib/station-visits.js"></script>
+  <script src="renderer/lib/quickfileConnectionState.js"></script>
+  <script src="renderer/lib/crm1Validation.js"></script>
   <!-- ── Module layer (load order matters) ─────────────────────
        1. toast.js     — UI feedback (no dependencies)
        2. app.js       — state vars + all functions + init()
