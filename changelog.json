@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.16",
+      "version": "1.9.17",
       "date": "2026-06-06",
       "latest": true,
+      "changes": [
+        "Fix CRM1 form filling the wrong boxes: gender (male/female/prefer not to say) and marital status (cohabiting/widowed) now tick the correct checkboxes on the official LAA template",
+        "Fix CRM1 benefits page: the two means questions (Guarantee Pension Credit / Universal Credit, and other passporting benefits) are now answered correctly and weekly income is only shown when not passported",
+        "Voluntary attendance note PDF now includes Matter Type, full interpreter details, and the disclosure items (samples, caution offered, injuries) that were previously omitted",
+        "Billing: the final review step now correctly checks the essential claim data before archiving, and there is a single billing path with clearer guidance"
+      ]
+    },
+    {
+      "version": "1.9.16",
+      "date": "2026-06-06",
+      "latest": false,
       "changes": [
         "Fix Windows form layout parity with Mac using compact rail and drawer modes",
         "Clear saved panel widths that were overriding compact sidebar on laptop screens"

@@ -6780,6 +6780,32 @@ var REQUIRED_FIELD_KEYS = [
     return w;
   }
 
+  /* "Hard" billing warnings: the essential fields a complete LAA bill must have.
+   * Used by the workflow completion step (Step 3) to confirm the matter has the
+   * core claim data before archiving. This is a strict subset of
+   * getBillingReadinessWarnings() (which also includes softer data-quality hints
+   * like multi-visit time-consistency checks). Exposed on window so the workflow
+   * screens (separate files) can call it. */
+  function getBillingHardWarnings() {
+    var d = formData;
+    var w = [];
+    if (d._formType === 'telephone') return w;
+    if (!(d.matterTypeCode || '').trim()) w.push('Criminal matter type');
+    var od = (d.outcomeDecision || '').trim();
+    if (!od) w.push('Outcome');
+    var voluntaryConcluded = d.attendanceMode === 'voluntary' ? (od && od !== 'Ongoing / Unknown') : false;
+    if (voluntaryConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code');
+    var mins = parseInt((d.totalMinutes || '').toString(), 10);
+    if (isNaN(mins) || mins <= 0) w.push('Time recording');
+    if (d.attendanceMode === 'voluntary') {
+      if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim() && d.dsccPrivateMatter !== 'Yes') w.push('DSCC reference or reason');
+    } else {
+      if (!(d.dsccRef || '').trim() && (d.sourceOfReferral || '').toLowerCase().indexOf('duty') >= 0 && d.dsccPrivateMatter !== 'Yes') w.push('DSCC number (duty route)');
+    }
+    return w;
+  }
+  window.getBillingHardWarnings = getBillingHardWarnings;
+
   function updateBillingReadinessPanel() {
     var list = document.getElementById('billing-readiness-list');
     var panel = document.getElementById('billing-readiness-panel');
@@ -6996,7 +7022,7 @@ var REQUIRED_FIELD_KEYS = [
       } else if (!_matterBillingNoteFinalised()) {
         helpEl.innerHTML = 'Finalise the attendance note (Section 9 on the form) before starting the billing process.';
       } else {
-        helpEl.innerHTML = 'Click <strong>Start billing process</strong> to step through documents, the QuickFile invoice, and review &amp; archive. Each step also has its own Archive button so you can file the matter away as soon as you are done.';
+        helpEl.innerHTML = 'Click <strong>Start billing process</strong> to step through documents, the QuickFile invoice, then review &amp; archive. You archive the matter on the final step once everything is in order.';
       }
     }
 
@@ -13107,7 +13133,7 @@ pdfAuditFooterHtml(d, settings) +
       row('Address', [d.address1, d.address2, d.address3, d.city, d.county, d.postCode].filter(Boolean).join(', ')) +
       row('Client phone', d.clientPhone) + row('Client email', d.clientEmail) +
       row('Language issues?', d.languageIssues) +
-      (d.languageIssues === 'Yes' ? row('Interpreter', d.interpreterName) + row('Language', d.interpreterLanguage) : '') +
+      (d.languageIssues === 'Yes' ? row('Interpreter', d.interpreterName) + row('Language', d.interpreterLanguage) + row('Interpretation mode', d.interpreterMode) + row('Interpreter agency', d.interpreterAgency) + row('Interpreter phone', d.interpreterPhone) + row('Interpreter arrival time', d.interpreterArrivalTime) : '') +
       row('Youth / Vulnerable?', d.juvenileVulnerable) +
       (d.juvenileVulnerable && d.juvenileVulnerable !== 'No' ? row('Appropriate Adult', d.appropriateAdultName) + row('AA relationship', d.appropriateAdultRelation) + row('AA phone', d.appropriateAdultPhone) + row('AA email', d.appropriateAdultEmail) + row('AA organisation', d.appropriateAdultOrganisation) + (d.appropriateAdultAddress ? row('AA address', d.appropriateAdultAddress) : '') : '') +
       row('Injuries to client?', d.injuriesToClient) + (d.injuriesToClient === 'Yes' ? row('Injury details', d.injuryDetails) : '') +
@@ -13123,7 +13149,9 @@ pdfAuditFooterHtml(d, settings) +
       '</table>' +
 
       '<h2>4. Offences</h2>' +
-      (offenceRows ? '<table>' + offenceRows + '</table>' : '<p style="font-size:10px;color:#64748b;">No offences recorded.</p>') +
+      ((d.matterTypeCode || offenceRows)
+        ? '<table>' + row('Matter Type', codeLookup('matterTypeCodes', d.matterTypeCode)) + offenceRows + '</table>'
+        : '<p style="font-size:10px;color:#64748b;">No offences recorded.</p>') +
       (d.otherOffencesNotes ? '<div class="nar">' + h(d.otherOffencesNotes) + '</div>' : '') +
 
       '<h2>5. Disclosure &amp; Evidence</h2><table>' +
@@ -13140,6 +13168,9 @@ pdfAuditFooterHtml(d, settings) +
       row('Written evidence?', d.writtenEvidence) + (d.writtenEvidenceDetails ? row('Evidence details', d.writtenEvidenceDetails) : '') +
       row('Exhibits to inspect?', d.exhibitsToInspect) + (d.exhibitsToInspect === 'Yes' ? row('Inspected?', d.exhibitsInspected) + (d.exhibitsNotes ? row('Exhibit notes', d.exhibitsNotes) : '') : '') +
       row('PNC disclosed?', d.pncDisclosed) + (d.pncNotes ? row('PNC notes', d.pncNotes) : '') +
+      row('Samples (disclosed)?', d.samplesDisclosed) +
+      row('Caution/out-of-court offered?', d.cautionAvailable) +
+      row('Injuries (disclosure)', d.disclosureReInjuries) +
       '</table>' +
       (d.disclosureNarrative ? '<div class="nar">' + h(d.disclosureNarrative) + '</div>' : '') +
 

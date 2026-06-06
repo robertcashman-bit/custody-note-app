@@ -14,6 +14,20 @@ function _billingFmtDate(val) {
 }
 
 function openBillingPanel() {
+  /* Single billing path: the canonical UI is the full-page billing workflow
+   * (Documents -> Billing review -> Review & archive). This legacy modal is kept
+   * only as a defensive fallback for environments where the workflow screen
+   * isn't mounted. Redirect to the workflow whenever it is available so users
+   * never see two competing billing UIs. */
+  if (typeof showView === 'function' && document.getElementById('view-matter-billing')) {
+    showView('matter-billing');
+    return;
+  }
+  if (typeof window !== 'undefined' && typeof window.openWorkflow === 'function') {
+    window.openWorkflow();
+    return;
+  }
+
   if (_billingPanelOpen) return;
   _billingPanelOpen = true;
 
@@ -210,12 +224,20 @@ function _renderBillingPanel(data, recordId, opts) {
     invoiceStatusHtml = '<div class="billing-status-badge billing-status-not-invoiced">Not Invoiced</div>';
   }
 
-  var mileageCost = (opts.mileageMiles || 0) * (opts.mileageRate || 0.45);
-  var subtotal = (opts.attendanceFee || 0) + mileageCost + (opts.parkingAmount || 0);
   var _vatRateForCalc = (opts.vatRate || 0.20);
   if (typeof _vatRateForCalc === 'number' && _vatRateForCalc > 1) _vatRateForCalc = _vatRateForCalc / 100;
-  var vatAmt = subtotal * _vatRateForCalc;
-  var total = subtotal + vatAmt;
+  var _legacyTotals = (typeof calculateInvoiceTotals === 'function')
+    ? calculateInvoiceTotals({
+        fixedFee: opts.attendanceFee || 0,
+        mileageMiles: opts.mileageMiles || 0,
+        mileageRate: opts.mileageRate || 0.45,
+        parkingAmount: opts.parkingAmount || 0,
+        vatRate: _vatRateForCalc,
+      })
+    : null;
+  var subtotal = _legacyTotals ? _legacyTotals.subTotal : 0;
+  var vatAmt = _legacyTotals ? _legacyTotals.vatTotal : 0;
+  var total = _legacyTotals ? _legacyTotals.grandTotal : 0;
 
   var auditHtml = '';
   if (opts.auditLog && opts.auditLog.length) {
@@ -379,19 +401,19 @@ function _recalcBillingTotals() {
   var rate = parseFloat(document.getElementById('billing-mileage-rate').value) || 0;
   var parking = parseFloat(document.getElementById('billing-parking').value) || 0;
   var vatPct = parseFloat(document.getElementById('billing-vat-rate').value) || 0;
-  var vatRate = vatPct / 100;
-
-  var mileageCost = miles * rate;
-  var subtotal = fee + mileageCost + parking;
-  var vat = subtotal * vatRate;
-  var total = subtotal + vat;
+  var totals = (typeof calculateInvoiceTotals === 'function')
+    ? calculateInvoiceTotals({
+        fixedFee: fee, mileageMiles: miles, mileageRate: rate,
+        parkingAmount: parking, vatRate: vatPct / 100,
+      })
+    : { subTotal: 0, vatTotal: 0, grandTotal: 0 };
 
   var subEl = document.getElementById('billing-subtotal');
   var vatEl = document.getElementById('billing-vat');
   var totEl = document.getElementById('billing-total');
-  if (subEl) subEl.textContent = _fmtCurrency(subtotal);
-  if (vatEl) vatEl.textContent = _fmtCurrency(vat);
-  if (totEl) totEl.textContent = _fmtCurrency(total);
+  if (subEl) subEl.textContent = _fmtCurrency(totals.subTotal);
+  if (vatEl) vatEl.textContent = _fmtCurrency(totals.vatTotal);
+  if (totEl) totEl.textContent = _fmtCurrency(totals.grandTotal);
 }
 
 var _invoiceInFlight = false;

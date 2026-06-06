@@ -388,7 +388,8 @@ describe('Billing screen source', () => {
   });
 
   it('has live QuickFile preview with line items', () => {
-    assert.ok(billingScreenSrc.includes('QuickFile Preview'));
+    assert.ok(billingScreenSrc.includes('Invoice total (QuickFile preview)'));
+    assert.ok(billingScreenSrc.includes('Your invoice'));
     assert.ok(billingScreenSrc.includes('wf-preview-table'));
     assert.ok(billingScreenSrc.includes('wf-preview-title'));
   });

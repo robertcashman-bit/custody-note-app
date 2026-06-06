@@ -52,8 +52,8 @@ function _wfRenderDocumentsStep(body, footer) {
   var html =
     '<div class="wf-screen wf-documents">' +
       '<div class="wf-screen-header">' +
-        '<h3>Step 1 &mdash; Documents &amp; Forms</h3>' +
-        '<p class="wf-screen-sub">Generate forms, upload files, and prepare documents for billing.</p>' +
+        '<h3>Step 1 &mdash; Documents &amp; forms</h3>' +
+        '<p class="wf-screen-sub">Generate LAA forms, upload files, and name attachments. When ready, continue to Step 2 to set the invoice amounts.</p>' +
       '</div>' +
       guideHtml +
 

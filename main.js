@@ -6728,6 +6728,7 @@ ipcMain.handle('print-pdf-file', async (_, filePath) => {
 
 /* â”€â”€â”€ LAA Official PDF prefill â”€â”€â”€ */
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const laaCrm1Fill = require('./lib/laaCrm1Fill');
 
 const LAA_FORM_FILES = {
   crm1: 'crm1-v16-feb-2025.pdf',
@@ -6775,12 +6776,6 @@ function fmtDateDMY(val) {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : String(val);
 }
 
-/** UK NI for PDF: strip spaces, uppercase (matches in-app validation AB123456C). */
-function normalizeNiNumberForPdf(s) {
-  if (s === undefined || s === null) return '';
-  return String(s).replace(/\s+/g, '').toUpperCase();
-}
-
 // H40 — these used to silently swallow "field not found" / pdf-lib errors,
 // so a renamed LAA form field would ship as a fully-blank PDF while the
 // app reported "filled". We now collect per-render misses onto an
@@ -6816,78 +6811,16 @@ function safeUncheck(form, fieldName) {
   try { form.getCheckBox(fieldName).uncheck(); } catch (_) {}
 }
 
-/** CRM1 income section: stored gross annual (Â£) â†’ weekly. */
-function poundsAnnualToWeeklyOrEmpty(val) {
-  if (val === undefined || val === null || val === '') return '';
-  const n = parseFloat(String(val).replace(/,/g, ''));
-  if (!Number.isFinite(n)) return '';
-  return String(Math.round((n / 52) * 100) / 100);
-}
-
-/** CRM1 page 7 Q2: Universal Credit or Guarantee Pension Credit only (narrower than main passporting list). */
-function benefitIndicatesUniversalCreditOrPensionGuarantee(d) {
-  const s = `${d.benefitType || ''} ${d.benefitOther || ''}`;
-  return /\bUniversal Credit\b/i.test(s) || /Pension Credit/i.test(s);
-}
-
 /**
  * CRM1 page 6 â€” Ethnicity (v16): codes from data/laa-reference-data.json ethnicCodes, left-to-right /
  * top-to-bottom field order on the official PDF (18 single-choice boxes).
  */
-const CRM1_ETHNICITY_FIELD_BY_CODE = {
-  '01': 'CheckBox137',
-  '02': 'CheckBox132',
-  '14': 'CheckBox101',
-  '16': 'CheckBox138',
-  '10': 'CheckBox134',
-  '11': 'CheckBox67',
-  '12': 'CheckBox145',
-  '13': 'CheckBox135',
-  '06': 'CheckBox68',
-  '07': 'CheckBox136',
-  '08': 'CheckBox116',
-  '09': 'CheckBox147',
-  '15': 'CheckBox150',
-  '04': 'CheckBox151',
-  '03': 'CheckBox148',
-  '05': 'CheckBox2',
-  '00': 'CheckBox152',
-  '99': 'CheckBox149',
-};
+/* (CRM1 ethnicity/disability code maps moved to lib/laaCrm1Fill.js) */
 
 /**
  * CRM1 page 6 â€” Disability: codes from disabilityCodes; physical order matches the printed
  * â€œDefinitions:â€ list on v16 (CheckBox66 = â€œPrefer not to sayâ€ â€” no app code, left blank).
  */
-const CRM1_DISABILITY_FIELD_BY_CODE = {
-  NCD: 'CheckBox31',
-  VIS: 'CheckBox32',
-  ILL: 'CheckBox3',
-  OTH: 'CheckBox65',
-  UKN: 'CheckBox4',
-  MHC: 'CheckBox5',
-  LDD: 'CheckBox72',
-  MOB: 'CheckBox117',
-  DEA: 'CheckBox73',
-  HEA: 'CheckBox120',
-  BLI: 'CheckBox100',
-};
-
-const CRM1_ALL_ETHNICITY_FIELDS = Object.values(CRM1_ETHNICITY_FIELD_BY_CODE);
-const CRM1_ALL_DISABILITY_FIELDS = Object.values(CRM1_DISABILITY_FIELD_BY_CODE);
-
-function fillCRM1EqualOpportunities(form, d) {
-  CRM1_ALL_ETHNICITY_FIELDS.forEach((name) => safeUncheck(form, name));
-  const eth = String(d.ethnicOriginCode || '').trim();
-  const ethField = CRM1_ETHNICITY_FIELD_BY_CODE[eth];
-  if (ethField) safeCheck(form, ethField, true);
-
-  CRM1_ALL_DISABILITY_FIELDS.forEach((name) => safeUncheck(form, name));
-  safeUncheck(form, 'CheckBox66');
-  const dis = String(d.disabilityCode || '').trim();
-  const disField = CRM1_DISABILITY_FIELD_BY_CODE[dis];
-  if (disField) safeCheck(form, disField, true);
-}
 
 async function embedSignature(pdfDoc, form, fieldName, dataUri) {
   if (!dataUri || typeof dataUri !== 'string' || !dataUri.startsWith('data:image')) return;
@@ -6923,138 +6856,11 @@ async function embedSignature(pdfDoc, form, fieldName, dataUri) {
   }
 }
 
+/* CRM1 prefill delegates to the unit-tested module. The IPC handlers set
+ * _laaFieldMissAccumulator before calling, so pass it through to surface any
+ * "field not found" misses (e.g. if the LAA renames a template field). */
 function fillCRM1(form, d) {
-  safeSet(form, 'Surname', d.surname);
-  const firstLine = [d.forename, d.middleName].filter(Boolean).join(' ').trim();
-  safeSet(form, 'First_name', firstLine || d.forename);
-  const dob = fmtDateDMY(d.dob);
-  if (dob) {
-    const parts = dob.split('/');
-    safeSet(form, 'Date_of_birth', parts[0] || '');
-    safeSet(form, 'Date_of_birth1', parts[1] || '');
-    safeSet(form, 'Date_of_birth2', parts[2] || '');
-  }
-  /* CRM1 v16 header UFN combs (y=674 row, page 1).
-   * Layout left-to-right: Comb1, Comb11, Comb2, Comb3, Comb4, Comb5, [printed slash], Comb21, Comb6, Comb7
-   * UFN format is DDMMYY/NNN -> 6 chars + slash + 3 chars = 9 fillable boxes.
-   * Always clear first (defensive) then populate from the record when available.
-   * The firm IS the user, so when the record carries a UFN we MUST print it. */
-  const CRM1_UFN_COMBS = ['Comb1','Comb11','Comb2','Comb3','Comb4','Comb5','Comb21','Comb6','Comb7'];
-  CRM1_UFN_COMBS.forEach(c => safeClearText(form, c));
-  /* UFN field is optional; firms often only enter File / matter ref — use the same 9 combs. */
-  const ufnRaw = d.ufn || d.ourFileNumber || d.fileReference || '';
-  const ufnChars = String(ufnRaw).replace(/\s+/g, '').replace(/\//g, '').toUpperCase();
-  if (ufnChars) {
-    for (let i = 0; i < CRM1_UFN_COMBS.length; i++) {
-      if (ufnChars[i]) safeSet(form, CRM1_UFN_COMBS[i], ufnChars[i]);
-    }
-  }
-
-  /* NI number: 9 individual comb boxes on the DOB row (y=627) */
-  const ni = normalizeNiNumberForPdf(d.niNumber || d.crm14NiNumber || '');
-  const NI_COMBS = ['National_insurance_number','National_insurance_number1','Comb10','Comb101','Comb8','Comb9','Comb12','Comb13','FillText644'];
-  for (let i = 0; i < NI_COMBS.length; i++) {
-    safeSet(form, NI_COMBS[i], ni[i] || '');
-  }
-  safeSet(form, 'Current_address', [d.address1, d.address2, d.address3].filter(Boolean).join(', '));
-  safeSet(form, 'FillText1', d.city);
-  safeSet(form, 'County', d.county);
-  safeSet(form, 'Postcode', d.postCode);
-
-  const ms = d.maritalStatus || '';
-  safeCheck(form, 'Married', ms === 'Married' || ms === 'Civil Partner' || ms === 'Married/Civil Partner');
-  safeCheck(form, 'CheckBox87', ms === 'Single');
-  safeCheck(form, 'Separated', ms === 'Separated');
-  safeCheck(form, 'Divorced', ms === 'Divorced' || ms === 'Divorced/dissolved CP');
-  safeCheck(form, 'CheckBox89', ms === 'Cohabiting');
-  safeCheck(form, 'CheckBox11', ms === 'Widowed');
-
-  /** Gender (CRM1 v16): checkbox defaults on the PDF can leave the wrong sex ticked if we only
-   * safeCheck('…', true); safeCheck does nothing when false. Clear all sex options every time
-   * (Male = CheckBox12, Female = CheckBox14 in field order — see LAA CRM1 Feb 2025). */
-  const gRaw = String(d.gender || '').trim().toLowerCase();
-  safeUncheck(form, 'CheckBox12');
-  safeUncheck(form, 'CheckBox14');
-  safeUncheck(form, 'CheckBox1');
-  const gMale = gRaw === 'male' || gRaw === 'm';
-  const gFemale = gRaw === 'female' || gRaw === 'f';
-  const gPnts = /^prefer\b/.test(gRaw) || gRaw === 'prefer not to say' || gRaw.includes('prefer not');
-  safeCheck(form, 'CheckBox12', gMale);
-  safeCheck(form, 'CheckBox14', gFemale);
-  safeCheck(form, 'CheckBox1', gPnts);
-
-  fillCRM1EqualOpportunities(form, d);
-
-  const under18 = d.juvenileVulnerable === 'Juvenile';
-  safeUncheck(form, 'Client under 18 checkbox');
-  safeUncheck(form, 'Client not under 18 checkbox');
-  safeCheck(form, 'Client under 18 checkbox', under18);
-  safeCheck(form, 'Client not under 18 checkbox', !under18);
-
-  const onBenefit = d.passportedBenefit === 'Yes' || d.benefits === 'Yes';
-  /* Main income question: Yes = left (CheckBox10), No = right (CheckBox9) â€” CRM1 v16 layout. */
-  safeUncheck(form, 'CheckBox9');
-  safeUncheck(form, 'CheckBox10');
-  safeCheck(form, 'CheckBox10', onBenefit);
-  safeCheck(form, 'CheckBox9', !onBenefit);
-
-  /* Narrow UC / Guarantee Pension Credit row (CheckBox13 = Yes left, CheckBox6 = No right). */
-  safeUncheck(form, 'CheckBox13');
-  safeUncheck(form, 'CheckBox6');
-  const ucPc = benefitIndicatesUniversalCreditOrPensionGuarantee(d);
-  if (d.benefits === 'Yes') {
-    safeCheck(form, 'CheckBox13', ucPc);
-    safeCheck(form, 'CheckBox6', !ucPc);
-  } else if (d.benefits === 'No') {
-    safeCheck(form, 'CheckBox6', true);
-  }
-
-  const wkClient = onBenefit ? '' : poundsAnnualToWeeklyOrEmpty(d.grossIncome);
-  const wkPartner = onBenefit ? '' : poundsAnnualToWeeklyOrEmpty(d.partnerIncome);
-  safeSet(form, 'The_client1', wkClient);
-  /* Field name is legacy; box is partner weekly Â£ (not name). */
-  safeSet(form, 'Partner_if_living_with_t_', wkPartner);
-  if (!onBenefit && (wkClient !== '' || wkPartner !== '')) {
-    const a = parseFloat(wkClient) || 0;
-    const b = parseFloat(wkPartner) || 0;
-    safeSet(form, 'Total1', String(Math.round((a + b) * 100) / 100));
-  }
-
-  /* NOTE: do NOT write d.dependants into FillText15.
-   * FillText15 is at page 7 (y=247) inside the "Calculate the total
-   * allowable deductions" block (Income tax / NI / other deductions),
-   * NOT the page-8 dependants box. CRM1 v16 has no AcroForm field for
-   * the page-8 dependants count (it is intentionally handwritten on the
-   * official form), so leaving every page-7 deductions field blank is
-   * the correct behaviour when we have no deduction figures captured. */
-
-  const capC = d.capitalClient;
-  const capP = d.capitalPartner;
-  const capT = d.capitalTotal;
-  const hasCapC = capC !== undefined && capC !== null && String(capC).trim() !== '';
-  const hasCapP = capP !== undefined && capP !== null && String(capP).trim() !== '';
-  const hasCapT = capT !== undefined && capT !== null && String(capT).trim() !== '';
-  /* Row 1 (FillText23/24): savings â€” client / partner */
-  if (hasCapC) safeSet(form, 'FillText23', String(capC).trim());
-  if (hasCapP) safeSet(form, 'FillText24', String(capP).trim());
-  /* Row 2 (FillText25/26): investments â€” default 0 when any capital data given */
-  if (hasCapC || hasCapP || hasCapT) {
-    safeSet(form, 'FillText25', '0');
-    safeSet(form, 'FillText26', '0');
-  }
-  /* Total (FillText27) */
-  if (hasCapT) {
-    safeSet(form, 'FillText27', String(capT).trim());
-  } else if (hasCapC || hasCapP) {
-    const x = parseFloat(String(capC).replace(/,/g, '')) || 0;
-    const y = parseFloat(String(capP).replace(/,/g, '')) || 0;
-    safeSet(form, 'FillText27', String(Math.round((x + y) * 100) / 100));
-  }
-  /* FillText28: amount above upper limit â€” set to total or 0 */
-  if (hasCapC || hasCapP || hasCapT) {
-    const totalVal = hasCapT ? String(capT).trim() : String((parseFloat(String(capC).replace(/,/g, '')) || 0) + (parseFloat(String(capP).replace(/,/g, '')) || 0));
-    safeSet(form, 'FillText28', totalVal);
-  }
+  return laaCrm1Fill.fillCRM1(form, d, { accumulator: _laaFieldMissAccumulator || undefined });
 }
 
 function fillCRM2(form, d) {
@@ -7253,7 +7059,11 @@ ipcMain.handle('laa-generate-official-pdf', async (_, { formType, data }) => {
     const safeName = laaDesktopPdfFilename(d, formType).replace(/[<>:"/\\|?*]/g, '_');
     const outPath = path.join(desktop, safeName);
     fs.writeFileSync(outPath, pdfBytes);
-    return { path: outPath };
+    return {
+      path: outPath,
+      fieldMisses: misses.length,
+      missedFields: misses.slice(0, 10).map(m => m.field),
+    };
   } catch (err) {
     console.error('[LAA PDF]', err);
     return { error: err.message || String(err) };
@@ -7301,7 +7111,12 @@ ipcMain.handle('laa-generate-pdf-buffer', async (_, { formType, data }) => {
     }
 
     const pdfBytes = await pdfDoc.save();
-    return { base64: Buffer.from(pdfBytes).toString('base64'), size: pdfBytes.length };
+    return {
+      base64: Buffer.from(pdfBytes).toString('base64'),
+      size: pdfBytes.length,
+      fieldMisses: misses.length,
+      missedFields: misses.slice(0, 10).map(m => m.field),
+    };
   } catch (err) {
     console.error('[LAA PDF Buffer]', err);
     return { error: err.message || String(err) };

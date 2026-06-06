@@ -141,10 +141,11 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
   }
 
   var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
-  var screenTitle = qfConfigured ? 'Step 2 &mdash; QuickFile invoice' : 'Step 2 &mdash; Billing review';
+  var screenTitle = qfConfigured ? 'Step 2 &mdash; Your invoice' : 'Step 2 &mdash; Billing review';
   var screenSub = qfConfigured
-    ? 'Create the QuickFile invoice and attach generated PDFs where selected.'
-    : 'Review the billing details for this matter before marking it complete.';
+    ? 'Set the fixed fee, mileage and parking you will bill the instructing firm, then send to QuickFile. Section 9 time on the attendance note is for your LAA claim only &mdash; it does not set these amounts.'
+    : 'Review the invoice amounts for this matter before marking it complete. Section 9 time on the attendance note is for your LAA claim only.';
+  var laaGuideHtml = _wfBuildLaaClaimGuideCard(meta.data);
 
   var billingGuideHtml = '';
   if (qfConfigured) {
@@ -172,6 +173,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
         statusBadge +
       '</div>' +
       billingGuideHtml +
+      laaGuideHtml +
       firmCallout +
 
       '<div class="wf-billing-grid">' +
@@ -183,9 +185,10 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
         '</div>' +
 
         '<div class="wf-card">' +
-          '<h4 class="wf-card-title">Charges</h4>' +
+          '<h4 class="wf-card-title">Your invoice &mdash; fixed fee, mileage &amp; parking</h4>' +
+          '<p class="settings-hint" style="margin:0 0 0.75rem;">Default attendance fee is &pound;160 (what most firms are invoiced). The LAA fixed fee on the claim form is &pound;320 &mdash; that is separate and does not change this invoice.</p>' +
           '<div class="wf-charges-form">' +
-            '<div class="wf-charge-row"><label for="wf-fee">Fixed Fee (&pound;)</label><input type="number" id="wf-fee" class="form-input wf-calc" value="' + (opts.attendanceFee || 160).toFixed(2) + '" step="0.01"></div>' +
+            '<div class="wf-charge-row"><label for="wf-fee">Attendance fee for invoice (&pound;)</label><input type="number" id="wf-fee" class="form-input wf-calc" value="' + (opts.attendanceFee || BILLING_DEFAULTS.fixedFee).toFixed(2) + '" step="0.01"></div>' +
             '<div class="wf-charge-row"><label for="wf-miles">Mileage Miles</label><input type="number" id="wf-miles" class="form-input wf-calc" value="' + (opts.mileageMiles || 0) + '" step="0.1"></div>' +
             '<div class="wf-charge-row"><label for="wf-rate">Mileage Rate (&pound;/mile)</label><input type="number" id="wf-rate" class="form-input wf-calc" value="' + (opts.mileageRate || 0.45).toFixed(2) + '" step="0.01"></div>' +
             '<div class="wf-charge-row"><label for="wf-parking">Parking (&pound;)</label><input type="number" id="wf-parking" class="form-input wf-calc" value="' + (opts.parkingAmount || 0).toFixed(2) + '" step="0.01"></div>' +
@@ -200,7 +203,8 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
         '</div>' +
 
         '<div class="wf-card wf-preview-card">' +
-          '<h4 class="wf-card-title">QuickFile Preview</h4>' +
+          '<h4 class="wf-card-title">Invoice total (QuickFile preview)</h4>' +
+          '<p class="settings-hint" style="margin:0 0 0.5rem;">Totals below come from the charges form &mdash; always routed through the same calculation used when sending to QuickFile.</p>' +
           '<div class="wf-preview-title" id="wf-preview-title">' + _wfEsc(opts.invoiceTitle) + '</div>' +
           '<table class="wf-preview-table">' +
             '<thead><tr><th>Description</th><th class="wf-col-amount">Amount</th></tr></thead>' +
@@ -264,6 +268,25 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
 
   _wfBuildBillingFooter(footer, meta, opts);
   _wfBindBillingEvents(meta, opts);
+}
+
+/** Read-only reminder: Section 9 LAA claim figures are separate from the QuickFile invoice. */
+function _wfBuildLaaClaimGuideCard(data) {
+  var d = data || {};
+  if (d._formType === 'telephone') return '';
+  var mins = parseInt(String(d.totalMinutes || ''), 10);
+  var minsLabel = (!isNaN(mins) && mins > 0) ? (mins + ' minutes recorded on the attendance note') : 'No time recorded yet on the attendance note';
+  var escapeHint = '';
+  if (d.isEscapeFee === 'Yes' || (d.totalNet && parseFloat(d.totalNet) > 650)) {
+    escapeHint = ' <strong>Escape case:</strong> total costs may exceed the &pound;650 threshold &mdash; claim at hourly rates (CRM18).';
+  }
+  return '<div class="wf-card wf-laa-claim-guide">' +
+    '<h4 class="wf-card-title">LAA claim guide (Section 9) &mdash; does not set the bill</h4>' +
+    '<p class="settings-hint" style="margin:0;">' + minsLabel +
+    '. The LAA fixed fee on your claim is &pound;320 with a &pound;650 escape threshold. ' +
+    'Those figures are for the Legal Aid portal &mdash; they do not change the attendance fee, mileage or parking you enter for QuickFile above.' +
+    escapeHint + '</p>' +
+  '</div>';
 }
 
 function _wfBuildDocumentSelectionPanel(meta) {
