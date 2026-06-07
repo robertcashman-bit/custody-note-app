@@ -32,13 +32,27 @@ function _wfCompletionAttachmentsMeta(data) {
 }
 
 function _wfRenderCompletionStep(body, footer) {
+  body.innerHTML = '<div class="wf-loading">Loading completion checklist&hellip;</div>';
+  footer.innerHTML = '';
+
+  var qfPromise = (typeof QuickfileConfigured !== 'undefined' && QuickfileConfigured.fetchQuickFileConfigured)
+    ? QuickfileConfigured.fetchQuickFileConfigured()
+    : Promise.resolve((typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured());
+
+  qfPromise.then(function (qfOn) {
+    _wfRenderCompletionStepBody(body, footer, !!qfOn);
+  }).catch(function () {
+    _wfRenderCompletionStepBody(body, footer, false);
+  });
+}
+
+function _wfRenderCompletionStepBody(body, footer, qfOn) {
   var meta = _wfMatterMeta();
   var d = meta.data || {};
   var noteOk = _wfCompletionNoteFinalised();
   var invOk = _wfCompletionHasInvoice(d);
   var am = _wfCompletionAttachmentsMeta(d);
   var archived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
-  var qfOn = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
 
   var hardWarnings = (typeof getBillingHardWarnings === 'function') ? getBillingHardWarnings() : [];
   var billingDataOk = hardWarnings.length === 0;
@@ -147,9 +161,18 @@ function _wfRunArchiveFromWorkflow() {
      yet, the user almost certainly forgot. Offer a clear 3-way choice so the
      bill is never silently archived without ever reaching QuickFile.        */
   var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
-  var qfConfigured = (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured();
-  var hasInvoice = _wfCompletionHasInvoice(data);
   var alreadyArchived = typeof currentRecordArchived !== 'undefined' && currentRecordArchived;
+  var qfCheck = (typeof QuickfileConfigured !== 'undefined' && QuickfileConfigured.fetchQuickFileConfigured)
+    ? QuickfileConfigured.fetchQuickFileConfigured()
+    : Promise.resolve((typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured());
+
+  qfCheck.then(function (qfConfigured) {
+    _wfRunArchiveFromWorkflowImpl(data, !!qfConfigured, alreadyArchived);
+  });
+}
+
+function _wfRunArchiveFromWorkflowImpl(data, qfConfigured, alreadyArchived) {
+  var hasInvoice = _wfCompletionHasInvoice(data);
 
   if (qfConfigured && !hasInvoice && !alreadyArchived && typeof showChoice === 'function') {
     showChoice(

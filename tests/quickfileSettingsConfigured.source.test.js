@@ -20,7 +20,11 @@ test('app.js bootstraps QuickFile inputs from getSettings', () => {
   );
 });
 
-test('app.js getQuickFileSettingsPayload falls back to _appSettingsCache when all QF inputs empty', () => {
-  assert.match(APP, /if \(!acc && !key && !app\)/);
-  assert.ok(APP.includes('_appSettingsCache'), 'fallback must read _appSettingsCache');
+test('app.js saveQuickFileSettings pushes credentials to the licence server', () => {
+  assert.match(APP, /quickfileSettingsPush/);
+});
+
+test('completion-screen uses DB-backed QuickfileConfigured helper', () => {
+  const completion = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'views', 'completion-screen.js'), 'utf8');
+  assert.match(completion, /QuickfileConfigured\.fetchQuickFileConfigured/);
 });

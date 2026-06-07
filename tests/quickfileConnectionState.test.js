@@ -17,7 +17,7 @@ describe('deriveQuickFileConnectionState', () => {
     assert.strictEqual(s.ok, false);
     assert.strictEqual(s.configured, false);
     assert.match(s.detail, /Account number, API key/);
-    assert.ok(s.instructions.some((i) => /another machine/i.test(i)), 'must explain per-machine storage');
+    assert.ok(s.instructions.some((i) => /Custody Note account/i.test(i)), 'must explain account-backed storage');
     assert.ok(s.instructions.length >= 2, 'must give reconnect steps');
   });
 

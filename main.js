@@ -4247,6 +4247,9 @@ ipcMain.handle('licence:validate', async () => {
     writeLicenceData(data);
     retrySyncQueueAfterLicenceSuccess();
     checkCloudBackupEntitlement().catch(() => {});
+    ensureQuickFileSettingsFromServer({ reason: 'licence-validate' }).catch(function (e) {
+      console.warn('[QuickFile] background settings pull after licence validate failed:', e && e.message);
+    });
   } else if (result.valid === false) {
     const serverStatus = result.serverStatus || 'revoked';
     if (serverStatus === 'expired') data.expiresAt = result.expiresAt || data.expiresAt;
@@ -4758,6 +4761,7 @@ ipcMain.handle('get-settings', () => {
 // trusting the value. Tokens / passwords are still accepted as opaque
 // strings (they're stored in the DB which is already encrypted at rest).
 const _URL_LIKE_SETTINGS = new Set(['cloudBackupUrl', 'syncApiUrl', 'cloudApiUrl']);
+const _QF_PRESERVE_LOG = '[set-settings] preserved existing QuickFile key:';
 function _isAllowedSettingsUrl(value) {
   if (typeof value !== 'string') return false;
   const v = value.trim();
@@ -4774,14 +4778,31 @@ function _isAllowedSettingsUrl(value) {
 ipcMain.handle('set-settings', (_, settings) => {
   if (!settings || typeof settings !== 'object') return { ok: false, error: 'Invalid settings payload' };
   const rejected = [];
+  let wroteQuickFile = false;
   for (const [key, value] of Object.entries(settings)) {
     if (_URL_LIKE_SETTINGS.has(key) && !_isAllowedSettingsUrl(value)) {
       rejected.push(key);
       continue;
     }
+    if (QUICKFILE_CREDENTIAL_KEYS.has(key)) {
+      const incoming = value == null ? '' : String(value).trim();
+      if (!incoming) {
+        const existing = dbGet('SELECT value FROM settings WHERE key = ?', [key]);
+        if (existing && String(existing.value || '').trim()) {
+          console.log(_QF_PRESERVE_LOG, key);
+          continue;
+        }
+      }
+      wroteQuickFile = true;
+    }
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value == null ? '' : String(value)]);
   }
   markDbDirty();
+  if (wroteQuickFile && typeof flushDbSync === 'function') {
+    try { flushDbSync(); } catch (flushErr) {
+      console.warn('[set-settings] flushDbSync after QuickFile keys failed:', flushErr && flushErr.message);
+    }
+  }
   if (rejected.length) {
     return { ok: true, rejectedSettings: rejected };
   }
@@ -6745,6 +6766,9 @@ ipcMain.handle('print-pdf-file', async (_, filePath) => {
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const laaCrm1Fill = require('./lib/laaCrm1Fill');
 const quickfileClient = require('./lib/quickfileClient');
+const quickfileSettingsSync = require('./lib/quickfileSettingsSync');
+
+const QUICKFILE_CREDENTIAL_KEYS = new Set(['quickfileAccountNumber', 'quickfileApiKey', 'quickfileAppId']);
 
 const LAA_FORM_FILES = {
   crm1: 'crm1-v16-feb-2025.pdf',
@@ -7188,6 +7212,116 @@ function getQuickFileSettingsStatus() {
   };
 }
 
+function applyQuickFileSettingsFromCloud(decrypted, serverUpdatedAt) {
+  if (!decrypted) return false;
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileAccountNumber', decrypted.quickfileAccountNumber || '']);
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileApiKey', decrypted.quickfileApiKey || '']);
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileAppId', decrypted.quickfileAppId || '']);
+  if (serverUpdatedAt) {
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsServerUpdatedAt', serverUpdatedAt]);
+  }
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsSyncedAt', new Date().toISOString()]);
+  markDbDirty();
+  if (typeof flushDbSync === 'function') {
+    try { flushDbSync(); } catch (flushErr) {
+      console.warn('[QuickFile] flushDbSync after cloud pull failed:', flushErr && flushErr.message);
+    }
+  }
+  return true;
+}
+
+async function ensureQuickFileSettingsFromServer(opts) {
+  const reason = (opts && opts.reason) || 'unknown';
+  const force = !!(opts && opts.force);
+  const status = getQuickFileSettingsStatus();
+  const localComplete = status.missing.length === 0;
+  const rows = dbAll('SELECT key, value FROM settings');
+  const localMeta = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const localServerUpdatedAt = String(localMeta.quickfileSettingsServerUpdatedAt || '').trim();
+
+  const apiUrl = getManagedCloudApiUrl();
+  const data = readLicenceData();
+  if (!apiUrl || !data || !data.key) {
+    return { ok: localComplete, usedLocal: localComplete, reason: reason, skipped: 'no-licence-or-api' };
+  }
+
+  if (localComplete && !force) {
+    const syncedAt = Date.parse(localMeta.quickfileSettingsSyncedAt || '');
+    if (syncedAt && (Date.now() - syncedAt) < 15 * 60 * 1000) {
+      return { ok: true, usedLocal: true, reason: reason, skipped: 'recent-local-cache' };
+    }
+  }
+
+  const pull = await quickfileSettingsSync.pullQuickFileSettingsFromServer(
+    httpPost,
+    apiUrl,
+    data.key,
+    getMachineId(),
+    { headers: _getAuthHeaders(), timeout: 15000 }
+  );
+
+  if (!pull.ok) {
+    console.warn('[QuickFile] settings pull failed (' + reason + '):', pull.error || 'unknown');
+    return { ok: localComplete, usedLocal: localComplete, reason: reason, error: pull.error || 'pull failed' };
+  }
+
+  const serverUpdatedAt = String(pull.updatedAt || '').trim();
+  if (localComplete && serverUpdatedAt && localServerUpdatedAt && serverUpdatedAt <= localServerUpdatedAt && !force) {
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsSyncedAt', new Date().toISOString()]);
+    markDbDirty();
+    return { ok: true, usedLocal: true, reason: reason, skipped: 'server-not-newer' };
+  }
+
+  const decrypted = quickfileSettingsSync.decryptQuickFileSettings(data.key, pull.blob);
+  if (!decrypted || !decrypted.quickfileAccountNumber || !decrypted.quickfileApiKey || !decrypted.quickfileAppId) {
+    console.warn('[QuickFile] settings pull returned undecryptable or incomplete blob (' + reason + ')');
+    return { ok: localComplete, usedLocal: localComplete, reason: reason, error: 'decrypt failed' };
+  }
+
+  applyQuickFileSettingsFromCloud(decrypted, serverUpdatedAt);
+  console.info('[QuickFile] settings pulled from server (' + reason + ') updatedAt=' + (serverUpdatedAt || '?'));
+  return { ok: true, usedLocal: false, reason: reason, updatedAt: serverUpdatedAt };
+}
+
+async function pushQuickFileSettingsToCloud(reason) {
+  const apiUrl = getManagedCloudApiUrl();
+  const data = readLicenceData();
+  if (!apiUrl || !data || !data.key) {
+    return { ok: false, error: 'Licence server not available' };
+  }
+  const status = getQuickFileSettingsStatus();
+  if (status.missing.length) {
+    return { ok: false, error: 'QuickFile credentials incomplete' };
+  }
+  const payload = {
+    quickfileAccountNumber: status.accountNumber,
+    quickfileApiKey: status.apiKey,
+    quickfileAppId: status.applicationId,
+  };
+  const push = await quickfileSettingsSync.pushQuickFileSettingsToServer(
+    httpPost,
+    apiUrl,
+    data.key,
+    getMachineId(),
+    payload,
+    { headers: _getAuthHeaders(), timeout: 15000 }
+  );
+  if (push.ok) {
+    if (push.updatedAt) {
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsServerUpdatedAt', push.updatedAt]);
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsSyncedAt', new Date().toISOString()]);
+      markDbDirty();
+      if (typeof flushDbSync === 'function') {
+        try { flushDbSync(); } catch (_) {}
+      }
+    }
+    console.info('[QuickFile] settings pushed to server (' + (reason || 'save') + ')');
+  } else {
+    console.warn('[QuickFile] settings push failed:', push.error || 'unknown');
+  }
+  return push;
+}
+
 function getQuickFileAuth() {
   const status = getQuickFileSettingsStatus();
   // A fresh submission number + MD5 is built for every request (no token reuse).
@@ -7350,6 +7484,7 @@ async function quickFileFetchAllClients() {
 }
 
 ipcMain.handle('quickfile-fetch-clients', async () => {
+  await ensureQuickFileSettingsFromServer({ reason: 'fetch-clients' });
   const records = await quickFileFetchAllClients();
   const clients = records.map((client) => {
     return quickFileNormaliseClient(client);
@@ -7378,6 +7513,7 @@ function recordQuickFileConnectionResult(ok, errorMessage) {
 }
 
 ipcMain.handle('quickfile-test-connection', async () => {
+  await ensureQuickFileSettingsFromServer({ reason: 'test-connection', force: true });
   try {
     const body = await quickFileRequest('/1_2/client/search', {
       SearchParameters: {
@@ -7409,7 +7545,8 @@ ipcMain.handle('quickfile-settings-status', () => {
 /* Reliable, DB-backed connection facts for the status panel. Reads only the
  * settings table (per-machine source of truth) — independent of any renderer
  * state, so it is consistent on every machine and after every restart. */
-ipcMain.handle('quickfile-connection-state', () => {
+ipcMain.handle('quickfile-connection-state', async () => {
+  await ensureQuickFileSettingsFromServer({ reason: 'connection-state', force: true });
   const status = getQuickFileSettingsStatus();
   const rows = dbAll('SELECT key, value FROM settings');
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -7420,6 +7557,14 @@ ipcMain.handle('quickfile-connection-state', () => {
     lastError: settings.quickfileLastConnectionError || '',
     lastCheckedAt: settings.quickfileLastConnectionCheckedAt || '',
   };
+});
+
+ipcMain.handle('quickfile-settings-push', async () => {
+  try {
+    return await pushQuickFileSettingsToCloud('settings-save');
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
 });
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -7709,6 +7854,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   if (!params || typeof params !== 'object') {
     return { ok: false, error: 'Invalid invoice parameters' };
   }
+  await ensureQuickFileSettingsFromServer({ reason: 'create-invoice', force: true });
   const {
     attendanceId,
     firmName,

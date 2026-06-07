@@ -29,21 +29,26 @@ function _wfRenderBillingStep(body, footer) {
   body.innerHTML = '<div class="wf-loading">Loading billing data&hellip;</div>';
   footer.innerHTML = '';
 
-  Promise.all([
+  var loadJobs = [
     stationId && window.api && window.api.stationMileageGet ? window.api.stationMileageGet(stationId) : Promise.resolve(null),
     recordId && window.api && window.api.attendanceInvoiceStatus ? window.api.attendanceInvoiceStatus(recordId) : Promise.resolve({}),
     recordId && window.api && window.api.billingAuditLogGet ? window.api.billingAuditLogGet(recordId) : Promise.resolve([]),
-    /* Read QuickFile credentials from the DB (main process) — not empty Settings form fields. */
     window.api && window.api.getSettings ? window.api.getSettings() : Promise.resolve({}),
     window.api && window.api.quickfileConnectionState ? window.api.quickfileConnectionState() : Promise.resolve(null),
-  ]).then(function (results) {
+  ];
+
+  Promise.allSettled(loadJobs).then(function (settled) {
+    function val(i, fallback) {
+      var r = settled[i];
+      return (r && r.status === 'fulfilled') ? r.value : fallback;
+    }
     meta = _wfMatterMeta();
     data = meta.data;
-    var stationMileage = results[0];
-    var invoiceStatus = results[1] || {};
-    var auditLog = results[2] || [];
-    var dbSettings = results[3] || {};
-    var qfConnection = results[4];
+    var stationMileage = val(0, null);
+    var invoiceStatus = val(1, {}) || {};
+    var auditLog = val(2, []) || [];
+    var dbSettings = val(3, {}) || {};
+    var qfConnection = val(4, null);
     _wfHydrateQuickFileSettingsCache(dbSettings);
     var qfConfigured = _wfIsQuickFileConfigured(dbSettings, qfConnection);
     var hasExisting = !!(invoiceStatus.quickfile_invoice_id);
@@ -85,20 +90,6 @@ function _wfRenderBillingStep(body, footer) {
       qfConnection: qfConnection,
     };
 
-    _wfRenderBillingBody(body, footer, meta, _wfBillingOpts);
-  }).catch(function () {
-    meta = _wfMatterMeta();
-    var invoiceTitle = formatInvoiceTitle(meta.clientName, meta.stationName);
-    _wfBillingOpts = {
-      clientName: meta.clientName, firmName: meta.firmName, stationName: meta.stationName,
-      attendanceDate: meta.attendanceDate, offenceSummary: meta.offenceSummary,
-      attendanceFee: fee, mileageMiles: miles, mileageRate: mileageRate,
-      parkingAmount: parking, vatRate: vatRate,
-      narrative: _buildInvoiceNarrative(meta.clientName, meta.stationName, meta.attendanceDate, meta.offenceSummary),
-      invoiceTitle: invoiceTitle, invoiceStatus: {}, hasExistingInvoice: false, auditLog: [],
-      qfConfigured: (typeof hasQuickFileSettingsConfigured === 'function') && hasQuickFileSettingsConfigured(),
-      qfConnection: null,
-    };
     _wfRenderBillingBody(body, footer, meta, _wfBillingOpts);
   });
 }
@@ -291,8 +282,8 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
               (qfConn && qfConn.missing && qfConn.missing.length
                 ? ('Missing: <strong>' + _wfEsc(qfConn.missing.join(', ')) + '</strong>. ')
                 : '') +
-              'QuickFile credentials are stored on <strong>this computer only</strong> &mdash; ' +
-              'they do not sync from other machines. Open Settings, enter your Account Number, ' +
+              'QuickFile credentials are saved to your Custody Note account and load automatically when you bill. ' +
+              'Open Settings, enter your Account Number, ' +
               'API Key and Application ID, then click <strong>Save and test QuickFile</strong>. ' +
               'You can still review billing above and continue to <strong>Review &amp; complete</strong> without invoicing here.' +
             '</p>' +
