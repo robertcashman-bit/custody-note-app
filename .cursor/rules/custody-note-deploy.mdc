@@ -27,6 +27,8 @@ This runs [`scripts/deploy.mjs`](scripts/deploy.mjs) which:
 4. Runs `sync-website.mjs` — updates `custody-note-website/data/releases.json`, commits, pushes → **Vercel auto-deploys custodynote.com**
 5. Re-pushes the release tag to trigger **Release and deploy** (Windows + Mac installers on GitHub)
 
+If Mac CI fails or stalls, run `npm run complete-mac-release` on a Mac with Apple signing credentials in `.env.local`.
+
 ## Do not
 
 - Use `mailto:` or ad-hoc git pushes without changelog sync

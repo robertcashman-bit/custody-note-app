@@ -19,6 +19,8 @@
     "release:current": "node scripts/release.mjs current",
     "sync-website": "node scripts/sync-website.mjs",
     "deploy": "node scripts/deploy.mjs",
+    "complete-mac-release": "node scripts/complete-mac-release.mjs",
+    "ensure-mac-release": "node scripts/ensure-mac-release.mjs",
     "build:icon": "node scripts/build-icon.mjs",
     "test": "node scripts/smoke-test.js",
     "smoke:licence-backup": "node ../custody-note-website/scripts/smoke-licence-backup.mjs",
