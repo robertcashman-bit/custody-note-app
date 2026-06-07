@@ -290,7 +290,27 @@ describe('app.js — view wiring', () => {
 
   it('billing panel button opens finish-matter workflow', () => {
     assert.ok(appJs.includes('billing-panel-btn'));
-    assert.ok(appJs.includes('promptBeforeOpeningBilling') || appJs.includes('openWorkflow'));
+    assert.ok(appJs.includes('executePrimaryRecordAction'));
+  });
+
+  it('streamlined billing UX hides §9 duplicate action buttons', () => {
+    const fnIdx = appJs.indexOf('function updateFormBarVisibility');
+    assert.ok(fnIdx !== -1);
+    const block = appJs.substring(fnIdx, fnIdx + 1200);
+    assert.ok(block.includes("finaliseBar.style.display = 'none'"), '§9 finalise bar must stay hidden');
+    assert.ok(block.includes("endBillingBtn.style.display = 'none'"), '§9 finish button must stay hidden');
+    assert.ok(block.includes("postFinaliseBar.style.display = 'none'"), '§9 post-finalise bar must stay hidden');
+    assert.ok(block.includes("archiveBtn.style.display = 'none'"), '§9 archive must stay hidden');
+  });
+
+  it('header billing button routes archive through executePrimaryRecordAction', () => {
+    assert.ok(appJs.includes("executePrimaryRecordAction(action)"));
+    assert.ok(appJs.includes("action === 'archive'"));
+    assert.ok(appJs.includes('archiveCurrentMatterFromForm'));
+  });
+
+  it('readiness panel no longer renders billing-readiness-open button', () => {
+    assert.ok(!appJs.includes('id="billing-readiness-open"'));
   });
 
   it('gear menu handles station-mileage action', () => {

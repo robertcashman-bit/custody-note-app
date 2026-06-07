@@ -393,6 +393,12 @@ describe('Finalise button handlers', () => {
       'form-finalise must call validateBeforeFinalise');
   });
 
+  it('executePrimaryRecordAction centralises header Finalise / Finish / Archive', () => {
+    assert.ok(appJsSource.includes('function executePrimaryRecordAction'));
+    assert.ok(appJsSource.includes("action === 'archive'"));
+    assert.ok(appJsSource.includes('archiveCurrentMatterFromForm'));
+  });
+
   it('form-finalise-bar button triggers validateBeforeFinalise', () => {
     const btnBlock = appJsSource.substring(
       appJsSource.indexOf("case 'form-finalise-bar':"),

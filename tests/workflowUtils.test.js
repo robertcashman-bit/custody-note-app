@@ -559,11 +559,10 @@ describe('Integration: app.js opens workflow', () => {
      #view-matter-billing reached via the bottom-nav "Billing" button,
      covered by the matter-billing assertions above. */
 
-  it('Finish matter / billing workflow is gated on a finalised note (Section 9)', () => {
-    /* UX copy + enforcement live in app.js next to loadMatterBillingScreen / _matterBillingMountWorkflow */
+  it('Finish matter / billing workflow is gated on a finalised note', () => {
     assert.ok(
-      appJs.includes('Finalise the attendance note (Section 9 on the form) before starting the billing process.'),
-      'help + toast should reference Section 9 so users know where to finalise'
+      appJs.includes('Finalise the attendance note using the button at the top of the form before starting the billing process.'),
+      'help + toast should reference the header Finalise button'
     );
     assert.ok(
       appJs.includes('function _matterBillingNoteFinalised()') &&
@@ -571,7 +570,8 @@ describe('Integration: app.js opens workflow', () => {
       '_matterBillingNoteFinalised must return true only for finalised or completed'
     );
     assert.ok(
-      appJs.includes("if (!_matterBillingNoteFinalised())") && appJs.includes("showToast('Finalise the attendance note (Section 9 on the form) before starting the billing process.'"),
+      appJs.includes("if (!_matterBillingNoteFinalised())") &&
+        appJs.includes("showToast('Finalise the attendance note using the button at the top of the form before starting the billing process.'"),
       'clicking through to the workflow must toast when the note is still draft'
     );
     assert.ok(

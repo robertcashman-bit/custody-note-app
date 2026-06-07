@@ -3131,6 +3131,36 @@ html.dark .time-breakdown-override-note strong {
 .billing-readiness-steps li {
   margin: 0.3rem 0;
 }
+.billing-readiness-steps li.is-current {
+  font-weight: 700;
+  color: var(--primary, #1d4ed8);
+}
+.billing-readiness-steps li.is-done {
+  color: var(--text-muted, #64748b);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--text-muted, #64748b) 55%, transparent);
+}
+.billing-readiness-banner {
+  margin: 0.65rem 0 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 12%, white 88%);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border, #cbd5e1) 65%);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text, #0f172a);
+}
+html.dark .billing-readiness-banner {
+  background: color-mix(in srgb, var(--primary) 22%, #0f172a 78%);
+  border-color: color-mix(in srgb, var(--primary) 45%, #334155 55%);
+  color: var(--text-light, #f1f5f9);
+}
+html.dark .billing-readiness-steps li.is-current {
+  color: #93c5fd;
+}
+html.dark .billing-readiness-steps li.is-done {
+  color: #64748b;
+}
 .billing-readiness-warnings {
   margin-top: 0.9rem;
   padding: 0.8rem 0.9rem;
