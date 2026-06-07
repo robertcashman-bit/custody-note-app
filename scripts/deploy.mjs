@@ -49,4 +49,9 @@ console.log('[deploy] Waiting 15s for auto-tag workflow (if package.json just pu
 await new Promise((r) => setTimeout(r, 15000));
 run(`node scripts/trigger-release-deploy.mjs v${version}`);
 
+if (process.platform === 'darwin') {
+  console.log('[deploy] Step 6/6 — ensure Mac release assets (local fallback on macOS)…');
+  run('node scripts/ensure-mac-release.mjs');
+}
+
 console.log(`[deploy] Complete — v${version} pushed, website synced, release workflow triggered.`);
