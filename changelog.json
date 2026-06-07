@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.20",
+      "version": "1.9.21",
       "date": "2026-06-07",
       "latest": true,
+      "changes": [
+        "Full-screen client signature for Legal Aid Declaration — large white signing pad with Save and Cancel",
+        "Save stores the client signature on the form and as a separate PNG attachment on the record",
+        "Cancel clears the signature and attachment; signature pads stay high-contrast in dark mode"
+      ]
+    },
+    {
+      "version": "1.9.20",
+      "date": "2026-06-07",
+      "latest": false,
       "changes": [
         "Court name typeahead now searches the full England and Wales magistrates courts list (292 courts)",
         "Fix court name suggestions showing only B–C names on focus; type at least 2 letters to search",
