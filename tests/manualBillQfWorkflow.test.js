@@ -463,20 +463,18 @@ describe('Step 2: Billing screen — review confirmation UX', () => {
 });
 
 describe('Step 2: Billing screen — data loading', () => {
-  it('loads station mileage, invoice status, and audit log in parallel', () => {
-    assert.ok(billingScreenJs.includes('Promise.all'));
+  it('loads station mileage, invoice status, audit log, and QuickFile state in parallel', () => {
+    assert.ok(billingScreenJs.includes('Promise.allSettled'));
     assert.ok(billingScreenJs.includes('stationMileageGet'));
     assert.ok(billingScreenJs.includes('attendanceInvoiceStatus'));
     assert.ok(billingScreenJs.includes('billingAuditLogGet'));
+    assert.ok(billingScreenJs.includes('quickfileConnectionState'));
   });
 
-  it('falls back to defaults if data load fails (catch handler)', () => {
-    const allIdx = billingScreenJs.indexOf('Promise.all([');
-    assert.ok(allIdx > 0, 'Must use Promise.all for billing data load');
-    const catchIdx = billingScreenJs.indexOf('}).catch(function ()', allIdx);
-    assert.ok(catchIdx > allIdx, 'Must have Promise.all catch handler');
-    const catchBody = billingScreenJs.slice(catchIdx, catchIdx + 1200);
-    assert.ok(catchBody.includes('_wfRenderBillingBody'), 'Catch still renders billing body');
+  it('uses allSettled so partial failures still render billing with DB-backed QuickFile state', () => {
+    assert.ok(billingScreenJs.includes('Promise.allSettled'));
+    assert.ok(billingScreenJs.includes('_wfIsQuickFileConfigured'));
+    assert.ok(!billingScreenJs.includes('}).catch(function ()'), 'must not downgrade QF on load failure');
   });
 
   it('auto-populates mileage from station database when form has no miles', () => {

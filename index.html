@@ -985,7 +985,7 @@
         <div class="settings-card" id="quickfile-settings-card">
           <h2>QuickFile invoicing &amp; directory</h2>
           <div id="quickfile-settings-content">
-            <p class="settings-hint">Enter your QuickFile API credentials here to <strong>send invoices</strong> from the billing workflow. Credentials are stored on <strong>this computer only</strong> &mdash; enter them once on each machine you use.</p>
+            <p class="settings-hint">Enter your QuickFile API credentials here to <strong>send invoices</strong> from the billing workflow. Credentials are saved to your Custody Note account and loaded automatically when you bill.</p>
 
             <div id="qf-connection-status" class="qf-connection-status" role="status" aria-live="polite">
               <span class="qf-status-dot" id="qf-status-dot"></span>
@@ -2088,6 +2088,7 @@
   <script src="renderer/lib/duplicate-attendance.js"></script>
   <script src="renderer/lib/station-visits.js"></script>
   <script src="renderer/lib/quickfileConnectionState.js"></script>
+  <script src="renderer/lib/quickfileConfigured.js"></script>
   <script src="renderer/lib/crm1Validation.js"></script>
   <!-- ── Module layer (load order matters) ─────────────────────
        1. toast.js     — UI feedback (no dependencies)

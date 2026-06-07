@@ -35,6 +35,11 @@ describe('magistratesCourtsSearch', () => {
     assert.strictEqual(hits[0], 'Southampton Magistrates\' Court');
   });
 
+  it('decodes HTML entities in court names', () => {
+    const hits = search.searchMagistratesCourts(["Barking &amp; Dagenham Magistrates' Court"], 'Bark', 5);
+    assert.ok(hits.some(function (name) { return name.indexOf('Barking & Dagenham') !== -1; }), hits.join(' | '));
+  });
+
   it('deduplicates and sorts normalized lists', () => {
     const normalized = search.normalizeCourtList(["B Court", 'B Court', '  A Court ']);
     assert.deepStrictEqual(normalized, ['A Court', 'B Court']);

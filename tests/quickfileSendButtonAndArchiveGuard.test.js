@@ -79,7 +79,8 @@ describe('v1.5.3 — Archive guard (do not silently bypass QuickFile)', () => {
     assert.ok(fn, 'Could not locate _wfRunArchiveFromWorkflow function');
     const body = fn[0];
     assert.match(body, /hasQuickFileSettingsConfigured/);
-    assert.match(body, /_wfCompletionHasInvoice/);
+    assert.match(body, /QuickfileConfigured\.fetchQuickFileConfigured/);
+    assert.match(body, /_wfRunArchiveFromWorkflowImpl/);
     assert.match(body, /currentRecordArchived/);
   });
 

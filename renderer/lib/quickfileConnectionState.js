@@ -43,8 +43,8 @@
     var lastCheckedAt = f.lastCheckedAt ? String(f.lastCheckedAt) : '';
 
     var perMachineNote =
-      'QuickFile credentials are stored on this computer only. If you use the app ' +
-      'on another machine, enter the same three details there once to connect it too.';
+      'QuickFile credentials are saved to your Custody Note account and loaded automatically when you bill. ' +
+      'Update them here if your QuickFile API details change.';
 
     // 1. Not configured on this machine.
     if (!configured) {
@@ -53,7 +53,7 @@
         ok: false,
         configured: false,
         tone: 'warn',
-        headline: 'Not set up on this computer',
+        headline: 'QuickFile not set up yet',
         detail: 'Missing: ' + missing.join(', ') + '.',
         instructions: [
           'Open QuickFile (quickfile.co.uk) \u2192 Account Settings \u2192 3rd Party Integration \u2192 API.',

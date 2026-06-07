@@ -4948,9 +4948,17 @@ var REQUIRED_FIELD_KEYS = [
     const settings = getQuickFileSettingsPayload();
     return window.api.setSettings(settings).then(function() {
       window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, settings);
-      if (showFeedback !== false) showSettingsSavedToast();
-      if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
-      return settings;
+      var pushP = (window.api.quickfileSettingsPush)
+        ? window.api.quickfileSettingsPush()
+        : Promise.resolve({ ok: true });
+      return pushP.then(function(pushResult) {
+        if (pushResult && pushResult.ok === false && showFeedback !== false) {
+          showToast('Saved on this computer but cloud sync failed: ' + (pushResult.error || 'try again'), 'warning', 6000);
+        }
+        if (showFeedback !== false) showSettingsSavedToast();
+        if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
+        return settings;
+      });
     });
   }
 
@@ -4988,9 +4996,13 @@ var REQUIRED_FIELD_KEYS = [
     }
     return window.api.loadMagistratesCourts()
       .then(function(list) {
+        var decode = window.MagistratesCourtsSearch && window.MagistratesCourtsSearch.decodeCourtName;
         if (Array.isArray(list)) {
           magistratesCourts = list
-            .map(function(x) { return String(x || '').trim(); })
+            .map(function(x) {
+              var s = String(x || '').trim();
+              return decode ? decode(s) : s;
+            })
             .filter(Boolean);
         } else {
           magistratesCourts = [];
@@ -5472,13 +5484,6 @@ var REQUIRED_FIELD_KEYS = [
 
   function saveSettings() {
     var cache = window._appSettingsCache || {};
-    var qfAccEl = document.getElementById('setting-quickfile-account');
-    var qfKeyEl = document.getElementById('setting-quickfile-apikey');
-    var qfAppEl = document.getElementById('setting-quickfile-appid');
-    /* Preserve explicit clears; only fall back to cache if the field is not present. */
-    var qfAccount = qfAccEl ? qfAccEl.value.trim() : (cache.quickfileAccountNumber || '');
-    var qfApiKey = qfKeyEl ? qfKeyEl.value.trim() : (cache.quickfileApiKey || '');
-    var qfAppId = qfAppEl ? qfAppEl.value.trim() : (cache.quickfileAppId || '');
     window.api.setSettings({
       email: document.getElementById('setting-email')?.value?.trim() || '',
       dsccPin: document.getElementById('setting-dscc-pin')?.value?.trim() || '',
@@ -5486,9 +5491,6 @@ var REQUIRED_FIELD_KEYS = [
       offsiteBackupFolder: document.getElementById('setting-offsite-backup-folder')?.value?.trim() || '',
       cloudBackupUrl: document.getElementById('setting-cloud-backup-url')?.value?.trim() || '',
       cloudBackupToken: document.getElementById('setting-cloud-backup-token')?.value?.trim() || '',
-      quickfileAccountNumber: qfAccount,
-      quickfileApiKey: qfApiKey,
-      quickfileAppId: qfAppId,
       billingAttendanceFee: document.getElementById('setting-billing-attendance-fee')?.value?.trim() || '160.00',
       billingMileageRate: document.getElementById('setting-billing-mileage-rate')?.value?.trim() || '0.45',
       billingVatRate: document.getElementById('setting-billing-vat-rate')?.value?.trim() || '20',
@@ -7236,7 +7238,7 @@ var REQUIRED_FIELD_KEYS = [
       var chipText = od;
       if (od === 'Bail without charge' && (formData.bailDate || '').trim()) {
         chipText = 'Bail \u2014 return ' + esc(formatDateGB(formData.bailDate));
-      } else if (od === 'Charged with bail' && (formData.courtName || '').trim()) {
+      } else if (od === 'Charged with Bail' && (formData.courtName || '').trim()) {
         chipText = 'Charged \u2014 ' + esc(formData.courtName);
       } else {
         chipText = esc(od);
@@ -10863,32 +10865,29 @@ var REQUIRED_FIELD_KEYS = [
       const searchFn = window.MagistratesCourtsSearch && window.MagistratesCourtsSearch.searchMagistratesCourts;
       let items = searchFn ? searchFn(magistratesCourts, q, 20) : [];
 
-      if (!q) {
+      function showHint(text) {
         var hintEl = document.createElement('div');
         hintEl.className = 'offence-autocomplete-hint';
         hintEl.style.padding = '10px 12px';
         hintEl.style.fontSize = '0.88rem';
         hintEl.style.color = '#64748b';
-        hintEl.textContent = 'Type at least 2 letters to search magistrates courts in England and Wales.';
+        hintEl.textContent = text;
         dropdown.appendChild(hintEl);
         dropdown.classList.add('open');
+      }
+
+      if (!q) {
+        showHint('Type at least 2 letters to search magistrates courts in England and Wales.');
         return;
       }
 
       if (q.length < 2) {
-        var shortHint = document.createElement('div');
-        shortHint.className = 'offence-autocomplete-hint';
-        shortHint.style.padding = '10px 12px';
-        shortHint.style.fontSize = '0.88rem';
-        shortHint.style.color = '#64748b';
-        shortHint.textContent = 'Type at least 2 letters to search.';
-        dropdown.appendChild(shortHint);
-        dropdown.classList.add('open');
+        showHint('Type at least 2 letters to search.');
         return;
       }
 
       if (!items.length) {
-        dropdown.classList.remove('open');
+        showHint("No courts match '" + q + "' — try a different spelling.");
         return;
       }
       items.forEach(function(name) {
@@ -10908,11 +10907,21 @@ var REQUIRED_FIELD_KEYS = [
       dropdown.classList.add('open');
     }
 
+    function runSuggestions() {
+      setSuggestions(input.value);
+    }
+
     var _courtDebounce = null;
-    input.addEventListener('focus', function() { setSuggestions(input.value); });
+    input.addEventListener('focus', function() {
+      if (!magistratesCourts.length && window.api && window.api.loadMagistratesCourts) {
+        loadMagistratesCourts().then(runSuggestions).catch(runSuggestions);
+        return;
+      }
+      runSuggestions();
+    });
     input.addEventListener('input', function() {
       clearTimeout(_courtDebounce);
-      _courtDebounce = setTimeout(function() { setSuggestions(input.value); }, 80);
+      _courtDebounce = setTimeout(runSuggestions, 80);
     });
     input.addEventListener('blur', function() {
       setTimeout(function() { dropdown.classList.remove('open'); }, 180);

@@ -43,15 +43,26 @@ describe('QuickFile connection reliability (main process)', () => {
 });
 
 describe('QuickFile connection panel (renderer)', () => {
-  it('preload bridges quickfileConnectionState', () => {
+  it('preload bridges quickfileConnectionState and settings push', () => {
     assert.ok(PRELOAD.includes('quickfileConnectionState'));
     assert.ok(PRELOAD.includes("ipcRenderer.invoke('quickfile-connection-state')"));
+    assert.ok(PRELOAD.includes('quickfileSettingsPush'));
   });
 
-  it('index.html includes the status panel and loads the shared helper', () => {
+  it('saveSettings does not include QuickFile credential keys', () => {
+    const saveStart = APP.indexOf('function saveSettings()');
+    const saveEnd = APP.indexOf('function loadFirmsList()');
+    assert.ok(saveStart > -1 && saveEnd > saveStart);
+    const body = APP.slice(saveStart, saveEnd);
+    assert.ok(!body.includes('quickfileAccountNumber'), 'bulk save must not write QuickFile account');
+    assert.ok(!body.includes('quickfileApiKey'), 'bulk save must not write QuickFile API key');
+    assert.ok(!body.includes('quickfileAppId'), 'bulk save must not write QuickFile app id');
+  });
+
+  it('index.html includes the status panel and account-based credential copy', () => {
     assert.ok(HTML.includes('id="qf-connection-status"'), 'status panel missing');
     assert.ok(HTML.includes('renderer/lib/quickfileConnectionState.js'), 'helper script not loaded');
-    assert.ok(/this computer only/i.test(HTML), 'must explain per-machine credential storage');
+    assert.match(HTML, /Custody Note account/i, 'must explain account-backed credential storage');
     assert.ok(HTML.includes('qf-import-addon-section'), 'import add-on gated separately from credentials');
   });
 

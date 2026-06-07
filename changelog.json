@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.21",
+      "version": "1.9.22",
       "date": "2026-06-07",
       "latest": true,
+      "changes": [
+        "QuickFile credentials are saved to your Custody Note account and pulled automatically when you bill — no more re-entering on each computer",
+        "Fix billing falsely showing QuickFile as not configured when credentials were already saved",
+        "Court name search: type 2+ letters for magistrates court suggestions; clearer messages when no match; fixes for court list loading"
+      ]
+    },
+    {
+      "version": "1.9.21",
+      "date": "2026-06-07",
+      "latest": false,
       "changes": [
         "Full-screen client signature for Legal Aid Declaration — large white signing pad with Save and Cancel",
         "Save stores the client signature on the form and as a separate PNG attachment on the record",
