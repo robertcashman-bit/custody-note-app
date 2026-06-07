@@ -232,6 +232,7 @@ contextBridge.exposeInMainWorld('api', {
   firmSetDefault: (id) => ipcRenderer.invoke('firm-set-default', id),
   generateUfn: (dateStr) => ipcRenderer.invoke('generate-ufn', dateStr),
   loadReferenceData: () => ipcRenderer.invoke('load-reference-data'),
+  loadMagistratesCourts: () => ipcRenderer.invoke('load-magistrates-courts'),
   saveCsv: (payload) => ipcRenderer.invoke('save-csv', payload),
   backupNow: () => ipcRenderer.invoke('backup-now'),
   officerEmails: {

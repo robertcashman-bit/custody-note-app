@@ -5352,6 +5352,21 @@ ipcMain.handle('load-reference-data', () => {
   return null;
 });
 
+ipcMain.handle('load-magistrates-courts', () => {
+  const courtsPath = path.join(__dirname, 'data', 'magistrates-courts.json');
+  if (!fs.existsSync(courtsPath)) {
+    console.error('[load-magistrates-courts] File not found:', courtsPath);
+    return [];
+  }
+  try {
+    const list = JSON.parse(fs.readFileSync(courtsPath, 'utf8'));
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    console.error('[load-magistrates-courts] Failed to parse magistrates-courts.json:', e && e.message);
+    return [];
+  }
+});
+
 ipcMain.handle('backup-now', async () => {
   try {
     const backupDir = getBackupFolder();

@@ -11,6 +11,12 @@
 - Do NOT introduce React, Vue, TypeScript, or UI frameworks unless explicitly requested
 - Preserve existing architecture unless there is a strong, stated reason to change it
 
+## Cross-platform parity (Mac + Windows)
+
+- One codebase, two builds — custody workflow behaviour must be the same on macOS and Windows
+- Do not add platform-specific custody/business logic; only OS integration may differ (see `.cursor/rules/custody-note-cross-platform-parity.mdc`)
+- When finishing work, state Mac and Windows impact explicitly
+
 ## General coding
 
 - Prefer small, modular functions over large rewrites
