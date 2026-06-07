@@ -410,7 +410,7 @@ function parseCasenotePdfTextToRecordData(pdfText) {
   const laaBlock = extractBlock(text, /10\.\s*LAA Declaration/i, /11\.\s*Admin/i);
   if (laaBlock) {
     data.previousAdvice = yn(extractOne(laaBlock, [/^Previous advice\?\s*(Yes|No)\b/im]));
-    data.privacyNoticeAccepted = yn(extractOne(laaBlock, [/^Privacy Notice\s*(Yes|No)\b/im]));
+    data.privacyNoticeAccepted = yn(extractOne(laaBlock, [/^Privacy Notice acknowledged\?\s*(Yes|No)\b/im, /^Privacy Notice\s*(Yes|No)\b/im]));
     data.laaClientFullName = extractOne(laaBlock, [/^Client name\s*([^\n]+)$/im]);
     data.laaSignatureDate = parseDateGBToISO(extractOne(laaBlock, [/^Date\s*(\d{2}\/\d{2}\/\d{4})\b/im]));
     data.laaSignatureTime = extractOne(laaBlock, [/^Time\s*(\d{2}:\d{2})\b/im]);
