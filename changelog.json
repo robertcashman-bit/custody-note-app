@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.20",
+      "date": "2026-06-07",
+      "latest": true,
+      "changes": [
+        "Court name typeahead now searches the full England and Wales magistrates courts list (292 courts)",
+        "Fix court name suggestions showing only B–C names on focus; type at least 2 letters to search",
+        "Cross-platform Mac/Windows functional parity rules added for development"
+      ]
+    },
+    {
       "version": "1.9.19",
       "date": "2026-06-06",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix QuickFile credentials always visible in Settings (invoicing no longer hidden behind the directory-import add-on lock)",
         "Fix billing Step 2 reading QuickFile credentials from the database on this computer, not empty Settings form fields — stops false 'not configured' when credentials are already saved",
