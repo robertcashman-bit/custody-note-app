@@ -1,37 +1,13 @@
 /**
- * Regression test for "I can't see the Finalise button on Section 9".
+ * Regression: Finalise must be reachable from any section via the header button only.
  *
- * Real-world bug, observed by the user on a voluntary draft:
- *   - On opening a draft, no Finalise button appeared anywhere.
- *   - The bottom-bar Finalise pill (#bottom-bar-finish-pill) was hidden.
- *   - The in-section "Attendance Finished — Finalise" bar (#form-finalise-bar)
- *     was also hidden.
- *   - The Section 9 file-completion panel rendered with light text on a
- *     light background in dark mode, so the title and 4-step checklist
- *     were illegible.
+ * v1.5.17 fixed header/pill updates when §9 was not yet rendered. v1.9.27
+ * consolidated to a single #billing-panel-btn (no bottom pill, no §9 action buttons).
  *
- * Root causes (now fixed):
- *   1. updateFormBarVisibility() returned early when the in-section
- *      action buttons hadn't yet been lazily rendered (sections 1-8),
- *      so updateBottomBarFinishPill() was never called -> the global
- *      pill stayed at its inline display:none.
- *   2. showSection() called _formEnsureSectionRendered() to lazily
- *      mount Section 9 but never re-ran updateFormBarVisibility(), so
- *      #form-finalise-bar / #form-end-billing-btn / #form-post-finalise-bar
- *      stayed at their initial display:none even after navigating to §9.
- *   3. The .billing-readiness-panel CSS used a literal `white` in
- *      color-mix() for the background; combined with dark-mode --text
- *      being near-white, the panel text was invisible.
- *
- * This test seeds a draft (custody and voluntary), opens it from the
- * Records list, and asserts:
- *   A. While on Section 1, the bottom-bar Finalise pill is visible
- *      with label "Finalise".
- *   B. After navigating to Section 9, BOTH the in-section
- *      #form-finalise-bar AND the bottom-bar pill are visible.
- *   C. The billing-readiness panel renders with non-zero contrast
- *      between the title text and the panel background (proxy for the
- *      "ghosted in dark mode" bug).
+ * Asserts on a custody/voluntary draft:
+ *   A. #billing-panel-btn visible on §1 with label Finalise
+ *   B. Same on §9; #form-finalise-bar and #bottom-bar-finish-pill stay hidden
+ *   C. billing-readiness panel readable in light and dark themes
  */
 import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'path';
@@ -167,7 +143,7 @@ test.afterAll(async ({}, testInfo) => {
 });
 
 for (const mode of ['custody', 'voluntary'] as const) {
-  test(`Finalise button is visible on a ${mode} draft (bottom-bar pill on §1, in-section bar on §9)`, async () => {
+  test(`Finalise button is visible via header on a ${mode} draft (§1 and §9)`, async () => {
     const firmId = await seedFirm(page, `${FIRM_NAME} ${mode}`);
     const attendanceId = await seedDraftAttendance(page, {
       firmId,
@@ -187,18 +163,19 @@ for (const mode of ['custody', 'voluntary'] as const) {
       if (typeof w.showSection === 'function') w.showSection(0);
     });
 
-    /* ---- A. Bottom-bar Finalise pill is visible on Section 1 (draft) ---- */
-    const pill = page.locator('#bottom-bar-finish-pill');
+    /* ---- A. Header Finalise button visible on Section 1 (draft) ---- */
+    const headerBtn = page.locator('#billing-panel-btn');
     await expect(
-      pill,
-      `bottom-bar Finalise pill must be visible on §1 of a ${mode} draft (regression: was display:none)`,
+      headerBtn,
+      `#billing-panel-btn must be visible on §1 of a ${mode} draft`,
     ).toBeVisible({ timeout: 5_000 });
-    await expect(pill).toHaveText(/Finalise/);
-    /* The pill's pillAction dataset should be 'finalise' for a draft */
-    const action = await pill.getAttribute('data-pill-action');
-    expect(action, 'pill action should be "finalise" for a draft').toBe('finalise');
+    await expect(headerBtn).toHaveText(/Finalise/);
+    await expect(headerBtn).toHaveAttribute('data-action', 'finalise');
 
-    /* ---- B. Navigate to Section 9; both buttons must be visible ---- */
+    const pill = page.locator('#bottom-bar-finish-pill');
+    await expect(pill, 'bottom-bar pill must stay hidden (header-only UX)').not.toBeVisible();
+
+    /* ---- B. Navigate to Section 9; header still primary; no §9 duplicates ---- */
     await page.evaluate(() => {
       const w = window as unknown as {
         showSection?: (idx: number) => void;
@@ -209,18 +186,16 @@ for (const mode of ['custody', 'voluntary'] as const) {
       if (typeof w.showSection === 'function' && idx >= 0) w.showSection(idx);
     });
 
-    /* In-section finalise bar (the canonical click target). */
+    await expect(headerBtn, 'header Finalise must remain visible on §9').toBeVisible();
+    await expect(headerBtn).toHaveText(/Finalise/);
+
     const finaliseBar = page.locator('#form-finalise-bar');
     await expect(
       finaliseBar,
-      `in-section #form-finalise-bar must be visible on §9 of a ${mode} draft ` +
-        '(regression: stayed display:none after lazy section render)',
-    ).toBeVisible({ timeout: 5_000 });
-    await expect(finaliseBar).toContainText(/Finalise/);
+      'in-section #form-finalise-bar must stay hidden (header-only UX)',
+    ).not.toBeVisible();
 
-    /* Bottom-bar pill should still be visible (and still labelled "Finalise"). */
-    await expect(pill, 'bottom-bar pill should remain visible on §9').toBeVisible();
-    await expect(pill).toHaveText(/Finalise/);
+    await expect(pill, 'bottom-bar pill must stay hidden on §9').not.toBeVisible();
 
     /* ---- C. The file-completion panel must be readable.
        Proxy: the title element's computed text colour should differ
