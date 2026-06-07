@@ -58,7 +58,7 @@ describe('court typeahead — load race UX (app.js wiring)', () => {
 
   it('ensureMagistratesCourtsLoaded re-runs suggestions after load when field focused', () => {
     assert.match(appJs, /function ensureMagistratesCourtsLoaded/);
-    assert.match(appJs, /if \(document\.activeElement === input\) setSuggestions/);
+    assert.match(appJs, /if \(document\.activeElement === input\)[\s\S]{0,120}setSuggestions/);
   });
 
   it('shows Loading magistrates courts instead of No courts match when list empty', () => {
@@ -71,6 +71,19 @@ describe('court typeahead — load race UX (app.js wiring)', () => {
 
   it('uses normalizeCourtSearchQuery before searching', () => {
     assert.match(appJs, /normalizeCourtSearchQuery/);
+  });
+
+  it('shows explicit message when court list fails to load', () => {
+    assert.match(appJs, /Court list failed to load/);
+  });
+
+  it('logs court count after successful load', () => {
+    assert.match(appJs, /\[loadMagistratesCourts\] count=/);
+  });
+
+  it('shows court name field hint for typeahead', () => {
+    assert.match(appJs, /court-name-hint/);
+    assert.match(appJs, /Type 2\+ letters for magistrates court suggestions/);
   });
 });
 
@@ -100,5 +113,23 @@ describe('court typeahead — simulated load race', () => {
     loaded = courts;
     const hits = simulateSearchWhileLoading('Sevenoaks');
     assert.ok(hits.some(function(n) { return /Sevenoaks/i.test(n); }));
+  });
+});
+
+describe('billing panel button placement (finalise visibility regression)', () => {
+  const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+
+  it('#billing-panel-btn is in header-form-actions not form-page-header', () => {
+    const headerIdx = indexHtml.indexOf('id="header-form-actions"');
+    const btnIdx = indexHtml.indexOf('id="billing-panel-btn"');
+    const formHeaderIdx = indexHtml.indexOf('class="form-page-header"');
+    assert.ok(headerIdx >= 0 && btnIdx > headerIdx && btnIdx < formHeaderIdx);
+    const formHeader = indexHtml.slice(formHeaderIdx, indexHtml.indexOf('id="standalone-back-bar"', formHeaderIdx));
+    assert.ok(!formHeader.includes('billing-panel-btn'));
+  });
+
+  it('styles keep header primary action visible when form-active', () => {
+    assert.match(stylesCss, /#header-form-actions #billing-panel-btn/);
+    assert.match(stylesCss, /body\.form-active #view-form > \.form-page-header \{ display: none; \}/);
   });
 });

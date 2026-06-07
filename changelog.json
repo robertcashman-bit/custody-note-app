@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.27",
+      "version": "1.9.28",
       "date": "2026-06-07",
       "latest": true,
+      "changes": [
+        "Fixed missing Finalise / Finish matter / Archive button while editing — primary action is now in the visible top app bar",
+        "Court name typeahead: clearer hints when the field appears; explicit message if the magistrates court list fails to load",
+        "Mac auto-update: stops infinite retry loops after repeated download or checksum failures and clears stale update cache"
+      ]
+    },
+    {
+      "version": "1.9.27",
+      "date": "2026-06-07",
+      "latest": false,
       "changes": [
         "Billing and finalise UX: one header button for the whole matter (Finalise → Finish matter → Archive matter) — no duplicate Section 9 or bottom-bar buttons",
         "Section 9 file-completion panel is informational only, with a 4-step lifecycle checklist and current-phase highlight",

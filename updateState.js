@@ -25,6 +25,8 @@ function getDefaultState() {
     lastRemoteVersion: null,
     lastNoUpdateCheckAt: null,
     appVersionAtCheck: null,
+    consecutiveDownloadFailures: 0,
+    downloadFailureVersion: null,
   };
 }
 
@@ -35,6 +37,9 @@ function normalizeState(raw) {
   }
   if (!Number.isFinite(state.failedInstallCount)) {
     state.failedInstallCount = 0;
+  }
+  if (!Number.isFinite(state.consecutiveDownloadFailures)) {
+    state.consecutiveDownloadFailures = 0;
   }
   if (state.lastCountedInstallAttemptAt != null && !Number.isFinite(state.lastCountedInstallAttemptAt)) {
     state.lastCountedInstallAttemptAt = null;

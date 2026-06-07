@@ -5009,6 +5009,11 @@ var REQUIRED_FIELD_KEYS = [
         } else {
           magistratesCourts = [];
         }
+        if (magistratesCourts.length) {
+          console.log('[loadMagistratesCourts] count=' + magistratesCourts.length);
+        } else {
+          console.warn('[loadMagistratesCourts] court list empty after load');
+        }
         return magistratesCourts;
       })
       .catch(function(err) {
@@ -6714,7 +6719,7 @@ var REQUIRED_FIELD_KEYS = [
     }
     var label = '';
     var action = '';
-    var cls = 'btn btn-small btn-accent';
+    var cls = 'btn btn-small btn-accent btn-header-primary-action';
     var titleText = '';
     if (currentRecordStatus === 'completed') {
       label = 'Archive matter';
@@ -10405,6 +10410,10 @@ var REQUIRED_FIELD_KEYS = [
       acWrap.appendChild(input);
       acWrap.appendChild(dd);
       wrap.appendChild(acWrap);
+      const courtHint = document.createElement('p');
+      courtHint.className = 'field-hint court-name-hint';
+      courtHint.textContent = 'Type 2+ letters for magistrates court suggestions (England and Wales).';
+      wrap.appendChild(courtHint);
       initCourtAutocomplete(input, dd);
     } else if (f.type === 'email') {
       const emailWrap = document.createElement('div');
@@ -10920,12 +10929,14 @@ var REQUIRED_FIELD_KEYS = [
           return;
         }
         if (opts.loadFailed) {
-          showHint('Could not load the court list — click the field again to retry.');
+          showHint('Court list failed to load — restart the app. You can still type the court name manually.');
           return;
         }
         showHint('Loading magistrates courts…');
         ensureMagistratesCourtsLoaded().then(function() {
-          if (document.activeElement === input) setSuggestions(input.value, { loading: false, loadFailed: !magistratesCourts.length });
+          if (document.activeElement === input) {
+            setSuggestions(input.value, { loading: false, loadFailed: !magistratesCourts.length });
+          }
         });
         return;
       }
@@ -16597,11 +16608,22 @@ pdfAuditFooterHtml(d, settings) +
       } else if (data.status === 'error') {
         if (banner) banner.style.display = 'none';
         var instErr = window.__appVersion ? 'v' + window.__appVersion : '';
-        showIdleGlobalBanner('Custody Note ' + instErr + ' \u2014 update check failed (will retry)');
-        if (typeof showToast === 'function' && data.message && !_updateToastShown.error) {
-          _updateToastShown.error = true;
-          showToast('Update error: ' + data.message, 'error', 4000);
-          setTimeout(function() { _updateToastShown.error = false; }, 30000);
+        var errMsg = (data.message || '').toLowerCase();
+        var isChecksumErr = errMsg.indexOf('sha512') >= 0 || errMsg.indexOf('checksum') >= 0;
+        if (isChecksumErr) {
+          showIdleGlobalBanner('Update download failed \u2014 install manually from custodynote.com/download');
+          if (typeof showToast === 'function' && data.message && !_updateToastShown.error) {
+            _updateToastShown.error = true;
+            showToast('Update download failed (checksum error). Download the latest version from custodynote.com/download and install manually.', 'error', 8000);
+            setTimeout(function() { _updateToastShown.error = false; }, 30000);
+          }
+        } else {
+          showIdleGlobalBanner('Custody Note ' + instErr + ' \u2014 update check failed (will retry)');
+          if (typeof showToast === 'function' && data.message && !_updateToastShown.error) {
+            _updateToastShown.error = true;
+            showToast('Update error: ' + data.message, 'error', 4000);
+            setTimeout(function() { _updateToastShown.error = false; }, 30000);
+          }
         }
         _lastUpdateToastPct = -1;
       }
