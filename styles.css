@@ -263,7 +263,7 @@ html.dark .badge.badge-health-danger { background: #450a0a; color: #fca5a5; bord
 html.dark .badge.badge-health-ok { background: #064e3b; color: #86efac; border-color: #065f46; }
 html.dark .escape-yes { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
 html.dark .escape-no { background: #064e3b; color: #6ee7b7; border-color: #065f46; }
-html.dark .signature-canvas { background: #0f172a; border-color: var(--border); }
+html.dark .signature-canvas { background: #ffffff; border-color: #64748b; }
 html.dark .form-page-header { background: var(--surface); }
 html.dark .interview-block { background: var(--surface); border-color: var(--border); }
 html.dark .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
@@ -2535,7 +2535,7 @@ html.dark .grounds-card .checkbox-item.grounds-option:hover {
 .signature-wrap { margin-top: 4px; }
 .signature-canvas {
   border: 2px solid var(--border); border-radius: 6px;
-  background: #fafbfc; cursor: crosshair; display: block;
+  background: #ffffff; cursor: crosshair; display: block;
   width: 100%; max-width: 100%; height: 200px;
 }
 .btn-small {
@@ -2550,6 +2550,15 @@ html.dark .grounds-card .checkbox-item.grounds-option:hover {
   border-radius: 10px; background: var(--primary); color: #fff;
   border: none; cursor: pointer; margin-top: 4px; margin-left: 4px;
 }
+.btn-client-sign-fullscreen {
+  display: block; width: 100%; max-width: 420px;
+  padding: 0.85rem 1.25rem; margin-top: 8px; margin-bottom: 6px;
+  font-size: 1.05rem; font-weight: 700; border-radius: 12px;
+  background: var(--primary); color: #fff; border: 2px solid #fff;
+  cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.btn-client-sign-fullscreen:hover { background: var(--primary-hover); }
+html.dark .btn-client-sign-fullscreen { border-color: #94a3b8; }
 .sig-fullscreen-overlay {
   position: fixed; inset: 0; z-index: 9999;
   background: rgba(0,0,0,0.88);
@@ -2558,23 +2567,31 @@ html.dark .grounds-card .checkbox-item.grounds-option:hover {
   padding: 1rem;
 }
 .sig-fullscreen-overlay .sig-fs-label {
-  color: #fff; font-size: 1.2rem; font-weight: 600; margin-bottom: 0.75rem;
+  color: #fff; font-size: 1.35rem; font-weight: 700; margin-bottom: 0.75rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.sig-fullscreen-overlay .sig-fs-hint {
+  color: #e2e8f0; font-size: 0.95rem; margin-bottom: 0.75rem; text-align: center;
 }
 .sig-fullscreen-overlay canvas {
   background: #fff; border-radius: 8px;
+  border: 3px solid #fff;
   width: 95vw; height: 55vh; max-width: 1200px;
   cursor: crosshair; touch-action: none;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
 }
 .sig-fullscreen-overlay .sig-fs-buttons {
-  display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; justify-content: center;
+  display: flex; gap: 1rem; margin-top: 1.25rem; flex-wrap: wrap; justify-content: center;
 }
 .sig-fullscreen-overlay .sig-fs-buttons button {
-  padding: 0.6rem 1.5rem; font-size: 1rem; border-radius: 10px; border: none; cursor: pointer; font-weight: 600;
+  padding: 0.85rem 2rem; font-size: 1.15rem; border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.45); cursor: pointer; font-weight: 700;
+  min-width: 130px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
-.sig-fs-btn-done { background: #22c55e; color: #fff; }
-.sig-fs-btn-clear { background: #64748b; color: #fff; }
+.sig-fs-btn-done, .sig-fs-btn-save { background: #22c55e; color: #fff; }
+.sig-fs-btn-clear { background: #475569; color: #fff; }
 .sig-fs-btn-preset { background: #2563eb; color: #fff; }
-.sig-fs-btn-cancel { background: #ef4444; color: #fff; }
+.sig-fs-btn-cancel { background: #dc2626; color: #fff; }
 
 
 /* ═══ CALC PANEL ═══ */

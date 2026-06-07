@@ -10218,8 +10218,21 @@ var REQUIRED_FIELD_KEYS = [
       const canvas = document.createElement('canvas'); canvas.className = 'signature-canvas';
       canvas.width = 900; canvas.height = 200; canvas.dataset.sigKey = f.sigKey;
       sw.appendChild(canvas);
+      const isClientSig = f.sigKey === 'clientSig';
+      if (isClientSig) {
+        const signBtn = document.createElement('button');
+        signBtn.type = 'button';
+        signBtn.className = 'btn-client-sign-fullscreen';
+        signBtn.textContent = 'Sign full screen';
+        signBtn.addEventListener('click', function() {
+          openFullscreenSignature(canvas, f.sigKey, f.label, { saveAsAttachment: true, cancelClears: true });
+        });
+        sw.appendChild(signBtn);
+      }
       const clr = document.createElement('button'); clr.type = 'button'; clr.className = 'btn-small'; clr.textContent = 'Clear';
-      clr.addEventListener('click', () => { clearCanvas(canvas); delete formData[f.sigKey]; if (canvas._strokeHistory) canvas._strokeHistory.length = 0; });
+      clr.addEventListener('click', () => {
+        clearInlineSignature(canvas, f.sigKey, isClientSig);
+      });
       sw.appendChild(clr);
       const undoBtn = document.createElement('button'); undoBtn.type = 'button'; undoBtn.className = 'btn-small'; undoBtn.textContent = 'Undo';
       undoBtn.style.marginLeft = '4px';
@@ -10229,18 +10242,20 @@ var REQUIRED_FIELD_KEYS = [
           hist.pop();
           const prev = hist[hist.length - 1];
           const ctx = canvas.getContext('2d');
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          prepareSignatureCanvasContext(ctx, canvas);
           const img = new Image();
           img.onload = () => { ctx.drawImage(img, 0, 0); formData[f.sigKey] = prev; };
           img.src = prev;
         } else if (hist && hist.length <= 1) {
-          clearCanvas(canvas); delete formData[f.sigKey]; hist.length = 0;
+          clearInlineSignature(canvas, f.sigKey, isClientSig);
         }
       });
       sw.appendChild(undoBtn);
-      const signBtn = document.createElement('button'); signBtn.type = 'button'; signBtn.className = 'btn-sign-fullscreen'; signBtn.textContent = 'Sign';
-      signBtn.addEventListener('click', function() { openFullscreenSignature(canvas, f.sigKey, f.label); });
-      sw.appendChild(signBtn);
+      if (!isClientSig) {
+        const signBtn = document.createElement('button'); signBtn.type = 'button'; signBtn.className = 'btn-sign-fullscreen'; signBtn.textContent = 'Sign';
+        signBtn.addEventListener('click', function() { openFullscreenSignature(canvas, f.sigKey, f.label); });
+        sw.appendChild(signBtn);
+      }
       if (shouldOfferPresetSignature(f.sigKey)) {
         const presetBtn = document.createElement('button');
         presetBtn.type = 'button';
@@ -11293,6 +11308,14 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   /* ─── SIGNATURE ─── */
+  function prepareSignatureCanvasContext(ctx, canvas, lineWidth) {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = lineWidth || (canvas.width > 600 ? 3 : 2);
+    ctx.lineCap = 'round';
+  }
+
   function getCanvasCoords(canvas, e) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = rect.width > 0 ? canvas.width / rect.width : 1;
@@ -11305,7 +11328,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function initSignatureCanvas(canvas, sigKey, data) {
     const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    prepareSignatureCanvasContext(ctx, canvas);
     let drawing = false;
     let lastTouchEnd = 0;
     const strokeHistory = [];
@@ -11317,7 +11340,11 @@ var REQUIRED_FIELD_KEYS = [
     canvas._strokeHistory = strokeHistory;
     if (data[sigKey]) {
       const img = new Image();
-      img.onload = () => { ctx.drawImage(img, 0, 0); strokeHistory.push(canvas.toDataURL()); };
+      img.onload = () => {
+        prepareSignatureCanvasContext(ctx, canvas);
+        ctx.drawImage(img, 0, 0);
+        strokeHistory.push(canvas.toDataURL());
+      };
       img.src = data[sigKey];
     }
     canvas.addEventListener('mousedown', e => { if (ignoreMouse()) return; drawing = true; const p = getCanvasCoords(canvas, e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
@@ -11342,20 +11369,44 @@ var REQUIRED_FIELD_KEYS = [
     canvas.addEventListener('touchcancel', () => { if (drawing) saveSig(); lastTouchEnd = Date.now(); }, { passive: true });
   }
 
-  function clearCanvas(c) { c.getContext('2d').clearRect(0, 0, c.width, c.height); }
+  function clearCanvas(c) {
+    prepareSignatureCanvasContext(c.getContext('2d'), c);
+  }
 
-  function openFullscreenSignature(inlineCanvas, sigKey, label) {
+  function clearInlineSignature(inlineCanvas, sigKey, removeAttachment) {
+    clearCanvas(inlineCanvas);
+    if (inlineCanvas._strokeHistory) inlineCanvas._strokeHistory.length = 0;
+    delete formData[sigKey];
+    if (removeAttachment && window.ClientSignatureAttachment) {
+      window.ClientSignatureAttachment.removeClientSignatureAttachment(formData);
+      renderPhotoThumbs('attachments');
+    }
+    quietSave();
+  }
+
+  function openFullscreenSignature(inlineCanvas, sigKey, label, options) {
+    options = options || {};
+    var saveAsAttachment = !!options.saveAsAttachment;
+    var cancelClears = options.cancelClears !== false && saveAsAttachment;
     var overlay = document.createElement('div');
     overlay.className = 'sig-fullscreen-overlay';
     var titleEl = document.createElement('div'); titleEl.className = 'sig-fs-label'; titleEl.textContent = label || 'Signature';
     overlay.appendChild(titleEl);
+    if (saveAsAttachment) {
+      var hintEl = document.createElement('div');
+      hintEl.className = 'sig-fs-hint';
+      hintEl.textContent = 'Sign on the white pad below, then press Save. Cancel clears the signature.';
+      overlay.appendChild(hintEl);
+    }
     var fsCanvas = document.createElement('canvas');
     fsCanvas.width = 1200; fsCanvas.height = 500;
     overlay.appendChild(fsCanvas);
     var presetBtn = null;
     var btnRow = document.createElement('div'); btnRow.className = 'sig-fs-buttons';
     var clearBtn = document.createElement('button'); clearBtn.textContent = 'Clear'; clearBtn.className = 'sig-fs-btn-clear';
-    var doneBtn = document.createElement('button'); doneBtn.textContent = 'Done'; doneBtn.className = 'sig-fs-btn-done';
+    var doneBtn = document.createElement('button');
+    doneBtn.textContent = saveAsAttachment ? 'Save' : 'Done';
+    doneBtn.className = saveAsAttachment ? 'sig-fs-btn-save' : 'sig-fs-btn-done';
     var cancelBtn = document.createElement('button'); cancelBtn.textContent = 'Cancel'; cancelBtn.className = 'sig-fs-btn-cancel';
     btnRow.appendChild(clearBtn);
     if (shouldOfferPresetSignature(sigKey)) {
@@ -11368,8 +11419,8 @@ var REQUIRED_FIELD_KEYS = [
     overlay.appendChild(btnRow);
     document.body.appendChild(overlay);
     var ctx = fsCanvas.getContext('2d');
-    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, fsCanvas.width, fsCanvas.height);
-    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    prepareSignatureCanvasContext(ctx, fsCanvas, 3);
+    var hasDrawn = !!formData[sigKey];
     if (formData[sigKey]) {
       var existing = new Image();
       existing.onload = function() { ctx.drawImage(existing, 0, 0, fsCanvas.width, fsCanvas.height); };
@@ -11377,29 +11428,46 @@ var REQUIRED_FIELD_KEYS = [
     }
     var drawing = false; var lastTouchEnd = 0;
     var ignoreMouse = function() { return Date.now() - lastTouchEnd < 500; };
-    fsCanvas.addEventListener('mousedown', function(e) { if (ignoreMouse()) return; drawing = true; var p = getCanvasCoords(fsCanvas, e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+    var markDrawn = function() { hasDrawn = true; };
+    fsCanvas.addEventListener('mousedown', function(e) { if (ignoreMouse()) return; drawing = true; markDrawn(); var p = getCanvasCoords(fsCanvas, e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
     fsCanvas.addEventListener('mousemove', function(e) { if (ignoreMouse() || !drawing) return; var p = getCanvasCoords(fsCanvas, e); ctx.lineTo(p.x, p.y); ctx.stroke(); });
     fsCanvas.addEventListener('mouseup', function() { if (ignoreMouse()) return; drawing = false; });
     fsCanvas.addEventListener('mouseleave', function() { drawing = false; });
-    fsCanvas.addEventListener('touchstart', function(e) { if (!e.touches.length) return; drawing = true; var p = getCanvasCoords(fsCanvas, e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: true });
+    fsCanvas.addEventListener('touchstart', function(e) { if (!e.touches.length) return; drawing = true; markDrawn(); var p = getCanvasCoords(fsCanvas, e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, { passive: true });
     fsCanvas.addEventListener('touchmove', function(e) { if (!drawing || !e.touches.length) return; e.preventDefault(); var p = getCanvasCoords(fsCanvas, e); ctx.lineTo(p.x, p.y); ctx.stroke(); }, { passive: false });
     fsCanvas.addEventListener('touchend', function() { drawing = false; lastTouchEnd = Date.now(); }, { passive: true });
     fsCanvas.addEventListener('touchcancel', function() { drawing = false; lastTouchEnd = Date.now(); }, { passive: true });
-    clearBtn.addEventListener('click', function() { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, fsCanvas.width, fsCanvas.height); ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 3; ctx.lineCap = 'round'; });
+    clearBtn.addEventListener('click', function() {
+      hasDrawn = false;
+      prepareSignatureCanvasContext(ctx, fsCanvas, 3);
+    });
     if (presetBtn) {
       presetBtn.addEventListener('click', function() {
         drawPresetSignature(fsCanvas, sigKey, { fillBackground: true });
+        hasDrawn = true;
       });
     }
     doneBtn.addEventListener('click', function() {
+      if (!hasDrawn) {
+        showToast(saveAsAttachment ? 'Please sign before pressing Save' : 'Please sign before pressing Done', 'error');
+        return;
+      }
       var iCtx = inlineCanvas.getContext('2d');
-      iCtx.clearRect(0, 0, inlineCanvas.width, inlineCanvas.height);
+      prepareSignatureCanvasContext(iCtx, inlineCanvas);
       iCtx.drawImage(fsCanvas, 0, 0, inlineCanvas.width, inlineCanvas.height);
       if (inlineCanvas._strokeHistory) inlineCanvas._strokeHistory.length = 0;
       saveSignatureCanvas(inlineCanvas, sigKey);
+      if (saveAsAttachment && window.ClientSignatureAttachment) {
+        window.ClientSignatureAttachment.upsertClientSignatureAttachment(formData, formData[sigKey]);
+        renderPhotoThumbs('attachments');
+        quietSave();
+      }
       document.body.removeChild(overlay);
     });
-    cancelBtn.addEventListener('click', function() { document.body.removeChild(overlay); });
+    cancelBtn.addEventListener('click', function() {
+      if (cancelClears) clearInlineSignature(inlineCanvas, sigKey, true);
+      document.body.removeChild(overlay);
+    });
   }
 
 
