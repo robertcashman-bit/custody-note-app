@@ -35,6 +35,10 @@ jobs:
           fetch-depth: 0
 
       - name: Create and push release tag when missing
+        env:
+          # GITHUB_TOKEN tag pushes do not trigger other workflows (Release and deploy).
+          # Use GH_PAT when configured so tag push starts the release pipeline.
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           set -e
           VERSION=$(node -p "require('./package.json').version")
@@ -47,5 +51,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${TAG}" -m "Release ${TAG}"
+          if [ -n "${GH_PAT:-}" ]; then
+            git remote set-url origin "https://x-access-token:${GH_PAT}@github.com/${GITHUB_REPOSITORY}.git"
+          fi
           git push origin "${TAG}"
           echo "Pushed ${TAG} — Release and deploy workflow should start."
