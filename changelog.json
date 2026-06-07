@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.24",
+      "version": "1.9.25",
       "date": "2026-06-07",
       "latest": true,
+      "changes": [
+        "PDF Defence summary: court date/time, CN06 outcome code, interview position, and next venue filled correctly for charged outcomes",
+        "PDF LAA Declaration: prints the LAA privacy notice text above the declaration (matching the form)",
+        "PDF row renamed to \"Privacy Notice acknowledged?\" — blank until set, not defaulting to No"
+      ]
+    },
+    {
+      "version": "1.9.24",
+      "date": "2026-06-07",
+      "latest": false,
       "changes": [
         "PDF LAA Declaration: prints the LAA privacy notice text above the declaration (matching the form)",
         "PDF row renamed to \"Privacy Notice acknowledged?\" — blank until set, not defaulting to No"
