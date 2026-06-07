@@ -16,6 +16,7 @@ Desktop Electron app for custody note and legal workflow use. This app supports 
 - Data: SQLite via `sql.js`
 - Packaging: `electron-builder` with Windows NSIS installer
 - Updates: `electron-updater` via GitHub Releases
+- Mac and Windows: functional parity required — see `custody-note-cross-platform-parity.mdc`
 
 ---
 

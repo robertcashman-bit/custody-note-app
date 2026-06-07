@@ -4982,8 +4982,11 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function loadMagistratesCourts() {
-    return fetch('data/magistrates-courts.json')
-      .then(function(res) { return res.ok ? res.json() : []; })
+    if (!window.api || !window.api.loadMagistratesCourts) {
+      magistratesCourts = [];
+      return Promise.resolve([]);
+    }
+    return window.api.loadMagistratesCourts()
       .then(function(list) {
         if (Array.isArray(list)) {
           magistratesCourts = list
@@ -4992,9 +4995,12 @@ var REQUIRED_FIELD_KEYS = [
         } else {
           magistratesCourts = [];
         }
+        return magistratesCourts;
       })
-      .catch(function() {
+      .catch(function(err) {
+        console.error('[loadMagistratesCourts]', err);
         magistratesCourts = [];
+        return [];
       });
   }
 
@@ -10837,16 +10843,35 @@ var REQUIRED_FIELD_KEYS = [
 
   function initCourtAutocomplete(input, dropdown) {
     function setSuggestions(query) {
-      const q = String(query || '').toLowerCase().trim();
+      const q = String(query || '').trim();
       dropdown.innerHTML = '';
-      let items = [];
+      const searchFn = window.MagistratesCourtsSearch && window.MagistratesCourtsSearch.searchMagistratesCourts;
+      let items = searchFn ? searchFn(magistratesCourts, q, 20) : [];
+
       if (!q) {
-        items = magistratesCourts.slice(0, 12);
-      } else {
-        items = magistratesCourts.filter(function(name) {
-          return name.toLowerCase().includes(q);
-        }).slice(0, 20);
+        var hintEl = document.createElement('div');
+        hintEl.className = 'offence-autocomplete-hint';
+        hintEl.style.padding = '10px 12px';
+        hintEl.style.fontSize = '0.88rem';
+        hintEl.style.color = '#64748b';
+        hintEl.textContent = 'Type at least 2 letters to search magistrates courts in England and Wales.';
+        dropdown.appendChild(hintEl);
+        dropdown.classList.add('open');
+        return;
       }
+
+      if (q.length < 2) {
+        var shortHint = document.createElement('div');
+        shortHint.className = 'offence-autocomplete-hint';
+        shortHint.style.padding = '10px 12px';
+        shortHint.style.fontSize = '0.88rem';
+        shortHint.style.color = '#64748b';
+        shortHint.textContent = 'Type at least 2 letters to search.';
+        dropdown.appendChild(shortHint);
+        dropdown.classList.add('open');
+        return;
+      }
+
       if (!items.length) {
         dropdown.classList.remove('open');
         return;
