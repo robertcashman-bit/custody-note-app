@@ -86,6 +86,11 @@ try {
     console.log('[sync-website] Nothing to commit (already up to date)');
   }
   const branch = getWebsitePushRef();
+  try {
+    execSync(`git pull --rebase origin ${branch}`, { cwd: WEBSITE_ROOT, stdio: 'inherit' });
+  } catch (e) {
+    console.warn('[sync-website] git pull --rebase failed (continuing with push):', e.message);
+  }
   execSync(`git push origin ${branch}`, { cwd: WEBSITE_ROOT, stdio: 'inherit' });
   console.log('[sync-website] Pushed to GitHub → Vercel will auto-deploy custodynote.com');
 } catch (e) {
