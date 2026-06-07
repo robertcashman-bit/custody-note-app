@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.9.25",
+      "version": "1.9.26",
       "date": "2026-06-07",
       "latest": true,
+      "changes": [
+        "Fix court name typeahead falsely showing \"no match\" for Sevenoaks while the court list was still loading",
+        "Court search ignores trailing punctuation; suggestions dropdown uses fixed positioning so it is not clipped by the form"
+      ]
+    },
+    {
+      "version": "1.9.25",
+      "date": "2026-06-07",
+      "latest": false,
       "changes": [
         "PDF Defence summary: court date/time, CN06 outcome code, interview position, and next venue filled correctly for charged outcomes",
         "PDF LAA Declaration: prints the LAA privacy notice text above the declaration (matching the form)",

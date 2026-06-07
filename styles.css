@@ -1847,7 +1847,7 @@ html.dark .outcome-chip--rui    { background: rgba(29,78,216,0.18); color: #bfdb
 .form-custom-scrollbar-thumb:active { cursor: grabbing; background: #2563eb; }
 body.form-scrollbar-dragging { user-select: none; }
 
-.form-section { display: none; width: 100%; min-width: 0; contain: content; }
+.form-section { display: none; width: 100%; min-width: 0; contain: layout style; }
 .form-section.active { display: block; }
 
 .form-row-2col {
@@ -3591,6 +3591,10 @@ html.dark .useful-links-category { color: var(--corporate-accent, #93c5fd); }
   display: none; box-shadow: 0 4px 16px rgba(0,0,0,0.1); z-index: 100;
 }
 .offence-autocomplete-dropdown.open { display: block; }
+.court-autocomplete-dropdown.open {
+  max-height: min(340px, 40vh);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
 .offence-autocomplete-option {
   padding: 0.5rem 0.75rem; cursor: pointer; font-size: 0.85rem; color: var(--text);
   border-bottom: 1px solid var(--border);

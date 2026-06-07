@@ -30,6 +30,16 @@ describe('magistratesCourtsSearch', () => {
     assert.ok(hits.some(function(name) { return /Sevenoaks/i.test(name); }), hits.join(' | '));
   });
 
+  it('strips trailing punctuation from search queries', () => {
+    assert.strictEqual(search.normalizeCourtSearchQuery('Sevenoaks.'), 'Sevenoaks');
+    const hits = search.searchMagistratesCourts(courts, 'Sevenoaks.', 20);
+    assert.ok(hits.some(function(name) { return /Sevenoaks/i.test(name); }), hits.join(' | '));
+  });
+
+  it('exports normalizeCourtSearchQuery', () => {
+    assert.strictEqual(typeof search.normalizeCourtSearchQuery, 'function');
+  });
+
   it('prefers names that start with the query', () => {
     const hits = search.searchMagistratesCourts(['Southampton Magistrates\' Court', 'East Hampshire Magistrates\' Court'], 'South', 5);
     assert.strictEqual(hits[0], 'Southampton Magistrates\' Court');
