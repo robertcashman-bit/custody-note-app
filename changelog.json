@@ -1,9 +1,28 @@
 {
   "releases": [
     {
-      "version": "1.9.22",
+      "version": "1.9.24",
       "date": "2026-06-07",
       "latest": true,
+      "changes": [
+        "PDF LAA Declaration: prints the LAA privacy notice text above the declaration (matching the form)",
+        "PDF row renamed to \"Privacy Notice acknowledged?\" — blank until set, not defaulting to No"
+      ]
+    },
+    {
+      "version": "1.9.23",
+      "date": "2026-06-07",
+      "latest": false,
+      "changes": [
+        "PDF Defence summary: next date now uses court date/time for charged and remanded outcomes",
+        "PDF Defence summary: outcome code auto-filled (e.g. CN06 for Charged without Bail) when not entered on the form",
+        "PDF Defence summary: interview position from client decision; next venue from court name or next location"
+      ]
+    },
+    {
+      "version": "1.9.22",
+      "date": "2026-06-07",
+      "latest": false,
       "changes": [
         "QuickFile credentials are saved to your Custody Note account and pulled automatically when you bill — no more re-entering on each computer",
         "Fix billing falsely showing QuickFile as not configured when credentials were already saved",
