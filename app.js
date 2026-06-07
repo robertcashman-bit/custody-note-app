@@ -24,6 +24,7 @@ var _lastFinaliseResult = null;
 var _lastDbWrite = null;
 var recentStationIds = [];
 var magistratesCourts = [];
+var _magistratesCourtsLoadPromise = null;
 var _cachedFlatOffences = null;
 var _cachedFlatOffencesWithMatter = null;
 var _formEnsureSectionRendered = null;
@@ -4991,9 +4992,11 @@ var REQUIRED_FIELD_KEYS = [
   function loadMagistratesCourts() {
     if (!window.api || !window.api.loadMagistratesCourts) {
       magistratesCourts = [];
+      _magistratesCourtsLoadPromise = null;
       return Promise.resolve([]);
     }
-    return window.api.loadMagistratesCourts()
+    if (_magistratesCourtsLoadPromise) return _magistratesCourtsLoadPromise;
+    _magistratesCourtsLoadPromise = window.api.loadMagistratesCourts()
       .then(function(list) {
         var decode = window.MagistratesCourtsSearch && window.MagistratesCourtsSearch.decodeCourtName;
         if (Array.isArray(list)) {
@@ -5012,7 +5015,16 @@ var REQUIRED_FIELD_KEYS = [
         console.error('[loadMagistratesCourts]', err);
         magistratesCourts = [];
         return [];
+      })
+      .finally(function() {
+        _magistratesCourtsLoadPromise = null;
       });
+    return _magistratesCourtsLoadPromise;
+  }
+
+  function ensureMagistratesCourtsLoaded() {
+    if (magistratesCourts.length) return Promise.resolve(magistratesCourts);
+    return loadMagistratesCourts();
   }
 
   /* ─── SETTINGS ─── */
@@ -10858,11 +10870,35 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function initCourtAutocomplete(input, dropdown) {
-    function setSuggestions(query) {
-      const q = String(query || '').trim();
+    dropdown.classList.add('court-autocomplete-dropdown');
+
+    function positionCourtDropdown() {
+      if (!dropdown.classList.contains('open')) return;
+      var rect = input.getBoundingClientRect();
+      dropdown.style.position = 'fixed';
+      dropdown.style.left = Math.max(8, rect.left) + 'px';
+      dropdown.style.top = (rect.bottom + 2) + 'px';
+      dropdown.style.width = Math.max(rect.width, 280) + 'px';
+      dropdown.style.right = 'auto';
+      dropdown.style.zIndex = '5000';
+    }
+
+    function resetCourtDropdownPosition() {
+      dropdown.style.position = '';
+      dropdown.style.left = '';
+      dropdown.style.top = '';
+      dropdown.style.width = '';
+      dropdown.style.right = '';
+      dropdown.style.zIndex = '';
+    }
+
+    function setSuggestions(query, opts) {
+      opts = opts || {};
+      var rawQ = String(query || '').trim();
+      var normFn = window.MagistratesCourtsSearch && window.MagistratesCourtsSearch.normalizeCourtSearchQuery;
+      var q = normFn ? normFn(rawQ) : rawQ;
       dropdown.innerHTML = '';
-      const searchFn = window.MagistratesCourtsSearch && window.MagistratesCourtsSearch.searchMagistratesCourts;
-      let items = searchFn ? searchFn(magistratesCourts, q, 20) : [];
+      var searchFn = window.MagistratesCourtsSearch && window.MagistratesCourtsSearch.searchMagistratesCourts;
 
       function showHint(text) {
         var hintEl = document.createElement('div');
@@ -10873,20 +10909,43 @@ var REQUIRED_FIELD_KEYS = [
         hintEl.textContent = text;
         dropdown.appendChild(hintEl);
         dropdown.classList.add('open');
+        positionCourtDropdown();
       }
 
-      if (!q) {
+      if (!rawQ) {
         showHint('Type at least 2 letters to search magistrates courts in England and Wales.');
         return;
       }
 
-      if (q.length < 2) {
+      if (rawQ.length < 2) {
         showHint('Type at least 2 letters to search.');
         return;
       }
 
+      if (!searchFn) {
+        showHint('Court search is unavailable — restart the app and try again.');
+        return;
+      }
+
+      if (!magistratesCourts.length) {
+        if (opts.loading) {
+          showHint('Loading magistrates courts…');
+          return;
+        }
+        if (opts.loadFailed) {
+          showHint('Could not load the court list — click the field again to retry.');
+          return;
+        }
+        showHint('Loading magistrates courts…');
+        ensureMagistratesCourtsLoaded().then(function() {
+          if (document.activeElement === input) setSuggestions(input.value, { loading: false, loadFailed: !magistratesCourts.length });
+        });
+        return;
+      }
+
+      var items = searchFn(magistratesCourts, q, 20);
       if (!items.length) {
-        showHint("No courts match '" + q + "' — try a different spelling.");
+        showHint("No courts match '" + rawQ + "' — try a different spelling.");
         return;
       }
       items.forEach(function(name) {
@@ -10900,33 +10959,45 @@ var REQUIRED_FIELD_KEYS = [
           input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
           dropdown.classList.remove('open');
+          resetCourtDropdownPosition();
         });
         dropdown.appendChild(opt);
       });
       dropdown.classList.add('open');
+      positionCourtDropdown();
     }
 
-    function runSuggestions() {
-      setSuggestions(input.value);
+    function runSuggestions(opts) {
+      setSuggestions(input.value, opts);
     }
 
     var _courtDebounce = null;
+    var _courtScrollReposition = function() { positionCourtDropdown(); };
+
     input.addEventListener('focus', function() {
-      if (!magistratesCourts.length && window.api && window.api.loadMagistratesCourts) {
-        loadMagistratesCourts().then(runSuggestions).catch(runSuggestions);
-        return;
-      }
-      runSuggestions();
+      ensureMagistratesCourtsLoaded().finally(function() {
+        runSuggestions({ loading: !magistratesCourts.length, loadFailed: !magistratesCourts.length });
+      });
+      window.addEventListener('scroll', _courtScrollReposition, true);
+      window.addEventListener('resize', _courtScrollReposition);
     });
     input.addEventListener('input', function() {
       clearTimeout(_courtDebounce);
-      _courtDebounce = setTimeout(runSuggestions, 80);
+      _courtDebounce = setTimeout(function() { runSuggestions(); }, 80);
     });
     input.addEventListener('blur', function() {
-      setTimeout(function() { dropdown.classList.remove('open'); }, 180);
+      setTimeout(function() {
+        dropdown.classList.remove('open');
+        resetCourtDropdownPosition();
+        window.removeEventListener('scroll', _courtScrollReposition, true);
+        window.removeEventListener('resize', _courtScrollReposition);
+      }, 180);
     });
     input.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') dropdown.classList.remove('open');
+      if (e.key === 'Escape') {
+        dropdown.classList.remove('open');
+        resetCourtDropdownPosition();
+      }
     });
   }
 

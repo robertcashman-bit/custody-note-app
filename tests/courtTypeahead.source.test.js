@@ -9,18 +9,23 @@ const APP = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 const BILLING = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'views', 'billing-screen.js'), 'utf8');
 
 describe('court typeahead source (app.js)', () => {
-  it('initCourtAutocomplete shows no-match hint instead of closing dropdown', () => {
+  it('initCourtAutocomplete shows no-match hint only when list is loaded', () => {
     assert.match(APP, /No courts match/);
-    assert.match(APP, /showHint\("No courts match/);
+    assert.match(APP, /Loading magistrates courts/);
   });
 
-  it('retries loadMagistratesCourts on focus when list empty', () => {
-    assert.match(APP, /if \(!magistratesCourts\.length/);
-    assert.match(APP, /loadMagistratesCourts\(\)\.then\(runSuggestions\)/);
+  it('retries via ensureMagistratesCourtsLoaded on focus and after typing during load', () => {
+    assert.match(APP, /ensureMagistratesCourtsLoaded/);
+    assert.match(APP, /ensureMagistratesCourtsLoaded\(\)\.finally/);
   });
 
   it('decodes court names when loading list', () => {
     assert.match(APP, /decodeCourtName/);
+  });
+
+  it('positions court dropdown with fixed coordinates', () => {
+    assert.match(APP, /function positionCourtDropdown/);
+    assert.match(APP, /getBoundingClientRect/);
   });
 });
 
