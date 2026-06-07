@@ -4,6 +4,7 @@ const log = require('electron-log');
 const { readState, mergeState, getStatePath } = require('./updateState');
 
 const MAX_FAILED_INSTALLS = 2;
+const MAX_DOWNLOAD_FAILURES = 3;
 const LOOP_WINDOW_MS = 5 * 60 * 1000;
 const UPDATE_CHECK_COOLDOWN = 5 * 60 * 1000;
 const UPDATE_CHECK_INTERVAL = 6 * 60 * 60 * 1000;
@@ -141,9 +142,68 @@ function initUpdater(options) {
     return !!(state.updaterDisabledUntil && state.updaterDisabledUntil > Date.now());
   }
 
+  function isChecksumError(message) {
+    const m = String(message || '').toLowerCase();
+    return m.includes('sha512') || m.includes('checksum');
+  }
+
+  function clearUpdaterPendingCache() {
+    const dirs = [
+      path.join(app.getPath('cache'), 'custody-note-updater'),
+      path.join(app.getPath('cache'), 'Custody Note-updater'),
+      path.join(app.getPath('userData'), 'pending'),
+    ];
+    for (const dir of dirs) {
+      try {
+        if (fs.existsSync(dir)) {
+          fs.rmSync(dir, { recursive: true, force: true });
+          logger.info(`Cleared updater cache: ${dir}`);
+        }
+      } catch (err) {
+        logger.warn(`Failed to clear updater cache ${dir}:`, err && err.message ? err.message : err);
+      }
+    }
+  }
+
+  function resetDownloadFailureState() {
+    setPersistedState({
+      consecutiveDownloadFailures: 0,
+      downloadFailureVersion: null,
+    });
+  }
+
+  function handleDownloadFailure(message, targetVersion) {
+    const version = targetVersion || downloadedVersion;
+    const persisted = getPersistedState();
+    const sameTarget = version && persisted.downloadFailureVersion &&
+      semverEq(persisted.downloadFailureVersion, version);
+    const count = (sameTarget ? (persisted.consecutiveDownloadFailures || 0) : 0) + 1;
+    const next = setPersistedState({
+      consecutiveDownloadFailures: count,
+      downloadFailureVersion: version || persisted.downloadFailureVersion,
+      lastError: message,
+      pendingUpdateVersion: version || persisted.pendingUpdateVersion,
+    });
+    logger.warn(`Download failure ${count}/${MAX_DOWNLOAD_FAILURES} target=${version || '?'}: ${message}`);
+    if (isChecksumError(message) && count < MAX_DOWNLOAD_FAILURES) {
+      clearUpdaterPendingCache();
+    }
+    if (count >= MAX_DOWNLOAD_FAILURES) {
+      const details = `Update download failed (${count} attempts): ${message}`;
+      enterRecoveryMode(next, details, { downloadFailure: true });
+      sendStatus({
+        status: 'loop-blocked',
+        message: 'Update download failed. Download manually from custodynote.com/download.',
+      });
+      return true;
+    }
+    return false;
+  }
+
   /** Do not clear failure / pending state on "no update" if we are mid-update or recovering. */
   function hasOutstandingInstallFailure(cur) {
     const pending = cur.pendingUpdateVersion || cur.pendingInstallVersion;
+    if ((cur.consecutiveDownloadFailures || 0) >= MAX_DOWNLOAD_FAILURES) return true;
     if (pending && !semverEq(pending, app.getVersion())) {
       if ((cur.failedInstallCount || 0) > 0) return true;
       if (cur.installAttemptedAt) return true;
@@ -171,7 +231,8 @@ function initUpdater(options) {
     return { asarPath, asarExclusiveOk, asarErr };
   }
 
-  function enterRecoveryMode(state, details) {
+  function enterRecoveryMode(state, details, opts) {
+    const options = opts || {};
     const disabledUntil = Date.now() + DISABLE_FOR_MS;
     loopDetected = true;
     updaterState = 'loop-blocked';
@@ -185,11 +246,22 @@ function initUpdater(options) {
     });
     logger.error('Updater recovery mode entered:', details);
     try {
-      dialog.showErrorBox(
-        'Custody Note — update failed',
-        'The update could not be installed automatically. Another program may be locking files in the Custody Note install folder (common with IDEs or antivirus).\n\n' +
-          'Close other apps that might be scanning that folder, download the latest installer from the website, and run it. If it still fails, run the installer as Administrator.'
-      );
+      let body;
+      if (options.downloadFailure) {
+        body =
+          'The update could not be downloaded automatically (checksum verification failed).\n\n' +
+          'Download the latest version from custodynote.com/download and install manually. ' +
+          'If the problem persists after installing from the website, contact support.';
+      } else if (process.platform === 'darwin') {
+        body =
+          'The update could not be installed automatically.\n\n' +
+          'Quit Custody Note, download the latest version from custodynote.com/download, and install from the .dmg.';
+      } else {
+        body =
+          'The update could not be installed automatically. Another program may be locking files in the Custody Note install folder (common with IDEs or antivirus).\n\n' +
+          'Close other apps that might be scanning that folder, download the latest installer from the website, and run it. If it still fails, run the installer as Administrator.';
+      }
+      dialog.showErrorBox('Custody Note — update failed', body);
     } catch (_) {}
   }
 
@@ -220,6 +292,8 @@ function initUpdater(options) {
         lastError: null,
         lastStartupAt: Date.now(),
         lastVersion: currentVersion,
+        consecutiveDownloadFailures: 0,
+        downloadFailureVersion: null,
       });
       return;
     }
@@ -405,6 +479,7 @@ function initUpdater(options) {
       downloadedVersion = info && info.version ? info.version : downloadedVersion;
       updaterState = 'downloaded';
       consecutiveFailures = 0;
+      resetDownloadFailureState();
       logger.info(`Event: update-downloaded target=${downloadedVersion || '?'}`);
       setPersistedState({
         pendingUpdateVersion: downloadedVersion,
@@ -440,6 +515,8 @@ function initUpdater(options) {
           updaterDisabledUntil: null,
           lastError: null,
           lastCountedInstallAttemptAt: null,
+          consecutiveDownloadFailures: 0,
+          downloadFailureVersion: null,
         }));
       }
       sendStatus({ status: 'up-to-date', version: app.getVersion(), remoteVersion });
@@ -447,9 +524,12 @@ function initUpdater(options) {
 
     autoUpdater.on('error', (err) => {
       updaterState = 'idle';
-      consecutiveFailures += 1;
       const message = err && err.message ? err.message : String(err);
       logger.error('Event: error', message);
+      if (handleDownloadFailure(message, downloadedVersion)) {
+        return;
+      }
+      consecutiveFailures += 1;
       setPersistedState({ lastError: message });
       sendStatus({ status: 'error', message });
       if (consecutiveFailures <= 3 && !loopDetected) {
@@ -534,6 +614,8 @@ function initUpdater(options) {
             updaterDisabledUntil: null,
             lastError: null,
             lastCountedInstallAttemptAt: null,
+            consecutiveDownloadFailures: 0,
+            downloadFailureVersion: null,
           }));
         }
         return { status: 'up-to-date', version: app.getVersion(), remoteVersion };
@@ -552,11 +634,14 @@ function initUpdater(options) {
       return { status: 'ready', version: downloadedVersion, currentVersion: app.getVersion() };
     } catch (err) {
       updaterState = 'idle';
-      consecutiveFailures += 1;
       const message = err && err.message ? err.message : String(err);
       logger.error(`checkForUpdates failed source=${source}: ${message}`);
+      if (handleDownloadFailure(message, downloadedVersion)) {
+        return { status: 'loop-blocked', message, currentVersion: app.getVersion() };
+      }
+      consecutiveFailures += 1;
       setPersistedState({ lastError: message });
-      if (consecutiveFailures <= 3) {
+      if (consecutiveFailures <= 3 && !loopDetected) {
         scheduleRetryAfterFailure(source);
       }
       return { status: 'error', message, currentVersion: app.getVersion() };
@@ -609,6 +694,8 @@ function initUpdater(options) {
       pendingInstallVersion: null,
       updaterDisabledUntil: null,
       lastError: null,
+      consecutiveDownloadFailures: 0,
+      downloadFailureVersion: null,
     });
     return { ok: true };
   }
@@ -650,6 +737,7 @@ module.exports = {
   createNoopUpdaterController,
   constants: {
     MAX_FAILED_INSTALLS,
+    MAX_DOWNLOAD_FAILURES,
     LOOP_WINDOW_MS,
     UPDATE_CHECK_COOLDOWN,
     UPDATE_CHECK_INTERVAL,

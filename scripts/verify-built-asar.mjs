@@ -170,6 +170,21 @@ function verifyAsar(asarPath) {
       info(`  OK ${spec.file} (${sz} bytes, parses, starts with expected line)`);
     }
 
+    /* magistrates court list — required for Section 8 court name typeahead */
+    const courtsFile = extractFile(asarPath, 'data/magistrates-courts.json', tmp);
+    let courtsList;
+    try {
+      courtsList = JSON.parse(readFileSync(courtsFile, 'utf8'));
+    } catch (e) {
+      fail(`asar data/magistrates-courts.json is not valid JSON: ${e.message} (asar=${asarPath})`);
+    }
+    if (!Array.isArray(courtsList) || courtsList.length < 200) {
+      fail(
+        `asar data/magistrates-courts.json must be an array with ≥200 courts (got ${Array.isArray(courtsList) ? courtsList.length : typeof courtsList}) (asar=${asarPath})`,
+      );
+    }
+    info(`  OK data/magistrates-courts.json (${courtsList.length} courts)`);
+
     /* main.js per package.json must resolve */
     if (pkg.main !== 'main.js') {
       info(`  NOTE pkg.main is "${pkg.main}" (not "main.js") — extracting and checking it too`);

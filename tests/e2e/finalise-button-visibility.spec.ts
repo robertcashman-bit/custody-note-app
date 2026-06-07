@@ -156,6 +156,8 @@ for (const mode of ['custody', 'voluntary'] as const) {
 
     await openRecordFromList(page, attendanceId);
 
+    await expect(page.locator('body')).toHaveClass(/form-active/);
+
     /* Force-navigate to Section 1 to assert the global pill, since the
        initial currentSectionIdx is 0 (= Section 1). */
     await page.evaluate(() => {
@@ -164,10 +166,10 @@ for (const mode of ['custody', 'voluntary'] as const) {
     });
 
     /* ---- A. Header Finalise button visible on Section 1 (draft) ---- */
-    const headerBtn = page.locator('#billing-panel-btn');
+    const headerBtn = page.locator('#header-form-actions #billing-panel-btn');
     await expect(
       headerBtn,
-      `#billing-panel-btn must be visible on §1 of a ${mode} draft`,
+      `#billing-panel-btn must be visible in app header on §1 of a ${mode} draft (body.form-active)`,
     ).toBeVisible({ timeout: 5_000 });
     await expect(headerBtn).toHaveText(/Finalise/);
     await expect(headerBtn).toHaveAttribute('data-action', 'finalise');

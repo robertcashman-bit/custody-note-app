@@ -605,6 +605,36 @@ body.form-active .header-form-actions { display: flex; }
 body.form-active #view-form > .form-page-header { display: none; }
 body.form-active .app-footer { display: none; }
 
+/* Primary record action (Finalise / Finish matter / Archive) — always visible in app header while editing */
+#header-form-actions #billing-panel-btn.btn-header-primary-action {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+  border: 1px solid #047857;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.35);
+}
+#header-form-actions #billing-panel-btn.btn-header-primary-action:hover {
+  background: linear-gradient(135deg, #047857, #059669);
+  color: #fff;
+}
+#header-form-actions #billing-panel-btn.state-finalised {
+  background: linear-gradient(135deg, #1e40af, #3b82f6);
+  border-color: #1d4ed8;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+}
+#header-form-actions #billing-panel-btn.state-finalised:hover {
+  background: linear-gradient(135deg, #1e3a8a, #2563eb);
+}
+#header-form-actions #billing-panel-btn.state-complete {
+  background: linear-gradient(135deg, #7c3aed, #8b5cf6);
+  border-color: #6d28d9;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.35);
+}
+#header-form-actions #billing-panel-btn.state-complete:hover {
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+}
+
 /* Phase 3: Calm header — hide secondary buttons when editing, show only autosave + gear */
 body.form-active #header-backup-now-btn,
 body.form-active #header-kb-help,

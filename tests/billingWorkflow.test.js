@@ -192,8 +192,17 @@ describe('Preload API surface', () => {
 });
 
 describe('index.html — billing UI elements', () => {
-  it('has billing panel button in form header', () => {
+  it('has billing panel button in visible app header (not hidden form-page-header)', () => {
     assert.ok(indexHtml.includes('id="billing-panel-btn"'));
+    const headerIdx = indexHtml.indexOf('id="header-form-actions"');
+    const btnIdx = indexHtml.indexOf('id="billing-panel-btn"');
+    const formHeaderIdx = indexHtml.indexOf('class="form-page-header"');
+    assert.ok(headerIdx >= 0 && btnIdx > headerIdx && btnIdx < formHeaderIdx,
+      '#billing-panel-btn must sit in app header before the hidden form-page-header');
+    const formHeaderEnd = indexHtml.indexOf('id="standalone-back-bar"', formHeaderIdx);
+    const formHeaderSlice = indexHtml.slice(formHeaderIdx, formHeaderEnd);
+    assert.ok(!formHeaderSlice.includes('id="billing-panel-btn"'),
+      '#billing-panel-btn must not remain inside .form-page-header');
   });
 
   it('has station mileage menu item', () => {
