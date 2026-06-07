@@ -72,6 +72,10 @@
 - Provide complete code changes — not vague advice or partial snippets
 - After changes: describe how to test and what could still fail
 
+## Deploy
+
+When the user says **deploy**, run `npm run deploy` (see `.cursor/rules/custody-note-deploy.mdc`). Do not push without syncing changelog and website.
+
 ## Do not
 
 - Give generic advice without inspecting actual project code
