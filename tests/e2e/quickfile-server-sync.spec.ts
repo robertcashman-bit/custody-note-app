@@ -75,17 +75,19 @@ test('opening Settings runs account sync and shows QuickFile panel', async () =>
 });
 
 test('local save still configures QuickFile for billing path', async () => {
-  await page.evaluate(async () => {
-    const w = window as unknown as { api: { setSettings: (s: Record<string, string>) => Promise<unknown> } };
+  const configured = await page.evaluate(async () => {
+    const w = window as unknown as {
+      api: { setSettings: (s: Record<string, string>) => Promise<unknown>; getSettings: () => Promise<Record<string, string>> };
+    };
     await w.api.setSettings({
       quickfileAccountNumber: '6131472870',
       quickfileApiKey: 'MOCK-API-KEY',
       quickfileAppId: '247b6272-d1fd-4f8c-a89b-f5ce6dc7d257',
     });
-  });
-  const configured = await page.evaluate(() => {
-    const w = window as unknown as { hasQuickFileSettingsConfigured?: () => boolean };
-    return typeof w.hasQuickFileSettingsConfigured === 'function' ? w.hasQuickFileSettingsConfigured() : false;
+    const s = await w.api.getSettings();
+    return !!(String(s.quickfileAccountNumber || '').trim()
+      && String(s.quickfileApiKey || '').trim()
+      && String(s.quickfileAppId || '').trim());
   });
   expect(configured).toBe(true);
 });

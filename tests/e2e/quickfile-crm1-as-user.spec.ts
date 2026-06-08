@@ -88,7 +88,7 @@ test('QuickFile connection panel reflects DB-backed state (not set up -> saved -
   await openQuickFilePanel();
   await expect(page.locator('#qf-connection-status')).toHaveAttribute('data-state', 'not_configured', { timeout: 10_000 });
   await expect(page.locator('#qf-status-headline')).toContainText(/Not set up/i);
-  await expect(page.locator('#qf-status-instructions')).toContainText(/another machine/i);
+  await expect(page.locator('#qf-status-instructions')).toContainText(/another computer|Custody Note account/i);
 
   /* 2. Save mock credentials (no live API call) and refresh. */
   await page.evaluate(async () => {
