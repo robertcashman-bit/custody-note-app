@@ -10,6 +10,8 @@
     "verify:release": "node scripts/verify-release-consistency.mjs",
     "check:version": "node scripts/verify-release-consistency.mjs",
     "check:deploy": "node scripts/check-deploy-prerequisites.mjs",
+    "auth:github-workflow": "node scripts/github-auth-with-workflow.mjs --login",
+    "push:workflow": "node scripts/github-auth-with-workflow.mjs --push",
     "install:deploy-tools": "bash scripts/install-deploy-tools.sh",
     "verify:built-asar": "node scripts/verify-built-asar.mjs",
     "build": "npm run verify:release && electron-builder && npm run verify:built-asar",
