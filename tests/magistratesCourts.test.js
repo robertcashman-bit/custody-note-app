@@ -89,6 +89,18 @@ describe('data/magistrates-courts.json', () => {
   });
 });
 
+describe('magistratesCourtsSearch browser script load', () => {
+  it('exposes window.MagistratesCourtsSearch without Node module (Electron renderer)', () => {
+    const { JSDOM } = require('jsdom');
+    const dom = new JSDOM('<!DOCTYPE html>', { runScripts: 'outside-only' });
+    const script = fs.readFileSync(path.join(__dirname, '..', 'lib', 'magistratesCourtsSearch.js'), 'utf8');
+    dom.window.eval(script);
+    assert.ok(dom.window.MagistratesCourtsSearch, 'MagistratesCourtsSearch missing on window');
+    const hits = dom.window.MagistratesCourtsSearch.searchMagistratesCourts(courts, 'ma', 5);
+    assert.ok(hits.length > 0, hits.join(' | '));
+  });
+});
+
 describe('main IPC wiring for magistrates courts', () => {
   it('registers load-magistrates-courts handler in main.js', () => {
     const mainJs = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');

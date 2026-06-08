@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.9.29",
+      "version": "1.9.30",
       "date": "2026-06-08",
       "latest": true,
+      "changes": [
+        "Fixed court name typeahead — magistrates court suggestions now appear when you type two or more letters"
+      ]
+    },
+    {
+      "version": "1.9.29",
+      "date": "2026-06-08",
+      "latest": false,
       "changes": [
         "QuickFile: enter credentials once in Settings — saved to your Custody Note account and pulled automatically on every computer before billing",
         "QuickFile connection panel explains account sync (no longer treats missing credentials as this-computer-only)",
