@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.9.30",
+      "version": "1.9.31",
       "date": "2026-06-08",
       "latest": true,
+      "changes": [
+        "Billing: open Billing from the bottom nav without a record open — choose a finalised matter (auto-selects if only one)",
+        "Records list: Bill button on each row — enabled when finalised or completed, greyed out until then",
+        "Finalise, Finish matter, and Archive matter moved to a prominent button in the form bottom bar",
+        "Improved text contrast on the Records list, QuickFile panel, and billing screens in light mode",
+        "QuickFile: clearer connection status when credentials are synced from your Custody Note account"
+      ]
+    },
+    {
+      "version": "1.9.30",
+      "date": "2026-06-08",
+      "latest": false,
       "changes": [
         "Fixed court name typeahead — magistrates court suggestions now appear when you type two or more letters"
       ]

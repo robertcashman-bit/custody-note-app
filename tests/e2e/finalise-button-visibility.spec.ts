@@ -1,12 +1,12 @@
 /**
- * Regression: Finalise must be reachable from any section via the header button only.
+ * Regression: Finalise must be reachable from any section via the bottom bar pill.
  *
- * v1.5.17 fixed header/pill updates when §9 was not yet rendered. v1.9.27
- * consolidated to a single #billing-panel-btn (no bottom pill, no §9 action buttons).
+ * Primary record action (Finalise / Finish matter / Archive) lives on
+ * #bottom-bar-finish-pill; #billing-panel-btn stays hidden on the form.
  *
  * Asserts on a custody/voluntary draft:
- *   A. #billing-panel-btn visible on §1 with label Finalise
- *   B. Same on §9; #form-finalise-bar and #bottom-bar-finish-pill stay hidden
+ *   A. #bottom-bar-finish-pill visible on §1 with label Finalise
+ *   B. Same on §9; #form-finalise-bar and #billing-panel-btn stay hidden
  *   C. billing-readiness panel readable in light and dark themes
  */
 import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test';
@@ -165,19 +165,19 @@ for (const mode of ['custody', 'voluntary'] as const) {
       if (typeof w.showSection === 'function') w.showSection(0);
     });
 
-    /* ---- A. Header Finalise button visible on Section 1 (draft) ---- */
+    /* ---- A. Bottom-bar Finalise pill visible on Section 1 (draft) ---- */
     const headerBtn = page.locator('#header-form-actions #billing-panel-btn');
-    await expect(
-      headerBtn,
-      `#billing-panel-btn must be visible in app header on §1 of a ${mode} draft (body.form-active)`,
-    ).toBeVisible({ timeout: 5_000 });
-    await expect(headerBtn).toHaveText(/Finalise/);
-    await expect(headerBtn).toHaveAttribute('data-action', 'finalise');
+    await expect(headerBtn, '#billing-panel-btn must stay hidden on the form (bottom-bar UX)').not.toBeVisible();
 
     const pill = page.locator('#bottom-bar-finish-pill');
-    await expect(pill, 'bottom-bar pill must stay hidden (header-only UX)').not.toBeVisible();
+    await expect(
+      pill,
+      `#bottom-bar-finish-pill must be visible on §1 of a ${mode} draft (body.form-active)`,
+    ).toBeVisible({ timeout: 5_000 });
+    await expect(pill).toHaveText(/Finalise/);
+    await expect(pill).toHaveAttribute('data-action', 'finalise');
 
-    /* ---- B. Navigate to Section 9; header still primary; no §9 duplicates ---- */
+    /* ---- B. Navigate to Section 9; bottom pill still primary; no §9 duplicates ---- */
     await page.evaluate(() => {
       const w = window as unknown as {
         showSection?: (idx: number) => void;
@@ -188,16 +188,15 @@ for (const mode of ['custody', 'voluntary'] as const) {
       if (typeof w.showSection === 'function' && idx >= 0) w.showSection(idx);
     });
 
-    await expect(headerBtn, 'header Finalise must remain visible on §9').toBeVisible();
-    await expect(headerBtn).toHaveText(/Finalise/);
+    await expect(pill, 'bottom-bar Finalise must remain visible on §9').toBeVisible();
+    await expect(pill).toHaveText(/Finalise/);
+    await expect(headerBtn, 'header billing button must stay hidden on §9').not.toBeVisible();
 
     const finaliseBar = page.locator('#form-finalise-bar');
     await expect(
       finaliseBar,
-      'in-section #form-finalise-bar must stay hidden (header-only UX)',
+      'in-section #form-finalise-bar must stay hidden (bottom-bar UX)',
     ).not.toBeVisible();
-
-    await expect(pill, 'bottom-bar pill must stay hidden on §9').not.toBeVisible();
 
     /* ---- C. The file-completion panel must be readable.
        Proxy: the title element's computed text colour should differ

@@ -351,7 +351,10 @@ test('full lifecycle stress journey (one Electron run)', async () => {
       await page!.waitForTimeout(900);
     });
 
-    let billingBtnVisible = await page.locator('#billing-panel-btn').isVisible().catch(() => false);
+    let billingBtnVisible = await page.locator('#bottom-bar-finish-pill').isVisible().catch(() => false);
+    if (!billingBtnVisible) {
+      billingBtnVisible = await page.locator('#billing-panel-btn').isVisible().catch(() => false);
+    }
     if (!billingBtnVisible) {
       /* Fall back to clicking the row in the records list */
       await page.locator('.bottom-nav-btn[data-nav="records"]').click().catch(() => undefined);
@@ -359,14 +362,20 @@ test('full lifecycle stress journey (one Electron run)', async () => {
       const rowSel = `[data-attendance-id="${attendanceId}"], [data-id="${attendanceId}"]`;
       await page.locator(rowSel).first().click({ timeout: 5000 }).catch(() => undefined);
       await page.waitForTimeout(800);
-      billingBtnVisible = await page.locator('#billing-panel-btn').isVisible().catch(() => false);
+      billingBtnVisible = await page.locator('#bottom-bar-finish-pill').isVisible().catch(() => false);
+      if (!billingBtnVisible) {
+        billingBtnVisible = await page.locator('#billing-panel-btn').isVisible().catch(() => false);
+      }
     }
     if (billingBtnVisible) record('H.0 record loaded into form view', 'PASS');
     else record('H.0 could not navigate to record from list', 'INFO', 'workflow steps below may use direct invocation fallback');
 
     let overlayPresent = false;
     if (billingBtnVisible) {
-      await page.locator('#billing-panel-btn').click();
+      const finishBtn = (await page.locator('#bottom-bar-finish-pill').isVisible().catch(() => false))
+        ? page.locator('#bottom-bar-finish-pill')
+        : page.locator('#billing-panel-btn');
+      await finishBtn.click();
       await page.waitForTimeout(500);
       const attachCancel = page.locator('.cn-confirm-overlay .cn-confirm-btns .btn-secondary').first();
       if (await attachCancel.isVisible().catch(() => false)) {

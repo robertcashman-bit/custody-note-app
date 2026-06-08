@@ -71,4 +71,23 @@ describe('deriveQuickFileConnectionState', () => {
     assert.strictEqual(s.state, 'not_configured');
     assert.strictEqual(s.ok, false);
   });
+
+  it('reports sync_unavailable when account pull fails with route/HTML 404', () => {
+    const s = deriveQuickFileConnectionState({
+      missing: ['Account number', 'API key', 'Application ID'],
+      syncError: 'Server error 404',
+    });
+    assert.strictEqual(s.state, 'sync_unavailable');
+    assert.match(s.headline, /temporarily unavailable/i);
+    assert.ok(!s.instructions.some((i) => /another computer/i.test(i)), 'must not imply sync worked');
+  });
+
+  it('not_configured when server has no saved credentials (JSON 404)', () => {
+    const s = deriveQuickFileConnectionState({
+      missing: ['API key'],
+      syncError: 'No QuickFile settings found for this licence',
+    });
+    assert.strictEqual(s.state, 'not_configured');
+    assert.ok(s.instructions.some((i) => /No QuickFile credentials are saved/i.test(i)));
+  });
 });
