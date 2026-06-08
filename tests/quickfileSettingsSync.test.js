@@ -2,6 +2,8 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
 const sync = require('../lib/quickfileSettingsSync');
 
 describe('quickfileSettingsSync', () => {
@@ -43,6 +45,20 @@ describe('quickfileSettingsSync', () => {
     assert.equal(posted.body.key, key);
     assert.ok(typeof posted.body.blob === 'string' && posted.body.blob.length > 0);
     assert.deepStrictEqual(sync.decryptQuickFileSettings(key, posted.body.blob), settings);
+  });
+
+  it('encrypts incomplete settings (empty api key) for round-trip; main rejects incomplete push', () => {
+    const incomplete = {
+      quickfileAccountNumber: '12345678',
+      quickfileApiKey: '',
+      quickfileAppId: 'app-id-99',
+    };
+    const blob = sync.encryptQuickFileSettings(key, incomplete);
+    const out = sync.decryptQuickFileSettings(key, blob);
+    assert.deepStrictEqual(out, incomplete);
+    const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+    assert.match(main, /if \(status\.missing\.length\)/);
+    assert.match(main, /QuickFile credentials incomplete/);
   });
 
   it('pullQuickFileSettingsFromServer returns blob payload', async () => {

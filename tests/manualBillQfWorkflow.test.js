@@ -477,6 +477,14 @@ describe('Step 2: Billing screen — data loading', () => {
     assert.ok(!billingScreenJs.includes('}).catch(function ()'), 'must not downgrade QF on load failure');
   });
 
+  it('resolves quickfileConnectionState in loadJobs before Send Bill to QuickFile UI', () => {
+    const qfIdx = billingScreenJs.indexOf('quickfileConnectionState');
+    const sendIdx = billingScreenJs.indexOf('wf-bill-create');
+    assert.ok(qfIdx > -1 && sendIdx > qfIdx, 'connection state must load before send button markup');
+    assert.ok(billingScreenJs.includes('var qfConnection = val(4, null)'));
+    assert.ok(billingScreenJs.includes('var qfConfigured = _wfIsQuickFileConfigured'));
+  });
+
   it('auto-populates mileage from station database when form has no miles', () => {
     assert.ok(billingScreenJs.includes('stationMileage.mileage_from_base'));
   });

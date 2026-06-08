@@ -5,10 +5,10 @@
  * the connection state is driven purely from the local settings DB.
  *
  * Path exercised:
- *   1. Open Settings -> QuickFile card. Fresh DB => panel shows
- *      "Not set up on this computer" (reliable, DB-backed state).
- *   2. Save mock credentials via IPC + refresh => "Credentials saved - not yet
- *      verified".
+ *   1. Open Settings -> QuickFile card. Fresh DB => panel shows account-sync
+ *      messaging (credentials sync from Custody Note account).
+ *   2. Save mock credentials via IPC + refresh => "Credentials loaded from
+ *      your account" (configured, not yet verified).
  *   3. Persist a successful health-check result via IPC + refresh =>
  *      "Connected" with a "Last verified" time.
  *   4. Seed a sparse matter (no DOB/address), open it, trigger CRM1 generation,
@@ -104,6 +104,7 @@ test('QuickFile connection panel reflects DB-backed state (not set up -> saved -
   });
   await openQuickFilePanel();
   await expect(page.locator('#qf-connection-status')).toHaveAttribute('data-state', 'configured_untested');
+  await expect(page.locator('#qf-status-headline')).toContainText(/loaded from your account/i);
 
   /* 3. Persist a successful health-check result and refresh => Connected. */
   await page.evaluate(async () => {
