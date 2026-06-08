@@ -437,6 +437,15 @@ async function _handleCreateInvoice(recordId, opts) {
   var narrative = document.getElementById('billing-narrative').value.trim();
 
   var allowDuplicate = false;
+  if (window.api.attendanceInvoiceStatus) {
+    try {
+      var freshStatus = await window.api.attendanceInvoiceStatus(recordId);
+      if (freshStatus && freshStatus.quickfile_invoice_id) {
+        opts.hasExistingInvoice = true;
+        opts.invoiceStatus = freshStatus;
+      }
+    } catch (_) { /* keep opts */ }
+  }
   if (opts.hasExistingInvoice) {
     var confirmed = await showConfirm('This record already has an invoice (' + (opts.invoiceStatus.quickfile_invoice_number || 'unknown') + ').\n\nAre you sure you want to create another invoice?');
     if (!confirmed) return;
@@ -509,7 +518,10 @@ async function _handleCreateInvoice(recordId, opts) {
       closeBillingPanel();
       _showInvoiceSuccessModal(result, opts);
     } else {
-      showToast('Invoice creation failed: ' + (result.error || 'Unknown error'), 'error');
+      var failMsg = (typeof formatLegacyBillingCreateFailureToast === 'function')
+        ? formatLegacyBillingCreateFailureToast(result.error, result.code)
+        : ('Invoice creation failed: ' + (result.error || 'Unknown error'));
+      showToast(failMsg, 'error');
       if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Send Bill to QuickFile'; }
     }
   }).catch(function (err) {

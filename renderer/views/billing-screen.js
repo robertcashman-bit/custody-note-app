@@ -180,7 +180,7 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
   if (qfConfigured) {
     var gSteps = [];
     if (opts.hasExistingInvoice) {
-      gSteps.push({ text: 'Invoice already created. Review below or create another if needed.', done: true });
+      gSteps.push({ text: 'Invoice already created. Review below, then click <strong>Continue to Review &amp; complete</strong>.', done: true });
       gSteps.push({ text: 'Click <strong>Continue to Review &amp; complete</strong> to move on.', done: false });
     } else {
       gSteps.push({ text: 'Check the charges and amounts are correct (edit if needed).', done: false });
@@ -649,6 +649,15 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
   }
 
   var allowDuplicate = false;
+  if (window.api.attendanceInvoiceStatus) {
+    try {
+      var freshStatus = await window.api.attendanceInvoiceStatus(recordId);
+      if (freshStatus && freshStatus.quickfile_invoice_id) {
+        opts.hasExistingInvoice = true;
+        opts.invoiceStatus = freshStatus;
+      }
+    } catch (_) { /* keep opts */ }
+  }
   if (opts.hasExistingInvoice) {
     var confirmed = await showConfirm('This record already has an invoice (' + ((opts.invoiceStatus || {}).quickfile_invoice_number || 'unknown') + ').\n\nAre you sure you want to create another invoice?');
     if (!confirmed) return;
@@ -735,11 +744,11 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
         _wfRenderCurrentStep();
       }
     } else {
-      _wfShowInvoiceFailure(result.error || 'Unknown error');
+      _wfShowInvoiceFailure(result.error || 'Unknown error', result.code);
     }
   } catch (err) {
     console.error('[billing] Invoice creation failed:', err);
-    _wfShowInvoiceFailure(err && err.message ? err.message : String(err));
+    _wfShowInvoiceFailure(err && err.message ? err.message : String(err), err && err.code);
   } finally {
     if (createBtn) { createBtn.disabled = false; createBtn.textContent = opts.hasExistingInvoice ? '\u26A0 Send Another Invoice to QuickFile' : 'Send Bill to QuickFile'; }
   }
@@ -747,16 +756,12 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
 
 /**
  * Show a clear, actionable recovery message when sending to QuickFile fails.
- * The record is NOT marked invoiced (nothing was created), so the user can
- * safely fix the cause and press the button again — no duplicate is created.
  */
-function _wfShowInvoiceFailure(reason) {
-  var msg = String(reason || 'Unknown error');
-  var looksLikeConnection = /not configured|auth|credential|401|403|HTTP 5\d\d|timeout|ENOTFOUND|ECONN|network|parse error|empty response/i.test(msg);
-  var action = looksLikeConnection
-    ? ' Check Settings \u2192 QuickFile and click "Test QuickFile connection", then press Send again.'
-    : ' Nothing was sent \u2014 fix the issue above and press "Send Bill to QuickFile" again.';
-  showToast('Send to QuickFile failed: ' + msg + '.' + action, 'error', 9000);
+function _wfShowInvoiceFailure(reason, code) {
+  var toast = (typeof formatBillingCreateFailureToast === 'function')
+    ? formatBillingCreateFailureToast(reason, code)
+    : ('Send to QuickFile failed: ' + String(reason || 'Unknown error'));
+  showToast(toast, 'error', 9000);
 }
 
 /**
