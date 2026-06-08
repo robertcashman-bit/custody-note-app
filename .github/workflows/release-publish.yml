@@ -169,6 +169,11 @@ jobs:
               echo "$assets" | grep -qx "$need" || missing+="$need "
             done
             if [ -z "$missing" ]; then
+              echo "Verifying updater asset checksums before publish…"
+              node scripts/verify-github-updater-assets.mjs --tag "$TAG" || {
+                echo "Checksum verification failed for $TAG — release stays draft."
+                exit 1
+              }
               is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
               if [ "$is_draft" = "true" ]; then
                 gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
