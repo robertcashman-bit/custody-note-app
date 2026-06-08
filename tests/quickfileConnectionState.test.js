@@ -26,7 +26,14 @@ describe('deriveQuickFileConnectionState', () => {
     assert.strictEqual(s.state, 'configured_untested');
     assert.strictEqual(s.ok, false);
     assert.strictEqual(s.configured, true);
+    assert.match(s.headline, /loaded from your account/i);
     assert.match(s.detail, /Test QuickFile connection/i);
+  });
+
+  it('not_configured mentions syncing from another computer', () => {
+    const s = deriveQuickFileConnectionState({ missing: ['Application ID'] });
+    assert.ok(s.instructions.some((i) => /another computer/i.test(i)), 'must mention account sync from other machine');
+    assert.ok(!s.instructions.some((i) => /this computer only/i.test(i)), 'must not say this-computer-only');
   });
 
   it('reports connected (ok=true) after a successful test with the verified time', () => {

@@ -21,6 +21,13 @@ function readPkgVersion() {
   return JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 }
 
+console.log('[deploy] Step 0/5 — deploy prerequisites');
+try {
+  run('node scripts/check-deploy-prerequisites.mjs');
+} catch {
+  process.exit(1);
+}
+
 console.log('[deploy] Step 1/5 — verify package.json and changelog.json');
 run('node scripts/verify-release-consistency.mjs');
 

@@ -77,8 +77,9 @@ describe('main.js QuickFile server sync wiring', () => {
     assert.match(main, /quickfile-create-invoice', async \(_, params\) => \{[\s\S]*await ensureQuickFileSettingsFromServer/);
   });
 
-  it('registers quickfile-settings-push IPC', () => {
+  it('registers quickfile-settings-push and quickfile-settings-ensure IPC', () => {
     assert.match(main, /ipcMain\.handle\('quickfile-settings-push'/);
+    assert.match(main, /ipcMain\.handle\('quickfile-settings-ensure'/);
   });
 
   it('preserves existing QuickFile keys on empty bulk set-settings', () => {

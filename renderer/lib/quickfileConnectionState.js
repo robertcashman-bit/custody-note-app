@@ -5,11 +5,9 @@
  * Important reality (do not "fix" with OAuth/cookies/localStorage): QuickFile is
  * authenticated per request with Account Number + API Key + Application ID,
  * hashed (MD5) into each call. There is NO OAuth token, refresh token, cookie or
- * redirect URI. Those credentials are stored in the app's LOCAL SQLite settings
- * table, which lives on the individual computer. That is why a correctly
- * configured account can look "not connected" on a different machine: the second
- * machine simply has not had the three credentials entered yet. This module makes
- * that explicit instead of showing a bare "not connected".
+ * redirect URI. Credentials are encrypted on the Custody Note server and pulled
+ * into local SQLite when you bill or open Settings — enter them once, then they
+ * follow your account to every computer.
  *
  * Pure + dual-export: required by Node tests and loaded as a renderer <script>.
  */
@@ -46,7 +44,7 @@
       'QuickFile credentials are saved to your Custody Note account and loaded automatically when you bill. ' +
       'Update them here if your QuickFile API details change.';
 
-    // 1. Not configured on this machine.
+    // 1. Not configured — sync may still be in progress or never saved to account.
     if (!configured) {
       return {
         state: 'not_configured',
@@ -56,9 +54,9 @@
         headline: 'QuickFile not set up yet',
         detail: 'Missing: ' + missing.join(', ') + '.',
         instructions: [
-          'Open QuickFile (quickfile.co.uk) \u2192 Account Settings \u2192 3rd Party Integration \u2192 API.',
-          'Copy your Account Number, create/seed an API key, and copy the Application ID.',
-          'Paste all three below and click "Save and test QuickFile".',
+          'If you saved QuickFile on another computer, reopen Settings in a moment — credentials sync from your Custody Note account automatically.',
+          'Otherwise open QuickFile (quickfile.co.uk) \u2192 Account Settings \u2192 3rd Party Integration \u2192 API.',
+          'Copy your Account Number, API key, and Application ID, paste below, then click "Save and test QuickFile".',
           perMachineNote,
         ],
       };
@@ -101,7 +99,7 @@
       ok: false,
       configured: true,
       tone: 'info',
-      headline: 'Credentials saved \u2014 not yet verified',
+      headline: 'Credentials loaded from your account',
       detail: 'Click "Test QuickFile connection" to confirm these details work.',
       instructions: [perMachineNote],
     };

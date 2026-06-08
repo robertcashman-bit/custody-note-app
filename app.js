@@ -4928,15 +4928,62 @@ var REQUIRED_FIELD_KEYS = [
   window.hasQuickFileSettingsConfigured = hasQuickFileSettingsConfigured;
 
   function openQuickFileSettings() {
-    showView('settings');
-    setTimeout(function() {
-      document.getElementById('quickfile-settings-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      if (!document.getElementById('setting-quickfile-account')?.value?.trim()) {
-        document.getElementById('setting-quickfile-account')?.focus();
-      }
-    }, 120);
+    syncQuickFileSettingsFromAccount({ toastOnPull: false }).finally(function() {
+      showView('settings');
+      setTimeout(function() {
+        document.getElementById('quickfile-settings-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!document.getElementById('setting-quickfile-account')?.value?.trim()) {
+          document.getElementById('setting-quickfile-account')?.focus();
+        }
+      }, 120);
+    });
   }
   window.openQuickFileSettings = openQuickFileSettings;
+
+  function hydrateQuickFileSettingsInputs(s) {
+    s = s || {};
+    var qfAcc = document.getElementById('setting-quickfile-account');
+    if (qfAcc) qfAcc.value = s.quickfileAccountNumber || '';
+    var qfKey = document.getElementById('setting-quickfile-apikey');
+    if (qfKey) qfKey.value = s.quickfileApiKey || '';
+    var qfApp = document.getElementById('setting-quickfile-appid');
+    if (qfApp) qfApp.value = s.quickfileAppId || '';
+  }
+
+  function syncQuickFileSettingsFromAccount(opts) {
+    opts = opts || {};
+    if (!window.api || !window.api.getSettings) {
+      return Promise.resolve({ settings: window._appSettingsCache || {}, ensure: null });
+    }
+    var hadLocal = hasQuickFileSettingsConfigured();
+    var ensureP = (window.api.quickfileSettingsEnsure)
+      ? window.api.quickfileSettingsEnsure()
+      : (window.api.quickfileConnectionState
+        ? window.api.quickfileConnectionState().then(function() { return { ok: true, pulled: true }; })
+        : Promise.resolve({ ok: false }));
+    return ensureP.then(function(result) {
+      return window.api.getSettings().then(function(s) {
+        s = s || {};
+        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
+        hydrateQuickFileSettingsInputs(s);
+        if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
+        if (!hadLocal && hasQuickFileSettingsConfigured() && opts.toastOnPull !== false) {
+          showToast('QuickFile settings loaded from your Custody Note account', 'success', 4000);
+        }
+        return { settings: s, ensure: result };
+      });
+    }).catch(function(err) {
+      console.error('[syncQuickFileSettingsFromAccount]', err);
+      return window.api.getSettings().then(function(s) {
+        s = s || {};
+        window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, s);
+        hydrateQuickFileSettingsInputs(s);
+        if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
+        return { settings: s, ensure: { ok: false, error: err && err.message } };
+      });
+    });
+  }
+  window.syncQuickFileSettingsFromAccount = syncQuickFileSettingsFromAccount;
 
   function showQuickFileSetupRequired() {
     showToast('Add your QuickFile account number, API key and application ID first.', 'warning');
@@ -5180,7 +5227,9 @@ var REQUIRED_FIELD_KEYS = [
     loadLicenceSettingsUI();
     // Trigger System Status card refresh whenever Settings is opened
     document.dispatchEvent(new CustomEvent('view-settings-shown'));
-    window.api.getSettings().then(s => {
+    syncQuickFileSettingsFromAccount({ toastOnPull: false }).then(function() {
+      return window.api.getSettings();
+    }).then(s => {
       const em = document.getElementById('setting-email');
       if (em) em.value = s.email || '';
       const dp = document.getElementById('setting-dscc-pin');
@@ -15574,15 +15623,6 @@ pdfAuditFooterHtml(d, settings) +
     window.api.getSettings().then(function(s) {
       window._appSettingsCache = s || {};
       s = s || {};
-      (function hydrateQuickFileSettingsInputs() {
-        var qfAcc = document.getElementById('setting-quickfile-account');
-        if (qfAcc) qfAcc.value = s.quickfileAccountNumber || '';
-        var qfKey = document.getElementById('setting-quickfile-apikey');
-        if (qfKey) qfKey.value = s.quickfileApiKey || '';
-        var qfApp = document.getElementById('setting-quickfile-appid');
-        if (qfApp) qfApp.value = s.quickfileAppId || '';
-      })();
-      if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
       applyFeeEarnerSigModeUI(s.feeEarnerSigMode || 'draw');
       updateFeeEarnerSigPreview(s.feeEarnerSigMaster || '');
       window._billingDefaults = {
@@ -15595,10 +15635,13 @@ pdfAuditFooterHtml(d, settings) +
         hideSplash();
         initFirstLaunchModal();
       }
-      /* Warm the general template store cache after settings are ready */
       if (typeof tplStoreInit === 'function') {
         tplStoreInit().catch(function() {});
       }
+    });
+
+    syncQuickFileSettingsFromAccount({ toastOnPull: true }).catch(function(e) {
+      console.error('[init] QuickFile account sync failed:', e);
     });
 
     initDarkMode();

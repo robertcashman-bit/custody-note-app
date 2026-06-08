@@ -4567,6 +4567,28 @@ app.whenReady().then(async () => {
     return;
   }
 
+  /* Pull QuickFile credentials from Custody Note account when licence is present. */
+  try {
+    const qfStatus = getQuickFileSettingsStatus();
+    const qfStartup = ensureQuickFileSettingsFromServer({
+      reason: 'startup',
+      force: qfStatus.missing.length > 0,
+    });
+    const logQfStartup = function (r) {
+      const tag = r && r.skipped ? r.skipped : (r && r.usedLocal ? 'cached' : 'pulled');
+      console.info('[QuickFile] startup pull: ' + tag);
+    };
+    if (qfStatus.missing.length > 0) {
+      logQfStartup(await qfStartup);
+    } else {
+      qfStartup.then(logQfStartup).catch(function (e) {
+        console.warn('[QuickFile] startup pull failed:', e && e.message);
+      });
+    }
+  } catch (qfErr) {
+    console.warn('[QuickFile] startup pull error:', qfErr && qfErr.message);
+  }
+
   // Normal app mode: create the window only after persistent data is available.
   if (!cliImportPath && !cliListRecords && !cliDumpId) {
     createWindow();
@@ -7245,6 +7267,7 @@ async function ensureQuickFileSettingsFromServer(opts) {
     return { ok: localComplete, usedLocal: localComplete, reason: reason, skipped: 'no-licence-or-api' };
   }
 
+  /* Incomplete local credentials: always pull from server (new machine / fresh install). */
   if (localComplete && !force) {
     const syncedAt = Date.parse(localMeta.quickfileSettingsSyncedAt || '');
     if (syncedAt && (Date.now() - syncedAt) < 15 * 60 * 1000) {
@@ -7564,6 +7587,31 @@ ipcMain.handle('quickfile-settings-push', async () => {
     return await pushQuickFileSettingsToCloud('settings-save');
   } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('quickfile-settings-ensure', async () => {
+  try {
+    const before = getQuickFileSettingsStatus();
+    const result = await ensureQuickFileSettingsFromServer({
+      reason: 'ensure',
+      force: before.missing.length > 0,
+    });
+    const after = getQuickFileSettingsStatus();
+    return {
+      ok: after.missing.length === 0,
+      pulled: result.usedLocal === false,
+      missing: after.missing,
+      skipped: result.skipped || null,
+      error: result.error || null,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      pulled: false,
+      missing: getQuickFileSettingsStatus().missing,
+      error: err && err.message ? err.message : String(err),
+    };
   }
 });
 

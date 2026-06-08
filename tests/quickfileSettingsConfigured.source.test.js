@@ -12,12 +12,10 @@ const assert = require('node:assert/strict');
 
 const APP = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
 
-test('app.js bootstraps QuickFile inputs from getSettings', () => {
-  assert.ok(APP.includes('hydrateQuickFileSettingsInputs'), 'expected hydrateQuickFileSettingsInputs() after startup getSettings');
-  assert.ok(
-    APP.includes("qfAcc.value = s.quickfileAccountNumber") && APP.includes("qfKey.value"),
-    'expected account + API key fields hydrated'
-  );
+test('app.js syncs QuickFile from account on startup and in Settings', () => {
+  assert.ok(APP.includes('syncQuickFileSettingsFromAccount'), 'expected syncQuickFileSettingsFromAccount()');
+  assert.ok(APP.includes('hydrateQuickFileSettingsInputs'), 'expected shared hydrate helper');
+  assert.match(APP, /syncQuickFileSettingsFromAccount\(\{ toastOnPull: true \}\)/);
 });
 
 test('app.js saveQuickFileSettings pushes credentials to the licence server', () => {
