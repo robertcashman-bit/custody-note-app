@@ -30,8 +30,18 @@
    * @param {string}   [facts.lastOkAt]   ISO timestamp of last successful test.
    * @param {string}   [facts.lastError]  Message from the last failed test.
    * @param {string}   [facts.lastCheckedAt] ISO timestamp of last test attempt (ok or fail).
+   * @param {string}   [facts.syncError]    Last account sync pull/push error from custodynote.com.
    * @returns {{state:string, ok:boolean, configured:boolean, headline:string, detail:string, instructions:string[], tone:string}}
    */
+  function isSyncUnavailableError(syncError) {
+    var e = String(syncError || '').trim();
+    if (!e) return false;
+    if (e === 'Server error 404') return true;
+    if (/QuickFile settings request failed/i.test(e)) return true;
+    if (/Invalid response from server/i.test(e)) return true;
+    return false;
+  }
+
   function deriveQuickFileConnectionState(facts) {
     var f = facts || {};
     var missing = Array.isArray(f.missing) ? f.missing : [];
@@ -39,6 +49,7 @@
     var lastOkAt = f.lastOkAt ? String(f.lastOkAt) : '';
     var lastError = f.lastError ? String(f.lastError) : '';
     var lastCheckedAt = f.lastCheckedAt ? String(f.lastCheckedAt) : '';
+    var syncError = f.syncError ? String(f.syncError) : '';
 
     var perMachineNote =
       'QuickFile credentials are saved to your Custody Note account and loaded automatically when you bill. ' +
@@ -46,6 +57,24 @@
 
     // 1. Not configured — sync may still be in progress or never saved to account.
     if (!configured) {
+      if (isSyncUnavailableError(syncError)) {
+        return {
+          state: 'sync_unavailable',
+          ok: false,
+          configured: false,
+          tone: 'error',
+          headline: 'QuickFile sync temporarily unavailable',
+          detail: 'Could not load credentials from your Custody Note account. ' + syncError + '.',
+          instructions: [
+            'Check your internet connection and try reopening Settings in a moment.',
+            'If this continues, contact Custody Note support — your saved credentials may still be on the server.',
+            'You can enter credentials below to use QuickFile on this computer only until sync is restored.',
+          ],
+        };
+      }
+      var savedOnAccountHint = /No QuickFile settings found/i.test(syncError)
+        ? 'No QuickFile credentials are saved on your Custody Note account yet.'
+        : 'If you saved QuickFile on another computer, reopen Settings in a moment — credentials sync from your Custody Note account automatically.';
       return {
         state: 'not_configured',
         ok: false,
@@ -54,8 +83,8 @@
         headline: 'QuickFile not set up yet',
         detail: 'Missing: ' + missing.join(', ') + '.',
         instructions: [
-          'If you saved QuickFile on another computer, reopen Settings in a moment — credentials sync from your Custody Note account automatically.',
-          'Otherwise open QuickFile (quickfile.co.uk) \u2192 Account Settings \u2192 3rd Party Integration \u2192 API.',
+          savedOnAccountHint,
+          'Open QuickFile (quickfile.co.uk) \u2192 Account Settings \u2192 3rd Party Integration \u2192 API.',
           'Copy your Account Number, API key, and Application ID, paste below, then click "Save and test QuickFile".',
           perMachineNote,
         ],
@@ -119,5 +148,6 @@
   return {
     deriveQuickFileConnectionState: deriveQuickFileConnectionState,
     formatWhen: formatWhen,
+    isSyncUnavailableError: isSyncUnavailableError,
   };
 });

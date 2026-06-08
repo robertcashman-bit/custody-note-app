@@ -561,8 +561,8 @@ describe('Integration: app.js opens workflow', () => {
 
   it('Finish matter / billing workflow is gated on a finalised note', () => {
     assert.ok(
-      appJs.includes('Finalise the attendance note using the button at the top of the form before starting the billing process.'),
-      'help + toast should reference the header Finalise button'
+      appJs.includes('Finalise the attendance note using the button in the bottom bar before starting the billing process.'),
+      'help + toast should reference the bottom-bar Finalise button'
     );
     assert.ok(
       appJs.includes('function _matterBillingNoteFinalised()') &&
@@ -571,7 +571,7 @@ describe('Integration: app.js opens workflow', () => {
     );
     assert.ok(
       appJs.includes("if (!_matterBillingNoteFinalised())") &&
-        appJs.includes("showToast('Finalise the attendance note using the button at the top of the form before starting the billing process.'"),
+        appJs.includes("showToast('Finalise the attendance note using the button in the bottom bar before starting the billing process.'"),
       'clicking through to the workflow must toast when the note is still draft'
     );
     assert.ok(

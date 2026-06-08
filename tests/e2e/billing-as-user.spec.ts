@@ -293,3 +293,68 @@ test('user can drive a finalised matter through Finish matter > billing > review
   expect(critical, `Console errors during billing flow: ${critical.join(' || ')}`).toHaveLength(0);
   expect(criticalPage, `Page crashes during billing flow: ${criticalPage.join(' || ')}`).toHaveLength(0);
 });
+
+test('Records list Bill button opens matter billing without opening the form', async () => {
+  const firmId = await page.evaluate(async (firmName) => {
+    const w = window as unknown as {
+      api: { firmSave: (f: Record<string, unknown>) => Promise<number | { id: number }> };
+    };
+    const out = await w.api.firmSave({
+      name: firmName,
+      contact_email: 'bill-list@example.com',
+      is_default: 1,
+    });
+    return typeof out === 'number' ? out : out?.id;
+  }, `BillList Firm ${stamp}`);
+  expect(firmId).toBeTruthy();
+
+  const attendanceId = await page.evaluate(
+    async (input) => {
+      const w = window as unknown as { api: { attendanceSave: (p: unknown) => Promise<number> } };
+      const data = {
+        _formType: 'attendance',
+        attendanceMode: 'custody',
+        forename: input.forename,
+        surname: input.surname,
+        date: '2026-05-10',
+        policeStationName: input.station,
+        firmId: input.firmId,
+        firmName: input.firmName,
+        feeEarnerName: 'E2E Bill List',
+        outcomeStation: 'NFA',
+        timeRecordingChecked: 'yes',
+      };
+      const id = await w.api.attendanceSave({ id: null, data, status: 'draft' });
+      await w.api.attendanceSave({ id, data, status: 'finalised' });
+      return id;
+    },
+    { forename: 'Bill', surname: `List${stamp}`, station: STATION_NAME, firmId, firmName: `BillList Firm ${stamp}` },
+  );
+  expect(attendanceId).toBeTruthy();
+
+  await page.locator('.bottom-nav-btn[data-nav="home"]').click();
+  await page.waitForTimeout(250);
+  await page.locator('.bottom-nav-btn[data-nav="list"]').click();
+  await expect(page.locator('#view-list')).toHaveClass(/active/);
+
+  const billBtn = page
+    .locator('#attendance-list li')
+    .filter({ has: page.locator(`.amend-btn[data-id="${attendanceId}"]`) })
+    .locator('.bill-btn');
+  await expect(billBtn, 'Bill button should be enabled on finalised row').toBeVisible({ timeout: 15_000 });
+  await expect(billBtn).toBeEnabled();
+  await billBtn.click();
+
+  await expect(page.locator('#view-matter-billing')).toHaveClass(/active/, { timeout: 10_000 });
+  await page.waitForFunction(
+    (id: number) => {
+      const w = window as unknown as { currentAttendanceId?: number };
+      return w.currentAttendanceId === id;
+    },
+    attendanceId,
+    { timeout: 10_000 },
+  );
+  await expect(page.locator('#workflow-overlay, .wf-inline #workflow-overlay').first()).toBeVisible({
+    timeout: 15_000,
+  });
+});

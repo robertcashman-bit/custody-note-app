@@ -22,6 +22,20 @@ function _listSortParams() {
   }
 }
 
+function _renderListBillButtonHtml(rec) {
+  var enabled = (typeof window.isListBillEnabled === 'function')
+    ? window.isListBillEnabled(rec)
+    : false;
+  var title = enabled
+    ? 'Open Finish matter billing for this record'
+    : (rec.archived_at
+      ? 'Archived records cannot be billed from the list'
+      : 'Finalise the attendance note before billing');
+  var disabled = enabled ? '' : ' disabled';
+  var cls = 'btn-list-action bill-btn' + (enabled ? '' : ' bill-btn--disabled');
+  return '<button type="button" class="' + cls + '"' + disabled + ' title="' + esc(title) + '">Bill</button>';
+}
+
 function refreshList() {
   var ul = document.getElementById('attendance-list');
   if (!ul || !window.api) return;
@@ -128,6 +142,7 @@ function refreshList() {
               archivedBadge +
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
+              _renderListBillButtonHtml(r) +
               archiveBtn +
               '<button type="button" class="btn-list-action amend-btn" title="Open record to edit (amend)" data-id="' + esc(String(r.id)) + '">Edit</button>' +
               '<button type="button" class="btn-list-action dup-btn" title="Duplicate for another client (same session)" data-id="' + esc(String(r.id)) + '">Duplicate</button>' +
@@ -144,6 +159,16 @@ function refreshList() {
         }
       } else {
         li.querySelector('.list-item-text').addEventListener('click', function() { openAttendance(r.id); });
+        var billBtn = li.querySelector('.bill-btn');
+        if (billBtn) {
+          billBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (billBtn.disabled) return;
+            if (typeof window.billAttendanceFromList === 'function') {
+              window.billAttendanceFromList(r.id);
+            }
+          });
+        }
         li.querySelector('.amend-btn').addEventListener('click', function(e) { e.stopPropagation(); amendAttendance(r.id, r.status, title); });
         li.querySelector('.dup-btn').addEventListener('click', function(e) { e.stopPropagation(); duplicateAttendance(r.id); });
         li.querySelector('.pdf-btn').addEventListener('click', function(e) {

@@ -89,7 +89,8 @@ describe('main.js QuickFile server sync wiring', () => {
   });
 
   it('pulls settings before connection-state and create-invoice IPC', () => {
-    assert.match(main, /quickfile-connection-state', async \(\) => \{\s*\n\s*await ensureQuickFileSettingsFromServer/);
+    assert.match(main, /quickfile-connection-state', async \(\) => \{[\s\S]*ensureQuickFileSettingsFromServer/);
+    assert.match(main, /syncError: \(ensureResult && ensureResult\.error\)/);
     assert.match(main, /quickfile-create-invoice', async \(_, params\) => \{[\s\S]*await ensureQuickFileSettingsFromServer/);
   });
 

@@ -7569,7 +7569,7 @@ ipcMain.handle('quickfile-settings-status', () => {
  * settings table (per-machine source of truth) — independent of any renderer
  * state, so it is consistent on every machine and after every restart. */
 ipcMain.handle('quickfile-connection-state', async () => {
-  await ensureQuickFileSettingsFromServer({ reason: 'connection-state', force: true });
+  const ensureResult = await ensureQuickFileSettingsFromServer({ reason: 'connection-state', force: true });
   const status = getQuickFileSettingsStatus();
   const rows = dbAll('SELECT key, value FROM settings');
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -7579,6 +7579,7 @@ ipcMain.handle('quickfile-connection-state', async () => {
     lastOkAt: settings.quickfileLastConnectionOkAt || '',
     lastError: settings.quickfileLastConnectionError || '',
     lastCheckedAt: settings.quickfileLastConnectionCheckedAt || '',
+    syncError: (ensureResult && ensureResult.error) || '',
   };
 });
 

@@ -6221,6 +6221,10 @@ var REQUIRED_FIELD_KEYS = [
           case 'amend': amendAttendance(id, rec.status, title); break;
           case 'dup': duplicateAttendance(id); break;
           case 'newMatter': newMatterFromAttendance(id); break;
+          case 'bill':
+            if (actionBtn.disabled) return;
+            billAttendanceFromList(id);
+            break;
           case 'delete': deleteAttendance(id, title); break;
         }
       } else if (e.target.closest('.list-item-text')) {
@@ -6741,59 +6745,60 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  function updateBottomBarFinishPill() {
-    updateBillingPanelHeaderBtn();
-    var pill = document.getElementById('bottom-bar-finish-pill');
-    if (!pill) return;
-    pill.style.display = 'none';
-    pill.setAttribute('aria-hidden', 'true');
-    pill.removeAttribute('data-pill-action');
-  }
-
-  // Header primary-action button (#billing-panel-btn) — the SINGLE entry
-  // point for finishing a record. Morphs by record state so the user always
-  // sees one obvious next-step button regardless of which section they are on.
-  //   draft           -> "Finalise"            -> validateBeforeFinalise()
-  //   finalised       -> "Finish matter"       -> promptBeforeOpeningBilling()
-  //   completed       -> "Archive matter"      -> executePrimaryRecordAction('archive')
-  //   archived        -> hidden
-  //   no record open  -> hidden
-  function updateBillingPanelHeaderBtn() {
-    var btn = document.getElementById('billing-panel-btn');
-    if (!btn) return;
-    if (!currentAttendanceId || currentRecordArchived) {
-      btn.style.display = 'none';
-      btn.removeAttribute('data-action');
-      return;
-    }
-    var label = '';
-    var action = '';
-    var cls = 'btn btn-small btn-accent btn-header-primary-action';
-    var titleText = '';
+  function getPrimaryRecordActionState() {
+    if (!currentAttendanceId || currentRecordArchived) return null;
     if (currentRecordStatus === 'completed') {
-      label = 'Archive matter';
-      action = 'archive';
-      cls += ' state-complete';
-      titleText = 'Office work is marked complete \u2014 archive to clear from the active list';
-    } else if (currentRecordStatus === 'finalised') {
+      return {
+        label: 'Archive matter',
+        action: 'archive',
+        stateClass: 'state-complete',
+        titleText: 'Office work is marked complete \u2014 archive to clear from the active list',
+      };
+    }
+    if (currentRecordStatus === 'finalised') {
       var hasInvoice = !!(
         (formData && (formData.quickfile_invoice_id || formData.quickfileInvoiceNumber || formData.quickfileInvoiceUrl))
       );
-      label = hasInvoice ? 'Continue finish matter' : 'Finish matter';
-      action = 'finishMatter';
-      cls += ' state-finalised';
-      titleText = 'Open the 3-step Finish matter screen (documents \u2192 invoice \u2192 archive)';
-    } else {
-      label = 'Finalise';
-      action = 'finalise';
-      cls += ' state-draft';
-      titleText = 'Lock the record before billing \u2014 runs validation first';
+      return {
+        label: hasInvoice ? 'Continue finish matter' : 'Finish matter',
+        action: 'finishMatter',
+        stateClass: 'state-finalised',
+        titleText: 'Open the 3-step Finish matter screen (documents \u2192 invoice \u2192 archive)',
+      };
     }
-    btn.style.display = '';
-    btn.textContent = label;
-    btn.className = cls;
-    btn.dataset.action = action;
-    btn.title = titleText;
+    return {
+      label: 'Finalise',
+      action: 'finalise',
+      stateClass: 'state-draft',
+      titleText: 'Lock the record before billing \u2014 runs validation first',
+    };
+  }
+
+  function updateBottomBarFinishPill() {
+    var headerBtn = document.getElementById('billing-panel-btn');
+    if (headerBtn) {
+      headerBtn.style.display = 'none';
+      headerBtn.removeAttribute('data-action');
+    }
+    var pill = document.getElementById('bottom-bar-finish-pill');
+    if (!pill) return;
+    var state = getPrimaryRecordActionState();
+    if (!state) {
+      pill.style.display = 'none';
+      pill.setAttribute('aria-hidden', 'true');
+      pill.removeAttribute('data-action');
+      return;
+    }
+    pill.style.display = '';
+    pill.setAttribute('aria-hidden', 'false');
+    pill.textContent = state.label;
+    pill.className = 'bottom-btn finish-pill ' + state.stateClass;
+    pill.dataset.action = state.action;
+    pill.title = state.titleText;
+  }
+
+  function updateBillingPanelHeaderBtn() {
+    updateBottomBarFinishPill();
   }
   window.updateBottomBarFinishPill = updateBottomBarFinishPill;
 
@@ -6826,7 +6831,7 @@ var REQUIRED_FIELD_KEYS = [
   };
 
   function showPostFinaliseNextStepsHint() {
-    showToast('Next: tap Finish matter at the top of the screen for documents, QuickFile invoice, and archive.', 'info', 7500);
+    showToast('Next: tap Finish matter in the bottom bar for documents, QuickFile invoice, and archive.', 'info', 7500);
   }
 
   function getBillingReadinessWarnings() {
@@ -6959,17 +6964,17 @@ var REQUIRED_FIELD_KEYS = [
     statusEl.textContent = statusText;
     var hint = '';
     if (currentRecordStatus === 'completed') {
-      hint = ' Use the Archive matter button at the top of the screen when ready.';
+      hint = ' Use the Archive matter button in the bottom bar when ready.';
     } else if (currentRecordStatus === 'finalised') {
-      hint = ' Use the Finish matter button at the top of the screen to continue.';
+      hint = ' Use the Finish matter button in the bottom bar to continue.';
     } else {
-      hint = ' Use the Finalise button at the top of the screen when the note is ready.';
+      hint = ' Use the Finalise button in the bottom bar when the note is ready.';
     }
     summaryEl.textContent = (summary + hint).trim();
     if (bannerEl) {
       if (currentRecordStatus === 'finalised' && !currentRecordArchived) {
         bannerEl.style.display = '';
-        bannerEl.innerHTML = 'Note finalised — click <strong>Finish matter</strong> at the top of the screen to continue.';
+        bannerEl.innerHTML = 'Note finalised — click <strong>Finish matter</strong> in the bottom bar to continue.';
       } else {
         bannerEl.style.display = 'none';
         bannerEl.textContent = '';
@@ -7001,6 +7006,56 @@ var REQUIRED_FIELD_KEYS = [
       target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }
+
+  function applyAttendanceSessionFromRow(id, row, parsedData) {
+    currentAttendanceId = id;
+    currentRecordStatus = row ? row.status : null;
+    currentRecordArchived = !!(row && row.archived_at);
+    formData = parsedData;
+    if (_recordCache && typeof _recordCache.set === 'function') {
+      _recordCache.set(id, { row: row, timestamp: Date.now() });
+    }
+  }
+
+  function isListBillEnabled(rec) {
+    if (!rec || rec.archived_at) return false;
+    var st = rec.status || 'draft';
+    return st === 'finalised' || st === 'completed';
+  }
+  window.isListBillEnabled = isListBillEnabled;
+
+  function billAttendanceFromList(id) {
+    if (!window.api || !window.api.attendanceGet) return;
+    if (_recordCache && _recordCache.has(id)) {
+      var cached = _recordCache.get(id);
+      var cachedRow = cached.row;
+      var cachedData = cachedRow && cachedRow.data ? parseJsonOrNull(cachedRow.data) : {};
+      if (cachedData === null) {
+        showToast('This record could not be opened because its saved data is corrupted. Restore from backup before editing it.', 'error', 7000);
+        return;
+      }
+      applyAttendanceSessionFromRow(id, cachedRow, cachedData);
+      if (typeof showView === 'function') showView('matter-billing');
+      return;
+    }
+    window.api.attendanceGet(id).then(function (row) {
+      if (!row) {
+        showToast('Record not found', 'error');
+        return;
+      }
+      var parsedData = row.data ? parseJsonOrNull(row.data) : {};
+      if (parsedData === null) {
+        showToast('This record could not be opened because its saved data is corrupted. Restore from backup before editing it.', 'error', 7000);
+        return;
+      }
+      applyAttendanceSessionFromRow(id, row, parsedData);
+      if (typeof showView === 'function') showView('matter-billing');
+    }).catch(function (e) {
+      showToast('Failed to load record for billing', 'error');
+      console.error('[billAttendanceFromList]', e);
+    });
+  }
+  window.billAttendanceFromList = billAttendanceFromList;
 
   function promptBeforeOpeningBilling() {
     /* Finish-matter is now a full-page Billing screen instead of a modal
@@ -7051,7 +7106,7 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     if (!_matterBillingNoteFinalised()) {
-      showToast('Finalise the attendance note using the button at the top of the form before starting the billing process.', 'error');
+      showToast('Finalise the attendance note using the button in the bottom bar before starting the billing process.', 'error');
       return;
     }
     if (typeof window.mountWorkflowInline !== 'function') {
@@ -7071,7 +7126,76 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
-  function loadMatterBillingScreen() {
+  function _matterBillingRenderPickerUI(rows) {
+    var stage = document.getElementById('matter-billing-stage');
+    if (!stage) return;
+    if (!rows || !rows.length) {
+      stage.innerHTML = '<p class="matter-billing-picker-empty">No matters ready to bill. Finalise a record first, then return here or use <strong>Bill</strong> on the Records list.</p>';
+      return;
+    }
+    var html = '<div class="matter-billing-picker"><h4 class="matter-billing-picker-title">Select a matter to bill</h4><ul class="matter-billing-picker-list">';
+    rows.forEach(function (r) {
+      var d = (typeof safeJson === 'function') ? safeJson(r.data) : {};
+      var name = (r.client_name && String(r.client_name).trim()) || [d.surname, d.forename].filter(Boolean).join(', ') || 'Unknown client';
+      var dateStr = _matterBillingFmtDate(r.attendance_date || d.date || '');
+      var station = r.station_name || d.policeStationName || '';
+      var meta = [dateStr !== '\u2014' ? dateStr : '', station].filter(Boolean).join(' \u00B7 ');
+      html += '<li><button type="button" class="matter-billing-picker-item" data-id="' + esc(String(r.id)) + '">' +
+        '<span class="matter-billing-picker-name">' + esc(name) + '</span>' +
+        (meta ? '<span class="matter-billing-picker-meta">' + esc(meta) + '</span>' : '') +
+        '</button></li>';
+    });
+    html += '</ul></div>';
+    stage.innerHTML = html;
+    stage.querySelectorAll('.matter-billing-picker-item').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var pickId = parseInt(btn.dataset.id, 10);
+        if (pickId) billAttendanceFromList(pickId);
+      });
+    });
+  }
+
+  function _matterBillingShowPickerWhenNoRecord() {
+    var clientEl = document.getElementById('matter-billing-client');
+    var firmEl = document.getElementById('matter-billing-firm');
+    var stationEl = document.getElementById('matter-billing-station');
+    var dateEl = document.getElementById('matter-billing-date');
+    var statusEl = document.getElementById('matter-billing-status');
+    var helpEl = document.getElementById('matter-billing-help');
+    var startBtn = document.getElementById('matter-billing-start-btn');
+    if (clientEl) clientEl.textContent = '\u2014';
+    if (firmEl) firmEl.textContent = '\u2014';
+    if (stationEl) stationEl.textContent = '\u2014';
+    if (dateEl) dateEl.textContent = '\u2014';
+    if (statusEl) {
+      statusEl.textContent = 'Select a matter';
+      statusEl.className = 'billing-readiness-status state-review';
+    }
+    if (startBtn) {
+      startBtn.disabled = true;
+      startBtn.title = 'Select a matter below or use Bill on the Records list';
+    }
+    if (helpEl) {
+      helpEl.innerHTML = 'Choose a finalised matter below, use <strong>Bill</strong> on the Records list, or open a record and tap <strong>Finish matter</strong> in the bottom bar.';
+    }
+    if (!window.api || !window.api.billableAttendances) {
+      _matterBillingRenderPickerUI([]);
+      return;
+    }
+    window.api.billableAttendances().then(function (rows) {
+      if (currentAttendanceId) return;
+      if (rows && rows.length === 1) {
+        billAttendanceFromList(rows[0].id);
+        return;
+      }
+      _matterBillingRenderPickerUI(rows || []);
+    }).catch(function (e) {
+      console.error('[matter-billing-picker]', e);
+      _matterBillingRenderPickerUI([]);
+    });
+  }
+
+  function _renderMatterBillingScreenBody() {
     var data = (typeof getFormData === 'function') ? getFormData() : (formData || {});
     var clientName = [data.forename, data.surname].filter(Boolean).join(' ') || '\u2014';
     var firmName = _matterBillingResolveFirmName(data) || '\u2014';
@@ -7133,25 +7257,47 @@ var REQUIRED_FIELD_KEYS = [
     }
     if (helpEl) {
       if (!currentAttendanceId) {
-        helpEl.innerHTML = 'Open a record from the Records list, then return here to start the billing process.';
+        helpEl.innerHTML = 'Choose a finalised matter below, use <strong>Bill</strong> on the Records list, or open a record and tap <strong>Finish matter</strong> in the bottom bar.';
       } else if (currentRecordArchived) {
         helpEl.innerHTML = 'This record is already <strong>archived</strong>. Unarchive it from the form if you need to make billing changes.';
       } else if (!_matterBillingNoteFinalised()) {
-        helpEl.innerHTML = 'Finalise the attendance note using the button at the top of the form, then return here or click <strong>Finish matter</strong> again.';
+        helpEl.innerHTML = 'Finalise the attendance note using the button in the bottom bar, then return here or click <strong>Finish matter</strong> again.';
       } else {
         helpEl.innerHTML = 'The 3-step process starts automatically when you open this screen from <strong>Finish matter</strong>. Use <strong>Start billing process</strong> to restart from step 1.';
       }
     }
 
-    /* Auto-mount the workflow on screen entry when the matter is ready
-     * to bill, so users land directly in step 1 instead of having to
-     * click twice. The button stays at the top as an explicit re-entry
-     * point per the user's requested layout. */
     if (canStart && stage && !stage.querySelector('#workflow-overlay')) {
       _matterBillingMountWorkflow();
-    } else if (!canStart && stage) {
+    } else if (!canStart && stage && currentAttendanceId) {
       stage.innerHTML = '';
     }
+  }
+
+  function loadMatterBillingScreen() {
+    if (!currentAttendanceId) {
+      _matterBillingShowPickerWhenNoRecord();
+      return;
+    }
+    if (!window.api || !window.api.attendanceGet) {
+      _renderMatterBillingScreenBody();
+      return;
+    }
+    window.api.attendanceGet(currentAttendanceId).then(function (row) {
+      if (row && currentAttendanceId) {
+        currentRecordStatus = row.status;
+        currentRecordArchived = !!row.archived_at;
+        var parsed = row.data ? parseJsonOrNull(row.data) : null;
+        if (parsed) formData = parsed;
+        if (_recordCache && typeof _recordCache.set === 'function') {
+          _recordCache.set(currentAttendanceId, { row: row, timestamp: Date.now() });
+        }
+      }
+      _renderMatterBillingScreenBody();
+    }).catch(function (e) {
+      console.error('[loadMatterBillingScreen]', e);
+      _renderMatterBillingScreenBody();
+    });
   }
   window.loadMatterBillingScreen = loadMatterBillingScreen;
 
@@ -8154,7 +8300,7 @@ var REQUIRED_FIELD_KEYS = [
           '<div class="billing-readiness-head">' +
             '<div>' +
               '<h4 class="billing-readiness-title">File completion — this matter</h4>' +
-              '<p class="billing-readiness-copy">One button at the top of the screen takes you through each step: <strong>Finalise</strong>, then <strong>Finish matter</strong> (3 steps), then <strong>Archive matter</strong> when office work is complete.</p>' +
+              '<p class="billing-readiness-copy">One button in the bottom bar takes you through each step: <strong>Finalise</strong>, then <strong>Finish matter</strong> (3 steps), then <strong>Archive matter</strong> when office work is complete.</p>' +
             '</div>' +
             '<span id="billing-readiness-status" class="billing-readiness-status state-review" aria-live="polite"></span>' +
           '</div>' +
@@ -15732,6 +15878,10 @@ pdfAuditFooterHtml(d, settings) +
     });
     document.getElementById('laa-forms-btn')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('billing-panel-btn')?.addEventListener('click', function () {
+      var action = (this && this.dataset && this.dataset.action) || 'finalise';
+      executePrimaryRecordAction(action);
+    });
+    document.getElementById('bottom-bar-finish-pill')?.addEventListener('click', function () {
       var action = (this && this.dataset && this.dataset.action) || 'finalise';
       executePrimaryRecordAction(action);
     });
