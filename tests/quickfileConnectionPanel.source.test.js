@@ -43,10 +43,12 @@ describe('QuickFile connection reliability (main process)', () => {
 });
 
 describe('QuickFile connection panel (renderer)', () => {
-  it('preload bridges quickfileConnectionState and settings push', () => {
+  it('preload bridges quickfileConnectionState, settings push, and settings ensure', () => {
     assert.ok(PRELOAD.includes('quickfileConnectionState'));
     assert.ok(PRELOAD.includes("ipcRenderer.invoke('quickfile-connection-state')"));
     assert.ok(PRELOAD.includes('quickfileSettingsPush'));
+    assert.ok(PRELOAD.includes('quickfileSettingsEnsure'));
+    assert.ok(PRELOAD.includes("ipcRenderer.invoke('quickfile-settings-ensure')"));
   });
 
   it('saveSettings does not include QuickFile credential keys', () => {

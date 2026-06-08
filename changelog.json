@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.29",
+      "date": "2026-06-08",
+      "latest": true,
+      "changes": [
+        "QuickFile: enter credentials once in Settings — saved to your Custody Note account and pulled automatically on every computer before billing",
+        "QuickFile connection panel explains account sync (no longer treats missing credentials as this-computer-only)",
+        "Deploy: preflight check script (check:deploy) and GitHub CLI install helper for one-command releases"
+      ]
+    },
+    {
       "version": "1.9.28",
       "date": "2026-06-07",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fixed missing Finalise / Finish matter / Archive button while editing — primary action is now in the visible top app bar",
         "Court name typeahead: clearer hints when the field appears; explicit message if the magistrates court list fails to load",

@@ -1,6 +1,6 @@
 {
   "name": "custody-note",
-  "version": "1.9.28",
+  "version": "1.9.29",
   "lastUpdated": "2026-06-07",
   "buildTime": "2026-06-07T22:00:00.000Z",
   "description": "Custody Note – LAA-compliant custody note app",
@@ -9,6 +9,8 @@
     "start": "electron .",
     "verify:release": "node scripts/verify-release-consistency.mjs",
     "check:version": "node scripts/verify-release-consistency.mjs",
+    "check:deploy": "node scripts/check-deploy-prerequisites.mjs",
+    "install:deploy-tools": "bash scripts/install-deploy-tools.sh",
     "verify:built-asar": "node scripts/verify-built-asar.mjs",
     "build": "npm run verify:release && electron-builder && npm run verify:built-asar",
     "build:only": "npm run verify:release && electron-builder && npm run verify:built-asar",

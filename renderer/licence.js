@@ -420,6 +420,11 @@
           showWarningBanner(trialMsg, status.daysRemaining);
         }
         if (window.api.licenceValidate) window.api.licenceValidate().catch(function (e) { console.error('[licence-validate]', e); });
+        if (window.syncQuickFileSettingsFromAccount) {
+          window.syncQuickFileSettingsFromAccount({ toastOnPull: true }).catch(function (e) {
+            console.error('[qf-sync]', e);
+          });
+        }
       }
     }).catch(function () {
       showLoginOverlay();
