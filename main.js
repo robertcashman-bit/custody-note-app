@@ -7930,7 +7930,11 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   if (attendanceId) {
     const existingInv = dbGet('SELECT quickfile_invoice_id, quickfile_invoice_number FROM attendances WHERE id = ?', [attendanceId]);
     if (existingInv && existingInv.quickfile_invoice_id && !params.allowDuplicate) {
-      return { ok: false, error: 'This record already has invoice #' + (existingInv.quickfile_invoice_number || existingInv.quickfile_invoice_id) + '. Set allowDuplicate to override.' };
+      return {
+        ok: false,
+        code: 'ALREADY_INVOICED',
+        error: 'This record already has invoice #' + (existingInv.quickfile_invoice_number || existingInv.quickfile_invoice_id) + '.',
+      };
     }
   }
 

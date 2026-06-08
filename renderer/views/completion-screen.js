@@ -292,12 +292,12 @@ function _wfBuildBillingSummaryCard(d) {
     rowHtml.push('<tr><td>Parking / disbursements</td><td style="text-align:right;">' + fmtCurr(totals.parkingAmount) + '</td></tr>');
   }
   if (rowHtml.length === 0) {
-    rowHtml.push('<tr><td colspan="2" style="color:var(--text-muted,#94a3b8);">No charge lines \u2014 set fees in Step 2 (Billing review).</td></tr>');
+    rowHtml.push('<tr><td colspan="2" style="color:var(--on-surface-muted,#64748b);">No charge lines \u2014 set fees in Step 2 (Billing review).</td></tr>');
   }
 
   return '<div class="wf-card">' +
     '<h4 class="wf-card-title">Billing summary (this matter)</h4>' +
-    '<p style="margin:0 0 0.5rem;font-size:0.88rem;color:var(--text-muted,#64748b);">Same line items and totals as the billing review / QuickFile preview in Step 2, not LAA notional time rates from Section 9.</p>' +
+    '<p style="margin:0 0 0.5rem;font-size:0.88rem;color:var(--on-surface-muted,#64748b);">Same line items and totals as the billing review / QuickFile preview in Step 2, not LAA notional time rates from Section 9.</p>' +
     '<table class="wf-billing-summary-table" style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
     '<thead><tr style="border-bottom:2px solid var(--border-color,#e2e8f0);"><th style="text-align:left;">Item</th><th style="text-align:right;">Amount</th></tr></thead><tbody>' +
     rowHtml.join('') +

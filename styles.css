@@ -19,6 +19,7 @@
   --text-muted: #94a3b8;
   --on-surface: #1e293b;
   --on-surface-muted: #64748b;
+  --muted: var(--on-surface-muted);
   --border: #334155;
   --section-bg: #1e293b;
   --section-text: #93c5fd;
@@ -69,9 +70,10 @@ html.theme-light {
   --bg: #f8fafc;
   --text: #1e293b;
   --text-light: #0f172a;
-  --text-muted: #64748b;
+  --text-muted: #475569;
   --on-surface: #334155;
   --on-surface-muted: #64748b;
+  --muted: var(--on-surface-muted);
   --primary: #1e40af;
   --primary-hover: #1d4ed8;
   --accent-teal: #2563eb;
@@ -224,7 +226,8 @@ html.dark {
   --text-light: #f1f5f9;
   --text-muted: #94a3b8;
   --on-surface: #e2e8f0;
-  --on-surface-muted: #94a3b8;
+  --on-surface-muted: #cbd5e1;
+  --muted: var(--on-surface-muted);
   --border: #334155;
   --section-bg: #0f1f40;
   --section-text: #93c5fd;
@@ -477,6 +480,8 @@ html.dark ::placeholder {
 html:not(.dark) {
   --on-surface: #0f172a;
   --on-surface-muted: #334155;
+  --text-muted: #475569;
+  --muted: var(--on-surface-muted);
 }
 
 /* Inputs outside .form-group: settings, reports, billing toolbar — explicit tokens */
@@ -810,10 +815,10 @@ html.dark .gear-section-label { color: var(--text-muted); }
   flex: 1;
 }
 .app-footer .footer-brand {
-  color: color-mix(in srgb, var(--text-muted) 80%, white 20%);
+  color: color-mix(in srgb, var(--text-muted) 92%, white 8%);
   font-weight: 500;
   font-size: 0.74rem;
-  opacity: 0.9;
+  opacity: 1;
   white-space: nowrap;
 }
 .footer-chip {
@@ -830,7 +835,7 @@ html.dark .gear-section-label { color: var(--text-muted); }
 }
 .footer-meta-chip {
   background: rgba(30, 41, 59, 0.72);
-  color: color-mix(in srgb, var(--text-muted) 88%, white 12%);
+  color: color-mix(in srgb, var(--text-muted) 94%, white 6%);
 }
 /* Install / first-run time next to v1.x.x in the footer (formatUkDateTimeFromIso). */
 .app-version-sub {
@@ -3168,11 +3173,11 @@ html.dark .time-breakdown-override-note strong {
 .billing-readiness-title {
   margin: 0;
   font-size: 1rem;
-  color: var(--text, #0f172a);
+  color: var(--on-surface, #0f172a);
 }
 .billing-readiness-copy {
   margin: 0.35rem 0 0;
-  color: var(--text-muted, #64748b);
+  color: var(--on-surface-muted, #64748b);
   font-size: 0.9rem;
   line-height: 1.45;
   max-width: 62ch;
@@ -3215,7 +3220,7 @@ html.dark .time-breakdown-override-note strong {
 }
 .billing-readiness-summary {
   margin: 0;
-  color: var(--text, #0f172a);
+  color: var(--on-surface, #0f172a);
   font-size: 0.9rem;
   line-height: 1.45;
   flex: 1 1 320px;
@@ -3223,7 +3228,7 @@ html.dark .time-breakdown-override-note strong {
 .billing-readiness-steps {
   margin: 0.85rem 0 0;
   padding-left: 1.2rem;
-  color: var(--text, #0f172a);
+  color: var(--on-surface, #0f172a);
   font-size: 0.88rem;
 }
 .billing-readiness-steps li {
@@ -3234,9 +3239,9 @@ html.dark .time-breakdown-override-note strong {
   color: var(--primary, #1d4ed8);
 }
 .billing-readiness-steps li.is-done {
-  color: var(--text-muted, #64748b);
+  color: var(--on-surface-muted, #64748b);
   text-decoration: line-through;
-  text-decoration-color: color-mix(in srgb, var(--text-muted, #64748b) 55%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--on-surface-muted, #64748b) 55%, transparent);
 }
 .billing-readiness-banner {
   margin: 0.65rem 0 0;
@@ -3246,7 +3251,7 @@ html.dark .time-breakdown-override-note strong {
   border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border, #cbd5e1) 65%);
   font-size: 0.88rem;
   line-height: 1.45;
-  color: var(--text, #0f172a);
+  color: var(--on-surface, #0f172a);
 }
 html.dark .billing-readiness-banner {
   background: color-mix(in srgb, var(--primary) 22%, #0f172a 78%);
@@ -6758,7 +6763,7 @@ html.dark .tpl-mgr-warn {
   flex-wrap: wrap;
   gap: 0.4rem 1.25rem;
   font-size: 0.9rem;
-  color: var(--text, #0f172a);
+  color: var(--on-surface, #0f172a);
 }
 .matter-billing-meta-item {
   display: inline-flex;
@@ -6842,6 +6847,115 @@ html.dark .tpl-mgr-warn {
   color: var(--on-surface-muted, #64748b);
   border: 1px dashed var(--border);
 }
+
+/* Billing screen + workflow — pale global --text is for the navy shell, not white cards */
+html:not(.dark) #view-matter-billing,
+html:not(.dark) #view-matter-billing .wf-inline,
+html:not(.dark) .wf-panel {
+  color: var(--on-surface, #1e293b);
+}
+html:not(.dark) #view-matter-billing .settings-hint,
+html:not(.dark) #view-matter-billing #matter-billing-help {
+  color: #475569;
+}
+html:not(.dark) .wf-card {
+  color: var(--on-surface, #1e293b);
+}
+html:not(.dark) .wf-card .wf-check-item,
+html:not(.dark) .wf-card .wf-finalise-item,
+html:not(.dark) .wf-card .wf-table td,
+html:not(.dark) .wf-card .wf-audit-action,
+html:not(.dark) .wf-card .wf-audit-entry,
+html:not(.dark) .wf-card .wf-charge-row span,
+html:not(.dark) .wf-billing-summary-table td,
+html:not(.dark) .wf-billing-summary-table th {
+  color: #1e293b;
+}
+html:not(.dark) .wf-gen-item {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+html:not(.dark) .wf-gen-label {
+  color: #0f172a;
+}
+html:not(.dark) .wf-gen-desc,
+html:not(.dark) .wf-gen-forms-sub,
+html:not(.dark) .wf-doc-sel-sub,
+html:not(.dark) .wf-doc-sel-group-label,
+html:not(.dark) .wf-doc-sel-size {
+  color: #475569;
+}
+html:not(.dark) .billing-readiness-panel {
+  color: var(--on-surface, #1e293b);
+}
+html:not(.dark) .billing-readiness-list {
+  color: #92400e;
+}
+html:not(.dark) .billing-readiness-banner {
+  color: #0f172a;
+}
+
+/* Form view — readable secondary text on white cards (light mode, navy shell) */
+html:not(.dark) #view-form .field-hint,
+html:not(.dark) #view-form .sbt-hint,
+html:not(.dark) #view-form .context-label,
+html:not(.dark) #view-form .form-group input[readonly] {
+  color: #334155;
+}
+html:not(.dark) #view-form .form-group > label {
+  color: #0f172a;
+}
+
+/* Home view — section titles and meta on light cards */
+html:not(.dark) #view-home .home-section-title {
+  color: #475569;
+}
+html:not(.dark) #view-home .home-item-meta,
+html:not(.dark) #view-home .home-focus-helper,
+html:not(.dark) #view-home .home-recent-empty,
+html:not(.dark) #view-home .home-stats,
+html:not(.dark) #view-home .home-recent-subhead,
+html:not(.dark) #view-home .home-recent-subnote,
+html:not(.dark) #view-home .home-status-strip {
+  color: #334155;
+}
+html.theme-light #view-home .home-section-title {
+  color: #475569;
+}
+
+/* Settings — dark mode hint readability */
+html.dark #view-settings .settings-card .settings-hint,
+html.dark #view-settings #sysstat-licence-line2,
+html.dark #view-settings #sysstat-licence-line3,
+html.dark #view-settings #sysstat-backup-line2,
+html.dark #view-settings #sysstat-update-line2 {
+  color: #cbd5e1;
+}
+
+/* Billing workflow — labels and hints on cards */
+html:not(.dark) #view-matter-billing .wf-label,
+html:not(.dark) #view-matter-billing .wf-screen-sub,
+html:not(.dark) #view-matter-billing .wf-review-confirm-hint,
+html:not(.dark) #view-matter-billing .wf-charge-row label,
+html:not(.dark) #view-matter-billing .wf-table th,
+html:not(.dark) #view-matter-billing .wf-summary-label,
+html:not(.dark) .wf-panel .wf-label,
+html:not(.dark) .wf-panel .wf-screen-sub,
+html:not(.dark) .wf-panel .wf-review-confirm-hint,
+html:not(.dark) .wf-panel .wf-charge-row label,
+html:not(.dark) .wf-panel .wf-table th,
+html:not(.dark) .wf-panel .wf-summary-label {
+  color: #475569;
+}
+html.dark .wf-card .wf-label,
+html.dark .wf-card .wf-screen-sub,
+html.dark .wf-card .wf-review-confirm-hint,
+html.dark .wf-card .wf-charge-row label,
+html.dark .wf-card .wf-table th,
+html.dark .wf-card .wf-summary-label {
+  color: #cbd5e1;
+}
+
 html.dark .matter-billing-header-card {
   background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   border-color: #334155;
@@ -6903,7 +7017,7 @@ html.dark .wf-inline .wf-panel { border-color: #334155; }
 }
 .wf-summary-item { display: flex; gap: 0.3rem; align-items: baseline; }
 .wf-summary-label { color: var(--muted, #64748b); font-weight: 500; }
-.wf-summary-value { color: var(--text, #0f172a); font-weight: 600; }
+.wf-summary-value { color: var(--on-surface, #0f172a); font-weight: 600; }
 
 /* Body & footer */
 .wf-body {
@@ -6935,11 +7049,11 @@ html.dark .wf-inline .wf-panel { border-color: #334155; }
 .wf-completion-row--ok { background: #ecfdf5; border-color: #6ee7b7; }
 .wf-completion-row--pending { background: #fffbeb; border-color: #fcd34d; }
 .wf-completion-icon { font-weight: 700; line-height: 1.2; }
-.wf-completion-label { font-weight: 600; color: var(--text, #0f172a); grid-column: 2; }
+.wf-completion-label { font-weight: 600; color: var(--on-surface, #0f172a); grid-column: 2; }
 .wf-completion-hint { grid-column: 1 / -1; font-size: 0.82rem; color: var(--muted, #64748b); margin: 0; padding-left: 1.75rem; }
 .wf-completion-save-note .settings-hint { max-width: 62ch; }
 
-.form-panel-billing-lines { font-size: 0.82rem; line-height: 1.45; color: var(--text, #0f172a); }
+.form-panel-billing-lines { font-size: 0.82rem; line-height: 1.45; color: var(--on-surface, #0f172a); }
 .form-panel-billing-row { margin: 0.15rem 0; }
 .form-panel-billing-row strong { font-weight: 600; }
 
@@ -6954,7 +7068,7 @@ html.dark .wf-inline .wf-panel { border-color: #334155; }
   border: 1px solid var(--border);
   background: var(--surface-alt, #f8fafc);
 }
-.wf-callout p { margin: 0 0 0.5rem; font-size: 0.9rem; line-height: 1.4; color: var(--text); }
+.wf-callout p { margin: 0 0 0.5rem; font-size: 0.9rem; line-height: 1.4; color: var(--on-surface, #1e293b); }
 .wf-callout p:last-child { margin-bottom: 0; }
 .wf-callout-warn {
   border-color: #f59e0b;
@@ -7021,7 +7135,7 @@ html.dark .wf-callout-warn p { color: #fde68a; }
 .wf-detail-row { display: flex; justify-content: space-between; padding: 0.3rem 0; font-size: 0.85rem; border-bottom: 1px solid var(--border, #f1f5f9); }
 .wf-detail-row:last-child { border-bottom: none; }
 .wf-label { color: var(--muted, #64748b); font-weight: 500; }
-.wf-value { color: var(--text, #0f172a); font-weight: 600; }
+.wf-value { color: var(--on-surface, #0f172a); font-weight: 600; }
 
 .wf-charges-form { display: flex; flex-direction: column; gap: 0.4rem; }
 .wf-charge-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
@@ -7030,7 +7144,7 @@ html.dark .wf-callout-warn p { color: #fde68a; }
 
 .wf-line-preview { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid var(--border, #e2e8f0); }
 .wf-line-label { font-size: 0.75rem; color: var(--muted, #94a3b8); margin: 0.3rem 0 0; font-weight: 600; }
-.wf-line-text { font-size: 0.82rem; margin: 0 0 0.2rem; color: var(--text, #334155); }
+.wf-line-text { font-size: 0.82rem; margin: 0 0 0.2rem; color: var(--on-surface, #334155); }
 
 /* Preview card */
 .wf-preview-card { background: #f0fdf4; border-color: #86efac; }
@@ -7054,7 +7168,7 @@ html.dark .wf-callout-warn p { color: #fde68a; }
 
 /* Linked files */
 .wf-linked-list { list-style: none; padding: 0; margin: 0; }
-.wf-linked-file { padding: 0.3rem 0; font-size: 0.82rem; color: var(--text, #334155); border-bottom: 1px solid var(--border, #f1f5f9); }
+.wf-linked-file { padding: 0.3rem 0; font-size: 0.82rem; color: var(--on-surface, #334155); border-bottom: 1px solid var(--border, #f1f5f9); }
 .wf-linked-file:last-child { border-bottom: none; }
 
 /* Status badges */
@@ -7068,7 +7182,17 @@ html.dark .wf-callout-warn p { color: #fde68a; }
 .wf-status--invoiced { background: #dcfce7; color: #166534; }
 .wf-status--sent { background: #e0e7ff; color: #3730a3; }
 .wf-status--archived { background: #f1f5f9; color: #475569; }
-.wf-invoice-num { font-size: 0.82rem; font-weight: 600; color: var(--text, #334155); margin-left: 0.4rem; }
+.wf-invoice-num { font-size: 0.82rem; font-weight: 600; color: var(--on-surface, #334155); margin-left: 0.4rem; }
+
+.wf-billing-summary-table th,
+.wf-billing-summary-table td {
+  color: var(--on-surface, #1e293b);
+  padding: 0.35rem 0;
+}
+.wf-billing-summary-table th {
+  color: var(--on-surface-muted, #475569);
+  font-weight: 600;
+}
 
 /* Audit */
 .wf-audit-details { margin-top: 0.75rem; font-size: 0.82rem; }
@@ -7160,7 +7284,7 @@ html.dark .wf-empty-state { color: #64748b; }
 .wf-gen-item-header { display: flex; align-items: center; gap: 0.6rem; flex: 1; min-width: 0; }
 .wf-gen-icon { font-size: 1.3rem; flex-shrink: 0; }
 .wf-gen-info { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
-.wf-gen-label { font-size: 0.88rem; font-weight: 600; color: var(--text, #1e293b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wf-gen-label { font-size: 0.88rem; font-weight: 600; color: var(--on-surface, #1e293b); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wf-gen-desc { font-size: 0.76rem; color: var(--text-muted, #64748b); }
 .wf-gen-item-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; margin-left: 0.75rem; }
 .wf-gen-status { font-size: 0.76rem; padding: 0.15rem 0.5rem; border-radius: 6px; white-space: nowrap; }
@@ -7184,7 +7308,7 @@ html.dark .wf-empty-state { color: #64748b; }
 .wf-doc-sel-item:hover { background: var(--section-bg, #f1f5f9); }
 .wf-doc-sel-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary, #3b82f6); flex-shrink: 0; cursor: pointer; }
 .wf-doc-sel-icon { font-size: 1.1rem; flex-shrink: 0; }
-.wf-doc-sel-name { flex: 1; font-size: 0.85rem; font-weight: 500; color: var(--text, #1e293b); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wf-doc-sel-name { flex: 1; font-size: 0.85rem; font-weight: 500; color: var(--on-surface, #1e293b); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wf-doc-sel-size { font-size: 0.76rem; color: var(--text-muted, #64748b); flex-shrink: 0; }
 .wf-doc-sel-summary {
   margin-top: 0.5rem; padding: 0.4rem 0.6rem; border-radius: 8px;
@@ -7235,8 +7359,7 @@ html.dark .wf-doc-sel-group-label { color: #94a3b8; }
 }
 .wf-action-guide-item--done {
   color: #059669;
-  text-decoration: line-through;
-  opacity: 0.7;
+  font-weight: 600;
 }
 
 /* Review confirmation unlock status */

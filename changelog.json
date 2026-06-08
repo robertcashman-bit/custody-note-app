@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.31",
+      "version": "1.9.32",
       "date": "2026-06-08",
       "latest": true,
+      "changes": [
+        "Improved text contrast across Home, Records, Settings, the attendance form, and billing workflow in light and dark mode",
+        "Billing: fixed duplicate-invoice error toast — no more developer messages; clear guidance to Continue to Review & complete",
+        "Billing Step 2 guide when invoice already exists is easier to read (no faded strikethrough text)"
+      ]
+    },
+    {
+      "version": "1.9.31",
+      "date": "2026-06-08",
+      "latest": false,
       "changes": [
         "Billing: open Billing from the bottom nav without a record open — choose a finalised matter (auto-selects if only one)",
         "Records list: Bill button on each row — enabled when finalised or completed, greyed out until then",

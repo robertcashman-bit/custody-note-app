@@ -150,6 +150,36 @@ function getInvoiceStatusClass(status) {
   }
 }
 
+function isAlreadyInvoicedError(reason, code) {
+  if (code === 'ALREADY_INVOICED') return true;
+  return /already has invoice/i.test(String(reason || ''));
+}
+
+function formatBillingCreateFailureToast(reason, code) {
+  if (isAlreadyInvoicedError(reason, code)) {
+    return 'This record already has an invoice. Click Continue to Review & complete to move on.';
+  }
+  var msg = String(reason || 'Unknown error');
+  var looksLikeConnection = /not configured|auth|credential|401|403|HTTP 5\d\d|timeout|ENOTFOUND|ECONN|network|parse error|empty response/i.test(msg);
+  if (looksLikeConnection) {
+    return 'Send to QuickFile failed: ' + msg + '. Check Settings \u2192 QuickFile and click "Test QuickFile connection", then press Send again.';
+  }
+  return 'Send to QuickFile failed: ' + msg + '. Nothing was sent \u2014 fix the issue above and press "Send Bill to QuickFile" again.';
+}
+
+function formatLegacyBillingCreateFailureToast(reason, code) {
+  if (isAlreadyInvoicedError(reason, code)) {
+    return 'This record already has an invoice. Use Continue to Review & complete in the Finish matter workflow to proceed.';
+  }
+  return 'Invoice creation failed: ' + String(reason || 'Unknown error');
+}
+
+if (typeof window !== 'undefined') {
+  window.isAlreadyInvoicedError = isAlreadyInvoicedError;
+  window.formatBillingCreateFailureToast = formatBillingCreateFailureToast;
+  window.formatLegacyBillingCreateFailureToast = formatLegacyBillingCreateFailureToast;
+}
+
 /**
  * Same totals as Step 2 (QuickFile preview): priority (1) snapshot from when
  * the user left the billing step, (2) live wf-* inputs if still on that step,
