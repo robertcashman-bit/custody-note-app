@@ -19,8 +19,8 @@ const base = {
 };
 
 describe('officerEmailDrafts — template bodies', () => {
-  it('exports 9 template types', () => {
-    assert.strictEqual(TEMPLATE_TYPES.length, 9);
+  it('exports 16 template types', () => {
+    assert.strictEqual(TEMPLATE_TYPES.length, 16);
   });
 
   it('disclosure_confirm_attendance mentions disclosure', () => {
@@ -63,11 +63,11 @@ describe('officerEmailDrafts — template bodies', () => {
     assert.ok(b.includes('The attendance is listed for 2025-01-01 at 10:00'), b);
   });
 
-  it('bail_details_request has four shape variants', () => {
+  it('bail_details_request has four shape variants and mentions return station', () => {
     const none = generateOfficerEmailBody(
       Object.assign({}, base, { templateType: 'bail_details_request', bailReturnDate: '', bailConditions: '' })
     );
-    assert.ok(none.includes('bail return date and time'), none.toLowerCase());
+    assert.ok(none.includes('police station(s) for return'), none.toLowerCase());
 
     const both = generateOfficerEmailBody(
       Object.assign({}, base, {
@@ -88,6 +88,58 @@ describe('officerEmailDrafts — template bodies', () => {
       Object.assign({}, base, { templateType: 'bail_details_request', bailReturnDate: '', bailConditions: 'Report weekly' })
     );
     assert.ok(condOnly.includes('Report weekly'), condOnly);
+  });
+
+  it('chase_bail_details_follow_up references prior email', () => {
+    const b = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'chase_bail_details_follow_up', bailReturnDate: '', bailConditions: '' })
+    );
+    assert.ok(b.includes('emailed previously'), b);
+    assert.ok(b.includes('police station(s) for return'), b.toLowerCase());
+  });
+
+  it('custody_record_detention_log_request asks for detention log', () => {
+    const b = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'custody_record_detention_log_request' })
+    );
+    assert.ok(b.includes('detention log'), b.toLowerCase());
+    assert.ok(b.includes('Dear DDO'), b);
+  });
+
+  it('chase_custody_log_follow_up references prior request', () => {
+    const b = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'chase_custody_log_follow_up' })
+    );
+    assert.ok(b.includes('requested a copy of the custody record previously'), b);
+  });
+
+  it('rui_details_request does not ask for bail conditions', () => {
+    const b = generateOfficerEmailBody(Object.assign({}, base, { templateType: 'rui_details_request' }));
+    assert.ok(b.includes('released under investigation'), b.toLowerCase());
+    assert.ok(!b.includes('bail conditions'), b.toLowerCase());
+  });
+
+  it('confirm_outcome_after_attendance asks for outcome options', () => {
+    const b = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'confirm_outcome_after_attendance', attendanceTime: '14:30' })
+    );
+    assert.ok(b.includes('I attended'), b);
+    assert.ok(b.includes('released on police bail'), b.toLowerCase());
+  });
+
+  it('chase_disclosure_follow_up references prior disclosure request', () => {
+    const b = generateOfficerEmailBody(Object.assign({}, base, { templateType: 'chase_disclosure_follow_up' }));
+    assert.ok(b.includes('requested disclosure previously'), b);
+  });
+
+  it('request_update_after_delay mentions release basis', () => {
+    const b = generateOfficerEmailBody(Object.assign({}, base, { templateType: 'request_update_after_delay' }));
+    assert.ok(b.includes('released under investigation'), b.toLowerCase());
+  });
+
+  it('matter_stood_down mentions stand down', () => {
+    const b = generateOfficerEmailBody(Object.assign({}, base, { templateType: 'matter_stood_down' }));
+    assert.ok(b.includes('stood down'), b.toLowerCase());
   });
 
   it('free_text_email contains placeholder', () => {
