@@ -297,12 +297,16 @@ test('user can drive a finalised matter through Finish matter > billing > review
 test('Records list Bill button opens matter billing without opening the form', async () => {
   test.setTimeout(120_000);
 
-  /* Previous test may leave billing workflow / overlays open — reset via showView. */
+  /* Previous test may leave billing workflow open — tear down overlay and navigate directly. */
   await page.evaluate(() => {
     const w = window as unknown as { showView?: (name: string) => void };
-    if (typeof w.showView === 'function') w.showView('home');
+    const overlay = document.getElementById('workflow-overlay');
+    if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    const inline = document.querySelector('#matter-billing-stage #workflow-overlay');
+    if (inline && inline.parentNode) inline.parentNode.removeChild(inline);
+    if (typeof w.showView === 'function') w.showView('list');
   });
-  await expect(page.locator('#view-home')).toHaveClass(/active/, { timeout: 15_000 });
+  await expect(page.locator('#view-list')).toHaveClass(/active/, { timeout: 15_000 });
   await dismissFirstLaunchModalIfPresent(page);
 
   const firmId = await page.evaluate(async (firmName) => {
@@ -342,9 +346,11 @@ test('Records list Bill button opens matter billing without opening the form', a
   );
   expect(attendanceId).toBeTruthy();
 
-  await page.locator('.bottom-nav-btn[data-nav="home"]').click();
-  await page.waitForTimeout(250);
-  await page.locator('.bottom-nav-btn[data-nav="list"]').click();
+  await page.evaluate(() => {
+    const w = window as unknown as { showView?: (name: string) => void; refreshList?: () => void };
+    if (typeof w.showView === 'function') w.showView('list');
+    if (typeof w.refreshList === 'function') w.refreshList();
+  });
   await expect(page.locator('#view-list')).toHaveClass(/active/);
 
   const billBtn = page
