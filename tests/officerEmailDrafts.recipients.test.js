@@ -9,8 +9,10 @@ describe('officerEmailDrafts — recipient defaulting', () => {
     assert.strictEqual(getRecipientNameOrDefault('chase_disclosure', ''), 'Officer');
   });
 
-  it('uses DDO for custody_log_request when blank', () => {
+  it('uses DDO for custody templates when blank', () => {
     assert.strictEqual(getRecipientNameOrDefault('custody_log_request', ''), 'DDO');
+    assert.strictEqual(getRecipientNameOrDefault('custody_record_detention_log_request', ''), 'DDO');
+    assert.strictEqual(getRecipientNameOrDefault('chase_custody_log_follow_up', ''), 'DDO');
   });
 
   it('preserves explicit name', () => {

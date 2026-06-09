@@ -27,4 +27,11 @@ describe('officerEmailDrafts — body', () => {
     assert.ok(b.includes('Please send initial disclosure to me at me@firm.example.'), b);
     assert.ok(!b.includes('by reply to this email'), b);
   });
+
+  it('chase_disclosure appends disclosure destination', () => {
+    const b = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'chase_disclosure', userEmailAddress: 'me@firm.example' })
+    );
+    assert.ok(b.includes('Please send initial disclosure to me at me@firm.example.'), b);
+  });
 });
