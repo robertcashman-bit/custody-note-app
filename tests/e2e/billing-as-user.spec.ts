@@ -295,6 +295,16 @@ test('user can drive a finalised matter through Finish matter > billing > review
 });
 
 test('Records list Bill button opens matter billing without opening the form', async () => {
+  test.setTimeout(120_000);
+
+  /* Previous test may leave billing workflow / overlays open — reset via showView. */
+  await page.evaluate(() => {
+    const w = window as unknown as { showView?: (name: string) => void };
+    if (typeof w.showView === 'function') w.showView('home');
+  });
+  await expect(page.locator('#view-home')).toHaveClass(/active/, { timeout: 15_000 });
+  await dismissFirstLaunchModalIfPresent(page);
+
   const firmId = await page.evaluate(async (firmName) => {
     const w = window as unknown as {
       api: { firmSave: (f: Record<string, unknown>) => Promise<number | { id: number }> };

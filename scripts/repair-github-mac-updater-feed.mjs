@@ -13,8 +13,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
-const OWNER = 'robertcashman-bit';
-const REPO = 'custody-note-app';
+import { fetchReleaseByTag } from './github-release-api.mjs';
 
 function parseArgs(argv) {
   let tag = null;
@@ -61,12 +60,7 @@ async function main() {
     'User-Agent': 'CustodyNote-RepairMacFeed',
   };
 
-  const releaseRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${tag}`, { headers });
-  const release = await releaseRes.json();
-  if (!release.id) {
-    console.error('[repair-mac-feed] Release not found:', release.message || tag);
-    process.exit(1);
-  }
+  const release = await fetchReleaseByTag(tag, token);
 
   const macAssetNames = (release.assets || [])
     .map((a) => a.name)
@@ -78,10 +72,11 @@ async function main() {
 
   macAssetNames.sort();
   const fileEntries = [];
+  const dlHeaders = { ...headers, Accept: 'application/octet-stream' };
   for (const name of macAssetNames) {
     const asset = release.assets.find((a) => a.name === name);
     console.log(`[repair-mac-feed] hashing ${name}…`);
-    const res = await fetch(asset.browser_download_url, { headers });
+    const res = await fetch(asset.url, { headers: dlHeaders, redirect: 'follow' });
     if (!res.ok) {
       console.error(`[repair-mac-feed] download failed ${name}: HTTP ${res.status}`);
       process.exit(1);
@@ -97,14 +92,14 @@ async function main() {
   const existingFeed = (release.assets || []).find((a) => a.name === 'latest-mac.yml');
   let releaseDate = new Date().toISOString();
   if (existingFeed) {
-    const oldRes = await fetch(existingFeed.browser_download_url, { headers });
+    const oldRes = await fetch(existingFeed.url, { headers: dlHeaders, redirect: 'follow' });
     if (oldRes.ok) {
       const oldText = await oldRes.text();
       const m = oldText.match(/releaseDate:\s*['"]?([^'"\n]+)/);
       if (m) releaseDate = m[1].trim();
     }
     console.log(`[repair-mac-feed] deleting stale latest-mac.yml (asset id ${existingFeed.id})…`);
-    const delRes = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/assets/${existingFeed.id}`, {
+    const delRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/assets/${existingFeed.id}`, {
       method: 'DELETE',
       headers,
     });
@@ -115,7 +110,7 @@ async function main() {
   }
 
   const ymlBody = buildLatestMacYml(version, fileEntries, releaseDate);
-  const uploadUrl = `https://uploads.github.com/repos/${OWNER}/${REPO}/releases/${release.id}/assets?name=${encodeURIComponent('latest-mac.yml')}`;
+  const uploadUrl = `https://uploads.github.com/repos/robertcashman-bit/custody-note-app/releases/${release.id}/assets?name=${encodeURIComponent('latest-mac.yml')}`;
   const upRes = await fetch(uploadUrl, {
     method: 'POST',
     headers: {

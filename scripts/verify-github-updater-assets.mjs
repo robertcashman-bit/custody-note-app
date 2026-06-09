@@ -75,23 +75,39 @@ function parseYamlFeed(text) {
   return files;
 }
 
-function assetUrl(release, fileName) {
-  const asset = (release.assets || []).find((a) => a.name === fileName);
-  if (!asset) return null;
-  return asset.browser_download_url;
+function findReleaseAsset(release, fileName) {
+  return (release.assets || []).find((a) => a.name === fileName) || null;
+}
+
+async function downloadReleaseAsset(asset, headers) {
+  if (!asset) return { error: 'asset missing' };
+  const dlHeaders = Object.assign({}, headers, { Accept: 'application/octet-stream' });
+  // Draft release assets 404 on browser_download_url — use the GitHub API asset URL.
+  const res = await fetch(asset.url, { headers: dlHeaders, redirect: 'follow' });
+  if (res.ok) {
+    return { buf: Buffer.from(await res.arrayBuffer()) };
+  }
+  if (asset.browser_download_url) {
+    const fallback = await fetch(asset.browser_download_url, { headers: dlHeaders, redirect: 'follow' });
+    if (fallback.ok) {
+      return { buf: Buffer.from(await fallback.arrayBuffer()) };
+    }
+    return { error: `download failed: HTTP ${fallback.status}` };
+  }
+  return { error: `download failed: HTTP ${res.status}` };
 }
 
 async function verifyFeed({ tag, feedName, platformLabel, release, headers }) {
-  const feedUrl = assetUrl(release, feedName);
-  if (!feedUrl) {
+  const feedAsset = findReleaseAsset(release, feedName);
+  if (!feedAsset) {
     return [{ ok: false, file: feedName, error: 'feed missing on release' }];
   }
 
-  const feedRes = await fetch(feedUrl, { headers });
-  if (!feedRes.ok) {
-    return [{ ok: false, file: feedName, error: `feed download failed: HTTP ${feedRes.status}` }];
+  const feedDl = await downloadReleaseAsset(feedAsset, headers);
+  if (feedDl.error || !feedDl.buf) {
+    return [{ ok: false, file: feedName, error: feedDl.error || 'feed download failed' }];
   }
-  const feedText = await feedRes.text();
+  const feedText = feedDl.buf.toString('utf8');
   const entries = parseYamlFeed(feedText);
   const results = [];
 
@@ -101,18 +117,17 @@ async function verifyFeed({ tag, feedName, platformLabel, release, headers }) {
       results.push({ ok: false, file: fileName || '(unknown)', error: 'missing url or sha512 in feed' });
       continue;
     }
-    const downloadUrl = assetUrl(release, fileName);
-    if (!downloadUrl) {
+    const binAsset = findReleaseAsset(release, fileName);
+    if (!binAsset) {
       results.push({ ok: false, file: fileName, error: 'asset missing on release' });
       continue;
     }
-    const binRes = await fetch(downloadUrl, { headers });
-    if (!binRes.ok) {
-      results.push({ ok: false, file: fileName, error: `download failed: HTTP ${binRes.status}` });
+    const binDl = await downloadReleaseAsset(binAsset, headers);
+    if (binDl.error || !binDl.buf) {
+      results.push({ ok: false, file: fileName, error: binDl.error || 'download failed' });
       continue;
     }
-    const buf = Buffer.from(await binRes.arrayBuffer());
-    const actual = sha512Base64(buf);
+    const actual = sha512Base64(binDl.buf);
     const expected = entry.sha512;
     if (actual !== expected) {
       results.push({
@@ -141,6 +156,9 @@ async function main() {
     'X-GitHub-Api-Version': '2022-11-28',
   };
   if (token) headers.Authorization = `Bearer ${token}`;
+  else {
+    console.warn('[verify-updater] No GH_TOKEN — draft release assets may not download.');
+  }
 
   console.log(`[verify-updater] Checking ${tag} (platform=${platform})…`);
   const release = await fetchReleaseByTag(tag, token);
