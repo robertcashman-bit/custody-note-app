@@ -8,6 +8,7 @@ import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { fetchReleaseByTag } from './github-release-api.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -37,16 +38,15 @@ if (!token) {
 
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const tag = `v${version}`;
-const headers = {
-  Accept: 'application/vnd.github+json',
-  Authorization: `Bearer ${token}`,
-  'X-GitHub-Api-Version': '2022-11-28',
-};
 
-const res = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/tags/${tag}`, { headers });
-const release = await res.json();
-const names = new Set((release.assets || []).map((a) => a.name));
-const needMac = !names.has('latest-mac.yml') || !names.has(`Custody-Note-${version}-arm64.dmg`);
+let needMac = true;
+try {
+  const release = await fetchReleaseByTag(tag, token);
+  const names = new Set((release.assets || []).map((a) => a.name));
+  needMac = !names.has('latest-mac.yml') || !names.has(`Custody-Note-${version}-arm64.dmg`);
+} catch (err) {
+  console.warn(`[ensure-mac-release] Could not read ${tag} yet (${err.message || err}) — will try complete-mac-release.`);
+}
 
 if (needMac) {
   console.log(`[ensure-mac-release] Mac assets missing on ${tag} — running complete-mac-release…`);

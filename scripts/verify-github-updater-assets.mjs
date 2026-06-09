@@ -11,11 +11,10 @@ import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { fetchReleaseByTag } from './github-release-api.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
-const OWNER = 'robertcashman-bit';
-const REPO = 'custody-note-app';
 
 function parseArgs(argv) {
   const opts = { tag: null, platform: 'both' };
@@ -74,14 +73,6 @@ function parseYamlFeed(text) {
   }
   if (current && current.url) files.push(current);
   return files;
-}
-
-async function fetchRelease(tag, headers) {
-  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/${tag}`, { headers });
-  if (!res.ok) {
-    throw new Error(`Release ${tag} not found: HTTP ${res.status} ${await res.text()}`);
-  }
-  return res.json();
 }
 
 function assetUrl(release, fileName) {
@@ -152,7 +143,7 @@ async function main() {
   if (token) headers.Authorization = `Bearer ${token}`;
 
   console.log(`[verify-updater] Checking ${tag} (platform=${platform})…`);
-  const release = await fetchRelease(tag, headers);
+  const release = await fetchReleaseByTag(tag, token);
   const allResults = [];
 
   if (platform === 'both' || platform === 'mac') {
