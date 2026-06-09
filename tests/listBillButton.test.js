@@ -49,6 +49,15 @@ describe('list Bill button wiring', () => {
     assert.match(listJsSource, /billAttendanceFromList/);
   });
 
+  it('app.js refreshList renders Bill button with data-action bill', () => {
+    const refreshBody = extractFunction(appJsSource, 'refreshList');
+    assert.ok(refreshBody, 'refreshList must exist in app.js');
+    assert.match(refreshBody, /data-action="bill"/);
+    assert.match(refreshBody, /bill-btn/);
+    assert.match(refreshBody, /isListBillEnabled/);
+    assert.match(refreshBody, /amend-btn/);
+  });
+
   it('app.js exposes billAttendanceFromList and matter billing picker', () => {
     assert.match(appJsSource, /window\.billAttendanceFromList\s*=\s*billAttendanceFromList/);
     assert.match(appJsSource, /billableAttendances/);

@@ -13,6 +13,7 @@ import { execSync, spawnSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { fetchReleaseByTag, waitForReleaseByTag } from './github-release-api.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -52,9 +53,8 @@ function resolveGitHubToken() {
   return null;
 }
 
-function publishReleaseIfReady(version, token) {
+async function publishReleaseIfReady(version, token, opts = {}) {
   const tag = `v${version}`;
-  const repo = 'robertcashman-bit/custody-note-app';
   const required = [
     `Custody-Note-Setup-${version}.exe`,
     `Custody-Note-Setup-${version}.exe.blockmap`,
@@ -71,32 +71,39 @@ function publishReleaseIfReady(version, token) {
     'X-GitHub-Api-Version': '2022-11-28',
     'User-Agent': 'CustodyNote-CompleteMacRelease',
   };
-  return fetch(`https://api.github.com/repos/${repo}/releases/tags/${tag}`, { headers })
-    .then((r) => r.json())
-    .then((release) => {
-      if (!release || !release.id) {
-        throw new Error(`Release ${tag} not found: ${release.message || 'unknown'}`);
-      }
-      const names = new Set((release.assets || []).map((a) => a.name));
-      const missing = required.filter((n) => !names.has(n));
-      if (missing.length) {
-        console.warn(`[complete-mac-release] Release ${tag} still missing: ${missing.join(', ')}`);
-        console.warn('[complete-mac-release] Mac assets uploaded; Windows assets may still be uploading via CI.');
-        return;
-      }
-      if (release.draft) {
-        return fetch(`https://api.github.com/repos/${repo}/releases/${release.id}`, {
-          method: 'PATCH',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ draft: false, make_latest: true }),
-        }).then((r) => {
-          if (!r.ok) throw new Error(`Failed to publish ${tag}: HTTP ${r.status}`);
-          console.log(`[complete-mac-release] Published ${tag} (draft → live).`);
-        });
-      } else {
-        console.log(`[complete-mac-release] ${tag} is already live.`);
-      }
+
+  let release;
+  try {
+    release = opts.waitForRelease
+      ? await waitForReleaseByTag(tag, token, { maxAttempts: opts.maxAttempts || 12, delayMs: 5000 })
+      : await fetchReleaseByTag(tag, token);
+  } catch (err) {
+    if (opts.waitForRelease) {
+      console.warn(`[complete-mac-release] Release ${tag} not ready yet: ${err.message || err}`);
+      return;
+    }
+    throw err;
+  }
+
+  const names = new Set((release.assets || []).map((a) => a.name));
+  const missing = required.filter((n) => !names.has(n));
+  if (missing.length) {
+    console.warn(`[complete-mac-release] Release ${tag} still missing: ${missing.join(', ')}`);
+    console.warn('[complete-mac-release] Mac assets uploaded; Windows assets may still be uploading via CI.');
+    return;
+  }
+
+  if (release.draft) {
+    const r = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/${release.id}`, {
+      method: 'PATCH',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ draft: false, make_latest: true }),
     });
+    if (!r.ok) throw new Error(`Failed to publish ${tag}: HTTP ${r.status}`);
+    console.log(`[complete-mac-release] Published ${tag} (draft → live).`);
+  } else {
+    console.log(`[complete-mac-release] ${tag} is already live.`);
+  }
 }
 
 if (process.platform !== 'darwin') {
@@ -157,11 +164,12 @@ if (checkedOutTag && branch !== 'HEAD') {
   run(`git checkout ${branch}`);
 }
 
-console.log('[complete-mac-release] Checking whether release can be published…');
-await publishReleaseIfReady(version, token);
+console.log('[complete-mac-release] Waiting for GitHub draft release (CI may still be creating it)…');
+await publishReleaseIfReady(version, token, { waitForRelease: true });
 
 console.log('[complete-mac-release] Uploading Mac assets if missing on GitHub…');
 run('node scripts/upload-mac-release-assets.mjs');
 
+console.log('[complete-mac-release] Checking whether release can be published…');
 await publishReleaseIfReady(version, token);
 console.log('[complete-mac-release] Done.');
