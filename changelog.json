@@ -1,12 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.33",
+      "version": "1.9.34",
       "date": "2026-06-09",
       "latest": true,
       "changes": [
         "Officer Emails: seven new templates — chase police bail details, chase disclosure/custody record follow-ups, confirm outcome after attendance, custody record and detention log request, RUI confirmation, and matter stood down",
         "Officer Emails: police bail and update-after-delay templates now ask for return police station(s); urgent disclosure includes disclosure destination"
+      ]
+    },
+    {
+      "version": "1.9.33",
+      "date": "2026-06-09",
+      "latest": false,
+      "changes": [
+        "Release metadata only (superseded by v1.9.34)"
       ]
     },
     {
