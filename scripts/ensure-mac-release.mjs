@@ -50,7 +50,22 @@ try {
 
 if (needMac) {
   console.log(`[ensure-mac-release] Mac assets missing on ${tag} — running complete-mac-release…`);
-  execSync('node scripts/complete-mac-release.mjs', { cwd: root, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token, GITHUB_TOKEN: token } });
+  try {
+    execSync('node scripts/complete-mac-release.mjs', { cwd: root, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token, GITHUB_TOKEN: token } });
+  } catch (err) {
+    try {
+      const release = await fetchReleaseByTag(tag, token);
+      const names = new Set((release.assets || []).map((a) => a.name));
+      const hasMac = names.has('latest-mac.yml') && names.has(`Custody-Note-${version}-arm64.dmg`);
+      if (hasMac) {
+        console.warn('[ensure-mac-release] complete-mac-release failed but Mac assets are on GitHub — continuing.');
+      } else {
+        throw err;
+      }
+    } catch (checkErr) {
+      throw err;
+    }
+  }
 } else if (existsSync(join(root, 'dist', 'latest-mac.yml'))) {
   console.log(`[ensure-mac-release] Mac assets present on ${tag}; uploading any local gaps…`);
   execSync('node scripts/upload-mac-release-assets.mjs', { cwd: root, stdio: 'inherit', env: { ...process.env, GH_TOKEN: token, GITHUB_TOKEN: token } });
