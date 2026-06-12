@@ -6346,7 +6346,9 @@ var REQUIRED_FIELD_KEYS = [
               '<span class="badge ' + (r.status || 'draft') + '">' + (r.status || 'draft') + '</span>' +
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
-              (function () {
+              (typeof window._renderListBillButtonHtml === 'function'
+                ? window._renderListBillButtonHtml(r)
+                : (function () {
                 var billOn = isListBillEnabled(r);
                 var billTitle = billOn
                   ? 'Open Finish matter billing for this record'
@@ -6354,7 +6356,7 @@ var REQUIRED_FIELD_KEYS = [
                     ? 'Archived records cannot be billed from the list'
                     : 'Finalise the attendance note before billing');
                 return '<button type="button" class="btn-list-action bill-btn' + (billOn ? '' : ' bill-btn--disabled') + '" data-action="bill" data-id="' + esc(String(r.id)) + '"' + (billOn ? '' : ' disabled') + ' title="' + esc(billTitle) + '">Bill</button>';
-              })() +
+              })()) +
               '<button type="button" class="btn-list-action amend-btn" data-action="amend" data-id="' + esc(String(r.id)) + '" title="Open record to edit (amend)">Edit</button>' +
               '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for another client (same session)">Duplicate</button>' +
               '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
@@ -6367,6 +6369,7 @@ var REQUIRED_FIELD_KEYS = [
       renderListPagination(filtered.length);
     }).catch(function(e) { showToast('Failed to refresh list', 'error'); console.error('[refreshList]', e); });
   }
+  window.refreshList = refreshList;
 
   function renderListPagination(total) {
     const pag = document.getElementById('list-pagination');

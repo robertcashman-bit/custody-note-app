@@ -170,10 +170,14 @@ jobs:
             done
             if [ -z "$missing" ]; then
               echo "Verifying updater asset checksums before publish…"
-              node scripts/verify-github-updater-assets.mjs --tag "$TAG" || {
-                echo "Checksum verification failed for $TAG — release stays draft."
-                exit 1
-              }
+              if ! node scripts/verify-github-updater-assets.mjs --tag "$TAG"; then
+                echo "Checksum verification failed — attempting Mac updater feed repair…"
+                node scripts/repair-github-mac-updater-feed.mjs --tag "$TAG" || true
+                node scripts/verify-github-updater-assets.mjs --tag "$TAG" || {
+                  echo "Checksum verification still failed for $TAG — release stays draft."
+                  exit 1
+                }
+              fi
               is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
               if [ "$is_draft" = "true" ]; then
                 gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
