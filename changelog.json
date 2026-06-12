@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.35",
+      "version": "1.9.36",
       "date": "2026-06-09",
       "latest": true,
+      "changes": [
+        "Officer Emails: prefill OIC name and email (and disclosure officer email when applicable) from the custody note",
+        "Officer Emails: email sign-off uses your fee earner name from Settings instead of a hardcoded name",
+        "Records list: removed duplicate list rendering path — app.js refreshList is the single authoritative implementation",
+        "Release pipeline: auto-repair Mac updater feed on checksum failure during publish"
+      ]
+    },
+    {
+      "version": "1.9.35",
+      "date": "2026-06-09",
+      "latest": false,
       "changes": [
         "Records list: Bill button restored on the main list — opens Finish matter billing without opening the form",
         "Release pipeline: fixed false CI failures when publishing draft GitHub releases (checksum verify and Mac deploy step)"
