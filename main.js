@@ -8295,6 +8295,16 @@ function _officerEmailExtraDomainsFromSettings() {
   }
 }
 
+function _officerEmailSignOffFromSettings() {
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key = 'feeEarnerNameDefault'");
+    if (!row || row.value == null || row.value === '') return '';
+    return String(row.value).trim();
+  } catch (_) {
+    return '';
+  }
+}
+
 function _officerDraftStatusAfterSave(apiLike, previousStatus) {
   const ps = String(previousStatus || 'draft');
   if (ps === 'sent_manually' || ps === 'cancelled' || ps === 'deleted') return ps;
@@ -8688,7 +8698,8 @@ ipcMain.handle('officer-email-drafts-copy', (_, text) => {
 
 ipcMain.handle('officer-email-drafts-preview', (_, fields) => {
   try {
-    const f = fields || {};
+    const f = Object.assign({}, fields || {});
+    if (!f.signOffName) f.signOffName = _officerEmailSignOffFromSettings();
     const subject = officerEmailDrafts.generateOfficerEmailSubject(f);
     let body = officerEmailDrafts.generateOfficerEmailBody(f);
     body = officerEmailDrafts.insertExtraNote(body, f.extraNote);

@@ -2,24 +2,9 @@
 (function (global) {
   'use strict';
 
-  var TEMPLATE_OPTIONS = [
-    { value: 'disclosure_confirm_attendance', label: 'Confirm attendance and request disclosure' },
-    { value: 'confirm_matter_effective', label: 'Confirm matter effective' },
-    { value: 'voluntary_interview_confirmation', label: 'Voluntary interview — confirm and disclosure' },
-    { value: 'confirm_outcome_after_attendance', label: 'Confirm outcome after attendance' },
-    { value: 'chase_disclosure', label: 'Request disclosure urgently' },
-    { value: 'chase_disclosure_follow_up', label: 'Chase disclosure — follow-up' },
-    { value: 'request_officer_contact_details', label: 'OIC / officer contact details' },
-    { value: 'custody_log_request', label: 'Request custody record' },
-    { value: 'custody_record_detention_log_request', label: 'Request custody record and detention log' },
-    { value: 'chase_custody_log_follow_up', label: 'Chase custody record — follow-up' },
-    { value: 'request_update_after_delay', label: 'Update following delay' },
-    { value: 'bail_details_request', label: 'Police bail — confirm details' },
-    { value: 'chase_bail_details_follow_up', label: 'Chase police bail details — follow-up' },
-    { value: 'rui_details_request', label: 'Released under investigation — confirm details' },
-    { value: 'matter_stood_down', label: 'Matter stood down — no longer attending' },
-    { value: 'free_text_email', label: 'Custom message (blank)' },
-  ];
+  var TEMPLATE_OPTIONS = (typeof OFFICER_EMAIL_TEMPLATE_OPTIONS !== 'undefined')
+    ? OFFICER_EMAIL_TEMPLATE_OPTIONS
+    : [];
 
   var STATUS_LABELS = {
     draft: 'Draft',
@@ -220,6 +205,15 @@
     });
   }
 
+  function getSignOffNameSafe() {
+    try {
+      var s = (typeof window !== 'undefined' && window._appSettingsCache) ? window._appSettingsCache : {};
+      return (s.feeEarnerNameDefault || s.feeEarnerName || '').trim();
+    } catch (_) {
+      return '';
+    }
+  }
+
   function collectFields() {
     return {
       templateType: els.template.value,
@@ -234,6 +228,7 @@
       bailReturnDate: els.bailDate ? els.bailDate.value : '',
       bailConditions: els.bailCond ? els.bailCond.value : '',
       userEmailAddress: els.userEmail.value,
+      signOffName: getSignOffNameSafe(),
       subject: els.subject.value,
       body: els.body.value,
     };
@@ -259,6 +254,16 @@
       if (arrivalTime) els.time.value = String(arrivalTime).trim();
     }
     if (!els.offence.value.trim() && fd.offenceSummary) els.offence.value = fd.offenceSummary;
+    if (!els.recipient.value.trim() && fd.oicName) els.recipient.value = String(fd.oicName).trim();
+    if (!els.to.value.trim()) {
+      var oicEmail = (fd.oicEmail || '').trim();
+      var disclosureEmail = (fd.disclosureOfficerEmail || '').trim();
+      if (oicEmail) {
+        els.to.value = oicEmail;
+      } else if (fd.disclosureOfficerIsOIC === 'No' && disclosureEmail) {
+        els.to.value = disclosureEmail;
+      }
+    }
   }
 
   function clearForm() {

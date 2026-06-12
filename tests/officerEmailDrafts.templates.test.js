@@ -24,9 +24,12 @@ describe('officerEmailDrafts — template bodies', () => {
   });
 
   it('disclosure_confirm_attendance mentions disclosure', () => {
-    const b = generateOfficerEmailBody(Object.assign({}, base, { templateType: 'disclosure_confirm_attendance' }));
+    const b = generateOfficerEmailBody(Object.assign({}, base, {
+      templateType: 'disclosure_confirm_attendance',
+      signOffName: 'Jane Solicitor',
+    }));
     assert.ok(b.includes('disclosure'), b);
-    assert.ok(b.includes('Robert Cashman'), b);
+    assert.ok(b.includes('Jane Solicitor'), b);
   });
 
   it('includes attendance time in body when set', () => {
