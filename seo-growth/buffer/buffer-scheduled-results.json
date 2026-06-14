@@ -38,5 +38,13 @@
     "status": "scheduled",
     "dueAt": "2026-06-23T12:30:00+01:00",
     "link": "https://custodynote.com/dscc-attendance-note-workflow"
+  },
+  {
+    "channel": "LinkedIn",
+    "channelId": "69d26c06031bfa423cd0c50d",
+    "postId": "6a2e8deccbbe21946a38549f",
+    "status": "scheduled",
+    "dueAt": "2026-06-24T09:30:00+01:00",
+    "link": "https://custodynote.com/blog"
   }
 ]
