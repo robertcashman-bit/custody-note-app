@@ -1,0 +1,42 @@
+[
+  {
+    "channel": "LinkedIn",
+    "channelId": "69d26c06031bfa423cd0c50d",
+    "postId": "6a2e8bf261b0aab8c16638a5",
+    "status": "scheduled",
+    "dueAt": "2026-06-16T09:30:00+01:00",
+    "link": "https://custodynote.com/blog/dscc-references-custody-records-and-attendance-notes"
+  },
+  {
+    "channel": "X/Twitter",
+    "channelId": "69d26c3d031bfa423cd0c6b3",
+    "postId": "6a2e8bf3699f807eb3081523",
+    "status": "scheduled",
+    "dueAt": "2026-06-17T12:30:00+01:00",
+    "link": "https://custodynote.com/blog/ai-assisted-custody-notes-benefits-and-limits"
+  },
+  {
+    "channel": "Google Business",
+    "channelId": "69d26c8b031bfa423cd0c8b7",
+    "postId": "6a2e8bf388e56947beb6aee0",
+    "status": "scheduled",
+    "dueAt": "2026-06-18T09:30:00+01:00",
+    "link": "https://custodynote.com/custody-note-template"
+  },
+  {
+    "channel": "LinkedIn",
+    "channelId": "69d26c06031bfa423cd0c50d",
+    "postId": "6a2e8bf761b0aab8c16638c9",
+    "status": "scheduled",
+    "dueAt": "2026-06-20T09:30:00+01:00",
+    "link": "https://custodynote.com/ai-custody-note-tool"
+  },
+  {
+    "channel": "X/Twitter",
+    "channelId": "69d26c3d031bfa423cd0c6b3",
+    "postId": "6a2e8bf761b0aab8c16638ed",
+    "status": "scheduled",
+    "dueAt": "2026-06-23T12:30:00+01:00",
+    "link": "https://custodynote.com/dscc-attendance-note-workflow"
+  }
+]

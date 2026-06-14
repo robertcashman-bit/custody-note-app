@@ -11,8 +11,8 @@ The other three sites are **not in this workspace**. Use drafts in this folder a
 - [x] RSS feed includes static blog posts
 - [x] CTA event tracking (`data-event` on contact + landing CTAs)
 - [x] `llms.txt` updated with new landing pages
-- [ ] **Deploy** custody-note-website changes (commit + push when ready)
-- [ ] Publish Phase 6 blog posts — see `blog-posts/blog-publication-summary.md` for overlap with live pages
+- [x] **Deploy** custody-note-website changes (commit + push when ready)
+- [x] Publish Phase 6 blog posts (gap fills) — DSCC + AI articles live on custodynote.com
 - [ ] Submit updated sitemap in Google Search Console and Bing Webmaster Tools after deploy
 
 ## policestationagent.com
