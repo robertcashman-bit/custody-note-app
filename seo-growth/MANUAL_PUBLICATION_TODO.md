@@ -13,6 +13,8 @@ The other three sites are **not in this workspace**. Use drafts in this folder a
 - [x] `llms.txt` updated with new landing pages
 - [x] **Deploy** custody-note-website changes (commit + push when ready)
 - [x] Publish Phase 6 blog posts (gap fills) — DSCC + AI articles live on custodynote.com
+- [x] **Custody Note Blog** in main navigation (desktop + mobile)
+- [x] Responsive display fixes (lg breakpoint alignment, sticky CTAs, mobile menu)
 - [ ] Submit updated sitemap in Google Search Console and Bing Webmaster Tools after deploy
 
 ## policestationagent.com
