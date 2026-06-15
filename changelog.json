@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.37",
+      "date": "2026-06-15",
+      "latest": true,
+      "changes": [
+        "Security: cross-device sync now encrypts attendance records with AES-256-GCM before upload — server stores ciphertext only",
+        "Sync pull decrypts envelopes locally using your device encryption key; legacy plaintext sync records remain readable until re-synced"
+      ]
+    },
+    {
       "version": "1.9.36",
       "date": "2026-06-09",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Officer Emails: prefill OIC name and email (and disclosure officer email when applicable) from the custody note",
         "Officer Emails: email sign-off uses your fee earner name from Settings instead of a hardcoded name",
