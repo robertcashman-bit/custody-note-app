@@ -211,8 +211,8 @@ jobs:
       - name: Checkout website
         uses: actions/checkout@v4
         with:
-          repository: robertcashman-bit/super-parakeet
-          path: custody note - website production
+          repository: robertcashman-bit/custody-note-website
+          path: custody-note-website
           token: ${{ secrets.GH_PAT }}
 
       - name: Setup Node
@@ -234,5 +234,5 @@ jobs:
       - name: Sync website releases.json and push
         working-directory: custody-note-app
         env:
-          WEBSITE_ROOT: ${{ github.workspace }}/custody note - website production
+          WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
         run: node scripts/sync-website.mjs
