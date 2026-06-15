@@ -2326,11 +2326,43 @@ async function syncPull(opts) {
     throw new Error(resp && resp.error ? resp.error : 'Pull failed');
   }
 
+  const { decryptSyncEnvelope } = require('./lib/syncRecordCrypto');
+  const masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
+
   const remoteRecords = resp.records || [];
   let merged = 0;
   let conflicts = 0;
 
-  for (const remote of remoteRecords) {
+  for (const rawRemote of remoteRecords) {
+    let remote = rawRemote;
+    if (rawRemote.envelope) {
+      if (!masterKeyHex) {
+        console.warn('[SYNC-PULL] Cannot decrypt envelope without local master key');
+        continue;
+      }
+      const payload = decryptSyncEnvelope(masterKeyHex, rawRemote.envelope);
+      if (!payload) {
+        console.warn('[SYNC-PULL] Failed to decrypt sync record', rawRemote.syncId);
+        continue;
+      }
+      remote = {
+        syncId: rawRemote.syncId,
+        data: payload.data,
+        status: payload.status,
+        createdAt: rawRemote.createdAt,
+        updatedAt: rawRemote.updatedAt,
+        deletedAt: payload.deletedAt || null,
+        deletionReason: payload.deletionReason || null,
+        clientName: payload.clientName || '',
+        stationName: payload.stationName || '',
+        dsccRef: payload.dsccRef || '',
+        attendanceDate: payload.attendanceDate || '',
+        supervisorApprovedAt: payload.supervisorApprovedAt || null,
+        supervisorNote: payload.supervisorNote || '',
+        archivedAt: payload.archivedAt || null,
+        version: rawRemote.version,
+      };
+    }
     const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty FROM attendances WHERE sync_id=?', [remote.syncId]);
 
     if (!local) {
@@ -2422,6 +2454,7 @@ function getSyncWorker() {
       getSyncApiUrl,
       readLicenceData,
       getMachineId,
+      getMasterKeyHex: () => getOrCreateMasterKey({ allowCreate: false }),
       httpPost: (url, body, opts) => httpPost(url, body, { ...opts, timeout: opts && opts.timeout || 8000 }),
       httpGetWithTimeout,
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
