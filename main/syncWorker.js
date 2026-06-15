@@ -33,6 +33,7 @@
  * Retry schedule: 1=0s, 2=10s, 3=30s, 4=2m, 5=10m, 6=30m → then failed
  */
 const crypto = require('crypto');
+const { encryptSyncEnvelope } = require('../lib/syncRecordCrypto');
 
 const SYNC_POLL_INTERVAL_MS = 60000;
 const SYNC_REQUEST_TIMEOUT_MS = 8000;
@@ -225,14 +226,11 @@ function createSyncWorker(ctx) {
     const row = ctx.dbGet('SELECT id, sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason, client_name, station_name, dscc_ref, attendance_date, supervisor_approved_at, supervisor_note, archived_at, sync_version FROM attendances WHERE id=?', [recordId]);
     if (!row) throw new Error('Record not found');
     const capturedVersion = row.sync_version || 1;
-    const record = {
-      syncId: row.sync_id,
+    const masterKeyHex = ctx.getMasterKeyHex && ctx.getMasterKeyHex();
+    if (!masterKeyHex) throw new Error('No encryption key; cannot sync');
+    const envelope = encryptSyncEnvelope(masterKeyHex, {
       data: row.data,
       status: row.status || 'draft',
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      deletedAt: row.deleted_at || null,
-      deletionReason: row.deletion_reason || null,
       clientName: row.client_name || '',
       stationName: row.station_name || '',
       dsccRef: row.dscc_ref || '',
@@ -240,6 +238,15 @@ function createSyncWorker(ctx) {
       supervisorApprovedAt: row.supervisor_approved_at || null,
       supervisorNote: row.supervisor_note || '',
       archivedAt: row.archived_at || null,
+      deletedAt: row.deleted_at || null,
+      deletionReason: row.deletion_reason || null,
+    });
+    const record = {
+      syncId: row.sync_id,
+      envelope,
+      encrypted: true,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
       version: capturedVersion,
     };
     const correlationId = generateCorrelationId();
