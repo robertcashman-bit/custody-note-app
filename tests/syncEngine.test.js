@@ -132,6 +132,7 @@ function createMockCtx(overrides = {}) {
     getSyncApiUrl: () => 'https://test.example.com',
     readLicenceData: () => ({ key: 'test-key' }),
     getMachineId: () => 'test-machine',
+    getMasterKeyHex: () => 'a'.repeat(64),
     httpPost: async (url, body, opts) => {
       httpPostCalls.push({ url, body, opts, timestamp: Date.now() });
       if (httpPostDelayMs > 0) await new Promise(r => setTimeout(r, httpPostDelayMs));
