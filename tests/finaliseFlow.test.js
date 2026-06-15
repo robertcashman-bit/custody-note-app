@@ -268,7 +268,7 @@ describe('Main process — attendance-force-status handler', () => {
 describe('Sync pull — finalise guard', () => {
 
   const pullStart = mainJsSource.indexOf('async function syncPull');
-  const pullFn = mainJsSource.substring(pullStart, pullStart + 3000);
+  const pullFn = mainJsSource.substring(pullStart, pullStart + 6000);
 
   it('refuses to overwrite locally-finalised records with remote draft', () => {
     assert.ok(pullFn.includes("localStatus === 'finalised'"),

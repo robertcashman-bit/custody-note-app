@@ -79,6 +79,7 @@ describe('sync integration', () => {
       getSyncApiUrl: () => 'https://example.com',
       readLicenceData: () => ({ key: 'x' }),
       getMachineId: () => 'm1',
+      getMasterKeyHex: () => 'a'.repeat(64),
       httpPost: () => Promise.resolve({ ok: true, written: 1 }),
       syncPull: () => Promise.resolve({ pulled: 0 }),
     });
@@ -124,6 +125,7 @@ describe('sync integration', () => {
       getSyncApiUrl: () => 'https://example.com',
       readLicenceData: () => ({ key: 'x' }),
       getMachineId: () => 'm1',
+      getMasterKeyHex: () => 'a'.repeat(64),
       httpPost: () => Promise.resolve({ ok: true }),
       syncPull: () => Promise.resolve({ pulled: 0 }),
     });

@@ -111,6 +111,7 @@ function createMockCtx(overrides = {}) {
     getSyncApiUrl: () => 'https://test.example.com',
     readLicenceData: () => ({ key: 'test-key' }),
     getMachineId: () => 'test-machine',
+    getMasterKeyHex: () => 'a'.repeat(64),
     httpPost: async () => ({ ok: true, written: 1 }),
     httpGetWithTimeout: async () => ({ statusCode: 200, ok: true }),
     onStatusChange: () => {}, sendToRenderer: () => {},
