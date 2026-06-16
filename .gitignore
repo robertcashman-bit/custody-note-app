@@ -42,6 +42,18 @@ id_ecdsa
 !*secret*.md
 *service-account*
 *serviceaccount*
+# ── Code-signing / notarisation material (Apple + generic keystores) ─────────
+# Apple App Store Connect API keys, provisioning profiles and Java keystores
+# must never be committed; leaking them lets an attacker publish a malicious
+# signed auto-update.
+*.p8
+AuthKey_*.p8
+*.mobileprovision
+*.provisionprofile
+*.jks
+*.keystore
+*.pkcs12
+*.cert
 
 # ── Encrypted local stores (live client data on developer machines) ─────────
 encryption.key
@@ -56,6 +68,13 @@ licences.db.enc
 licence-config.json
 photos/
 userData/
+# Defensive catch-all for any SQLite/db artefact containing client data.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
 
 # ── Logs ────────────────────────────────────────────────────────────────────
 *.log
