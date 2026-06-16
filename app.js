@@ -1,3 +1,34 @@
+/* ─── Renderer crash/error reporting (opt-in, PII-redacted in main) ───
+   Forward uncaught renderer errors + unhandled rejections to the main process,
+   which logs them through lib/safeLog and (only if a DSN is configured) to the
+   opt-in remote sink. Throttled so a tight error loop cannot flood IPC. */
+(function installRendererErrorReporting() {
+  if (typeof window === 'undefined') return;
+  var _lastReportAt = 0;
+  function report(message, source, line, stack) {
+    try {
+      if (!window.api || !window.api.reportClientError) return;
+      var now = Date.now();
+      if (now - _lastReportAt < 2000) return; // throttle bursts
+      _lastReportAt = now;
+      window.api.reportClientError({
+        message: String(message || 'Unknown renderer error'),
+        source: source ? String(source) : '',
+        line: line || 0,
+        stack: stack && typeof stack === 'string' ? stack : '',
+      });
+    } catch (_) { /* reporting must never break the app */ }
+  }
+  window.addEventListener('error', function(e) {
+    report(e && e.message, e && e.filename, e && e.lineno, e && e.error && e.error.stack);
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    var reason = e && e.reason;
+    var msg = reason && reason.message ? reason.message : String(reason);
+    report('Unhandled promise rejection: ' + msg, '', 0, reason && reason.stack);
+  });
+})();
+
 /* ─── STATE ─── */
 var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'view-form', settings: 'view-settings', quickcapture: 'view-quickcapture', reports: 'view-reports', authorities: 'view-authorities', 'officer-emails': 'view-officer-emails', help: 'view-help', 'station-mileage': 'view-station-mileage', 'matter-billing': 'view-matter-billing' };
 var currentAttendanceId = null;
@@ -3108,8 +3139,8 @@ var REQUIRED_FIELD_KEYS = [
     var blocked = st.blockedCount || 0;
     var conflicts = st.conflictCount || 0;
     if (conflicts > 0) {
-      setFooterIndicator(el, conflicts + ' conflict' + (conflicts === 1 ? '' : 's'), 'offline', 'Sync found newer remote changes but kept your local edits safe.');
-      el.style.cursor = '';
+      setFooterIndicator(el, conflicts + ' conflict' + (conflicts === 1 ? '' : 's'), 'offline', 'Sync found newer remote changes but kept your local edits safe. Click to review and resolve.');
+      el.style.cursor = 'pointer';
     } else if (pending === 0 && st.lastSync) {
       setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync), 'synced');
       el.style.cursor = '';
@@ -3176,6 +3207,206 @@ var REQUIRED_FIELD_KEYS = [
       if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
       return d.toLocaleDateString('en-GB');
     } catch (_) { return iso; }
+  }
+
+  /* ─── Sync conflict resolution UI ─────────────────────────────────────────
+     Conflicts are parked in the sync_conflicts table when a pull found newer
+     remote data but couldn't safely apply it (local finalised/completed, or
+     local had unsynced edits). This modal lets the user inspect local vs
+     remote and choose Keep local / Accept remote / Open record. Resolution is
+     enforced in the main process (main/syncConflicts.js): accepting remote
+     over a finalised/completed local record requires explicit confirmation. */
+  function _conflictSnapshotFields(snap) {
+    if (!snap) return {};
+    var data = snap.data;
+    if (data && typeof data === 'string') { try { data = JSON.parse(data); } catch (_) { data = {}; } }
+    data = data || {};
+    function pick() {
+      for (var i = 0; i < arguments.length; i++) {
+        var v = arguments[i];
+        if (v !== undefined && v !== null && v !== '') return v;
+      }
+      return '';
+    }
+    var forename = pick(data.forename, data.firstName, '');
+    var surname = pick(data.surname, data.lastName, '');
+    var clientName = pick(snap.clientName, (forename || surname) ? (forename + ' ' + surname).trim() : '', data.clientName);
+    return {
+      clientName: clientName || '—',
+      station: pick(snap.stationName, data.policeStation, data.station, '—'),
+      dscc: pick(snap.dsccRef, data.dsccRef, data.dscc, '—'),
+      attendanceDate: pick(snap.attendanceDate, data.attendanceDate, data.date, '—'),
+      status: pick(snap.status, '—'),
+      updatedAt: pick(snap.updatedAt, '—'),
+    };
+  }
+
+  function _conflictReasonLabel(reason) {
+    switch (reason) {
+      case 'protect_finalised': return 'Remote change blocked — local record is finalised/completed';
+      case 'preserve_local_dirty': return 'Remote change held — you have unsynced local edits';
+      case 'remote_newer': return 'Remote version is newer';
+      default: return reason || 'Conflict';
+    }
+  }
+
+  var _syncConflictsModalOpen = false;
+
+  function openSyncConflictsView() {
+    if (_syncConflictsModalOpen) return;
+    if (!window.api || !window.api.syncConflictsList) {
+      showToast('Conflict resolution is not available in this build.', 'error');
+      return;
+    }
+    _syncConflictsModalOpen = true;
+
+    var overlay = document.createElement('div');
+    overlay.className = 'cn-confirm-overlay';
+    var box = document.createElement('div');
+    box.className = 'cn-confirm-box';
+    box.style.maxWidth = '720px';
+    box.style.width = '92vw';
+    box.style.maxHeight = '86vh';
+    box.style.overflowY = 'auto';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', 'Sync conflicts');
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    function close() {
+      _syncConflictsModalOpen = false;
+      try { document.body.removeChild(overlay); } catch (_) {}
+    }
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', function escHandler(e) {
+      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escHandler); }
+    });
+
+    function render(conflicts) {
+      var html = '' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">' +
+        '<h3 style="margin:0;font-size:1.1rem;">Sync conflicts</h3>' +
+        '<button type="button" class="btn btn-secondary" id="cn-conflicts-close" aria-label="Close">Close</button>' +
+        '</div>' +
+        '<p style="margin:0 0 14px;font-size:13px;color:#64748b;">' +
+        'Another device sent changes that could not be applied automatically. Your local edits are safe. ' +
+        'Choose what to keep for each record.</p>';
+
+      if (!conflicts || !conflicts.length) {
+        html += '<div style="padding:24px;text-align:center;color:#16a34a;font-size:14px;">' +
+          'No conflicts to resolve. Everything is in sync.</div>';
+        box.innerHTML = html;
+        box.querySelector('#cn-conflicts-close').addEventListener('click', close);
+        return;
+      }
+
+      conflicts.forEach(function(c) {
+        var L = _conflictSnapshotFields(c.local);
+        var R = _conflictSnapshotFields(c.remote);
+        var protectedLocal = c.currentLocalStatus === 'finalised' || c.currentLocalStatus === 'completed';
+        html += '' +
+          '<div class="cn-conflict-card" data-id="' + esc(String(c.id)) + '" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff;">' +
+            '<div style="font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:5px 8px;margin-bottom:10px;">' +
+              esc(_conflictReasonLabel(c.reason)) +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
+              '<div>' +
+                '<div style="font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px;">This device (local)</div>' +
+                _conflictColHtml(L, c.currentLocalStatus || L.status) +
+              '</div>' +
+              '<div>' +
+                '<div style="font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px;">Other device (remote)</div>' +
+                _conflictColHtml(R, R.status) +
+              '</div>' +
+            '</div>' +
+            (protectedLocal
+              ? '<div style="font-size:11.5px;color:#7c2d12;margin-top:8px;">This record is <strong>' + esc(c.currentLocalStatus) + '</strong> locally. Accepting remote will ask you to confirm.</div>'
+              : '') +
+            '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
+              '<button type="button" class="btn btn-secondary cn-conflict-open" data-att="' + esc(String(c.attendanceId)) + '">Open record</button>' +
+              '<button type="button" class="btn btn-secondary cn-conflict-accept" data-id="' + esc(String(c.id)) + '">Accept remote</button>' +
+              '<button type="button" class="btn btn-primary cn-conflict-keep" data-id="' + esc(String(c.id)) + '">Keep local</button>' +
+            '</div>' +
+          '</div>';
+      });
+
+      box.innerHTML = html;
+      box.querySelector('#cn-conflicts-close').addEventListener('click', close);
+
+      Array.prototype.forEach.call(box.querySelectorAll('.cn-conflict-open'), function(btn) {
+        btn.addEventListener('click', function() {
+          var attId = parseInt(btn.getAttribute('data-att'), 10);
+          if (!attId) { showToast('That record is no longer available.', 'warning'); return; }
+          close();
+          try { openAttendance(attId); } catch (e) { console.error('[conflict-open]', e); }
+        });
+      });
+      Array.prototype.forEach.call(box.querySelectorAll('.cn-conflict-keep'), function(btn) {
+        btn.addEventListener('click', function() { resolve(parseInt(btn.getAttribute('data-id'), 10), 'keep_local', false); });
+      });
+      Array.prototype.forEach.call(box.querySelectorAll('.cn-conflict-accept'), function(btn) {
+        btn.addEventListener('click', function() { resolve(parseInt(btn.getAttribute('data-id'), 10), 'accept_remote', false); });
+      });
+    }
+
+    function resolve(conflictId, resolution, force) {
+      if (!conflictId || !window.api.syncConflictResolve) return;
+      window.api.syncConflictResolve({ conflictId: conflictId, resolution: resolution, force: !!force })
+        .then(function(res) {
+          if (res && res.blocked && res.reason === 'protected_status') {
+            var ok = window.confirm((res.message || 'This will overwrite a protected record.') +
+              '\n\nAre you sure you want to overwrite your local record with the remote version?');
+            if (ok) return resolve(conflictId, resolution, true);
+            return;
+          }
+          if (!res || !res.ok) {
+            showToast((res && res.error) || 'Could not resolve conflict.', 'error');
+            return;
+          }
+          if (resolution === 'accept_remote') {
+            showToast('Remote version applied.' + (res.forced ? ' (Protected record overwritten.)' : ''), 'success');
+            try { loadHomeRecent(); } catch (_) {}
+            try { refreshList(); } catch (_) {}
+          } else {
+            showToast('Local version kept; it will re-sync to other devices.', 'success');
+          }
+          try { refreshSyncCounts(); } catch (_) {}
+          load();
+        })
+        .catch(function(e) { console.error('[conflict-resolve]', e); showToast('Could not resolve conflict.', 'error'); });
+    }
+
+    function load() {
+      box.innerHTML = '<div style="padding:28px;text-align:center;color:#64748b;font-size:14px;">Loading conflicts…</div>';
+      window.api.syncConflictsList().then(function(res) {
+        if (!res || !res.ok) {
+          box.innerHTML = '<div style="padding:24px;color:#b91c1c;font-size:14px;">' +
+            esc((res && res.error) || 'Could not load conflicts.') + '</div>';
+          return;
+        }
+        render(res.conflicts || []);
+      }).catch(function(e) {
+        console.error('[conflicts-list]', e);
+        box.innerHTML = '<div style="padding:24px;color:#b91c1c;font-size:14px;">Could not load conflicts.</div>';
+      });
+    }
+
+    load();
+  }
+
+  function _conflictColHtml(f, status) {
+    function row(label, val) {
+      return '<div style="font-size:12px;color:#475569;margin:2px 0;"><span style="color:#94a3b8;">' +
+        esc(label) + ':</span> ' + esc(String(val == null || val === '' ? '—' : val)) + '</div>';
+    }
+    return '<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;">' +
+      row('Client', f.clientName) +
+      row('Status', status) +
+      row('Station', f.station) +
+      row('DSCC', f.dscc) +
+      row('Date', f.attendanceDate) +
+      row('Updated', f.updatedAt) +
+      '</div>';
   }
 
   var _currentView = null;
@@ -15273,7 +15504,7 @@ pdfAuditFooterHtml(d, settings) +
     if (window.api.onSyncConflictsDetected) {
       window.api.onSyncConflictsDetected(function(info) {
         var count = info && info.count || 0;
-        showToast((count || 'New') + ' sync conflict' + (count === 1 ? '' : 's') + ' detected. Local edits were kept; review Sync Diagnostics for details.', 'warning', 6500);
+        showToast((count || 'New') + ' sync conflict' + (count === 1 ? '' : 's') + ' detected. Local edits were kept — click the conflict indicator in the footer to review and resolve.', 'warning', 6500);
         try { refreshSyncCounts(); } catch (_) {}
       });
     }
@@ -15289,6 +15520,7 @@ pdfAuditFooterHtml(d, settings) +
     if (syncInd) {
       syncInd.addEventListener('click', function() {
         var txt = (syncInd.textContent || '');
+        if (txt.indexOf('conflict') !== -1) { openSyncConflictsView(); return; }
         if (txt.indexOf('blocked') === -1 && txt.indexOf('retrying') === -1) return;
         if (!window.api || !window.api.syncForceRetry) return;
         window.api.syncForceRetry().then(function(res) {

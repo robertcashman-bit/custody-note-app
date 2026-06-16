@@ -30,9 +30,14 @@
  * not install cleanly on a fresh Mac (likely causes: notarisation failed,
  * stapling failed, or entitlements rejected the binary).
  *
- * The unsigned build flow (npm run build:mac) is completely unaffected by
- * this script — it has its own electron-builder invocation reading the
- * default package.json config, which leaves identity:null.
+ * Signing is now the DEFAULT: package.json build.mac sets hardenedRuntime:true
+ * and no longer pins identity:null, so `npm run build:mac` / `npm run build`
+ * sign + harden whenever a Developer ID certificate is available (and skip
+ * signing gracefully when none is, rather than hard-failing). The explicit
+ * unsigned local-dev flow is `npm run build:mac:dev`. This script remains the
+ * full signed + NOTARISED pipeline used for distribution / CI releases and is
+ * unaffected by those package.json defaults — it deep-clones the build config
+ * and sets the exact signing identity, entitlements and notarize flags itself.
  */
 
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
@@ -186,12 +191,10 @@ const pkg = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8'));
 const baseBuild = pkg.build || {};
 const baseMac = baseBuild.mac || {};
 
-/* Pull the actual signing identity name out of the Keychain so we can
- * set it explicitly rather than relying on `delete overrideMac.identity`
- * + auto-discovery. electron-builder 26.x sometimes still observes
- * `identity: null` from the package.json fallback if we only delete the
- * override key, and silently skips signing. Setting it explicitly to
- * the matched string forces signing. */
+/* Pull the actual signing identity name out of the Keychain so we can set it
+ * explicitly rather than relying on auto-discovery. Setting it explicitly to
+ * the matched string forces electron-builder to sign with exactly this cert
+ * (and avoids any ambiguity if multiple identities are present). */
 const idLine = idOut.split('\n').find((l) => teamRe.test(l));
 const idMatch = idLine && idLine.match(/"(Developer ID Application:[^"]+)"/);
 if (!idMatch) {

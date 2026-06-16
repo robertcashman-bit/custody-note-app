@@ -357,6 +357,10 @@ contextBridge.exposeInMainWorld('api', {
   syncGetDiagnostics: () => ipcRenderer.invoke('sync-get-diagnostics'),
   attendanceHomeStats: () => ipcRenderer.invoke('attendance-home-stats'),
   syncForceRetry: () => ipcRenderer.invoke('sync-force-retry'),
+  syncConflictsList: () => ipcRenderer.invoke('sync-conflicts-list'),
+  syncConflictResolve: (params) => ipcRenderer.invoke('sync-conflict-resolve', params),
+  /* Lightweight, PII-redacted (main-side) crash/error reporting sink. */
+  reportClientError: (payload) => ipcRenderer.invoke('report-client-error', payload),
   onSyncStatusChanged: (cb) => ipcRenderer.on('sync-status-changed', (_, data) => cb(data)),
   onRecordsUpdatedFromSync: (cb) => ipcRenderer.on('records-updated-from-sync', (_, data) => cb(data)),
   onSyncConflictsDetected: (cb) => ipcRenderer.on('sync-conflicts-detected', (_, data) => cb(data)),

@@ -113,6 +113,10 @@ const initSqlJs = require('sql.js');
 const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-import');
 const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
+const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
+const syncConflicts = require('./main/syncConflicts');
+const errorReporting = require('./main/errorReporting');
+const dbCrypto = require('./lib/dbCrypto');
 const { createBackupScheduler } = require('./main/backupScheduler');
 const { hardenWindow, hardenSession, isSafeExternalUrl } = require('./main/windowHardening');
 const _securityLog = require('./main/securityLog');
@@ -448,48 +452,28 @@ async function uploadKeyEscrow() {
   return false;
 }
 
+// SECURITY: never persist legal-aid data unencrypted. The actual AES-256-GCM
+// primitives + on-disk envelope format live in lib/dbCrypto.js (unit-tested);
+// main.js owns master-key resolution (safeStorage / recovery / escrow). The
+// CN_NO_MASTER_KEY refusal is enforced inside dbCrypto.encryptBuffer.
 function encryptBuffer(buf) {
   const masterKeyHex = getOrCreateMasterKey();
-  if (!masterKeyHex) {
-    // SECURITY: never persist legal-aid data unencrypted. Refuse and let the caller
-    // surface a hard error / leave the on-disk DB untouched.
-    const err = new Error('No master key available; refusing to write database unencrypted. Set a recovery password in Settings or restore from backup.');
-    err.code = 'CN_NO_MASTER_KEY';
-    throw err;
-  }
-  const key = Buffer.from(masterKeyHex, 'hex');
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-  const encrypted = Buffer.concat([cipher.update(buf), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  const magic = Buffer.from(MAGIC);
-  return Buffer.concat([magic, iv, tag, encrypted]);
+  return dbCrypto.encryptBuffer(buf, masterKeyHex);
 }
 
 function decryptBuffer(buf) {
   if (!buf || buf.length < 4) return buf;
-  const magic = buf.slice(0, 4).toString();
-  if (magic !== MAGIC) return buf;
-  const iv = buf.slice(4, 16);
-  const tag = buf.slice(16, 32);
-  const data = buf.slice(32);
-  let masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
+  if (buf.slice(0, 4).toString() !== MAGIC) return buf;
+  const masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
   if (!masterKeyHex) {
     return null;
   }
-  const key = Buffer.from(masterKeyHex, 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(data), decipher.final()]);
+  return dbCrypto.decryptBuffer(buf, masterKeyHex);
 }
 
 async function decryptBufferWithRecovery(buf) {
   if (!buf || buf.length < 4) return buf;
-  const magic = buf.slice(0, 4).toString();
-  if (magic !== MAGIC) return buf;
-  const iv = buf.slice(4, 16);
-  const tag = buf.slice(16, 32);
-  const data = buf.slice(32);
+  if (buf.slice(0, 4).toString() !== MAGIC) return buf;
   let masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
   if (!masterKeyHex && hasRecoveryPassword()) {
     masterKeyHex = await promptForRecoveryPassword();
@@ -501,10 +485,7 @@ async function decryptBufferWithRecovery(buf) {
   if (!masterKeyHex) {
     throw new Error('Cannot decrypt database: no key available. If you have a recovery password, ensure the recovery.dat file is present.');
   }
-  const key = Buffer.from(masterKeyHex, 'hex');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-  decipher.setAuthTag(tag);
-  return Buffer.concat([decipher.update(data), decipher.final()]);
+  return dbCrypto.decryptBuffer(buf, masterKeyHex);
 }
 
 async function promptForRecoveryPassword() {
@@ -1369,199 +1350,36 @@ async function initDb() {
   // FOREIGN KEY constraint we add later is silently a no-op at runtime.
   try { db.run('PRAGMA foreign_keys = ON'); } catch (e) { console.warn('[initDb] PRAGMA foreign_keys failed:', e && e.message); }
 
-  db.run(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);`);
+  /* ───────────────────────────────────────────────────────────────────────
+   * Versioned schema migrations (main/dbMigrations.js).
+   *
+   * Historically this block was a flat list of CREATE TABLE/INDEX IF NOT
+   * EXISTS + _safeAddColumn ALTERs run unconditionally on every startup. That
+   * is now expressed as an ordered, named migration list tracked by a
+   * `schema_version` table. The v1 "baseline-schema" migration contains
+   * exactly those idempotent statements, so existing user DBs (which already
+   * have every column) migrate to the versioned state WITHOUT data loss or
+   * re-running destructive ops — they simply get stamped as version 1.
+   *
+   * Data-level backfills (backfillSyncIds / migrateSyncDirtyToQueue / station
+   * load / scheme-code migration) intentionally remain below, run after the
+   * schema is in place.
+   * ─────────────────────────────────────────────────────────────────────── */
+  try {
+    const migrationResult = runDbMigrations(db, {
+      logger: { error: (...a) => console.error(...a) },
+    });
+    if (migrationResult.applied.length) {
+      console.log('[schema] Applied migration(s): ' + migrationResult.applied.join(', ') +
+        ' (now at v' + migrationResult.to + ')');
+    }
+  } catch (err) {
+    console.error('[schema] Migration runner failed:', err && err.message ? err.message : err);
+    throw err;
+  }
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS attendances (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      data TEXT NOT NULL,
-      status TEXT DEFAULT 'draft'
-    );
-  `);
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS officer_email_drafts (
-      id TEXT PRIMARY KEY,
-      custody_note_id TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'draft',
-      template_type TEXT NOT NULL,
-      to_email TEXT DEFAULT '',
-      recipient_name TEXT DEFAULT '',
-      client_name TEXT DEFAULT '',
-      police_station TEXT DEFAULT '',
-      offence TEXT DEFAULT '',
-      attendance_date TEXT DEFAULT '',
-      attendance_time TEXT DEFAULT '',
-      extra_note TEXT DEFAULT '',
-      bail_return_date TEXT DEFAULT '',
-      bail_conditions TEXT DEFAULT '',
-      user_email_address TEXT DEFAULT '',
-      subject TEXT DEFAULT '',
-      body TEXT DEFAULT '',
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      opened_in_outlook_at TEXT,
-      sent_manually_confirmed_at TEXT,
-      cancelled_at TEXT,
-      deleted_at TEXT
-    );
-  `);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_custody_note_id ON officer_email_drafts (custody_note_id);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_status ON officer_email_drafts (status);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_officer_email_drafts_updated_at ON officer_email_drafts (updated_at);`);
-  _safeAddColumn('officer_email_drafts', "attendance_time TEXT DEFAULT ''");
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS police_stations (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      code TEXT NOT NULL,
-      scheme TEXT DEFAULT '',
-      region TEXT DEFAULT '',
-      UNIQUE(name, code)
-    );
-  `);
-
-  _safeAddColumn('police_stations', "scheme TEXT DEFAULT ''");
-  _safeAddColumn('police_stations', "region TEXT DEFAULT ''");
-  _safeAddColumn('police_stations', "scheme_code TEXT DEFAULT ''");
-  _safeAddColumn('police_stations', "kind TEXT DEFAULT 'station'");
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS firms (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      laa_account TEXT DEFAULT '',
-      contact_name TEXT DEFAULT '',
-      contact_email TEXT DEFAULT '',
-      contact_phone TEXT DEFAULT '',
-      address TEXT DEFAULT '',
-      source_of_referral TEXT DEFAULT '',
-      is_default INTEGER DEFAULT 0,
-      UNIQUE(name)
-    );
-  `);
-  _safeAddColumn('firms', "contact_name TEXT DEFAULT ''");
-  _safeAddColumn('firms', "source_of_referral TEXT DEFAULT ''");
-
-  db.run(`CREATE INDEX IF NOT EXISTS idx_attendances_updated ON attendances(updated_at);`);
-
-  /* â”€â”€â”€ Audit log â”€â”€â”€ */
-  db.run(`CREATE TABLE IF NOT EXISTS audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    attendance_id INTEGER,
-    action TEXT,
-    previous_snapshot TEXT,
-    changed_fields TEXT,
-    timestamp TEXT DEFAULT (datetime('now')),
-    user_note TEXT
-  );`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_audit_attendance ON audit_log(attendance_id);`);
-
-  /* â”€â”€â”€ Sync queue (offline-first, per-record, one bad never blocks) â”€â”€â”€ */
-  db.run(`CREATE TABLE IF NOT EXISTS sync_queue (
-    id TEXT PRIMARY KEY,
-    record_id TEXT NOT NULL,
-    operation TEXT DEFAULT 'upsert',
-    payload TEXT,
-    created_at INTEGER NOT NULL,
-    retry_count INTEGER DEFAULT 0,
-    last_attempt INTEGER NOT NULL,
-    status TEXT DEFAULT 'pending',
-    error TEXT
-  );`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sync_queue_record ON sync_queue(record_id);`);
-
-  /* â”€â”€â”€ Sync attempt audit (for reliability and traceability) â”€â”€â”€ */
-  db.run(`CREATE TABLE IF NOT EXISTS sync_attempts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    correlation_id TEXT,
-    direction TEXT NOT NULL,
-    record_count INTEGER DEFAULT 0,
-    success INTEGER NOT NULL,
-    error_message TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
-  );`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sync_attempts_created ON sync_attempts(created_at);`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS sync_conflicts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    attendance_id INTEGER,
-    sync_id TEXT,
-    reason TEXT,
-    local_version INTEGER DEFAULT 0,
-    remote_version INTEGER DEFAULT 0,
-    local_updated_at TEXT,
-    remote_updated_at TEXT,
-    remote_status TEXT,
-    local_snapshot TEXT,
-    remote_snapshot TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    resolved_at TEXT DEFAULT NULL,
-    resolution_note TEXT DEFAULT ''
-  );`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_sync_conflicts_open ON sync_conflicts(resolved_at, attendance_id);`);
-
-  /* â”€â”€â”€ Soft-delete & indexed search columns (idempotent) â”€â”€â”€ */
-  _safeAddColumn('attendances', "deleted_at TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "deletion_reason TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "client_name TEXT DEFAULT ''");
-  _safeAddColumn('attendances', "station_name TEXT DEFAULT ''");
-  _safeAddColumn('attendances', "dscc_ref TEXT DEFAULT ''");
-  _safeAddColumn('attendances', "attendance_date TEXT DEFAULT ''");
-  _safeAddColumn('attendances', "supervisor_approved_at TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "supervisor_note TEXT DEFAULT ''");
-  _safeAddColumn('attendances', "archived_at TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "work_type TEXT DEFAULT ''");
-
-  /* â”€â”€â”€ Billing / QuickFile invoice columns â”€â”€â”€ */
-  _safeAddColumn('attendances', "quickfile_invoice_id TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "quickfile_invoice_number TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "quickfile_invoice_url TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_created_at TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_created_by TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_subtotal REAL DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_vat REAL DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_total REAL DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_narrative TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_mileage_miles REAL DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_mileage_rate REAL DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_parking_amount REAL DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_attendance_fee REAL DEFAULT NULL");
-  _safeAddColumn('attendances', "invoice_vat_rate REAL DEFAULT NULL");
-
-  /* â”€â”€â”€ Station mileage column â”€â”€â”€ */
-  _safeAddColumn('police_stations', "mileage_from_base REAL DEFAULT NULL");
-  _safeAddColumn('police_stations', "postcode TEXT DEFAULT ''");
-
-  /* â”€â”€â”€ Billing audit log â”€â”€â”€ */
-  db.run(`CREATE TABLE IF NOT EXISTS billing_audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    attendance_id INTEGER,
-    action TEXT NOT NULL,
-    details TEXT DEFAULT '',
-    user_name TEXT DEFAULT '',
-    timestamp TEXT DEFAULT (datetime('now'))
-  );`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_billing_audit_att ON billing_audit_log(attendance_id);`);
-
-  /* â”€â”€â”€ Cross-device sync columns â”€â”€â”€ */
-  _safeAddColumn('attendances', "sync_id TEXT DEFAULT NULL");
-  _safeAddColumn('attendances', "sync_dirty INTEGER DEFAULT 1");
-  _safeAddColumn('attendances', "sync_version INTEGER DEFAULT 1");
-  db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_att_sync_id ON attendances(sync_id);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_att_sync_dirty ON attendances(sync_dirty);`);
   backfillSyncIds();
   migrateSyncDirtyToQueue();
-
-  db.run(`CREATE INDEX IF NOT EXISTS idx_att_client ON attendances(client_name);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_att_date ON attendances(attendance_date);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_att_dscc ON attendances(dscc_ref);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_att_status ON attendances(status);`);
-  db.run(`CREATE INDEX IF NOT EXISTS idx_att_list ON attendances(deleted_at, archived_at, updated_at);`);
 
   const existing = dbGet("SELECT 1 FROM settings WHERE key = 'backupFolder'");
   if (!existing) {
@@ -4452,9 +4270,12 @@ let _isDegraded = false;
 function _markDegradedAndMaybeQuit(label, err) {
   _isDegraded = true;
   try {
-    console.error('[Global] ' + label + ':', err && err.stack ? err.stack : err);
-    console.error('[Global] pid=' + process.pid + ', rss=' + Math.round(process.memoryUsage().rss / (1024 * 1024)) + ' MB');
+    // Route through the PII-safe redactor (lib/safeLog) so no confidential
+    // client data can leak into logs, then forward to opt-in remote reporting.
+    _safeLog.error('[Global] ' + label + ':', err && err.stack ? err.stack : err);
+    _safeLog.error('[Global] pid=' + process.pid + ', rss=' + Math.round(process.memoryUsage().rss / (1024 * 1024)) + ' MB');
   } catch (_) {}
+  try { errorReporting.captureException(err instanceof Error ? err : new Error(String(err)), label); } catch (_) {}
   try { if (typeof flushDbSync === 'function') flushDbSync(); } catch (flushErr) {
     console.error('[Global] flushDbSync during crash recovery failed:', flushErr && flushErr.message);
   }
@@ -4469,11 +4290,38 @@ function _markDegradedAndMaybeQuit(label, err) {
     try { startSyncTimer(); } catch (_) {}
   }
 }
+// Opt-in remote crash reporting (NO-OP unless CUSTODYNOTE_SENTRY_DSN/SENTRY_DSN
+// is set AND @sentry/electron is installed). All payloads are PII-redacted via
+// lib/safeLog before send. The local redacted-logging handlers below are the
+// always-on baseline regardless.
+try {
+  errorReporting.initMainErrorReporting({
+    release: (() => { try { return 'custody-note@' + app.getVersion(); } catch (_) { return undefined; } })(),
+  });
+} catch (e) {
+  try { _safeLog.warn('[errorReporting] init failed:', e && e.message ? e.message : e); } catch (_) {}
+}
+
 process.on('unhandledRejection', (reason) => {
   _markDegradedAndMaybeQuit('Unhandled rejection', reason instanceof Error ? reason : new Error(String(reason)));
 });
 process.on('uncaughtException', (err) => {
   _markDegradedAndMaybeQuit('Uncaught exception', err);
+});
+
+/* Renderer-side error reporting sink. The renderer forwards window 'error' /
+   'unhandledrejection' events here; we log them via the PII-safe redactor and
+   forward to opt-in remote reporting. NO-OP-safe: never throws back to caller. */
+ipcMain.handle('report-client-error', (_event, payload) => {
+  try {
+    const p = payload || {};
+    const msg = String(p.message || 'Unknown renderer error');
+    _safeLog.error('[renderer]', msg, p.source ? ('@' + p.source + ':' + (p.line || '?')) : '');
+    const err = new Error(msg);
+    if (p.stack && typeof p.stack === 'string') err.stack = p.stack;
+    errorReporting.captureException(err, 'renderer');
+  } catch (_) { /* reporting must never break the renderer */ }
+  return { ok: true };
 });
 
 app.on('second-instance', () => {
@@ -5794,6 +5642,58 @@ ipcMain.handle('sync-status', () => {
 ipcMain.handle('sync-schedule-on-reconnect', () => {
   scheduleSyncSoon();
   return {};
+});
+
+/* List open sync conflicts (local vs remote snapshots) for the resolution UI. */
+ipcMain.handle('sync-conflicts-list', () => {
+  try {
+    if (!db) return { ok: true, conflicts: [] };
+    const conflicts = syncConflicts.listOpenConflicts({ dbAll, dbGet });
+    return { ok: true, conflicts };
+  } catch (e) {
+    console.error('[sync-conflicts-list]', e && e.message ? e.message : e);
+    return { ok: false, error: e && e.message ? e.message : 'Failed to list conflicts' };
+  }
+});
+
+/* Resolve a single sync conflict. resolution: 'keep_local' | 'accept_remote'.
+   { force: true } is required to accept remote over a protected local record. */
+ipcMain.handle('sync-conflict-resolve', (_event, params) => {
+  try {
+    if (!db) return { ok: false, error: 'Database not ready' };
+    const conflictId = params && params.conflictId;
+    const resolution = params && params.resolution;
+    const force = !!(params && params.force);
+    const result = syncConflicts.resolveConflict(
+      {
+        dbGet,
+        dbRun,
+        appendAuditLog,
+        nowIso: () => new Date().toISOString(),
+      },
+      conflictId,
+      resolution,
+      { force }
+    );
+    if (result.ok && !result.alreadyResolved) {
+      try { saveDb(); } catch (saveErr) { console.error('[sync-conflict-resolve] saveDb failed:', saveErr && saveErr.message); }
+      // Keeping local means the local edit must re-propagate to other devices.
+      if (result.requeue && result.attendanceId != null) {
+        try { enqueueSyncForRecord(result.attendanceId); } catch (_) {}
+      }
+      try { scheduleSyncSoon(); } catch (_) {}
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try { mainWindow.webContents.send('sync-status-changed', { status: 'synced' }); } catch (_) {}
+        if (result.resolution === 'accept_remote') {
+          try { mainWindow.webContents.send('records-updated-from-sync', { count: 1 }); } catch (_) {}
+        }
+      }
+    }
+    return result;
+  } catch (e) {
+    console.error('[sync-conflict-resolve]', e && e.message ? e.message : e);
+    return { ok: false, error: e && e.message ? e.message : 'Failed to resolve conflict' };
+  }
 });
 
 ipcMain.handle('sync-get-diagnostics', () => {
