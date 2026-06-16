@@ -40,6 +40,7 @@
     "security:scan": "node scripts/security-audit.mjs",
     "build:icns": "node scripts/build-icns.mjs",
     "build:mac": "npm run verify:release && npm run build:icns && electron-builder --mac && npm run verify:built-asar",
+    "build:mac:dev": "npm run verify:release && npm run build:icns && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac -c.mac.identity=null -c.mac.hardenedRuntime=false && npm run verify:built-asar",
     "build:mac:signed": "npm run verify:release && npm run build:icns && node scripts/build-mac-signed.mjs && npm run verify:built-asar",
     "verify:mac:cert": "security find-identity -v -p codesigning",
     "start:mac": "electron ."
@@ -103,9 +104,10 @@
           ]
         }
       ],
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "identity": null,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
       "artifactName": "Custody-Note-${version}-${arch}.${ext}"
     },
     "dmg": {

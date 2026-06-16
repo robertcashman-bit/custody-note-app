@@ -8,6 +8,8 @@ const assert = require('node:assert');
 
 const root = path.join(__dirname, '..');
 const mainJs = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+// Schema DDL now lives in the versioned migration runner.
+const dbMigrationsJs = fs.readFileSync(path.join(root, 'main', 'dbMigrations.js'), 'utf8');
 const preloadJs = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
 const appJs = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 
@@ -54,7 +56,7 @@ describe('Legal record integrity (main process)', () => {
   });
 
   it('audit_log table and attendance-save inserts exist', () => {
-    assert.ok(mainJs.includes('CREATE TABLE IF NOT EXISTS audit_log'));
+    assert.ok((mainJs + dbMigrationsJs).includes('CREATE TABLE IF NOT EXISTS audit_log'));
     assert.ok(mainJs.includes("INSERT INTO audit_log"));
   });
 

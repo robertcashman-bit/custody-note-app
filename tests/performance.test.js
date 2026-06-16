@@ -7,6 +7,9 @@ const appJsPath = path.join(__dirname, '..', 'app.js');
 const appJsSource = fs.readFileSync(appJsPath, 'utf8');
 const mainJsPath = path.join(__dirname, '..', 'main.js');
 const mainJsSource = fs.readFileSync(mainJsPath, 'utf8');
+// Schema DDL (indexes etc.) now lives in the versioned migration runner.
+const dbMigrationsSource = fs.readFileSync(path.join(__dirname, '..', 'main', 'dbMigrations.js'), 'utf8');
+const schemaSource = mainJsSource + '\n' + dbMigrationsSource;
 const stylesCssPath = path.join(__dirname, '..', 'styles.css');
 const stylesCssSource = fs.readFileSync(stylesCssPath, 'utf8');
 const indexHtmlPath = path.join(__dirname, '..', 'index.html');
@@ -75,8 +78,8 @@ describe('Performance — main process', () => {
   });
 
   it('has composite index for list query', () => {
-    assert.ok(mainJsSource.includes('idx_att_list'), 'must have idx_att_list index');
-    assert.ok(mainJsSource.includes('deleted_at, archived_at, updated_at'), 'index must cover list filter columns');
+    assert.ok(schemaSource.includes('idx_att_list'), 'must have idx_att_list index');
+    assert.ok(schemaSource.includes('deleted_at, archived_at, updated_at'), 'index must cover list filter columns');
   });
 
   it('configures calmer backup scheduler timings', () => {

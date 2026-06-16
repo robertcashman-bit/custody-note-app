@@ -11,6 +11,11 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const mainJs = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+// Schema DDL was extracted from main.js initDb into a versioned migration
+// runner (main/dbMigrations.js). Schema-presence assertions scan both so the
+// contract is "the column/table is defined somewhere in the schema source".
+const dbMigrationsJs = fs.readFileSync(path.join(root, 'main', 'dbMigrations.js'), 'utf8');
+const schemaSource = mainJs + '\n' + dbMigrationsJs;
 // QuickFile auth + response parsing now lives in this shared, unit-tested module.
 const quickfileClientJs = fs.readFileSync(path.join(root, 'lib', 'quickfileClient.js'), 'utf8');
 const preloadJs = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
@@ -34,14 +39,15 @@ describe('Database schema — billing columns', () => {
   // The test contract is now "the column is present in a schema migration",
   // regardless of whether it's a literal ALTER TABLE or a _safeAddColumn call.
   function hasColumnMigration(table, col) {
-    if (mainJs.includes(`ALTER TABLE ${table} ADD COLUMN ${col}`)) return true;
-    // _safeAddColumn('attendances', "col TYPE ...") — column name is
-    // always followed by a space + a type keyword, so match that shape.
+    if (schemaSource.includes(`ALTER TABLE ${table} ADD COLUMN ${col}`)) return true;
+    // Column adds go through a helper — either `_safeAddColumn('table', "col ...")`
+    // (repair paths in main.js) or the migration runner's `add('table', "col ...")`
+    // (main/dbMigrations.js). Column name is always followed by a space + type.
     const re = new RegExp(
-      `_safeAddColumn\\(\\s*['"\`]${table}['"\`]\\s*,\\s*['"\`]${col}\\b`,
+      `(?:_safeAddColumn|add)\\(\\s*['"\`]${table}['"\`]\\s*,\\s*['"\`]${col}\\b`,
       'i'
     );
-    return re.test(mainJs);
+    return re.test(schemaSource);
   }
 
   expectedColumns.forEach(col => {
@@ -60,11 +66,11 @@ describe('Database schema — billing columns', () => {
   });
 
   it('billing_audit_log table is created', () => {
-    assert.ok(mainJs.includes('CREATE TABLE IF NOT EXISTS billing_audit_log'));
+    assert.ok(schemaSource.includes('CREATE TABLE IF NOT EXISTS billing_audit_log'));
   });
 
   it('billing_audit_log has attendance_id index', () => {
-    assert.ok(mainJs.includes('idx_billing_audit_att'));
+    assert.ok(schemaSource.includes('idx_billing_audit_att'));
   });
 });
 

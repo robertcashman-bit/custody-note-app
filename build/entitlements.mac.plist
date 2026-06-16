@@ -2,11 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Hardened-runtime entitlements for the signed + notarised macOS build.
-  These are ignored by the unsigned build (npm run build:mac) and only
-  take effect when electron-builder signs the .app, which happens via
-  npm run build:mac:signed once APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD /
-  APPLE_TEAM_ID env vars are set and a Developer ID Application
-  certificate is installed in the Keychain.
+  These are ignored by the explicit unsigned dev build
+  (npm run build:mac:dev) and only take effect when electron-builder signs
+  the .app. Signing is now the default for npm run build:mac / build whenever
+  a Developer ID Application certificate is available; the full signed +
+  notarised distribution build runs via npm run build:mac:signed once
+  APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID env vars are set and
+  a Developer ID Application certificate is installed in the Keychain.
 
   This is the canonical set of entitlements for an Electron app under
   Apple's hardened runtime. Removing any of them will cause the app to
