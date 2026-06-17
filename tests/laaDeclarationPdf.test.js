@@ -67,6 +67,35 @@ describe('laaDeclarationPdf helpers — official LAA wording', () => {
   it('uses Privacy Notice acknowledged? label constant', () => {
     assert.strictEqual(laaPdf.PRIVACY_ACK_LABEL, 'Privacy Notice acknowledged?');
   });
+
+  it('buildLaaDeclarationFormHtml renders advice variant with privacy first', () => {
+    const html = laaPdf.buildLaaDeclarationFormHtml('adviceAssistance', {}, id);
+    assert.match(html, /laa-decl-block/);
+    assert.match(html, /Legal Aid Agency Privacy Notice/);
+    assert.match(html, /Client\u2019s Declaration \(Advice/);
+    assert.match(html, /all the information I have given is true/);
+    const privacyIdx = html.indexOf('Legal Aid Agency Privacy Notice');
+    const declIdx = html.indexOf('Client\u2019s Declaration');
+    assert.ok(privacyIdx < declIdx, 'privacy notice should precede declaration');
+  });
+
+  it('buildLaaDeclarationFormHtml renders full CRM14 applicant variant', () => {
+    const html = laaPdf.buildLaaDeclarationFormHtml('crm14Applicant', {}, id);
+    assert.match(html, /Fraud notice/);
+    assert.match(html, /Applicant\u2019s Declaration/);
+    assert.match(html, /right to representation for the purposes of criminal proceedings/);
+    assert.match(html, /I have read the Fraud Notice/);
+    assert.ok(laaPdf.CRM14_APPLICANT_PARAGRAPHS.length >= 15, 'v7 applicant declaration should be multi-paragraph');
+  });
+
+  it('buildLaaDeclarationFormHtml renders partner and representative variants', () => {
+    const partnerAdvice = laaPdf.buildLaaDeclarationFormHtml('partnerAdvice', {}, id);
+    assert.match(partnerAdvice, /Partner\u2019s declaration/);
+    const partnerCrm14 = laaPdf.buildLaaDeclarationFormHtml('partnerCrm14', {}, id);
+    assert.match(partnerCrm14, /Declaration by the applicant\u2019s partner/);
+    const rep = laaPdf.buildLaaDeclarationFormHtml('representative', {}, id);
+    assert.match(rep, /Declaration by the legal representative/);
+  });
 });
 
 describe('laaDeclarationPdf — client / fee-earner name fallback (regression)', () => {
@@ -141,6 +170,15 @@ describe('laaDeclarationPdf app wiring', () => {
 
   it('form field offers blank default before Yes/No', () => {
     assert.match(appJs, /privacyNoticeAccepted.*options: \['','Yes','No'\]/);
+  });
+
+  it('uses laaDeclarationBlock field type wired to buildLaaDeclarationFormHtml', () => {
+    assert.match(appJs, /type: 'laaDeclarationBlock'/);
+    assert.match(appJs, /buildLaaDeclarationFormHtml/);
+    assert.match(appJs, /variant: 'adviceAssistance'/);
+    assert.match(appJs, /variant: 'crm14Applicant'/);
+    assert.doesNotMatch(appJs, /hasDeclarationText/);
+    assert.doesNotMatch(appJs, /inlineDeclaration/);
   });
 
   it('lib/laaDeclarationPdf.js uses browser-safe export', () => {

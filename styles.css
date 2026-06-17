@@ -2730,6 +2730,18 @@ html.dark .btn-client-sign-fullscreen { border-color: #94a3b8; }
   margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--privacy-border);
   font-size: 0.82rem; color: var(--declaration-heading); white-space: pre-wrap;
 }
+.laa-decl-block > .privacy-text:first-child {
+  margin-top: 0; padding-top: 0; border-top: none;
+}
+.laa-decl-block .laa-fraud-warning {
+  font-size: 0.82rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 5px;
+  padding: 0.5rem 0.75rem; margin: 0.75rem 0; line-height: 1.45;
+}
+html.dark .laa-decl-block .laa-fraud-warning {
+  background: rgba(254, 242, 242, 0.12); border-color: rgba(254, 202, 202, 0.35);
+}
+.laa-decl-block h3 { margin-top: 0.75rem; }
+.laa-decl-block .declaration-text + .declaration-text { margin-top: 0.5rem; }
 
 /* ═══ MULTI-INTERVIEW ═══ */
 .interview-notes-warning {
