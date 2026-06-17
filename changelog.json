@@ -6,7 +6,10 @@
       "latest": true,
       "changes": [
         "Security: cross-device sync now encrypts attendance records with AES-256-GCM before upload — server stores ciphertext only",
-        "Sync pull decrypts envelopes locally using your device encryption key; legacy plaintext sync records remain readable until re-synced"
+        "Sync pull decrypts envelopes locally using your device encryption key; legacy plaintext sync records remain readable until re-synced",
+        "PDF: Defence summary and section 8 now show outcome code, next date, next venue, interview position, and headline advice (derived from court date, client decision, and advice fields)",
+        "PDF: LAA Declaration (section 11) always prints — Privacy Notice, Applicant\u2019s Declaration, and CRM3 fields; no longer skipped when signatures are empty",
+        "PDF: CRM14 section includes fraud warning and rep/partner declaration blocks; improved spacing on Defence summary and LAA blocks"
       ]
     },
     {

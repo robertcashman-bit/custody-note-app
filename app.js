@@ -12992,20 +12992,24 @@ var REQUIRED_FIELD_KEYS = [
   // C8b: Defence summary panel — a compact, page-1 "what happened" block
   // visible to the case lawyer without skim-reading the whole note.
   function pdfDefenceSummaryCss() {
-    return '.def-summary{margin:6px 0 8px;border:1px solid #c7d2fe;border-radius:6px;background:#fafbff;padding:6px 10px;print-color-adjust:exact;}' +
-      '.def-summary h3{margin:0 0 4px;font-size:9px;letter-spacing:0.06em;text-transform:uppercase;color:#1e40af;font-weight:700;}' +
-      '.def-summary .ds-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;}' +
-      '.def-summary .ds-item{font-size:9px;line-height:1.4;}' +
+    return '.def-summary{margin:8px 0 10px;border:1px solid #c7d2fe;border-radius:6px;background:#fafbff;padding:8px 12px;print-color-adjust:exact;}' +
+      '.def-summary h3{margin:0 0 6px;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:#1e40af;font-weight:700;}' +
+      '.def-summary .ds-grid{display:grid;grid-template-columns:1fr;gap:4px 0;}' +
+      '.def-summary .ds-item{font-size:10px;line-height:1.5;word-break:break-word;overflow-wrap:anywhere;}' +
       '.def-summary .ds-item strong{color:#1e3a8a;}' +
       '.def-summary .ds-item.ds-wide{grid-column:1 / -1;}' +
       '.def-summary .ds-empty{color:#94a3b8;font-style:italic;}';
+  }
+  function getDefenceSummaryFields(d) {
+    var DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+    return DS && DS.buildDefenceSummaryFields ? DS.buildDefenceSummaryFields(d) : {};
   }
   function pdfDefenceSummaryHtml(d) {
     var DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
     if (DS && typeof DS.buildDefenceSummaryHtml === 'function') {
       return DS.buildDefenceSummaryHtml(d, esc);
     }
-    var fields = DS && DS.buildDefenceSummaryFields ? DS.buildDefenceSummaryFields(d) : {};
+    var fields = getDefenceSummaryFields(d);
     function it(label, val, wide) {
       var v = (val == null || val === '') ? '<span class="ds-empty">not recorded</span>' : esc(String(val));
       return '<div class="ds-item' + (wide ? ' ds-wide' : '') + '"><strong>' + esc(label) + ':</strong> ' + v + '</div>';
@@ -13058,12 +13062,33 @@ var REQUIRED_FIELD_KEYS = [
   }
   function laaPrivacyNoticePdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
-    return L ? L.buildLaaPrivacyNoticeHtml(refData, escFn) : '';
+    if (L) return L.buildLaaPrivacyNoticeHtml(refData, escFn);
+    var text = refData && refData.privacyNoticeText ? String(refData.privacyNoticeText).trim() : '';
+    if (!text) return '';
+    return '<div class="laa-privacy-box"><p class="laa-decl-heading">Privacy Notice</p><p>' + escFn(text) + '</p></div>';
   }
   function laaApplicantDeclarationPdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
     if (L) return L.buildLaaApplicantDeclarationHtml(refData, escFn);
-    return '<div class="decl-box">' + escFn(refData.laaDeclarationText || '') + '</div>';
+    var text = refData && refData.laaDeclarationText ? String(refData.laaDeclarationText).trim() : '';
+    if (!text) return '';
+    return '<div class="decl-box"><p class="laa-decl-applicant">Applicant\u2019s Declaration</p><p>' + escFn(text) + '</p></div>';
+  }
+  function laaPartnerDeclarationNotePdfHtml(escFn) {
+    var L = getLaaDeclarationPdfHelpers();
+    return L && L.buildLaaPartnerDeclarationNoteHtml ? L.buildLaaPartnerDeclarationNoteHtml(escFn) : '';
+  }
+  function crm14FraudWarningPdfHtml(escFn) {
+    var L = getLaaDeclarationPdfHelpers();
+    return L && L.buildCrm14FraudWarningHtml ? L.buildCrm14FraudWarningHtml(escFn) : '';
+  }
+  function crm14PartnerDeclarationNotePdfHtml(escFn) {
+    var L = getLaaDeclarationPdfHelpers();
+    return L && L.buildCrm14PartnerDeclarationNoteHtml ? L.buildCrm14PartnerDeclarationNoteHtml(escFn) : '';
+  }
+  function crm14RepDeclarationNotePdfHtml(escFn) {
+    var L = getLaaDeclarationPdfHelpers();
+    return L && L.buildCrm14RepDeclarationNoteHtml ? L.buildCrm14RepDeclarationNoteHtml(escFn) : '';
   }
   function laaPrivacyAckLabel() {
     var L = getLaaDeclarationPdfHelpers();
@@ -13136,8 +13161,8 @@ laaDeclarationPdfCssSnippet() +
 '.sig-block .sig-label{font-size:8.5px;font-weight:600;margin-bottom:3px;color:#334155;}' +
 '.sig-img{max-width:240px;max-height:65px;display:block;}' +
 '.sig-unsigned{font-style:italic;color:#64748b;}' +
-'.cover-block{background:#f0f4ff;border:1px solid #c7d2fe;border-radius:6px;padding:6px 10px;margin:5px 0 8px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px 16px;print-color-adjust:exact;}' +
-'.cover-item{font-size:8.5px;line-height:1.35;}.cover-item strong{color:#1e40af;}' +
+'.cover-block{background:#f0f4ff;border:1px solid #c7d2fe;border-radius:6px;padding:8px 12px;margin:6px 0 10px;display:grid;grid-template-columns:1fr 1fr;gap:4px 16px;print-color-adjust:exact;}' +
+'.cover-item{font-size:9px;line-height:1.45;word-break:break-word;overflow-wrap:anywhere;}.cover-item strong{color:#1e40af;}' +
 '.watermark{position:fixed;top:30%;left:5%;font-size:110px;font-weight:900;color:rgba(0,0,0,0.04);transform:rotate(-30deg);pointer-events:none;z-index:0;letter-spacing:12px;print-color-adjust:exact;}' +
 '</style></head><body>' +
 '<div class="letterhead">' +
@@ -13359,8 +13384,16 @@ row('Decision', d.outcomeDecision) +
   if (d.bailConditionsChecklist) return row('Bail conditions', d.bailConditionsChecklist.replace(/\|/g, '; ')) + (d.bailConditions ? row('Bail conditions details', d.bailConditions) : '');
   return '';
 })() +
+(function() {
+  var f = getDefenceSummaryFields(d);
+  return row('Outcome code', f.outcomeCode) +
+    row('Next date', f.nextDate) +
+    row('Next venue', f.nextVenue) +
+    row('Interview position', f.interviewPosition) +
+    row('Headline advice', f.headlineAdvice);
+})() +
 row('Court', d.courtName) + row('Court date', fmtDate(d.courtDate)) + (d.courtTime ? row('Court time', d.courtTime) : '') +
-row('Next location', d.nextLocationName) + row('Next date', fmtDate(d.nextDate)) + row('Further attendance', d.furtherAttendance) +
+row('Next location', d.nextLocationName) + row('Next date (form field)', fmtDate(d.nextDate)) + row('Further attendance', d.furtherAttendance) +
 row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes' ? row('Follow-up required', d.followUpRequired) : '') +
 (d.handedBackToDSCCReason ? row('Reason handed back to DSCC (Spec 9.53)', d.handedBackToDSCCReason) : '') +
 (d.nonAttendanceReason ? row('Reason for non-attendance (Spec 9.39/9.44)', d.nonAttendanceReason) : '') +
@@ -13459,17 +13492,20 @@ row('Invoice notes', d.invoiceNotes) +
 (function() {
   var laaRows = row('Previous advice?', d.previousAdvice) + row('Details', d.previousAdviceDetails) +
     row(laaPrivacyAckLabel(), d.privacyNoticeAccepted) +
+    row('Client involved in another way?', d.clientInvolvedAnotherWay) +
+    (d.clientInvolvedAnotherWay === 'Yes' ? row('Involved in another way — details', d.clientInvolvedDetails) : '') +
+    row('Counsel instructed? (CRM3)', d.counselInstructed) +
+    row('Advocacy Assistance — proceedings / reason (CRM3)', d.advocacyReason) +
     row('Client has partner?', d.laaHasPartner) +
     row('Client name', d.laaClientFullName) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
     (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
     row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
-  var hasSig = d.clientSig || getEffectiveFeeEarnerSig(d) || d.laaPartnerSig;
-  if (!laaRows && !hasSig && !laaPrivacyNoticePdfHtml(h) && !laaApplicantDeclarationPdfHtml(h)) return '';
   return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
     ((d.workType === 'Police Station Telephone Attendance' || (d.sufficientBenefitTest && d.sufficientBenefitTest.split('|').indexOf('Telephone advice only') >= 0)) ? '<p style="font-size:10px;color:#64748b;margin-bottom:8px;"><em>For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.</em></p>' : '') +
     laaPrivacyNoticePdfHtml(h) +
     laaApplicantDeclarationPdfHtml(h) +
     '<table>' + laaRows + '</table>' +
+    (d.laaHasPartner === 'Yes' ? laaPartnerDeclarationNotePdfHtml(h) : '') +
     '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' +
     (d.laaHasPartner === 'Yes' ? '<div class="sig-block"><p class="sig-label">Partner signature</p>' + sig('laaPartnerSig') + '</div>' : '') +
     '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>';
@@ -13497,10 +13533,11 @@ row('Invoice notes', d.invoiceNotes) +
 })() +
 
 (function() {
-  var hasCrm14 = d.crm14SignedFormOnFile || d.crm14NewOrChange || d.crm14Title || d.crm14CaseType || d.crm14HasPartner || d.crm14PassportingBenefits || d.crm14InterestsOfJustice || d.crm14CourtName || d.crm14Urn;
+  var hasCrm14 = d.crm14SignedFormOnFile || d.crm14NewOrChange || d.crm14Title || d.crm14CaseType || d.crm14HasPartner || d.crm14PassportingBenefits || d.crm14InterestsOfJustice || d.crm14CourtName || d.crm14Urn || d.crm14RepAuthorised || d.crm14InstructedByFirm || d.crm14InstructedByPds;
   if (!hasCrm14) return '';
   var subSect = function(title, rows) { return rows ? '<p style="font-size:10px;font-weight:600;margin:12px 0 4px;">' + h(title) + '</p><table>' + rows + '</table>' : ''; };
   return '<h2>14. Legal Aid application (Apply for criminal legal aid / CRM14)</h2>' +
+    crm14FraudWarningPdfHtml(h) +
     '<p style="font-size:9px;color:#64748b;margin-bottom:8px;">Data required for the Apply for criminal legal aid service (mandatory) or paper CRM14 (limited circumstances). The signed online form (client-signed, typically 2 pages) must be retained on file.</p>' +
     row('Signed Apply application (client-signed, 2-page) on file?', d.crm14SignedFormOnFile) +
     subSect('About you – Personal details',
@@ -13526,7 +13563,13 @@ row('Invoice notes', d.invoiceNotes) +
       row('CRM15 financial statement required?', d.crm14Crm15Required) +
       row('Gross annual income', d.grossIncome) + row('Partner income', d.partnerIncome)) +
     subSect('Interests of Justice',
-      d.crm14InterestsOfJustice ? row('Interests of Justice test – outcome and notes', d.crm14InterestsOfJustice) : '');
+      d.crm14InterestsOfJustice ? row('Interests of Justice test – outcome and notes', d.crm14InterestsOfJustice) : '') +
+    subSect('Declaration by the legal representative',
+      row('Authorised to provide representation under LAA contract?', d.crm14RepAuthorised) +
+      row('Instructed by LAA-contracted firm?', d.crm14InstructedByFirm) +
+      row('Instructed by PDS solicitor?', d.crm14InstructedByPds)) +
+    crm14RepDeclarationNotePdfHtml(h) +
+    (d.crm14HasPartner === 'Yes' ? crm14PartnerDeclarationNotePdfHtml(h) + '<div class="sig-block"><p class="sig-label">CRM14 partner signature</p>' + sig('crm14PartnerSig') + '</div>' : '');
 })() +
 
 PDF_CASENOTE_ADVERT +
@@ -13978,16 +14021,19 @@ pdfAuditFooterHtml(d, settings) +
       (function() {
         var laaRows = row('Previous advice?', d.previousAdvice) + row('Details', d.previousAdviceDetails) +
           row(laaPrivacyAckLabel(), d.privacyNoticeAccepted) +
+          row('Client involved in another way?', d.clientInvolvedAnotherWay) +
+          (d.clientInvolvedAnotherWay === 'Yes' ? row('Involved in another way — details', d.clientInvolvedDetails) : '') +
+          row('Counsel instructed? (CRM3)', d.counselInstructed) +
+          row('Advocacy Assistance — proceedings / reason (CRM3)', d.advocacyReason) +
           row('Client has partner?', d.laaHasPartner) +
           row('Client name', d.laaClientFullName) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
           (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
           row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
-        var hasSig = d.clientSig || getEffectiveFeeEarnerSig(d) || d.laaPartnerSig;
-        if (!laaRows && !hasSig && !laaPrivacyNoticePdfHtml(h) && !laaApplicantDeclarationPdfHtml(h)) return '';
         return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
           laaPrivacyNoticePdfHtml(h) +
           laaApplicantDeclarationPdfHtml(h) +
           '<table>' + laaRows + '</table>' +
+          (d.laaHasPartner === 'Yes' ? laaPartnerDeclarationNotePdfHtml(h) : '') +
           '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' +
           (d.laaHasPartner === 'Yes' ? '<div class="sig-block"><p class="sig-label">Partner signature</p>' + sig('laaPartnerSig') + '</div>' : '') +
           '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>';
