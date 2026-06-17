@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.38",
+      "date": "2026-06-17",
+      "latest": true,
+      "changes": [
+        "PDF: client name now always prints in the LAA Declaration (sections 11 / sign-off) — falls back to the record's name when the dedicated declaration field was left blank",
+        "PDF: LAA Declaration now uses the official Legal Aid Agency wording — full LAA Privacy Notice and the CRM2 Client's Declaration (Advice & Assistance)",
+        "PDF: CRM14 section now reproduces the official applicant declaration, fraud notice, and the full legal representative and partner declarations",
+        "PDF: official declaration wording is built in so it prints correctly even if reference data fails to load"
+      ]
+    },
+    {
       "version": "1.9.37",
       "date": "2026-06-15",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Security: cross-device sync now encrypts attendance records with AES-256-GCM before upload — server stores ciphertext only",
         "Sync pull decrypts envelopes locally using your device encryption key; legacy plaintext sync records remain readable until re-synced",

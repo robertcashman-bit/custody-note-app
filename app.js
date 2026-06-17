@@ -13062,21 +13062,32 @@ var REQUIRED_FIELD_KEYS = [
   }
   function laaPrivacyNoticePdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
-    if (L) return L.buildLaaPrivacyNoticeHtml(refData, escFn);
-    var text = refData && refData.privacyNoticeText ? String(refData.privacyNoticeText).trim() : '';
-    if (!text) return '';
-    return '<div class="laa-privacy-box"><p class="laa-decl-heading">Privacy Notice</p><p>' + escFn(text) + '</p></div>';
+    return L ? L.buildLaaPrivacyNoticeHtml(refData, escFn) : '';
   }
   function laaApplicantDeclarationPdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
-    if (L) return L.buildLaaApplicantDeclarationHtml(refData, escFn);
-    var text = refData && refData.laaDeclarationText ? String(refData.laaDeclarationText).trim() : '';
-    if (!text) return '';
-    return '<div class="decl-box"><p class="laa-decl-applicant">Applicant\u2019s Declaration</p><p>' + escFn(text) + '</p></div>';
+    return L ? L.buildLaaApplicantDeclarationHtml(refData, escFn) : '';
   }
   function laaPartnerDeclarationNotePdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
     return L && L.buildLaaPartnerDeclarationNoteHtml ? L.buildLaaPartnerDeclarationNoteHtml(escFn) : '';
+  }
+  // Client / fee-earner name for the LAA declaration, with a fallback to the
+  // record's own name fields so the name is never blank on a generated PDF
+  // (laaClientFullName only auto-fills when the LAA section is opened in the form).
+  function laaClientNameForPdf(d) {
+    var L = getLaaDeclarationPdfHelpers();
+    if (L && L.resolveLaaClientName) return L.resolveLaaClientName(d);
+    return d.laaClientFullName || [d.forename, d.middleName, d.surname].filter(Boolean).join(' ').toUpperCase();
+  }
+  function laaFeeEarnerNameForPdf(d) {
+    var L = getLaaDeclarationPdfHelpers();
+    if (L && L.resolveLaaFeeEarnerName) return L.resolveLaaFeeEarnerName(d);
+    return d.laaFeeEarnerFullName || d.feeEarnerName || '';
+  }
+  function crm14ApplicantDeclarationNotePdfHtml(escFn) {
+    var L = getLaaDeclarationPdfHelpers();
+    return L && L.buildCrm14ApplicantDeclarationNoteHtml ? L.buildCrm14ApplicantDeclarationNoteHtml(escFn) : '';
   }
   function crm14FraudWarningPdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
@@ -13497,9 +13508,9 @@ row('Invoice notes', d.invoiceNotes) +
     row('Counsel instructed? (CRM3)', d.counselInstructed) +
     row('Advocacy Assistance — proceedings / reason (CRM3)', d.advocacyReason) +
     row('Client has partner?', d.laaHasPartner) +
-    row('Client name', d.laaClientFullName) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
+    row('Client name', laaClientNameForPdf(d)) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
     (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
-    row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
+    row('Fee Earner', laaFeeEarnerNameForPdf(d)) + row('Certification', d.feeEarnerCertification);
   return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
     ((d.workType === 'Police Station Telephone Attendance' || (d.sufficientBenefitTest && d.sufficientBenefitTest.split('|').indexOf('Telephone advice only') >= 0)) ? '<p style="font-size:10px;color:#64748b;margin-bottom:8px;"><em>For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.</em></p>' : '') +
     laaPrivacyNoticePdfHtml(h) +
@@ -13537,6 +13548,7 @@ row('Invoice notes', d.invoiceNotes) +
   if (!hasCrm14) return '';
   var subSect = function(title, rows) { return rows ? '<p style="font-size:10px;font-weight:600;margin:12px 0 4px;">' + h(title) + '</p><table>' + rows + '</table>' : ''; };
   return '<h2>14. Legal Aid application (Apply for criminal legal aid / CRM14)</h2>' +
+    crm14ApplicantDeclarationNotePdfHtml(h) +
     crm14FraudWarningPdfHtml(h) +
     '<p style="font-size:9px;color:#64748b;margin-bottom:8px;">Data required for the Apply for criminal legal aid service (mandatory) or paper CRM14 (limited circumstances). The signed online form (client-signed, typically 2 pages) must be retained on file.</p>' +
     row('Signed Apply application (client-signed, 2-page) on file?', d.crm14SignedFormOnFile) +
@@ -13689,14 +13701,14 @@ pdfAuditFooterHtml(d, settings) +
       row('Number of calls', d.numberOfCalls) +
       row('Number of suspects', d.numberOfSuspects) +
       row('Previous advice?', d.previousAdvice) + (d.previousAdviceDetails ? row('Details', d.previousAdviceDetails) : '') +
-      row('Client Name', d.laaClientFullName) +
+      row('Client Name', laaClientNameForPdf(d)) +
       row(laaPrivacyAckLabel(), d.privacyNoticeAccepted) +
       '</table>' +
       laaPrivacyNoticePdfHtml(h) +
       laaApplicantDeclarationPdfHtml(h) +
       (d.clientSig ? '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' : '') +
       (getEffectiveFeeEarnerSig(d) ? '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>' : '') +
-      '<table>' + row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification) +
+      '<table>' + row('Fee Earner', laaFeeEarnerNameForPdf(d)) + row('Certification', d.feeEarnerCertification) +
       row('UFN', d.ufn) + row('Firm LAA Account', d.firmLaaAccount) +
       row('Ethnic Origin', d.ethnicOriginCode) + row('Disability', d.disabilityCode) +
       '</table>' +
@@ -14026,9 +14038,9 @@ pdfAuditFooterHtml(d, settings) +
           row('Counsel instructed? (CRM3)', d.counselInstructed) +
           row('Advocacy Assistance — proceedings / reason (CRM3)', d.advocacyReason) +
           row('Client has partner?', d.laaHasPartner) +
-          row('Client name', d.laaClientFullName) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
+          row('Client name', laaClientNameForPdf(d)) + row('Date', fmtDate(d.laaSignatureDate)) + row('Time', d.laaSignatureTime) +
           (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
-          row('Fee Earner', d.laaFeeEarnerFullName) + row('Certification', d.feeEarnerCertification);
+          row('Fee Earner', laaFeeEarnerNameForPdf(d)) + row('Certification', d.feeEarnerCertification);
         return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
           laaPrivacyNoticePdfHtml(h) +
           laaApplicantDeclarationPdfHtml(h) +
