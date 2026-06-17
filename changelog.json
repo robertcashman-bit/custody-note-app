@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.38",
+      "version": "1.9.39",
       "date": "2026-06-17",
       "latest": true,
+      "changes": [
+        "LAA Declaration: Privacy Notice and official declaration text now appear in the app immediately before the client signs — in LAA Declaration, Attend (Section 6), telephone sign-off, and CRM14",
+        "CRM14: full v7 applicant declaration (online criminal legal aid) shown in the form and in PDF section 14, with privacy notice and fraud warning",
+        "Single authoritative wording source in lib/laaDeclarationPdf.js — CRM2 Advice & Assistance, v7 applicant/partner/rep declarations, and LAA Privacy Notice shared between UI and PDF"
+      ]
+    },
+    {
+      "version": "1.9.38",
+      "date": "2026-06-17",
+      "latest": false,
       "changes": [
         "PDF: client name now always prints in the LAA Declaration (sections 11 / sign-off) — falls back to the record's name when the dedicated declaration field was left blank",
         "PDF: LAA Declaration now uses the official Legal Aid Agency wording — full LAA Privacy Notice and the CRM2 Client's Declaration (Advice & Assistance)",

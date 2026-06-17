@@ -811,7 +811,6 @@ var LAA = {
     {
       id: 'attend', title: '6. Consultation (Attend on Client)',
       keyFields: ['conflictCheckResult', 'niNumber', 'clientInstructions', 'clientDecision'],
-      inlineDeclaration: true,
       checklist: [
         { key: 'chkConflictCheck', label: 'Conflict of interest check completed', group: 'Conflict & independence' },
         { key: 'chkConfidentiality', label: 'Advised on Confidentiality', group: 'Conflict & independence' },
@@ -827,7 +826,9 @@ var LAA = {
       ],
       fields: [
         { key: '_h_laa_inline', label: 'Legal Aid Declaration', type: 'sectionHeading' },
-        { key: '_note_laa_inline', label: 'The applicant should read and sign the declaration below. This records the client\'s consent for legal aid.', type: 'sectionNote' },
+        { key: '_note_laa_inline', label: 'The client should read the Privacy Notice and declaration below before signing.', type: 'sectionNote' },
+        { key: '_laa_decl_inline', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
+        { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
         { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig' },
         { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
@@ -1140,7 +1141,7 @@ var LAA = {
       { key: '_note_comms', label: 'Log telephone calls, emails, and text messages. Each entry records the type, direction, party, and summary.', type: 'sectionNote' },
       { key: '_commsLogEntries', label: 'Communications', type: 'multiCommsLog' },
     ]},
-    { id: 'laaDeclaration', title: 'LAA Declaration', keyFields: ['laaClientFullName', 'clientSig'], hasDeclarationText: true, fields: [
+    { id: 'laaDeclaration', title: 'LAA Declaration', keyFields: ['laaClientFullName', 'clientSig'], fields: [
       { key: 'previousAdvice', label: 'Has client received advice on this matter before?', type: 'select', options: ['Yes','No'] },
       { key: 'previousAdviceDetails', label: 'Previous advice details', type: 'text', cols: 2, showIf: { field: 'previousAdvice', value: 'Yes' } },
       { key: '_h_crm3', label: 'CRM3 (Advocacy Assistance)', type: 'sectionHeading' },
@@ -1148,9 +1149,11 @@ var LAA = {
       { key: 'clientInvolvedDetails', label: 'If involved in another way — details', type: 'textarea', cols: 2, rows: 3, showIf: { field: 'clientInvolvedAnotherWay', value: 'Yes' } },
       { key: 'counselInstructed', label: 'Has counsel been instructed? (CRM3)', type: 'select', options: ['','Yes','No'] },
       { key: 'advocacyReason', label: 'Advocacy Assistance — proceedings / reason (CRM3)', type: 'textarea', cols: 2, rows: 2, placeholder: 'e.g. bail variation, Parole, Warrant of Further Detention' },
+      { key: '_h_laa_sign', label: 'Client declaration & signature', type: 'sectionHeading' },
+      { key: '_laa_decl_main', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
       { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
       { key: 'laaHasPartner', label: 'Does the client have a partner?', type: 'select', options: ['Yes','No'] },
-      { key: '_note_partner_decl', label: 'Partner\u2019s declaration: I declare that the information included in this application is a true statement of all my financial circumstances to the best of my knowledge and belief. I agree to the LAA checking the information I have given. I authorise those organisations to provide the information for which the LAA may ask. I have read the Fraud Notice.', type: 'sectionNote', showIf: { field: 'laaHasPartner', value: 'Yes' } },
+      { key: '_laa_decl_partner', label: 'Partner declaration', type: 'laaDeclarationBlock', variant: 'partnerAdvice', showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaPartnerFullName', label: 'Partner\u2019s full name (BLOCK CAPITALS)', type: 'text', cols: 2, showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaPartnerSignature', label: 'Partner signature', type: 'signature', sigKey: 'laaPartnerSig', showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaPartnerSignatureDate', label: 'Partner signature date (auto)', type: 'date', readonly: true, showIf: { field: 'laaHasPartner', value: 'Yes' } },
@@ -1169,9 +1172,9 @@ var LAA = {
       { key: 'maatId', label: 'MAAT ID', type: 'text', placeholder: 'Firm provides after charge', firmCompletes: true },
     ]},
     { id: 'crm14', title: 'Legal Aid application (Apply / CRM14)', keyFields: ['crm14CaseType', 'crm14MaatRef'], fields: [
-      { key: '_warning_fraud', label: 'Please note: Making a false declaration is an offence. If you are found doing so, you may be prosecuted, potentially leading to a fine and/or prison sentence. The Legal Aid Agency has a zero tolerance approach to fraud and will look to prosecute where there is evidence of fraud.', type: 'sectionNote', className: 'fraud-warning' },
       { key: '_note_crm14', label: 'Apply for criminal legal aid: The LAA\'s mandatory route is the Apply for criminal legal aid service (apply-for-criminal-legal-aid.service.justice.gov.uk). This section captures the same information required for that application. The paper CRM14/CRM15 forms are only used in limited circumstances (e.g. no portal access, civil contempt, breach of civil injunction). Complete this section to support either route.', type: 'sectionNote' },
       { key: '_note_crm14_retain', label: 'The Apply service produces an online form signed by the client (typically 2 pages). You must retain a copy of this signed form on the client file.', type: 'sectionNote' },
+      { key: '_laa_decl_crm14', label: 'Applicant declaration', type: 'laaDeclarationBlock', variant: 'crm14Applicant' },
       { key: 'crm14SignedFormOnFile', label: 'Signed Apply application (client-signed, 2-page) on file?', type: 'select', options: ['Yes','No','To follow','N/A (paper CRM14 used)'] },
       { key: '_h_crm14_about', label: 'About you – Personal details', type: 'sectionHeading' },
       { key: 'crm14NewOrChange', label: 'New application or change of circumstances?', type: 'select', options: ['New application','Change of circumstances'] },
@@ -1206,7 +1209,7 @@ var LAA = {
       { key: 'crm14PartnerAddress', label: "Partner's address (if different from yours)", type: 'textarea', cols: 2, showIf: { field: 'crm14HasPartner', value: 'Yes' } },
       { key: 'crm14PartnerVictimWitnessCoDef', label: 'Is your partner a victim, prosecution witness, or co-defendant in this case?', type: 'select', options: ['Yes','No','N/A'], showIf: { field: 'crm14HasPartner', value: 'Yes' } },
       { key: '_h_partner_declaration', label: 'Partner\'s declaration', type: 'sectionHeading', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
-      { key: '_note_partner_declaration', label: 'I declare that the information included in this application is a true statement of all my financial circumstances to the best of my knowledge and belief. I agree to the LAA and HMCTS, or my partner\'s solicitor, checking the information I have given, with the Department for Work and Pensions, HM Revenue and Customs or other people and organisations. I authorise those people and organisations to provide the information for which the LAA, HMCTS or my partner\'s solicitor may ask. I understand that this application will be made electronically by the legal representative. I have read the Fraud Notice.', type: 'sectionNote', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
+      { key: '_laa_decl_crm14_partner', label: 'Partner declaration', type: 'laaDeclarationBlock', variant: 'partnerCrm14', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
       { key: 'crm14PartnerSignature', label: 'Partner signature', type: 'signature', sigKey: 'crm14PartnerSig', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
       { key: 'crm14PartnerSignatureDate', label: 'Partner signature date', type: 'date', showIf: { field: 'crm14HasPartner', value: 'Yes' } },
       { key: '_h_crm14_financial', label: 'Financial assessment', type: 'sectionHeading' },
@@ -1221,7 +1224,7 @@ var LAA = {
       { key: '_note_crm14_instructed', label: 'I confirm that I have been instructed to provide representation by:', type: 'sectionNote' },
       { key: 'crm14InstructedByFirm', label: 'a firm which holds a contract issued by the LAA', type: 'select', options: ['','Yes','No'], cols: 2 },
       { key: 'crm14InstructedByPds', label: 'a solicitor employed by the LAA in the Public Defender Service who is authorised to provide representation', type: 'select', options: ['','Yes','No'], cols: 2 },
-      { key: '_note_crm14_rep_declaration', label: 'I confirm that I have gone through the questions on the Interests of Justice and financial assessment aspects of the application with the applicant. I confirm that the applicant has not provided me with any information which contradicts the information provided in this application.', type: 'sectionNote' },
+      { key: '_laa_decl_rep', label: 'Representative declaration', type: 'laaDeclarationBlock', variant: 'representative' },
     ]},
   ];
 
@@ -1328,7 +1331,6 @@ var LAA = {
     {
       id: 'telSignOff', title: '4. Sign Off',
       keyFields: ['laaClientFullName', 'clientSig'],
-      hasDeclarationText: true,
       fields: [
         { key: '_h_time', label: 'Time & Counts', type: 'sectionHeading' },
         { key: 'telephoneCallDuration', label: 'Total call duration (minutes)', type: 'number', placeholder: 'e.g. 25' },
@@ -1338,6 +1340,8 @@ var LAA = {
         { key: 'previousAdviceDetails', label: 'Previous advice details', type: 'text', cols: 2, showIf: { field: 'previousAdvice', value: 'Yes' } },
         { key: '_h_signatures', label: 'Signatures', type: 'sectionHeading' },
         { key: '_note_tel_declaration', label: 'Signatures are optional for telephone advice. Enable below only if the client is present or the firm requires a signed copy.', type: 'sectionNote' },
+        { key: '_laa_decl_tel', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
+        { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
         { key: 'laaFeeEarnerFullName', label: 'Fee Earner Full Name', type: 'text', placeholder: 'Your full name', cols: 2 },
         { key: 'captureSignatures', label: 'Capture signatures?', type: 'select', options: ['No','Yes'] },
@@ -1568,7 +1572,6 @@ var LAA = {
     {
       id: 'attend', title: '6. Consultation (Attend on Client)',
       keyFields: ['conflictCheckResult', 'niNumber', 'clientInstructions', 'clientDecision'],
-      inlineDeclaration: true,
       checklist: [
         { key: 'chkConflictCheck', label: 'Conflict of interest check completed', group: 'Conflict & independence' },
         { key: 'chkConfidentiality', label: 'Advised on Confidentiality', group: 'Conflict & independence' },
@@ -1583,7 +1586,9 @@ var LAA = {
       ],
       fields: [
         { key: '_h_laa_inline', label: 'Legal Aid Declaration', type: 'sectionHeading' },
-        { key: '_note_laa_inline', label: 'The applicant should read and sign the declaration below. This records the client\'s consent for legal aid.', type: 'sectionNote' },
+        { key: '_note_laa_inline', label: 'The client should read the Privacy Notice and declaration below before signing.', type: 'sectionNote' },
+        { key: '_laa_decl_inline', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
+        { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
         { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig' },
         { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
@@ -7568,7 +7573,7 @@ var REQUIRED_FIELD_KEYS = [
   function autoFillFromClient() {
     const sec = activeFormSections[currentSectionIdx];
     if (!sec) return;
-    if (sec.id === 'laaDeclaration' || sec.id === 'telSignOff' || (sec.id === 'attend' && sec.inlineDeclaration)) {
+    if (sec.id === 'laaDeclaration' || sec.id === 'telSignOff' || sec.id === 'attend') {
       autoFillDeclarationFields();
     }
     if (sec.id === 'consents') {
@@ -8123,13 +8128,6 @@ var REQUIRED_FIELD_KEYS = [
       const section = document.createElement('div');
       section.className = 'form-section active section-accent-1';
         section.dataset.sectionId = sec.id;
-        if (sec.hasDeclarationText && refData.laaDeclarationText) {
-          const decl = document.createElement('div');
-          decl.className = 'declaration-box';
-          if (refData.privacyNoticeText) decl.innerHTML = '<p class="privacy-text">' + esc(refData.privacyNoticeText) + '</p>';
-          decl.innerHTML += '<h3>Applicant\'s Declaration</h3><p class="declaration-text">' + esc(refData.laaDeclarationText) + '</p>';
-          section.appendChild(decl);
-        }
         const grid = document.createElement('div');
         grid.className = 'form-row-2col';
         (sec.fields || []).forEach(f => renderField(f, data, grid, section));
@@ -8318,26 +8316,6 @@ var REQUIRED_FIELD_KEYS = [
     }
 
     function populateSectionContent(section, sec, secIdx) {
-      if (sec.hasDeclarationText && refData.laaDeclarationText) {
-        const telNote = document.createElement('p');
-        telNote.className = 'declaration-tel-note';
-        telNote.style.fontSize = '12px'; telNote.style.color = '#64748b'; telNote.style.marginBottom = '8px';
-        telNote.textContent = 'For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.';
-        telNote.dataset.showIfField = 'workType';
-        telNote.dataset.showIfValue = 'Police Station Telephone Attendance';
-        telNote.dataset.showIfOrField = 'sufficientBenefitTest';
-        telNote.dataset.showIfOrValue = 'Telephone advice only';
-        telNote.style.display = 'none';
-        section.appendChild(telNote);
-        const decl = document.createElement('div');
-        decl.className = 'declaration-box';
-        if (refData.privacyNoticeText) {
-          decl.innerHTML = '<p class="privacy-text">' + esc(refData.privacyNoticeText) + '</p>';
-        }
-        decl.innerHTML += '<h3>Applicant\'s Declaration</h3><p class="declaration-text">' + esc(refData.laaDeclarationText) + '</p>';
-        section.appendChild(decl);
-      }
-
       if (sec.checklist) {
         const cl = document.createElement('div');
         cl.className = 'checklist-group consultation-checklist';
@@ -8374,16 +8352,6 @@ var REQUIRED_FIELD_KEYS = [
           cl.appendChild(row);
         });
         section.appendChild(cl);
-      }
-
-      if (sec.inlineDeclaration && refData.laaDeclarationText) {
-        const decl = document.createElement('div');
-        decl.className = 'declaration-box inline-declaration';
-        if (refData.privacyNoticeText) {
-          decl.innerHTML = '<p class="privacy-text">' + esc(refData.privacyNoticeText) + '</p>';
-        }
-        decl.innerHTML += '<h3>Applicant\u2019s Declaration</h3><p class="declaration-text">' + esc(refData.laaDeclarationText) + '</p>';
-        section.appendChild(decl);
       }
 
       const grid = document.createElement('div');
@@ -8971,6 +8939,21 @@ var REQUIRED_FIELD_KEYS = [
       }
       const wrap = f.showIf ? document.createElement('div') : null;
       if (wrap) { wrap.style.gridColumn = '1 / -1'; wrap.dataset.showIfField = f.showIf.field; wrap.dataset.showIfValue = f.showIf.value || ''; wrap.dataset.showIfValues = (f.showIf.values || []).join(','); wrap.appendChild(p); grid.appendChild(wrap); } else grid.appendChild(p);
+      return;
+    }
+    if (f.type === 'laaDeclarationBlock') {
+      var L = (typeof window !== 'undefined' && window.LaaDeclarationPdf) ? window.LaaDeclarationPdf : null;
+      var declWrap = document.createElement('div');
+      declWrap.style.gridColumn = '1 / -1';
+      if (f.showIf) {
+        declWrap.dataset.showIfField = f.showIf.field;
+        declWrap.dataset.showIfValue = f.showIf.value || '';
+        declWrap.dataset.showIfValues = (f.showIf.values || []).join(',');
+      }
+      if (L && typeof L.buildLaaDeclarationFormHtml === 'function') {
+        declWrap.innerHTML = L.buildLaaDeclarationFormHtml(f.variant || 'adviceAssistance', refData, esc);
+      }
+      grid.appendChild(declWrap);
       return;
     }
     if (f.type === 'actionButton') {
@@ -13548,8 +13531,9 @@ row('Invoice notes', d.invoiceNotes) +
   if (!hasCrm14) return '';
   var subSect = function(title, rows) { return rows ? '<p style="font-size:10px;font-weight:600;margin:12px 0 4px;">' + h(title) + '</p><table>' + rows + '</table>' : ''; };
   return '<h2>14. Legal Aid application (Apply for criminal legal aid / CRM14)</h2>' +
-    crm14ApplicantDeclarationNotePdfHtml(h) +
+    laaPrivacyNoticePdfHtml(h) +
     crm14FraudWarningPdfHtml(h) +
+    crm14ApplicantDeclarationNotePdfHtml(h) +
     '<p style="font-size:9px;color:#64748b;margin-bottom:8px;">Data required for the Apply for criminal legal aid service (mandatory) or paper CRM14 (limited circumstances). The signed online form (client-signed, typically 2 pages) must be retained on file.</p>' +
     row('Signed Apply application (client-signed, 2-page) on file?', d.crm14SignedFormOnFile) +
     subSect('About you – Personal details',
