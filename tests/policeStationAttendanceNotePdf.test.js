@@ -115,3 +115,29 @@ describe('window exposure of PDF builders (so documents-screen can reach them)',
     });
   });
 });
+
+describe('Police Station Attendance Note PDF — defence summary and outcome fields', () => {
+  const buildPdfHtmlBody = sliceFunction(
+    appJs,
+    'function buildPdfHtml(',
+    'function buildTelephonePdfHtml('
+  );
+
+  it('section 8 uses derived defence summary fields', () => {
+    assert.match(buildPdfHtmlBody, /getDefenceSummaryFields\(d\)/);
+    assert.match(buildPdfHtmlBody, /row\('Outcome code', f\.outcomeCode\)/);
+    assert.match(buildPdfHtmlBody, /row\('Next date', f\.nextDate\)/);
+    assert.match(buildPdfHtmlBody, /row\('Next venue', f\.nextVenue\)/);
+    assert.match(buildPdfHtmlBody, /row\('Interview position', f\.interviewPosition\)/);
+    assert.match(buildPdfHtmlBody, /row\('Headline advice', f\.headlineAdvice\)/);
+  });
+
+  it('section 11 always includes privacy notice and applicant declaration calls', () => {
+    assert.match(buildPdfHtmlBody, /laaPrivacyNoticePdfHtml\(h\)/);
+    assert.match(buildPdfHtmlBody, /laaApplicantDeclarationPdfHtml\(h\)/);
+    assert.ok(
+      !buildPdfHtmlBody.includes('if (!laaRows && !hasSig && !laaPrivacyNoticePdfHtml(h)'),
+      'custody PDF must not skip entire LAA Declaration when fields are empty'
+    );
+  });
+});

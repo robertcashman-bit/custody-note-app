@@ -103,8 +103,15 @@ describe('defenceSummary — app wiring', () => {
     assert.ok(dsIdx < appIdx, 'defenceSummary.js must load before app.js');
   });
 
+  it('lib/defenceSummary.js uses browser-safe export', () => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'lib', 'defenceSummary.js'), 'utf8');
+    assert.match(src, /typeof module !== 'undefined' && module\.exports/);
+    assert.match(src, /window\.DefenceSummary = DefenceSummary/);
+  });
+
   it('app.js pdfDefenceSummaryHtml delegates to DefenceSummary module', () => {
     assert.match(appJs, /window\.DefenceSummary/);
     assert.match(appJs, /buildDefenceSummaryHtml/);
+    assert.match(appJs, /getDefenceSummaryFields/);
   });
 });
