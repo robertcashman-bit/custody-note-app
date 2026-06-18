@@ -1991,9 +1991,47 @@ var REQUIRED_FIELD_KEYS = [
       _laaHelpersWarned = true;
       // Traceable, non-silent: a missing lib/laaDeclarationPdf.js means a broken
       // or stale install. We never silently drop the legal declaration text.
-      try { console.error('[LAA-DECL] window.LaaDeclarationPdf unavailable — official declaration wording could not be loaded. Update/reinstall the latest version.'); } catch (_) {}
+      try { console.error('[LAA-DECL] window.LaaDeclarationPdf unavailable — using refData wording fallback. Update/reinstall if this persists.'); } catch (_) {}
     }
     return L;
+  }
+
+  // Official CRM2 client declaration — mirrors data/laa-reference-data.json and
+  // lib/laaDeclarationPdf.js; used when the wording module is unavailable.
+  var _LAA_FALLBACK_APPLICANT_DECL =
+    'As far as I know all the information I have given is true and I have not withheld any relevant information. ' +
+    'I understand that if I give false information the services provided to me may be cancelled and I may be prosecuted.';
+
+  function _laaFallbackPrivacyText(rd) {
+    rd = rd || refData || {};
+    var t = (rd.privacyNoticeText && String(rd.privacyNoticeText).trim()) || '';
+    return t;
+  }
+
+  function _laaFallbackAdviceDeclarationText(rd) {
+    rd = rd || refData || {};
+    var t = (rd.laaDeclarationText && String(rd.laaDeclarationText).trim()) || '';
+    return t || _LAA_FALLBACK_APPLICANT_DECL;
+  }
+
+  function buildLaaDeclarationFormHtmlForUi(variant, refDataSource) {
+    var L = getLaaDeclarationPdfHelpers();
+    var rd = refDataSource || refData;
+    if (L && typeof L.buildLaaDeclarationFormHtml === 'function') {
+      return L.buildLaaDeclarationFormHtml(variant || 'adviceAssistance', rd, esc);
+    }
+    // Fallback: bundled reference data carries the official CRM2 privacy + declaration text.
+    if (variant === 'adviceAssistance' || !variant) {
+      var privacy = _laaFallbackPrivacyText(rd);
+      var decl = _laaFallbackAdviceDeclarationText(rd);
+      if (privacy || decl) {
+        return '<div class="declaration-box laa-decl-block" data-laa-decl-variant="adviceAssistance">' +
+          (privacy ? '<p class="privacy-text"><strong>Legal Aid Agency Privacy Notice</strong></p><p class="privacy-text">' + esc(privacy) + '</p>' : '') +
+          (decl ? '<h3>Client\u2019s Declaration (Advice &amp; Assistance \u2014 CRM1/CRM2)</h3><p class="declaration-text">' + esc(decl) + '</p>' : '') +
+          '</div>';
+      }
+    }
+    return '<div class="declaration-box laa-decl-block laa-decl-fallback"><p class="section-note">Official LAA declaration text could not be loaded. Close and reopen the app; if this persists, reinstall the latest version.</p></div>';
   }
 
   function resolveClientSigLaaDeclarationVariant(explicitVariant) {
@@ -2002,14 +2040,6 @@ var REQUIRED_FIELD_KEYS = [
     var sec = activeFormSections[currentSectionIdx];
     if (sec && sec.id === 'crm14') return 'crm14Applicant';
     return 'adviceAssistance';
-  }
-
-  function buildLaaDeclarationFormHtmlForUi(variant, refDataSource) {
-    var L = getLaaDeclarationPdfHelpers();
-    if (L && typeof L.buildLaaDeclarationFormHtml === 'function') {
-      return L.buildLaaDeclarationFormHtml(variant || 'adviceAssistance', refDataSource || refData, esc);
-    }
-    return '<div class="declaration-box laa-decl-block laa-decl-fallback"><p class="section-note">Official LAA declaration text could not be loaded. Close and reopen the app; if this persists, reinstall the latest version.</p></div>';
   }
 
   function safeJson(s) {
@@ -13078,9 +13108,18 @@ var REQUIRED_FIELD_KEYS = [
     '</div>';
   }
 
+  // PDF CSS for LAA declaration blocks — mirrors lib/laaDeclarationPdf.js so styled
+  // fallback HTML renders correctly even when the wording module fails to load.
+  var _LAA_DECL_PDF_CSS =
+    '.laa-privacy-box{font-size:9.5px;background:#fffbeb;border:1px solid #f59e0b;border-radius:5px;padding:8px 10px;margin:8px 0;line-height:1.5;white-space:pre-wrap;word-break:break-word;print-color-adjust:exact;}' +
+    '.laa-decl-heading{font-size:10px;font-weight:700;margin:0 0 6px;color:#92400e;}' +
+    '.laa-decl-applicant{font-size:10px;font-weight:700;margin:0 0 6px;color:#92400e;}' +
+    '.laa-static-note{font-size:9px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:6px 9px;margin:6px 0;line-height:1.45;white-space:pre-wrap;word-break:break-word;print-color-adjust:exact;}' +
+    '.laa-fraud-warning{font-size:9px;background:#fef2f2;border:1px solid #fecaca;border-radius:5px;padding:6px 9px;margin:0 0 8px;line-height:1.45;word-break:break-word;print-color-adjust:exact;}';
+
   function laaDeclarationPdfCssSnippet() {
     var L = getLaaDeclarationPdfHelpers();
-    return L ? L.buildLaaDeclarationPdfCss() : '';
+    return L ? L.buildLaaDeclarationPdfCss() : _LAA_DECL_PDF_CSS;
   }
   // Safety-first: if the official wording module is unavailable (broken/stale
   // install) we must NOT silently produce a declaration-less legal document.
@@ -13095,11 +13134,20 @@ var REQUIRED_FIELD_KEYS = [
   }
   function laaPrivacyNoticePdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
-    return L ? L.buildLaaPrivacyNoticeHtml(refData, escFn) : laaDeclUnavailableNoticeHtml(escFn);
+    var html = (L && L.buildLaaPrivacyNoticeHtml) ? L.buildLaaPrivacyNoticeHtml(refData, escFn) : '';
+    if (html && html.trim()) return html;
+    var privacy = _laaFallbackPrivacyText(refData);
+    if (privacy) {
+      return '<div class="laa-privacy-box"><p class="laa-decl-heading">Legal Aid Agency Privacy Notice</p><p>' + escFn(privacy) + '</p></div>';
+    }
+    return laaDeclUnavailableNoticeHtml(escFn);
   }
   function laaApplicantDeclarationPdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
-    return L ? L.buildLaaApplicantDeclarationHtml(refData, escFn) : '';
+    var html = (L && L.buildLaaApplicantDeclarationHtml) ? L.buildLaaApplicantDeclarationHtml(refData, escFn) : '';
+    if (html && html.trim()) return html;
+    var decl = _laaFallbackAdviceDeclarationText(refData);
+    return '<div class="decl-box"><p class="laa-decl-applicant">Client\u2019s Declaration (Advice &amp; Assistance \u2014 CRM1/CRM2)</p><p>' + escFn(decl) + '</p></div>';
   }
   function laaPartnerDeclarationNotePdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();

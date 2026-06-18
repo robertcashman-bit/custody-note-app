@@ -48,6 +48,7 @@ const CRITICAL_FILES = [
   { file: 'preload.js',     firstLineStartsWith: 'const { contextBridge',      minBytes: 1000  },
   { file: 'updater.js',     firstLineStartsWith: "const path = require('path')", minBytes: 10000 },
   { file: 'updateState.js', firstLineStartsWith: "const fs = require('fs')",     minBytes: 200   },
+  { file: 'lib/laaDeclarationPdf.js', firstLineStartsWith: "'use strict';", minBytes: 5000 },
 ];
 
 function fail(msg) {

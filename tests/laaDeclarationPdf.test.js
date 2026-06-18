@@ -194,6 +194,21 @@ describe('laaDeclarationPdf app wiring', () => {
     assert.doesNotMatch(appJs, /return L \? L\.buildLaaPrivacyNoticeHtml\(refData, escFn\) : '';/);
   });
 
+  it('PDF applicant declaration never silently returns empty when wording module is unavailable', () => {
+    const fnStart = appJs.indexOf('function laaApplicantDeclarationPdfHtml(escFn)');
+    const fnEnd = appJs.indexOf('function laaPartnerDeclarationNotePdfHtml(escFn)', fnStart);
+    assert.ok(fnStart !== -1 && fnEnd !== -1, 'expected laaApplicantDeclarationPdfHtml in app.js');
+    const body = appJs.slice(fnStart, fnEnd);
+    assert.doesNotMatch(body, /return L \? L\.buildLaaApplicantDeclarationHtml\(refData, escFn\) : '';/);
+    assert.match(body, /_laaFallbackAdviceDeclarationText\(refData\)/);
+    assert.match(body, /Client\\u2019s Declaration \(Advice &amp; Assistance \\u2014 CRM1\/CRM2\)/);
+  });
+
+  it('PDF LAA declaration CSS renders even when wording module is unavailable', () => {
+    assert.match(appJs, /_LAA_DECL_PDF_CSS/);
+    assert.match(appJs, /return L \? L\.buildLaaDeclarationPdfCss\(\) : _LAA_DECL_PDF_CSS/);
+  });
+
   it('logs a traceable error when window.LaaDeclarationPdf is missing', () => {
     assert.match(appJs, /\[LAA-DECL\] window\.LaaDeclarationPdf unavailable/);
   });
