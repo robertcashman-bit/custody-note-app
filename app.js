@@ -1984,8 +1984,16 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── HELPERS ─── */
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
+  var _laaHelpersWarned = false;
   function getLaaDeclarationPdfHelpers() {
-    return (typeof window !== 'undefined' && window.LaaDeclarationPdf) ? window.LaaDeclarationPdf : null;
+    var L = (typeof window !== 'undefined' && window.LaaDeclarationPdf) ? window.LaaDeclarationPdf : null;
+    if (!L && !_laaHelpersWarned) {
+      _laaHelpersWarned = true;
+      // Traceable, non-silent: a missing lib/laaDeclarationPdf.js means a broken
+      // or stale install. We never silently drop the legal declaration text.
+      try { console.error('[LAA-DECL] window.LaaDeclarationPdf unavailable — official declaration wording could not be loaded. Update/reinstall the latest version.'); } catch (_) {}
+    }
+    return L;
   }
 
   function resolveClientSigLaaDeclarationVariant(explicitVariant) {
@@ -13074,9 +13082,20 @@ var REQUIRED_FIELD_KEYS = [
     var L = getLaaDeclarationPdfHelpers();
     return L ? L.buildLaaDeclarationPdfCss() : '';
   }
+  // Safety-first: if the official wording module is unavailable (broken/stale
+  // install) we must NOT silently produce a declaration-less legal document.
+  // Every LAA/CRM14 PDF section begins with laaPrivacyNoticePdfHtml(), so the
+  // notice surfaces exactly once per section instead of the declaration text.
+  function laaDeclUnavailableNoticeHtml(escFn) {
+    return '<div class="decl-box" style="border:2px solid #b91c1c;background:#fef2f2;padding:8px 10px;">' +
+      '<p style="font-weight:700;color:#b91c1c;margin:0 0 4px;">Legal Aid declaration text could not be loaded</p>' +
+      '<p style="font-size:9px;margin:0;color:#7f1d1d;">This installation could not load the official LAA declaration wording. ' +
+      'Update Custody Note to the latest version and re-export before relying on this document for signature.</p>' +
+      '</div>';
+  }
   function laaPrivacyNoticePdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
-    return L ? L.buildLaaPrivacyNoticeHtml(refData, escFn) : '';
+    return L ? L.buildLaaPrivacyNoticeHtml(refData, escFn) : laaDeclUnavailableNoticeHtml(escFn);
   }
   function laaApplicantDeclarationPdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
@@ -14108,6 +14127,9 @@ pdfAuditFooterHtml(d, settings) +
   window.buildPdfHtml = buildPdfHtml;
   window.buildVoluntaryPdfHtml = buildVoluntaryPdfHtml;
   window.buildTelephonePdfHtml = buildTelephonePdfHtml;
+  // Exposed so the in-app LAA declaration block can be asserted at runtime
+  // (mirrors window.buildPdfHtml for the PDF surface).
+  window.buildLaaDeclarationFormHtmlForUi = buildLaaDeclarationFormHtmlForUi;
 
   var CONFIDENTIALITY_REMINDER = 'Only share with authorised recipients. Client confidentiality and SRA standards apply.';
 
