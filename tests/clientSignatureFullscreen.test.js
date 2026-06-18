@@ -65,9 +65,16 @@ describe('client signature fullscreen wiring', () => {
     assert.match(appSrc, /btn-client-sign-fullscreen/);
     assert.match(appSrc, /Sign full screen/);
     assert.match(appSrc, /saveAsAttachment:\s*true/);
+    assert.match(appSrc, /showLaaDeclaration:\s*true/);
     assert.match(appSrc, /cancelClears:\s*true/);
     assert.match(appSrc, /ClientSignatureAttachment\.upsertClientSignatureAttachment/);
     assert.match(appSrc, /ClientSignatureAttachment\.removeClientSignatureAttachment/);
+  });
+
+  it('full-screen client sign shows LAA declaration panel before the pad', () => {
+    assert.match(appSrc, /sig-fs-decl-panel/);
+    assert.match(appSrc, /buildLaaDeclarationFormHtmlForUi/);
+    assert.match(appSrc, /showLaaDeclaration/);
   });
 
   it('labels client full-screen confirm as Save, not Done', () => {
@@ -83,5 +90,12 @@ describe('client signature fullscreen wiring', () => {
     assert.match(stylesSrc, /\.btn-client-sign-fullscreen/);
     assert.match(stylesSrc, /\.sig-fs-btn-save/);
     assert.match(stylesSrc, /\.sig-fullscreen-overlay \.sig-fs-hint/);
+    assert.match(stylesSrc, /\.sig-fs-decl-panel/);
+  });
+
+  it('clientSignatureAttachment uses browser-safe export', () => {
+    const src = fs.readFileSync(path.join(root, 'lib', 'clientSignatureAttachment.js'), 'utf8');
+    assert.match(src, /typeof module !== 'undefined' && module\.exports/);
+    assert.match(src, /window\.ClientSignatureAttachment = ClientSignatureAttachment/);
   });
 });

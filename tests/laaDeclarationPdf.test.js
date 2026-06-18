@@ -174,7 +174,7 @@ describe('laaDeclarationPdf app wiring', () => {
 
   it('uses laaDeclarationBlock field type wired to buildLaaDeclarationFormHtml', () => {
     assert.match(appJs, /type: 'laaDeclarationBlock'/);
-    assert.match(appJs, /buildLaaDeclarationFormHtml/);
+    assert.match(appJs, /buildLaaDeclarationFormHtmlForUi/);
     assert.match(appJs, /variant: 'adviceAssistance'/);
     assert.match(appJs, /variant: 'crm14Applicant'/);
     assert.doesNotMatch(appJs, /hasDeclarationText/);
