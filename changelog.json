@@ -1,12 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.42",
+      "version": "1.9.43",
       "date": "2026-06-18",
       "latest": true,
       "changes": [
-        "Fix: LAA Declaration PDF always prints the official CRM2 client declaration — even when the wording module fails to load, using bundled reference data and hardcoded fallback text",
-        "Fix: LAA declaration PDF styling now renders correctly without relying on the wording module"
+        "Fix: LAA Declaration PDF now always includes the official CRM2 client declaration text — uses bundled reference data and hardcoded fallback when the wording module is unavailable",
+        "Fix: LAA declaration PDF styling renders correctly even without the wording module"
+      ]
+    },
+    {
+      "version": "1.9.42",
+      "date": "2026-06-18",
+      "latest": false,
+      "changes": [
+        "Release metadata only — LAA declaration PDF fix shipped in v1.9.43"
       ]
     },
     {

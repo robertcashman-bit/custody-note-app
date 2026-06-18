@@ -176,9 +176,10 @@ test('no critical console/page errors during declaration rendering', async () =>
 });
 
 // Defensive: if a broken/stale install fails to load lib/laaDeclarationPdf.js,
-// the PDF must show a VISIBLE notice (never silently omit the legal declaration).
-// This runs last so the intentional console.error does not affect other checks.
-test('PDF shows a visible notice (not silent) when the wording module is missing', async () => {
+// the PDF must still render official CRM2 wording from bundled refData — never
+// silently omit the legal declaration. This runs last so intentional console.error
+// does not affect other checks.
+test('PDF still renders CRM2 declaration from refData when the wording module is missing', async () => {
   const html = await page.evaluate(() => {
     const w = window as unknown as {
       LaaDeclarationPdf?: unknown;
@@ -193,9 +194,8 @@ test('PDF shows a visible notice (not silent) when the wording module is missing
     }
   });
 
-  expect(html, 'must surface a visible "could not be loaded" notice').toContain(
-    'Legal Aid declaration text could not be loaded',
+  expect(html, 'must fall back to bundled refData CRM2 wording').toContain(
+    'all the information I have given is true and I have not withheld any relevant information',
   );
-  // And must NOT silently render an empty/partial declaration that looks complete.
-  expect(html).not.toContain('all the information I have given is true');
+  expect(html).toContain('Legal Aid Agency Privacy Notice');
 });
