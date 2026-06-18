@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.9.41",
+      "version": "1.9.42",
       "date": "2026-06-18",
       "latest": true,
+      "changes": [
+        "Fix: LAA Declaration PDF always prints the official CRM2 client declaration — even when the wording module fails to load, using bundled reference data and hardcoded fallback text",
+        "Fix: LAA declaration PDF styling now renders correctly without relying on the wording module"
+      ]
+    },
+    {
+      "version": "1.9.41",
+      "date": "2026-06-18",
+      "latest": false,
       "changes": [
         "LAA Declaration: hardened so the attendance-note PDF can never silently omit the declaration — if the official wording can't load it now prints a clear 'update and re-export' notice instead of just the privacy line",
         "LAA Declaration: added a real runtime test that verifies the full CRM2 and CRM14 declarations render in the PDF and in the app"
