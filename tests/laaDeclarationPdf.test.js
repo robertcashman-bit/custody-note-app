@@ -187,6 +187,21 @@ describe('laaDeclarationPdf app wiring', () => {
     assert.match(src, /window\.LaaDeclarationPdf = LaaDeclarationPdf/);
   });
 
+  it('PDF surfaces a visible notice (never silent empty) when wording module is unavailable', () => {
+    assert.match(appJs, /laaDeclUnavailableNoticeHtml/);
+    assert.match(appJs, /Legal Aid declaration text could not be loaded/);
+    // The privacy-notice entry point must not silently return '' anymore.
+    assert.doesNotMatch(appJs, /return L \? L\.buildLaaPrivacyNoticeHtml\(refData, escFn\) : '';/);
+  });
+
+  it('logs a traceable error when window.LaaDeclarationPdf is missing', () => {
+    assert.match(appJs, /\[LAA-DECL\] window\.LaaDeclarationPdf unavailable/);
+  });
+
+  it('exposes the in-app declaration builder for runtime verification', () => {
+    assert.match(appJs, /window\.buildLaaDeclarationFormHtmlForUi = buildLaaDeclarationFormHtmlForUi/);
+  });
+
   it('custody PDF always renders LAA Declaration section (no skip gate)', () => {
     assert.match(appJs, /11\. LAA Declaration/);
     assert.doesNotMatch(
