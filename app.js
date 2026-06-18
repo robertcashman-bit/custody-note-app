@@ -830,7 +830,7 @@ var LAA = {
         { key: '_laa_decl_inline', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
         { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
-        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig' },
+        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'adviceAssistance' },
         { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
         { key: 'laaSignatureTime', label: 'Time of Signature (auto)', type: 'time', readonly: true },
         { key: '_h_conflict', label: 'Conflict Check', type: 'sectionHeading' },
@@ -1157,8 +1157,8 @@ var LAA = {
       { key: 'laaPartnerFullName', label: 'Partner\u2019s full name (BLOCK CAPITALS)', type: 'text', cols: 2, showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaPartnerSignature', label: 'Partner signature', type: 'signature', sigKey: 'laaPartnerSig', showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaPartnerSignatureDate', label: 'Partner signature date (auto)', type: 'date', readonly: true, showIf: { field: 'laaHasPartner', value: 'Yes' } },
-      { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig' },
       { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
+      { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'adviceAssistance' },
       { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
       { key: 'laaSignatureTime', label: 'Time of Signature (auto)', type: 'time', readonly: true },
       { key: 'feeEarnerSignature', label: 'Fee Earner Signature', type: 'signature', sigKey: 'feeEarnerSig' },
@@ -1345,7 +1345,7 @@ var LAA = {
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
         { key: 'laaFeeEarnerFullName', label: 'Fee Earner Full Name', type: 'text', placeholder: 'Your full name', cols: 2 },
         { key: 'captureSignatures', label: 'Capture signatures?', type: 'select', options: ['No','Yes'] },
-        { key: 'clientSignature', label: 'Client Signature (if present)', type: 'signature', sigKey: 'clientSig', showIf: { field: 'captureSignatures', value: 'Yes' } },
+        { key: 'clientSignature', label: 'Client Signature (if present)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'adviceAssistance', showIf: { field: 'captureSignatures', value: 'Yes' } },
         { key: 'feeEarnerSignature', label: 'Fee Earner Signature', type: 'signature', sigKey: 'feeEarnerSig', showIf: { field: 'captureSignatures', value: 'Yes' } },
         { key: 'feeEarnerCertification', label: 'Certification', type: 'select', options: ['Draft','Finalised'] },
         { key: '_h_admin', label: 'Administration', type: 'sectionHeading' },
@@ -1590,7 +1590,7 @@ var LAA = {
         { key: '_laa_decl_inline', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
         { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
-        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig' },
+        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'adviceAssistance' },
         { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
         { key: 'laaSignatureTime', label: 'Time of Signature (auto)', type: 'time', readonly: true },
         { key: '_h_conflict', label: 'Conflict Check', type: 'sectionHeading' },
@@ -1983,6 +1983,27 @@ var REQUIRED_FIELD_KEYS = [
 
   /* ─── HELPERS ─── */
   function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+  function getLaaDeclarationPdfHelpers() {
+    return (typeof window !== 'undefined' && window.LaaDeclarationPdf) ? window.LaaDeclarationPdf : null;
+  }
+
+  function resolveClientSigLaaDeclarationVariant(explicitVariant) {
+    if (explicitVariant) return explicitVariant;
+    if (currentStandaloneSectionId === 'crm14') return 'crm14Applicant';
+    var sec = activeFormSections[currentSectionIdx];
+    if (sec && sec.id === 'crm14') return 'crm14Applicant';
+    return 'adviceAssistance';
+  }
+
+  function buildLaaDeclarationFormHtmlForUi(variant, refDataSource) {
+    var L = getLaaDeclarationPdfHelpers();
+    if (L && typeof L.buildLaaDeclarationFormHtml === 'function') {
+      return L.buildLaaDeclarationFormHtml(variant || 'adviceAssistance', refDataSource || refData, esc);
+    }
+    return '<div class="declaration-box laa-decl-block laa-decl-fallback"><p class="section-note">Official LAA declaration text could not be loaded. Close and reopen the app; if this persists, reinstall the latest version.</p></div>';
+  }
+
   function safeJson(s) {
     if (!s) return {};
     if (typeof s === 'object') return s;
@@ -8942,7 +8963,6 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     if (f.type === 'laaDeclarationBlock') {
-      var L = (typeof window !== 'undefined' && window.LaaDeclarationPdf) ? window.LaaDeclarationPdf : null;
       var declWrap = document.createElement('div');
       declWrap.style.gridColumn = '1 / -1';
       if (f.showIf) {
@@ -8950,9 +8970,7 @@ var REQUIRED_FIELD_KEYS = [
         declWrap.dataset.showIfValue = f.showIf.value || '';
         declWrap.dataset.showIfValues = (f.showIf.values || []).join(',');
       }
-      if (L && typeof L.buildLaaDeclarationFormHtml === 'function') {
-        declWrap.innerHTML = L.buildLaaDeclarationFormHtml(f.variant || 'adviceAssistance', refData, esc);
-      }
+      declWrap.innerHTML = buildLaaDeclarationFormHtmlForUi(f.variant || 'adviceAssistance', refData);
       grid.appendChild(declWrap);
       return;
     }
@@ -10651,7 +10669,12 @@ var REQUIRED_FIELD_KEYS = [
         signBtn.className = 'btn-client-sign-fullscreen';
         signBtn.textContent = 'Sign full screen';
         signBtn.addEventListener('click', function() {
-          openFullscreenSignature(canvas, f.sigKey, f.label, { saveAsAttachment: true, cancelClears: true });
+          openFullscreenSignature(canvas, f.sigKey, f.label, {
+            saveAsAttachment: true,
+            cancelClears: true,
+            showLaaDeclaration: true,
+            laaDeclVariant: f.laaDeclVariant,
+          });
         });
         sw.appendChild(signBtn);
       }
@@ -11886,18 +11909,29 @@ var REQUIRED_FIELD_KEYS = [
     options = options || {};
     var saveAsAttachment = !!options.saveAsAttachment;
     var cancelClears = options.cancelClears !== false && saveAsAttachment;
+    var showLaaDeclaration = !!options.showLaaDeclaration && sigKey === 'clientSig';
+    var laaDeclVariant = resolveClientSigLaaDeclarationVariant(options.laaDeclVariant);
     var overlay = document.createElement('div');
-    overlay.className = 'sig-fullscreen-overlay';
+    overlay.className = 'sig-fullscreen-overlay' + (showLaaDeclaration ? ' sig-fullscreen-overlay--with-decl' : '');
+    if (showLaaDeclaration) {
+      var declPanel = document.createElement('div');
+      declPanel.className = 'sig-fs-decl-panel';
+      declPanel.innerHTML = buildLaaDeclarationFormHtmlForUi(laaDeclVariant, refData);
+      overlay.appendChild(declPanel);
+    }
     var titleEl = document.createElement('div'); titleEl.className = 'sig-fs-label'; titleEl.textContent = label || 'Signature';
     overlay.appendChild(titleEl);
     if (saveAsAttachment) {
       var hintEl = document.createElement('div');
       hintEl.className = 'sig-fs-hint';
-      hintEl.textContent = 'Sign on the white pad below, then press Save. Cancel clears the signature.';
+      hintEl.textContent = showLaaDeclaration
+        ? 'Read the Privacy Notice and declaration above, then sign on the white pad below and press Save. Cancel clears the signature.'
+        : 'Sign on the white pad below, then press Save. Cancel clears the signature.';
       overlay.appendChild(hintEl);
     }
     var fsCanvas = document.createElement('canvas');
     fsCanvas.width = 1200; fsCanvas.height = 500;
+    if (showLaaDeclaration) fsCanvas.className = 'sig-fs-canvas-with-decl';
     overlay.appendChild(fsCanvas);
     var presetBtn = null;
     var btnRow = document.createElement('div'); btnRow.className = 'sig-fs-buttons';
@@ -13036,9 +13070,6 @@ var REQUIRED_FIELD_KEYS = [
     '</div>';
   }
 
-  function getLaaDeclarationPdfHelpers() {
-    return (typeof window !== 'undefined' && window.LaaDeclarationPdf) ? window.LaaDeclarationPdf : null;
-  }
   function laaDeclarationPdfCssSnippet() {
     var L = getLaaDeclarationPdfHelpers();
     return L ? L.buildLaaDeclarationPdfCss() : '';

@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.39",
+      "version": "1.9.40",
       "date": "2026-06-17",
       "latest": true,
+      "changes": [
+        "LAA Declaration: full-screen client sign now shows the official Privacy Notice and declaration above the signing pad — the primary tablet signing flow",
+        "LAA Declaration: inline declaration blocks always render official wording with a visible fallback if the module fails to load",
+        "Fix: client signature attachment module uses browser-safe export so renderer script loading is reliable in Electron"
+      ]
+    },
+    {
+      "version": "1.9.39",
+      "date": "2026-06-17",
+      "latest": false,
       "changes": [
         "LAA Declaration: Privacy Notice and official declaration text now appear in the app immediately before the client signs — in LAA Declaration, Attend (Section 6), telephone sign-off, and CRM14",
         "CRM14: full v7 applicant declaration (online criminal legal aid) shown in the form and in PDF section 14, with privacy notice and fraud warning",
