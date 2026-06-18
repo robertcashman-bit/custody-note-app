@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.41",
+      "date": "2026-06-18",
+      "latest": true,
+      "changes": [
+        "LAA Declaration: hardened so the attendance-note PDF can never silently omit the declaration — if the official wording can't load it now prints a clear 'update and re-export' notice instead of just the privacy line",
+        "LAA Declaration: added a real runtime test that verifies the full CRM2 and CRM14 declarations render in the PDF and in the app"
+      ]
+    },
+    {
       "version": "1.9.40",
       "date": "2026-06-17",
-      "latest": true,
+      "latest": false,
       "changes": [
         "LAA Declaration: full-screen client sign now shows the official Privacy Notice and declaration above the signing pad — the primary tablet signing flow",
         "LAA Declaration: inline declaration blocks always render official wording with a visible fallback if the module fails to load",
