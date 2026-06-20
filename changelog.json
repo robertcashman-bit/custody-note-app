@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.44",
+      "date": "2026-06-20",
+      "latest": true,
+      "changes": [
+        "Settings: Share Custody Note and help links now open tracked custodynote.com URLs (UTM analytics for referrals and in-app help)",
+        "Settings: New quick links to attendance note guide, PACE interview notes, FAQ, and contact on the website"
+      ]
+    },
+    {
       "version": "1.9.43",
       "date": "2026-06-18",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix: LAA Declaration PDF now always includes the official CRM2 client declaration text — uses bundled reference data and hardcoded fallback when the wording module is unavailable",
         "Fix: LAA declaration PDF styling renders correctly even without the wording module"
