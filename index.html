@@ -1377,7 +1377,11 @@
             <summary style="padding:0.75rem 1rem;cursor:pointer;font-weight:600;user-select:none;">What do you do if you need support?</summary>
             <div style="padding:0 1rem 1rem;border-top:1px solid var(--border,#eee);">
               <ul style="margin:0.5rem 0 0 0;padding-left:1.25rem;line-height:1.7;">
-                <li><strong>Support forum</strong> — Post questions, get help from the team and other users. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/support">Open forum</button></li>
+                <li><strong>Writing attendance notes</strong> — Structure, templates, and PACE guidance on the website.
+                  <button type="button" class="btn btn-small support-faq-link" data-url="" id="help-attendance-notes-btn">Attendance note guide</button>
+                  <button type="button" class="btn btn-small support-faq-link" data-url="" id="help-pace-interview-btn">PACE interview notes</button>
+                </li>
+                <li><strong>Support forum</strong> — Post questions, get help from the team and other users. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/support" id="help-support-forum-btn">Open forum</button></li>
                 <li><strong>Forgot licence key?</strong> — Enter your email and we&apos;ll send it if we have it on file.
                   <div class="forgot-licence-row" style="margin-top:0.35rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
                     <input type="email" id="forgot-licence-email" placeholder="you@example.com" class="forgot-licence-input settings-input" style="min-width:180px;font-size:0.85rem;" />
@@ -1385,8 +1389,8 @@
                     <span id="forgot-licence-msg" class="forgot-licence-msg" style="font-size:0.8rem;color:var(--text-muted,#666);"></span>
                   </div>
                 </li>
-                <li><strong>FAQ</strong> — Trials, licences, cloud backup, billing. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/faq">View FAQ</button></li>
-                <li><strong>Sales or general enquiries</strong> — Use the Contact form on the website. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/contact">Contact</button></li>
+                <li><strong>FAQ</strong> — Trials, licences, cloud backup, billing. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/faq" id="help-faq-btn">View FAQ</button></li>
+                <li><strong>Sales or general enquiries</strong> — Use the Contact form on the website. <button type="button" class="btn btn-small support-faq-link" data-url="https://www.custodynote.com/contact" id="help-contact-btn">Contact</button></li>
               </ul>
             </div>
           </details>
@@ -2090,6 +2094,7 @@
   <script src="renderer/lib/quickfileConnectionState.js"></script>
   <script src="renderer/lib/quickfileConfigured.js"></script>
   <script src="renderer/lib/crm1Validation.js"></script>
+  <script src="renderer/lib/websiteLinks.js"></script>
   <!-- ── Module layer (load order matters) ─────────────────────
        1. toast.js     — UI feedback (no dependencies)
        2. app.js       — state vars + all functions + init()

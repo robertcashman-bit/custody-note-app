@@ -17868,7 +17868,8 @@ pdfAuditFooterHtml(d, settings) +
       if (link && link.href && window.api?.openExternal) { e.preventDefault(); window.api.openExternal(link.href); }
     });
     document.getElementById('suggestions-forum-open-btn')?.addEventListener('click', () => {
-      var url = (window._appSettingsCache && window._appSettingsCache.suggestionsForumUrl) ? window._appSettingsCache.suggestionsForumUrl : 'https://www.custodynote.com/support';
+      var custom = (window._appSettingsCache && window._appSettingsCache.suggestionsForumUrl) ? window._appSettingsCache.suggestionsForumUrl : '';
+      var url = custom || (window.WEBSITE_LINKS ? window.WEBSITE_LINKS.support() : 'https://custodynote.com/support');
       if (window.api && window.api.openExternal) {
         window.api.openExternal(url);
       } else {
@@ -18241,6 +18242,21 @@ pdfAuditFooterHtml(d, settings) +
       });
     })();
 
+    (function initWebsiteHelpLinks() {
+      if (!window.WEBSITE_LINKS) return;
+      var map = {
+        'help-support-forum-btn': window.WEBSITE_LINKS.support(),
+        'help-faq-btn': window.WEBSITE_LINKS.faq(),
+        'help-contact-btn': window.WEBSITE_LINKS.contact(),
+        'help-attendance-notes-btn': window.WEBSITE_LINKS.attendanceNotesGuide(),
+        'help-pace-interview-btn': window.WEBSITE_LINKS.paceInterviewNotes(),
+      };
+      Object.keys(map).forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.dataset.url = map[id];
+      });
+    })();
+
     document.addEventListener('click', function(e) {
       var link = e.target?.closest?.('.support-faq-link');
       if (link && link.dataset?.url) {
@@ -18252,7 +18268,9 @@ pdfAuditFooterHtml(d, settings) +
         }
       }
     });
-    var shareAppUrl = 'https://custodynote.com/download';
+    var shareAppUrl = window.WEBSITE_LINKS
+      ? window.WEBSITE_LINKS.download()
+      : 'https://custodynote.com/download?utm_source=app&utm_medium=referral&utm_campaign=share';
     document.getElementById('share-app-copy-btn')?.addEventListener('click', function() {
       var btn = this;
       var copy = function() {

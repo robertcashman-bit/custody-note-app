@@ -68,6 +68,21 @@ writeFileSync(
 );
 console.log(`[sync-website] Synced v${pkg.version} and ${changelog.releases.length} releases to website`);
 
+// SEO blog imports + release-notes post → data/blog-imports.json
+try {
+  execSync('node seo-growth/scripts/publish-blog-from-markdown.mjs --stagger-weeks', {
+    cwd: APP_ROOT,
+    stdio: 'inherit',
+    env: { ...process.env, WEBSITE_ROOT },
+  });
+  execSync('node scripts/sync-changelog-blog.mjs', {
+    cwd: WEBSITE_ROOT,
+    stdio: 'inherit',
+  });
+} catch (e) {
+  console.warn('[sync-website] Blog import sync failed (non-fatal):', e.message);
+}
+
 if (noPush) {
   console.log('[sync-website] No-push mode — skipping git commit/push');
   process.exit(0);
