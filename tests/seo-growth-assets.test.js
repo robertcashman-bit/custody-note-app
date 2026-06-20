@@ -63,4 +63,15 @@ describe("seo-growth asset pack", () => {
     assert.ok(header.includes("post_text"));
     assert.ok(header.includes("suggested_date"));
   });
+
+  it("growth automation scripts exist", () => {
+    for (const file of [
+      "scripts/schedule-buffer.mjs",
+      "scripts/publish-blog-from-markdown.mjs",
+      "scripts/import-sister-site-content.mjs",
+      "scripts/markdown-blog-utils.mjs",
+    ]) {
+      assert.ok(fs.existsSync(path.join(ROOT, file)), `missing ${file}`);
+    }
+  });
 });
