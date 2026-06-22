@@ -364,16 +364,6 @@
             </div>
           </div>
 
-          <!-- Attendance picker for Print PDF / Email to solicitor from home -->
-          <div id="attendance-picker-modal" class="sections-index hidden" aria-label="Select attendance">
-            <div class="sections-index-content attendance-picker-content">
-              <h3 id="attendance-picker-title">Select attendance</h3>
-              <p class="attendance-picker-hint">Choose an attendance to print or email.</p>
-              <ul id="attendance-picker-list" class="attendance-picker-list"></ul>
-              <button type="button" id="attendance-picker-cancel" class="btn btn-secondary" style="margin-top:0.75rem;width:100%;">Cancel</button>
-            </div>
-          </div>
-
           <div id="home-status-section" class="home-status-strip">
             <span id="home-net-status" class="home-status-item">Checking connection&hellip;</span>
             <span class="home-status-sep">&middot;</span>
@@ -1356,13 +1346,18 @@
           <p class="settings-hint">The app works fully offline. All data is stored locally on this computer in an SQLite database. No internet connection is required for core functionality.</p>
         </div>
 
-        <div class="settings-card">
+        <div class="settings-card" id="settings-laa-forms-card">
           <h2>LAA Forms (Official)</h2>
-          <p>Open official LAA PDF form templates bundled with the app. These are the real forms from GOV.UK.</p>
-          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm1" style="margin-top:0.5rem;display:block;text-align:left;">CRM1 &mdash; Client&rsquo;s Details (v16 Feb 2025)</button>
-          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm2" style="margin-top:0.5rem;display:block;text-align:left;">CRM2 &mdash; Advice &amp; Assistance (v15 Oct 2025)</button>
-          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm3" style="margin-top:0.5rem;display:block;text-align:left;">CRM3 &mdash; Advocacy Assistance (v17 Feb 2025)</button>
-          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-declaration" style="margin-top:0.5rem;display:block;text-align:left;">Applicant Declaration (v7 Feb 2025)</button>
+          <p>Open official LAA PDF form templates. Forms used for generation are verified automatically on startup.</p>
+          <div id="settings-laa-versions" class="settings-laa-versions" aria-live="polite">
+            <p class="settings-hint">Checking template versions…</p>
+          </div>
+          <p id="settings-laa-last-check" class="settings-hint" style="margin-top:0.35rem;"></p>
+          <button type="button" class="btn btn-secondary btn-small" id="settings-laa-check-updates" style="margin-top:0.5rem;">Check for LAA form updates</button>
+          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm1" style="margin-top:0.75rem;display:block;text-align:left;">CRM1 &mdash; Client&rsquo;s Details</button>
+          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm2" style="margin-top:0.5rem;display:block;text-align:left;">CRM2 &mdash; Advice &amp; Assistance</button>
+          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-crm3" style="margin-top:0.5rem;display:block;text-align:left;">CRM3 &mdash; Advocacy Assistance</button>
+          <button type="button" class="btn btn-secondary laa-link" id="settings-laa-declaration" style="margin-top:0.5rem;display:block;text-align:left;">Applicant Declaration</button>
         </div>
 
         <div class="settings-card" id="modules-installed-card">

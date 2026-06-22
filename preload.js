@@ -324,6 +324,9 @@ contextBridge.exposeInMainWorld('api', {
   laaGenerateOfficialPdf: (params) => ipcRenderer.invoke('laa-generate-official-pdf', params),
   laaOpenOfficialTemplate: (formType) => ipcRenderer.invoke('laa-open-official-template', formType),
   laaGeneratePdfBuffer: (params) => ipcRenderer.invoke('laa-generate-pdf-buffer', params),
+  laaEnsureTemplates: (opts) => ipcRenderer.invoke('laa-ensure-templates', opts),
+  laaGetTemplateStatus: () => ipcRenderer.invoke('laa-get-template-status'),
+  onLaaTemplatesUpdated: (cb) => ipcRenderer.on('laa-templates-updated', (_, data) => cb(data)),
   htmlToPdfBuffer: (params) => ipcRenderer.invoke('html-to-pdf-buffer', params),
   /* Auth */
   authStatus: () => ipcRenderer.invoke('auth:status'),

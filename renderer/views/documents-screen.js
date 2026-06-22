@@ -440,7 +440,16 @@ function _wfGenerateLaaForm(formId, meta) {
   if (!window.api || !window.api.laaGeneratePdfBuffer) {
     return Promise.resolve({ error: 'PDF generation not available' });
   }
-  return window.api.laaGeneratePdfBuffer({ formType: formId, data: data });
+  var generate = function() {
+    return window.api.laaGeneratePdfBuffer({ formType: formId, data: data });
+  };
+  if (window.api.laaEnsureTemplates) {
+    return window.api.laaEnsureTemplates({}).then(function(res) {
+      if (res && !res.ok) return { error: res.error || 'LAA templates unavailable' };
+      return generate();
+    });
+  }
+  return generate();
 }
 
 function _wfGenerateHtmlForm(formId, meta) {

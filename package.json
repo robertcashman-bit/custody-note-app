@@ -1,7 +1,7 @@
 {
   "name": "custody-note",
-  "version": "1.9.44",
-  "lastUpdated": "2026-06-20",
+  "version": "1.9.45",
+  "lastUpdated": "2026-06-22",
   "buildTime": "2026-06-08T18:00:00.000Z",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
@@ -34,6 +34,7 @@
     "test:all": "node scripts/test-all.js",
     "test:ci": "node scripts/test-all.js",
     "test:e2e": "playwright test",
+    "test:laa": "node --test tests/laaFormsManifest.test.js tests/laaFormsSync.test.js tests/attendancePicker.source.test.js && playwright test tests/e2e/laa-home-forms.spec.ts",
     "test:unit": "node scripts/run-unit-tests.js",
     "test:deep": "node --test tests/deepAudit.test.js",
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
