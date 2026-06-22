@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.45",
+      "date": "2026-06-22",
+      "latest": true,
+      "changes": [
+        "Fix: Home screen LAA form cards (CRM1, CRM2, CRM3, Applicant Declaration) now open a visible attendance picker — previously the modal opened off-screen when the home page was scrolled",
+        "LAA forms: automatic official template version check on startup; Settings shows active form versions and a Check for updates button",
+        "LAA forms: when no attendances exist, choose Generate blank form or Create new attendance from the picker",
+        "Release: Mac installers built by CI during deploy (avoids updater checksum race); GitHub release publish retries asset verification"
+      ]
+    },
+    {
       "version": "1.9.44",
       "date": "2026-06-20",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Settings: Share Custody Note and help links now open tracked custodynote.com URLs (UTM analytics for referrals and in-app help)",
         "Settings: New quick links to attendance note guide, PACE interview notes, FAQ, and contact on the website"

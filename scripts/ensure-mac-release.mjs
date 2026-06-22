@@ -39,6 +39,21 @@ if (!token) {
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const tag = `v${version}`;
 
+try {
+  const inProgress = execSync(
+    'gh run list --repo robertcashman-bit/custody-note-app --workflow "Release and deploy" --status in_progress --json headBranch',
+    { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] },
+  );
+  const runs = JSON.parse(inProgress || '[]');
+  if (runs.some((r) => r.headBranch === tag)) {
+    console.log(`[ensure-mac-release] GitHub Actions release for ${tag} is in progress — skipping local Mac build.`);
+    console.log('[ensure-mac-release] If CI fails: npm run complete-mac-release');
+    process.exit(0);
+  }
+} catch {
+  // gh unavailable — continue with asset check
+}
+
 let needMac = true;
 try {
   const release = await fetchReleaseByTag(tag, token);

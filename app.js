@@ -5517,9 +5517,61 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
+  function loadLaaFormsSettingsUI(forceCheck) {
+    var versionsEl = document.getElementById('settings-laa-versions');
+    var lastCheckEl = document.getElementById('settings-laa-last-check');
+    var checkBtn = document.getElementById('settings-laa-check-updates');
+    if (!versionsEl || !window.api) return;
+
+    function renderStatus(status) {
+      if (!status || !status.forms) {
+        versionsEl.innerHTML = '<p class="settings-hint">Could not load LAA template status.</p>';
+        return;
+      }
+      if (!status.ok) {
+        versionsEl.innerHTML = '<p class="settings-hint" style="color:var(--danger,#b91c1c);">' + esc(status.error || 'Templates unavailable') + '</p>';
+        return;
+      }
+      var order = ['crm1', 'crm2', 'crm3', 'declaration'];
+      var html = '<dl>';
+      order.forEach(function(ft) {
+        var f = status.forms[ft];
+        if (!f) return;
+        var ver = f.version ? (f.version + (f.date ? ' (' + f.date + ')' : '')) : 'unknown';
+        var src = f.source === 'downloaded' ? 'updated download' : 'bundled with app';
+        html += '<dt>' + esc(f.label || ft) + '</dt><dd>' + esc(ver) + ' — ' + esc(src) + '</dd>';
+      });
+      html += '</dl>';
+      versionsEl.innerHTML = html;
+      if (lastCheckEl) {
+        lastCheckEl.textContent = status.lastCheckAt
+          ? ('Last checked: ' + new Date(status.lastCheckAt).toLocaleString('en-GB'))
+          : 'Using bundled official templates.';
+      }
+    }
+
+    if (checkBtn) checkBtn.disabled = true;
+    var apiCall = forceCheck && window.api.laaEnsureTemplates
+      ? window.api.laaEnsureTemplates({ forceRemote: true })
+      : (window.api.laaGetTemplateStatus ? window.api.laaGetTemplateStatus() : window.api.laaEnsureTemplates({}));
+    apiCall.then(function(status) {
+      renderStatus(status);
+      if (forceCheck && status && status.updated && status.updatedForms && status.updatedForms.length) {
+        showToast('LAA forms updated: ' + status.updatedForms.join(', '), 'success', 6000);
+      } else if (forceCheck && status && status.ok) {
+        showToast('LAA forms are up to date', 'success');
+      }
+    }).catch(function() {
+      versionsEl.innerHTML = '<p class="settings-hint">Could not check LAA templates.</p>';
+    }).finally(function() {
+      if (checkBtn) checkBtn.disabled = false;
+    });
+  }
+
   function loadSettings() {
     if (!window.api) return;
     loadLicenceSettingsUI();
+    loadLaaFormsSettingsUI(false);
     // Trigger System Status card refresh whenever Settings is opened
     document.dispatchEvent(new CustomEvent('view-settings-shown'));
     syncQuickFileSettingsFromAccount({ toastOnPull: false }).then(function() {
@@ -14499,7 +14551,134 @@ pdfAuditFooterHtml(d, settings) +
   }
 
   function closeAttendancePickerModal() {
-    document.getElementById('attendance-picker-modal')?.classList.add('hidden');
+    document.querySelectorAll('.attendance-picker-overlay').forEach(function(el) {
+      try { el.remove(); } catch (_) {}
+    });
+  }
+
+  /**
+   * Fixed viewport overlay for picking an attendance record.
+   * opts: { title, hint, emptyState: { message, blankLabel, onBlank, createLabel, onCreate }, onSelect(id), onCancel() }
+   */
+  function openAttendancePickerModal(opts) {
+    opts = opts || {};
+    closeAttendancePickerModal();
+    var overlay = document.createElement('div');
+    overlay.className = 'attendance-picker-overlay';
+    overlay.setAttribute('aria-label', opts.title || 'Select attendance');
+    overlay.innerHTML =
+      '<div class="sections-index-content attendance-picker-content">' +
+        '<h3>' + esc(opts.title || 'Select attendance') + '</h3>' +
+        (opts.hint ? '<p class="attendance-picker-hint">' + opts.hint + '</p>' : '') +
+        '<ul class="attendance-picker-list" data-role="list"></ul>' +
+        '<div class="attendance-picker-empty-actions hidden" data-role="empty-actions"></div>' +
+        '<button type="button" class="btn btn-secondary attendance-picker-cancel" style="margin-top:0.75rem;width:100%;">Cancel</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    var listEl = overlay.querySelector('[data-role="list"]');
+    var emptyActions = overlay.querySelector('[data-role="empty-actions"]');
+    var closed = false;
+
+    function close() {
+      if (closed) return;
+      closed = true;
+      try { overlay.remove(); } catch (_) {}
+    }
+
+    function finish(id) {
+      close();
+      if (id != null && opts.onSelect) opts.onSelect(id);
+      else if (opts.onCancel) opts.onCancel();
+    }
+
+    overlay.querySelector('.attendance-picker-cancel').addEventListener('click', function() { finish(null); });
+    overlay.addEventListener('click', function(e) { if (e.target === overlay) finish(null); });
+
+    function showEmptyActions(message) {
+      listEl.innerHTML = '<li class="home-recent-empty">' + esc(message || 'No attendances yet.') + '</li>';
+      if (!opts.emptyState) return;
+      emptyActions.classList.remove('hidden');
+      emptyActions.innerHTML = '';
+      if (opts.emptyState.blankLabel && opts.emptyState.onBlank) {
+        var blankBtn = document.createElement('button');
+        blankBtn.type = 'button';
+        blankBtn.className = 'btn btn-secondary';
+        blankBtn.style.cssText = 'width:100%;margin-bottom:0.5rem;';
+        blankBtn.textContent = opts.emptyState.blankLabel;
+        blankBtn.addEventListener('click', function() {
+          close();
+          opts.emptyState.onBlank();
+        });
+        emptyActions.appendChild(blankBtn);
+      }
+      if (opts.emptyState.createLabel && opts.emptyState.onCreate) {
+        var createBtn = document.createElement('button');
+        createBtn.type = 'button';
+        createBtn.className = 'btn';
+        createBtn.style.cssText = 'width:100%;margin-bottom:0.5rem;';
+        createBtn.textContent = opts.emptyState.createLabel;
+        createBtn.addEventListener('click', function() {
+          close();
+          opts.emptyState.onCreate();
+        });
+        emptyActions.appendChild(createBtn);
+      }
+    }
+
+    listEl.innerHTML = '<li class="home-recent-empty">Loading\u2026</li>';
+    var listFn = window.api && (window.api.attendanceListFull || window.api.attendanceList);
+    if (!listFn) {
+      showEmptyActions('Could not load attendances.');
+      return overlay;
+    }
+    listFn().then(function(rows) {
+      if (!rows || !rows.length) {
+        showEmptyActions(opts.emptyState && opts.emptyState.message ? opts.emptyState.message : 'No attendances yet.');
+        return;
+      }
+      emptyActions.classList.add('hidden');
+      var sorted = rows.slice().sort(function(a, b) { return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''); });
+      listEl.innerHTML = sorted.map(function(r) {
+        var name = (r.client_name && String(r.client_name).trim()) || 'Draft (no name)';
+        var station = r.station_name || '';
+        var date = r.attendance_date || '';
+        if (date) {
+          var dm = String(date).match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (dm) date = dm[3] + '/' + dm[2] + '/' + dm[1];
+        }
+        var meta = [station, date].filter(Boolean).join(' \u00B7 ');
+        return '<li class="attendance-picker-item" data-id="' + r.id + '"><span class="picker-item-name">' + esc(name) + '</span><span class="picker-item-meta">' + esc(meta) + '</span></li>';
+      }).join('');
+      listEl.querySelectorAll('.attendance-picker-item').forEach(function(li) {
+        li.addEventListener('click', function() {
+          var id = parseInt(li.dataset.id, 10);
+          finish(isNaN(id) ? null : id);
+        });
+      });
+    }).catch(function() {
+      listEl.innerHTML = '<li class="home-recent-empty">Failed to load list.</li>';
+      showToast('Failed to load attendances', 'error');
+    });
+    return overlay;
+  }
+
+  function startNewAttendanceFromHome() {
+    if (window.__licenceExpired) {
+      showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000);
+      return;
+    }
+    currentStandaloneSectionId = null;
+    formData = {};
+    currentAttendanceId = null;
+    currentSectionIdx = 0;
+    activeFormSections = formSections;
+    formData.attendanceMode = 'custody';
+    formData.workType = 'First Police Station Attendance';
+    formData._formType = 'attendance';
+    prefillDefaults();
+    renderForm(formData);
+    showView('new');
   }
 
   /* ═══════════════════════════════════════════════
@@ -14510,7 +14689,7 @@ pdfAuditFooterHtml(d, settings) +
   function showStandaloneAttachChooser(kindTitle) {
     return new Promise(function(resolve) {
       var overlay = document.createElement('div');
-      overlay.className = 'sections-index';
+      overlay.className = 'attendance-picker-overlay';
       overlay.innerHTML =
         '<div class="sections-index-content" style="max-width:420px;width:92%;">' +
           '<h3 style="margin-top:0;">' + esc(kindTitle) + '</h3>' +
@@ -14537,54 +14716,11 @@ pdfAuditFooterHtml(d, settings) +
 
   function pickAttendanceIdForStandalone(titleText) {
     return new Promise(function(resolve) {
-      var modal = document.getElementById('attendance-picker-modal');
-      var titleEl = document.getElementById('attendance-picker-title');
-      var listEl = document.getElementById('attendance-picker-list');
-      var cancelBtn = document.getElementById('attendance-picker-cancel');
-      if (!modal || !listEl || !titleEl) { resolve(null); return; }
-
-      titleEl.textContent = titleText || 'Select attendance';
-      listEl.innerHTML = '<li class="home-recent-empty">Loading…</li>';
-      modal.classList.remove('hidden');
-
-      var done = false;
-      function finish(val) {
-        if (done) return;
-        done = true;
-        try { modal.classList.add('hidden'); } catch (_) {}
-        resolve(val);
-      }
-
-      function onCancel(e) { if (e) e.preventDefault(); finish(null); }
-      cancelBtn?.addEventListener('click', onCancel, { once: true });
-
-      var listFn = window.api.attendanceListFull || window.api.attendanceList;
-      listFn().then(function(rows) {
-        if (!rows || !rows.length) {
-          listEl.innerHTML = '<li class="home-recent-empty">No attendances found. Create one first.</li>';
-          return;
-        }
-        var sorted = rows.slice().sort(function(a, b) { return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''); });
-        listEl.innerHTML = sorted.map(function(r) {
-          var name = (r.client_name && String(r.client_name).trim()) || 'Draft (no name)';
-          var station = r.station_name || '';
-          var date = r.attendance_date || '';
-          if (date) {
-            var dm = String(date).match(/^(\d{4})-(\d{2})-(\d{2})/);
-            if (dm) date = dm[3] + '/' + dm[2] + '/' + dm[1];
-          }
-          var meta = [station, date].filter(Boolean).join(' · ');
-          return '<li class="attendance-picker-item" data-id="' + r.id + '"><span class="picker-item-name">' + esc(name) + '</span><span class="picker-item-meta">' + esc(meta) + '</span></li>';
-        }).join('');
-        listEl.querySelectorAll('.attendance-picker-item').forEach(function(li) {
-          li.addEventListener('click', function() {
-            var id = parseInt(li.dataset.id, 10);
-            finish(isNaN(id) ? null : id);
-          });
-        });
-      }).catch(function() {
-        listEl.innerHTML = '<li class="home-recent-empty">Failed to load list.</li>';
-        showToast('Failed to load attendances', 'error');
+      openAttendancePickerModal({
+        title: titleText || 'Select attendance',
+        hint: 'Choose an attendance to attach this section to.',
+        onSelect: function(id) { resolve(id); },
+        onCancel: function() { resolve(null); },
       });
     });
   }
@@ -16446,10 +16582,6 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('kb-help-close')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.add('hidden'); });
     document.getElementById('kb-help-modal')?.addEventListener('click', (e) => { if (e.target.id === 'kb-help-modal') document.getElementById('kb-help-modal').classList.add('hidden'); });
     document.getElementById('sections-index')?.addEventListener('click', e => { if (e.target.id === 'sections-index') closeSectionsIndex(); });
-    document.getElementById('attendance-picker-cancel')?.addEventListener('click', closeAttendancePickerModal);
-    document.getElementById('attendance-picker-modal')?.addEventListener('click', function(e) {
-      if (e.target.id === 'attendance-picker-modal') closeAttendancePickerModal();
-    });
     var homeBackupEl = document.getElementById('home-backup-status');
     if (homeBackupEl) {
       homeBackupEl.title = 'Click to create a backup now';
@@ -17840,12 +17972,33 @@ pdfAuditFooterHtml(d, settings) +
     ['crm1', 'crm2', 'crm3', 'declaration'].forEach(function(ft) {
       var btn = document.getElementById('settings-laa-' + ft);
       if (btn) btn.addEventListener('click', function() {
-        window.api.laaOpenOfficialTemplate(ft).then(function(r) {
-          if (r && r.error) showToast(r.error, 'error');
-          else showToast('Opening official form template…', 'success');
-        });
+        var openFn = function() {
+          window.api.laaOpenOfficialTemplate(ft).then(function(r) {
+            if (r && r.error) showToast(r.error, 'error');
+            else showToast('Opening official form template…', 'success');
+          });
+        };
+        if (window.api.laaEnsureTemplates) {
+          window.api.laaEnsureTemplates({}).then(function(res) {
+            if (res && !res.ok) showToast(res.error || 'LAA templates unavailable', 'error');
+            else openFn();
+          }).catch(function() { openFn(); });
+        } else {
+          openFn();
+        }
       });
     });
+    document.getElementById('settings-laa-check-updates')?.addEventListener('click', function() {
+      loadLaaFormsSettingsUI(true);
+    });
+    if (window.api && window.api.onLaaTemplatesUpdated) {
+      window.api.onLaaTemplatesUpdated(function(data) {
+        if (data && data.updatedForms && data.updatedForms.length) {
+          showToast('LAA forms updated: ' + data.updatedForms.join(', '), 'success', 6000);
+        }
+        loadLaaFormsSettingsUI(false);
+      });
+    }
     document.getElementById('useful-links-card')?.addEventListener('click', function(e) {
       var link = e.target?.closest?.('.useful-link-btn');
       if (link) {
@@ -18653,14 +18806,26 @@ pdfAuditFooterHtml(d, settings) +
       }
     };
 
-    if (formType === 'crm1') {
-      promptCrm1ValidationBeforeGenerate(data).then(function (ok) {
-        if (ok) proceed();
-      });
+    var afterTemplates = function(ensureResult) {
+      if (ensureResult && !ensureResult.ok) {
+        showToast(ensureResult.error || 'LAA form templates unavailable', 'error');
+        return;
+      }
+      if (formType === 'crm1') {
+        promptCrm1ValidationBeforeGenerate(data).then(function (ok) {
+          if (ok) proceed();
+        });
+        return;
+      }
+      proceed();
+    };
+
+    if (window.api.laaEnsureTemplates) {
+      window.api.laaEnsureTemplates({}).then(afterTemplates).catch(function() { afterTemplates({ ok: true }); });
       return;
     }
 
-    proceed();
+    afterTemplates({ ok: true });
   }
   window.openLaaForm = openLaaForm;
 
@@ -18865,9 +19030,9 @@ pdfAuditFooterHtml(d, settings) +
     if (existing) { existing.remove(); return; }
     var popup = document.createElement('div');
     popup.id = 'laa-forms-popup';
-    popup.className = 'sections-index';
+    popup.className = 'attendance-picker-overlay';
     popup.innerHTML =
-      '<div class="sections-index-content">' +
+      '<div class="sections-index-content" style="max-width:360px;width:90%;">' +
         '<h3>Generate LAA Form</h3>' +
         '<p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;">Pre-populated from this attendance record.</p>' +
         '<ul style="list-style:none;">' +
@@ -18878,7 +19043,7 @@ pdfAuditFooterHtml(d, settings) +
         '</ul>' +
         '<button type="button" class="btn btn-secondary" style="margin-top:0.75rem;width:100%;" id="laa-popup-close">Close</button>' +
       '</div>';
-    document.getElementById('view-form').appendChild(popup);
+    document.body.appendChild(popup);
     popup.querySelectorAll('.laa-popup-item').forEach(function(li) {
       li.style.cssText = 'padding:0.6rem 0.75rem;margin-bottom:0.25rem;border-radius:6px;cursor:pointer;font-size:0.9rem;font-weight:600;color:var(--text);';
       li.addEventListener('mouseenter', function() { this.style.background = 'var(--section-bg)'; });
@@ -18894,48 +19059,25 @@ pdfAuditFooterHtml(d, settings) +
 
   function showLaaFormPicker(formType) {
     var formNames = { crm1: 'CRM1 \u2014 Client Details', crm2: 'CRM2 \u2014 Advice & Assistance', crm3: 'CRM3 \u2014 Advocacy Assistance', declaration: 'Applicant Declaration' };
-    var modal = document.getElementById('attendance-picker-modal');
-    var titleEl = document.getElementById('attendance-picker-title');
-    var listEl = document.getElementById('attendance-picker-list');
-    if (!modal || !listEl) return;
-    titleEl.textContent = 'Select attendance for ' + (formNames[formType] || formType);
-    listEl.innerHTML = '<li class="home-recent-empty">Loading\u2026</li>';
-    modal.classList.remove('hidden');
-    var listFn = window.api.attendanceListFull || window.api.attendanceList;
-    listFn().then(function(rows) {
-      if (!rows || !rows.length) {
-        listEl.innerHTML = '<li class="home-recent-empty">No attendances found. Create one first.</li>';
-        return;
-      }
-      var sorted = rows.slice().sort(function(a, b) { return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''); });
-      listEl.innerHTML = sorted.map(function(r) {
-        var name = (r.client_name && String(r.client_name).trim()) || 'Draft (no name)';
-        var station = r.station_name || '';
-        var date = r.attendance_date || '';
-        if (date) {
-          var dm = String(date).match(/^(\d{4})-(\d{2})-(\d{2})/);
-          if (dm) date = dm[3] + '/' + dm[2] + '/' + dm[1];
-        }
-        var meta = [station, date].filter(Boolean).join(' \u00B7 ');
-        return '<li class="attendance-picker-item" data-id="' + r.id + '"><span class="picker-item-name">' + esc(name) + '</span><span class="picker-item-meta">' + esc(meta) + '</span></li>';
-      }).join('');
-      listEl.querySelectorAll('.attendance-picker-item').forEach(function(li) {
-        var id = parseInt(li.dataset.id, 10);
-        if (isNaN(id)) return;
-        li.addEventListener('click', function() {
-          modal.classList.add('hidden');
-          window.api.attendanceGet(id).then(function(row) {
-            if (!row || !row.data) { showToast('Could not load attendance', 'error'); return; }
-            var data = safeJson(row.data);
-            openLaaForm(formType, data);
-          }).catch(function(err) {
-            showToast('Failed to load attendance: ' + (err && err.message), 'error');
-          });
+    openAttendancePickerModal({
+      title: 'Select attendance for ' + (formNames[formType] || formType),
+      hint: 'Choose a record to pre-fill the form, or generate a blank form.',
+      emptyState: {
+        message: 'No attendances yet.',
+        blankLabel: 'Generate blank form',
+        onBlank: function() { openLaaForm(formType, {}); },
+        createLabel: 'Create new attendance',
+        onCreate: startNewAttendanceFromHome,
+      },
+      onSelect: function(id) {
+        window.api.attendanceGet(id).then(function(row) {
+          if (!row || !row.data) { showToast('Could not load attendance', 'error'); return; }
+          var data = safeJson(row.data);
+          openLaaForm(formType, data);
+        }).catch(function(err) {
+          showToast('Failed to load attendance: ' + (err && err.message), 'error');
         });
-      });
-    }).catch(function() {
-      listEl.innerHTML = '<li class="home-recent-empty">Failed to load list.</li>';
-      showToast('Failed to load attendances', 'error');
+      },
     });
   }
 
@@ -18944,8 +19086,7 @@ pdfAuditFooterHtml(d, settings) +
     if (existing) { existing.remove(); return; }
     var overlay = document.createElement('div');
     overlay.id = 'laa-nav-popup';
-    overlay.className = 'sections-index';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.3);';
+    overlay.className = 'attendance-picker-overlay';
     overlay.innerHTML =
       '<div class="sections-index-content" style="max-width:360px;width:90%;">' +
         '<h3>Generate LAA Form</h3>' +

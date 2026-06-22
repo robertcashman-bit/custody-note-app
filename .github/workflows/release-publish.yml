@@ -169,14 +169,32 @@ jobs:
               echo "$assets" | grep -qx "$need" || missing+="$need "
             done
             if [ -z "$missing" ]; then
-              echo "Verifying updater asset checksums before publish…"
-              if ! node scripts/verify-github-updater-assets.mjs --tag "$TAG"; then
+              echo "All asset names present — waiting 30s for GitHub uploads to settle…"
+              sleep 30
+              verify_ok=false
+              for vattempt in $(seq 1 5); do
+                echo "Verifying updater checksums (attempt $vattempt/5)…"
+                if node scripts/verify-github-updater-assets.mjs --tag "$TAG"; then
+                  verify_ok=true
+                  break
+                fi
+                sleep 15
+              done
+              if [ "$verify_ok" != "true" ]; then
                 echo "Checksum verification failed — attempting Mac updater feed repair…"
                 node scripts/repair-github-mac-updater-feed.mjs --tag "$TAG" || true
-                node scripts/verify-github-updater-assets.mjs --tag "$TAG" || {
-                  echo "Checksum verification still failed for $TAG — release stays draft."
-                  exit 1
-                }
+                for vattempt in $(seq 1 12); do
+                  echo "Post-repair verify (attempt $vattempt/12)…"
+                  if node scripts/verify-github-updater-assets.mjs --tag "$TAG"; then
+                    verify_ok=true
+                    break
+                  fi
+                  sleep 15
+                done
+              fi
+              if [ "$verify_ok" != "true" ]; then
+                echo "Checksum verification still failed for $TAG — release stays draft."
+                exit 1
               fi
               is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
               if [ "$is_draft" = "true" ]; then

@@ -1831,6 +1831,25 @@ html.dark .outcome-chip--bail   { background: rgba(202,138,4,0.18); color: #fef3
 html.dark .outcome-chip--nfa    { background: rgba(5,150,105,0.18); color: #bbf7d0; border-color: rgba(5,150,105,0.45); }
 html.dark .outcome-chip--rui    { background: rgba(29,78,216,0.18); color: #bfdbfe; border-color: rgba(29,78,216,0.45); }
 
+.attendance-picker-overlay {
+  position: fixed; inset: 0; z-index: 900;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.5); padding: 1rem;
+}
+.attendance-picker-overlay .sections-index-content {
+  border-radius: 12px;
+  max-height: 85vh;
+  width: 100%;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.25);
+  animation: none;
+}
+.attendance-picker-empty-actions { margin-top: 0.75rem; }
+.attendance-picker-empty-actions.hidden { display: none; }
+.settings-laa-versions { margin-top: 0.5rem; font-size: 0.88rem; line-height: 1.5; }
+.settings-laa-versions dl { margin: 0; display: grid; grid-template-columns: minmax(8rem, 1fr) auto; gap: 0.2rem 0.75rem; }
+.settings-laa-versions dt { font-weight: 600; margin: 0; }
+.settings-laa-versions dd { margin: 0; color: var(--on-surface-muted); }
+
 /* Sections index popup */
 .sections-index {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;

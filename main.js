@@ -3834,6 +3834,56 @@ function httpGetWithTimeout(url, timeoutMs) {
   });
 }
 
+function httpGetBinaryBuffer(url, timeoutMs) {
+  const ceiling = (timeoutMs || 15000) + 2000;
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const done = (fn, val) => { if (!settled) { settled = true; fn(val); } };
+    const hardTimer = setTimeout(() => {
+      if (req) req.destroy();
+      const err = new Error('Hard timeout');
+      err.code = 'ETIMEDOUT';
+      done(reject, err);
+    }, ceiling);
+    let req;
+    try {
+      const parsed = new URL(url);
+      if (!isAllowedApiUrl(url)) { clearTimeout(hardTimer); return done(reject, new Error('URL not allowed')); }
+      const mod = parsed.protocol === 'https:' ? https : http;
+      const reqOpts = {
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method: 'GET',
+        timeout: timeoutMs || 15000,
+      };
+      if (parsed.protocol === 'https:' && isAllowedApiUrl(url)) reqOpts.agent = _trustedApiAgent;
+      req = mod.request(reqOpts, (res) => {
+        const chunks = [];
+        res.on('data', (c) => { chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)); });
+        res.on('end', () => {
+          clearTimeout(hardTimer);
+          done(resolve, {
+            statusCode: res.statusCode,
+            ok: res.statusCode >= 200 && res.statusCode < 300,
+            buffer: Buffer.concat(chunks),
+          });
+        });
+      });
+      req.on('error', (e) => {
+        clearTimeout(hardTimer); const err = e instanceof Error ? e : new Error(String(e)); if (e && e.code) err.code = e.code; done(reject, err);
+      });
+      req.on('timeout', () => {
+        req.destroy(); clearTimeout(hardTimer); const err = new Error('Timeout'); err.code = 'ETIMEDOUT'; done(reject, err);
+      });
+      req.end();
+    } catch (e) {
+      clearTimeout(hardTimer);
+      done(reject, e);
+    }
+  });
+}
+
 function httpPost(url, body, opts) {
   const timeoutMs = (opts && opts.timeout) || 15000;
   const maxRedirects = (opts && opts._redirectCount) || 0;
@@ -4473,6 +4523,9 @@ app.whenReady().then(async () => {
   // Normal app mode: create the window only after persistent data is available.
   if (!cliImportPath && !cliListRecords && !cliDumpId) {
     createWindow();
+    runLaaEnsureTemplates({}).catch(function (e) {
+      console.warn('[LAA] startup template check failed:', e && e.message);
+    });
   }
 
   // Auto-import watcher: periodically scan configured folder for new PDF/JSON files.
@@ -6720,17 +6773,50 @@ ipcMain.handle('print-pdf-file', async (_, filePath) => {
 /* â”€â”€â”€ LAA Official PDF prefill â”€â”€â”€ */
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const laaCrm1Fill = require('./lib/laaCrm1Fill');
+const laaFormsSync = require('./lib/laaFormsSync');
+const laaFormsManifest = require('./lib/laaFormsManifest');
 const quickfileClient = require('./lib/quickfileClient');
 const quickfileSettingsSync = require('./lib/quickfileSettingsSync');
 
 const QUICKFILE_CREDENTIAL_KEYS = new Set(['quickfileAccountNumber', 'quickfileApiKey', 'quickfileAppId']);
 
-const LAA_FORM_FILES = {
-  crm1: 'crm1-v16-feb-2025.pdf',
-  crm2: 'crm2-v15-oct-2025.pdf',
-  crm3: 'crm3-v17-feb-2025.pdf',
-  declaration: 'applicant-declaration-v7-feb-2025.pdf',
-};
+let _laaTemplateStatusCache = null;
+
+function getBundledLaaFormDir() {
+  const packed = path.join(process.resourcesPath, 'app', 'data', 'laa-official-forms');
+  if (fs.existsSync(packed)) return packed;
+  return path.join(__dirname, 'data', 'laa-official-forms');
+}
+
+function getLaaFormDir() {
+  const active = laaFormsSync.getActiveManifest(getBundledLaaFormDir(), app.getPath('userData'));
+  return active ? active.baseDir : getBundledLaaFormDir();
+}
+
+function getLaaTemplatePath(formType) {
+  return laaFormsSync.resolveTemplatePath(formType, getBundledLaaFormDir(), app.getPath('userData'));
+}
+
+async function runLaaEnsureTemplates(opts) {
+  const result = await laaFormsSync.ensureTemplates({
+    bundledDir: getBundledLaaFormDir(),
+    userDataDir: app.getPath('userData'),
+    httpGet: (url, ms) => httpGetWithTimeout(url, ms),
+    httpGetBinary: (url, ms) => httpGetBinaryBuffer(url, ms),
+    apiBaseUrl: getManagedCloudApiUrl() || 'https://custodynote.com',
+    forceRemote: !!(opts && opts.forceRemote),
+  });
+  _laaTemplateStatusCache = result;
+  if (result.updated && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('laa-templates-updated', {
+        updatedForms: result.updatedForms || [],
+        forms: result.forms || {},
+      });
+    } catch (_) {}
+  }
+  return result;
+}
 
 /** Human-readable label for Desktop naming: Client - Station - Date - Form - Firm.pdf */
 function laaSanitizeFilePart(s, maxLen) {
@@ -6757,12 +6843,6 @@ function laaDesktopPdfFilename(d, formType) {
   const what = labels[formType] || String(formType || 'LAA form').replace(/-/g, ' ');
   const firm = laaSanitizeFilePart(dd.firmName, 72) || 'Firm';
   return `${client} - ${station} - ${dateIso} - ${what} - ${firm}.pdf`;
-}
-
-function getLaaFormDir() {
-  const packed = path.join(process.resourcesPath, 'app', 'data', 'laa-official-forms');
-  if (fs.existsSync(packed)) return packed;
-  return path.join(__dirname, 'data', 'laa-official-forms');
 }
 
 function fmtDateDMY(val) {
@@ -7008,12 +7088,31 @@ function mergeFeeEarnerSigFromSettings(data, settings) {
   return d;
 }
 
+ipcMain.handle('laa-ensure-templates', async (_, opts) => {
+  try {
+    return await runLaaEnsureTemplates(opts || {});
+  } catch (err) {
+    console.error('[LAA ensure-templates]', err);
+    return { ok: false, error: err.message || String(err), forms: {} };
+  }
+});
+
+ipcMain.handle('laa-get-template-status', async () => {
+  if (_laaTemplateStatusCache) return _laaTemplateStatusCache;
+  try {
+    return await runLaaEnsureTemplates({ skipRemote: true });
+  } catch (err) {
+    return { ok: false, error: err.message || String(err), forms: {} };
+  }
+});
+
 ipcMain.handle('laa-generate-official-pdf', async (_, { formType, data }) => {
   try {
-    const filename = LAA_FORM_FILES[formType];
-    if (!filename) return { error: 'Unknown form type: ' + formType };
-    const templatePath = path.join(getLaaFormDir(), filename);
-    if (!fs.existsSync(templatePath)) return { error: 'Template not found: ' + filename };
+    if (!laaFormsManifest.FORM_TYPES.includes(formType)) return { error: 'Unknown form type: ' + formType };
+    const ensure = await runLaaEnsureTemplates({});
+    if (!ensure.ok) return { error: ensure.error || 'LAA templates unavailable' };
+    const templatePath = getLaaTemplatePath(formType);
+    if (!templatePath) return { error: 'Template not found for ' + formType };
 
     const templateBytes = fs.readFileSync(templatePath);
     const pdfDoc = await PDFDocument.load(templateBytes, { ignoreEncryption: true });
@@ -7068,10 +7167,11 @@ ipcMain.handle('laa-generate-official-pdf', async (_, { formType, data }) => {
 /* Generate LAA PDF as base64 buffer (for attaching to records/invoices, not saving to Desktop) */
 ipcMain.handle('laa-generate-pdf-buffer', async (_, { formType, data }) => {
   try {
-    const filename = LAA_FORM_FILES[formType];
-    if (!filename) return { error: 'Unknown form type: ' + formType };
-    const templatePath = path.join(getLaaFormDir(), filename);
-    if (!fs.existsSync(templatePath)) return { error: 'Template not found: ' + filename };
+    if (!laaFormsManifest.FORM_TYPES.includes(formType)) return { error: 'Unknown form type: ' + formType };
+    const ensure = await runLaaEnsureTemplates({});
+    if (!ensure.ok) return { error: ensure.error || 'LAA templates unavailable' };
+    const templatePath = getLaaTemplatePath(formType);
+    if (!templatePath) return { error: 'Template not found for ' + formType };
 
     const templateBytes = fs.readFileSync(templatePath);
     const pdfDoc = await PDFDocument.load(templateBytes, { ignoreEncryption: true });
@@ -7132,10 +7232,11 @@ ipcMain.handle('html-to-pdf-buffer', async (_, { html }) => {
 
 ipcMain.handle('laa-open-official-template', async (_, formType) => {
   try {
-    const filename = LAA_FORM_FILES[formType];
-    if (!filename) return { error: 'Unknown form type: ' + formType };
-    const templatePath = path.join(getLaaFormDir(), filename);
-    if (!fs.existsSync(templatePath)) return { error: 'Template not found: ' + filename };
+    if (!laaFormsManifest.FORM_TYPES.includes(formType)) return { error: 'Unknown form type: ' + formType };
+    const ensure = await runLaaEnsureTemplates({});
+    if (!ensure.ok) return { error: ensure.error || 'LAA templates unavailable' };
+    const templatePath = getLaaTemplatePath(formType);
+    if (!templatePath) return { error: 'Template not found for ' + formType };
     await shell.openPath(templatePath);
     return { path: templatePath };
   } catch (err) {
