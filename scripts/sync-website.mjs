@@ -10,7 +10,7 @@
  *   WEBSITE_GIT_BRANCH — branch to push (default: detect origin/HEAD, else master)
  *   SYNC_WEBSITE_NO_PUSH — if "1", write releases.json only (no git commit/push)
  */
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { execSync } from 'child_process';
@@ -67,6 +67,20 @@ writeFileSync(
   'utf8'
 );
 console.log(`[sync-website] Synced v${pkg.version} and ${changelog.releases.length} releases to website`);
+
+// LAA official PDF templates + manifest (desktop app auto-update endpoint)
+const laaSrcDir = join(APP_ROOT, 'data', 'laa-official-forms');
+const laaDestDir = join(WEBSITE_ROOT, 'data', 'laa-official-forms');
+if (existsSync(laaSrcDir)) {
+  if (!existsSync(laaDestDir)) mkdirSync(laaDestDir, { recursive: true });
+  for (const name of readdirSync(laaSrcDir)) {
+    const src = join(laaSrcDir, name);
+    if (statSync(src).isFile()) {
+      writeFileSync(join(laaDestDir, name), readFileSync(src));
+    }
+  }
+  console.log('[sync-website] Synced LAA official forms to website data/laa-official-forms');
+}
 
 // SEO blog imports + release-notes post → data/blog-imports.json
 try {
