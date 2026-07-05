@@ -3694,7 +3694,7 @@ ipcMain.handle('get-safe-storage-status', () => {
    LICENCE / SUBSCRIPTION SYSTEM
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const LICENCE_FILE = 'licence.dat';
-const LICENCE_GRACE_DAYS = 7;
+const LICENCE_GRACE_DAYS = 60;
 const LICENCE_REVALIDATE_HOURS = 24;
 const TRIAL_DAYS = 30;
 
@@ -4025,51 +4025,14 @@ const ADMIN_EMAILS_LOCAL = (process.env.CUSTODY_ADMIN_EMAILS || '')
   .map(e => e.trim().toLowerCase())
   .filter(Boolean);
 
+const { computeLicenceStatus: computeLicenceStatusCore } = require('./main/computeLicenceStatus');
+
 function computeLicenceStatus(data) {
-  const noAddons = { quickfile: false, emailAddon: false };
-  if (!data || !data.key) return { status: 'none', message: 'No licence activated', addons: noAddons };
-  const isAdmin = data.email && ADMIN_EMAILS_LOCAL.includes(data.email.toLowerCase());
-  const isAddonValid = (exp) => exp && new Date(exp).getTime() > Date.now();
-  const addons = {
-    quickfile: isAdmin || isAddonValid(data.entitlements?.quickfile?.expiresAt),
-    emailAddon: isAdmin || isAddonValid(data.entitlements?.emailAddon?.expiresAt),
-  };
-  if (data.status === 'revoked' || data.status === 'invalid') {
-    return { status: 'revoked', message: 'Licence has been revoked. Please enter a new licence key or contact support.', key: data.key, email: data.email, addons, entitlements: data.entitlements || null };
-  }
-  if (data.status === 'already_used') {
-    return {
-      status: 'already_used',
-      message: data.message || 'Licence is already in use on the maximum number of devices. Deactivate a device in Settings on an activated PC, then try again.',
-      key: data.key,
-      email: data.email,
-      addons,
-      entitlements: data.entitlements || null,
-    };
-  }
-  const now = Date.now();
-  if (data.expiresAt) {
-    const expiryMs = new Date(data.expiresAt).getTime();
-    const daysRemaining = Math.ceil((expiryMs - now) / (24 * 60 * 60 * 1000));
-    if (expiryMs < now) {
-      return { status: 'expired', message: 'Your subscription expired on ' + new Date(data.expiresAt).toLocaleDateString('en-GB') + '. Please renew to continue using Custody Note.', key: data.key, email: data.email, daysRemaining: 0, isTrial: !!data.isTrial, trialDays: TRIAL_DAYS, addons, entitlements: data.entitlements || null };
-    }
-    if (daysRemaining <= 7) {
-      return { status: 'expiring_soon', message: 'Your ' + (data.isTrial ? 'trial' : 'subscription') + ' expires in ' + daysRemaining + ' day' + (daysRemaining !== 1 ? 's' : '') + '. Please renew to avoid interruption.', key: data.key, email: data.email || '', expiresAt: data.expiresAt, activatedAt: data.activatedAt, lastValidated: data.lastValidated, daysRemaining: daysRemaining, isTrial: !!data.isTrial, trialDays: TRIAL_DAYS, addons, entitlements: data.entitlements || null };
-    }
-  }
-  if (data.lastValidated) {
-    const sinceLast = now - new Date(data.lastValidated).getTime();
-    const graceMs = LICENCE_GRACE_DAYS * 24 * 60 * 60 * 1000;
-    if (sinceLast > graceMs) {
-      return { status: 'grace_expired', message: 'Licence could not be verified for ' + LICENCE_GRACE_DAYS + ' days. Please connect to the internet.', key: data.key, email: data.email, addons, entitlements: data.entitlements || null };
-    }
-  }
-  const result = { status: 'active', key: data.key, email: data.email || '', expiresAt: data.expiresAt || null, activatedAt: data.activatedAt, lastValidated: data.lastValidated, isTrial: !!data.isTrial, trialDays: data.isTrial ? TRIAL_DAYS : undefined, addons, entitlements: data.entitlements || null };
-  if (data.expiresAt) {
-    result.daysRemaining = Math.ceil((new Date(data.expiresAt).getTime() - now) / (24 * 60 * 60 * 1000));
-  }
-  return result;
+  return computeLicenceStatusCore(data, {
+    graceDays: LICENCE_GRACE_DAYS,
+    trialDays: TRIAL_DAYS,
+    adminEmails: ADMIN_EMAILS_LOCAL,
+  });
 }
 
 ipcMain.handle('licence:status', () => {
@@ -4102,6 +4065,7 @@ ipcMain.handle('licence:status', () => {
   }
   const result = computeLicenceStatus(data);
   result.enforced = enforced;
+  result.graceDays = LICENCE_GRACE_DAYS;
   if (data && data.authToken) {
     result.signInWithAccount = true;
     result.accountEmail = data.email || '';

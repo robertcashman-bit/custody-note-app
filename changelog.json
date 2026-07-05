@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.46",
+      "date": "2026-07-05",
+      "latest": true,
+      "changes": [
+        "Licence: offline validation grace extended from 7 to 60 days — paid subscriptions no longer treated as expired just because the app has not been opened recently",
+        "Licence: stale validation shows a warning and auto-revalidates when online instead of blocking new records or forcing reactivation",
+        "Licence: Email my licence key added to the sign-in overlay and Settings › Account (including grace and no-licence states)"
+      ]
+    },
+    {
       "version": "1.9.45",
       "date": "2026-06-22",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix: Home screen LAA form cards (CRM1, CRM2, CRM3, Applicant Declaration) now open a visible attendance picker — previously the modal opened off-screen when the home page was scrolled",
         "LAA forms: automatic official template version check on startup; Settings shows active form versions and a Check for updates button",

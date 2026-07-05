@@ -5436,14 +5436,23 @@ var REQUIRED_FIELD_KEYS = [
     window.api.licenceStatus().then(function(st) {
       var activeEl = document.getElementById('licence-status-active');
       var noneEl = document.getElementById('licence-status-none');
+      var graceEl = document.getElementById('licence-status-needs-validation');
       var trialUpgradeEl = document.getElementById('licence-trial-upgrade');
       var obscuredEl = document.getElementById('licence-key-obscured');
       var typeBadge = document.getElementById('licence-type-badge');
       var timeEl = document.getElementById('licence-time-remaining');
       var lastValidatedEl = document.getElementById('licence-last-validated');
       var resultEl = document.getElementById('licence-validate-result');
+      var graceMsgEl = document.getElementById('licence-grace-message');
+      var graceEmailEl = document.getElementById('licence-grace-forgot-email');
+      var noneEmailEl = document.getElementById('licence-none-forgot-email');
       if (!activeEl || !noneEl) return;
       if (resultEl) { resultEl.style.display = 'none'; resultEl.textContent = ''; }
+      if (graceEl) graceEl.style.display = 'none';
+      if (st && st.email) {
+        if (graceEmailEl && !graceEmailEl.value) graceEmailEl.value = st.email;
+        if (noneEmailEl && !noneEmailEl.value) noneEmailEl.value = st.email;
+      }
       if (st && st.key && (st.status === 'active' || st.status === 'expiring_soon')) {
         noneEl.style.display = 'none';
         activeEl.style.display = '';
@@ -5483,8 +5492,13 @@ var REQUIRED_FIELD_KEYS = [
         if (lastValidatedEl) {
           lastValidatedEl.textContent = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
         }
-        // Show the inline upgrade box when on a trial
         if (trialUpgradeEl) trialUpgradeEl.style.display = st.isTrial ? '' : 'none';
+      } else if (st && st.status === 'grace_expired' && graceEl) {
+        activeEl.style.display = 'none';
+        noneEl.style.display = 'none';
+        graceEl.style.display = '';
+        if (graceMsgEl) graceMsgEl.textContent = st.message || 'Connect to the internet to verify your subscription. Your licence is still active.';
+        if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
       } else {
         activeEl.style.display = 'none';
         noneEl.style.display = '';
@@ -14663,9 +14677,16 @@ pdfAuditFooterHtml(d, settings) +
     return overlay;
   }
 
-  function startNewAttendanceFromHome() {
+  function showLicenceGateToast() {
     if (window.__licenceExpired) {
       showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000);
+      return true;
+    }
+    return false;
+  }
+
+  function startNewAttendanceFromHome() {
+    if (showLicenceGateToast()) {
       return;
     }
     currentStandaloneSectionId = null;
@@ -15860,7 +15881,7 @@ pdfAuditFooterHtml(d, settings) +
             case 'home': navigateTo('home'); break;
             case 'records': navigateTo('list'); break;
             case 'new-attendance':
-              if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); break; }
+              if (window.__licenceExpired) { showLicenceGateToast(); break; }
               currentStandaloneSectionId = null;
               formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
               activeFormSections = formSections;
@@ -15959,7 +15980,7 @@ pdfAuditFooterHtml(d, settings) +
             return;
           case 'home-card-attendance':
             e.preventDefault();
-            if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
+            if (window.__licenceExpired) { showLicenceGateToast(); return; }
             currentStandaloneSectionId = null;
             formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
             activeFormSections = formSections;
@@ -15972,7 +15993,7 @@ pdfAuditFooterHtml(d, settings) +
             return;
           case 'home-card-voluntary':
             e.preventDefault();
-            if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
+            if (window.__licenceExpired) { showLicenceGateToast(); return; }
             currentStandaloneSectionId = null;
             formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
             activeFormSections = voluntaryFormSections;
@@ -15993,7 +16014,7 @@ pdfAuditFooterHtml(d, settings) +
             return;
           case 'home-card-telephone':
             e.preventDefault();
-            if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
+            if (window.__licenceExpired) { showLicenceGateToast(); return; }
             formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
             activeFormSections = telFormSections;
             formData.workType = 'Police Station Telephone Attendance';
@@ -16004,7 +16025,7 @@ pdfAuditFooterHtml(d, settings) +
             return;
           case 'home-card-quick':
             e.preventDefault();
-            if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
+            if (window.__licenceExpired) { showLicenceGateToast(); return; }
             openQuickCapture();
             return;
           case 'home-card-officer-emails':
@@ -16473,7 +16494,7 @@ pdfAuditFooterHtml(d, settings) +
       btn.addEventListener('click', function() {
         var nav = btn.dataset.nav;
         if (nav === 'new-attendance') {
-          if (window.__licenceExpired) { showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000); return; }
+          if (window.__licenceExpired) { showLicenceGateToast(); return; }
           if (currentAttendanceId || Object.keys(formData).length > 0) {
             showConfirm('Start a new record? Any unsaved changes will be lost.').then(function(ok) {
               if (ok) { currentAttendanceId = null; formData = {}; showView('new'); }
@@ -16864,9 +16885,7 @@ pdfAuditFooterHtml(d, settings) +
       if (window.initLicenceUI) window.initLicenceUI();
       loadLicenceSettingsUI();
     });
-    document.getElementById('btn-licence-validate')?.addEventListener('click', function() {
-      var resultEl = document.getElementById('licence-validate-result');
-      var btn = document.getElementById('btn-licence-validate');
+    function runLicenceValidateUI(resultEl, btn) {
       if (!window.api.licenceValidate || !resultEl) return;
       if (btn) btn.disabled = true;
       resultEl.style.display = '';
@@ -16882,6 +16901,9 @@ pdfAuditFooterHtml(d, settings) +
         } else if (r.valid === true) {
           resultEl.textContent = 'Valid — licence is active.';
           resultEl.style.color = '#059669';
+          window.__licenceExpired = false;
+          window.__licenceNeedsValidation = false;
+          document.dispatchEvent(new CustomEvent('licence-activated'));
         } else if (status.status === 'expired') {
           resultEl.textContent = 'Expired — ' + (status.message || 'Subscription has expired.');
           resultEl.style.color = '#dc2626';
@@ -16900,6 +16922,39 @@ pdfAuditFooterHtml(d, settings) +
         if (btn) btn.disabled = false;
         resultEl.textContent = 'Network error — ' + (e && e.message ? e.message : 'Could not reach server');
         resultEl.style.color = '#dc2626';
+      });
+    }
+
+    document.getElementById('btn-licence-validate')?.addEventListener('click', function() {
+      runLicenceValidateUI(
+        document.getElementById('licence-validate-result'),
+        document.getElementById('btn-licence-validate')
+      );
+    });
+    document.getElementById('btn-licence-grace-validate')?.addEventListener('click', function() {
+      var msgEl = document.getElementById('licence-grace-forgot-msg');
+      if (msgEl) {
+        msgEl.textContent = 'Validating…';
+        msgEl.style.color = '';
+      }
+      if (!window.api || !window.api.licenceValidate) return;
+      var btn = this;
+      btn.disabled = true;
+      window.api.licenceValidate().then(function(r) {
+        btn.disabled = false;
+        if (r && r.valid === true) {
+          if (msgEl) { msgEl.textContent = 'Licence verified — you are good to go.'; msgEl.style.color = 'var(--success-color,#16a34a)'; }
+          window.__licenceExpired = false;
+          window.__licenceNeedsValidation = false;
+          document.dispatchEvent(new CustomEvent('licence-activated'));
+          loadLicenceSettingsUI();
+        } else if (msgEl) {
+          msgEl.textContent = (r && r.message) || (r && r.status && r.status.message) || 'Could not verify. Check your internet and try again.';
+          msgEl.style.color = '#dc2626';
+        }
+      }).catch(function(e) {
+        btn.disabled = false;
+        if (msgEl) { msgEl.textContent = 'Network error — ' + (e && e.message ? e.message : 'Could not reach server'); msgEl.style.color = '#dc2626'; }
       });
     });
     document.getElementById('btn-licence-activate-settings')?.addEventListener('click', function() {
@@ -17710,7 +17765,12 @@ pdfAuditFooterHtml(d, settings) +
           line1 = 'Expiring soon — ' + (st.daysRemaining || '') + ' days remaining';
           line2 = 'Renew at custodynote.com/pricing';
           line3 = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
-        } else if (st.status === 'expired' || st.status === 'grace_expired') {
+        } else if (st.status === 'grace_expired') {
+          icon = '⚠️'; color = '#d97706';
+          line1 = 'Needs online verification';
+          line2 = st.message || 'Connect to the internet — your subscription is still active.';
+          line3 = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
+        } else if (st.status === 'expired') {
           icon = '❌'; color = '#dc2626';
           line1 = 'Licence expired';
           line2 = st.message || 'Renew your subscription at custodynote.com/pricing';
@@ -18029,34 +18089,66 @@ pdfAuditFooterHtml(d, settings) +
         window.open(url, '_blank');
       }
     });
+    window.requestLicenceKeyEmail = function(email, msgEl, btn) {
+      if (!email) {
+        if (msgEl) { msgEl.textContent = 'Enter your email address.'; msgEl.style.color = ''; }
+        return Promise.resolve();
+      }
+      if (btn) btn.disabled = true;
+      if (msgEl) { msgEl.textContent = 'Sending…'; msgEl.style.color = ''; }
+      var sendPromise;
+      if (window.custodyNote && window.custodyNote.requestLicenceEmail) {
+        sendPromise = window.custodyNote.requestLicenceEmail(email);
+      } else if (window.api && window.api.licenceEmailKey) {
+        sendPromise = window.api.licenceEmailKey({ email: email }).then(function(r) {
+          return {
+            success: r.ok !== false && r.sent !== false,
+            message: r.message || r.error || (r.ok ? 'If that email exists in our system, your licence code has been sent.' : 'Could not send email.'),
+          };
+        });
+      } else {
+        if (btn) btn.disabled = false;
+        if (msgEl) { msgEl.textContent = 'Email recovery is not available. Restart the app.'; msgEl.style.color = '#dc2626'; }
+        return Promise.resolve();
+      }
+      return sendPromise.then(function(res) {
+        if (btn) btn.disabled = false;
+        if (!msgEl) return;
+        if (res && res.success === false) {
+          msgEl.textContent = res.message || 'Could not send email. Try again or contact support.';
+          msgEl.style.color = '#dc2626';
+        } else {
+          msgEl.textContent = (res && res.message) ? res.message : 'If that email exists in our system, your licence code has been sent.';
+          msgEl.style.color = 'var(--success-color,#16a34a)';
+        }
+      }).catch(function(e) {
+        if (btn) btn.disabled = false;
+        if (msgEl) { msgEl.textContent = 'Could not connect. Please try again later.'; msgEl.style.color = ''; }
+        console.error('[requestLicenceEmail]', e);
+      });
+    };
+
     (function initForgotLicence() {
       var btn = document.getElementById('forgot-licence-btn');
       var inp = document.getElementById('forgot-licence-email');
       var msg = document.getElementById('forgot-licence-msg');
-      if (!btn || !inp || !msg || !window.custodyNote?.requestLicenceEmail) return;
+      if (!btn || !inp || !msg) return;
       btn.addEventListener('click', function() {
-        var email = (inp.value || '').trim();
-        if (!email) { msg.textContent = 'Enter your email address.'; msg.style.color = ''; return; }
-        btn.disabled = true;
-        msg.textContent = 'Sending…';
-        msg.style.color = '';
-        window.custodyNote.requestLicenceEmail(email).then(function(res) {
-          if (res && res.success === false) {
-            msg.textContent = res.message || 'Could not send email. Try again or contact support.';
-            msg.style.color = '#dc2626';
-          } else {
-            msg.textContent = res && res.message ? res.message : 'If that email exists in our system, your licence code has been sent.';
-            msg.style.color = 'var(--success-color,#16a34a)';
-          }
-          btn.disabled = false;
-        }).catch(function(e) {
-          msg.textContent = 'Could not connect. Please try again later.';
-          msg.style.color = '';
-          btn.disabled = false;
-          console.error('[requestLicenceEmail]', e);
-        });
+        window.requestLicenceKeyEmail((inp.value || '').trim(), msg, btn);
       });
     })();
+
+    document.getElementById('licence-none-forgot-btn')?.addEventListener('click', function() {
+      var inp = document.getElementById('licence-none-forgot-email');
+      var msg = document.getElementById('licence-none-forgot-msg');
+      window.requestLicenceKeyEmail((inp && inp.value || '').trim(), msg, this);
+    });
+
+    document.getElementById('btn-licence-grace-email-key')?.addEventListener('click', function() {
+      var inp = document.getElementById('licence-grace-forgot-email');
+      var msg = document.getElementById('licence-grace-forgot-msg');
+      window.requestLicenceKeyEmail((inp && inp.value || '').trim(), msg, this);
+    });
 
     /**
      * Copy a licence key to the clipboard, then auto-clear it 30 seconds
