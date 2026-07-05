@@ -891,6 +891,19 @@
             <p style="margin:0.6rem 0 0 0;font-size:0.8rem;color:#1e3a8a;">Don&rsquo;t have a key? <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;font-weight:600;">Subscribe at custodynote.com/pricing &rarr;</a></p>
           </div>
 
+          <div id="licence-status-needs-validation" style="display:none;margin-top:1rem;padding:1rem 1.1rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;">
+            <p style="margin:0 0 0.4rem 0;font-weight:700;font-size:0.95rem;color:#92400e;">&#9888; Online verification needed</p>
+            <p id="licence-grace-message" style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#78350f;">Connect to the internet to verify your subscription. Your licence is still active.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+              <button type="button" id="btn-licence-grace-validate" class="btn btn-primary btn-small">Validate now</button>
+              <button type="button" id="btn-licence-grace-email-key" class="btn btn-secondary btn-small">Email my licence key</button>
+            </div>
+            <div class="forgot-licence-row" style="margin-top:0.75rem;display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+              <input type="email" id="licence-grace-forgot-email" placeholder="Purchase email" class="forgot-licence-input settings-input" style="min-width:180px;font-size:0.85rem;" />
+              <span id="licence-grace-forgot-msg" class="forgot-licence-msg" style="font-size:0.8rem;color:var(--text-muted,#666);"></span>
+            </div>
+          </div>
+
           <div id="licence-status-none" style="display:none;margin-top:1rem;">
             <p class="settings-hint" style="margin:0 0 0.75rem 0;">Enter your Custody Note licence key to activate.</p>
             <label for="setting-licence-key">Licence key</label>
@@ -898,6 +911,14 @@
             <p class="settings-hint" style="margin:0.25rem 0 0 0;font-size:0.8rem;">Hyphens and spaces are optional; key is normalised to uppercase.</p>
             <button type="button" id="btn-licence-activate-settings" class="btn btn-primary" style="margin-top:0.5rem;">Activate</button>
             <p id="licence-activate-error" class="licence-error" style="display:none;margin-top:0.5rem;color:#dc2626;"></p>
+            <div style="margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border,#e2e8f0);">
+              <p class="settings-hint" style="margin:0 0 0.5rem 0;"><strong>Forgot your licence key?</strong> Enter your purchase email and we&rsquo;ll send it if we have it on file.</p>
+              <div class="forgot-licence-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+                <input type="email" id="licence-none-forgot-email" placeholder="you@example.com" class="forgot-licence-input settings-input" style="min-width:180px;font-size:0.85rem;" />
+                <button type="button" id="licence-none-forgot-btn" class="btn btn-small btn-secondary">Email my licence key</button>
+                <span id="licence-none-forgot-msg" class="forgot-licence-msg" style="font-size:0.8rem;color:var(--text-muted,#666);"></span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1575,7 +1596,8 @@
               <ul>
                 <li>After purchasing a subscription at <a href="https://custodynote.com" target="_blank" rel="noopener">custodynote.com</a>, you will receive a licence key by email.</li>
                 <li>Enter your licence key in the activation overlay when prompted (e.g. when trial has expired or when opening the app without a valid licence).</li>
-                <li>The app validates your licence online. You need an internet connection for activation and periodic validation (the app has a grace period when offline).</li>
+                <li>The app validates your licence online. You need an internet connection for activation and periodic validation. If you have not opened the app for a while, you have a <strong>60-day offline grace period</strong> before online verification is required — your subscription remains active during this time.</li>
+                <li><strong>Forgot your licence key?</strong> Use <strong>Email my licence key</strong> on the sign-in overlay, or go to <strong>Settings &gt; Account &gt; Licence</strong> (or Settings &gt; Support). Enter the email address you used when purchasing.</li>
                 <li>If you see a "subscription" or "trial" message and you have paid, ensure you entered the exact licence key from your email. Keys are case-sensitive; enter them exactly as shown.</li>
               </ul>
               <h4>Renewing or changing your subscription</h4>
@@ -2049,6 +2071,17 @@
             <button type="button" id="magic-link-resend-btn" class="btn btn-secondary" style="padding:0.4rem 1rem;font-size:0.85rem;">Resend link</button>
             <button type="button" id="magic-link-change-btn" class="btn btn-secondary" style="padding:0.4rem 1rem;font-size:0.85rem;">Change email</button>
           </div>
+        </div>
+
+        <!-- Email licence key recovery -->
+        <div id="licence-overlay-email-key" style="margin-top:1rem;border-top:1px solid rgba(255,255,255,0.1);padding-top:1rem;">
+          <p class="licence-hint" style="font-size:0.82rem;margin:0 0 0.5rem;color:#94a3b8;">Forgot your licence key? We can email it if we have it on file.</p>
+          <label for="overlay-forgot-licence-email" style="font-size:0.85rem;">Purchase email</label>
+          <input type="email" id="overlay-forgot-licence-email" placeholder="your@email.com" autocomplete="email" spellcheck="false">
+          <div class="licence-actions" style="margin-top:0.5rem;">
+            <button type="button" id="overlay-forgot-licence-btn" class="btn btn-secondary" style="width:100%;padding:0.5rem;">Email my licence key</button>
+          </div>
+          <p id="overlay-forgot-licence-msg" style="font-size:0.8rem;color:#94a3b8;margin:0.5rem 0 0;min-height:1.2em;"></p>
         </div>
 
         <!-- Licence key fallback -->
