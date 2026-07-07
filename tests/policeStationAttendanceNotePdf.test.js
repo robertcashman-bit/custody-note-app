@@ -134,7 +134,7 @@ describe('Police Station Attendance Note PDF — defence summary and outcome fie
 
   it('section 11 always includes privacy notice and applicant declaration calls', () => {
     assert.match(buildPdfHtmlBody, /laaPrivacyNoticePdfHtml\(h\)/);
-    assert.match(buildPdfHtmlBody, /laaApplicantDeclarationPdfHtml\(h\)/);
+    assert.match(buildPdfHtmlBody, /laaOnlineApplicantDeclarationPdfHtml\(h\)/);
     assert.ok(
       !buildPdfHtmlBody.includes('if (!laaRows && !hasSig && !laaPrivacyNoticePdfHtml(h)'),
       'custody PDF must not skip entire LAA Declaration when fields are empty'

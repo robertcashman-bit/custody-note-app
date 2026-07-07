@@ -2791,6 +2791,18 @@ html.dark .laa-decl-block .laa-fraud-warning {
 }
 .laa-decl-block h3 { margin-top: 0.75rem; }
 .laa-decl-block .declaration-text + .declaration-text { margin-top: 0.5rem; }
+.laa-decl-block .laa-decl-bullets,
+.declaration-box .laa-decl-bullets {
+  margin: 0.35rem 0 0.65rem 1.25rem;
+  padding: 0;
+  line-height: 1.45;
+}
+.laa-decl-block .laa-decl-bullets li,
+.declaration-box .laa-decl-bullets li { margin-bottom: 0.35rem; }
+.address-nfa-wrap { margin-bottom: 0.15rem; }
+.address-nfa-label { font-weight: 600; }
+input.address-nfa-locked { background: var(--input-disabled-bg, #f1f5f9); color: var(--text-muted, #64748b); }
+html.dark input.address-nfa-locked { background: rgba(148,163,184,0.12); }
 
 /* ═══ MULTI-INTERVIEW ═══ */
 .interview-notes-warning {
