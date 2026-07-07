@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.49",
+      "version": "1.9.50",
       "date": "2026-07-07",
       "latest": true,
+      "changes": [
+        "Cross-device sync: one canonical encryption key per licence — fixes records still not syncing when two computers each had their own key and overwrote cloud escrow",
+        "Cross-device sync: second device adopts the first device’s key and re-pushes its records under that key so every record decrypts on every computer",
+        "Cross-device sync: stops escrow ping-pong — devices no longer overwrite each other’s cloud recovery key after every push"
+      ]
+    },
+    {
+      "version": "1.9.49",
+      "date": "2026-07-07",
+      "latest": false,
       "changes": [
         "Cross-device sync: automatic encryption key recovery from cloud when opening the app on a second computer — fixes records not appearing because each PC had its own key",
         "Cross-device sync: primary device uploads key escrow after push so other computers can decrypt synced records",

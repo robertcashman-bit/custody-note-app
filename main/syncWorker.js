@@ -281,9 +281,6 @@ function createSyncWorker(ctx) {
         _lastError = null;
         setConnectivity('api_available');
         totalProcessed++;
-        if (ctx.uploadKeyEscrowIfNeeded) {
-          ctx.uploadKeyEscrowIfNeeded().catch(() => {});
-        }
       } catch (e) {
         const retryable = isRetryableError(e);
         markFailed(id, e, retryable);
@@ -351,6 +348,24 @@ function createSyncWorker(ctx) {
     }
   }
 
+  /** Canonical-key handshake: once per session, retried at most once a minute
+   *  until it succeeds. Guarantees every device converges on ONE encryption
+   *  key per licence BEFORE pushing or pulling records. */
+  let _canonicalKeyDone = false;
+  let _canonicalKeyLastTry = 0;
+  const CANONICAL_KEY_RETRY_MS = 60_000;
+
+  async function ensureCanonicalKeyOnce() {
+    if (_canonicalKeyDone || !ctx.ensureCanonicalKey) return;
+    const now = Date.now();
+    if (now - _canonicalKeyLastTry < CANONICAL_KEY_RETRY_MS) return;
+    _canonicalKeyLastTry = now;
+    try {
+      const res = await ctx.ensureCanonicalKey();
+      if (res && res.ok) _canonicalKeyDone = true;
+    } catch (_) {}
+  }
+
   /**
    * Main loop: advisory health check, recover stuck items, process batch, pull.
    * Health check no longer blocks processing — only 'offline' and 'auth_required'
@@ -366,6 +381,7 @@ function createSyncWorker(ctx) {
       if (conn === 'offline' || conn === 'auth_required') {
         return;
       }
+      await ensureCanonicalKeyOnce();
       recoverStuckItems();
       await processBatch();
       if (ctx.syncPull) {
@@ -376,9 +392,6 @@ function createSyncWorker(ctx) {
         });
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('records-updated-from-sync', { count: pullResult.pulled });
-        }
-        if (pullResult && pullResult.pulled > 0 && ctx.uploadKeyEscrowIfNeeded) {
-          ctx.uploadKeyEscrowIfNeeded().catch(() => {});
         }
         if (pullResult && pullResult.conflicts > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('sync-conflicts-detected', { count: pullResult.conflicts });
