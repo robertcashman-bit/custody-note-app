@@ -101,7 +101,7 @@ test('window.LaaDeclarationPdf is loaded with the official wording', async () =>
 
   expect(result.loaded, 'window.LaaDeclarationPdf must be defined in the renderer').toBe(true);
   expect(result.advice).toContain('Legal Aid Agency Privacy Notice');
-  expect(result.advice).toContain('left anything out that:');
+  expect(result.advice).toContain('As far as I know all the information I have given is true');
   expect(result.crm14).toContain('right to representation for the purposes of criminal proceedings');
 });
 
@@ -204,7 +204,7 @@ test('PDF still renders CRM2 declaration from refData when the wording module is
   });
 
   expect(html, 'must fall back to bundled refData CRM2 wording').toContain(
-    'all the information I have given is true and I have not withheld any relevant information',
+    'As far as I know all the information I have given is true and I have not withheld any relevant information',
   );
   expect(html).toContain('Legal Aid Agency Privacy Notice');
 });
