@@ -1,0 +1,25 @@
+{
+  "folders": [
+    {
+      "name": "PoliceStationAgent.com",
+      "path": "one"
+    },
+    {
+      "name": "PoliceStationRepUK.com",
+      "path": "Policestationrepuk"
+    },
+    {
+      "name": "CustodyNote website",
+      "path": "custody-note-website"
+    },
+    {
+      "name": "PSRUKTrain.com",
+      "path": "pstrain-rebuild"
+    },
+    {
+      "name": "CustodyNoteApp",
+      "path": "."
+    }
+  ],
+  "settings": {}
+}
