@@ -18,10 +18,10 @@
  *    FIX: pushRecord now captures sync_version at read time. markSynced only
  *    clears sync_dirty when the version still matches.
  *
- * 3. processOne processed exactly one queue item per 10s cycle. A queue of 20
- *    items took 200+ seconds to flush even with perfect connectivity.
- *    FIX: processBatch processes up to 5 items per cycle, stopping on the
- *    first network error (no point continuing if connectivity is lost).
+ * 3. One HTTP request per record made large backlogs very slow (re-key, bulk
+ *    recovery). FIX: processBatch sends up to PUSH_HTTP_BATCH_SIZE records per
+ *    request and runs up to MAX_PUSH_ROUNDS_PER_CYCLE rounds per cycle (100
+ *    records/cycle max), stopping on the first network error.
  *
  * 4. recoverStuckItems reset 'blocked' items (permanent 4xx errors) to pending
  *    after 5 minutes, causing them to retry forever and burn cycles.
@@ -35,13 +35,15 @@
 const crypto = require('crypto');
 const { encryptSyncEnvelope } = require('../lib/syncRecordCrypto');
 
-const SYNC_POLL_INTERVAL_MS = 30000;
+const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
 const HEALTH_CHECK_TIMEOUT_MS = 4000;
-const SCHEDULE_SOON_DEBOUNCE_MS = 3000;
+const SCHEDULE_SOON_DEBOUNCE_MS = 1000;
 const RETRY_DELAYS_MS = [0, 10_000, 30_000, 120_000, 600_000, 1_800_000]; // attempt 1..6
 const MAX_RETRY_ATTEMPTS = 6;
-const BATCH_SIZE = 5;
+const PUSH_HTTP_BATCH_SIZE = 20;
+const MAX_PUSH_ROUNDS_PER_CYCLE = 5;
+const MAX_RECORDS_PER_CYCLE = PUSH_HTTP_BATCH_SIZE * MAX_PUSH_ROUNDS_PER_CYCLE;
 const HEALTH_CHECK_SKIP_WINDOW_MS = 60_000;
 const BLOCKED_RECOVERY_COOLDOWN_MS = 30 * 60_000;
 const MAX_BLOCKED_AUTO_RECOVERIES = 3;
@@ -170,7 +172,7 @@ function createSyncWorker(ctx) {
     const rows = ctx.dbAll(
       `SELECT id, record_id, operation, payload, retry_count, last_attempt, status, created_at
        FROM sync_queue
-       WHERE status IN ('pending','syncing')
+       WHERE status = 'pending'
        ORDER BY created_at ASC LIMIT 20`
     );
     for (const row of rows || []) {
@@ -214,15 +216,8 @@ function createSyncWorker(ctx) {
     ctx.flushDb && ctx.flushDb();
   }
 
-  /**
-   * Push single record to API. Reads current state from attendances and
-   * captures sync_version so markSynced can do a version-aware cleanup.
-   */
-  async function pushRecord(queueItem) {
-    const apiUrl = ctx.getSyncApiUrl && ctx.getSyncApiUrl();
-    if (!apiUrl) throw new Error('No API URL');
-    const data = ctx.readLicenceData && ctx.readLicenceData();
-    if (!data || !data.key) throw new Error('No licence');
+  /** Build encrypted push payload for one queue item. */
+  function buildPushPayload(queueItem) {
     const recordId = queueItem.record_id;
     const row = ctx.dbGet('SELECT id, sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason, client_name, station_name, dscc_ref, attendance_date, supervisor_approved_at, supervisor_note, archived_at, sync_version FROM attendances WHERE id=?', [recordId]);
     if (!row) throw new Error('Record not found');
@@ -242,48 +237,73 @@ function createSyncWorker(ctx) {
       deletedAt: row.deleted_at || null,
       deletionReason: row.deletion_reason || null,
     });
-    const record = {
-      syncId: row.sync_id,
-      envelope,
-      encrypted: true,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      version: capturedVersion,
+    return {
+      queueId: queueItem.id,
+      recordId,
+      capturedVersion,
+      record: {
+        syncId: row.sync_id,
+        envelope,
+        encrypted: true,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        version: capturedVersion,
+      },
     };
+  }
+
+  /** Push up to PUSH_HTTP_BATCH_SIZE records in one HTTP request. */
+  async function pushRecordBatch(queueItems) {
+    const apiUrl = ctx.getSyncApiUrl && ctx.getSyncApiUrl();
+    if (!apiUrl) throw new Error('No API URL');
+    const data = ctx.readLicenceData && ctx.readLicenceData();
+    if (!data || !data.key) throw new Error('No licence');
+    const payloads = queueItems.map((item) => buildPushPayload(item));
     const correlationId = generateCorrelationId();
     const resp = await ctx.httpPost(
       `${apiUrl.replace(/\/$/, '')}/api/sync/push`,
-      { key: data.key, machineId: ctx.getMachineId(), records: [record] },
+      {
+        key: data.key,
+        machineId: ctx.getMachineId(),
+        records: payloads.map((p) => p.record),
+      },
       { timeout: SYNC_REQUEST_TIMEOUT_MS, correlationId }
     );
     if (!resp || !resp.ok) throw new Error(resp && resp.error ? resp.error : 'Push failed');
-    return { written: resp.written || 1, capturedVersion };
+    return payloads;
   }
 
   /**
-   * Process up to BATCH_SIZE queue items per cycle. Stops on first network
-   * error (no point continuing if connectivity is lost).
+   * Process up to MAX_RECORDS_PER_CYCLE queue items per cycle (batched HTTP).
+   * Stops on first network error (no point continuing if connectivity is lost).
    */
   async function processBatch() {
     let totalProcessed = 0;
-    for (let i = 0; i < BATCH_SIZE; i++) {
-      const item = getNextQueueItem();
-      if (!item) break;
-      const id = item.id;
-      const recordId = item.record_id;
-      markSyncing(id);
+    for (let round = 0; round < MAX_PUSH_ROUNDS_PER_CYCLE; round++) {
+      const items = [];
+      for (let i = 0; i < PUSH_HTTP_BATCH_SIZE; i++) {
+        const item = getNextQueueItem();
+        if (!item) break;
+        items.push(item);
+        markSyncing(item.id);
+      }
+      if (items.length === 0) break;
       if (totalProcessed === 0) notifyRenderer({ status: 'syncing' });
       try {
-        const result = await pushRecord(item);
-        markSynced(id, recordId, result.capturedVersion);
+        const payloads = await pushRecordBatch(items);
+        for (const payload of payloads) {
+          markSynced(payload.queueId, payload.recordId, payload.capturedVersion);
+          totalProcessed++;
+        }
         _lastSyncAt = new Date().toISOString();
         _lastSuccessfulPushAt = Date.now();
         _lastError = null;
         setConnectivity('api_available');
-        totalProcessed++;
       } catch (e) {
         const retryable = isRetryableError(e);
-        markFailed(id, e, retryable);
+        for (const item of items) {
+          markFailed(item.id, e, retryable);
+        }
         _lastError = e && e.message ? e.message : String(e);
         // H32 — invalidate the "recent successful push" cache on any error so
         // the next cycle actually hits /api/health instead of blindly
@@ -353,7 +373,7 @@ function createSyncWorker(ctx) {
    *  key per licence BEFORE pushing or pulling records. */
   let _canonicalKeyDone = false;
   let _canonicalKeyLastTry = 0;
-  const CANONICAL_KEY_RETRY_MS = 60_000;
+  const CANONICAL_KEY_RETRY_MS = 15_000;
 
   async function ensureCanonicalKeyOnce() {
     if (_canonicalKeyDone || !ctx.ensureCanonicalKey) return;
@@ -536,7 +556,9 @@ module.exports = {
   MAX_RETRY_ATTEMPTS,
   SYNC_REQUEST_TIMEOUT_MS,
   HEALTH_CHECK_TIMEOUT_MS,
-  BATCH_SIZE,
+  PUSH_HTTP_BATCH_SIZE,
+  MAX_PUSH_ROUNDS_PER_CYCLE,
+  MAX_RECORDS_PER_CYCLE,
   BLOCKED_RECOVERY_COOLDOWN_MS,
   MAX_BLOCKED_AUTO_RECOVERIES,
 };

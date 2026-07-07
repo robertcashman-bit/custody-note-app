@@ -137,9 +137,9 @@ describe('Performance — footer and status rendering', () => {
 });
 
 describe('Performance — sync cadence', () => {
-  it('uses 30 second idle sync polling', () => {
-    assert.ok(syncWorkerSource.includes('const SYNC_POLL_INTERVAL_MS = 30000'),
-      'sync worker should use a 30 second idle poll interval');
+  it('uses 10 second idle sync polling', () => {
+    assert.ok(syncWorkerSource.includes('const SYNC_POLL_INTERVAL_MS = 10000'),
+      'sync worker should use a 10 second idle poll interval');
   });
 });
 
