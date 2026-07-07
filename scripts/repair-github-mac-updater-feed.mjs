@@ -13,7 +13,13 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
-import { fetchReleaseByTag } from './github-release-api.mjs';
+import { fetchReleaseByTag, RELEASE_OWNER, RELEASE_REPO } from './github-release-api.mjs';
+
+function repoSlug() {
+  const env = String(process.env.GITHUB_REPOSITORY || '').trim();
+  if (env && env.includes('/')) return env;
+  return `${RELEASE_OWNER}/${RELEASE_REPO}`;
+}
 
 function parseArgs(argv) {
   let tag = null;
@@ -99,7 +105,7 @@ async function main() {
       if (m) releaseDate = m[1].trim();
     }
     console.log(`[repair-mac-feed] deleting stale latest-mac.yml (asset id ${existingFeed.id})…`);
-    const delRes = await fetch(`https://api.github.com/repos/robertcashman-bit/custody-note-app/releases/assets/${existingFeed.id}`, {
+    const delRes = await fetch(`https://api.github.com/repos/${repoSlug()}/releases/assets/${existingFeed.id}`, {
       method: 'DELETE',
       headers,
     });
@@ -110,7 +116,8 @@ async function main() {
   }
 
   const ymlBody = buildLatestMacYml(version, fileEntries, releaseDate);
-  const uploadUrl = `https://uploads.github.com/repos/robertcashman-bit/custody-note-app/releases/${release.id}/assets?name=${encodeURIComponent('latest-mac.yml')}`;
+  const slug = repoSlug();
+  const uploadUrl = `https://uploads.github.com/repos/${slug}/releases/${release.id}/assets?name=${encodeURIComponent('latest-mac.yml')}`;
   const upRes = await fetch(uploadUrl, {
     method: 'POST',
     headers: {
