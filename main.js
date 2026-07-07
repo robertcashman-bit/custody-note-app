@@ -402,43 +402,86 @@ const {
   decryptMasterKeyFromEscrow,
 } = require('./lib/keyEscrow');
 
-let _lastEscrowUploadAt = 0;
-const ESCROW_UPLOAD_COOLDOWN_MS = 60 * 60 * 1000;
+const { ensureCanonicalSyncKey } = require('./lib/canonicalSyncKey');
 
-async function tryRecoverMasterKeyFromCloud(opts = {}) {
-  const apiUrl = getManagedCloudApiUrl();
-  if (!apiUrl) return { ok: false, reason: 'no_api' };
-  const data = readLicenceData();
-  if (!data || !data.key) return { ok: false, reason: 'no_licence' };
+let _lastCanonicalKeyAction = null;
+let _lastCanonicalKeyAt = null;
+
+/**
+ * Adopt a canonical key downloaded from escrow: swap the in-memory key,
+ * persist via safeStorage, re-encrypt the on-disk DB, and move aside any
+ * stale recovery.dat (it wraps the OLD key — offering it later would restore
+ * a key that can no longer read the DB or the cloud records).
+ */
+function adoptCanonicalMasterKey(masterKeyHex) {
+  _masterKey = masterKeyHex;
+  saveMasterKeyToSafeStorage(masterKeyHex);
   try {
-    const resp = await httpPost(`${apiUrl}/api/recovery`, {
-      key: data.key,
-      machineId: getMachineId(),
-    }, { headers: _getAuthHeaders() });
-    if (!resp || !resp.ok || !resp.blob) {
-      return { ok: false, reason: 'no_escrow', error: resp && resp.error ? resp.error : null };
+    const recPath = getRecoveryFilePath();
+    if (fs.existsSync(recPath)) {
+      const stalePath = recPath + '.superseded-' + new Date().toISOString().slice(0, 10);
+      fs.renameSync(recPath, stalePath);
+      console.warn('[Sync] recovery.dat wrapped the previous key — moved aside. Ask the user to set a new recovery password.');
     }
-    const masterKeyHex = decryptMasterKeyFromEscrow(resp.blob, data.key);
-    if (!masterKeyHex || masterKeyHex.length !== 64) {
-      return { ok: false, reason: 'decrypt_failed' };
-    }
-    _masterKey = masterKeyHex;
-    saveMasterKeyToSafeStorage(masterKeyHex);
-    if (!opts.silent) {
-      console.info('[Recovery] Master key restored from cloud escrow for cross-device sync.');
-    }
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, reason: 'error', error: e && e.message ? e.message : String(e) };
-  }
+  } catch (_) {}
+  try { if (db) saveDb(); } catch (_) {}
+  console.info('[Sync] Adopted canonical sync key from cloud escrow.');
 }
 
-async function uploadKeyEscrowThrottled(force = false) {
-  const now = Date.now();
-  if (!force && now - _lastEscrowUploadAt < ESCROW_UPLOAD_COOLDOWN_MS) return false;
-  const ok = await uploadKeyEscrow();
-  if (ok) _lastEscrowUploadAt = now;
-  return ok;
+/**
+ * Re-key: every record this device has ever synced gets a version bump and is
+ * re-queued, so it is re-pushed encrypted with the (newly adopted) canonical
+ * key. The cloud store converges on ciphertext all devices can read.
+ */
+function rekeyLocalRecordsForSync() {
+  if (!db) return 0;
+  const rows = dbAll('SELECT id FROM attendances WHERE sync_id IS NOT NULL') || [];
+  for (const row of rows) {
+    dbRun('UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE id=?', [row.id]);
+    enqueueSyncForRecord(row.id);
+  }
+  if (rows.length > 0) {
+    saveDb();
+    console.info('[Sync] Re-keyed ' + rows.length + ' record(s) for re-push under the canonical key.');
+  }
+  return rows.length;
+}
+
+/**
+ * Establish the ONE canonical encryption key for this licence.
+ * Download-first: adopt an existing escrow key (re-keying local records if we
+ * had a different one); only upload ours when no escrow exists yet.
+ */
+async function ensureCanonicalSyncKeyNow() {
+  const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return { ok: false, action: 'no_api' };
+  const data = readLicenceData();
+  const result = await ensureCanonicalSyncKey({
+    getLicenceKey: () => (data && data.key ? data.key : null),
+    getLocalKeyHex: () => getOrCreateMasterKey({ allowCreate: false }),
+    fetchEscrow: () => httpPost(`${apiUrl}/api/recovery`, {
+      key: data.key,
+      machineId: getMachineId(),
+    }, { headers: _getAuthHeaders() }),
+    uploadEscrow: async (blob) => {
+      const resp = await httpPost(`${apiUrl}/api/recovery`, {
+        key: data.key,
+        machineId: getMachineId(),
+        blob,
+      }, { headers: _getAuthHeaders() });
+      return !!(resp && resp.ok);
+    },
+    encryptEscrow: encryptMasterKeyForEscrow,
+    decryptEscrow: decryptMasterKeyFromEscrow,
+    adoptKey: adoptCanonicalMasterKey,
+    rekeyLocalRecords: () => { rekeyLocalRecordsForSync(); },
+  });
+  _lastCanonicalKeyAction = result.action;
+  _lastCanonicalKeyAt = new Date().toISOString();
+  if (!result.ok && result.action !== 'match') {
+    console.warn('[Sync] Canonical key check:', result.action, result.error || '');
+  }
+  return result;
 }
 
 async function uploadKeyEscrow() {
@@ -2161,7 +2204,7 @@ async function syncPull(opts) {
   const localCountRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const localCount = localCountRow ? localCountRow.c : 0;
   if (localCount === 0 || _lastPullStats.decryptFailed > 0 || _lastPullStats.noMasterKeySkipped > 0) {
-    await tryRecoverMasterKeyFromCloud({ silent: true });
+    await ensureCanonicalSyncKeyNow().catch(() => {});
   }
 
   const { decryptSyncEnvelope } = require('./lib/syncRecordCrypto');
@@ -2376,7 +2419,7 @@ function scheduleAutoFullResyncIfEmpty() {
   if (total > 0) return;
   console.info('[Sync] No local records — scheduling automatic full re-sync from cloud');
   setTimeout(() => {
-    tryRecoverMasterKeyFromCloud({ silent: true }).then(() => {
+    ensureCanonicalSyncKeyNow().then(() => {
       return runFullSyncFromCloud();
     }).catch((e) => {
       console.warn('[Sync] Auto full re-sync failed:', e && e.message ? e.message : e);
@@ -2401,12 +2444,7 @@ function getSyncWorker() {
       httpPost: (url, body, opts) => httpPost(url, body, { ...opts, timeout: opts && opts.timeout || 8000 }),
       httpGetWithTimeout,
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
-      uploadKeyEscrowIfNeeded: () => {
-        const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
-        const hasRecords = countRow && countRow.c > 0;
-        if (!hasRecords) return Promise.resolve(false);
-        return uploadKeyEscrowThrottled(false);
-      },
+      ensureCanonicalKey: () => ensureCanonicalSyncKeyNow(),
       resolveSyncConflictsForRecord: (recordId, resolutionNote) => clearOpenSyncConflicts(Number(recordId), resolutionNote),
       onStatusChange: () => {},
       sendToRenderer: (channel, data) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data); },
@@ -4223,11 +4261,7 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     entitlements: result.entitlements || null,
   };
   writeLicenceData(data);
-  await tryRecoverMasterKeyFromCloud({ silent: true });
-  const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
-  if (countRow && countRow.c > 0) {
-    uploadKeyEscrowThrottled(true).catch(() => {});
-  }
+  await ensureCanonicalSyncKeyNow().catch(() => {});
   checkCloudBackupEntitlement().catch(() => {});
   retrySyncQueueAfterLicenceSuccess();
   scheduleSyncSoon();
@@ -5893,8 +5927,8 @@ ipcMain.handle('sync-get-diagnostics', () => {
     totalRecords: totalCount ? totalCount.c : 0,
     lastPull: getLastPullStats(),
     dataSource: 'sqlite-backend-sync',
-    escrowUploadCooldownMs: ESCROW_UPLOAD_COOLDOWN_MS,
-    lastEscrowUploadAt: _lastEscrowUploadAt || null,
+    canonicalKeyAction: _lastCanonicalKeyAction,
+    canonicalKeyCheckedAt: _lastCanonicalKeyAt,
   };
 });
 
@@ -6066,17 +6100,20 @@ ipcMain.handle('session-unlock', (_, password) => {
 });
 
 ipcMain.handle('recover-key-from-cloud', async () => {
-  const result = await tryRecoverMasterKeyFromCloud();
+  const result = await ensureCanonicalSyncKeyNow();
   if (!result.ok) {
+    const messages = {
+      no_key_no_escrow: 'No cloud recovery data found. Open Custody Note on a computer that has your records and ensure sync has run, or set a recovery password in Settings → Security.',
+      escrow_undecryptable: 'Cloud recovery data exists but could not be decrypted with this licence key. Check that both computers use exactly the same licence key.',
+      no_licence: 'No licence key activated on this computer.',
+    };
     return {
       ok: false,
-      error: result.error || (result.reason === 'no_escrow'
-        ? 'No cloud recovery data found. Open Custody Note on a computer that has your records and ensure sync has run, or set a recovery password in Settings → Security.'
-        : 'Could not recover encryption key from cloud.'),
+      error: result.error || messages[result.action] || 'Could not recover encryption key from cloud.',
     };
   }
   scheduleSyncSoon();
-  return { ok: true };
+  return { ok: true, action: result.action };
 });
 
 ipcMain.handle('is-db-encrypted', () => {
