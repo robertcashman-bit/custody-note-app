@@ -13397,9 +13397,13 @@ var REQUIRED_FIELD_KEYS = [
     return L && L.buildCrm14FairProcessingNoticeHtml ? L.buildCrm14FairProcessingNoticeHtml(escFn) : '';
   }
   function laaOnlineApplicantDeclarationPdfHtml(escFn) {
-    return crm14FraudWarningPdfHtml(escFn) +
-      crm14ApplicantDeclarationNotePdfHtml(escFn) +
-      crm14FairProcessingNoticePdfHtml(escFn);
+    var L = getLaaDeclarationPdfHelpers();
+    if (L) {
+      return crm14FraudWarningPdfHtml(escFn) +
+        crm14ApplicantDeclarationNotePdfHtml(escFn) +
+        crm14FairProcessingNoticePdfHtml(escFn);
+    }
+    return laaApplicantDeclarationPdfHtml(escFn);
   }
   function crm14PartnerDeclarationNotePdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
