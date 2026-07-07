@@ -35,9 +35,10 @@
 const crypto = require('crypto');
 const { encryptSyncEnvelope } = require('../lib/syncRecordCrypto');
 
-const SYNC_POLL_INTERVAL_MS = 60000;
-const SYNC_REQUEST_TIMEOUT_MS = 8000;
+const SYNC_POLL_INTERVAL_MS = 30000;
+const SYNC_REQUEST_TIMEOUT_MS = 30000;
 const HEALTH_CHECK_TIMEOUT_MS = 4000;
+const SCHEDULE_SOON_DEBOUNCE_MS = 3000;
 const RETRY_DELAYS_MS = [0, 10_000, 30_000, 120_000, 600_000, 1_800_000]; // attempt 1..6
 const MAX_RETRY_ATTEMPTS = 6;
 const BATCH_SIZE = 5;
@@ -280,6 +281,9 @@ function createSyncWorker(ctx) {
         _lastError = null;
         setConnectivity('api_available');
         totalProcessed++;
+        if (ctx.uploadKeyEscrowIfNeeded) {
+          ctx.uploadKeyEscrowIfNeeded().catch(() => {});
+        }
       } catch (e) {
         const retryable = isRetryableError(e);
         markFailed(id, e, retryable);
@@ -373,6 +377,9 @@ function createSyncWorker(ctx) {
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('records-updated-from-sync', { count: pullResult.pulled });
         }
+        if (pullResult && pullResult.pulled > 0 && ctx.uploadKeyEscrowIfNeeded) {
+          ctx.uploadKeyEscrowIfNeeded().catch(() => {});
+        }
         if (pullResult && pullResult.conflicts > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('sync-conflicts-detected', { count: pullResult.conflicts });
           notifyRenderer({});
@@ -429,7 +436,7 @@ function createSyncWorker(ctx) {
     _scheduleSoonTimer = setTimeout(() => {
       _scheduleSoonTimer = null;
       runCycle().catch(() => {});
-    }, 15000);
+    }, SCHEDULE_SOON_DEBOUNCE_MS);
   }
 
   function getDiagnostics() {
@@ -511,6 +518,7 @@ module.exports = {
   isRetryableError,
   getNextAttemptMs,
   SYNC_POLL_INTERVAL_MS,
+  SCHEDULE_SOON_DEBOUNCE_MS,
   RETRY_DELAYS_MS,
   MAX_RETRY_ATTEMPTS,
   SYNC_REQUEST_TIMEOUT_MS,

@@ -400,6 +400,13 @@ if (process.env.CUSTODYNOTE_PACKAGED !== '1') {
   contextBridge.exposeInMainWorld('__CUSTODYNOTE_E2E__', {
     skipLicenceGate: process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1',
   });
+  contextBridge.exposeInMainWorld('__cnSyncDiag', async () => {
+    const status = await ipcRenderer.invoke('sync-status');
+    const diag = await ipcRenderer.invoke('sync-get-diagnostics');
+    const payload = { status, diag, at: new Date().toISOString() };
+    console.log('[cnSyncDiag]', payload);
+    return payload;
+  });
 }
 
 contextBridge.exposeInMainWorld('custodyNote', {

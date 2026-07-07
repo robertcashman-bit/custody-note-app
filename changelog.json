@@ -1,9 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.9.48",
+      "version": "1.9.49",
       "date": "2026-07-07",
       "latest": true,
+      "changes": [
+        "Cross-device sync: automatic encryption key recovery from cloud when opening the app on a second computer — fixes records not appearing because each PC had its own key",
+        "Cross-device sync: primary device uploads key escrow after push so other computers can decrypt synced records",
+        "Cross-device sync: faster background sync (30s poll, 3s debounce) and longer push timeout for slow networks",
+        "Cross-device sync: pulls all pending remote records in batches when catching up after long offline periods",
+        "Cross-device sync: diagnostics show API URL, licence, and master key status (Ctrl+Shift+D or __cnSyncDiag in dev)",
+        "Website sync API: pull returns up to 200 records per request with hasMore for large backlogs"
+      ]
+    },
+    {
+      "version": "1.9.48",
+      "date": "2026-07-07",
+      "latest": false,
       "changes": [
         "Cross-device sync: footer now shows honest status (No remote records, decrypt failed, Up to date) instead of misleading Synced when nothing arrived",
         "Cross-device sync: Full re-sync from cloud and Push all pending now in Settings → Backup",
