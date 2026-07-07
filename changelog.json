@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.50",
+      "version": "1.9.51",
       "date": "2026-07-07",
       "latest": true,
+      "changes": [
+        "Cross-device sync: much faster catch-up — batch push sends up to 100 records per sync cycle (20 per request) instead of 5 one-at-a-time",
+        "Cross-device sync: quicker idle polling (10s) and faster sync after save (1s debounce) so missing records appear on other devices sooner",
+        "Cross-device sync: fixed batch queue picker so in-flight items are not picked twice during a push round"
+      ]
+    },
+    {
+      "version": "1.9.50",
+      "date": "2026-07-07",
+      "latest": false,
       "changes": [
         "Cross-device sync: one canonical encryption key per licence — fixes records still not syncing when two computers each had their own key and overwrote cloud escrow",
         "Cross-device sync: second device adopts the first device’s key and re-pushes its records under that key so every record decrypts on every computer",

@@ -6,7 +6,7 @@
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { createSyncWorker, BATCH_SIZE } = require('../main/syncWorker');
+const { createSyncWorker, MAX_RECORDS_PER_CYCLE } = require('../main/syncWorker');
 
 function createMockCtx(overrides = {}) {
   const tables = {
@@ -18,7 +18,9 @@ function createMockCtx(overrides = {}) {
   function dbAll(sql, params = []) {
     if (sql.includes('FROM sync_queue')) {
       let rows = [...tables.sync_queue];
-      if (sql.includes("status IN ('pending','syncing')")) rows = rows.filter(r => r.status === 'pending' || r.status === 'syncing');
+      if (sql.includes("status IN ('pending','syncing')") || sql.includes("status = 'pending'")) {
+        rows = rows.filter(r => r.status === 'pending' || (sql.includes('syncing') && r.status === 'syncing'));
+      }
       else if (sql.includes("status = 'blocked'")) rows = rows.filter(r => r.status === 'blocked');
       else if (sql.includes("status = 'failed'")) rows = rows.filter(r => r.status === 'failed');
       else if (sql.includes("status IN ('failed','blocked')")) rows = rows.filter(r => r.status === 'failed' || r.status === 'blocked');
@@ -43,7 +45,9 @@ function createMockCtx(overrides = {}) {
   function dbGet(sql, params = []) {
     if (sql.includes('COUNT(*)')) {
       let rows = [...tables.sync_queue];
-      if (sql.includes("status IN ('pending','syncing')")) rows = rows.filter(r => r.status === 'pending' || r.status === 'syncing');
+      if (sql.includes("status IN ('pending','syncing')") || sql.includes("status = 'pending'")) {
+        rows = rows.filter(r => r.status === 'pending' || (sql.includes('syncing') && r.status === 'syncing'));
+      }
       if (sql.includes("status='failed'")) rows = rows.filter(r => r.status === 'failed');
       if (sql.includes("status='blocked'")) rows = rows.filter(r => r.status === 'blocked');
       return { c: rows.length };
@@ -129,7 +133,7 @@ describe('Stress: Queue flood (100 records)', () => {
     const worker = createSyncWorker(mock.ctx);
     for (let i = 1; i <= 100; i++) worker.enqueue(String(i), 'upsert', {});
 
-    const maxCycles = Math.ceil(100 / BATCH_SIZE) + 5;
+    const maxCycles = Math.ceil(100 / MAX_RECORDS_PER_CYCLE) + 5;
     for (let c = 0; c < maxCycles; c++) {
       await worker.runCycle();
     }
@@ -251,7 +255,7 @@ describe('Stress: Stale recovery under load (50 failed items)', () => {
       q.last_attempt = Date.now() - 6 * 60_000;
     }
 
-    const maxCycles = Math.ceil(50 / BATCH_SIZE) + 5;
+    const maxCycles = Math.ceil(50 / MAX_RECORDS_PER_CYCLE) + 5;
     for (let c = 0; c < maxCycles; c++) {
       await worker.runCycle();
     }

@@ -2441,7 +2441,7 @@ function getSyncWorker() {
       readLicenceData,
       getMachineId,
       getMasterKeyHex: () => getOrCreateMasterKey({ allowCreate: false }),
-      httpPost: (url, body, opts) => httpPost(url, body, { ...opts, timeout: opts && opts.timeout || 8000 }),
+      httpPost: (url, body, opts) => httpPost(url, body, { ...opts, timeout: (opts && opts.timeout) || 30000 }),
       httpGetWithTimeout,
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
       ensureCanonicalKey: () => ensureCanonicalSyncKeyNow(),

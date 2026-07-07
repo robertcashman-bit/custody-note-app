@@ -7,7 +7,7 @@
  */
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert');
-const { createSyncWorker, isRetryableError, BATCH_SIZE, HEALTH_CHECK_TIMEOUT_MS } = require('../main/syncWorker');
+const { createSyncWorker, isRetryableError, MAX_RECORDS_PER_CYCLE, PUSH_HTTP_BATCH_SIZE, HEALTH_CHECK_TIMEOUT_MS } = require('../main/syncWorker');
 
 function createMockCtx(overrides = {}) {
   const tables = {
@@ -20,7 +20,9 @@ function createMockCtx(overrides = {}) {
   function dbAll(sql, params = []) {
     if (sql.includes('FROM sync_queue')) {
       let rows = [...tables.sync_queue];
-      if (sql.includes("status IN ('pending','syncing')")) rows = rows.filter(r => r.status === 'pending' || r.status === 'syncing');
+      if (sql.includes("status IN ('pending','syncing')") || sql.includes("status = 'pending'")) {
+        rows = rows.filter(r => r.status === 'pending' || (sql.includes('syncing') && r.status === 'syncing'));
+      }
       else if (sql.includes("status = 'blocked'")) rows = rows.filter(r => r.status === 'blocked');
       else if (sql.includes("status = 'failed'")) rows = rows.filter(r => r.status === 'failed');
       else if (sql.includes("status IN ('failed','blocked')")) rows = rows.filter(r => r.status === 'failed' || r.status === 'blocked');
@@ -45,7 +47,9 @@ function createMockCtx(overrides = {}) {
   function dbGet(sql, params = []) {
     if (sql.includes('COUNT(*)')) {
       let rows = [...tables.sync_queue];
-      if (sql.includes("status IN ('pending','syncing')")) rows = rows.filter(r => r.status === 'pending' || r.status === 'syncing');
+      if (sql.includes("status IN ('pending','syncing')") || sql.includes("status = 'pending'")) {
+        rows = rows.filter(r => r.status === 'pending' || (sql.includes('syncing') && r.status === 'syncing'));
+      }
       if (sql.includes("status='failed'")) rows = rows.filter(r => r.status === 'failed');
       if (sql.includes("status='blocked'")) rows = rows.filter(r => r.status === 'blocked');
       return { c: rows.length };
@@ -253,7 +257,7 @@ describe('Sync Engine: Network failure retry', () => {
 
 
 describe('Sync Engine: Queue recovery (batch processing)', () => {
-  it('processes up to BATCH_SIZE items per cycle', async () => {
+  it('processes all queued items in one cycle when under batch limit', async () => {
     const mock = createMockCtx();
     for (let i = 1; i <= 8; i++) {
       mock.addAttendance(i);
@@ -262,25 +266,26 @@ describe('Sync Engine: Queue recovery (batch processing)', () => {
     for (let i = 1; i <= 8; i++) {
       worker.enqueue(String(i), 'upsert', {});
     }
-    await worker.runCycle();
-    const synced = mock.tables.sync_queue.filter(r => r.status === 'synced').length;
-    assert.strictEqual(synced, BATCH_SIZE);
-    assert.strictEqual(mock.getHttpCalls().length, BATCH_SIZE);
-  });
-
-  it('flushes full queue in 2 cycles for 8 items', async () => {
-    const mock = createMockCtx();
-    for (let i = 1; i <= 8; i++) {
-      mock.addAttendance(i);
-    }
-    const worker = createSyncWorker(mock.ctx);
-    for (let i = 1; i <= 8; i++) {
-      worker.enqueue(String(i), 'upsert', {});
-    }
-    await worker.runCycle();
     await worker.runCycle();
     const synced = mock.tables.sync_queue.filter(r => r.status === 'synced').length;
     assert.strictEqual(synced, 8);
+    assert.strictEqual(mock.getHttpCalls().length, 1);
+  });
+
+  it('flushes large queue in 2 cycles', async () => {
+    const total = MAX_RECORDS_PER_CYCLE + 15;
+    const mock = createMockCtx();
+    for (let i = 1; i <= total; i++) {
+      mock.addAttendance(i);
+    }
+    const worker = createSyncWorker(mock.ctx);
+    for (let i = 1; i <= total; i++) {
+      worker.enqueue(String(i), 'upsert', {});
+    }
+    await worker.runCycle();
+    await worker.runCycle();
+    const synced = mock.tables.sync_queue.filter(r => r.status === 'synced').length;
+    assert.strictEqual(synced, total);
   });
 
   it('stops batch on first network error', async () => {
@@ -291,12 +296,14 @@ describe('Sync Engine: Queue recovery (batch processing)', () => {
       if (callCount === 2) { const e = new Error('Timeout'); e.code = 'ETIMEDOUT'; throw e; }
       return { ok: true, written: 1 };
     };
-    for (let i = 1; i <= 5; i++) mock.addAttendance(i);
+    const firstBatch = PUSH_HTTP_BATCH_SIZE;
+    const secondBatch = 5;
+    for (let i = 1; i <= firstBatch + secondBatch; i++) mock.addAttendance(i);
     const worker = createSyncWorker(mock.ctx);
-    for (let i = 1; i <= 5; i++) worker.enqueue(String(i), 'upsert', {});
+    for (let i = 1; i <= firstBatch + secondBatch; i++) worker.enqueue(String(i), 'upsert', {});
     await worker.runCycle();
     const synced = mock.tables.sync_queue.filter(r => r.status === 'synced').length;
-    assert.strictEqual(synced, 1);
+    assert.strictEqual(synced, firstBatch);
     assert.strictEqual(callCount, 2);
   });
 
