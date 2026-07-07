@@ -12,41 +12,62 @@ Multi-project layout for all Custody Note / police station rep sites.
 | PSRUKTrain.com | psrtrain.com | `pstrain-rebuild/` | `robertdavidcashman-droid/psrtrain` | pstrain |
 | CustodyNoteApp | (desktop) | `.` (root) | `robertdavidcashman-droid/custody-note-app` | none (GitHub Releases) |
 
-CustodyNoteApp desktop source (when pushed) can live in `custody-note-app-desktop/` to keep the root repo as a release stub.
+Configuration: [`workspaces.manifest.json`](workspaces.manifest.json)
+
+## Automatic setup
+
+### Cloud Agent (automatic on every run)
+
+[`.cursor/environment.json`](.cursor/environment.json) runs:
+
+1. `scripts/bootstrap-github-repos.sh` — create missing GitHub repos (needs `GITHUB_PAT`)
+2. `scripts/sync-all-workspaces.sh` — clone or pull all repos
+3. `scripts/verify-workspaces.sh` — health check
+
+Manual sync anytime:
+
+```bash
+bash scripts/sync-all-workspaces.sh
+bash scripts/verify-workspaces.sh
+```
+
+### MacBook (one-time install, then automatic every 5 min)
+
+```bash
+# Optional: custom folder paths
+export REPUK_DIR="$HOME/Policestationrepuk"
+export PSRTRAIN_DIR="$HOME/pstrain-rebuild"
+
+bash scripts/install-mac-sync-agent.sh
+```
+
+Test without pushing:
+
+```bash
+bash scripts/mac-push-missing-repos.sh --dry-run
+```
+
+Logs: `~/Library/Logs/cursor-workspace-sync.log`
+
+### Cursor Cloud secrets (one-time)
+
+| Secret | Purpose |
+|--------|---------|
+| `GITHUB_PAT` | Create missing repos from cloud bootstrap |
+| `VERCEL_TOKEN` | Verify Vercel Git links |
 
 ## Open all five in Cursor
 
-**Cloud Agent:** File → Open Workspace from File → `all-workspaces.code-workspace`
-
-**MacBook (sibling folders):** use `one/policestationagent.code-workspace` on branch `cursor/update-all-workspaces-b9c1`, or clone all repos as siblings and open `all-workspaces.code-workspace` from a parent folder.
-
-## Setup from Mac (one-time)
-
-Repos `policestationrepuk` and `psrtrain` must exist on GitHub and contain your Mac code:
-
-```bash
-bash scripts/mac-push-missing-repos.sh
-```
-
-Then in Cloud Agent (or locally), clone missing folders:
-
-```bash
-git clone https://github.com/robertdavidcashman-droid/policestationrepuk.git Policestationrepuk
-git clone https://github.com/robertdavidcashman-droid/psrtrain.git pstrain-rebuild
-```
-
-## Verify
-
-```bash
-bash scripts/verify-workspaces.sh
-```
+File → Open Workspace from File → `all-workspaces.code-workspace`
 
 ## Vercel
 
 Each website repo connects to **one** Vercel project. Do not link `one` to the pstrain project (see `one/scripts/verify-deployment-target.js`).
 
-Authenticate Vercel (MCP in Cursor or `VERCEL_TOKEN`), then run:
-
 ```bash
 bash scripts/verify-vercel-links.sh
 ```
+
+## GitHub health check
+
+Workflow [`.github/workflows/workspace-sync-check.yml`](.github/workflows/workspace-sync-check.yml) runs every 6 hours and reports missing repos.

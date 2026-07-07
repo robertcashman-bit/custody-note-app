@@ -3,6 +3,15 @@
 set -euo pipefail
 
 GH="robertdavidcashman-droid"
+REPUK_DIR="${REPUK_DIR:-$HOME/Policestationrepuk}"
+PSRTRAIN_DIR="${PSRTRAIN_DIR:-$HOME/pstrain-rebuild}"
+STATUS_FILE="${HOME}/.cursor-workspace-sync-last-run.json"
+DRY_RUN=0
+
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
+  echo "DRY RUN — no git push or repo create"
+fi
 
 create_repo_if_missing() {
   local name="$1"
@@ -11,6 +20,10 @@ create_repo_if_missing() {
     echo "Repo $GH/$name already exists"
   else
     echo "Creating $GH/$name..."
+    if [[ $DRY_RUN -eq 1 ]]; then
+      echo "  [dry-run] would create $GH/$name"
+      return 0
+    fi
     gh repo create "$GH/$name" --public --description "$desc" --add-readme
   fi
 }
@@ -25,6 +38,11 @@ push_local() {
     return 1
   fi
 
+  if [[ $DRY_RUN -eq 1 ]]; then
+    echo "[dry-run] would push $dir -> $GH/$repo"
+    return 0
+  fi
+
   cd "$dir"
   if [[ ! -d .git ]]; then
     echo "Initializing git in $dir"
@@ -32,7 +50,6 @@ push_local() {
     git add -A
     if ! git commit -m "Initial commit from Mac"; then
       echo "ERROR: Initial commit failed (nothing to commit or git identity/hooks issue)."
-      echo "Fix the issue (add files, configure git user, or resolve hooks) and re-run."
       return 1
     fi
   fi
@@ -44,7 +61,7 @@ push_local() {
 
   git remote remove origin 2>/dev/null || true
   git remote add origin "https://github.com/$GH/$repo.git"
-  git fetch origin --prune
+  git fetch origin --prune 2>/dev/null || true
 
   local src=""
   if git show-ref --verify --quiet refs/heads/main; then
@@ -65,8 +82,32 @@ push_local() {
     dest="master"
   fi
 
+  local local_sha remote_sha
+  local_sha=$(git rev-parse HEAD)
+  remote_sha=$(git rev-parse "origin/$dest" 2>/dev/null || echo "")
+
+  if [[ "$local_sha" == "$remote_sha" ]]; then
+    echo "Already up to date: $dir ($local_sha)"
+    return 0
+  fi
+
   git push -u origin "$src:$dest" --force-with-lease
   echo "Pushed $dir ($src -> $dest) -> $GH/$repo"
+}
+
+write_status() {
+  if [[ $DRY_RUN -eq 1 ]]; then
+    return 0
+  fi
+  python3 - <<PY
+import json, datetime
+print(json.dumps({
+    "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+    "repuk_dir": "$REPUK_DIR",
+    "psrtrain_dir": "$PSRTRAIN_DIR",
+    "status": "ok"
+}, indent=2))
+PY
 }
 
 echo "=== Creating GitHub repos (if missing) ==="
@@ -74,13 +115,13 @@ create_repo_if_missing "policestationrepuk" "PoliceStationRepUK website - police
 create_repo_if_missing "psrtrain" "PSRUKTrain website - psrtrain.com"
 
 echo ""
-echo "=== Pushing PoliceStationRepUK ==="
+echo "=== Pushing PoliceStationRepUK ($REPUK_DIR) ==="
 FAIL=0
-push_local "$HOME/Policestationrepuk" "policestationrepuk" main || FAIL=1
+push_local "$REPUK_DIR" "policestationrepuk" main || FAIL=1
 
 echo ""
-echo "=== Pushing PSRUKTrain ==="
-push_local "$HOME/pstrain-rebuild" "psrtrain" main || FAIL=1
+echo "=== Pushing PSRUKTrain ($PSRTRAIN_DIR) ==="
+push_local "$PSRTRAIN_DIR" "psrtrain" main || FAIL=1
 
 if [[ $FAIL -ne 0 ]]; then
   echo ""
@@ -88,11 +129,7 @@ if [[ $FAIL -ne 0 ]]; then
   exit 1
 fi
 
+write_status > "$STATUS_FILE"
 echo ""
-echo "=== CustodyNoteApp desktop (optional) ==="
-echo "If desktop source is in a separate folder, push it to custody-note-app:"
-echo "  cd /path/to/desktop-source"
-echo "  git remote add origin https://github.com/$GH/custody-note-app.git"
-echo "  git push -u origin main"
-echo ""
-echo "Done. Re-run verify in Cloud Agent: bash scripts/verify-workspaces.sh"
+echo "Status written to $STATUS_FILE"
+echo "Done. Cloud Agent will auto-sync via scripts/sync-all-workspaces.sh"
