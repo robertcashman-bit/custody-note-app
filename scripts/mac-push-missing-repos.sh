@@ -18,7 +18,7 @@ create_repo_if_missing() {
 push_local() {
   local dir="$1"
   local repo="$2"
-  local branch="${3:-master}"
+  local branch="${3:-main}"
 
   if [[ ! -d "$dir" ]]; then
     echo "SKIP: $dir not found"
@@ -30,21 +30,43 @@ push_local() {
     echo "Initializing git in $dir"
     git init
     git add -A
-    git commit -m "Initial commit from Mac" || true
+    if ! git commit -m "Initial commit from Mac"; then
+      echo "ERROR: Initial commit failed (nothing to commit or git identity/hooks issue)."
+      echo "Fix the issue (add files, configure git user, or resolve hooks) and re-run."
+      return 1
+    fi
+  fi
+
+  if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+    echo "ERROR: Repository has no commits; nothing to push from $dir."
+    return 1
   fi
 
   git remote remove origin 2>/dev/null || true
   git remote add origin "https://github.com/$GH/$repo.git"
+  git fetch origin --prune
 
-  if git show-ref --verify --quiet "refs/heads/$branch"; then
-    git push -u origin "$branch" --force-with-lease
-  elif git show-ref --verify --quiet refs/heads/main; then
-    git push -u origin main --force-with-lease
+  local src=""
+  if git show-ref --verify --quiet refs/heads/main; then
+    src="main"
+  elif git show-ref --verify --quiet "refs/heads/$branch"; then
+    src="$branch"
+  elif git show-ref --verify --quiet refs/heads/master; then
+    src="master"
   else
-    git branch -M "$branch"
-    git push -u origin "$branch"
+    src="$branch"
+    git branch -M "$src"
   fi
-  echo "Pushed $dir -> $GH/$repo"
+
+  local dest="main"
+  if git show-ref --verify --quiet refs/remotes/origin/main; then
+    dest="main"
+  elif git show-ref --verify --quiet refs/remotes/origin/master; then
+    dest="master"
+  fi
+
+  git push -u origin "$src:$dest" --force-with-lease
+  echo "Pushed $dir ($src -> $dest) -> $GH/$repo"
 }
 
 echo "=== Creating GitHub repos (if missing) ==="
@@ -53,11 +75,18 @@ create_repo_if_missing "psrtrain" "PSRUKTrain website - psrtrain.com"
 
 echo ""
 echo "=== Pushing PoliceStationRepUK ==="
-push_local "$HOME/Policestationrepuk" "policestationrepuk" master || true
+FAIL=0
+push_local "$HOME/Policestationrepuk" "policestationrepuk" main || FAIL=1
 
 echo ""
 echo "=== Pushing PSRUKTrain ==="
-push_local "$HOME/pstrain-rebuild" "psrtrain" master || true
+push_local "$HOME/pstrain-rebuild" "psrtrain" main || FAIL=1
+
+if [[ $FAIL -ne 0 ]]; then
+  echo ""
+  echo "ERROR: One or more pushes failed; see logs above."
+  exit 1
+fi
 
 echo ""
 echo "=== CustodyNoteApp desktop (optional) ==="

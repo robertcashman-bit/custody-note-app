@@ -43,11 +43,40 @@ FAIL=0
 for project in "${!EXPECTED[@]}"; do
   repo="${EXPECTED[$project]}"
   echo "--- $project -> robertdavidcashman-droid/$repo ---"
-  # List project via API through vercel CLI project ls
-  if "$VERCEL_BIN" project ls --token "$VERCEL_TOKEN" 2>/dev/null | grep -qi "$project"; then
-    echo "  OK: project name found in account"
+  expected_full="robertdavidcashman-droid/$repo"
+
+  inspect_json=""
+  if inspect_json="$("$VERCEL_BIN" project inspect "$project" --token "$VERCEL_TOKEN" --json 2>/dev/null)"; then
+    actual_full="$(python3 - "$expected_full" <<'PY'
+import json,sys
+expected = sys.argv[1]
+data = json.load(sys.stdin)
+link = data.get("link") or {}
+repo = (link.get("repo") or "").strip()
+print(repo)
+PY
+)"
   else
-    echo "  WARN: project '$project' not found (may use a different name)"
+    inspect_txt="$("$VERCEL_BIN" project inspect "$project" --token "$VERCEL_TOKEN" 2>/dev/null || true)"
+    actual_full="$(python3 - <<'PY'
+import re,sys
+txt = sys.stdin.read()
+m = re.search(r'^\s*Git Repository:\s*(.+?)\s*$', txt, re.IGNORECASE | re.MULTILINE)
+print((m.group(1).strip() if m else ""))
+PY
+<<<"$inspect_txt"
+)"
+  fi
+
+  if [[ -z "$actual_full" ]]; then
+    echo "  WARN: could not read Git repository link for '$project' (project missing or not linked)"
+    ((FAIL++)) || true
+  elif [[ "$actual_full" == "$expected_full" ]]; then
+    echo "  OK: Git link matches ($actual_full)"
+  else
+    echo "  WARN: Git link mismatch"
+    echo "    expected: $expected_full"
+    echo "    actual:   $actual_full"
     ((FAIL++)) || true
   fi
 done
