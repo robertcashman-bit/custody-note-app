@@ -10,7 +10,7 @@
 import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { fetchReleaseByTag } from './github-release-api.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -224,9 +224,12 @@ async function main() {
   console.log(`[verify-updater] All ${allResults.length} asset(s) verified for ${tag}.`);
 }
 
-main().catch((err) => {
-  console.error('[verify-updater] Fatal:', err && err.message ? err.message : err);
-  process.exit(1);
-});
+const isDirectRun = import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error('[verify-updater] Fatal:', err && err.message ? err.message : err);
+    process.exit(1);
+  });
+}
 
 export { parseYamlFeed, sha512Base64 };
