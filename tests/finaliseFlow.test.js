@@ -268,7 +268,7 @@ describe('Main process — attendance-force-status handler', () => {
 describe('Sync pull — finalise guard', () => {
 
   const pullStart = mainJsSource.indexOf('async function syncPull');
-  const pullFn = mainJsSource.substring(pullStart, pullStart + 6000);
+  const pullFn = mainJsSource.substring(pullStart, pullStart + 12000);
 
   it('refuses to overwrite locally-finalised records with remote draft', () => {
     assert.ok(pullFn.includes("localStatus === 'finalised'"),
@@ -282,17 +282,15 @@ describe('Sync pull — finalise guard', () => {
   });
 
   it('does NOT reference undeclared ctx variable', () => {
-    const hrIdx = pullFn.indexOf('HARD RULE');
-    const guardBlock = pullFn.substring(hrIdx, pullFn.indexOf('continue', hrIdx));
+    const guardIdx = pullFn.indexOf("localStatus === 'finalised'");
+    const guardBlock = pullFn.substring(guardIdx, pullFn.indexOf('continue', guardIdx));
     assert.ok(!guardBlock.includes('ctx'),
       'sync pull guard must NOT reference ctx (causes ReferenceError)');
   });
 
   it('uses dbGet directly for status lookup', () => {
-    const hrIdx = pullFn.indexOf('HARD RULE');
-    const guardBlock = pullFn.substring(hrIdx, pullFn.indexOf('continue', hrIdx));
-    assert.ok(guardBlock.includes("dbGet('SELECT status FROM attendances"),
-      'must use dbGet directly');
+    assert.ok(pullFn.includes("dbGet('SELECT status FROM attendances WHERE id=?', [local.id])"),
+      'must use dbGet directly for local status lookup');
   });
 });
 

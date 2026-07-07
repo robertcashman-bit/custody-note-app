@@ -397,46 +397,59 @@ function tryRecoverMasterKey(password) {
 }
 
 /* â”€â”€â”€ Cloud key escrow â”€â”€â”€ */
-function encryptMasterKeyForEscrow(masterKeyHex, licenceKey) {
-  const salt = crypto.createHash('sha256').update('cn-escrow-salt:' + licenceKey.trim().toUpperCase()).digest();
-  const derived = crypto.pbkdf2Sync(licenceKey.trim().toUpperCase(), salt, PBKDF2_ITERATIONS, 32, PBKDF2_DIGEST);
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', derived, iv);
-  const enc = Buffer.concat([cipher.update(Buffer.from(masterKeyHex, 'utf8')), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, tag, enc]).toString('base64');
+const {
+  encryptMasterKeyForEscrow,
+  decryptMasterKeyFromEscrow,
+} = require('./lib/keyEscrow');
+
+let _lastEscrowUploadAt = 0;
+const ESCROW_UPLOAD_COOLDOWN_MS = 60 * 60 * 1000;
+
+async function tryRecoverMasterKeyFromCloud(opts = {}) {
+  const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return { ok: false, reason: 'no_api' };
+  const data = readLicenceData();
+  if (!data || !data.key) return { ok: false, reason: 'no_licence' };
+  try {
+    const resp = await httpPost(`${apiUrl}/api/recovery`, {
+      key: data.key,
+      machineId: getMachineId(),
+    }, { headers: _getAuthHeaders() });
+    if (!resp || !resp.ok || !resp.blob) {
+      return { ok: false, reason: 'no_escrow', error: resp && resp.error ? resp.error : null };
+    }
+    const masterKeyHex = decryptMasterKeyFromEscrow(resp.blob, data.key);
+    if (!masterKeyHex || masterKeyHex.length !== 64) {
+      return { ok: false, reason: 'decrypt_failed' };
+    }
+    _masterKey = masterKeyHex;
+    saveMasterKeyToSafeStorage(masterKeyHex);
+    if (!opts.silent) {
+      console.info('[Recovery] Master key restored from cloud escrow for cross-device sync.');
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: 'error', error: e && e.message ? e.message : String(e) };
+  }
 }
 
-function decryptMasterKeyFromEscrow(blob, licenceKey) {
-  const raw = Buffer.from(blob, 'base64');
-  if (raw.length < 28) return null;
-  const iv = raw.slice(0, 12);
-  const tag = raw.slice(12, 28);
-  const enc = raw.slice(28);
-  const salt = crypto.createHash('sha256').update('cn-escrow-salt:' + licenceKey.trim().toUpperCase()).digest();
-  const tryWith = function (iters) {
-    try {
-      const derived = crypto.pbkdf2Sync(licenceKey.trim().toUpperCase(), salt, iters, 32, PBKDF2_DIGEST);
-      const decipher = crypto.createDecipheriv('aes-256-gcm', derived, iv);
-      decipher.setAuthTag(tag);
-      const dec = Buffer.concat([decipher.update(enc), decipher.final()]);
-      return dec.toString('utf8');
-    } catch (_) {
-      return null;
-    }
-  };
-  // Try the current (stronger) iteration count first; fall back to legacy
-  // 100k for blobs uploaded by older clients before the 2026 hardening pass.
-  return tryWith(PBKDF2_ITERATIONS) || tryWith(PBKDF2_ITERATIONS_LEGACY);
+async function uploadKeyEscrowThrottled(force = false) {
+  const now = Date.now();
+  if (!force && now - _lastEscrowUploadAt < ESCROW_UPLOAD_COOLDOWN_MS) return false;
+  const ok = await uploadKeyEscrow();
+  if (ok) _lastEscrowUploadAt = now;
+  return ok;
 }
 
 async function uploadKeyEscrow() {
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return false;
   const data = readLicenceData();
-  if (!data || !data.key || !_masterKey) return false;
+  if (!data || !data.key) return false;
+  const masterKeyHex = _masterKey || getOrCreateMasterKey({ allowCreate: false });
+  if (!masterKeyHex) return false;
   try {
-    const blob = encryptMasterKeyForEscrow(_masterKey, data.key);
+    const blob = encryptMasterKeyForEscrow(masterKeyHex, data.key);
     const resp = await httpPost(`${apiUrl}/api/recovery`, {
       key: data.key,
       machineId: getMachineId(),
@@ -2145,135 +2158,161 @@ async function syncPull(opts) {
   const data = readLicenceData();
   if (!data || !data.key) return { pulled: 0 };
 
-  const since = getLastSyncTimestamp();
-  const syncOpts = { timeout: 30000 };
-  if (opts && opts.correlationId) syncOpts.headers = { 'X-Correlation-Id': opts.correlationId };
-  const resp = await httpPost(`${apiUrl}/api/sync/pull`, {
-    key: data.key,
-    machineId: getMachineId(),
-    since,
-  }, syncOpts);
-
-  if (!resp || !resp.ok) {
-    throw new Error(resp && resp.error ? resp.error : 'Pull failed');
+  const localCountRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+  const localCount = localCountRow ? localCountRow.c : 0;
+  if (localCount === 0 || _lastPullStats.decryptFailed > 0 || _lastPullStats.noMasterKeySkipped > 0) {
+    await tryRecoverMasterKeyFromCloud({ silent: true });
   }
 
   const { decryptSyncEnvelope } = require('./lib/syncRecordCrypto');
-  const masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
+  const syncOpts = { timeout: 30000 };
+  if (opts && opts.correlationId) syncOpts.headers = { 'X-Correlation-Id': opts.correlationId };
 
-  const remoteRecords = resp.records || [];
   let merged = 0;
   let conflicts = 0;
   let decryptFailed = 0;
   let noMasterKeySkipped = 0;
-  const receivedCount = remoteRecords.length;
+  let receivedCount = 0;
+  let cursorAdvanced = true;
+  let iterations = 0;
+  const MAX_PULL_ITERATIONS = 50;
 
-  for (const rawRemote of remoteRecords) {
-    let remote = rawRemote;
-    if (rawRemote.envelope) {
-      if (!masterKeyHex) {
-        console.warn('[SYNC-PULL] Cannot decrypt envelope without local master key');
-        noMasterKeySkipped++;
-        continue;
-      }
-      const payload = decryptSyncEnvelope(masterKeyHex, rawRemote.envelope);
-      if (!payload) {
-        console.warn('[SYNC-PULL] Failed to decrypt sync record', rawRemote.syncId);
-        decryptFailed++;
-        continue;
-      }
-      remote = {
-        syncId: rawRemote.syncId,
-        data: payload.data,
-        status: payload.status,
-        createdAt: rawRemote.createdAt,
-        updatedAt: rawRemote.updatedAt,
-        deletedAt: payload.deletedAt || null,
-        deletionReason: payload.deletionReason || null,
-        clientName: payload.clientName || '',
-        stationName: payload.stationName || '',
-        dsccRef: payload.dsccRef || '',
-        attendanceDate: payload.attendanceDate || '',
-        supervisorApprovedAt: payload.supervisorApprovedAt || null,
-        supervisorNote: payload.supervisorNote || '',
-        archivedAt: payload.archivedAt || null,
-        version: rawRemote.version,
-      };
+  while (iterations < MAX_PULL_ITERATIONS) {
+    iterations++;
+    const since = getLastSyncTimestamp();
+    const resp = await httpPost(`${apiUrl}/api/sync/pull`, {
+      key: data.key,
+      machineId: getMachineId(),
+      since,
+    }, syncOpts);
+
+    if (!resp || !resp.ok) {
+      throw new Error(resp && resp.error ? resp.error : 'Pull failed');
     }
-    const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty FROM attendances WHERE sync_id=?', [remote.syncId]);
 
-    if (!local) {
-      dbRun(
-        `INSERT INTO attendances (sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason,
+    const masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
+    const remoteRecords = resp.records || [];
+    let batchMerged = 0;
+    let batchConflicts = 0;
+    let batchDecryptFailed = 0;
+    let batchNoMasterKeySkipped = 0;
+    receivedCount += remoteRecords.length;
+
+    for (const rawRemote of remoteRecords) {
+      let remote = rawRemote;
+      if (rawRemote.envelope) {
+        if (!masterKeyHex) {
+          console.warn('[SYNC-PULL] Cannot decrypt envelope without local master key');
+          batchNoMasterKeySkipped++;
+          continue;
+        }
+        const payload = decryptSyncEnvelope(masterKeyHex, rawRemote.envelope);
+        if (!payload) {
+          console.warn('[SYNC-PULL] Failed to decrypt sync record', rawRemote.syncId);
+          batchDecryptFailed++;
+          continue;
+        }
+        remote = {
+          syncId: rawRemote.syncId,
+          data: payload.data,
+          status: payload.status,
+          createdAt: rawRemote.createdAt,
+          updatedAt: rawRemote.updatedAt,
+          deletedAt: payload.deletedAt || null,
+          deletionReason: payload.deletionReason || null,
+          clientName: payload.clientName || '',
+          stationName: payload.stationName || '',
+          dsccRef: payload.dsccRef || '',
+          attendanceDate: payload.attendanceDate || '',
+          supervisorApprovedAt: payload.supervisorApprovedAt || null,
+          supervisorNote: payload.supervisorNote || '',
+          archivedAt: payload.archivedAt || null,
+          version: rawRemote.version,
+        };
+      }
+      const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty FROM attendances WHERE sync_id=?', [remote.syncId]);
+
+      if (!local) {
+        dbRun(
+          `INSERT INTO attendances (sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason,
          client_name, station_name, dscc_ref, attendance_date,
          supervisor_approved_at, supervisor_note, archived_at, sync_dirty, sync_version)
          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)`,
-        [remote.syncId, remote.data, remote.status, remote.createdAt, remote.updatedAt,
-         remote.deletedAt || null, remote.deletionReason || null,
-         remote.clientName || '', remote.stationName || '', remote.dsccRef || '', remote.attendanceDate || '',
-         remote.supervisorApprovedAt || null, remote.supervisorNote || '', remote.archivedAt || null,
-         remote.version || 1]
-      );
-      merged++;
-      continue;
-    }
-
-    const localVersion = local.sync_version || 1;
-    const remoteVersion = remote.version || 1;
-
-    /* HARD RULE: never revert a locally-finalised record to draft via sync pull.
-       This protects against the scenario where the finalise push failed but
-       the server still has an older draft version. */
-    const localStatus = (() => {
-      const s = dbGet('SELECT status FROM attendances WHERE id=?', [local.id]);
-      return s ? s.status : null;
-    })();
-    if (localStatus === 'finalised' && remote.status !== 'finalised') {
-      console.log('[SYNC-PULL] BLOCKED: refusing to overwrite finalised record id=' + local.id +
-        ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
-      recordSyncConflict(local.id, local, remote, 'protect_finalised');
-      conflicts++;
-      continue;
-    }
-    if (localStatus === 'completed' && remote.status !== 'completed') {
-      console.log('[SYNC-PULL] BLOCKED: refusing to overwrite office-completed record id=' + local.id +
-        ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
-      recordSyncConflict(local.id, local, remote, 'protect_finalised');
-      conflicts++;
-      continue;
-    }
-
-    const remoteNewer = remoteVersion > localVersion ||
-      (remoteVersion === localVersion && remote.updatedAt > (local.updated_at || ''));
-
-    if (remoteNewer) {
-      if (local.sync_dirty === 1) {
-        recordSyncConflict(local.id, local, remote, 'preserve_local_dirty');
-        conflicts++;
+          [remote.syncId, remote.data, remote.status, remote.createdAt, remote.updatedAt,
+           remote.deletedAt || null, remote.deletionReason || null,
+           remote.clientName || '', remote.stationName || '', remote.dsccRef || '', remote.attendanceDate || '',
+           remote.supervisorApprovedAt || null, remote.supervisorNote || '', remote.archivedAt || null,
+           remote.version || 1]
+        );
+        batchMerged++;
         continue;
       }
-      clearOpenSyncConflicts(local.id, 'remote_applied');
-      dbRun(
-        `UPDATE attendances SET data=?, status=?, updated_at=?, deleted_at=?, deletion_reason=?,
+
+      const localVersion = local.sync_version || 1;
+      const remoteVersion = remote.version || 1;
+
+      const localStatus = (() => {
+        const s = dbGet('SELECT status FROM attendances WHERE id=?', [local.id]);
+        return s ? s.status : null;
+      })();
+      if (localStatus === 'finalised' && remote.status !== 'finalised') {
+        console.log('[SYNC-PULL] BLOCKED: refusing to overwrite finalised record id=' + local.id +
+          ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
+        recordSyncConflict(local.id, local, remote, 'protect_finalised');
+        batchConflicts++;
+        continue;
+      }
+      if (localStatus === 'completed' && remote.status !== 'completed') {
+        console.log('[SYNC-PULL] BLOCKED: refusing to overwrite office-completed record id=' + local.id +
+          ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
+        recordSyncConflict(local.id, local, remote, 'protect_finalised');
+        batchConflicts++;
+        continue;
+      }
+
+      const remoteNewer = remoteVersion > localVersion ||
+        (remoteVersion === localVersion && remote.updatedAt > (local.updated_at || ''));
+
+      if (remoteNewer) {
+        if (local.sync_dirty === 1) {
+          recordSyncConflict(local.id, local, remote, 'preserve_local_dirty');
+          batchConflicts++;
+          continue;
+        }
+        clearOpenSyncConflicts(local.id, 'remote_applied');
+        dbRun(
+          `UPDATE attendances SET data=?, status=?, updated_at=?, deleted_at=?, deletion_reason=?,
          client_name=?, station_name=?, dscc_ref=?, attendance_date=?,
          supervisor_approved_at=?, supervisor_note=?, archived_at=?, sync_dirty=0, sync_version=?
          WHERE id=?`,
-        [remote.data, remote.status, remote.updatedAt,
-         remote.deletedAt || null, remote.deletionReason || null,
-         remote.clientName || '', remote.stationName || '', remote.dsccRef || '', remote.attendanceDate || '',
-         remote.supervisorApprovedAt || null, remote.supervisorNote || '', remote.archivedAt || null,
-         remoteVersion, local.id]
-      );
-      merged++;
+          [remote.data, remote.status, remote.updatedAt,
+           remote.deletedAt || null, remote.deletionReason || null,
+           remote.clientName || '', remote.stationName || '', remote.dsccRef || '', remote.attendanceDate || '',
+           remote.supervisorApprovedAt || null, remote.supervisorNote || '', remote.archivedAt || null,
+           remoteVersion, local.id]
+        );
+        batchMerged++;
+      }
     }
-  }
 
-  const { shouldAdvanceSyncPullCursor } = require('./lib/syncPullCursor');
-  const cursorAdvanced = shouldAdvanceSyncPullCursor({ receivedCount, decryptFailed, noMasterKeySkipped });
-  if (resp.serverTime && cursorAdvanced) {
-    setLastSyncTimestamp(resp.serverTime);
-  } else if (!cursorAdvanced && (decryptFailed > 0 || noMasterKeySkipped > 0)) {
-    console.warn('[SYNC-PULL] Pull cursor not advanced —', decryptFailed, 'decrypt failed,', noMasterKeySkipped, 'skipped (no key)');
+    merged += batchMerged;
+    conflicts += batchConflicts;
+    decryptFailed += batchDecryptFailed;
+    noMasterKeySkipped += batchNoMasterKeySkipped;
+
+    const { shouldAdvanceSyncPullCursor } = require('./lib/syncPullCursor');
+    cursorAdvanced = shouldAdvanceSyncPullCursor({
+      receivedCount: remoteRecords.length,
+      decryptFailed: batchDecryptFailed,
+      noMasterKeySkipped: batchNoMasterKeySkipped,
+    });
+    if (resp.serverTime && cursorAdvanced) {
+      setLastSyncTimestamp(resp.serverTime);
+    } else if (!cursorAdvanced && (batchDecryptFailed > 0 || batchNoMasterKeySkipped > 0)) {
+      console.warn('[SYNC-PULL] Pull cursor not advanced —', batchDecryptFailed, 'decrypt failed,', batchNoMasterKeySkipped, 'skipped (no key)');
+    }
+
+    if (!resp.hasMore || remoteRecords.length === 0) break;
   }
 
   _lastPullStats = {
@@ -2337,7 +2376,9 @@ function scheduleAutoFullResyncIfEmpty() {
   if (total > 0) return;
   console.info('[Sync] No local records — scheduling automatic full re-sync from cloud');
   setTimeout(() => {
-    runFullSyncFromCloud().catch((e) => {
+    tryRecoverMasterKeyFromCloud({ silent: true }).then(() => {
+      return runFullSyncFromCloud();
+    }).catch((e) => {
       console.warn('[Sync] Auto full re-sync failed:', e && e.message ? e.message : e);
     });
   }, 12000);
@@ -2360,6 +2401,12 @@ function getSyncWorker() {
       httpPost: (url, body, opts) => httpPost(url, body, { ...opts, timeout: opts && opts.timeout || 8000 }),
       httpGetWithTimeout,
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
+      uploadKeyEscrowIfNeeded: () => {
+        const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+        const hasRecords = countRow && countRow.c > 0;
+        if (!hasRecords) return Promise.resolve(false);
+        return uploadKeyEscrowThrottled(false);
+      },
       resolveSyncConflictsForRecord: (recordId, resolutionNote) => clearOpenSyncConflicts(Number(recordId), resolutionNote),
       onStatusChange: () => {},
       sendToRenderer: (channel, data) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data); },
@@ -4176,8 +4223,14 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     entitlements: result.entitlements || null,
   };
   writeLicenceData(data);
+  await tryRecoverMasterKeyFromCloud({ silent: true });
+  const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+  if (countRow && countRow.c > 0) {
+    uploadKeyEscrowThrottled(true).catch(() => {});
+  }
   checkCloudBackupEntitlement().catch(() => {});
   retrySyncQueueAfterLicenceSuccess();
+  scheduleSyncSoon();
   return { success: true, status: computeLicenceStatus(data) };
 });
 
@@ -5819,7 +5872,30 @@ ipcMain.handle('sync-conflict-resolve', (_event, params) => {
 
 ipcMain.handle('sync-get-diagnostics', () => {
   const w = getSyncWorker();
-  return w ? w.getDiagnostics() : {};
+  const diag = w ? w.getDiagnostics() : {};
+  const lic = readLicenceData();
+  const data = lic || {};
+  const apiUrl = getSyncApiUrl();
+  const totalCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+  const masterKeyPresent = !!getOrCreateMasterKey({ allowCreate: false });
+  let licenceKeyMasked = null;
+  if (data.key) {
+    const k = String(data.key);
+    licenceKeyMasked = k.length > 8 ? k.slice(0, 4) + '-****-****-' + k.slice(-4) : '****';
+  }
+  return {
+    ...diag,
+    apiUrl: apiUrl || null,
+    machineId: getMachineId(),
+    licenceKeyMasked,
+    licenceEmail: data.email || null,
+    masterKeyPresent,
+    totalRecords: totalCount ? totalCount.c : 0,
+    lastPull: getLastPullStats(),
+    dataSource: 'sqlite-backend-sync',
+    escrowUploadCooldownMs: ESCROW_UPLOAD_COOLDOWN_MS,
+    lastEscrowUploadAt: _lastEscrowUploadAt || null,
+  };
 });
 
 ipcMain.handle('sync-force-retry', () => {
@@ -5990,27 +6066,17 @@ ipcMain.handle('session-unlock', (_, password) => {
 });
 
 ipcMain.handle('recover-key-from-cloud', async () => {
-  const apiUrl = getManagedCloudApiUrl();
-  if (!apiUrl) return { ok: false, error: 'Cannot reach server' };
-  const data = readLicenceData();
-  if (!data || !data.key) return { ok: false, error: 'No licence key activated' };
-  try {
-    const resp = await httpPost(`${apiUrl}/api/recovery`, {
-      key: data.key,
-      machineId: getMachineId(),
-    }, { headers: _getAuthHeaders() });
-    if (!resp || !resp.ok) return { ok: false, error: resp && resp.error ? resp.error : 'Failed' };
-    if (!resp.blob) return { ok: false, error: 'No cloud recovery data found. Set a recovery password on a device that has your data.' };
-    const masterKeyHex = decryptMasterKeyFromEscrow(resp.blob, data.key);
-    if (!masterKeyHex || masterKeyHex.length !== 64) {
-      return { ok: false, error: 'Could not decrypt recovery data. The licence key may not match.' };
-    }
-    _masterKey = masterKeyHex;
-    saveMasterKeyToSafeStorage(masterKeyHex);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e && e.message ? e.message : 'Recovery failed' };
+  const result = await tryRecoverMasterKeyFromCloud();
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error || (result.reason === 'no_escrow'
+        ? 'No cloud recovery data found. Open Custody Note on a computer that has your records and ensure sync has run, or set a recovery password in Settings → Security.'
+        : 'Could not recover encryption key from cloud.'),
+    };
   }
+  scheduleSyncSoon();
+  return { ok: true };
 });
 
 ipcMain.handle('is-db-encrypted', () => {

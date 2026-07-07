@@ -40,11 +40,11 @@ describe("sync worker", () => {
     assert.strictEqual(MAX_RETRY_ATTEMPTS, 6);
   });
 
-  it("SYNC_REQUEST_TIMEOUT_MS is 8 seconds", () => {
-    assert.strictEqual(SYNC_REQUEST_TIMEOUT_MS, 8000);
+  it("SYNC_REQUEST_TIMEOUT_MS is 30 seconds", () => {
+    assert.strictEqual(SYNC_REQUEST_TIMEOUT_MS, 30000);
   });
 
-  it("SYNC_POLL_INTERVAL_MS is 60 seconds", () => {
-    assert.strictEqual(SYNC_POLL_INTERVAL_MS, 60000);
+  it("SYNC_POLL_INTERVAL_MS is 30 seconds", () => {
+    assert.strictEqual(SYNC_POLL_INTERVAL_MS, 30000);
   });
 });

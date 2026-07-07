@@ -15164,6 +15164,11 @@ pdfAuditFooterHtml(d, settings) +
       if (summaryEl) {
         var lines = [];
         lines.push('=== SYNC ===');
+        lines.push('API URL:       ' + (diag.apiUrl || status.apiUrl || 'none'));
+        lines.push('Machine ID:    ' + (diag.machineId || 'unknown'));
+        lines.push('Licence:       ' + (diag.licenceKeyMasked || 'not activated'));
+        lines.push('Master key:    ' + (diag.masterKeyPresent ? 'present' : 'MISSING'));
+        lines.push('Data source:   ' + (diag.dataSource || 'sqlite'));
         lines.push('Connectivity:  ' + (diag.connectivity || status.connectivity || 'unknown'));
         lines.push('Queue pending: ' + (diag.queueLength || 0));
         lines.push('Queue failed:  ' + (diag.failedCount || status.failedCount || 0));
@@ -15959,8 +15964,14 @@ pdfAuditFooterHtml(d, settings) +
     if (window.api.onRecordsUpdatedFromSync) {
       window.api.onRecordsUpdatedFromSync(function(info) {
         showToast('Synced ' + (info && info.count || '') + ' record' + ((info && info.count !== 1) ? 's' : '') + ' from another device', 'success');
+        if (_recordCache && typeof _recordCache.clear === 'function') _recordCache.clear();
         try { loadHomeRecent(); } catch (_) {}
         try { refreshList(); } catch (_) {}
+        if (currentAttendanceId && window.api && window.api.attendanceGet) {
+          window.api.attendanceGet(currentAttendanceId).then(function(row) {
+            if (row && _recordCache) _recordCache.set(currentAttendanceId, { row: row, timestamp: Date.now() });
+          }).catch(function() {});
+        }
       });
     }
     if (window.api.onSyncConflictsDetected) {
