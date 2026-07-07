@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.9.47",
+      "version": "1.9.48",
       "date": "2026-07-07",
       "latest": true,
+      "changes": [
+        "Cross-device sync: footer now shows honest status (No remote records, decrypt failed, Up to date) instead of misleading Synced when nothing arrived",
+        "Cross-device sync: Full re-sync from cloud and Push all pending now in Settings → Backup",
+        "Cross-device sync: pull cursor no longer advances when records fail to decrypt — skipped records can be re-pulled after key recovery",
+        "Cross-device sync: empty secondary devices automatically run a full re-sync on startup",
+        "Cross-device sync: warning toast when remote records cannot be decrypted"
+      ]
+    },
+    {
+      "version": "1.9.47",
+      "date": "2026-07-07",
+      "latest": false,
       "changes": [
         "Address: No Fixed Abode (NFA) checkbox on client address fields — ticks to fill and lock address as NFA",
         "LAA Declaration: Section 11, inline sign-off, and telephone sign-off now show the full official online applicant declaration (v7 Feb 2025), not the short CRM2 text",

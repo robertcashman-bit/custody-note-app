@@ -355,6 +355,7 @@ contextBridge.exposeInMainWorld('api', {
   onCloudBackupStatusChanged: (cb) => ipcRenderer.on('cloud-backup-status-changed', (_, data) => cb(data)),
   /* Cross-device sync */
   syncNow: () => ipcRenderer.invoke('sync-now'),
+  syncFullResync: () => ipcRenderer.invoke('sync-full-resync'),
   syncStatus: () => ipcRenderer.invoke('sync-status'),
   syncScheduleOnReconnect: () => ipcRenderer.invoke('sync-schedule-on-reconnect'),
   syncGetDiagnostics: () => ipcRenderer.invoke('sync-get-diagnostics'),
@@ -365,6 +366,7 @@ contextBridge.exposeInMainWorld('api', {
   /* Lightweight, PII-redacted (main-side) crash/error reporting sink. */
   reportClientError: (payload) => ipcRenderer.invoke('report-client-error', payload),
   onSyncStatusChanged: (cb) => ipcRenderer.on('sync-status-changed', (_, data) => cb(data)),
+  onSyncPullWarning: (cb) => ipcRenderer.on('sync-pull-warning', (_, data) => cb(data)),
   onRecordsUpdatedFromSync: (cb) => ipcRenderer.on('records-updated-from-sync', (_, data) => cb(data)),
   onSyncConflictsDetected: (cb) => ipcRenderer.on('sync-conflicts-detected', (_, data) => cb(data)),
   /* Auto-update */

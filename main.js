@@ -2124,6 +2124,20 @@ function setLastSyncTimestamp(ts) {
   dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('lastSyncPullAt', ?)", [ts]);
 }
 
+let _lastPullStats = {
+  received: 0,
+  merged: 0,
+  conflicts: 0,
+  decryptFailed: 0,
+  noMasterKeySkipped: 0,
+  cursorAdvanced: false,
+  at: null,
+};
+
+function getLastPullStats() {
+  return { ..._lastPullStats };
+}
+
 async function syncPull(opts) {
   const apiUrl = getSyncApiUrl();
   if (!apiUrl) return { pulled: 0 };
@@ -2150,17 +2164,22 @@ async function syncPull(opts) {
   const remoteRecords = resp.records || [];
   let merged = 0;
   let conflicts = 0;
+  let decryptFailed = 0;
+  let noMasterKeySkipped = 0;
+  const receivedCount = remoteRecords.length;
 
   for (const rawRemote of remoteRecords) {
     let remote = rawRemote;
     if (rawRemote.envelope) {
       if (!masterKeyHex) {
         console.warn('[SYNC-PULL] Cannot decrypt envelope without local master key');
+        noMasterKeySkipped++;
         continue;
       }
       const payload = decryptSyncEnvelope(masterKeyHex, rawRemote.envelope);
       if (!payload) {
         console.warn('[SYNC-PULL] Failed to decrypt sync record', rawRemote.syncId);
+        decryptFailed++;
         continue;
       }
       remote = {
@@ -2249,14 +2268,79 @@ async function syncPull(opts) {
     }
   }
 
-  if (resp.serverTime) {
+  const { shouldAdvanceSyncPullCursor } = require('./lib/syncPullCursor');
+  const cursorAdvanced = shouldAdvanceSyncPullCursor({ receivedCount, decryptFailed, noMasterKeySkipped });
+  if (resp.serverTime && cursorAdvanced) {
     setLastSyncTimestamp(resp.serverTime);
+  } else if (!cursorAdvanced && (decryptFailed > 0 || noMasterKeySkipped > 0)) {
+    console.warn('[SYNC-PULL] Pull cursor not advanced —', decryptFailed, 'decrypt failed,', noMasterKeySkipped, 'skipped (no key)');
   }
+
+  _lastPullStats = {
+    received: receivedCount,
+    merged,
+    conflicts,
+    decryptFailed,
+    noMasterKeySkipped,
+    cursorAdvanced,
+    at: new Date().toISOString(),
+  };
+
+  const correlationId = opts && opts.correlationId;
+  logSyncAttempt(
+    correlationId,
+    'pull',
+    receivedCount,
+    decryptFailed === 0 && noMasterKeySkipped === 0,
+    decryptFailed > 0
+      ? `decrypt_failed:${decryptFailed}`
+      : (noMasterKeySkipped > 0 ? `no_master_key:${noMasterKeySkipped}` : null)
+  );
 
   if (merged > 0 || conflicts > 0) {
     saveDb();
   }
-  return { pulled: merged, conflicts };
+  return {
+    pulled: merged,
+    conflicts,
+    received: receivedCount,
+    decryptFailed,
+    noMasterKeySkipped,
+    cursorAdvanced,
+  };
+}
+
+function resetSyncPullCursor() {
+  if (!db) return;
+  dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
+}
+
+async function runFullSyncFromCloud() {
+  if (!db) throw new Error('Database not ready');
+  migrateSyncDirtyToQueue();
+  resetSyncPullCursor();
+  saveDb();
+  const w = getSyncWorker();
+  if (w) {
+    w.forceRetryAll();
+    await w.runCycle();
+  }
+}
+
+/** Secondary devices with no local records: auto full re-sync once network is up. */
+function scheduleAutoFullResyncIfEmpty() {
+  if (!db || !getSyncApiUrl()) return;
+  const data = readLicenceData();
+  if (!data || !data.key) return;
+  const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+  const total = countRow ? countRow.c : 0;
+  if (total > 0) return;
+  console.info('[Sync] No local records — scheduling automatic full re-sync from cloud');
+  setTimeout(() => {
+    runFullSyncFromCloud().catch((e) => {
+      console.warn('[Sync] Auto full re-sync failed:', e && e.message ? e.message : e);
+    });
+  }, 12000);
 }
 
 let _syncWorker = null;
@@ -4644,7 +4728,10 @@ app.whenReady().then(async () => {
   setTimeout(() => checkCloudBackupEntitlement().catch(() => {}), 15000);
   setInterval(() => { checkCloudBackupEntitlement().catch(() => {}); }, 60 * 60 * 1000);
   // Start cross-device sync after short delay to allow network to settle
-  setTimeout(() => startSyncTimer(), 8000);
+  setTimeout(() => {
+    startSyncTimer();
+    scheduleAutoFullResyncIfEmpty();
+  }, 8000);
   setInterval(() => {
     cleanupAccidentalDuplicateDrafts();
     dedupeDraftsByCaseKeys();
@@ -5509,7 +5596,7 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     backfillSyncIds();
     dbRun("UPDATE attendances SET sync_dirty=1");
     rebuildSyncQueueForDirtyRecords();
-    dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
+    resetSyncPullCursor();
     saveDb();
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
@@ -5589,7 +5676,7 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     backfillSyncIds();
     dbRun("UPDATE attendances SET sync_dirty=1");
     rebuildSyncQueueForDirtyRecords();
-    dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
+    resetSyncPullCursor();
     saveDb();
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
@@ -5606,11 +5693,24 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
 /* â”€â”€â”€ Cross-device sync IPC handlers â”€â”€â”€ */
 ipcMain.handle('sync-now', async () => {
   try {
+    migrateSyncDirtyToQueue();
     const w = getSyncWorker();
-    if (w) await w.runCycle();
+    if (w) {
+      w.forceRetryAll();
+      await w.runCycle();
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e && e.message ? e.message : 'Sync failed' };
+  }
+});
+
+ipcMain.handle('sync-full-resync', async () => {
+  try {
+    await runFullSyncFromCloud();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Full re-sync failed' };
   }
 });
 
@@ -5641,6 +5741,8 @@ ipcMain.handle('sync-status', () => {
   const blockedCount = (queueBlocked ? queueBlocked.c : 0) || 0;
   const conflictCount = (conflicts ? conflicts.c : 0) || 0;
   const pending = pendingCount + failedCount + blockedCount;
+  const dirtyPushCount = dirtyCount ? dirtyCount.c : 0;
+  const lastPull = getLastPullStats();
   return {
     enabled: !!apiUrl,
     inProgress: diag.inProgress || false,
@@ -5649,7 +5751,9 @@ ipcMain.handle('sync-status', () => {
     failedCount,
     blockedCount,
     conflictCount,
+    dirtyPushCount,
     totalRecords: totalCount ? totalCount.c : 0,
+    lastPull,
     lastAttempts,
     connectivity: diag.connectivity,
     lastError: diag.lastError,
