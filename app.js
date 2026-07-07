@@ -603,6 +603,7 @@ var LAA = {
           'British','Irish','Polish','Romanian','Indian','Pakistani','Bangladeshi','Nigerian','Jamaican','Somali','Albanian','Afghan','Iraqi','Iranian','Eritrean','Sudanese','Ethiopian','Vietnamese','Chinese','Lithuanian','Latvian','Portuguese','Italian','Spanish','French','German','Turkish','Sri Lankan','Ghanaian','Zimbabwean','South African','Brazilian','Colombian','American','Canadian','Australian','Dual nationality','Stateless','Unknown','Other'
         ] },
         { key: 'nationalityOther', label: 'Other nationality (specify)', type: 'text', placeholder: 'Type nationality not listed', showIf: { field: 'nationality', value: 'Other' } },
+        { key: 'addressNfa', label: 'No Fixed Abode (NFA)', type: 'addressNfa' },
         { key: 'address1', label: 'Address line 1', type: 'text', placeholder: 'House number and street', cols: 2 },
         { key: 'address2', label: 'Address line 2', type: 'text', cols: 2 },
         { key: 'address3', label: 'Address line 3', type: 'text', cols: 2 },
@@ -826,11 +827,11 @@ var LAA = {
       ],
       fields: [
         { key: '_h_laa_inline', label: 'Legal Aid Declaration', type: 'sectionHeading' },
-        { key: '_note_laa_inline', label: 'The client should read the Privacy Notice and declaration below before signing.', type: 'sectionNote' },
-        { key: '_laa_decl_inline', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
+        { key: '_note_laa_inline', label: 'The client should read the online applicant declaration (Apply for criminal legal aid) and Privacy Notice below before signing.', type: 'sectionNote' },
+        { key: '_laa_decl_inline', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'crm14Applicant' },
         { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
-        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'adviceAssistance' },
+        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'crm14Applicant' },
         { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
         { key: 'laaSignatureTime', label: 'Time of Signature (auto)', type: 'time', readonly: true },
         { key: '_h_conflict', label: 'Conflict Check', type: 'sectionHeading' },
@@ -1150,15 +1151,15 @@ var LAA = {
       { key: 'counselInstructed', label: 'Has counsel been instructed? (CRM3)', type: 'select', options: ['','Yes','No'] },
       { key: 'advocacyReason', label: 'Advocacy Assistance — proceedings / reason (CRM3)', type: 'textarea', cols: 2, rows: 2, placeholder: 'e.g. bail variation, Parole, Warrant of Further Detention' },
       { key: '_h_laa_sign', label: 'Client declaration & signature', type: 'sectionHeading' },
-      { key: '_laa_decl_main', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
+      { key: '_laa_decl_main', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'crm14Applicant' },
       { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
       { key: 'laaHasPartner', label: 'Does the client have a partner?', type: 'select', options: ['Yes','No'] },
-      { key: '_laa_decl_partner', label: 'Partner declaration', type: 'laaDeclarationBlock', variant: 'partnerAdvice', showIf: { field: 'laaHasPartner', value: 'Yes' } },
+      { key: '_laa_decl_partner', label: 'Partner declaration', type: 'laaDeclarationBlock', variant: 'partnerCrm14', showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaPartnerFullName', label: 'Partner\u2019s full name (BLOCK CAPITALS)', type: 'text', cols: 2, showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaPartnerSignature', label: 'Partner signature', type: 'signature', sigKey: 'laaPartnerSig', showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaPartnerSignatureDate', label: 'Partner signature date (auto)', type: 'date', readonly: true, showIf: { field: 'laaHasPartner', value: 'Yes' } },
       { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
-      { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'adviceAssistance' },
+      { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'crm14Applicant' },
       { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
       { key: 'laaSignatureTime', label: 'Time of Signature (auto)', type: 'time', readonly: true },
       { key: 'feeEarnerSignature', label: 'Fee Earner Signature', type: 'signature', sigKey: 'feeEarnerSig' },
@@ -1340,12 +1341,12 @@ var LAA = {
         { key: 'previousAdviceDetails', label: 'Previous advice details', type: 'text', cols: 2, showIf: { field: 'previousAdvice', value: 'Yes' } },
         { key: '_h_signatures', label: 'Signatures', type: 'sectionHeading' },
         { key: '_note_tel_declaration', label: 'Signatures are optional for telephone advice. Enable below only if the client is present or the firm requires a signed copy.', type: 'sectionNote' },
-        { key: '_laa_decl_tel', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
+        { key: '_laa_decl_tel', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'crm14Applicant' },
         { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
         { key: 'laaFeeEarnerFullName', label: 'Fee Earner Full Name', type: 'text', placeholder: 'Your full name', cols: 2 },
         { key: 'captureSignatures', label: 'Capture signatures?', type: 'select', options: ['No','Yes'] },
-        { key: 'clientSignature', label: 'Client Signature (if present)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'adviceAssistance', showIf: { field: 'captureSignatures', value: 'Yes' } },
+        { key: 'clientSignature', label: 'Client Signature (if present)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'crm14Applicant', showIf: { field: 'captureSignatures', value: 'Yes' } },
         { key: 'feeEarnerSignature', label: 'Fee Earner Signature', type: 'signature', sigKey: 'feeEarnerSig', showIf: { field: 'captureSignatures', value: 'Yes' } },
         { key: 'feeEarnerCertification', label: 'Certification', type: 'select', options: ['Draft','Finalised'] },
         { key: '_h_admin', label: 'Administration', type: 'sectionHeading' },
@@ -1447,6 +1448,7 @@ var LAA = {
           'British','Irish','Polish','Romanian','Indian','Pakistani','Bangladeshi','Nigerian','Jamaican','Somali','Albanian','Afghan','Iraqi','Iranian','Eritrean','Sudanese','Ethiopian','Vietnamese','Chinese','Lithuanian','Latvian','Portuguese','Italian','Spanish','French','German','Turkish','Sri Lankan','Ghanaian','Zimbabwean','South African','Brazilian','Colombian','American','Canadian','Australian','Dual nationality','Stateless','Unknown','Other'
         ] },
         { key: 'nationalityOther', label: 'Other nationality (specify)', type: 'text', placeholder: 'Type nationality not listed', showIf: { field: 'nationality', value: 'Other' } },
+        { key: 'addressNfa', label: 'No Fixed Abode (NFA)', type: 'addressNfa' },
         { key: 'address1', label: 'Address line 1', type: 'text', placeholder: 'House number and street', cols: 2 },
         { key: 'address2', label: 'Address line 2', type: 'text', cols: 2 },
         { key: 'address3', label: 'Address line 3', type: 'text', cols: 2 },
@@ -1586,11 +1588,11 @@ var LAA = {
       ],
       fields: [
         { key: '_h_laa_inline', label: 'Legal Aid Declaration', type: 'sectionHeading' },
-        { key: '_note_laa_inline', label: 'The client should read the Privacy Notice and declaration below before signing.', type: 'sectionNote' },
-        { key: '_laa_decl_inline', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'adviceAssistance' },
+        { key: '_note_laa_inline', label: 'The client should read the online applicant declaration (Apply for criminal legal aid) and Privacy Notice below before signing.', type: 'sectionNote' },
+        { key: '_laa_decl_inline', label: 'LAA declaration', type: 'laaDeclarationBlock', variant: 'crm14Applicant' },
         { key: 'privacyNoticeAccepted', label: 'Privacy Notice acknowledged?', type: 'select', options: ['','Yes','No'] },
         { key: 'laaClientFullName', label: 'Client Full Name (BLOCK CAPITALS)', type: 'text', cols: 2 },
-        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'adviceAssistance' },
+        { key: 'clientSignature', label: 'Client Signature (Applicant)', type: 'signature', sigKey: 'clientSig', laaDeclVariant: 'crm14Applicant' },
         { key: 'laaSignatureDate', label: 'Date of Signature (auto)', type: 'date', readonly: true },
         { key: 'laaSignatureTime', label: 'Time of Signature (auto)', type: 'time', readonly: true },
         { key: '_h_conflict', label: 'Conflict Check', type: 'sectionHeading' },
@@ -1790,7 +1792,7 @@ var clientLookupKeys = [
     'title','forename','middleName','surname','gender','dob',
     'nationality','nationalityOther','ethnicOriginCode','disabilityCode',
     'clientPhone','clientEmail','clientEmailConsent',
-    'address1','address2','address3','city','county','postCode',
+    'addressNfa','address1','address2','address3','city','county','postCode',
     'niNumber','arcNumber',
     'maritalStatus','employmentStatus',
     'accommodationStatus','accommodationDetails',
@@ -2014,20 +2016,63 @@ var REQUIRED_FIELD_KEYS = [
     return t || _LAA_FALLBACK_APPLICANT_DECL;
   }
 
+  var _ADDRESS_FIELD_KEYS = ['address1', 'address2', 'address3', 'city', 'county', 'postCode'];
+
+  function _nfaValue() {
+    return (window.ClientAddress && window.ClientAddress.NFA_VALUE) || 'No Fixed Abode';
+  }
+
+  function formatClientAddressForPdf(d, separator) {
+    if (window.ClientAddress && typeof window.ClientAddress.formatClientAddress === 'function') {
+      return window.ClientAddress.formatClientAddress(d, separator);
+    }
+    d = d || {};
+    if (d.addressNfa === 'Yes' || String(d.address1 || '').trim().toLowerCase() === 'no fixed abode') return 'No Fixed Abode';
+    return _ADDRESS_FIELD_KEYS.map(function (k) { return String(d[k] || '').trim(); }).filter(Boolean).join(separator == null ? ', ' : separator);
+  }
+
+  function applyAddressNfaState(checked, formEl) {
+    formEl = formEl || document.getElementById('attendance-form') || document;
+    var nfaVal = _nfaValue();
+    formData.addressNfa = checked ? 'Yes' : 'No';
+    if (checked) {
+      formData.address1 = nfaVal;
+      _ADDRESS_FIELD_KEYS.slice(1).forEach(function (k) { formData[k] = ''; });
+    } else if (String(formData.address1 || '').trim() === nfaVal) {
+      formData.address1 = '';
+    }
+    _ADDRESS_FIELD_KEYS.forEach(function (k) {
+      var el = formEl.querySelector('[data-field="' + k + '"]');
+      if (!el) return;
+      if (checked) {
+        el.value = k === 'address1' ? nfaVal : '';
+        el.readOnly = true;
+        el.classList.add('address-nfa-locked');
+      } else {
+        el.readOnly = false;
+        el.classList.remove('address-nfa-locked');
+        if (k === 'address1' && String(el.value || '').trim() === nfaVal) el.value = '';
+      }
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    var nfaCb = formEl.querySelector('[data-field="addressNfa"]');
+    if (nfaCb) nfaCb.checked = !!checked;
+    scheduleQuietSave();
+  }
+
   function buildLaaDeclarationFormHtmlForUi(variant, refDataSource) {
     var L = getLaaDeclarationPdfHelpers();
     var rd = refDataSource || refData;
     if (L && typeof L.buildLaaDeclarationFormHtml === 'function') {
-      return L.buildLaaDeclarationFormHtml(variant || 'adviceAssistance', rd, esc);
+      return L.buildLaaDeclarationFormHtml(variant || 'crm14Applicant', rd, esc);
     }
-    // Fallback: bundled reference data carries the official CRM2 privacy + declaration text.
-    if (variant === 'adviceAssistance' || !variant) {
+    if (variant === 'crm14Applicant' || variant === 'adviceAssistance' || !variant) {
       var privacy = _laaFallbackPrivacyText(rd);
       var decl = _laaFallbackAdviceDeclarationText(rd);
       if (privacy || decl) {
-        return '<div class="declaration-box laa-decl-block" data-laa-decl-variant="adviceAssistance">' +
+        return '<div class="declaration-box laa-decl-block" data-laa-decl-variant="crm14Applicant">' +
           (privacy ? '<p class="privacy-text"><strong>Legal Aid Agency Privacy Notice</strong></p><p class="privacy-text">' + esc(privacy) + '</p>' : '') +
-          (decl ? '<h3>Client\u2019s Declaration (Advice &amp; Assistance \u2014 CRM1/CRM2)</h3><p class="declaration-text">' + esc(decl) + '</p>' : '') +
+          (decl ? '<h3>Applicant\u2019s Declaration (Apply for criminal legal aid \u2014 v7 Feb 2025)</h3><p class="declaration-text">' + esc(decl) + '</p>' : '') +
           '</div>';
       }
     }
@@ -2039,7 +2084,7 @@ var REQUIRED_FIELD_KEYS = [
     if (currentStandaloneSectionId === 'crm14') return 'crm14Applicant';
     var sec = activeFormSections[currentSectionIdx];
     if (sec && sec.id === 'crm14') return 'crm14Applicant';
-    return 'adviceAssistance';
+    return 'crm14Applicant';
   }
 
   function safeJson(s) {
@@ -6773,7 +6818,7 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── DUPLICATE ATTENDANCE: implemented globally in renderer/views/list.js (duplicateAttendance) ─── */
 
   /* ─── NEW MATTER (SAME CLIENT) ─── Copy only client personal details; new file number on save */
-  var clientPersonalKeys = ['title','forename','middleName','surname','dob','gender','address1','address2','address3','city','county','postCode','clientPhone','clientEmail','clientEmailConsent','nationality','nationalityOther','accommodationStatus','accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber','benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes','clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason','ethnicOriginCode','disabilityCode','riskAssessment','juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress','interpreterName','interpreterLanguage','languageIssues'];
+  var clientPersonalKeys = ['title','forename','middleName','surname','dob','gender','addressNfa','address1','address2','address3','city','county','postCode','clientPhone','clientEmail','clientEmailConsent','nationality','nationalityOther','accommodationStatus','accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber','benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes','clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason','ethnicOriginCode','disabilityCode','riskAssessment','juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress','interpreterName','interpreterLanguage','languageIssues'];
 
   function newMatterFromAttendance(id) {
     window.api.attendanceGet(id).then(row => {
@@ -6892,7 +6937,7 @@ var REQUIRED_FIELD_KEYS = [
     var src = JSON.parse(JSON.stringify(formData));
     var sharedKeys = [
       'title','forename','middleName','surname','gender','dob','nationality','nationalityOther',
-      'clientPhone','clientEmail','address1','address2','address3','city','county','postCode',
+      'clientPhone','clientEmail','addressNfa','address1','address2','address3','city','county','postCode',
       'niNumber','arcNumber','clientType','benefits','benefitType','benefitOther','passportedBenefit','employmentStatus',
       'ethnicOriginCode','disabilityCode',
       'policeStationId','policeStationName','schemeId','firmId','firmName','firmLaaAccount',
@@ -6945,7 +6990,7 @@ var REQUIRED_FIELD_KEYS = [
     var src = JSON.parse(JSON.stringify(formData));
     var sharedKeys = [
       'title','forename','middleName','surname','gender','dob','nationality','nationalityOther',
-      'clientPhone','clientEmail','address1','address2','address3','city','county','postCode',
+      'clientPhone','clientEmail','addressNfa','address1','address2','address3','city','county','postCode',
       'policeStationId','policeStationName','schemeId','firmId','firmName','firmLaaAccount',
       'firmContactName','firmContactPhone','firmContactEmail','feeEarnerName',
       'dsccRef','instructionDateTime','instructionSource','dsccNotificationStatus',
@@ -7711,8 +7756,8 @@ var REQUIRED_FIELD_KEYS = [
         setFieldValue('retainerDob', formData.dob);
         formData.retainerDob = formData.dob;
       }
-      if (!formData._duplicateFreshClient && !formData.retainerAddress && formData.address1) {
-        const addr = [formData.address1, formData.address2, formData.address3, formData.city, formData.county, formData.postCode].filter(Boolean).join('\n');
+      if (!formData._duplicateFreshClient && !formData.retainerAddress && (formData.address1 || formData.addressNfa === 'Yes')) {
+        const addr = formatClientAddressForPdf(formData, '\n');
         setFieldValue('retainerAddress', addr);
         formData.retainerAddress = addr;
       }
@@ -8291,7 +8336,7 @@ var REQUIRED_FIELD_KEYS = [
         updateContextBar();
         updateFormBarVisibility();
         const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
-        const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
+        const sharedClientFields = ['forename','surname','middleName','dob','title','addressNfa','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
         var _standaloneUiDebounce = null;
         form.querySelectorAll('select, input, textarea').forEach(el => {
           var isTextLike = (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox','radio','hidden','date','time','file'].includes(el.type)));
@@ -8340,7 +8385,7 @@ var REQUIRED_FIELD_KEYS = [
     var _lazyFormData = data;
 
     const timeAndCalcFields = ['timeSetOff','timeArrival','timeDeparture','timeOfficeHome','waitingTimeStart','waitingTimeEnd','weekendBankHoliday'];
-    const sharedClientFields = ['forename','surname','middleName','dob','title','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
+    const sharedClientFields = ['forename','surname','middleName','dob','title','addressNfa','address1','address2','address3','city','county','postCode','gender','nationality','nationalityOther','clientPhone','clientEmail'];
 
     var _uiRefreshDebounce = null;
     var UI_REFRESH_DEBOUNCE_MS = 300;
@@ -9074,8 +9119,40 @@ var REQUIRED_FIELD_KEYS = [
         declWrap.dataset.showIfValue = f.showIf.value || '';
         declWrap.dataset.showIfValues = (f.showIf.values || []).join(',');
       }
-      declWrap.innerHTML = buildLaaDeclarationFormHtmlForUi(f.variant || 'adviceAssistance', refData);
+      declWrap.innerHTML = buildLaaDeclarationFormHtmlForUi(f.variant || 'crm14Applicant', refData);
       grid.appendChild(declWrap);
+      return;
+    }
+    if (f.type === 'addressNfa') {
+      const wrap = document.createElement('div');
+      wrap.className = 'form-group address-nfa-wrap';
+      wrap.style.gridColumn = '1 / -1';
+      if (f.showIf) {
+        wrap.dataset.showIfField = f.showIf.field;
+        wrap.dataset.showIfValue = f.showIf.value || '';
+        wrap.dataset.showIfValues = (f.showIf.values || []).join(',');
+      }
+      const lbl = document.createElement('label');
+      lbl.className = 'checkbox-item address-nfa-label';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.dataset.field = 'addressNfa';
+      const isNfa = data.addressNfa === 'Yes' || (window.ClientAddress && window.ClientAddress.isAddressNfa(data));
+      cb.checked = !!isNfa;
+      if (isNfa && !data.addressNfa) {
+        data.addressNfa = 'Yes';
+        formData.addressNfa = 'Yes';
+      }
+      cb.addEventListener('change', function () {
+        applyAddressNfaState(cb.checked);
+      });
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' ' + f.label));
+      wrap.appendChild(lbl);
+      grid.appendChild(wrap);
+      if (isNfa) {
+        requestAnimationFrame(function () { applyAddressNfaState(true); });
+      }
       return;
     }
     if (f.type === 'actionButton') {
@@ -11158,6 +11235,22 @@ var REQUIRED_FIELD_KEYS = [
       updateDobAgeDisplay(input, wrap);
     }
 
+    if (f.key === 'address1') {
+      input.addEventListener('input', function () {
+        var formEl = document.getElementById('attendance-form') || document;
+        var nfaCb = formEl.querySelector('[data-field="addressNfa"]');
+        if (!nfaCb || !nfaCb.checked) return;
+        if (String(input.value || '').trim() !== _nfaValue()) {
+          nfaCb.checked = false;
+          formData.addressNfa = 'No';
+          _ADDRESS_FIELD_KEYS.forEach(function (k) {
+            var el = formEl.querySelector('[data-field="' + k + '"]');
+            if (el) { el.readOnly = false; el.classList.remove('address-nfa-locked'); }
+          });
+        }
+      });
+    }
+
     if (f.key === 'postCode') {
       var pcRow = document.createElement('div');
       pcRow.style.cssText = 'display:flex;align-items:center;gap:0.4rem;';
@@ -11215,6 +11308,11 @@ var REQUIRED_FIELD_KEYS = [
         if (isNaN(idx) || !pcDropWrap._addresses) return;
         var addr = pcDropWrap._addresses[idx];
         if (!addr) return;
+        var nfaCb = (document.getElementById('attendance-form') || document).querySelector('[data-field="addressNfa"]');
+        if (nfaCb && nfaCb.checked) {
+          nfaCb.checked = false;
+          formData.addressNfa = 'No';
+        }
         var form = document.getElementById('attendance-form') || document;
         var setField = function(key, val) {
           formData[key] = val;
@@ -11226,6 +11324,10 @@ var REQUIRED_FIELD_KEYS = [
         setField('address3', addr.line3);
         setField('city', addr.city);
         setField('county', addr.county);
+        _ADDRESS_FIELD_KEYS.forEach(function (k) {
+          var el = form.querySelector('[data-field="' + k + '"]');
+          if (el) { el.readOnly = false; el.classList.remove('address-nfa-locked'); }
+        });
         if (addr.postcode) { input.value = addr.postcode; formData.postCode = addr.postcode; }
         pcDropWrap.style.display = 'none';
         showToast('Address filled', 'success');
@@ -13240,6 +13342,15 @@ var REQUIRED_FIELD_KEYS = [
     var L = getLaaDeclarationPdfHelpers();
     return L && L.buildCrm14FraudWarningHtml ? L.buildCrm14FraudWarningHtml(escFn) : '';
   }
+  function crm14FairProcessingNoticePdfHtml(escFn) {
+    var L = getLaaDeclarationPdfHelpers();
+    return L && L.buildCrm14FairProcessingNoticeHtml ? L.buildCrm14FairProcessingNoticeHtml(escFn) : '';
+  }
+  function laaOnlineApplicantDeclarationPdfHtml(escFn) {
+    return crm14FraudWarningPdfHtml(escFn) +
+      crm14ApplicantDeclarationNotePdfHtml(escFn) +
+      crm14FairProcessingNoticePdfHtml(escFn);
+  }
   function crm14PartnerDeclarationNotePdfHtml(escFn) {
     var L = getLaaDeclarationPdfHelpers();
     return L && L.buildCrm14PartnerDeclarationNoteHtml ? L.buildCrm14PartnerDeclarationNoteHtml(escFn) : '';
@@ -13398,7 +13509,7 @@ row('Already at station?', d.alreadyAtStation) + row('Travel from', d.travelOrig
 row('Custody number', d.custodyNumber) + row('Custody record read?', d.custodyRecordRead) +
 row('Client (from record)', [d.title, d.forename, d.middleName, d.surname].filter(Boolean).join(' ')) +
 row('Date of birth', fmtDate(d.dob)) + row('Gender', d.gender) + row('Nationality', d.nationality === 'Other' ? d.nationalityOther : d.nationality) +
-row('Address', [d.address1, d.address2, d.address3, d.city, d.county, d.postCode].filter(Boolean).join(', ')) +
+row('Address', formatClientAddressForPdf(d)) +
 row('Custody record issues', d.custodyRecordIssues) +
 row('Arresting officer', d.arrestingOfficerName) + row('Arresting officer collar / badge no.', d.arrestingOfficerNumber) +
 row('Voluntary Interview', d.voluntaryInterview) +
@@ -13661,9 +13772,9 @@ row('Invoice notes', d.invoiceNotes) +
   return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
     ((d.workType === 'Police Station Telephone Attendance' || (d.sufficientBenefitTest && d.sufficientBenefitTest.split('|').indexOf('Telephone advice only') >= 0)) ? '<p style="font-size:10px;color:#64748b;margin-bottom:8px;"><em>For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.</em></p>' : '') +
     laaPrivacyNoticePdfHtml(h) +
-    laaApplicantDeclarationPdfHtml(h) +
+    laaOnlineApplicantDeclarationPdfHtml(h) +
     '<table>' + laaRows + '</table>' +
-    (d.laaHasPartner === 'Yes' ? laaPartnerDeclarationNotePdfHtml(h) : '') +
+    (d.laaHasPartner === 'Yes' ? crm14PartnerDeclarationNotePdfHtml(h) : '') +
     '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' +
     (d.laaHasPartner === 'Yes' ? '<div class="sig-block"><p class="sig-label">Partner signature</p>' + sig('laaPartnerSig') + '</div>' : '') +
     '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>';
@@ -13698,6 +13809,7 @@ row('Invoice notes', d.invoiceNotes) +
     laaPrivacyNoticePdfHtml(h) +
     crm14FraudWarningPdfHtml(h) +
     crm14ApplicantDeclarationNotePdfHtml(h) +
+    crm14FairProcessingNoticePdfHtml(h) +
     '<p style="font-size:9px;color:#64748b;margin-bottom:8px;">Data required for the Apply for criminal legal aid service (mandatory) or paper CRM14 (limited circumstances). The signed online form (client-signed, typically 2 pages) must be retained on file.</p>' +
     row('Signed Apply application (client-signed, 2-page) on file?', d.crm14SignedFormOnFile) +
     subSect('About you – Personal details',
@@ -13705,7 +13817,7 @@ row('Invoice notes', d.invoiceNotes) +
       row('Title', d.crm14Title) + row('First name(s)', d.crm14Forename || d.forename) + row('Surname', d.crm14Surname || d.surname) +
       row('Date of birth', fmtDate(d.crm14Dob || d.dob)) + row('National Insurance number', d.crm14NiNumber || d.niNumber) + row('ARC number', d.crm14ArcNumber || d.arcNumber)) +
     subSect('About you – Contact information',
-      row('Usual home address', d.crm14HomeAddress || [d.address1, d.address2, d.address3, d.city, d.county, d.postCode].filter(Boolean).join(', ')) +
+      row('Usual home address', d.crm14HomeAddress || formatClientAddressForPdf(d)) +
       row('Correspondence address (if different)', d.crm14CorrespondenceAddress) +
       row('Email address', d.crm14Email || d.clientEmail) + row('Landline', d.crm14Landline) + row('Mobile', d.crm14Mobile) + row('Work telephone', d.crm14WorkPhone)) +
     subSect('About you – Case details',
@@ -13853,7 +13965,7 @@ pdfAuditFooterHtml(d, settings) +
       row(laaPrivacyAckLabel(), d.privacyNoticeAccepted) +
       '</table>' +
       laaPrivacyNoticePdfHtml(h) +
-      laaApplicantDeclarationPdfHtml(h) +
+      laaOnlineApplicantDeclarationPdfHtml(h) +
       (d.clientSig ? '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' : '') +
       (getEffectiveFeeEarnerSig(d) ? '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>' : '') +
       '<table>' + row('Fee Earner', laaFeeEarnerNameForPdf(d)) + row('Certification', d.feeEarnerCertification) +
@@ -14016,7 +14128,7 @@ pdfAuditFooterHtml(d, settings) +
       row('Title', d.title) + row('Full name', [d.forename, d.middleName, d.surname].filter(Boolean).join(' ')) +
       row('Date of birth', fmtDate(d.dob)) + row('Gender', d.gender) +
       row('Nationality', d.nationality === 'Other' ? d.nationalityOther : d.nationality) +
-      row('Address', [d.address1, d.address2, d.address3, d.city, d.county, d.postCode].filter(Boolean).join(', ')) +
+      row('Address', formatClientAddressForPdf(d)) +
       row('Client phone', d.clientPhone) + row('Client email', d.clientEmail) +
       row('Language issues?', d.languageIssues) +
       (d.languageIssues === 'Yes' ? row('Interpreter', d.interpreterName) + row('Language', d.interpreterLanguage) + row('Interpretation mode', d.interpreterMode) + row('Interpreter agency', d.interpreterAgency) + row('Interpreter phone', d.interpreterPhone) + row('Interpreter arrival time', d.interpreterArrivalTime) : '') +
@@ -14191,9 +14303,9 @@ pdfAuditFooterHtml(d, settings) +
           row('Fee Earner', laaFeeEarnerNameForPdf(d)) + row('Certification', d.feeEarnerCertification);
         return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
           laaPrivacyNoticePdfHtml(h) +
-          laaApplicantDeclarationPdfHtml(h) +
+          laaOnlineApplicantDeclarationPdfHtml(h) +
           '<table>' + laaRows + '</table>' +
-          (d.laaHasPartner === 'Yes' ? laaPartnerDeclarationNotePdfHtml(h) : '') +
+          (d.laaHasPartner === 'Yes' ? crm14PartnerDeclarationNotePdfHtml(h) : '') +
           '<div class="sig-block"><p class="sig-label">Client signature</p>' + sig('clientSig') + '</div>' +
           (d.laaHasPartner === 'Yes' ? '<div class="sig-block"><p class="sig-label">Partner signature</p>' + sig('laaPartnerSig') + '</div>' : '') +
           '<div class="sig-block"><p class="sig-label">Fee earner signature</p>' + sig('feeEarnerSig') + '</div>';

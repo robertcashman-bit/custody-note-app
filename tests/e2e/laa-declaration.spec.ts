@@ -101,7 +101,7 @@ test('window.LaaDeclarationPdf is loaded with the official wording', async () =>
 
   expect(result.loaded, 'window.LaaDeclarationPdf must be defined in the renderer').toBe(true);
   expect(result.advice).toContain('Legal Aid Agency Privacy Notice');
-  expect(result.advice).toContain('all the information I have given is true');
+  expect(result.advice).toContain('left anything out that:');
   expect(result.crm14).toContain('right to representation for the purposes of criminal proceedings');
 });
 
@@ -130,9 +130,12 @@ test('PDF builder renders the FULL declaration, not just the privacy line', asyn
   expect(html).toContain('Privacy Notice acknowledged?');
 
   // The bits that were MISSING in the bug report:
-  // CRM2 client declaration (section 11).
-  expect(html, 'CRM2 client declaration must be in the PDF').toContain(
-    'all the information I have given is true and I have not withheld any relevant information',
+  // CRM2 client declaration (section 11) — retained as fallback when wording module missing.
+  expect(html, 'Online applicant declaration must be in the PDF').toContain(
+    'left anything out that:',
+  );
+  expect(html, 'Online applicant declaration must be in the PDF').toContain(
+    'right to representation for the purposes of criminal proceedings',
   );
   // CRM14 fraud notice (section 14).
   expect(html, 'CRM14 fraud notice must be in the PDF').toContain(
@@ -140,7 +143,10 @@ test('PDF builder renders the FULL declaration, not just the privacy line', asyn
   );
   // CRM14 applicant declaration (section 14).
   expect(html, 'CRM14 applicant declaration must be in the PDF').toContain(
-    'right to representation for the purposes of criminal proceedings',
+    'left anything out that:',
+  );
+  expect(html, 'CRM14 fair processing notice must be in the PDF').toContain(
+    'Fair Processing Notice',
   );
   // CRM14 representative declaration.
   expect(html, 'CRM14 representative declaration must be in the PDF').toContain(
@@ -154,17 +160,20 @@ test('in-app LAA declaration block renders official text (no fallback)', async (
       buildLaaDeclarationFormHtmlForUi: (v: string, r?: unknown) => string;
     };
     return {
-      advice: w.buildLaaDeclarationFormHtmlForUi('adviceAssistance'),
+      advice: w.buildLaaDeclarationFormHtmlForUi('crm14Applicant'),
       crm14: w.buildLaaDeclarationFormHtmlForUi('crm14Applicant'),
     };
   });
 
   expect(blocks.advice).not.toContain('could not be loaded');
   expect(blocks.advice).toContain('Legal Aid Agency Privacy Notice');
-  expect(blocks.advice).toContain('all the information I have given is true');
+  expect(blocks.advice).toContain('left anything out that:');
+  expect(blocks.advice).toContain('Applicant\u2019s Declaration');
 
   expect(blocks.crm14).not.toContain('could not be loaded');
   expect(blocks.crm14).toContain('Making a false declaration is an offence');
+  expect(blocks.crm14).toContain('left anything out that:');
+  expect(blocks.crm14).toContain('Fair Processing Notice');
   expect(blocks.crm14).toContain('right to representation for the purposes of criminal proceedings');
 });
 

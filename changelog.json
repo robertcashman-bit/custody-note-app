@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.47",
+      "date": "2026-07-07",
+      "latest": true,
+      "changes": [
+        "Address: No Fixed Abode (NFA) checkbox on client address fields — ticks to fill and lock address as NFA",
+        "LAA Declaration: Section 11, inline sign-off, and telephone sign-off now show the full official online applicant declaration (v7 Feb 2025), not the short CRM2 text",
+        "LAA Declaration: PDF output matches — full applicant declaration, partner declaration, fraud notice, and Fair Processing Notice",
+        "LAA Declaration: full official privacy notice wording restored across app and PDF"
+      ]
+    },
+    {
       "version": "1.9.46",
       "date": "2026-07-05",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Licence: offline validation grace extended from 7 to 60 days — paid subscriptions no longer treated as expired just because the app has not been opened recently",
         "Licence: stale validation shows a warning and auto-revalidates when online instead of blocking new records or forcing reactivation",

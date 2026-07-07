@@ -17,7 +17,8 @@ describe('laaDeclarationPdf helpers — official LAA wording', () => {
     const html = laaPdf.buildLaaPrivacyNoticeHtml(refData, id);
     assert.match(html, /Legal Aid Agency Privacy Notice<\/p>/);
     assert.match(html, /Executive Agency of the Ministry of Justice/);
-    assert.match(html, /Article 6\(1\)\(e\) UK GDPR/);
+    assert.match(html, /Article 6\(1\)\(e\) of UK GDPR/);
+    assert.match(html, /Types of personal data we process/);
     assert.match(html, /Information Commissioner/);
   });
 
@@ -42,26 +43,40 @@ describe('laaDeclarationPdf helpers — official LAA wording', () => {
   it('CRM14 applicant declaration reflects the official applicant declaration form', () => {
     const html = laaPdf.buildCrm14ApplicantDeclarationNoteHtml(id);
     assert.match(html, /right to representation for the purposes of criminal proceedings/);
+    assert.match(html, /left anything out that:/);
+    assert.match(html, /<ul class="laa-decl-bullets">/);
+    assert.match(html, /My legal aid may be stopped and I may be asked to pay back my costs in full/);
+    assert.match(html, /Data Sharing/);
     assert.match(html, /I have read the Fraud Notice/);
+  });
+
+  it('CRM14 fair processing notice matches the official v7 fraud notice page', () => {
+    const html = laaPdf.buildCrm14FairProcessingNoticeHtml(id);
+    assert.match(html, /Fair Processing Notice/);
+    assert.match(html, /www\.justice\.gov\.uk\/legal-aid\/make-an-application/);
   });
 
   it('CRM14 fraud warning matches the official zero-tolerance notice', () => {
     const html = laaPdf.buildCrm14FraudWarningHtml(id);
-    assert.match(html, /Fraud notice/);
+    assert.match(html, /PLEASE NOTE/);
     assert.match(html, /Making a false declaration is an offence/);
     assert.match(html, /zero tolerance approach to fraud/);
   });
 
   it('CRM14 partner declaration matches the official wording', () => {
     const html = laaPdf.buildCrm14PartnerDeclarationNoteHtml(id);
+    assert.match(html, /Declaration by your \(the applicant\u2019s\) partner/);
     assert.match(html, /true statement of all my financial circumstances/);
-    assert.match(html, /Department for Work and Pensions, HM Revenue and Customs/);
+    assert.match(html, /Department for Work and Pensions, HM Revenue and Customs or other people and organisations/);
+    assert.match(html, /made electronically by the legal representative/);
   });
 
-  it('CRM14 representative declaration includes authorisation + IoJ confirmation', () => {
+  it('CRM14 representative declaration includes instruction bullets', () => {
     const html = laaPdf.buildCrm14RepDeclarationNoteHtml(id);
     assert.match(html, /authorised to provide representation under a contract issued by the LAA/);
     assert.match(html, /Interests of Justice and financial assessment/);
+    assert.match(html, /a firm which holds a contract issued by the LAA/);
+    assert.match(html, /Public Defender Service/);
   });
 
   it('uses Privacy Notice acknowledged? label constant', () => {
@@ -81,18 +96,20 @@ describe('laaDeclarationPdf helpers — official LAA wording', () => {
 
   it('buildLaaDeclarationFormHtml renders full CRM14 applicant variant', () => {
     const html = laaPdf.buildLaaDeclarationFormHtml('crm14Applicant', {}, id);
-    assert.match(html, /Fraud notice/);
+    assert.match(html, /PLEASE NOTE/);
     assert.match(html, /Applicant\u2019s Declaration/);
     assert.match(html, /right to representation for the purposes of criminal proceedings/);
+    assert.match(html, /left anything out that:/);
+    assert.match(html, /Fair Processing Notice/);
     assert.match(html, /I have read the Fraud Notice/);
-    assert.ok(laaPdf.CRM14_APPLICANT_PARAGRAPHS.length >= 15, 'v7 applicant declaration should be multi-paragraph');
+    assert.ok(laaPdf.CRM14_APPLICANT_BLOCKS.length >= 12, 'v7 applicant declaration should be multi-block');
   });
 
   it('buildLaaDeclarationFormHtml renders partner and representative variants', () => {
     const partnerAdvice = laaPdf.buildLaaDeclarationFormHtml('partnerAdvice', {}, id);
     assert.match(partnerAdvice, /Partner\u2019s declaration/);
     const partnerCrm14 = laaPdf.buildLaaDeclarationFormHtml('partnerCrm14', {}, id);
-    assert.match(partnerCrm14, /Declaration by the applicant\u2019s partner/);
+    assert.match(partnerCrm14, /Declaration by your \(the applicant\u2019s\) partner/);
     const rep = laaPdf.buildLaaDeclarationFormHtml('representative', {}, id);
     assert.match(rep, /Declaration by the legal representative/);
   });
@@ -129,16 +146,20 @@ describe('data/laa-reference-data.json carries official wording', () => {
   });
   it('privacyNoticeText is the official LAA privacy notice', () => {
     assert.match(refData.privacyNoticeText, /Executive Agency of the Ministry of Justice/);
-    assert.match(refData.privacyNoticeText, /Article 6\(1\)\(e\) UK GDPR/);
+    assert.match(refData.privacyNoticeText, /Article 6\(1\)\(e\) of UK GDPR/);
+    assert.match(refData.privacyNoticeText, /Types of personal data we process/);
   });
 });
 
 describe('laaDeclarationPdf app wiring', () => {
   it('loads lib/laaDeclarationPdf.js before app.js', () => {
+    const privacyIdx = indexHtml.indexOf('src="lib/laaPrivacyNoticeV7.js"');
     const libIdx = indexHtml.indexOf('src="lib/laaDeclarationPdf.js"');
     const appIdx = indexHtml.indexOf('src="app.js"');
+    assert.ok(privacyIdx !== -1);
     assert.ok(libIdx !== -1);
     assert.ok(appIdx !== -1);
+    assert.ok(privacyIdx < libIdx);
     assert.ok(libIdx < appIdx);
   });
 
@@ -160,8 +181,9 @@ describe('laaDeclarationPdf app wiring', () => {
     assert.doesNotMatch(appJs, /row\('Fee Earner', d\.laaFeeEarnerFullName\)/);
   });
 
-  it('section 14 renders the CRM14 applicant declaration', () => {
+  it('section 14 renders the CRM14 applicant declaration and fair processing notice', () => {
     assert.match(appJs, /crm14ApplicantDeclarationNotePdfHtml\(h\)/);
+    assert.match(appJs, /crm14FairProcessingNoticePdfHtml\(h\)/);
   });
 
   it('does not default privacyNoticeAccepted to No on new records', () => {
@@ -175,7 +197,6 @@ describe('laaDeclarationPdf app wiring', () => {
   it('uses laaDeclarationBlock field type wired to buildLaaDeclarationFormHtml', () => {
     assert.match(appJs, /type: 'laaDeclarationBlock'/);
     assert.match(appJs, /buildLaaDeclarationFormHtmlForUi/);
-    assert.match(appJs, /variant: 'adviceAssistance'/);
     assert.match(appJs, /variant: 'crm14Applicant'/);
     assert.doesNotMatch(appJs, /hasDeclarationText/);
     assert.doesNotMatch(appJs, /inlineDeclaration/);
@@ -217,8 +238,10 @@ describe('laaDeclarationPdf app wiring', () => {
     assert.match(appJs, /window\.buildLaaDeclarationFormHtmlForUi = buildLaaDeclarationFormHtmlForUi/);
   });
 
-  it('custody PDF always renders LAA Declaration section (no skip gate)', () => {
+  it('custody PDF always renders LAA Declaration section with online applicant declaration', () => {
     assert.match(appJs, /11\. LAA Declaration/);
+    assert.match(appJs, /laaOnlineApplicantDeclarationPdfHtml\(h\)/);
+    assert.match(appJs, /crm14PartnerDeclarationNotePdfHtml\(h\)/);
     assert.doesNotMatch(
       appJs,
       /if \(!laaRows && !hasSig && !laaPrivacyNoticePdfHtml\(h\) && !laaApplicantDeclarationPdfHtml\(h\)\) return '';/,
@@ -226,5 +249,12 @@ describe('laaDeclarationPdf app wiring', () => {
     assert.match(appJs, /laaPrivacyNoticePdfHtml\(h\)/);
     assert.match(appJs, /Counsel instructed\? \(CRM3\)/);
     assert.match(appJs, /crm14FraudWarningPdfHtml\(h\)/);
+  });
+
+  it('LAA sign-off sections use the online applicant declaration variant', () => {
+    const matches = appJs.match(/type: 'laaDeclarationBlock', variant: 'crm14Applicant'/g) || [];
+    assert.ok(matches.length >= 4, 'expected online declaration at section 11, attend inline, tel and voluntary inline, found ' + matches.length);
+    assert.match(appJs, /variant: 'partnerCrm14'/);
+    assert.doesNotMatch(appJs, /type: 'laaDeclarationBlock', variant: 'adviceAssistance'/);
   });
 });
