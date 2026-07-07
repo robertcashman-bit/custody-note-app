@@ -118,6 +118,13 @@ jobs:
 
           rm -f "$CERT_PATH"
 
+      - name: Preflight Apple notarization credentials
+        env:
+          APPLE_ID:                    ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID:               ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/preflight-apple-notary.mjs
+
       - name: Build, sign, notarise + upload macOS assets
         env:
           GH_TOKEN:                    ${{ secrets.GITHUB_TOKEN }}
@@ -126,6 +133,14 @@ jobs:
           APPLE_TEAM_ID:               ${{ secrets.APPLE_TEAM_ID }}
           CN_PUBLISH:                  always
         run: npm run build:mac:signed
+
+      - name: Regenerate latest-mac.yml from uploaded Mac assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          node scripts/repair-github-mac-updater-feed.mjs --tag "v${VERSION}"
 
   # ─── Job 2: Wait for all platform assets, then flip the release to live ─────
   # Runs after both platform builds. Polls the draft release for the full asset
@@ -169,8 +184,8 @@ jobs:
               echo "$assets" | grep -qx "$need" || missing+="$need "
             done
             if [ -z "$missing" ]; then
-              echo "All asset names present — waiting 30s for GitHub uploads to settle…"
-              sleep 30
+              echo "All asset names present — waiting 45s for GitHub uploads to settle…"
+              sleep 45
               verify_ok=false
               for vattempt in $(seq 1 5); do
                 echo "Verifying updater checksums (attempt $vattempt/5)…"

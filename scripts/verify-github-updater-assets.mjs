@@ -79,22 +79,38 @@ function findReleaseAsset(release, fileName) {
   return (release.assets || []).find((a) => a.name === fileName) || null;
 }
 
-async function downloadReleaseAsset(asset, headers) {
+async function downloadReleaseAsset(asset, headers, opts = {}) {
   if (!asset) return { error: 'asset missing' };
   const dlHeaders = Object.assign({}, headers, { Accept: 'application/octet-stream' });
-  // Draft release assets 404 on browser_download_url — use the GitHub API asset URL.
-  const res = await fetch(asset.url, { headers: dlHeaders, redirect: 'follow' });
-  if (res.ok) {
-    return { buf: Buffer.from(await res.arrayBuffer()) };
-  }
-  if (asset.browser_download_url) {
-    const fallback = await fetch(asset.browser_download_url, { headers: dlHeaders, redirect: 'follow' });
-    if (fallback.ok) {
-      return { buf: Buffer.from(await fallback.arrayBuffer()) };
+  const maxAttempts = opts.maxAttempts != null ? opts.maxAttempts : 5;
+  const delayMs = opts.delayMs != null ? opts.delayMs : 3000;
+  let lastError = 'download failed';
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const res = await fetch(asset.url, { headers: dlHeaders, redirect: 'follow' });
+    if (res.ok) {
+      return { buf: Buffer.from(await res.arrayBuffer()) };
     }
-    return { error: `download failed: HTTP ${fallback.status}` };
+    lastError = `download failed: HTTP ${res.status}`;
+    if (res.status === 404 && attempt < maxAttempts) {
+      await new Promise((r) => setTimeout(r, delayMs));
+      continue;
+    }
+    if (asset.browser_download_url) {
+      const fallback = await fetch(asset.browser_download_url, { headers: dlHeaders, redirect: 'follow' });
+      if (fallback.ok) {
+        return { buf: Buffer.from(await fallback.arrayBuffer()) };
+      }
+      lastError = `download failed: HTTP ${fallback.status}`;
+      if (fallback.status === 404 && attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+    }
+    if (res.status !== 404 || attempt >= maxAttempts) break;
   }
-  return { error: `download failed: HTTP ${res.status}` };
+
+  return { error: lastError };
 }
 
 async function verifyFeed({ tag, feedName, platformLabel, release, headers }) {
@@ -212,3 +228,5 @@ main().catch((err) => {
   console.error('[verify-updater] Fatal:', err && err.message ? err.message : err);
   process.exit(1);
 });
+
+export { parseYamlFeed, sha512Base64 };
