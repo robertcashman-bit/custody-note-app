@@ -365,12 +365,25 @@ function createSyncWorker(ctx) {
       recoverStuckItems();
       await processBatch();
       if (ctx.syncPull) {
-        const pullResult = await ctx.syncPull().catch(() => ({ pulled: 0 }));
+        const pullResult = await ctx.syncPull().catch((e) => {
+          _lastError = e && e.message ? e.message : String(e);
+          notifyRenderer({ status: 'error', lastError: _lastError, retryable: isRetryableError(e) });
+          return { pulled: 0, decryptFailed: 0, received: 0 };
+        });
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('records-updated-from-sync', { count: pullResult.pulled });
         }
         if (pullResult && pullResult.conflicts > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('sync-conflicts-detected', { count: pullResult.conflicts });
+          notifyRenderer({});
+        }
+        if (pullResult && (pullResult.decryptFailed > 0 || pullResult.noMasterKeySkipped > 0) && ctx.sendToRenderer) {
+          ctx.sendToRenderer('sync-pull-warning', {
+            decryptFailed: pullResult.decryptFailed || 0,
+            noMasterKeySkipped: pullResult.noMasterKeySkipped || 0,
+            received: pullResult.received || 0,
+            merged: pullResult.pulled || 0,
+          });
           notifyRenderer({});
         }
       }

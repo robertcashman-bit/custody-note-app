@@ -1214,6 +1214,17 @@
               <span><strong>AWS Cloud:</strong> <span id="backup-dest-cloud-status">Checking&hellip;</span></span>
             </div>
           </div>
+          <div id="cross-device-sync-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border,#ccc);">
+            <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Cross-device record sync</h3>
+            <p class="settings-hint" style="margin:0 0 0.5rem;">Records sync automatically in the background when online. Each computer keeps a local copy; changes push to the cloud and pull onto your other devices.</p>
+            <p id="cross-device-sync-status" class="settings-hint" style="margin:0 0 0.5rem;">Checking sync status&hellip;</p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.25rem;">
+              <button type="button" id="btn-sync-full-resync" class="btn btn-secondary">Full re-sync from cloud</button>
+              <button type="button" id="btn-sync-push-now" class="btn btn-secondary">Push all pending now</button>
+            </div>
+            <p class="settings-hint" style="margin:0.5rem 0 0;">Use <strong>Full re-sync from cloud</strong> if this computer shows Synced but records from another device are missing. Use <strong>Push all pending now</strong> on the computer that has your records.</p>
+            <p id="cross-device-sync-action-status" class="settings-hint" style="margin:0.35rem 0 0;"></p>
+          </div>
           <div id="cloud-backup-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border, #ccc);">
             <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Cloud Backup (AWS)</h3>
             <p id="cloud-backup-checking" class="settings-hint" style="margin:0;color:#64748b;">Checking cloud backup status&hellip;</p>

@@ -3251,8 +3251,27 @@ var REQUIRED_FIELD_KEYS = [
       setFooterIndicator(el, conflicts + ' conflict' + (conflicts === 1 ? '' : 's'), 'offline', 'Sync found newer remote changes but kept your local edits safe. Click to review and resolve.');
       el.style.cursor = 'pointer';
     } else if (pending === 0 && st.lastSync) {
-      setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync), 'synced');
-      el.style.cursor = '';
+      var lp = st.lastPull || {};
+      var decryptFailed = lp.decryptFailed || 0;
+      var received = lp.received || 0;
+      var merged = lp.merged || 0;
+      var total = st.totalRecords || 0;
+      if (decryptFailed > 0) {
+        setFooterIndicator(el, decryptFailed + ' decrypt failed', 'offline', 'Remote records could not be decrypted. Use Settings \u2192 Backup \u2192 Recover from Cloud (Security tab) or Full re-sync from cloud.');
+        el.style.cursor = 'pointer';
+      } else if (total === 0 && received === 0) {
+        setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Push all pending now and wait for 0 pending.');
+        el.style.cursor = '';
+      } else if (merged > 0) {
+        setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync) + ' (' + merged + ' new)', 'synced');
+        el.style.cursor = '';
+      } else if (received > 0 && merged === 0) {
+        setFooterIndicator(el, 'Up to date', 'synced', 'Checked cloud \u2014 local records are current.');
+        el.style.cursor = '';
+      } else {
+        setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync), 'synced');
+        el.style.cursor = '';
+      }
     } else if (blocked > 0) {
       setFooterIndicator(el, blocked + ' auto-retrying', 'offline', (st.lastError || '') + ' — will auto-retry. Click to retry now.');
       el.style.cursor = 'pointer';
@@ -3302,7 +3321,38 @@ var REQUIRED_FIELD_KEYS = [
     if (!window.api || !window.api.syncStatus) return;
     window.api.syncStatus().then(function(st) {
       applySyncSnapshot(st || {});
+      try { refreshCrossDeviceSyncPanel(st || {}); } catch (_) {}
     }).catch(function(e) { console.error('[sync-status]', e); });
+  }
+
+  function refreshCrossDeviceSyncPanel(st) {
+    var statusEl = document.getElementById('cross-device-sync-status');
+    var section = document.getElementById('cross-device-sync-section');
+    if (!statusEl || !section) return;
+    if (!st || !st.enabled) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+    var lines = [];
+    lines.push('Local records: ' + (st.totalRecords != null ? st.totalRecords : '\u2014'));
+    if (st.lastSync) lines.push('Last pull: ' + formatSyncTime(st.lastSync));
+    var pending = st.pendingChanges || 0;
+    var dirty = st.dirtyPushCount || 0;
+    if (pending > 0) lines.push('Upload queue: ' + pending + ' pending');
+    else if (dirty > 0) lines.push('Waiting to upload: ' + dirty + ' record' + (dirty === 1 ? '' : 's'));
+    else lines.push('Upload queue: clear');
+    var lp = st.lastPull || {};
+    if (lp.received > 0) {
+      lines.push('Last pull received ' + lp.received + ', merged ' + (lp.merged || 0));
+    }
+    if (lp.decryptFailed > 0) {
+      lines.push('Warning: ' + lp.decryptFailed + ' record(s) could not be decrypted');
+    }
+    if (st.conflictCount > 0) lines.push('Open conflicts: ' + st.conflictCount);
+    if (st.lastError) lines.push('Last error: ' + st.lastError);
+    statusEl.textContent = lines.join(' \u00b7 ');
+    statusEl.style.color = (lp.decryptFailed > 0 || st.failedCount > 0) ? '#b45309' : '';
   }
 
   function formatSyncTime(iso) {
@@ -15920,6 +15970,20 @@ pdfAuditFooterHtml(d, settings) +
         try { refreshSyncCounts(); } catch (_) {}
       });
     }
+    if (window.api.onSyncPullWarning) {
+      window.api.onSyncPullWarning(function(info) {
+        var failed = (info && info.decryptFailed) || 0;
+        var noKey = (info && info.noMasterKeySkipped) || 0;
+        var total = failed + noKey;
+        if (total <= 0) return;
+        showToast(
+          total + ' remote record' + (total === 1 ? '' : 's') + ' could not be decrypted. Check Settings \u2192 Security \u2192 Recover from Cloud, or run Full re-sync from Settings \u2192 Backup.',
+          'warning',
+          8000
+        );
+        try { refreshSyncCounts(); } catch (_) {}
+      });
+    }
     if (window.api.onSyncStatusChanged) {
       window.api.onSyncStatusChanged(function(data) {
         updateSyncStatusIndicator(data);
@@ -15933,6 +15997,12 @@ pdfAuditFooterHtml(d, settings) +
       syncInd.addEventListener('click', function() {
         var txt = (syncInd.textContent || '');
         if (txt.indexOf('conflict') !== -1) { openSyncConflictsView(); return; }
+        if (txt.indexOf('decrypt failed') !== -1) {
+          showView('settings');
+          var backupTab = document.querySelector('.settings-tab[data-stab="backup"]');
+          if (backupTab) backupTab.click();
+          return;
+        }
         if (txt.indexOf('blocked') === -1 && txt.indexOf('retrying') === -1) return;
         if (!window.api || !window.api.syncForceRetry) return;
         window.api.syncForceRetry().then(function(res) {
@@ -16746,6 +16816,8 @@ pdfAuditFooterHtml(d, settings) +
             showToast('Sync failed: ' + (res && res.error || 'Unknown error'), 'error');
           }
           refreshSyncCounts();
+          try { loadHomeRecent(); } catch (_) {}
+          try { refreshList(); } catch (_) {}
         }).catch(function(e) {
           showToast('Sync failed: ' + (e && e.message || 'Unknown error'), 'error');
         }).finally(function() {
@@ -16944,8 +17016,54 @@ pdfAuditFooterHtml(d, settings) +
         var tabId = tab.dataset.stab;
         settingsTabBar.querySelectorAll('.settings-tab').forEach(function(t) { t.classList.toggle('active', t.dataset.stab === tabId); });
         document.querySelectorAll('.settings-tab-panel').forEach(function(p) { p.classList.toggle('active', p.dataset.stabPanel === tabId); });
+        if (tabId === 'backup') refreshSyncCounts();
       });
     }
+
+    document.getElementById('btn-sync-full-resync')?.addEventListener('click', function() {
+      if (!window.api || !window.api.syncFullResync) return;
+      var btn = this;
+      var statusEl = document.getElementById('cross-device-sync-action-status');
+      if (!confirm('Re-download all records from the cloud? This is safe and does not delete local records unless newer remote versions apply.')) return;
+      btn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Full re-sync running\u2026'; statusEl.style.color = '#d97706'; }
+      window.api.syncFullResync().then(function(res) {
+        if (res && res.ok) {
+          showToast('Full re-sync complete', 'success');
+          if (statusEl) { statusEl.textContent = 'Full re-sync finished'; statusEl.style.color = 'green'; }
+          try { loadHomeRecent(); } catch (_) {}
+          try { refreshList(); } catch (_) {}
+        } else {
+          showToast('Full re-sync failed: ' + (res && res.error || 'Unknown error'), 'error');
+          if (statusEl) { statusEl.textContent = res && res.error ? res.error : 'Failed'; statusEl.style.color = '#dc2626'; }
+        }
+        refreshSyncCounts();
+      }).catch(function(err) {
+        showToast('Full re-sync failed: ' + (err && err.message || err), 'error');
+        if (statusEl) { statusEl.textContent = ''; }
+      }).finally(function() { btn.disabled = false; });
+    });
+
+    document.getElementById('btn-sync-push-now')?.addEventListener('click', function() {
+      if (!window.api || !window.api.syncNow) return;
+      var btn = this;
+      var statusEl = document.getElementById('cross-device-sync-action-status');
+      btn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Pushing pending records\u2026'; statusEl.style.color = '#d97706'; }
+      window.api.syncNow().then(function(res) {
+        if (res && res.ok) {
+          showToast('Push and pull complete', 'success');
+          if (statusEl) { statusEl.textContent = 'Sync finished — check upload queue above'; statusEl.style.color = 'green'; }
+        } else {
+          showToast('Sync failed: ' + (res && res.error || 'Unknown error'), 'error');
+          if (statusEl) { statusEl.textContent = res && res.error ? res.error : 'Failed'; statusEl.style.color = '#dc2626'; }
+        }
+        refreshSyncCounts();
+      }).catch(function(err) {
+        showToast('Sync failed: ' + (err && err.message || err), 'error');
+        if (statusEl) { statusEl.textContent = ''; }
+      }).finally(function() { btn.disabled = false; });
+    });
 
     document.getElementById('settings-save-btn')?.addEventListener('click', function() {
       if (typeof saveSettings === 'function') saveSettings();
