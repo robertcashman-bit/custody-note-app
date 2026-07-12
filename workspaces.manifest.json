@@ -1,0 +1,39 @@
+{
+  "repos": [
+    {
+      "name": "PoliceStationAgent",
+      "dir": "one",
+      "github": "robertdavidcashman-droid/one",
+      "branch": "master",
+      "vercel": "web44ai"
+    },
+    {
+      "name": "PoliceStationRepUK",
+      "dir": "Policestationrepuk",
+      "github": "robertdavidcashman-droid/policestationrepuk",
+      "branch": "main",
+      "vercel": "policestationrepuk"
+    },
+    {
+      "name": "CustodyNoteWebsite",
+      "dir": "custody-note-website",
+      "github": "robertdavidcashman-droid/custody-note-website",
+      "branch": "master",
+      "vercel": "custody-note-website"
+    },
+    {
+      "name": "PSRUKTrain",
+      "dir": "pstrain-rebuild",
+      "github": "robertdavidcashman-droid/psrtrain",
+      "branch": "main",
+      "vercel": "pstrain"
+    },
+    {
+      "name": "CustodyNoteApp",
+      "dir": ".",
+      "github": "robertdavidcashman-droid/custody-note-app",
+      "branch": "main",
+      "vercel": null
+    }
+  ]
+}
