@@ -3,36 +3,41 @@
     {
       "name": "PoliceStationAgent",
       "dir": "one",
-      "github": "robertdavidcashman-droid/one",
+      "homeDir": "policestationagent",
+      "github": "robertcashman-bit/policestationagent",
       "branch": "master",
       "vercel": "web44ai"
     },
     {
       "name": "PoliceStationRepUK",
       "dir": "Policestationrepuk",
-      "github": "robertdavidcashman-droid/policestationrepuk",
-      "branch": "main",
-      "vercel": "policestationrepuk"
+      "homeDir": "Policestationrepuk",
+      "github": "robertcashman-bit/Policestationrepuk",
+      "branch": "master",
+      "vercel": "policestationrepuk-new"
     },
     {
       "name": "CustodyNoteWebsite",
       "dir": "custody-note-website",
-      "github": "robertdavidcashman-droid/custody-note-website",
+      "homeDir": "custody-note-website",
+      "github": "robertcashman-bit/custody-note-website",
       "branch": "master",
       "vercel": "custody-note-website"
     },
     {
       "name": "PSRUKTrain",
       "dir": "pstrain-rebuild",
-      "github": "robertdavidcashman-droid/psrtrain",
-      "branch": "main",
-      "vercel": "pstrain"
+      "homeDir": "pstrain-rebuild",
+      "github": "robertcashman-bit/pstrain-rebuild",
+      "branch": "master",
+      "vercel": "pstrain-rebuild"
     },
     {
       "name": "CustodyNoteApp",
       "dir": ".",
-      "github": "robertdavidcashman-droid/custody-note-app",
-      "branch": "main",
+      "homeDir": "custody-note-app",
+      "github": "robertcashman-bit/custody-note-app",
+      "branch": "master",
       "vercel": null
     }
   ]

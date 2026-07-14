@@ -4,15 +4,17 @@ Multi-project layout for all Custody Note / police station rep sites.
 
 ## Projects
 
-| Workspace | Domain | Folder | GitHub repo | Vercel project |
-|-----------|--------|--------|-------------|----------------|
-| PoliceStationAgent.com | policestationagent.com | `one/` | `robertdavidcashman-droid/one` | web44ai |
-| PoliceStationRepUK.com | policestationrepuk.org | `Policestationrepuk/` | `robertdavidcashman-droid/policestationrepuk` | policestationrepuk |
-| CustodyNote website | custodynote.com | `custody-note-website/` | `robertdavidcashman-droid/custody-note-website` | custody-note-website |
-| PSRUKTrain.com | psrtrain.com | `pstrain-rebuild/` | `robertdavidcashman-droid/psrtrain` | pstrain |
-| CustodyNoteApp | (desktop) | `.` (root) | `robertdavidcashman-droid/custody-note-app` | none (GitHub Releases) |
+| Workspace | Domain | Mac folder (`$HOME`) | GitHub repo | Vercel project |
+|-----------|--------|----------------------|-------------|----------------|
+| PoliceStationAgent.com | policestationagent.com | `policestationagent/` | `robertcashman-bit/policestationagent` | web44ai |
+| PoliceStationRepUK.com | policestationrepuk.org | `Policestationrepuk/` | `robertcashman-bit/Policestationrepuk` | policestationrepuk-new |
+| CustodyNote website | custodynote.com | `custody-note-website/` | `robertcashman-bit/custody-note-website` | custody-note-website |
+| PSRUKTrain.com | psrtrain.com | `pstrain-rebuild/` | `robertcashman-bit/pstrain-rebuild` | pstrain-rebuild |
+| CustodyNoteApp | (desktop) | `custody-note-app/` (this repo) | `robertcashman-bit/custody-note-app` | none (GitHub Releases) |
 
 Configuration: [`workspaces.manifest.json`](workspaces.manifest.json)
+
+Cloud Agent nested clones still use the `dir` field under this repo. Mac sibling checkouts use `homeDir` under `$HOME`.
 
 ## Automatic setup
 
@@ -31,43 +33,16 @@ bash scripts/sync-all-workspaces.sh
 bash scripts/verify-workspaces.sh
 ```
 
-### MacBook (one-time install, then automatic every 5 min)
+### MacBook (shared with `~/dev-hub` sync)
+
+Preferred: `~/dev-hub/scripts/install-mac-sync-schedule.sh` (every 30 minutes).
+
+Optional legacy agent (every 5 minutes):
 
 ```bash
-# Optional: custom folder paths
-export REPUK_DIR="$HOME/Policestationrepuk"
-export PSRTRAIN_DIR="$HOME/pstrain-rebuild"
-
 bash scripts/install-mac-sync-agent.sh
-```
-
-Test without pushing:
-
-```bash
-bash scripts/mac-push-missing-repos.sh --dry-run
-```
-
-Logs: `~/Library/Logs/cursor-workspace-sync.log`
-
-### Cursor Cloud secrets (one-time)
-
-| Secret | Purpose |
-|--------|---------|
-| `GITHUB_PAT` | Create missing repos from cloud bootstrap |
-| `VERCEL_TOKEN` | Verify Vercel Git links |
-
-## Open all five in Cursor
-
-File → Open Workspace from File → `all-workspaces.code-workspace`
-
-## Vercel
-
-Each website repo connects to **one** Vercel project. Do not link `one` to the pstrain project (see `one/scripts/verify-deployment-target.js`).
-
-```bash
-bash scripts/verify-vercel-links.sh
 ```
 
 ## GitHub health check
 
-Workflow [`.github/workflows/workspace-sync-check.yml`](.github/workflows/workspace-sync-check.yml) runs every 6 hours and reports missing repos.
+Workflow [`.github/workflows/workspace-sync-check.yml`](.github/workflows/workspace-sync-check.yml) runs every 6 hours and fails if any manifest repo is missing on GitHub.

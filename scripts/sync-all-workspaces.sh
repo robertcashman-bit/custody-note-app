@@ -1,9 +1,12 @@
 #!/bin/bash
 # Clone or pull all workspace repos defined in workspaces.manifest.json.
+# Uses nested $ROOT/<dir> when present; otherwise clones into $HOME/<homeDir>
+# (Mac sibling layout) when homeDir is set.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MANIFEST="$ROOT/workspaces.manifest.json"
+HOME_ROOT="${HOME:-}"
 POLL_SECONDS="${SYNC_POLL_SECONDS:-60}"
 
 if [[ ! -f "$MANIFEST" ]]; then
@@ -30,11 +33,30 @@ wait_for_repo() {
   return 0
 }
 
+resolve_path() {
+  local dir="$1"
+  local home_dir="$2"
+  if [[ "$dir" == "." ]]; then
+    echo "$ROOT"
+    return
+  fi
+  if [[ -d "$ROOT/$dir/.git" || -d "$ROOT/$dir" ]]; then
+    echo "$ROOT/$dir"
+    return
+  fi
+  if [[ -n "$home_dir" ]]; then
+    echo "$HOME_ROOT/$home_dir"
+    return
+  fi
+  echo "$ROOT/$dir"
+}
+
 sync_repo() {
   local name="$1"
   local dir="$2"
-  local slug="$3"
-  local branch="$4"
+  local home_dir="$3"
+  local slug="$4"
+  local branch="$5"
 
   if [[ "$dir" == "." ]]; then
     echo "--- $name (root) — skip clone ---"
@@ -42,20 +64,22 @@ sync_repo() {
     return 0
   fi
 
-  echo "--- $name ($dir) ---"
+  local path
+  path="$(resolve_path "$dir" "$home_dir")"
+  echo "--- $name ($path) ---"
 
   if ! repo_exists_on_github "$slug"; then
     if ! wait_for_repo "$slug"; then
-      echo "  MISSING: $slug not on GitHub yet (run mac-push-missing-repos.sh on Mac)"
+      echo "  MISSING: $slug not on GitHub yet"
       return 1
     fi
   fi
 
   local url="https://github.com/${slug}.git"
-  local path="$ROOT/$dir"
 
   if [[ ! -d "$path/.git" ]]; then
-    echo "  Cloning $url -> $dir"
+    echo "  Cloning $url -> $path"
+    mkdir -p "$(dirname "$path")"
     git clone "$url" "$path"
   else
     echo "  Pulling latest"
@@ -76,8 +100,8 @@ echo "Root: $ROOT"
 echo ""
 
 FAIL=0
-while IFS=$'\t' read -r name dir slug branch; do
-  sync_repo "$name" "$dir" "$slug" "$branch" || FAIL=1
+while IFS=$'\t' read -r name dir home_dir slug branch; do
+  sync_repo "$name" "$dir" "$home_dir" "$slug" "$branch" || FAIL=1
 done < <(python3 - "$MANIFEST" <<'PY'
 import json, sys
 manifest = json.load(open(sys.argv[1]))
@@ -85,6 +109,7 @@ for repo in manifest["repos"]:
     print("\t".join([
         repo["name"],
         repo["dir"],
+        repo.get("homeDir") or "",
         repo["github"],
         repo["branch"],
     ]))
