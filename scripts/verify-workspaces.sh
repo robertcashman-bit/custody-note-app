@@ -1,10 +1,11 @@
 #!/bin/bash
 # Health check for all workspace folders (reads workspaces.manifest.json).
+# Resolves Mac sibling layout ($HOME/<homeDir>) and Cloud nested layout ($ROOT/<dir>).
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 MANIFEST="$ROOT/workspaces.manifest.json"
-cd "$ROOT"
+HOME_ROOT="${HOME:-}"
 
 FAIL=0
 WARN=0
@@ -14,27 +15,43 @@ if [[ ! -f "$MANIFEST" ]]; then
   exit 1
 fi
 
+resolve_path() {
+  local dir="$1"
+  local home_dir="$2"
+  if [[ "$dir" == "." ]]; then
+    echo "$ROOT"
+    return
+  fi
+  if [[ -d "$ROOT/$dir/.git" ]]; then
+    echo "$ROOT/$dir"
+    return
+  fi
+  if [[ -n "$home_dir" && -d "$HOME_ROOT/$home_dir/.git" ]]; then
+    echo "$HOME_ROOT/$home_dir"
+    return
+  fi
+  # Prefer nested path for error messages when neither exists.
+  echo "$ROOT/$dir"
+}
+
 check_repo() {
   local name="$1"
   local dir="$2"
-  local remote="$3"
-  local branch="$4"
-  local need_pkg="$5"
+  local home_dir="$3"
+  local remote="$4"
+  local branch="$5"
+  local need_pkg="$6"
 
-  echo "--- $name ($dir) ---"
+  local git_dir
+  git_dir="$(resolve_path "$dir" "$home_dir")"
 
-  if [[ "$dir" == "." ]]; then
-    dir="."
-  fi
+  echo "--- $name ($git_dir) ---"
 
-  if [[ "$dir" != "." ]] && [[ ! -d "$dir" ]]; then
+  if [[ ! -d "$git_dir" ]]; then
     echo "  MISSING: folder not found"
     ((FAIL++)) || true
     return
   fi
-
-  local git_dir="$ROOT"
-  [[ "$dir" != "." ]] && git_dir="$ROOT/$dir"
 
   if [[ ! -d "$git_dir/.git" ]]; then
     echo "  FAIL: not a git repository"
@@ -78,8 +95,8 @@ check_repo() {
 echo "Workspace root: $ROOT"
 echo ""
 
-while IFS=$'\t' read -r name dir remote branch need_pkg; do
-  check_repo "$name" "$dir" "$remote" "$branch" "$need_pkg"
+while IFS=$'\t' read -r name dir home_dir remote branch need_pkg; do
+  check_repo "$name" "$dir" "$home_dir" "$remote" "$branch" "$need_pkg"
 done < <(python3 - "$MANIFEST" <<'PY'
 import json, sys
 manifest = json.load(open(sys.argv[1]))
@@ -88,6 +105,7 @@ for repo in manifest["repos"]:
     print("\t".join([
         repo["name"],
         repo["dir"],
+        repo.get("homeDir") or "",
         repo["github"],
         repo["branch"],
         need_pkg,
@@ -101,12 +119,8 @@ echo "Failures: $FAIL"
 echo "Warnings: $WARN"
 
 if [[ $FAIL -gt 0 ]]; then
-  echo "Some workspaces are missing. Install Mac sync agent: bash scripts/install-mac-sync-agent.sh"
+  echo "Some workspaces failed checks."
   exit 1
-fi
-
-if [[ $WARN -gt 0 ]]; then
-  exit 0
 fi
 
 echo "All workspace checks passed."

@@ -2,7 +2,7 @@
 # Run once on your MacBook to create missing GitHub repos and push local code.
 set -euo pipefail
 
-GH="robertdavidcashman-droid"
+GH="robertcashman-bit"
 REPUK_DIR="${REPUK_DIR:-$HOME/Policestationrepuk}"
 PSRTRAIN_DIR="${PSRTRAIN_DIR:-$HOME/pstrain-rebuild}"
 STATUS_FILE="${HOME}/.cursor-workspace-sync-last-run.json"
@@ -111,17 +111,17 @@ PY
 }
 
 echo "=== Creating GitHub repos (if missing) ==="
-create_repo_if_missing "policestationrepuk" "PoliceStationRepUK website - policestationrepuk.org"
-create_repo_if_missing "psrtrain" "PSRUKTrain website - psrtrain.com"
+create_repo_if_missing "Policestationrepuk" "PoliceStationRepUK website - policestationrepuk.org"
+create_repo_if_missing "pstrain-rebuild" "PSRUKTrain website - psrtrain.com"
 
 echo ""
 echo "=== Pushing PoliceStationRepUK ($REPUK_DIR) ==="
 FAIL=0
-push_local "$REPUK_DIR" "policestationrepuk" main || FAIL=1
+push_local "$REPUK_DIR" "Policestationrepuk" master || FAIL=1
 
 echo ""
 echo "=== Pushing PSRUKTrain ($PSRTRAIN_DIR) ==="
-push_local "$PSRTRAIN_DIR" "psrtrain" main || FAIL=1
+push_local "$PSRTRAIN_DIR" "pstrain-rebuild" master || FAIL=1
 
 if [[ $FAIL -ne 0 ]]; then
   echo ""
