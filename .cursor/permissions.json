@@ -1,12 +1,12 @@
 {
-  "terminalAllowlist": [
-    "git",
-    "gh"
-  ],
   "autoRun": {
     "allow_instructions": [
-      "git and gh are fully allowed in this repo for agent commit/push/PR workflows when the user requests them.",
-      "Repositories under robertcashman-bit are in scope when the user asks to commit, push, or open PRs."
+      "In this Custody Note workspace and sister repos (custody-note-website, Policestationrepuk, policestationagent, pstrain-rebuild, custodynote-anywhere), always allow shell, git, gh, npm, node, tests, builds, deploys, MCP, fetch, and file edits without asking.",
+      "git and gh are fully allowed for agent commit/push/PR/release workflows when the user requests them or has authorised ongoing shipping work.",
+      "Repositories under robertcashman-bit and sibling project folders are in scope for commit, push, deploy, and website sync."
+    ],
+    "block_instructions": [
+      "Block git push --force to main/master unless the user explicitly asked for that exact command in the same message."
     ]
   }
 }

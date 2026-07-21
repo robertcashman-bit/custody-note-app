@@ -1,11 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Shell(git)",
-      "Shell(git *)",
-      "Shell(gh)",
-      "Shell(gh *)"
+      "Shell(**)",
+      "Read(**)",
+      "Write(**)",
+      "WebFetch(**)",
+      "Mcp(**)"
     ],
-    "deny": []
+    "deny": [
+      "Shell(rm -rf /)",
+      "Shell(git push --force*)",
+      "Shell(git reset --hard*)"
+    ]
   }
 }
