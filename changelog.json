@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.53",
+      "date": "2026-07-21",
+      "latest": true,
+      "changes": [
+        "Licence: fixed previously-activated licences not being recognised on some machines (legacy licence.dat read + migration)",
+        "Licence: fixed licence admin/forgot-key IPC handlers when encrypted admin store init fails",
+        "Reliability: cloud backup status emit and test hermetic API URL safeguards"
+      ]
+    },
+    {
       "version": "1.9.51",
       "date": "2026-07-07",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Cross-device sync: much faster catch-up — batch push sends up to 100 records per sync cycle (20 per request) instead of 5 one-at-a-time",
         "Cross-device sync: quicker idle polling (10s) and faster sync after save (1s debounce) so missing records appear on other devices sooner",
@@ -151,7 +161,7 @@
         "Security: cross-device sync now encrypts attendance records with AES-256-GCM before upload — server stores ciphertext only",
         "Sync pull decrypts envelopes locally using your device encryption key; legacy plaintext sync records remain readable until re-synced",
         "PDF: Defence summary and section 8 now show outcome code, next date, next venue, interview position, and headline advice (derived from court date, client decision, and advice fields)",
-        "PDF: LAA Declaration (section 11) always prints — Privacy Notice, Applicant\u2019s Declaration, and CRM3 fields; no longer skipped when signatures are empty",
+        "PDF: LAA Declaration (section 11) always prints — Privacy Notice, Applicant’s Declaration, and CRM3 fields; no longer skipped when signatures are empty",
         "PDF: CRM14 section includes fraud warning and rep/partner declaration blocks; improved spacing on Defence summary and LAA blocks"
       ]
     },
