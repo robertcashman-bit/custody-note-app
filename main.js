@@ -1791,6 +1791,9 @@ function getManagedCloudApiUrl() {
       if (cfg.apiUrl && isAllowedApiUrl(cfg.apiUrl)) return cfg.apiUrl;
     }
   } catch (_) {}
+  // Test runs must be hermetic: never default to production custodynote.com
+  // unless explicitly configured via env or licence-config.json.
+  if (process.env.NODE_ENV === 'test') return null;
   return 'https://custodynote.com';
 }
 
@@ -1832,7 +1835,11 @@ function emitCloudBackupStatus(overrides) {
   if (overrides && typeof overrides === 'object') {
     Object.assign(payload, overrides);
   }
-  mainWindow.webContents.send('cloud-backup-status-changed', payload);
+  try {
+    mainWindow.webContents.send('cloud-backup-status-changed', payload);
+  } catch (e) {
+    console.warn('[CloudBackup] status emit failed:', e && e.message ? e.message : e);
+  }
 }
 
 async function checkCloudBackupEntitlement() {
@@ -3895,8 +3902,23 @@ function readLicenceData() {
   try {
     const raw = fs.readFileSync(lpath);
     if (safeStorage.isEncryptionAvailable()) {
-      const json = safeStorage.decryptString(raw);
-      return JSON.parse(json);
+      try {
+        const json = safeStorage.decryptString(raw);
+        return JSON.parse(json);
+      } catch (e) {
+        // Back-compat: older builds (or unusual environments) may have written
+        // plaintext JSON even when safeStorage is available. Treat that as a
+        // valid licence file, then migrate it to encrypted form so future reads
+        // are stable.
+        try {
+          const parsed = JSON.parse(raw.toString('utf8'));
+          if (parsed && typeof parsed === 'object') {
+            try { writeLicenceData(parsed); } catch (_) {}
+            return parsed;
+          }
+        } catch (_) {}
+        throw e;
+      }
     }
     return JSON.parse(raw.toString('utf8'));
   } catch (e) {
@@ -4623,9 +4645,16 @@ app.whenReady().then(async () => {
   try {
     const licenceStoreKey = require('./main/licenceStoreKey').getLicenceStoreKey(app, safeStorage);
     await require('./main/licenceStore').initStore(app.getPath('userData'), licenceStoreKey);
-    require('./main/licenceIpc').registerLicenceIpc(app);
   } catch (e) {
     console.warn('[LicenceStore] Init failed:', e.message);
+  }
+  // Register licence IPC regardless of whether the admin encrypted store could init.
+  // E2E and non-admin flows (forgot-key, admin password checks, etc.) must not
+  // crash with "No handler registered" just because safeStorage is unavailable.
+  try {
+    require('./main/licenceIpc').registerLicenceIpc(app);
+  } catch (e) {
+    console.warn('[LicenceIPC] Register failed:', e && e.message ? e.message : e);
   }
 
   if (trialInitOnly) {
