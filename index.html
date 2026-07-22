@@ -895,14 +895,21 @@
 
           <!-- Shown only when on a trial — direct paid key entry -->
           <div id="licence-trial-upgrade" style="display:none;margin-top:1.25rem;padding:1rem 1.1rem;background:linear-gradient(135deg,#eff6ff,#f0f9ff);border:2px solid #3b82f6;border-radius:10px;">
-            <p style="margin:0 0 0.4rem 0;font-weight:700;font-size:1rem;color:#1e40af;">&#128273; Enter your paid licence key</p>
-            <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#1e3a8a;">Paste the licence key from your purchase confirmation email. This activates cloud backup and removes the trial notice.</p>
+            <p style="margin:0 0 0.4rem 0;font-weight:700;font-size:1rem;color:#1e40af;">&#128273; Upgrade to Pro</p>
+            <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#1e3a8a;">Paste the licence key from your purchase confirmation email. Pro unlocks managed cloud backup and advanced tools. Core features stay free forever.</p>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
               <input type="text" id="trial-upgrade-key" class="settings-input settings-input--trial" placeholder="CN-XXXX-XXXX-XXXX-XXXX" autocomplete="off" spellcheck="false" style="flex:1;min-width:220px;max-width:340px;font-size:0.95rem;">
-              <button type="button" id="btn-trial-upgrade-activate" class="btn btn-primary" style="padding:0.55rem 1.2rem;font-size:0.95rem;">Activate</button>
+              <button type="button" id="btn-trial-upgrade-activate" class="btn btn-primary" style="padding:0.55rem 1.2rem;font-size:0.95rem;">Activate Pro</button>
             </div>
             <p id="trial-upgrade-error" style="display:none;margin:0.5rem 0 0 0;font-size:0.85rem;color:#dc2626;"></p>
-            <p style="margin:0.6rem 0 0 0;font-size:0.8rem;color:#1e3a8a;">Don&rsquo;t have a key? <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;font-weight:600;">Subscribe at custodynote.com/pricing &rarr;</a></p>
+            <p style="margin:0.6rem 0 0 0;font-size:0.8rem;color:#1e3a8a;">Don&rsquo;t have a key? <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;font-weight:600;">Subscribe to Pro at custodynote.com/pricing &rarr;</a></p>
+          </div>
+
+          <div class="settings-card" id="pro-ai-coming-soon-card" style="margin-top:1rem;">
+            <h2>Pro AI summaries <span style="font-size:0.75rem;font-weight:600;color:#64748b;letter-spacing:0.04em;text-transform:uppercase;">Coming soon</span></h2>
+            <p class="settings-hint" style="margin:0 0 0.5rem;">Opt-in interview and attendance summary drafts for Pro users. Nothing is sent to an AI provider until you explicitly request a draft — case content stays under your control.</p>
+            <p id="pro-ai-gate-message" class="settings-hint" style="margin:0 0 0.75rem;font-weight:600;">Available on Pro after launch. Upgrade at custodynote.com/pricing.</p>
+            <button type="button" id="btn-pro-ai-request-draft" class="btn btn-secondary" disabled title="Coming soon">Request draft (coming soon)</button>
           </div>
 
           <div id="licence-status-needs-validation" style="display:none;margin-top:1rem;padding:1rem 1.1rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;">
@@ -1446,11 +1453,12 @@
           </div>
 
           <div class="share-app-card" style="margin-top:1.25rem;padding:1rem;background:linear-gradient(135deg,#eff6ff,#f0f9ff);border:1px solid #93c5fd;border-radius:10px;">
-            <h3 class="share-app-title" style="margin:0 0 0.25rem 0;font-size:0.95rem;color:#1e40af;">Share Custody Note</h3>
-            <p class="share-app-desc" style="margin:0 0 0.75rem 0;font-size:0.8rem;color:#1e3a8a;">Recommend the app to a colleague — copy the link or open an email.</p>
+            <h3 class="share-app-title" style="margin:0 0 0.25rem 0;font-size:0.95rem;color:#1e40af;">Invite a colleague</h3>
+            <p class="share-app-desc" style="margin:0 0 0.5rem 0;font-size:0.8rem;color:#1e3a8a;">Share Free forever Custody Note — copy your personal invite link or open an email.</p>
+            <p id="share-referral-url" class="settings-hint" style="margin:0 0 0.75rem 0;font-size:0.78rem;word-break:break-all;color:#1e40af;"></p>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-              <button type="button" id="share-app-copy-btn" class="btn btn-secondary" style="font-size:0.85rem;">Copy download link</button>
-              <button type="button" id="share-app-email-btn" class="btn btn-secondary" style="font-size:0.85rem;">Email link</button>
+              <button type="button" id="share-app-copy-btn" class="btn btn-secondary" style="font-size:0.85rem;">Copy invite link</button>
+              <button type="button" id="share-app-email-btn" class="btn btn-secondary" style="font-size:0.85rem;">Email invite</button>
             </div>
           </div>
           <p id="check-updates-status" class="settings-hint" style="margin-top:0.5rem;min-height:1.5em;"></p>

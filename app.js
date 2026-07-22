@@ -5585,35 +5585,51 @@ var REQUIRED_FIELD_KEYS = [
           }
         }
         if (typeBadge) {
-          if (st.isTrial) {
+          if (st.tier === 'free' || st.isFree || (st.key && String(st.key).indexOf('FREE-') === 0)) {
+            typeBadge.textContent = 'FREE';
+            typeBadge.style.background = '#e0e7ff';
+            typeBadge.style.color = '#3730a3';
+          } else if (st.isTrial || st.tier === 'trial') {
             typeBadge.textContent = 'TRIAL';
             typeBadge.style.background = '#fef3c7';
             typeBadge.style.color = '#92400e';
           } else {
-            typeBadge.textContent = 'SUBSCRIPTION';
+            typeBadge.textContent = 'PRO';
             typeBadge.style.background = '#d1fae5';
             typeBadge.style.color = '#065f46';
           }
         }
         if (timeEl) {
-          if (st.isTrial) {
+          if (st.tier === 'free' || st.isFree || (st.key && String(st.key).indexOf('FREE-') === 0)) {
+            timeEl.textContent = 'Free forever — core features unlocked';
+            timeEl.style.color = '#4338ca';
+          } else if (st.isTrial) {
             timeEl.textContent = 'Free trial \u2014 ' + (st.daysRemaining !== undefined ? st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : 'active');
             timeEl.style.color = '#d97706';
           } else if (st.daysRemaining !== undefined) {
-            timeEl.textContent = 'Subscription \u2014 ' + st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining';
+            timeEl.textContent = 'Pro \u2014 ' + st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining';
             timeEl.style.color = '';
           } else if (st.expiresAt) {
-            timeEl.textContent = 'Subscription \u2014 expires ' + new Date(st.expiresAt).toLocaleDateString('en-GB');
+            timeEl.textContent = 'Pro \u2014 expires ' + new Date(st.expiresAt).toLocaleDateString('en-GB');
             timeEl.style.color = '';
           } else {
-            timeEl.textContent = 'Subscription active';
+            timeEl.textContent = 'Pro active';
             timeEl.style.color = '#059669';
           }
         }
         if (lastValidatedEl) {
           lastValidatedEl.textContent = st.lastValidated ? 'Last validated: ' + new Date(st.lastValidated).toLocaleString('en-GB') : '';
         }
-        if (trialUpgradeEl) trialUpgradeEl.style.display = st.isTrial ? '' : 'none';
+        var isFreeLike = !!(st.tier === 'free' || st.isFree || st.isTrial || (st.key && String(st.key).indexOf('FREE-') === 0) || (st.key && String(st.key).indexOf('TRIAL-') === 0));
+        if (trialUpgradeEl) trialUpgradeEl.style.display = isFreeLike ? '' : 'none';
+        var aiMsg = document.getElementById('pro-ai-gate-message');
+        if (aiMsg) {
+          if (st.tier === 'pro' && (st.status === 'active' || st.status === 'expiring_soon' || st.status === 'grace_expired')) {
+            aiMsg.textContent = 'You are on Pro. AI summary drafts are coming soon — nothing will be sent until you explicitly request a draft.';
+          } else {
+            aiMsg.textContent = 'AI summary drafts are a Pro feature (coming soon). Upgrade at custodynote.com/pricing.';
+          }
+        }
       } else if (st && st.status === 'grace_expired' && graceEl) {
         activeEl.style.display = 'none';
         noneEl.style.display = 'none';
