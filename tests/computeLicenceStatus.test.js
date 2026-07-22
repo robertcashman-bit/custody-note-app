@@ -92,7 +92,7 @@ describe('computeLicenceStatus freemium Free forever', () => {
     assert.equal(st.status, 'active');
     assert.equal(st.tier, 'free');
     assert.equal(st.createAllowed, true);
-    assert.match(st.message, /Free forever/i);
+    assert.match(st.message, /free beta|Free during beta|beta access/i);
   });
 
   it('downgrades expired paid to Free core when freemium on', () => {

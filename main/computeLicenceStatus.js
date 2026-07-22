@@ -85,7 +85,7 @@ function computeLicenceStatus(data, options) {
 
   const now = Date.now();
 
-  // Non-expiring Free forever
+  // Non-expiring Free during beta
   if (tier === 'free' || (freeTierEnabled && keyLooksFree(data.key))) {
     return {
       status: 'active',
@@ -114,7 +114,7 @@ function computeLicenceStatus(data, options) {
         return {
           status: 'active',
           message: wasTrial
-            ? 'You are on Free forever. Upgrade to Pro for managed cloud backup and advanced tools.'
+            ? 'You are on free beta access. Pro (cloud backup) is planned after beta.'
             : 'Your Pro subscription expired on ' +
               new Date(data.expiresAt).toLocaleDateString('en-GB') +
               '. Core features remain available on Free — renew Pro for cloud backup and advanced tools.',
