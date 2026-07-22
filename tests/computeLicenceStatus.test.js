@@ -1,6 +1,10 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { computeLicenceStatus, DEFAULT_GRACE_DAYS } = require('../main/computeLicenceStatus');
+const {
+  computeLicenceStatus,
+  resolveTier,
+  DEFAULT_GRACE_DAYS,
+} = require('../main/computeLicenceStatus');
 
 describe('computeLicenceStatus grace period', () => {
   const paidKey = 'CN-AAAA-BBBB-CCCC-DDDD';
@@ -19,6 +23,8 @@ describe('computeLicenceStatus grace period', () => {
       status: 'active',
     });
     assert.equal(st.status, 'active');
+    assert.equal(st.tier, 'pro');
+    assert.equal(st.createAllowed, true);
   });
 
   it('returns grace_expired when lastValidated is older than grace window', () => {
@@ -34,16 +40,20 @@ describe('computeLicenceStatus grace period', () => {
     assert.match(st.message, /still active/i);
   });
 
-  it('returns expired before grace when subscription date has passed', () => {
+  it('returns expired before grace when subscription date has passed and free tier off', () => {
     const pastExpiry = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const stale = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    const st = computeLicenceStatus({
-      key: paidKey,
-      expiresAt: pastExpiry,
-      lastValidated: stale,
-      status: 'active',
-    });
+    const st = computeLicenceStatus(
+      {
+        key: paidKey,
+        expiresAt: pastExpiry,
+        lastValidated: stale,
+        status: 'active',
+      },
+      { freeTierEnabled: false },
+    );
     assert.equal(st.status, 'expired');
+    assert.equal(st.createAllowed, false);
   });
 
   it('respects custom graceDays option', () => {
@@ -54,5 +64,53 @@ describe('computeLicenceStatus grace period', () => {
     );
     assert.equal(st.status, 'grace_expired');
     assert.match(st.message, /7 days/);
+  });
+});
+
+describe('computeLicenceStatus freemium Free forever', () => {
+  it('treats FREE-* as active free with createAllowed', () => {
+    const st = computeLicenceStatus({
+      key: 'FREE-ABCDEF0123456789',
+      status: 'active',
+      activatedAt: new Date().toISOString(),
+    });
+    assert.equal(st.status, 'active');
+    assert.equal(st.tier, 'free');
+    assert.equal(st.isFree, true);
+    assert.equal(st.createAllowed, true);
+    assert.equal(st.expiresAt, null);
+  });
+
+  it('downgrades expired trial to Free when freemium on', () => {
+    const past = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const st = computeLicenceStatus({
+      key: 'TRIAL-ABCDEF0123456789',
+      isTrial: true,
+      expiresAt: past,
+      status: 'active',
+    });
+    assert.equal(st.status, 'active');
+    assert.equal(st.tier, 'free');
+    assert.equal(st.createAllowed, true);
+    assert.match(st.message, /Free forever/i);
+  });
+
+  it('downgrades expired paid to Free core when freemium on', () => {
+    const past = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const st = computeLicenceStatus({
+      key: 'CN-AAAA-BBBB-CCCC-DDDD',
+      expiresAt: past,
+      status: 'active',
+    });
+    assert.equal(st.status, 'active');
+    assert.equal(st.tier, 'free');
+    assert.equal(st.proExpired, true);
+    assert.equal(st.createAllowed, true);
+  });
+
+  it('resolveTier recognises free/trial/pro keys', () => {
+    assert.equal(resolveTier({ key: 'FREE-X' }), 'free');
+    assert.equal(resolveTier({ key: 'TRIAL-X', isTrial: true }), 'trial');
+    assert.equal(resolveTier({ key: 'CN-AAAA-BBBB-CCCC-DDDD' }), 'pro');
   });
 });

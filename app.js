@@ -15009,7 +15009,7 @@ pdfAuditFooterHtml(d, settings) +
 
   function showLicenceGateToast() {
     if (window.__licenceExpired) {
-      showToast('Your subscription has expired. Renew at custodynote.com/pricing to create new records.', 'warning', 5000);
+      showToast('Renew Pro at custodynote.com/pricing for cloud backup, or continue on Free for core notes.', 'warning', 5000);
       return true;
     }
     return false;
@@ -18955,7 +18955,7 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('share-app-email-btn')?.addEventListener('click', function() {
       var subject = 'Custody Note – custody notes app for police station reps';
       var body =
-        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload: ' + shareAppUrl + '\n\n30-day free trial, no credit card.';
+        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + shareAppUrl + '\n\nFree forever on core features · Pro £9.99/mo for cloud backup.';
       copyOutlookComposeFields('', subject, body, {
         allowEmptyTo: true,
         successToast: 'Copied — paste into Outlook or any mail client',

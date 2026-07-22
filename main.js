@@ -1845,6 +1845,8 @@ function emitCloudBackupStatus(overrides) {
 async function checkCloudBackupEntitlement() {
   const data = readLicenceData();
   const isTrial = !!(data && data.isTrial);
+  const isFree =
+    !!(data && (data.isFree || data.tier === 'free' || String(data.key || '').toUpperCase().startsWith('FREE-')));
   const hasAuth = !!(data && data.authToken);
   if (!data || (!data.key && !hasAuth)) {
     _cloudBackupEnabled = false;
@@ -1852,11 +1854,12 @@ async function checkCloudBackupEntitlement() {
     emitCloudBackupStatus({ enabled: false, isTrial: false, lastError: null });
     return;
   }
-  if (isTrial && !hasAuth) {
+  // Free forever and local trial do not include managed AWS cloud backup (Pro only).
+  if ((isFree || isTrial) && !hasAuth) {
     _cloudBackupEnabled = false;
     _lastManagedCloudError = null;
-    console.info('[CloudBackup] Skipping entitlement check â€” trial licence active. Cloud backup not included.');
-    emitCloudBackupStatus({ enabled: false, isTrial: true, lastError: null });
+    console.info('[CloudBackup] Skipping entitlement check — Free/trial licence. Cloud backup is Pro-only.');
+    emitCloudBackupStatus({ enabled: false, isTrial: !!isTrial, lastError: null });
     return;
   }
   const apiUrl = getManagedCloudApiUrl();
@@ -3874,7 +3877,20 @@ const LICENCE_GRACE_DAYS = 60;
 const LICENCE_REVALIDATE_HOURS = 24;
 const TRIAL_DAYS = 30;
 
-/** One anonymous ping when a packaged install starts its local trial (no case data). */
+/** Freemium Free forever — set FREE_TIER_ENABLED=0 or licence-config freeTierEnabled:false to roll back to timed trial. */
+function isFreeTierEnabled() {
+  if (process.env.FREE_TIER_ENABLED === '0' || process.env.FREE_TIER_ENABLED === 'false') return false;
+  try {
+    const cfgPath = path.join(app.getPath('userData'), 'licence-config.json');
+    if (fs.existsSync(cfgPath)) {
+      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+      if (cfg.freeTierEnabled === false) return false;
+    }
+  } catch (_) {}
+  return true;
+}
+
+/** One anonymous ping when a packaged install starts Free / legacy trial (no case data). */
 function reportTrialStartedToServer() {
   if (!app.isPackaged) return;
   const apiUrl = getManagedCloudApiUrl();
@@ -3883,7 +3899,47 @@ function reportTrialStartedToServer() {
     machineId: getMachineId(),
     platform: process.platform,
     appVersion: app.getVersion(),
+    tier: isFreeTierEnabled() ? 'free' : 'trial',
   }, { timeout: 8000 }).catch(function () {});
+}
+
+function buildLocalFreeLicenceData() {
+  const now = new Date().toISOString();
+  return {
+    key: 'FREE-' + getMachineId().slice(0, 16).toUpperCase(),
+    email: '',
+    activatedAt: now,
+    lastValidated: now,
+    expiresAt: null,
+    machineId: getMachineId(),
+    status: 'active',
+    isTrial: false,
+    isFree: true,
+    tier: 'free',
+  };
+}
+
+/** Migrate legacy TRIAL-* (or expired paid local trial) onto non-expiring Free when freemium is on. */
+function maybeMigrateLicenceToFree(data) {
+  if (!isFreeTierEnabled() || !data || !data.key) return data;
+  const key = String(data.key).toUpperCase();
+  if (key.startsWith('FREE-')) {
+    if (data.expiresAt || data.isTrial || data.tier !== 'free') {
+      data.expiresAt = null;
+      data.isTrial = false;
+      data.isFree = true;
+      data.tier = 'free';
+      data.status = 'active';
+      writeLicenceData(data);
+    }
+    return data;
+  }
+  if (!key.startsWith('TRIAL-')) return data;
+  const migrated = buildLocalFreeLicenceData();
+  migrated.activatedAt = data.activatedAt || migrated.activatedAt;
+  migrated.email = data.email || '';
+  writeLicenceData(migrated);
+  return migrated;
 }
 
 function getLicencePath() {
@@ -4223,6 +4279,7 @@ function computeLicenceStatus(data) {
     graceDays: LICENCE_GRACE_DAYS,
     trialDays: TRIAL_DAYS,
     adminEmails: ADMIN_EMAILS_LOCAL,
+    freeTierEnabled: isFreeTierEnabled(),
   });
 }
 
@@ -4235,28 +4292,40 @@ ipcMain.handle('licence:status', () => {
       status: 'error',
       message: 'Stored licence could not be read. Custody Note will not replace it automatically.',
       addons: { quickfile: false, emailAddon: false },
+      tier: 'none',
+      createAllowed: false,
       enforced,
     };
   }
   if (!data || !data.key) {
-    const now = new Date();
-    const expires = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
-    data = {
-      key: 'TRIAL-' + getMachineId().slice(0, 16).toUpperCase(),
-      email: '',
-      activatedAt: now.toISOString(),
-      lastValidated: now.toISOString(),
-      expiresAt: expires.toISOString(),
-      machineId: getMachineId(),
-      status: 'active',
-      isTrial: true,
-    };
-    writeLicenceData(data);
-    reportTrialStartedToServer();
+    if (isFreeTierEnabled()) {
+      data = buildLocalFreeLicenceData();
+      writeLicenceData(data);
+      reportTrialStartedToServer();
+    } else {
+      const now = new Date();
+      const expires = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
+      data = {
+        key: 'TRIAL-' + getMachineId().slice(0, 16).toUpperCase(),
+        email: '',
+        activatedAt: now.toISOString(),
+        lastValidated: now.toISOString(),
+        expiresAt: expires.toISOString(),
+        machineId: getMachineId(),
+        status: 'active',
+        isTrial: true,
+        tier: 'trial',
+      };
+      writeLicenceData(data);
+      reportTrialStartedToServer();
+    }
+  } else {
+    data = maybeMigrateLicenceToFree(data);
   }
   const result = computeLicenceStatus(data);
   result.enforced = enforced;
   result.graceDays = LICENCE_GRACE_DAYS;
+  result.freeTierEnabled = isFreeTierEnabled();
   if (data && data.authToken) {
     result.signInWithAccount = true;
     result.accountEmail = data.email || '';
