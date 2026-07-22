@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.54",
+      "date": "2026-07-22",
+      "latest": true,
+      "changes": [
+        "QuickFile: new instructing firms are created or matched in QuickFile automatically when you save them (if credentials are configured)",
+        "Billing: fixed false “select the instructing firm” error when a firm was already selected on the record",
+        "LAA Declaration: “Client signature not needed” tick with optional reason — clears missing-signature warnings when marked",
+        "Firms: typing a name that is not on the list prompts you to add it and opens the add-firm form with the name filled in"
+      ]
+    },
+    {
       "version": "1.9.53",
       "date": "2026-07-21",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Licence: fixed previously-activated licences not being recognised on some machines (legacy licence.dat read + migration)",
         "Licence: fixed licence admin/forgot-key IPC handlers when encrypted admin store init fails",
