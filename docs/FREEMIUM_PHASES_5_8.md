@@ -1,18 +1,25 @@
-## Phase 5 — Viral + retention — SHIPPED (v1.9.58+)
+# Freemium programme status
 
-- Settings toggle: PDF footer “Prepared with Custody Note” (default on; firms can disable)
-- Home Updates tips strip (`renderer/product-tips.js` + `data/product-tips.json` + custodynote.com/product-tips.json)
-- Soft invite after finalise (once per install)
+## Shipped
 
-## Phase 6 — Pro AI (scaffold only)
-
-- `main/proAiEntitlement.js` — entitlement gate; no provider calls yet
-
-## Phases 7–8 (still deferred)
-
-| Phase | Scope |
+| Phase | Status |
 | --- | --- |
-| 7 | Firm workspace MVP (seats, templates, branding) |
-| 8 | Anywhere ↔ Desktop sync bridge |
+| 0 Multi-site Free/Pro £9.99 copy | Live on custodynote.com + sister sites |
+| 1 Analytics taxonomy | `docs/ANALYTICS.md` |
+| 2 Free forever licence | Desktop v1.9.57+ |
+| 3 Explore-first onboarding | Soft Free banner |
+| 4 Referral redirect | `/r/:code` → download |
+| 5 Tips / PDF branding / soft invite | Desktop v1.9.58+ |
+| 6 Pro AI | Entitlement scaffold + Settings “Coming soon” card (no provider yet) |
+| 7 Firm workspace | Pricing firm enquiry path + roadmap copy (self-serve seats later) |
+| 8 Anywhere bridge | Roadmap messaging on pricing (sync bridge later) |
 
-Do not start Phase 6 provider work until Free/Pro gates are stable and Lemon Pro is £9.99.
+## Manual
+
+- Lemon Squeezy Pro product/variant must be **£9.99/mo** so checkout matches the site.
+
+## Not built yet (full products)
+
+- Live AI provider (UK region, opt-in, audit log)
+- Firm admin seats / shared templates
+- Anywhere ↔ Desktop sync crypto bridge
