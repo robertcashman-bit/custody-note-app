@@ -1,0 +1,32 @@
+[
+  {
+    "id": "pace-breaks",
+    "title": "PACE tip",
+    "body": "Note interview breaks and refreshments — Code C expects a clear record of welfare pauses.",
+    "href": "https://custodynote.com/pace-custody-note-requirements"
+  },
+  {
+    "id": "dscc-ref",
+    "title": "Billing tip",
+    "body": "Capture the DSCC reference (or private-matter reason) before you leave the station — it is hard to reconstruct later.",
+    "href": "https://custodynote.com/attendance-notes-legal-aid-billing"
+  },
+  {
+    "id": "free-pro",
+    "title": "Free forever",
+    "body": "Core notes, PDF and local backup stay free. Pro (£9.99/mo) adds managed cloud backup.",
+    "href": "https://custodynote.com/pricing"
+  },
+  {
+    "id": "invite",
+    "title": "Invite a colleague",
+    "body": "Share Custody Note with another rep — Free forever on core features, no credit card.",
+    "href": "https://custodynote.com/download"
+  },
+  {
+    "id": "offline",
+    "title": "Offline-first",
+    "body": "Your database lives on this device. Finish the note in the custody suite even with no signal.",
+    "href": "https://custodynote.com/offline-attendance-note-software"
+  }
+]

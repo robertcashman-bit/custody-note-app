@@ -3706,6 +3706,9 @@ var REQUIRED_FIELD_KEYS = [
     updateGearLicenceItem();
     initSyncStatus();
     updateHomeBillingWidget();
+    if (window.ProductTips && typeof window.ProductTips.mountHomeTipsStrip === 'function') {
+      try { window.ProductTips.mountHomeTipsStrip(); } catch (e) { console.error('[product-tips]', e); }
+    }
   }
 
   function initSyncStatus() {
@@ -5741,6 +5744,8 @@ var REQUIRED_FIELD_KEYS = [
       if (opc && document.activeElement !== opc) opc.value = s.officePostcode || '';
       const dm = document.getElementById('setting-dark-mode');
       if (dm) dm.checked = s.darkMode === 'true';
+      const pdfBrand = document.getElementById('setting-pdf-branding-footer');
+      if (pdfBrand) pdfBrand.checked = s.pdfBrandingFooter !== 'false';
       if (s.colourTheme) applyTheme(s.colourTheme);
       const fs = document.getElementById('setting-font-size');
       if (fs && s.fontSize) { fs.value = s.fontSize; }
@@ -6045,6 +6050,7 @@ var REQUIRED_FIELD_KEYS = [
       })(),
       officePostcode: document.getElementById('setting-office-postcode')?.value?.trim() || '',
       darkMode: document.getElementById('setting-dark-mode')?.checked ? 'true' : 'false',
+      pdfBrandingFooter: document.getElementById('setting-pdf-branding-footer')?.checked ? 'true' : 'false',
       fontSize: document.getElementById('setting-font-size')?.value || '16',
       layoutMode: document.getElementById('setting-layout-mode')?.value || 'standard',
       navMode: document.getElementById('setting-nav-mode')?.value || 'auto',
@@ -7377,6 +7383,46 @@ var REQUIRED_FIELD_KEYS = [
 
   function showPostFinaliseNextStepsHint() {
     showToast('Next: tap Finish matter in the bottom bar for documents, QuickFile invoice, and archive.', 'info', 7500);
+    maybeShowReferralInviteAfterFinalise();
+  }
+
+  function maybeShowReferralInviteAfterFinalise() {
+    try {
+      if (localStorage.getItem('cn_referral_invite_done') === '1') return;
+    } catch (_) {
+      return;
+    }
+    setTimeout(function () {
+      if (typeof showConfirm !== 'function') return;
+      showConfirm(
+        'Invite a colleague to Custody Note?\n\nFree forever on core features — no credit card. We will copy a short message you can paste into WhatsApp or email.',
+        'Share Custody Note'
+      ).then(function (ok) {
+        try { localStorage.setItem('cn_referral_invite_done', '1'); } catch (_) {}
+        if (!ok) return;
+        var url = 'https://custodynote.com/download';
+        try {
+          if (window.WEBSITE_LINKS && typeof window.WEBSITE_LINKS.download === 'function') {
+            url = window.WEBSITE_LINKS.download();
+          }
+        } catch (_) {}
+        var text =
+          'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\n' +
+          'Download free: ' + url + '\n\nFree forever on core features · Pro £9.99/mo for cloud backup.';
+        var copied = false;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+              showToast('Invite text copied — paste it to a colleague', 'success', 5000);
+            }).catch(function () {
+              showToast(text, 'info', 12000);
+            });
+            copied = true;
+          }
+        } catch (_) {}
+        if (!copied) showToast(text, 'info', 12000);
+      }).catch(function () {});
+    }, 2500);
   }
 
   function getBillingReadinessWarnings() {
@@ -13374,11 +13420,19 @@ var REQUIRED_FIELD_KEYS = [
   /* ═══════════════════════════════════════════════
      PDF GENERATION – comprehensive LAA-compliant
      ═══════════════════════════════════════════════ */
-  /* Free-trial advert last page – keep in sync with index.html splash-advert */
-  var PDF_CASENOTE_ADVERT = '<div style="margin-top:32px;padding:14px 20px;border-top:2px solid #2563eb;text-align:center;font-size:10px;color:#475569;background:#f8fafc;border-radius:0 0 6px 6px;">' +
-    '<strong style="color:#2563eb;font-size:11px;">Custody Note</strong> &mdash; Digital attendance notes for police station representatives.<br>' +
-    '<span style="font-size:11px;font-weight:600;color:#0f172a;">Free trial? Go to <a href="https://www.custodynote.com" style="color:#2563eb;text-decoration:underline;">www.custodynote.com</a></span>' +
-    '</div>';
+  /* Free-plan advert last page – keep in sync with freemium copy; gated by pdfBrandingFooter setting */
+  function pdfBrandingEnabled(settings) {
+    var s = settings || window._appSettingsCache || {};
+    if (s.pdfBrandingFooter === 'false' || s.pdfBrandingFooter === false) return false;
+    return true;
+  }
+  function pdfCaseNoteAdvertHtml(settings) {
+    if (!pdfBrandingEnabled(settings)) return '';
+    return '<div style="margin-top:32px;padding:14px 20px;border-top:2px solid #2563eb;text-align:center;font-size:10px;color:#475569;background:#f8fafc;border-radius:0 0 6px 6px;">' +
+      '<strong style="color:#2563eb;font-size:11px;">Custody Note</strong> &mdash; Digital attendance notes for police station representatives.<br>' +
+      '<span style="font-size:11px;font-weight:600;color:#0f172a;">Free forever on core features &middot; <a href="https://www.custodynote.com/download" style="color:#2563eb;text-decoration:underline;">www.custodynote.com/download</a></span>' +
+      '</div>';
+  }
   function formatInstructionDateTime(val) {
     if (!val || typeof val !== 'string') return '';
     var s = val.trim();
@@ -14062,7 +14116,7 @@ row('Invoice notes', d.invoiceNotes) +
     (d.crm14HasPartner === 'Yes' ? crm14PartnerDeclarationNotePdfHtml(h) + '<div class="sig-block"><p class="sig-label">CRM14 partner signature</p>' + sig('crm14PartnerSig') + '</div>' : '');
 })() +
 
-PDF_CASENOTE_ADVERT +
+pdfCaseNoteAdvertHtml() +
 pdfAuditFooterHtml(d, settings) +
 '</body></html>';
   }
@@ -14190,7 +14244,7 @@ pdfAuditFooterHtml(d, settings) +
       row('UFN', d.ufn) + row('Firm LAA Account', d.firmLaaAccount) +
       row('Ethnic Origin', d.ethnicOriginCode) + row('Disability', d.disabilityCode) +
       '</table>' +
-      PDF_CASENOTE_ADVERT +
+      pdfCaseNoteAdvertHtml() +
       pdfAuditFooterHtml(d, settings) +
       '</body></html>';
   }
@@ -14550,7 +14604,7 @@ pdfAuditFooterHtml(d, settings) +
           '<table>' + consentRows + '</table>';
       })() +
 
-      PDF_CASENOTE_ADVERT +
+      pdfCaseNoteAdvertHtml() +
       pdfAuditFooterHtml(d, settings) +
       '</body></html>';
   }
@@ -14599,7 +14653,11 @@ pdfAuditFooterHtml(d, settings) +
       const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
       const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
       const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
-      window.api.printToPdf({ html: html, filename: fn }).then(function(p) {
+      window.api.printToPdf({
+        html: html,
+        filename: fn,
+        brandingFooter: pdfBrandingEnabled(settings),
+      }).then(function(p) {
         showToast('PDF saved: ' + p, 'success');
       }).catch(e => showToast('PDF failed: ' + (e && e.message), 'error'));
     }).catch(function(e) { showToast('Export failed: could not load settings', 'error'); console.error('[exportPdf]', e); });
@@ -15232,7 +15290,7 @@ pdfAuditFooterHtml(d, settings) +
       repSigHtml +
       '<p>Name: ' + esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ' + esc(sigDateLine || '____________') + '</p>' +
       '<div class="footer">© Defence Legal Services Ltd &nbsp;|&nbsp; Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
-      PDF_CASENOTE_ADVERT +
+      pdfCaseNoteAdvertHtml() +
       '</body></html>';
     printGeneratedDoc(html);
   }
@@ -15272,7 +15330,7 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="sig-box"></div>' +
       '<p>Name (BLOCK CAPITALS): ______________________________&nbsp;&nbsp;&nbsp;&nbsp; Date: ' + esc(date) + (time ? ' &nbsp;&nbsp; Time: ' + esc(time) : '') + '</p>' +
       '<div class="footer">© Defence Legal Services Ltd &nbsp;|&nbsp; Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
-      PDF_CASENOTE_ADVERT +
+      pdfCaseNoteAdvertHtml() +
       '</body></html>';
     printGeneratedDoc(html);
   }
@@ -15309,7 +15367,7 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="sig-box"></div>' +
       '<p>Name: ' + esc(fee) + '&nbsp;&nbsp;&nbsp;&nbsp; Date: ' + esc(date) + '</p>' +
       '<div class="footer">© Defence Legal Services Ltd &nbsp;|&nbsp; Generated: ' + new Date().toLocaleString('en-GB') + '</div>' +
-      PDF_CASENOTE_ADVERT +
+      pdfCaseNoteAdvertHtml() +
       '</body></html>';
     printGeneratedDoc(html);
   }
