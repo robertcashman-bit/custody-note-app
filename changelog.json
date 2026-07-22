@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.56",
+      "version": "1.9.57",
       "date": "2026-07-22",
       "latest": true,
+      "changes": [
+        "Free forever: first launch no longer starts a timed trial — core notes, PDF, billing and local backup stay available without a subscription",
+        "Pro (£9.99/mo): managed cloud backup and advanced tools; expired Pro falls back to Free core instead of blocking new records",
+        "Onboarding: explore-first Free banner (dismissible); help and share copy updated for Free/Pro"
+      ]
+    },
+    {
+      "version": "1.9.56",
+      "date": "2026-07-22",
+      "latest": false,
       "changes": [
         "QuickFile billing: fixed client create so CompanyName is sent in the correct ClientDetails fields (invalid Email/ClientType no longer break Send Bill for new firms)"
       ]

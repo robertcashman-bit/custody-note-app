@@ -36,7 +36,21 @@
 
   function hasRealPaidKey(status) {
     var keyStr = String(status && status.key || '');
-    return !!status && !!status.key && !keyStr.startsWith('TRIAL-') && !keyStr.startsWith('ACCOUNT-');
+    return !!status && !!status.key && !keyStr.startsWith('TRIAL-') && !keyStr.startsWith('ACCOUNT-') && !keyStr.startsWith('FREE-');
+  }
+
+  function isFreeTierStatus(status) {
+    if (!status) return false;
+    if (status.tier === 'free' || status.isFree) return true;
+    var keyStr = String(status.key || '');
+    return keyStr.startsWith('FREE-');
+  }
+
+  function createAllowed(status) {
+    if (!status) return false;
+    if (status.createAllowed === true) return true;
+    if (status.createAllowed === false) return false;
+    return status.status === 'active' || status.status === 'expiring_soon' || status.status === 'grace_expired';
   }
 
   function hasFutureExpiry(status) {
@@ -45,6 +59,7 @@
   }
 
   function shouldBypassLoginOverlay(status) {
+    if (isFreeTierStatus(status) && createAllowed(status)) return true;
     return hasRealPaidKey(status) || (hasFutureExpiry(status) && !status.isTrial);
   }
 
@@ -154,7 +169,7 @@
     return d.innerHTML;
   }
 
-  function showWarningBanner(message, daysRemaining) {
+  function showWarningBanner(message, daysRemaining, opts) {
     if (_warningBanner) { try { _warningBanner.remove(); } catch (_) {} }
     _warningBanner = document.createElement('div');
     _warningBanner.className = 'licence-warning-banner';
@@ -162,6 +177,9 @@
     _warningBanner.innerHTML = '<span class="licence-warning-icon">&#9888;</span> <span>' + esc(message) + '</span> <button type="button" class="licence-warning-dismiss" title="Dismiss">&times;</button>';
     _warningBanner.querySelector('.licence-warning-dismiss').addEventListener('click', function () {
       _warningBanner.style.display = 'none';
+      if (opts && opts.dismissKey) {
+        try { localStorage.setItem(opts.dismissKey, '1'); } catch (_) {}
+      }
     });
     var header = document.querySelector('.app-header');
     if (header) header.insertAdjacentElement('afterend', _warningBanner);
@@ -434,10 +452,13 @@
             window.__licenceExpired = true;
             window.__licenceNeedsValidation = false;
             showExpiryBanner(st.message || 'Your licence has been revoked. Contact support.');
-          } else if (st.status === 'expired') {
+          } else if (st.status === 'expired' && !createAllowed(st)) {
             window.__licenceExpired = true;
             window.__licenceNeedsValidation = false;
             showExpiryBanner(st.message || 'Your subscription has expired. Renew to continue creating new records.');
+          } else if (st.status === 'expired' && createAllowed(st)) {
+            window.__licenceExpired = false;
+            showWarningBanner(st.message || 'Pro expired — you are on Free forever. Upgrade for cloud backup.', 0);
           } else if (st.status === 'grace_expired') {
             showGraceBanner(st);
           }
@@ -451,12 +472,27 @@
   function enterAppWithOptionalValidation(status) {
     hideOverlay();
     markReady();
-    window.__licenceExpired = false;
+    window.__licenceExpired = !createAllowed(status);
     startRevalidation();
     runStartupValidation();
-    if (status && status.isTrial && status.daysRemaining != null && status.status === 'active') {
+    if (isFreeTierStatus(status) && status.status === 'active') {
+      try {
+        if (!localStorage.getItem('cn_free_banner_dismissed')) {
+          showWarningBanner(
+            'You are on Free forever. Pro (£9.99/mo) unlocks managed cloud backup and advanced tools.',
+            null,
+            { dismissKey: 'cn_free_banner_dismissed' }
+          );
+        }
+      } catch (_) {
+        showWarningBanner('You are on Free forever. Pro (£9.99/mo) unlocks managed cloud backup and advanced tools.', null);
+      }
+    } else if (status && status.isTrial && status.daysRemaining != null && status.status === 'active') {
       var trialMsg = 'Free trial: ' + status.daysRemaining + ' day' + (status.daysRemaining !== 1 ? 's' : '') + ' remaining';
       showWarningBanner(trialMsg, status.daysRemaining);
+    }
+    if (status && status.proExpired) {
+      showWarningBanner(status.message || 'Pro expired — core features remain on Free.', 0);
     }
     if (window.syncQuickFileSettingsFromAccount) {
       window.syncQuickFileSettingsFromAccount({ toastOnPull: true }).catch(function (e) {
@@ -502,7 +538,13 @@
       var prefillEmail = status.email || auth.email || '';
       var hasAuthToken = !!auth.loggedIn;
       var hasRealKey = hasRealPaidKey(status);
-      var isTrialOnly = !!status.isTrial && !hasAuthToken && !status.signInWithAccount;
+      var isTrialOnly = !!status.isTrial && !hasAuthToken && !status.signInWithAccount && !isFreeTierStatus(status);
+
+      // Explore-first: Free forever enters the app without a hard login overlay.
+      if (isFreeTierStatus(status) && createAllowed(status)) {
+        enterAppWithOptionalValidation(status);
+        return;
+      }
 
       if (isTrialOnly && !hasRealKey && !shouldBypassLoginOverlay(status)) {
         showLoginOverlay(prefillEmail);
@@ -519,6 +561,10 @@
       }
 
       if (status.status === 'expired') {
+        if (createAllowed(status) || isFreeTierStatus(status)) {
+          enterAppWithOptionalValidation(status);
+          return;
+        }
         window.__licenceExpired = true;
         window.__licenceNeedsValidation = false;
         hideOverlay();
@@ -543,7 +589,7 @@
 
       hideOverlay();
       markReady();
-      window.__licenceExpired = false;
+      window.__licenceExpired = !createAllowed(status);
       window.__licenceNeedsValidation = false;
 
       if (status.status === 'expiring_soon') {
