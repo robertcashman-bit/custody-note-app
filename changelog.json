@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.59",
+      "version": "1.9.60",
       "date": "2026-07-22",
       "latest": true,
+      "changes": [
+        "Pro AI: opt-in local attendance and interview summary drafts (Pro only) — review and edit before insert; nothing sent to a cloud AI provider yet",
+        "Firm workspace: local seats, branding footer, and shared templates in Settings → Licence",
+        "Anywhere bridge: import JSON from Custody Note Anywhere in Settings → Backup (cn-anywhere-bridge v1)",
+        "Privacy: documented opt-in Pro AI local drafts"
+      ]
+    },
+    {
+      "version": "1.9.59",
+      "date": "2026-07-22",
+      "latest": false,
       "changes": [
         "Settings: Free / Pro licence badges and Upgrade to Pro panel for Free installs",
         "Settings: Pro AI summaries “Coming soon” card (opt-in drafts will never send without your action)",

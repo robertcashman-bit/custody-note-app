@@ -52,18 +52,25 @@ key is wrapped with the user's recovery password using PBKDF2-SHA512
 | `https://outlook.office.com` (compose URL) | The `to`, `subject`, and optionally `body` for any email the user explicitly chooses to send. | TLS only; **subject and body travel in the URL query string and are visible to Microsoft, browser history, and any corporate proxy.** The app shows a confirmation dialog with a "subject only" recommended option that strips the body before opening. |
 | `https://custodynote.com` (postcode lookup) | One UK postcode at a time (only if the user invokes lookup). | TLS. Response not retained unless the user accepts an address. |
 
-CustodyNote does **not** send anything to OpenAI, Anthropic, Google,
-Microsoft Graph, analytics services, error-tracking services, advertising
-networks, or any other third party.
+CustodyNote does **not** send case content to OpenAI, Anthropic, Google,
+Microsoft Graph, analytics services, advertising networks, or any other third
+party by default.
+
+**Pro AI summary drafts (opt-in):** Pro users may request a local structured
+draft built only from fields already on the open record. That path never leaves
+the device. A future UK-region cloud AI path will require a separate explicit
+confirmation and will not run silently. Cloud AI is not enabled until a
+provider endpoint is configured.
 
 ### 2.3 What is NEVER stored or transmitted
 
 - The user's recovery password (only its PBKDF2 derivative is stored).
 - The user's admin password (only its PBKDF2 hash is stored).
 - The plaintext master key (sealed by the OS keychain).
-- Telemetry of any kind. The app does not phone home except for licence
-  validation, optional cloud backup, optional postcode lookup, and
-  auto-update binary download from GitHub.
+- Telemetry of case content. The app does not phone home except for licence
+  validation, optional cloud backup, optional postcode lookup,
+  auto-update binary download from GitHub, and (only if the user explicitly
+  confirms) a future Pro AI cloud draft request.
 
 ---
 

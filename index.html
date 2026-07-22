@@ -96,6 +96,7 @@
         <span id="header-form-actions" class="header-form-actions">
           <span id="header-autosave" class="autosave-indicator" title="Drafts save automatically to this computer while you edit. After finalise, autosave stops because the note is locked."></span>
           <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent btn-header-primary-action" title="Primary action for the current record (Finalise / Finish matter / Archive)" style="display:none;">Finalise</button>
+          <button type="button" class="btn btn-small btn-secondary" id="header-pro-ai-draft" title="Pro AI: build a local summary draft from this record" style="display:none;">Pro AI draft</button>
           <button type="button" class="btn btn-small btn-backup-now" id="header-backup-now-btn" title="Save &amp; backup now">&#128190; Backup</button>
           <button type="button" class="btn-small" id="header-kb-help" title="Keyboard shortcuts">?</button>
           <button type="button" class="btn btn-small" id="header-laa-forms" title="Generate LAA forms">LAA Forms</button>
@@ -906,10 +907,46 @@
           </div>
 
           <div class="settings-card" id="pro-ai-coming-soon-card" style="margin-top:1rem;">
-            <h2>Pro AI summaries <span style="font-size:0.75rem;font-weight:600;color:#64748b;letter-spacing:0.04em;text-transform:uppercase;">Coming soon</span></h2>
-            <p class="settings-hint" style="margin:0 0 0.5rem;">Opt-in interview and attendance summary drafts for Pro users. Nothing is sent to an AI provider until you explicitly request a draft — case content stays under your control.</p>
-            <p id="pro-ai-gate-message" class="settings-hint" style="margin:0 0 0.75rem;font-weight:600;">Available on Pro after launch. Upgrade at custodynote.com/pricing.</p>
-            <button type="button" id="btn-pro-ai-request-draft" class="btn btn-secondary" disabled title="Coming soon">Request draft (coming soon)</button>
+            <h2>Pro AI summaries</h2>
+            <p class="settings-hint" style="margin:0 0 0.5rem;">Opt-in attendance and interview summary drafts. Default path builds a local draft on this device — nothing is sent to an AI provider unless you explicitly choose cloud later (when configured).</p>
+            <p id="pro-ai-gate-message" class="settings-hint" style="margin:0 0 0.75rem;font-weight:600;">Checking entitlement&hellip;</p>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+              <button type="button" id="btn-pro-ai-request-draft" class="btn btn-secondary" disabled>Request attendance draft</button>
+              <button type="button" id="btn-pro-ai-request-interview" class="btn btn-secondary" disabled>Request interview draft</button>
+            </div>
+            <p class="settings-hint" style="margin:0.5rem 0 0;">Open a record first so the draft can use your form fields. Review and edit before saving.</p>
+          </div>
+
+          <div class="settings-card" id="firm-workspace-card" style="margin-top:1rem;">
+            <h2>Firm workspace</h2>
+            <p class="settings-hint" style="margin:0 0 0.75rem;">Local MVP for multi-user firms: seats, branding footer, and shared templates on this device. Cloud seats and billing remain via <a href="https://custodynote.com/firm" target="_blank" rel="noopener">custodynote.com/firm</a>.</p>
+            <label for="firm-ws-name">Firm name</label>
+            <input type="text" id="firm-ws-name" class="settings-input" placeholder="Your firm name" style="max-width:360px;">
+            <label for="firm-ws-branding" style="margin-top:0.75rem;">Branding footer (optional)</label>
+            <input type="text" id="firm-ws-branding" class="settings-input" placeholder="e.g. Prepared for instructing firm" style="max-width:480px;">
+            <label class="toggle-row" style="margin-top:0.75rem;">
+              <span>Share templates across seats</span>
+              <input type="checkbox" id="firm-ws-share-templates" checked>
+            </label>
+            <button type="button" id="btn-firm-ws-save" class="btn btn-secondary" style="margin-top:0.75rem;">Save firm details</button>
+            <p id="firm-ws-save-msg" class="settings-hint" style="margin:0.35rem 0 0;display:none;" role="status"></p>
+            <h3 style="margin:1.25rem 0 0.5rem;font-size:0.95rem;">Seats <span id="firm-ws-seat-count" class="settings-hint" style="font-weight:400;"></span></h3>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
+              <input type="email" id="firm-ws-seat-email" class="settings-input" placeholder="colleague@firm.co.uk" style="min-width:200px;max-width:280px;">
+              <select id="firm-ws-seat-role" class="settings-input" style="max-width:120px;">
+                <option value="member">Member</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button type="button" id="btn-firm-ws-add-seat" class="btn btn-secondary">Add seat</button>
+            </div>
+            <ul id="firm-ws-seats-list" style="margin:0.75rem 0 0;padding-left:1.1rem;font-size:0.85rem;"></ul>
+            <h3 style="margin:1.25rem 0 0.5rem;font-size:0.95rem;">Shared templates</h3>
+            <div style="display:flex;flex-direction:column;gap:0.5rem;max-width:480px;">
+              <input type="text" id="firm-ws-tpl-name" class="settings-input" placeholder="Template name">
+              <textarea id="firm-ws-tpl-body" class="settings-input" rows="3" placeholder="Template body (paste into notes when needed)"></textarea>
+              <button type="button" id="btn-firm-ws-add-tpl" class="btn btn-secondary" style="align-self:flex-start;">Add template</button>
+            </div>
+            <ul id="firm-ws-tpl-list" style="margin:0.75rem 0 0;padding-left:1.1rem;font-size:0.85rem;"></ul>
           </div>
 
           <div id="licence-status-needs-validation" style="display:none;margin-top:1rem;padding:1rem 1.1rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;">
@@ -1250,6 +1287,15 @@
             </div>
             <p class="settings-hint" style="margin:0.5rem 0 0;">Use <strong>Full re-sync from cloud</strong> if this computer shows Synced but records from another device are missing. Use <strong>Push all pending now</strong> on the computer that has your records.</p>
             <p id="cross-device-sync-action-status" class="settings-hint" style="margin:0.35rem 0 0;"></p>
+          </div>
+          <div id="anywhere-bridge-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border,#ccc);">
+            <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Custody Note Anywhere &rarr; Desktop</h3>
+            <p class="settings-hint" style="margin:0 0 0.5rem;">Import drafts exported from the Anywhere companion (JSON bridge or Anywhere backup). Records arrive as editable drafts on this computer. Same Free / Pro licence story — managed cloud sync remains a Pro path.</p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+              <button type="button" id="btn-anywhere-bridge-import" class="btn btn-secondary">Import Anywhere JSON&hellip;</button>
+              <a href="https://custodynote.com/custodynote-anywhere" target="_blank" rel="noopener" class="settings-hint" style="font-size:0.85rem;">About Anywhere</a>
+            </div>
+            <p id="anywhere-bridge-status" class="settings-hint" style="margin:0.5rem 0 0;" role="status"></p>
           </div>
           <div id="cloud-backup-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border, #ccc);">
             <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Cloud Backup (AWS)</h3>
@@ -2170,6 +2216,7 @@
   <script src="renderer/toast.js"></script>
   <script src="renderer/emailCopy.js"></script>
   <script src="renderer/licence.js"></script>
+  <script src="renderer/freemiumFeatures.js"></script>
   <!-- Wheel-style ("rotating counter") date/time picker. Self-contained, attaches a 🕑/📅 button next to every native date/time/datetime-local input. Native typing still works. -->
   <script src="renderer/widgets/wheelDateTimePicker.js"></script>
   <script src="lib/magistratesCourtsSearch.js"></script>
@@ -2260,7 +2307,19 @@
   </div>
 
   <!-- Cloud backup restore prompt (when backups exist and user has not dismissed recently) -->
-  <div id="cloud-backup-restore-prompt-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Cloud backups available">
+  <div id="pro-ai-draft-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="pro-ai-draft-title">
+    <div class="first-launch-modal" style="max-width:640px;width:94%;">
+      <h2 id="pro-ai-draft-title" style="margin:0 0 0.5rem;">Pro AI draft</h2>
+      <p id="pro-ai-draft-meta" class="settings-hint" style="margin:0 0 0.75rem;"></p>
+      <textarea id="pro-ai-draft-text" class="settings-input" rows="14" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.85rem;" aria-label="Editable AI draft"></textarea>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;">
+        <button type="button" id="pro-ai-draft-copy" class="btn btn-secondary">Copy</button>
+        <button type="button" id="pro-ai-draft-insert" class="btn btn-primary">Insert into notes</button>
+        <button type="button" id="pro-ai-draft-close" class="btn btn-secondary">Close</button>
+      </div>
+      <p class="settings-hint" style="margin:0.75rem 0 0;">Edit before saving. This is a starting point — not legal advice.</p>
+    </div>
+  </div>
     <div class="first-launch-box" style="max-width:420px;">
       <h2 style="margin:0 0 0.5rem;">Cloud backups available</h2>
       <p style="margin:0 0 1rem;font-size:0.9rem;color:var(--text-muted,#64748b);">You have cloud backups. Restore from a backup or continue with data on this device.</p>
