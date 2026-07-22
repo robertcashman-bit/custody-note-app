@@ -7,6 +7,7 @@
       "changes": [
         "Settings: Free / Pro licence badges and Upgrade to Pro panel for Free installs",
         "Settings: Pro AI summaries “Coming soon” card (opt-in drafts will never send without your action)",
+        "Settings: personal invite link (/r/:code) for sharing Free Custody Note",
         "Reliability: e2e no longer fails when the tips feed is briefly unavailable mid-deploy"
       ]
     },

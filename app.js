@@ -18996,17 +18996,43 @@ pdfAuditFooterHtml(d, settings) +
         }
       }
     });
-    var shareAppUrl = window.WEBSITE_LINKS
-      ? window.WEBSITE_LINKS.download()
-      : 'https://custodynote.com/download?utm_source=app&utm_medium=referral&utm_campaign=share';
+    function getShareInviteUrl() {
+      var code = '';
+      try {
+        var cache = window._appSettingsCache || {};
+        if (cache.referralCode) code = String(cache.referralCode);
+      } catch (_) {}
+      if (!code) {
+        try {
+          code = localStorage.getItem('cn_referral_code') || '';
+        } catch (_) {}
+      }
+      if (!code) {
+        code = 'CN' + Date.now().toString(36).toUpperCase().slice(-6);
+        try { localStorage.setItem('cn_referral_code', code); } catch (_) {}
+        if (window.api && window.api.setSettings) {
+          window.api.setSettings({ referralCode: code }).catch(function () {});
+        }
+      }
+      if (window.WEBSITE_LINKS && typeof window.WEBSITE_LINKS.referral === 'function') {
+        return window.WEBSITE_LINKS.referral(code);
+      }
+      return 'https://custodynote.com/r/' + encodeURIComponent(code) +
+        '?utm_source=app&utm_medium=referral&utm_campaign=invite';
+    }
+    var shareAppUrl = getShareInviteUrl();
+    var shareUrlEl = document.getElementById('share-referral-url');
+    if (shareUrlEl) shareUrlEl.textContent = shareAppUrl;
     document.getElementById('share-app-copy-btn')?.addEventListener('click', function() {
       var btn = this;
+      shareAppUrl = getShareInviteUrl();
+      if (shareUrlEl) shareUrlEl.textContent = shareAppUrl;
       var copy = function() {
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(shareAppUrl).then(function() {
-            showToast('Link copied to clipboard', 'success');
+            showToast('Invite link copied', 'success');
             btn.textContent = 'Copied!';
-            setTimeout(function() { btn.textContent = 'Copy download link'; }, 2000);
+            setTimeout(function() { btn.textContent = 'Copy invite link'; }, 2000);
           }).catch(function() { showToast('Could not copy', 'error'); });
         } else {
           var ta = document.createElement('textarea');
@@ -19017,9 +19043,9 @@ pdfAuditFooterHtml(d, settings) +
           ta.select();
           try {
             document.execCommand('copy');
-            showToast('Link copied to clipboard', 'success');
+            showToast('Invite link copied', 'success');
             btn.textContent = 'Copied!';
-            setTimeout(function() { btn.textContent = 'Copy download link'; }, 2000);
+            setTimeout(function() { btn.textContent = 'Copy invite link'; }, 2000);
           } catch (_) { showToast('Could not copy', 'error'); }
           document.body.removeChild(ta);
         }
@@ -19027,6 +19053,7 @@ pdfAuditFooterHtml(d, settings) +
       copy();
     });
     document.getElementById('share-app-email-btn')?.addEventListener('click', function() {
+      shareAppUrl = getShareInviteUrl();
       var subject = 'Custody Note – custody notes app for police station reps';
       var body =
         'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + shareAppUrl + '\n\nFree forever on core features · Pro £9.99/mo for cloud backup.';
