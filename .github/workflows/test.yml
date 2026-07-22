@@ -41,14 +41,6 @@ jobs:
       # test is still run locally as part of `npm run test:all` before
       # every release.
 
-  unit-tests-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run test:unit
-
+      # macOS unit tests were removed from this workflow — they duplicated
+      # Windows `test:unit` and burned expensive macos-latest minutes.
+      # Signed Mac builds still run on macos-latest in release-publish.yml.
