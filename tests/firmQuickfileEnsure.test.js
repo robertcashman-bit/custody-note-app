@@ -66,6 +66,18 @@ describe('ensureFirmInQuickFile after firm save', () => {
   });
 });
 
+describe('QuickFile Client_Create payload', () => {
+  it('uses buildQuickFileClientCreateBody (CompanyName-only ClientDetails)', () => {
+    assert.match(mainJs, /buildQuickFileClientCreateBody/);
+    const start = mainJs.indexOf('async function quickFileFindOrCreateClient');
+    assert.ok(start > 0);
+    const body = mainJs.slice(start, start + 1200);
+    assert.match(body, /quickfileClient\.buildQuickFileClientCreateBody/);
+    assert.doesNotMatch(body, /ClientType:\s*'Company'/);
+    assert.doesNotMatch(body, /ClientDetails:\s*\{[\s\S]*Email:/);
+  });
+});
+
 describe('billing firmName re-resolve guard', () => {
   it('workflow create invoice re-resolves firm via _wfResolveFirmDisplayName', () => {
     const start = billingScreenJs.indexOf('function _wfHandleCreateInvoice(');

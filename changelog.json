@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.9.55",
+      "version": "1.9.56",
       "date": "2026-07-22",
       "latest": true,
+      "changes": [
+        "QuickFile billing: fixed client create so CompanyName is sent in the correct ClientDetails fields (invalid Email/ClientType no longer break Send Bill for new firms)"
+      ]
+    },
+    {
+      "version": "1.9.55",
+      "date": "2026-07-22",
+      "latest": false,
       "changes": [
         "Windows auto-update: clear sticky GitHub update-feed cache on Check for updates so a new release is not missed after publish"
       ]
