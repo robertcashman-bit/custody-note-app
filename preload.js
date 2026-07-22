@@ -377,6 +377,17 @@ contextBridge.exposeInMainWorld('api', {
   getAutoUpdateState: () => ipcRenderer.invoke('get-auto-update-state'),
   appUpdateResetLoop: () => ipcRenderer.invoke('app-update-reset-loop'),
   appUpdateDiagnosticInstall: () => ipcRenderer.invoke('app-update-diagnostic-install'),
+  /* Pro AI / firm workspace / Anywhere bridge */
+  proAiDraftSummary: (params) => ipcRenderer.invoke('pro-ai:draft-summary', params || {}),
+  proAiStatus: () => ipcRenderer.invoke('pro-ai:status'),
+  firmWorkspaceGet: () => ipcRenderer.invoke('firm-workspace:get'),
+  firmWorkspaceSave: (payload) => ipcRenderer.invoke('firm-workspace:save', payload || {}),
+  firmWorkspaceAddSeat: (params) => ipcRenderer.invoke('firm-workspace:add-seat', params || {}),
+  firmWorkspaceRemoveSeat: (params) => ipcRenderer.invoke('firm-workspace:remove-seat', params || {}),
+  firmWorkspaceAddTemplate: (params) => ipcRenderer.invoke('firm-workspace:add-template', params || {}),
+  firmWorkspaceRemoveTemplate: (params) => ipcRenderer.invoke('firm-workspace:remove-template', params || {}),
+  anywhereBridgeImport: (params) => ipcRenderer.invoke('anywhere-bridge:import', params || {}),
+  anywhereBridgeChooseAndImport: () => ipcRenderer.invoke('anywhere-bridge:choose-and-import'),
 });
 
 contextBridge.exposeInMainWorld('custodyNoteBuildInfo', {

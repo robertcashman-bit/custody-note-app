@@ -3608,6 +3608,15 @@ var REQUIRED_FIELD_KEYS = [
 
     var isForm = (name === 'new');
     document.body.classList.toggle('form-active', isForm);
+    if (window.FreemiumFeatures && typeof window.FreemiumFeatures.refreshProAiGateFromLicence === 'function') {
+      try {
+        if (window.api && window.api.licenceStatus) {
+          window.api.licenceStatus().then(function (st) {
+            window.FreemiumFeatures.refreshProAiGateFromLicence(st || {});
+          }).catch(function () {});
+        }
+      } catch (_) {}
+    }
     if (isForm && typeof updateResponsiveLayoutClasses === 'function') {
       updateResponsiveLayoutClasses(_layoutSettingsCache);
     }
@@ -5623,11 +5632,13 @@ var REQUIRED_FIELD_KEYS = [
         var isFreeLike = !!(st.tier === 'free' || st.isFree || st.isTrial || (st.key && String(st.key).indexOf('FREE-') === 0) || (st.key && String(st.key).indexOf('TRIAL-') === 0));
         if (trialUpgradeEl) trialUpgradeEl.style.display = isFreeLike ? '' : 'none';
         var aiMsg = document.getElementById('pro-ai-gate-message');
-        if (aiMsg) {
+        if (window.FreemiumFeatures && typeof window.FreemiumFeatures.refreshProAiGateFromLicence === 'function') {
+          window.FreemiumFeatures.refreshProAiGateFromLicence(st);
+        } else if (aiMsg) {
           if (st.tier === 'pro' && (st.status === 'active' || st.status === 'expiring_soon' || st.status === 'grace_expired')) {
-            aiMsg.textContent = 'You are on Pro. AI summary drafts are coming soon — nothing will be sent until you explicitly request a draft.';
+            aiMsg.textContent = 'You are on Pro. Request a local draft from an open record — nothing leaves this device unless you later enable cloud AI.';
           } else {
-            aiMsg.textContent = 'AI summary drafts are a Pro feature (coming soon). Upgrade at custodynote.com/pricing.';
+            aiMsg.textContent = 'AI summary drafts are a Pro feature. Upgrade at custodynote.com/pricing.';
           }
         }
       } else if (st && st.status === 'grace_expired' && graceEl) {
@@ -5723,6 +5734,11 @@ var REQUIRED_FIELD_KEYS = [
     if (!window.api) return;
     loadLicenceSettingsUI();
     loadLaaFormsSettingsUI(false);
+    try {
+      if (window.FreemiumFeatures && typeof window.FreemiumFeatures.loadFirmWorkspace === 'function') {
+        window.FreemiumFeatures.loadFirmWorkspace();
+      }
+    } catch (_) {}
     // Trigger System Status card refresh whenever Settings is opened
     document.dispatchEvent(new CustomEvent('view-settings-shown'));
     syncQuickFileSettingsFromAccount({ toastOnPull: false }).then(function() {
@@ -12671,6 +12687,9 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function getFormData() { collectCurrentData(); return formData; }
+  window.getFormData = getFormData;
+  window.setFieldValue = setFieldValue;
+  window.getFieldValue = getFieldValue;
 
   /* ─── SAVE ─── */
   function setListFilterAndShowList(filter) {

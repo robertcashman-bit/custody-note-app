@@ -4947,6 +4947,191 @@ ipcMain.handle('get-settings', () => {
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 });
 
+/* ── Freemium: Pro AI drafts, firm workspace, Anywhere bridge ── */
+const {
+  requestProAiDraft,
+  describeProAiGate: describeProAiGateMain,
+} = require('./main/proAiSummary');
+const {
+  normaliseFirmWorkspace,
+  addSeat: firmAddSeat,
+  removeSeat: firmRemoveSeat,
+  addSharedTemplate: firmAddSharedTemplate,
+  removeSharedTemplate: firmRemoveSharedTemplate,
+} = require('./main/firmWorkspace');
+const {
+  isBridgePayload,
+  buildBridgeFromAnywhereBackup,
+  mapBridgeAttendanceToDesktop,
+} = require('./main/anywhereBridge');
+
+function readFirmWorkspaceFromDb() {
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key = 'firmWorkspaceJson'");
+    if (!row || !row.value) return normaliseFirmWorkspace({});
+    return normaliseFirmWorkspace(JSON.parse(row.value));
+  } catch (_) {
+    return normaliseFirmWorkspace({});
+  }
+}
+
+function writeFirmWorkspaceToDb(ws) {
+  const normalised = normaliseFirmWorkspace(ws);
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [
+    'firmWorkspaceJson',
+    JSON.stringify(normalised),
+  ]);
+  return normalised;
+}
+
+ipcMain.handle('pro-ai:draft-summary', async (_, params) => {
+  const p = params || {};
+  if (p.confirmed !== true) {
+    return { ok: false, error: 'Explicit confirmation required before generating a draft.' };
+  }
+  const lic = computeLicenceStatus(readLicenceData());
+  const result = await requestProAiDraft({
+    formData: p.formData || {},
+    kind: p.kind,
+    licenceStatus: lic,
+    useCloud: p.useCloud === true,
+    cloudFetcher: null, // Cloud provider opt-in ships when UK endpoint is configured; local draft is the MVP path.
+  });
+  try {
+    const aid = p.attendanceId != null ? Number(p.attendanceId) : null;
+    if (aid && result && result.ok) {
+      dbRun(
+        'INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)',
+        [
+          aid,
+          'pro_ai_draft',
+          new Date().toISOString(),
+          'mode=' + (result.mode || 'local') + '; kind=' + (p.kind === 'interview' ? 'interview' : 'attendance'),
+        ],
+      );
+    }
+  } catch (e) {
+    console.warn('[pro-ai] audit log failed:', e && e.message);
+  }
+  return result;
+});
+
+ipcMain.handle('pro-ai:status', () => {
+  const lic = computeLicenceStatus(readLicenceData());
+  return describeProAiGateMain(lic);
+});
+
+ipcMain.handle('firm-workspace:get', () => {
+  return { ok: true, workspace: readFirmWorkspaceFromDb() };
+});
+
+ipcMain.handle('firm-workspace:save', (_, payload) => {
+  const next = writeFirmWorkspaceToDb(Object.assign({}, readFirmWorkspaceFromDb(), payload || {}));
+  return { ok: true, workspace: next };
+});
+
+ipcMain.handle('firm-workspace:add-seat', (_, params) => {
+  const result = firmAddSeat(readFirmWorkspaceFromDb(), params && params.email, params && params.role);
+  if (!result.ok) return result;
+  return { ok: true, workspace: writeFirmWorkspaceToDb(result.workspace) };
+});
+
+ipcMain.handle('firm-workspace:remove-seat', (_, params) => {
+  const result = firmRemoveSeat(readFirmWorkspaceFromDb(), params && params.email);
+  if (!result.ok) return result;
+  return { ok: true, workspace: writeFirmWorkspaceToDb(result.workspace) };
+});
+
+ipcMain.handle('firm-workspace:add-template', (_, params) => {
+  const result = firmAddSharedTemplate(
+    readFirmWorkspaceFromDb(),
+    params && params.name,
+    params && params.body,
+  );
+  if (!result.ok) return result;
+  return { ok: true, workspace: writeFirmWorkspaceToDb(result.workspace), template: result.template };
+});
+
+ipcMain.handle('firm-workspace:remove-template', (_, params) => {
+  const result = firmRemoveSharedTemplate(readFirmWorkspaceFromDb(), params && params.id);
+  if (!result.ok) return result;
+  return { ok: true, workspace: writeFirmWorkspaceToDb(result.workspace) };
+});
+
+function importAnywhereBridgePayload(payload) {
+  if (!isBridgePayload(payload)) {
+    if (Array.isArray(payload)) {
+      payload = buildBridgeFromAnywhereBackup({ attendances: payload });
+    } else if (payload && Array.isArray(payload.attendances)) {
+      // Anywhere backup JSON (app: custodynote-anywhere) or any attendances array
+      payload = buildBridgeFromAnywhereBackup(payload);
+    }
+  }
+  if (!isBridgePayload(payload)) {
+    return { ok: false, error: 'Not a valid Custody Note Anywhere bridge file (cn-anywhere-bridge v1).' };
+  }
+  let imported = 0;
+  const errors = [];
+  for (const item of payload.attendances) {
+    try {
+      const mapped = mapBridgeAttendanceToDesktop(item);
+      const now = new Date().toISOString();
+      const data = mapped.data || {};
+      const status = mapped.status || 'draft';
+      const clientName = [data.surname || '', data.forename || ''].filter(Boolean).join(', ');
+      const stationName = data.policeStationName || '';
+      const dsccRef = data.dsccRef || '';
+      const attendanceDate = data.date || '';
+      const workType = data.workType || '';
+      const newSyncId = typeof generateSyncId === 'function' ? generateSyncId() : ('local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
+      dbRun(
+        'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date, work_type, sync_id, sync_dirty, sync_version) VALUES (?,?,?,?,?,?,?,?,?,1,1)',
+        [JSON.stringify(data), status, now, clientName, stationName, dsccRef, attendanceDate, workType, newSyncId],
+      );
+      imported += 1;
+    } catch (e) {
+      errors.push(e && e.message ? e.message : String(e));
+    }
+  }
+  try { if (typeof markDbDirty === 'function') markDbDirty(); } catch (_) {}
+  return { ok: true, imported, errors: errors.slice(0, 5), total: payload.attendances.length };
+}
+
+ipcMain.handle('anywhere-bridge:import', async (_, params) => {
+  let payload = params && params.payload;
+  if (!payload && params && params.filePath) {
+    try {
+      payload = JSON.parse(fs.readFileSync(String(params.filePath), 'utf8'));
+    } catch (e) {
+      return { ok: false, error: 'Could not read bridge file: ' + (e && e.message) };
+    }
+  }
+  return importAnywhereBridgePayload(payload);
+});
+
+ipcMain.handle('anywhere-bridge:choose-and-import', async () => {
+  const { dialog } = require('electron');
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  const result = await dialog.showOpenDialog(win || undefined, {
+    title: 'Import Anywhere bridge / backup',
+    properties: ['openFile'],
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (result.canceled || !result.filePaths || !result.filePaths[0]) {
+    return { ok: false, cancelled: true };
+  }
+  let payload;
+  try {
+    payload = JSON.parse(fs.readFileSync(result.filePaths[0], 'utf8'));
+  } catch (e) {
+    return { ok: false, error: 'Could not read file: ' + (e && e.message) };
+  }
+  const out = importAnywhereBridgePayload(payload);
+  if (out && out.ok) out.filePath = result.filePaths[0];
+  return out;
+});
+
+
 // H21 — settings keys that hold network endpoints can repoint the encrypted
 // DB upload target if a renderer is poisoned. Validate them server-side
 // before persisting; return an error to the renderer rather than silently
