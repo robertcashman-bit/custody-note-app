@@ -6666,7 +6666,7 @@ ipcMain.handle('open-app-folder', async () => {
 // (multi-attachment cover bundles) while killing pathological renderer input.
 const RENDER_HTML_MAX_BYTES = 25 * 1024 * 1024;
 
-async function renderHtmlToPdfBuffer(html) {
+async function renderHtmlToPdfBuffer(html, options) {
   if (typeof html !== 'string' || html.length === 0) {
     throw new Error('renderHtmlToPdfBuffer: html is empty');
   }
@@ -6674,6 +6674,7 @@ async function renderHtmlToPdfBuffer(html) {
   if (byteLen > RENDER_HTML_MAX_BYTES) {
     throw new Error('renderHtmlToPdfBuffer: html exceeds ' + RENDER_HTML_MAX_BYTES + ' bytes (got ' + byteLen + ')');
   }
+  const brandingFooter = !(options && options.brandingFooter === false);
   const tempDir = app.getPath('temp');
   const tempPath = path.join(tempDir, `cn-pdf-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.html`);
   fs.writeFileSync(tempPath, html, 'utf8');
@@ -6706,7 +6707,7 @@ async function renderHtmlToPdfBuffer(html) {
         if (err) reject(err); else resolve();
       };
       const timer = setTimeout(
-        () => finish(new Error('PDF HTML load timeout (60s) â€” temp file: ' + tempPath)),
+        () => finish(new Error('PDF HTML load timeout (60s) — temp file: ' + tempPath)),
         60000
       );
       win.webContents.once('did-finish-load', () => finish());
@@ -6719,6 +6720,9 @@ async function renderHtmlToPdfBuffer(html) {
       win.loadFile(tempPath).catch((err) => finish(err));
     });
 
+    const brandLine = brandingFooter
+      ? '<div>Prepared with Custody Note</div>'
+      : '<div></div>';
     const buf = await win.webContents.printToPDF({
       pageSize: 'A4',
       margins: { marginType: 'default' },
@@ -6729,7 +6733,7 @@ async function renderHtmlToPdfBuffer(html) {
       footerTemplate: `
       <div style="width:100%; padding:0 12px; font-family:Segoe UI, Arial, sans-serif; font-size:8px; color:#475569; border-top:1px solid #e2e8f0; padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
         <div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
-        <div>Created with Custody Note</div>
+        ${brandLine}
         <div>Generated <span class="date"></span></div>
       </div>
     `,
@@ -6741,7 +6745,7 @@ async function renderHtmlToPdfBuffer(html) {
   }
 }
 
-ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
+ipcMain.handle('print-to-pdf', async (_, { html, filename, brandingFooter }) => {
   // Logged-name only (never log the full path — the home folder leaks the
   // OS username; the file basename can leak client name if the renderer
   // hasn't already sanitised it). The basename is what the user already
@@ -6755,7 +6759,7 @@ ipcMain.handle('print-to-pdf', async (_, { html, filename }) => {
     }
     safeName = path.basename(filename || `attendance-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
     outPath = path.join(desktop, safeName);
-    const buf = await renderHtmlToPdfBuffer(html);
+    const buf = await renderHtmlToPdfBuffer(html, { brandingFooter: brandingFooter !== false });
     fs.writeFileSync(outPath, buf);
     console.log('[print-to-pdf] wrote ' + safeName + ' (' + buf.length + ' bytes)');
     return outPath;
@@ -6975,9 +6979,11 @@ ipcMain.handle('export-docx', async (_, { data, settings, filename }) => {
   ].filter(Boolean);
   if (timeRows.length) children.push(new Table({ rows: timeRows, width: { size: 100, type: WidthType.PERCENTAGE } }));
 
-  children.push(new Paragraph({ spacing: { before: 300 }, children: [
-    new TextRun({ text: 'Created with Custody Note \u2014 www.custodynote.com', size: 16, font: 'Segoe UI', color: '94a3b8', italics: true })
-  ] }));
+  if (!(settings && settings.pdfBrandingFooter === 'false')) {
+    children.push(new Paragraph({ spacing: { before: 300 }, children: [
+      new TextRun({ text: 'Prepared with Custody Note \u2014 www.custodynote.com', size: 16, font: 'Segoe UI', color: '94a3b8', italics: true })
+    ] }));
+  }
 
   const doc = new Document({
     creator: 'Custody Note',
