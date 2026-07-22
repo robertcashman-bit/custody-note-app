@@ -34,6 +34,7 @@ var views = { home: 'view-home', list: 'view-list', firms: 'view-firms', new: 'v
 var currentAttendanceId = null;
 var stations = [];
 var firms = [];
+window.firms = firms;
 var firmsPage = 1;
 var FIRMS_PER_PAGE = 50;
 var refData = {};
@@ -3953,7 +3954,7 @@ var REQUIRED_FIELD_KEYS = [
 
     if (!d.firmId) flags.push({ key: 'no-firm', label: 'No firm', tone: 'warning' });
     if (status !== 'finalised' && status !== 'completed') {
-      if (d._formType !== 'telephone' && !d.clientSig) flags.push({ key: 'client-sig', label: 'Client sign', tone: 'warning' });
+      if (d._formType !== 'telephone' && !d.clientSig && !d.clientSigNotNeeded) flags.push({ key: 'client-sig', label: 'Client sign', tone: 'warning' });
       if (!getEffectiveFeeEarnerSig(d)) flags.push({ key: 'fee-earner-sig', label: 'Rep sign', tone: 'warning' });
       if (ageMs > staleDraftMs && !isOutcomeDecisionRecorded(d.outcomeDecision || getLegacyOutcomeDecision(d.caseOutcomeStatus, d._formType))) {
         flags.push({ key: 'outcome', label: 'Outcome', tone: 'danger' });
@@ -4230,7 +4231,7 @@ var REQUIRED_FIELD_KEYS = [
       var name = [d.forename, d.surname].filter(Boolean).join(' ') || r.client_name || 'Unnamed';
       var id = r.id;
 
-      if (!d.clientSig) issues.push({ id: id, name: name, reason: 'Missing client signature' });
+      if (!d.clientSig && !d.clientSigNotNeeded) issues.push({ id: id, name: name, reason: 'Missing client signature' });
       var recordAgeMs = r.created_at ? (Date.now() - new Date(r.created_at).getTime()) : 0;
       var sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
       if (recordAgeMs > sevenDaysMs && !isOutcomeDecisionRecorded(d.outcomeDecision || getLegacyOutcomeDecision(d.caseOutcomeStatus, d._formType))) {
@@ -4680,11 +4681,32 @@ var REQUIRED_FIELD_KEYS = [
     function qcRenderFirmResults(filteredList) {
       if (!resultsDiv) return;
       resultsDiv.innerHTML = '';
-      const q = (searchInp && searchInp.value || '').trim().toLowerCase();
+      const q = (searchInp && searchInp.value || '').trim();
+      const qLower = q.toLowerCase();
       if (!firms.length) {
         resultsDiv.innerHTML = '<div class="firms-search-result-item firms-search-empty">No firms yet. Add a firm first.</div>';
-      } else if (q && (!filteredList || !filteredList.length)) {
-        resultsDiv.innerHTML = '<div class="firms-search-result-item firms-search-empty">No firms match.</div>';
+      } else if (qLower && (!filteredList || !filteredList.length)) {
+        const noMatch = document.createElement('div');
+        noMatch.className = 'firms-search-result-item firms-search-empty firms-search-add-action';
+        noMatch.setAttribute('role', 'option');
+        noMatch.textContent = 'Add "' + q + '" as a new firm';
+        noMatch.addEventListener('click', function() {
+          showConfirm('No firm matches "' + q + '". Add this firm and enter the contact details?').then(function(ok) {
+            if (!ok) return;
+            if (useSection) useSection.style.display = 'none';
+            if (choiceRow) choiceRow.style.display = 'none';
+            if (addSection) addSection.style.display = 'block';
+            var nameEl = document.getElementById('qc-new-firm-name');
+            if (nameEl) {
+              nameEl.value = q;
+              nameEl.classList.remove('input-error');
+            }
+            var contactEl = document.getElementById('qc-new-firm-contact');
+            if (contactEl) contactEl.focus();
+            else if (nameEl) nameEl.focus();
+          });
+        });
+        resultsDiv.appendChild(noMatch);
       } else {
         const list = (filteredList && filteredList.length) ? filteredList : firms;
         list.forEach(function(fi) {
@@ -4764,7 +4786,7 @@ var REQUIRED_FIELD_KEYS = [
         savedFirmId = id;
         return window.api.firmsList();
       }).then(function(f) {
-        firms = f;
+        setFirmsList(f);
         const added = firms.find(function(fi) { return String(fi.id) === String(savedFirmId); }) ||
           firms.find(function(fi) { return fi.name === name; });
         if (added) {
@@ -4775,6 +4797,7 @@ var REQUIRED_FIELD_KEYS = [
         addSection.style.display = 'none';
         if (btn) { btn.disabled = false; btn.textContent = 'Add Firm'; }
         qcUpdateFirmSelectedLine();
+        ensureFirmInQuickFile(added || newFirm);
       }).catch(function() {
         if (btn) { btn.disabled = false; btn.textContent = 'Add Firm'; }
       });
@@ -6056,10 +6079,44 @@ var REQUIRED_FIELD_KEYS = [
     }).catch(function(e) { showToast('Failed to save settings', 'error'); console.error('[saveSettings]', e); });
   }
 
+  function setFirmsList(next) {
+    firms = Array.isArray(next) ? next : [];
+    window.firms = firms;
+    return firms;
+  }
+
+  /* After a local firm save, find-or-create the matching QuickFile client when
+   * credentials are configured. Never blocks or fails the local save. */
+  function ensureFirmInQuickFile(firmOrName, contactEmail) {
+    if (!window.api || !window.api.quickfileEnsureClient) return;
+    var firmName = '';
+    var email = contactEmail || '';
+    if (firmOrName && typeof firmOrName === 'object') {
+      firmName = String(firmOrName.name || '').trim();
+      if (!email) email = String(firmOrName.contact_email || '').trim();
+    } else {
+      firmName = String(firmOrName || '').trim();
+    }
+    if (!firmName) return;
+    window.api.quickfileEnsureClient({ firmName: firmName, contactEmail: email }).then(function(res) {
+      if (!res) return;
+      if (res.ok) {
+        showToast('Firm also added to QuickFile', 'success', 3500);
+        return;
+      }
+      if (res.skipped === 'not-configured') return;
+      if (res.error) {
+        showToast('Firm saved locally, but QuickFile sync failed: ' + res.error, 'warning', 6500);
+      }
+    }).catch(function(err) {
+      console.warn('[QuickFile] ensureFirmInQuickFile', err);
+    });
+  }
+
   function loadFirmsList() {
     if (!window.api) return;
     window.api.firmsList().then(f => {
-      firms = f;
+      setFirmsList(f);
       if (formData && formData.firmId && !(String(formData.firmName || '').trim())) {
         const fi = firms.find(function (x) { return String(x.id) === String(formData.firmId); });
         if (fi && fi.name) formData.firmName = fi.name;
@@ -6097,9 +6154,23 @@ var REQUIRED_FIELD_KEYS = [
       container.appendChild(item);
     } else if (query && !filteredList.length) {
       const item = document.createElement('div');
-      item.className = 'firms-search-result-item firms-search-empty';
-      item.textContent = 'No firms match.';
+      item.className = 'firms-search-result-item firms-search-empty firms-search-add-action';
       item.setAttribute('role', 'option');
+      item.textContent = 'Add "' + query + '" as a new firm';
+      item.addEventListener('click', function() {
+        showConfirm('No firm matches "' + query + '". Add this firm and enter the contact details?').then(function(ok) {
+          if (!ok) return;
+          if (typeof showFirmsAddSection === 'function') showFirmsAddSection();
+          const nameEl = document.getElementById('new-firm-name');
+          if (nameEl) {
+            nameEl.value = query;
+            nameEl.classList.remove('input-error');
+          }
+          const contactEl = document.getElementById('new-firm-contact');
+          if (contactEl) contactEl.focus();
+          else if (nameEl) nameEl.focus();
+        });
+      });
       container.appendChild(item);
     } else {
       (filteredList.length ? filteredList : firms).forEach(firm => {
@@ -6242,12 +6313,14 @@ var REQUIRED_FIELD_KEYS = [
     if (phone && !isValidPhoneOrSentinel(phone)) { showToast('Phone: digits / + / - / brackets, or None / N/A / Not applicable', 'error'); return; }
     if (email && !EMAIL_REGEX.test(email)) { showToast('Please enter a valid email address', 'error'); return; }
     document.getElementById('new-firm-name')?.classList.remove('input-error');
-    window.api.firmSave({ name: name, contact_name: contact || '', contact_phone: phone || '', contact_email: email || '' }).then(() => {
+    const payload = { name: name, contact_name: contact || '', contact_phone: phone || '', contact_email: email || '' };
+    window.api.firmSave(payload).then(() => {
       document.getElementById('new-firm-name').value = '';
       document.getElementById('new-firm-contact').value = '';
       document.getElementById('new-firm-phone').value = '';
       document.getElementById('new-firm-email').value = '';
       loadFirmsList();
+      ensureFirmInQuickFile(payload);
     }).catch(function(e) { showToast('Failed to add firm', 'error'); console.error('[addFirm]', e); });
   }
 
@@ -6432,7 +6505,7 @@ var REQUIRED_FIELD_KEYS = [
       }).then(function() {
         return window.api.firmsList();
       }).then(function(updatedFirms) {
-        firms = updatedFirms || [];
+        setFirmsList(updatedFirms || []);
         loadFirmsList();
         updateQuickFileImportStatusLabel(stamp);
         const parts = [];
@@ -6572,7 +6645,7 @@ var REQUIRED_FIELD_KEYS = [
     return window.api.firmSave(updated).then(function() {
       return window.api.firmsList();
     }).then(function(f) {
-      firms = f;
+      setFirmsList(f);
       refreshQuickCaptureContactSuggestions();
     });
   }
@@ -6770,8 +6843,12 @@ var REQUIRED_FIELD_KEYS = [
         }
         const meta = [dateLabel, stationLabel, dsccLabel, outcomeLabel].filter(Boolean).join(' \u00B7 ');
         const formTypeBadge = d._formType === 'telephone' ? '<span class="badge badge-tel">TEL</span>' : (d.attendanceMode === 'voluntary' ? '<span class="badge badge-vol">VOL</span>' : '<span class="badge badge-att">ATT</span>');
-        const hasDecl = !!(d.clientSig);
-        const declBadge = hasDecl ? '<span class="badge badge-decl" title="Applicant declaration signed">Declared</span>' : '';
+        const hasDecl = !!(d.clientSig || d.clientSigNotNeeded);
+        const declBadge = hasDecl
+          ? (d.clientSigNotNeeded
+            ? '<span class="badge badge-decl" title="Client signature marked not needed">Sig N/A</span>'
+            : '<span class="badge badge-decl" title="Applicant declaration signed">Declared</span>')
+          : '';
         const healthBadges = renderRecordHealthBadges({
           id: r.id,
           status: r.status,
@@ -10729,16 +10806,30 @@ var REQUIRED_FIELD_KEYS = [
 
       function renderFormFirmResults(filteredList) {
         resultsDiv.innerHTML = '';
-        var q = (searchInp.value || '').trim().toLowerCase();
+        var q = (searchInp.value || '').trim();
+        var qLower = q.toLowerCase();
         if (!firms.length) {
           var empty = document.createElement('div');
           empty.className = 'firms-search-result-item firms-search-empty';
           empty.textContent = 'No firms yet. Add a firm first.';
           resultsDiv.appendChild(empty);
-        } else if (q && !filteredList.length) {
+        } else if (qLower && !filteredList.length) {
           var noMatch = document.createElement('div');
-          noMatch.className = 'firms-search-result-item firms-search-empty';
-          noMatch.textContent = 'No firms match.';
+          noMatch.className = 'firms-search-result-item firms-search-empty firms-search-add-action';
+          noMatch.setAttribute('role', 'option');
+          noMatch.textContent = 'Add "' + q + '" as a new firm';
+          noMatch.addEventListener('click', function() {
+            showConfirm('No firm matches "' + q + '". Add this firm and enter the contact details?').then(function(ok) {
+              if (!ok) return;
+              useExistingWrap.style.display = 'none';
+              choiceRow.style.display = 'none';
+              addRow.style.display = 'block';
+              firmInps.afn.value = q;
+              firmInps.afn.classList.remove('input-error');
+              if (firmInps.afc) firmInps.afc.focus();
+              else firmInps.afn.focus();
+            });
+          });
           resultsDiv.appendChild(noMatch);
         } else {
           var list = filteredList.length ? filteredList : firms;
@@ -10820,7 +10911,7 @@ var REQUIRED_FIELD_KEYS = [
           savedFirmId = id;
           return window.api.firmsList();
         }).then(function(f) {
-          firms = f;
+          setFirmsList(f);
           var added = firms.find(function(fi) { return String(fi.id) === String(savedFirmId); }) ||
             firms.find(function(fi) { return fi.name === name; });
           if (added) {
@@ -10836,6 +10927,8 @@ var REQUIRED_FIELD_KEYS = [
               setFieldValue('instructionSource', added.source_of_referral);
             }
             showToast('Firm saved and selected', 'success');
+            if (typeof quietSave === 'function') quietSave();
+            ensureFirmInQuickFile(added);
           }
           addRow.style.display = 'none';
           Object.keys(firmInps).forEach(function(k) { firmInps[k].value = ''; });
@@ -10947,8 +11040,72 @@ var REQUIRED_FIELD_KEYS = [
         });
         sw.appendChild(presetBtn);
       }
+      if (isClientSig) {
+        const notNeededWrap = document.createElement('div');
+        notNeededWrap.className = 'client-sig-not-needed';
+        const notNeededLabel = document.createElement('label');
+        notNeededLabel.className = 'client-sig-not-needed__label';
+        const notNeededCb = document.createElement('input');
+        notNeededCb.type = 'checkbox';
+        notNeededCb.className = 'client-sig-not-needed__cb';
+        notNeededCb.checked = !!(data.clientSigNotNeeded || formData.clientSigNotNeeded);
+        notNeededLabel.appendChild(notNeededCb);
+        notNeededLabel.appendChild(document.createTextNode(' Client signature not needed'));
+        notNeededWrap.appendChild(notNeededLabel);
+        const reasonWrap = document.createElement('div');
+        reasonWrap.className = 'client-sig-not-needed__reason-wrap';
+        reasonWrap.style.display = notNeededCb.checked ? 'block' : 'none';
+        const reasonLab = document.createElement('label');
+        reasonLab.className = 'client-sig-not-needed__reason-label';
+        reasonLab.textContent = 'Reason (optional)';
+        const reasonInp = document.createElement('input');
+        reasonInp.type = 'text';
+        reasonInp.className = 'form-input client-sig-not-needed__reason';
+        reasonInp.placeholder = 'e.g. client released / refused';
+        reasonInp.maxLength = 200;
+        reasonInp.value = data.declarationUnsignedReason || formData.declarationUnsignedReason || '';
+        reasonWrap.appendChild(reasonLab);
+        reasonWrap.appendChild(reasonInp);
+        notNeededWrap.appendChild(reasonWrap);
+        sw.appendChild(notNeededWrap);
+
+        function applyClientSigNotNeededState() {
+          var on = !!notNeededCb.checked;
+          formData.clientSigNotNeeded = on;
+          reasonWrap.style.display = on ? 'block' : 'none';
+          canvas.style.opacity = on ? '0.45' : '';
+          canvas.style.pointerEvents = on ? 'none' : '';
+          var controls = sw.querySelectorAll('.btn-client-sign-fullscreen, .btn-small, .btn-sign-fullscreen');
+          controls.forEach(function(btn) {
+            if (btn.closest && btn.closest('.client-sig-not-needed')) return;
+            btn.disabled = on;
+          });
+          if (on) {
+            if (formData.clientSig) clearInlineSignature(canvas, 'clientSig', true);
+            formData.declarationUnsignedReason = (reasonInp.value || '').trim();
+          } else {
+            if (!(reasonInp.value || '').trim()) delete formData.declarationUnsignedReason;
+          }
+          quietSave();
+        }
+        notNeededCb.addEventListener('change', applyClientSigNotNeededState);
+        reasonInp.addEventListener('input', function() {
+          if (!notNeededCb.checked) return;
+          formData.declarationUnsignedReason = (reasonInp.value || '').trim();
+        });
+        reasonInp.addEventListener('change', function() {
+          if (!notNeededCb.checked) return;
+          formData.declarationUnsignedReason = (reasonInp.value || '').trim();
+          quietSave();
+        });
+        sw._applyClientSigNotNeededState = applyClientSigNotNeededState;
+        sw._clientSigNotNeededCb = notNeededCb;
+      }
       wrap.appendChild(sw);
       initSignatureCanvas(canvas, f.sigKey, data);
+      if (isClientSig && sw._clientSigNotNeededCb && sw._clientSigNotNeededCb.checked && sw._applyClientSigNotNeededState) {
+        sw._applyClientSigNotNeededState();
+      }
       grid.appendChild(wrap);
       return;
     } else if (f.type === 'time') {
@@ -13429,7 +13586,14 @@ var REQUIRED_FIELD_KEYS = [
       (typeof val === 'string' && /^(yes|y|true|on|checked|ticked)$/i.test(val.trim()));
     const check = (k, l) => _isTicked(d[k]) ? '<span class="chk">\u2611 ' + h(l) + '</span>' : '<span class="chk unc">\u2610 ' + h(l) + '</span>';
     const sigUri = function(k) { return k === 'feeEarnerSig' ? getEffectiveFeeEarnerSig(d) : (d[k] || ''); };
-    const sig = k => sigUri(k) ? '<img src="' + sigUri(k) + '" class="sig-img" alt="">' : '<em class="sig-unsigned">Not signed</em>';
+    const sig = function(k) {
+      if (sigUri(k)) return '<img src="' + sigUri(k) + '" class="sig-img" alt="">';
+      if (k === 'clientSig' && d.clientSigNotNeeded) {
+        var reason = (d.declarationUnsignedReason || '').trim();
+        return '<em class="sig-unsigned">Not needed' + (reason ? ' \u2014 ' + h(reason) : '') + '</em>';
+      }
+      return '<em class="sig-unsigned">Not signed</em>';
+    };
     const sn = d.policeStationName || '';
     const firmName = d.firmName || '';
     const brand = (settings.brandName || 'Defence Legal Services Ltd') + (settings.tradingAs ? ' t/a ' + settings.tradingAs : '');
@@ -16493,7 +16657,7 @@ pdfAuditFooterHtml(d, settings) +
       loadMagistratesCourts(),
     ]).then(([s, f, rd]) => {
       stations = s;
-      firms = f;
+      setFirmsList(f);
       refData = rd || {};
       loadRecentStations();
       splashDataReady = true;
@@ -19130,7 +19294,7 @@ pdfAuditFooterHtml(d, settings) +
     }
 
     var proceed = function () {
-      var needsClientSig = !data.clientSig;
+      var needsClientSig = !data.clientSig && !data.clientSigNotNeeded;
       var needsFeeEarnerSig = !getEffectiveFeeEarnerSig(data);
       var sigQueue = [];
       if (needsClientSig) sigQueue.push({ sigKey: 'clientSig', label: 'Client Signature — ' + title });
@@ -19280,6 +19444,7 @@ pdfAuditFooterHtml(d, settings) +
 
     var sigStatus = '';
     if (data.clientSig) sigStatus += '<span style="color:#22c55e;font-size:0.8rem;margin-right:0.75rem;" title="Client has signed">&#10003; Client signed</span>';
+    else if (data.clientSigNotNeeded) sigStatus += '<span style="color:#64748b;font-size:0.8rem;margin-right:0.75rem;" title="' + esc(data.declarationUnsignedReason || 'Client signature not needed') + '">&#10003; Client signature not needed</span>';
     else sigStatus += '<span style="color:#ef4444;font-size:0.8rem;margin-right:0.75rem;" title="Client has NOT signed">&#10007; Client unsigned</span>';
     if (getEffectiveFeeEarnerSig(data)) sigStatus += '<span style="color:#22c55e;font-size:0.8rem;" title="Fee earner has signed">&#10003; Fee earner signed</span>';
     else sigStatus += '<span style="color:#ef4444;font-size:0.8rem;" title="Fee earner has NOT signed">&#10007; Fee earner unsigned</span>';

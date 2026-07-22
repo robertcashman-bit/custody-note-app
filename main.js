@@ -7749,6 +7749,34 @@ ipcMain.handle('quickfile-fetch-clients', async () => {
   return { clients };
 });
 
+/* Find or create a QuickFile client for a local firm. Used when saving a new
+ * firm so the directory stays in sync before billing. Skips cleanly when
+ * credentials are not configured — never fails local firm save. */
+ipcMain.handle('quickfile-ensure-client', async (_, params) => {
+  const firmName = String((params && params.firmName) || '').trim();
+  const contactEmail = String((params && params.contactEmail) || '').trim();
+  if (!firmName) {
+    return { ok: false, error: 'Firm name is required' };
+  }
+  try {
+    await ensureQuickFileSettingsFromServer({ reason: 'ensure-client' });
+    const status = getQuickFileSettingsStatus();
+    if (status.missing.length) {
+      return { ok: false, skipped: 'not-configured', missing: status.missing };
+    }
+    const clientId = await quickFileFindOrCreateClient(firmName, contactEmail);
+    if (!clientId) {
+      return { ok: false, error: 'Could not find or create QuickFile client for ' + firmName };
+    }
+    console.info('[QuickFile] ensure-client ok firm=' + firmName + ' clientId=' + clientId);
+    return { ok: true, clientId: clientId };
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    console.warn('[QuickFile] ensure-client failed:', msg);
+    return { ok: false, error: msg };
+  }
+});
+
 /* Persist the outcome of a real QuickFile health check so the connection panel
  * can show a reliable state across app restarts and on every machine. We only
  * ever write the three status keys here — never the credential keys — so a

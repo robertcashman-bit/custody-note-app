@@ -2654,6 +2654,40 @@ html.dark .grounds-card .checkbox-item.grounds-option:hover {
 
 /* ═══ SIGNATURE ═══ */
 .signature-wrap { margin-top: 4px; }
+.client-sig-not-needed {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.client-sig-not-needed__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.client-sig-not-needed__reason-wrap { max-width: 28rem; }
+.client-sig-not-needed__reason-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.2rem;
+}
+.client-sig-not-needed__reason { width: 100%; box-sizing: border-box; }
+html.dark .client-sig-not-needed__label { color: #e5eefb; }
+.firms-search-result-item.firms-search-add-action {
+  cursor: pointer;
+  font-style: normal;
+  color: var(--primary, #1d4ed8);
+  font-weight: 600;
+}
+.firms-search-result-item.firms-search-add-action:hover {
+  background: rgba(29, 78, 216, 0.08);
+}
 .signature-canvas {
   border: 2px solid var(--border); border-radius: 6px;
   background: #ffffff; cursor: crosshair; display: block;
