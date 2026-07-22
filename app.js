@@ -7440,7 +7440,7 @@ var REQUIRED_FIELD_KEYS = [
         } catch (_) {}
         var text =
           'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\n' +
-          'Download free: ' + url + '\n\nFree during beta (we're testing) · Pro planned after beta (~£9.99/mo).';
+          'Download free: ' + url + '\n\nFree during beta (we are testing) · Pro planned after beta (~£9.99/mo).';
         var copied = false;
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -19075,7 +19075,7 @@ pdfAuditFooterHtml(d, settings) +
       shareAppUrl = getShareInviteUrl();
       var subject = 'Custody Note – custody notes app for police station reps';
       var body =
-        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + shareAppUrl + '\n\nFree during beta (we're testing) · Pro planned after beta (~£9.99/mo).';
+        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + shareAppUrl + '\n\nFree during beta (we are testing) · Pro planned after beta (~£9.99/mo).';
       copyOutlookComposeFields('', subject, body, {
         allowEmptyTo: true,
         successToast: 'Copied — paste into Outlook or any mail client',
