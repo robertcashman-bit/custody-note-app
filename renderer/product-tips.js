@@ -139,7 +139,18 @@
     }
   }
 
+  function shouldFetchRemote() {
+    try {
+      if (typeof window !== 'undefined' && window.__CUSTODYNOTE_E2E__) return false;
+    } catch (_) {}
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+    } catch (_) {}
+    return true;
+  }
+
   function refreshFromRemote(tips) {
+    if (!shouldFetchRemote()) return Promise.resolve(tips);
     if (typeof fetch !== 'function') return Promise.resolve(tips);
     var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     var timer = setTimeout(function () {
