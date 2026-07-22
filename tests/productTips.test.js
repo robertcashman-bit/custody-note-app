@@ -9,7 +9,7 @@ describe('product tips', () => {
     const raw = fs.readFileSync(path.join(__dirname, '..', 'data', 'product-tips.json'), 'utf8');
     const tips = JSON.parse(raw);
     assert.ok(Array.isArray(tips) && tips.length >= 3);
-    assert.ok(tips.some((t) => /free forever/i.test(t.body || '')));
+    assert.ok(tips.some((t) => /free during beta|beta/i.test(t.body || '')));
   });
 
   it('ProductTips.pickTip returns a tip object', () => {

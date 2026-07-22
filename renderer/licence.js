@@ -458,7 +458,7 @@
             showExpiryBanner(st.message || 'Your subscription has expired. Renew to continue creating new records.');
           } else if (st.status === 'expired' && createAllowed(st)) {
             window.__licenceExpired = false;
-            showWarningBanner(st.message || 'Pro expired — you are on Free forever. Upgrade for cloud backup.', 0);
+            showWarningBanner(st.message || 'Pro expired — you are on free beta access. Cloud backup returns with Pro after beta.', 0);
           } else if (st.status === 'grace_expired') {
             showGraceBanner(st);
           }
@@ -479,13 +479,13 @@
       try {
         if (!localStorage.getItem('cn_free_banner_dismissed')) {
           showWarningBanner(
-            'You are on Free forever. Pro (£9.99/mo) unlocks managed cloud backup and advanced tools.',
+            'You are on free beta access — Custody Note is in beta, which is why it is free while we test. Pro (£9.99/mo) is planned after beta.',
             null,
             { dismissKey: 'cn_free_banner_dismissed' }
           );
         }
       } catch (_) {
-        showWarningBanner('You are on Free forever. Pro (£9.99/mo) unlocks managed cloud backup and advanced tools.', null);
+        showWarningBanner('You are on free beta access — Custody Note is in beta, which is why it is free while we test. Pro (£9.99/mo) is planned after beta.', null);
       }
     } else if (status && status.isTrial && status.daysRemaining != null && status.status === 'active') {
       var trialMsg = 'Free trial: ' + status.daysRemaining + ' day' + (status.daysRemaining !== 1 ? 's' : '') + ' remaining';
@@ -540,7 +540,7 @@
       var hasRealKey = hasRealPaidKey(status);
       var isTrialOnly = !!status.isTrial && !hasAuthToken && !status.signInWithAccount && !isFreeTierStatus(status);
 
-      // Explore-first: Free forever enters the app without a hard login overlay.
+      // Explore-first: Free during beta enters the app without a hard login overlay.
       if (isFreeTierStatus(status) && createAllowed(status)) {
         enterAppWithOptionalValidation(status);
         return;

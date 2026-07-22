@@ -5610,7 +5610,7 @@ var REQUIRED_FIELD_KEYS = [
         }
         if (timeEl) {
           if (st.tier === 'free' || st.isFree || (st.key && String(st.key).indexOf('FREE-') === 0)) {
-            timeEl.textContent = 'Free forever — core features unlocked';
+            timeEl.textContent = 'Free during beta — core features unlocked';
             timeEl.style.color = '#4338ca';
           } else if (st.isTrial) {
             timeEl.textContent = 'Free trial \u2014 ' + (st.daysRemaining !== undefined ? st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : 'active');
@@ -7427,7 +7427,7 @@ var REQUIRED_FIELD_KEYS = [
     setTimeout(function () {
       if (typeof showConfirm !== 'function') return;
       showConfirm(
-        'Invite a colleague to Custody Note?\n\nFree forever on core features — no credit card. We will copy a short message you can paste into WhatsApp or email.',
+        'Invite a colleague to Custody Note?\n\nFree during beta — no credit card. We will copy a short message you can paste into WhatsApp or email.',
         'Share Custody Note'
       ).then(function (ok) {
         try { localStorage.setItem('cn_referral_invite_done', '1'); } catch (_) {}
@@ -7440,7 +7440,7 @@ var REQUIRED_FIELD_KEYS = [
         } catch (_) {}
         var text =
           'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\n' +
-          'Download free: ' + url + '\n\nFree forever on core features · Pro £9.99/mo for cloud backup.';
+          'Download free: ' + url + '\n\nFree during beta (we're testing) · Pro planned after beta (~£9.99/mo).';
         var copied = false;
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -13465,7 +13465,7 @@ var REQUIRED_FIELD_KEYS = [
     if (!pdfBrandingEnabled(settings)) return '';
     return '<div style="margin-top:32px;padding:14px 20px;border-top:2px solid #2563eb;text-align:center;font-size:10px;color:#475569;background:#f8fafc;border-radius:0 0 6px 6px;">' +
       '<strong style="color:#2563eb;font-size:11px;">Custody Note</strong> &mdash; Digital attendance notes for police station representatives.<br>' +
-      '<span style="font-size:11px;font-weight:600;color:#0f172a;">Free forever on core features &middot; <a href="https://www.custodynote.com/download" style="color:#2563eb;text-decoration:underline;">www.custodynote.com/download</a></span>' +
+      '<span style="font-size:11px;font-weight:600;color:#0f172a;">Free during beta &middot; <a href="https://www.custodynote.com/download" style="color:#2563eb;text-decoration:underline;">www.custodynote.com/download</a></span>' +
       '</div>';
   }
   function formatInstructionDateTime(val) {
@@ -19075,7 +19075,7 @@ pdfAuditFooterHtml(d, settings) +
       shareAppUrl = getShareInviteUrl();
       var subject = 'Custody Note – custody notes app for police station reps';
       var body =
-        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + shareAppUrl + '\n\nFree forever on core features · Pro £9.99/mo for cloud backup.';
+        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + shareAppUrl + '\n\nFree during beta (we're testing) · Pro planned after beta (~£9.99/mo).';
       copyOutlookComposeFields('', subject, body, {
         allowEmptyTo: true,
         successToast: 'Copied — paste into Outlook or any mail client',
