@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.60",
+      "version": "1.9.61",
       "date": "2026-07-22",
       "latest": true,
+      "changes": [
+        "Beta: Custody Note is free during public beta while we test with real police station work — no credit card to start",
+        "Copy: Free forever wording replaced with Free during beta across tips, licence banners, and share invites",
+        "Pro: paid plans remain planned after beta (cloud backup and advanced tools)"
+      ]
+    },
+    {
+      "version": "1.9.60",
+      "date": "2026-07-22",
+      "latest": false,
       "changes": [
         "Pro AI: opt-in local attendance and interview summary drafts (Pro only) — review and edit before insert; nothing sent to a cloud AI provider yet",
         "Firm workspace: local seats, branding footer, and shared templates in Settings → Licence",
