@@ -62,7 +62,11 @@ async function main() {
   // /buy redirect (after website deploy; may 404 until then)
   try {
     const buy = await get('/buy');
-    if (buy.url.includes('/pricing') || buy.text.includes('Subscribe Now')) {
+    if (
+      buy.url.includes('/pricing') ||
+      buy.text.includes('Subscribe Now') ||
+      buy.text.includes('Subscribe to Pro')
+    ) {
       pass('GET /buy', `resolves to pricing (${buy.status})`);
     } else if (buy.status === 404) {
       fail('GET /buy', '404 — deploy custody-note-website /buy → /pricing redirect');
@@ -79,7 +83,7 @@ async function main() {
     if (pricing.status !== 200) fail('GET /pricing', `HTTP ${pricing.status}`);
     else if (
       pricing.text.includes('lemonsqueezy.com/checkout/buy') &&
-      pricing.text.includes('Subscribe Now')
+      (pricing.text.includes('Subscribe Now') || pricing.text.includes('Subscribe to Pro'))
     ) {
       pass('GET /pricing', 'Lemon Squeezy checkout linked');
     } else if (pricing.text.includes('Subscribe — Email Us')) {
