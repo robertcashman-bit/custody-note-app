@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.9.54",
+      "version": "1.9.55",
       "date": "2026-07-22",
       "latest": true,
+      "changes": [
+        "Windows auto-update: clear sticky GitHub update-feed cache on Check for updates so a new release is not missed after publish"
+      ]
+    },
+    {
+      "version": "1.9.54",
+      "date": "2026-07-22",
+      "latest": false,
       "changes": [
         "QuickFile: new instructing firms are created or matched in QuickFile automatically when you save them (if credentials are configured)",
         "Billing: fixed false “select the instructing firm” error when a firm was already selected on the record",
