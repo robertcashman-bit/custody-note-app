@@ -8,7 +8,11 @@
  */
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { buildQuickFileAuth, parseQuickFileResponse } = require('../lib/quickfileClient');
+const {
+  buildQuickFileAuth,
+  parseQuickFileResponse,
+  buildQuickFileClientCreateBody,
+} = require('../lib/quickfileClient');
 
 const VALID = { accountNumber: '1234567', apiKey: 'API-KEY-ABC', applicationId: 'APP-ID-XYZ' };
 
@@ -64,5 +68,29 @@ describe('parseQuickFileResponse', () => {
 
   it('throws a parse error for invalid JSON on a 200', () => {
     assert.throws(() => parseQuickFileResponse(200, '<html>not json</html>'), /parse error \(HTTP 200\)/);
+  });
+});
+
+describe('buildQuickFileClientCreateBody', () => {
+  it('builds CompanyName-only ClientDetails (no ClientType or Email in that namespace)', () => {
+    const body = buildQuickFileClientCreateBody('  Acme Solicitors  ', 'billing@acme.test');
+    assert.deepStrictEqual(body, {
+      ClientDetails: { CompanyName: 'Acme Solicitors' },
+    });
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(body.ClientDetails, 'ClientType'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(body.ClientDetails, 'Email'), false);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(body, 'ClientContacts'), false);
+  });
+
+  it('truncates CompanyName to 100 characters', () => {
+    const long = 'X'.repeat(150);
+    const body = buildQuickFileClientCreateBody(long);
+    assert.strictEqual(body.ClientDetails.CompanyName.length, 100);
+  });
+
+  it('throws when firm name is empty after trim', () => {
+    assert.throws(() => buildQuickFileClientCreateBody('   '), /Firm name is required/);
+    assert.throws(() => buildQuickFileClientCreateBody(''), /Firm name is required/);
+    assert.throws(() => buildQuickFileClientCreateBody(null), /Firm name is required/);
   });
 });

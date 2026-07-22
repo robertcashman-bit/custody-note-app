@@ -7944,13 +7944,9 @@ async function quickFileFindOrCreateClient(firmName, contactEmail) {
   });
   if (match) return match.ClientID || match.ClientId;
 
-  const createBody = await quickFileRequest('/1_2/client/create', {
-    ClientDetails: {
-      ClientType: 'Company',
-      CompanyName: firmName,
-      Email: contactEmail || '',
-    },
-  });
+  /* Client_Create: CompanyName only under ClientDetails (no ClientType / Email). */
+  const createPayload = quickfileClient.buildQuickFileClientCreateBody(firmName, contactEmail);
+  const createBody = await quickFileRequest('/1_2/client/create', createPayload);
   return createBody.ClientID || createBody.ClientId || createBody.RecordID || null;
 }
 
