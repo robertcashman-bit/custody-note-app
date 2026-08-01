@@ -7899,84 +7899,9 @@ function quickFileRequest(apiPath, bodyContent) {
   });
 }
 
-function quickFileJoinAddress(parts) {
-  return parts.map((part) => String(part || '').trim()).filter(Boolean).join(', ');
-}
-
-function quickFileExtractAddress(client) {
-  if (!client || typeof client !== 'object') return '';
-  const candidates = [
-    client.Address,
-    client.InvoiceAddress,
-    client.DeliveryAddress,
-    client.PostalAddress,
-    client.PrimaryAddress,
-    client.AddressDetails,
-  ];
-  for (const address of candidates) {
-    if (!address) continue;
-    if (typeof address === 'string') {
-      const text = address.trim();
-      if (text) return text;
-      continue;
-    }
-    if (typeof address === 'object') {
-      const joined = quickFileJoinAddress([
-        address.Line1,
-        address.Line2,
-        address.Line3,
-        address.Line4,
-        address.Line5,
-        address.AddressLine1,
-        address.AddressLine2,
-        address.AddressLine3,
-        address.AddressLine4,
-        address.AddressLine5,
-        address.City,
-        address.Town,
-        address.County,
-        address.Postcode,
-        address.PostCode,
-        address.Zip,
-        address.Country,
-      ]);
-      if (joined) return joined;
-    }
-  }
-  return quickFileJoinAddress([
-    client.AddressLine1,
-    client.AddressLine2,
-    client.AddressLine3,
-    client.AddressLine4,
-    client.AddressLine5,
-    client.City,
-    client.Town,
-    client.County,
-    client.Postcode,
-    client.PostCode,
-    client.Zip,
-    client.Country,
-  ]);
-}
-
 function quickFileExtractRecords(body) {
   const clientList = body.Record || body.Records || body.ClientDetails || body.Clients || [];
   return Array.isArray(clientList) ? clientList : [clientList].filter(Boolean);
-}
-
-function quickFileNormaliseClient(client) {
-  const primary = client.PrimaryContact || client.Contact || {};
-  return {
-    clientId: client.ClientID || client.ClientId || '',
-    companyName: client.ClientName || client.CompanyName || client.Name || '',
-    contactName: (
-      client.ContactName ||
-      [primary.FirstName || client.ContactFirstName || '', primary.Surname || client.ContactLastName || ''].filter(Boolean).join(' ')
-    ).trim(),
-    email: client.Email || primary.Email || '',
-    telephone: client.Telephone || primary.Telephone || primary.Phone || '',
-    address: quickFileExtractAddress(client),
-  };
 }
 
 async function quickFileFetchAllClients() {
@@ -8000,12 +7925,51 @@ async function quickFileFetchAllClients() {
   return clients;
 }
 
+/* Client_Get for one client — Address + ClientContacts only. Used to enrich the
+ * thin Client_Search rows before firm import. */
+async function quickFileGetClientDetails(clientId) {
+  const id = String(clientId || '').trim();
+  if (!id) return null;
+  return quickFileRequest('/1_2/client/get', {
+    ClientID: id,
+    ReturnData: {
+      Address: true,
+      ClientContacts: true,
+    },
+  });
+}
+
+const QUICKFILE_GET_CONCURRENCY = 5;
+
+/* Search all clients, then enrich each with Client_Get (concurrency-capped).
+ * A failed get keeps the search-row normalisation so one bad client cannot
+ * abort the whole import. */
+async function quickFileFetchAndEnrichClients() {
+  const records = await quickFileFetchAllClients();
+  const enriched = await quickfileClient.mapWithConcurrency(
+    records,
+    QUICKFILE_GET_CONCURRENCY,
+    async (record) => {
+      const searchNorm = quickfileClient.normaliseQuickFileSearchClient(record);
+      if (!searchNorm.clientId) {
+        return searchNorm;
+      }
+      try {
+        const getBody = await quickFileGetClientDetails(searchNorm.clientId);
+        return quickfileClient.mergeQuickFileClientDetails(searchNorm, getBody);
+      } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
+        console.warn('[QuickFile] client/get failed for ClientID=' + searchNorm.clientId + ': ' + msg);
+        return searchNorm;
+      }
+    }
+  );
+  return enriched.filter((client) => client && client.companyName);
+}
+
 ipcMain.handle('quickfile-fetch-clients', async () => {
   await ensureQuickFileSettingsFromServer({ reason: 'fetch-clients' });
-  const records = await quickFileFetchAllClients();
-  const clients = records.map((client) => {
-    return quickFileNormaliseClient(client);
-  }).filter((client) => client.companyName);
+  const clients = await quickFileFetchAndEnrichClients();
   return { clients };
 });
 

@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.62",
+      "date": "2026-08-01",
+      "latest": true,
+      "changes": [
+        "QuickFile: firm import now pulls full client details (address and primary contact) via Client_Get, not just the search list",
+        "Firms: address field is editable after QuickFile import or re-sync"
+      ]
+    },
+    {
       "version": "1.9.61",
       "date": "2026-07-22",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Beta: Custody Note is free during public beta while we test with real police station work — no credit card to start",
         "Copy: Free forever wording replaced with Free during beta across tips, licence banners, and share invites",

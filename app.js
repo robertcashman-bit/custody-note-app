@@ -6301,6 +6301,7 @@ var REQUIRED_FIELD_KEYS = [
           '<label>Contact <input class="fe-contact" value="' + esc(firm.contact_name || '') + '" placeholder="Contact name"></label>' +
           '<label>Phone <input type="tel" class="fe-phone" value="' + esc(firm.contact_phone || '') + '" placeholder="Phone"></label>' +
           '<label>Email <input class="fe-email" value="' + esc(firm.contact_email || '') + '" placeholder="Email"></label>' +
+          '<label>Address <input class="fe-address" value="' + esc(firm.address || '') + '" placeholder="Postal address"></label>' +
           '<div class="firm-edit-actions"><button type="button" class="btn btn-primary btn-small fe-save">Save</button><button type="button" class="btn btn-secondary btn-small fe-cancel">Cancel</button></div>' +
           '</div></td>';
         tr.querySelector('.firm-del').addEventListener('click', () => {
@@ -6327,6 +6328,7 @@ var REQUIRED_FIELD_KEYS = [
             contact_name: editRow.querySelector('.fe-contact').value.trim(),
             contact_phone: phoneVal,
             contact_email: editRow.querySelector('.fe-email').value.trim(),
+            address: (editRow.querySelector('.fe-address') && editRow.querySelector('.fe-address').value.trim()) || '',
           });
           window.api.firmSave(updated).then(() => { showToast('Firm updated', 'success'); loadFirmsList(); }).catch(function(err) { showToast('Failed to save firm: ' + (err && err.message || ''), 'error'); });
         });
