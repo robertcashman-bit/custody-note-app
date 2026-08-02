@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.65",
+      "version": "1.9.66",
       "date": "2026-08-02",
       "latest": true,
+      "changes": [
+        "Case Assessment: Ask AI — tick to open a multi-turn Q&A session for any legal question (follow-ups stay open until you close); Copy or Append to Law / Elements only when you choose",
+        "Law / Elements AI fill: draft stays in the review modal until you press Insert; clear notice when the field already has saved text",
+        "Ask AI and Law fill checkboxes are never printed on the PDF"
+      ]
+    },
+    {
+      "version": "1.9.65",
+      "date": "2026-08-02",
+      "latest": false,
       "changes": [
         "Case Assessment: optional AI fill for Law / Elements of offence (actus reus, mens rea, defences, sentencing) using your own OpenAI API key — review before insert; checkbox never appears on the PDF",
         "Settings: store your OpenAI API key (synced with other Custody Note settings across devices when licensed)",
