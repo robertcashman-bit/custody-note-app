@@ -96,7 +96,6 @@
         <span id="header-form-actions" class="header-form-actions">
           <span id="header-autosave" class="autosave-indicator" title="Drafts save automatically to this computer while you edit. After finalise, autosave stops because the note is locked."></span>
           <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent btn-header-primary-action" title="Primary action for the current record (Finalise / Finish matter / Archive)" style="display:none;">Finalise</button>
-          <button type="button" class="btn btn-small btn-secondary" id="header-pro-ai-draft" title="Pro AI: build a local summary draft from this record" style="display:none;">Pro AI draft</button>
           <button type="button" class="btn btn-small btn-backup-now" id="header-backup-now-btn" title="Save &amp; backup now">&#128190; Backup</button>
           <button type="button" class="btn-small" id="header-kb-help" title="Keyboard shortcuts">?</button>
           <button type="button" class="btn btn-small" id="header-laa-forms" title="Generate LAA forms">LAA Forms</button>
@@ -906,17 +905,6 @@
             <p style="margin:0.6rem 0 0 0;font-size:0.8rem;color:#1e3a8a;">Don&rsquo;t have a key? <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;font-weight:600;">Subscribe to Pro at custodynote.com/pricing &rarr;</a></p>
           </div>
 
-          <div class="settings-card" id="pro-ai-coming-soon-card" style="margin-top:1rem;">
-            <h2>Pro AI summaries</h2>
-            <p class="settings-hint" style="margin:0 0 0.5rem;">Opt-in attendance and interview summary drafts. Default path builds a local draft on this device — nothing is sent to an AI provider unless you explicitly choose cloud later (when configured).</p>
-            <p id="pro-ai-gate-message" class="settings-hint" style="margin:0 0 0.75rem;font-weight:600;">Checking entitlement&hellip;</p>
-            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">
-              <button type="button" id="btn-pro-ai-request-draft" class="btn btn-secondary" disabled>Request attendance draft</button>
-              <button type="button" id="btn-pro-ai-request-interview" class="btn btn-secondary" disabled>Request interview draft</button>
-            </div>
-            <p class="settings-hint" style="margin:0.5rem 0 0;">Open a record first so the draft can use your form fields. Review and edit before saving.</p>
-          </div>
-
           <div class="settings-card" id="firm-workspace-card" style="margin-top:1rem;">
             <h2>Firm workspace</h2>
             <p class="settings-hint" style="margin:0 0 0.75rem;">Local MVP for multi-user firms: seats, branding footer, and shared templates on this device. Cloud seats and billing remain via <a href="https://custodynote.com/firm" target="_blank" rel="noopener">custodynote.com/firm</a>.</p>
@@ -1083,6 +1071,16 @@
               <button type="button" id="btn-save-import-qf" class="btn btn-primary">Save and import firms now</button>
               <p class="settings-hint" style="margin-top:0.55rem;">Optional: import your QuickFile client directory into <strong>Firms You Work For</strong>.</p>
             </div>
+          </div>
+        </div>
+
+        <div class="settings-card" id="openai-settings-card">
+          <h2>OpenAI (Law / Elements)</h2>
+          <div id="openai-settings-content">
+            <p class="settings-hint">Optional. Paste your own OpenAI API key to fill <strong>The Law / Elements of offence</strong> from the Case Assessment checkbox. Only offence name and statute are sent when you confirm. Billed to your OpenAI account.</p>
+            <label for="setting-openai-apikey">OpenAI API key</label>
+            <input type="password" id="setting-openai-apikey" class="settings-input" placeholder="sk-…" autocomplete="off" spellcheck="false">
+            <p class="settings-hint" style="margin-top:0.5rem;">Saved on this device and synced (encrypted) to your Custody Note licence — same as QuickFile — so your other installs can use it.</p>
           </div>
         </div>
 
@@ -2217,6 +2215,7 @@
   <script src="renderer/emailCopy.js"></script>
   <script src="renderer/licence.js"></script>
   <script src="renderer/freemiumFeatures.js"></script>
+  <script src="renderer/aiLawElements.js"></script>
   <!-- Wheel-style ("rotating counter") date/time picker. Self-contained, attaches a 🕑/📅 button next to every native date/time/datetime-local input. Native typing still works. -->
   <script src="renderer/widgets/wheelDateTimePicker.js"></script>
   <script src="lib/magistratesCourtsSearch.js"></script>
@@ -2306,20 +2305,23 @@
     </div>
   </div>
 
-  <!-- Cloud backup restore prompt (when backups exist and user has not dismissed recently) -->
-  <div id="pro-ai-draft-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="pro-ai-draft-title">
+  <!-- AI Law / Elements review modal -->
+  <div id="ai-law-draft-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ai-law-draft-title">
     <div class="first-launch-modal" style="max-width:640px;width:94%;">
-      <h2 id="pro-ai-draft-title" style="margin:0 0 0.5rem;">Pro AI draft</h2>
-      <p id="pro-ai-draft-meta" class="settings-hint" style="margin:0 0 0.75rem;"></p>
-      <textarea id="pro-ai-draft-text" class="settings-input" rows="14" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.85rem;" aria-label="Editable AI draft"></textarea>
+      <h2 id="ai-law-draft-title" style="margin:0 0 0.5rem;">AI draft — Law / Elements</h2>
+      <p id="ai-law-draft-meta" class="settings-hint" style="margin:0 0 0.75rem;"></p>
+      <textarea id="ai-law-draft-text" class="settings-input" rows="14" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.85rem;" aria-label="Editable AI law draft"></textarea>
       <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;">
-        <button type="button" id="pro-ai-draft-copy" class="btn btn-secondary">Copy</button>
-        <button type="button" id="pro-ai-draft-insert" class="btn btn-primary">Insert into notes</button>
-        <button type="button" id="pro-ai-draft-close" class="btn btn-secondary">Close</button>
+        <button type="button" id="ai-law-draft-copy" class="btn btn-secondary">Copy</button>
+        <button type="button" id="ai-law-draft-insert" class="btn btn-primary">Insert into Law / Elements</button>
+        <button type="button" id="ai-law-draft-close" class="btn btn-secondary">Close</button>
       </div>
-      <p class="settings-hint" style="margin:0.75rem 0 0;">Edit before saving. This is a starting point — not legal advice.</p>
+      <p class="settings-hint" style="margin:0.75rem 0 0;">Edit before inserting. This is a starting point — not legal advice.</p>
     </div>
   </div>
+
+  <!-- Cloud backup restore prompt (when backups exist and user has not dismissed recently) -->
+  <div id="cloud-backup-restore-prompt-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-label="Cloud backups available">
     <div class="first-launch-box" style="max-width:420px;">
       <h2 style="margin:0 0 0.5rem;">Cloud backups available</h2>
       <p style="margin:0 0 1rem;font-size:0.9rem;color:var(--text-muted,#64748b);">You have cloud backups. Restore from a backup or continue with data on this device.</p>

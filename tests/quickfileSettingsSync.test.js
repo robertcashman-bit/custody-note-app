@@ -12,13 +12,26 @@ describe('quickfileSettingsSync', () => {
     quickfileAccountNumber: '12345678',
     quickfileApiKey: 'secret-api-key',
     quickfileAppId: 'app-id-99',
+    openaiApiKey: 'sk-test-openai',
   };
 
-  it('encrypts and decrypts settings round-trip', () => {
+  it('encrypts and decrypts settings round-trip including OpenAI key', () => {
     const blob = sync.encryptQuickFileSettings(key, settings);
     assert.ok(typeof blob === 'string' && blob.length > 20);
     const out = sync.decryptQuickFileSettings(key, blob);
     assert.deepStrictEqual(out, settings);
+  });
+
+  it('decrypts legacy blobs without openaiApiKey as empty string', () => {
+    const legacy = {
+      quickfileAccountNumber: '12345678',
+      quickfileApiKey: 'secret-api-key',
+      quickfileAppId: 'app-id-99',
+    };
+    const blob = sync.encryptQuickFileSettings(key, legacy);
+    const out = sync.decryptQuickFileSettings(key, blob);
+    assert.equal(out.openaiApiKey, '');
+    assert.equal(out.quickfileApiKey, 'secret-api-key');
   });
 
   it('returns null for wrong licence key', () => {
@@ -47,17 +60,18 @@ describe('quickfileSettingsSync', () => {
     assert.deepStrictEqual(sync.decryptQuickFileSettings(key, posted.body.blob), settings);
   });
 
-  it('encrypts incomplete settings (empty api key) for round-trip; main rejects incomplete push', () => {
+  it('encrypts incomplete settings (empty api key) for round-trip; main rejects incomplete push without OpenAI', () => {
     const incomplete = {
       quickfileAccountNumber: '12345678',
       quickfileApiKey: '',
       quickfileAppId: 'app-id-99',
+      openaiApiKey: '',
     };
     const blob = sync.encryptQuickFileSettings(key, incomplete);
     const out = sync.decryptQuickFileSettings(key, blob);
     assert.deepStrictEqual(out, incomplete);
     const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-    assert.match(main, /if \(status\.missing\.length\)/);
+    assert.match(main, /if \(status\.missing\.length && !openaiApiKey\)/);
     assert.match(main, /QuickFile credentials incomplete/);
   });
 

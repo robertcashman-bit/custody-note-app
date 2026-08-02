@@ -876,6 +876,7 @@ var LAA = {
         { key: 'clientEmailConsent', label: 'Consent to email?', type: 'select', options: ['Yes','No'] },
         { key: '_h_case_assessment', label: 'Case Assessment', type: 'sectionHeading' },
         { key: 'gapsInEvidence', label: 'Gaps in Evidence', type: 'text', placeholder: 'e.g. None', cols: 2 },
+        { key: 'aiFillLawElements', label: 'Fill Law / Elements with AI (offence name & statute only — not printed)', type: 'aiLawFill' },
         { key: 'lawElements', label: 'The Law / Elements of offence', type: 'textarea', cols: 2 },
         { key: 'caseAssessment', label: 'Case assessment (police case)', type: 'select', options: ['N/A','Strong','Medium','Weak'] },
         { key: 'caseAssessmentWhy', label: 'Assessment reasoning', type: 'textarea', placeholder: 'Why is the case assessed this way?', showIf: { field: 'caseAssessment', notValue: 'N/A' } },
@@ -1635,6 +1636,7 @@ var LAA = {
         { key: 'clientEmailConsent', label: 'Consent to email?', type: 'select', options: ['Yes','No'] },
         { key: '_h_case_assessment', label: 'Case Assessment', type: 'sectionHeading' },
         { key: 'gapsInEvidence', label: 'Gaps in Evidence', type: 'text', placeholder: 'e.g. None', cols: 2 },
+        { key: 'aiFillLawElements', label: 'Fill Law / Elements with AI (offence name & statute only — not printed)', type: 'aiLawFill' },
         { key: 'lawElements', label: 'The Law / Elements of offence', type: 'textarea', cols: 2 },
         { key: 'caseAssessment', label: 'Case assessment (police case)', type: 'select', options: ['N/A','Strong','Medium','Weak'] },
         { key: 'caseAssessmentWhy', label: 'Assessment reasoning', type: 'textarea', placeholder: 'Why is the case assessed this way?', showIf: { field: 'caseAssessment', notValue: 'N/A' } },
@@ -3651,15 +3653,6 @@ var REQUIRED_FIELD_KEYS = [
 
     var isForm = (name === 'new');
     document.body.classList.toggle('form-active', isForm);
-    if (window.FreemiumFeatures && typeof window.FreemiumFeatures.refreshProAiGateFromLicence === 'function') {
-      try {
-        if (window.api && window.api.licenceStatus) {
-          window.api.licenceStatus().then(function (st) {
-            window.FreemiumFeatures.refreshProAiGateFromLicence(st || {});
-          }).catch(function () {});
-        }
-      } catch (_) {}
-    }
     if (isForm && typeof updateResponsiveLayoutClasses === 'function') {
       updateResponsiveLayoutClasses(_layoutSettingsCache);
     }
@@ -5676,16 +5669,6 @@ var REQUIRED_FIELD_KEYS = [
         }
         var isFreeLike = !!(st.tier === 'free' || st.isFree || st.isTrial || (st.key && String(st.key).indexOf('FREE-') === 0) || (st.key && String(st.key).indexOf('TRIAL-') === 0));
         if (trialUpgradeEl) trialUpgradeEl.style.display = isFreeLike ? '' : 'none';
-        var aiMsg = document.getElementById('pro-ai-gate-message');
-        if (window.FreemiumFeatures && typeof window.FreemiumFeatures.refreshProAiGateFromLicence === 'function') {
-          window.FreemiumFeatures.refreshProAiGateFromLicence(st);
-        } else if (aiMsg) {
-          if (st.tier === 'pro' && (st.status === 'active' || st.status === 'expiring_soon' || st.status === 'grace_expired')) {
-            aiMsg.textContent = 'You are on Pro. Request a local draft from an open record — nothing leaves this device unless you later enable cloud AI.';
-          } else {
-            aiMsg.textContent = 'AI summary drafts are a Pro feature. Upgrade at custodynote.com/pricing.';
-          }
-        }
       } else if (st && st.status === 'grace_expired' && graceEl) {
         activeEl.style.display = 'none';
         noneEl.style.display = 'none';
@@ -5815,6 +5798,8 @@ var REQUIRED_FIELD_KEYS = [
       const qfApp = document.getElementById('setting-quickfile-appid');
       if (qfApp) qfApp.value = s.quickfileAppId || '';
       if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
+      const oaiKey = document.getElementById('setting-openai-apikey');
+      if (oaiKey) oaiKey.value = s.openaiApiKey || '';
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
       const opc = document.getElementById('setting-office-postcode');
@@ -9456,6 +9441,29 @@ var REQUIRED_FIELD_KEYS = [
       if (isNfa) {
         requestAnimationFrame(function () { applyAddressNfaState(true); });
       }
+      return;
+    }
+    if (f.type === 'aiLawFill') {
+      /* UI-only — never printed on PDF (buildPdfHtml / buildVoluntaryPdfHtml omit this key). */
+      const wrap = document.createElement('div');
+      wrap.className = 'form-group';
+      wrap.style.gridColumn = '1 / -1';
+      const lbl = document.createElement('label');
+      lbl.className = 'checkbox-item';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.name = f.key;
+      cb.dataset.field = f.key;
+      cb.dataset.pdfExclude = '1';
+      lbl.appendChild(cb);
+      lbl.appendChild(document.createTextNode(' ' + f.label));
+      wrap.appendChild(lbl);
+      const hint = document.createElement('p');
+      hint.className = 'settings-hint';
+      hint.style.margin = '0.25rem 0 0 1.5rem';
+      hint.textContent = 'Requires your OpenAI API key in Settings → Integrations. Review the draft before it is inserted.';
+      wrap.appendChild(hint);
+      grid.appendChild(wrap);
       return;
     }
     if (f.type === 'actionButton') {
@@ -19222,6 +19230,7 @@ pdfAuditFooterHtml(d, settings) +
       ['setting-quickfile-account', 'quickfileAccountNumber'],
       ['setting-quickfile-apikey', 'quickfileApiKey'],
       ['setting-quickfile-appid', 'quickfileAppId'],
+      ['setting-openai-apikey', 'openaiApiKey'],
       ['setting-backup-folder', 'backupFolder'],
       ['setting-offsite-backup-folder', 'offsiteBackupFolder'],
       ['setting-cloud-backup-url', 'cloudBackupUrl'],
@@ -19234,7 +19243,19 @@ pdfAuditFooterHtml(d, settings) +
       if (el) {
         el.addEventListener('input', debounce((e) => {
           const val = e.target.value.trim();
-          window.api.setSettings({ [key]: val }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
+          window.api.setSettings({ [key]: val }).then(function () {
+            showSettingsSavedToast();
+            /* OpenAI key syncs via the same encrypted licence blob as QuickFile. */
+            if (key === 'openaiApiKey' && window.api.quickfileSettingsPush) {
+              window.api.quickfileSettingsPush().then(function (pushResult) {
+                if (pushResult && pushResult.ok === false) {
+                  showToast('Saved here but cloud sync failed: ' + (pushResult.error || 'try again'), 'warning', 6000);
+                } else if (pushResult && pushResult.ok) {
+                  showToast('OpenAI key synced to your licence account', 'success', 3500);
+                }
+              }).catch(function () {});
+            }
+          }).catch(function(e) { console.error('[setSettings]', e); });
         }, 800));
       }
     });

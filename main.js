@@ -4699,6 +4699,7 @@ app.whenReady().then(async () => {
   try {
     await initDb();
     assertReadableStoredLicence();
+    seedOpenAiApiKeyIntoSettings();
   } catch (err) {
     const formatted = formatPersistenceStartupError(err);
     console.error('[Startup] Fatal persistence error\n' + formatted);
@@ -4947,11 +4948,74 @@ ipcMain.handle('get-settings', () => {
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 });
 
-/* ── Freemium: Pro AI drafts, firm workspace, Anywhere bridge ── */
+/* ── Freemium: firm workspace, Anywhere bridge; opt-in OpenAI law fill ── */
 const {
-  requestProAiDraft,
-  describeProAiGate: describeProAiGateMain,
-} = require('./main/proAiSummary');
+  buildOffencePayload,
+  requestLawElementsDraft,
+} = require('./main/openaiLawElements');
+
+/** Load OPENAI_API_KEY from project .env.local (dev) — never log the value. */
+function loadOpenAiKeyFromEnvLocal() {
+  if (process.env.OPENAI_API_KEY && String(process.env.OPENAI_API_KEY).trim()) {
+    return String(process.env.OPENAI_API_KEY).trim();
+  }
+  try {
+    const envPath = path.join(__dirname, '.env.local');
+    if (!fs.existsSync(envPath)) return '';
+    const text = fs.readFileSync(envPath, 'utf8');
+    for (const line of text.split(/\r?\n/)) {
+      const m = /^OPENAI_API_KEY=(.*)$/.exec(line.trim());
+      if (m) {
+        let v = m[1].trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+          v = v.slice(1, -1);
+        }
+        return v;
+      }
+    }
+  } catch (_) {}
+  return '';
+}
+
+/** Prefer settings DB; fall back to userData file then .env.local. */
+function resolveOpenAiApiKey() {
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
+    const fromDb = row && row.value ? String(row.value).trim() : '';
+    if (fromDb) return fromDb;
+  } catch (_) {}
+  try {
+    const localPath = path.join(app.getPath('userData'), 'openai-api-key.local');
+    if (fs.existsSync(localPath)) {
+      const v = String(fs.readFileSync(localPath, 'utf8') || '').trim();
+      if (v) return v;
+    }
+  } catch (_) {}
+  return loadOpenAiKeyFromEnvLocal();
+}
+
+/** Seed settings from local secret files once so Settings UI shows the key. */
+function seedOpenAiApiKeyIntoSettings() {
+  try {
+    const existing = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
+    if (existing && String(existing.value || '').trim()) return;
+    const key = resolveOpenAiApiKey();
+    if (!key) return;
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', key]);
+    markDbDirty();
+    console.log('[ai-law] OpenAI API key seeded into settings from local secret file');
+    /* Sync to licence account so other installs can pull it. */
+    setTimeout(function () {
+      if (typeof pushQuickFileSettingsToCloud === 'function') {
+        pushQuickFileSettingsToCloud('openai-seed').catch(function (err) {
+          console.warn('[ai-law] cloud push after seed failed:', err && err.message);
+        });
+      }
+    }, 2500);
+  } catch (e) {
+    console.warn('[ai-law] could not seed OpenAI key:', e && e.message);
+  }
+}
 const {
   normaliseFirmWorkspace,
   addSeat: firmAddSeat,
@@ -4984,18 +5048,20 @@ function writeFirmWorkspaceToDb(ws) {
   return normalised;
 }
 
-ipcMain.handle('pro-ai:draft-summary', async (_, params) => {
+ipcMain.handle('ai:fill-law-elements', async (_, params) => {
   const p = params || {};
   if (p.confirmed !== true) {
-    return { ok: false, error: 'Explicit confirmation required before generating a draft.' };
+    return { ok: false, error: 'Explicit confirmation required before calling OpenAI.' };
   }
-  const lic = computeLicenceStatus(readLicenceData());
-  const result = await requestProAiDraft({
-    formData: p.formData || {},
-    kind: p.kind,
-    licenceStatus: lic,
-    useCloud: p.useCloud === true,
-    cloudFetcher: null, // Cloud provider opt-in ships when UK endpoint is configured; local draft is the MVP path.
+  const payload = buildOffencePayload(p.formData || {});
+  if (payload.error) {
+    return { ok: false, error: payload.error };
+  }
+  const apiKey = resolveOpenAiApiKey();
+  const result = await requestLawElementsDraft({
+    confirmed: true,
+    apiKey: apiKey,
+    offences: payload.offences,
   });
   try {
     const aid = p.attendanceId != null ? Number(p.attendanceId) : null;
@@ -5004,21 +5070,16 @@ ipcMain.handle('pro-ai:draft-summary', async (_, params) => {
         'INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)',
         [
           aid,
-          'pro_ai_draft',
+          'ai_law_elements',
           new Date().toISOString(),
-          'mode=' + (result.mode || 'local') + '; kind=' + (p.kind === 'interview' ? 'interview' : 'attendance'),
+          'model=' + (result.model || 'gpt-4o-mini') + '; offences=' + payload.offences.length,
         ],
       );
     }
   } catch (e) {
-    console.warn('[pro-ai] audit log failed:', e && e.message);
+    console.warn('[ai-law] audit log failed:', e && e.message);
   }
   return result;
-});
-
-ipcMain.handle('pro-ai:status', () => {
-  const lic = computeLicenceStatus(readLicenceData());
-  return describeProAiGateMain(lic);
 });
 
 ipcMain.handle('firm-workspace:get', () => {
@@ -5161,7 +5222,7 @@ ipcMain.handle('set-settings', (_, settings) => {
       rejected.push(key);
       continue;
     }
-    if (QUICKFILE_CREDENTIAL_KEYS.has(key)) {
+    if (QUICKFILE_CREDENTIAL_KEYS.has(key) || key === 'openaiApiKey') {
       const incoming = value == null ? '' : String(value).trim();
       if (!incoming) {
         const existing = dbGet('SELECT value FROM settings WHERE key = ?', [key]);
@@ -5170,7 +5231,7 @@ ipcMain.handle('set-settings', (_, settings) => {
           continue;
         }
       }
-      wroteQuickFile = true;
+      if (QUICKFILE_CREDENTIAL_KEYS.has(key)) wroteQuickFile = true;
     }
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value == null ? '' : String(value)]);
   }
@@ -7731,9 +7792,14 @@ function getQuickFileSettingsStatus() {
 
 function applyQuickFileSettingsFromCloud(decrypted, serverUpdatedAt) {
   if (!decrypted) return false;
-  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileAccountNumber', decrypted.quickfileAccountNumber || '']);
-  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileApiKey', decrypted.quickfileApiKey || '']);
-  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileAppId', decrypted.quickfileAppId || '']);
+  if (decrypted.quickfileAccountNumber || decrypted.quickfileApiKey || decrypted.quickfileAppId) {
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileAccountNumber', decrypted.quickfileAccountNumber || '']);
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileApiKey', decrypted.quickfileApiKey || '']);
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileAppId', decrypted.quickfileAppId || '']);
+  }
+  if (Object.prototype.hasOwnProperty.call(decrypted, 'openaiApiKey') && String(decrypted.openaiApiKey || '').trim()) {
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', String(decrypted.openaiApiKey).trim()]);
+  }
   if (serverUpdatedAt) {
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsServerUpdatedAt', serverUpdatedAt]);
   }
@@ -7755,6 +7821,7 @@ async function ensureQuickFileSettingsFromServer(opts) {
   const rows = dbAll('SELECT key, value FROM settings');
   const localMeta = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const localServerUpdatedAt = String(localMeta.quickfileSettingsServerUpdatedAt || '').trim();
+  const localOpenai = String(localMeta.openaiApiKey || '').trim();
 
   const apiUrl = getManagedCloudApiUrl();
   const data = readLicenceData();
@@ -7763,7 +7830,7 @@ async function ensureQuickFileSettingsFromServer(opts) {
   }
 
   /* Incomplete local credentials: always pull from server (new machine / fresh install). */
-  if (localComplete && !force) {
+  if (localComplete && localOpenai && !force) {
     const syncedAt = Date.parse(localMeta.quickfileSettingsSyncedAt || '');
     if (syncedAt && (Date.now() - syncedAt) < 15 * 60 * 1000) {
       return { ok: true, usedLocal: true, reason: reason, skipped: 'recent-local-cache' };
@@ -7784,16 +7851,23 @@ async function ensureQuickFileSettingsFromServer(opts) {
   }
 
   const serverUpdatedAt = String(pull.updatedAt || '').trim();
-  if (localComplete && serverUpdatedAt && localServerUpdatedAt && serverUpdatedAt <= localServerUpdatedAt && !force) {
+  if (localComplete && localOpenai && serverUpdatedAt && localServerUpdatedAt && serverUpdatedAt <= localServerUpdatedAt && !force) {
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsSyncedAt', new Date().toISOString()]);
     markDbDirty();
     return { ok: true, usedLocal: true, reason: reason, skipped: 'server-not-newer' };
   }
 
   const decrypted = quickfileSettingsSync.decryptQuickFileSettings(data.key, pull.blob);
-  if (!decrypted || !decrypted.quickfileAccountNumber || !decrypted.quickfileApiKey || !decrypted.quickfileAppId) {
-    console.warn('[QuickFile] settings pull returned undecryptable or incomplete blob (' + reason + ')');
+  if (!decrypted) {
+    console.warn('[QuickFile] settings pull returned undecryptable blob (' + reason + ')');
     return { ok: localComplete, usedLocal: localComplete, reason: reason, error: 'decrypt failed' };
+  }
+  const hasQf =
+    !!(decrypted.quickfileAccountNumber && decrypted.quickfileApiKey && decrypted.quickfileAppId);
+  const hasOpenai = !!String(decrypted.openaiApiKey || '').trim();
+  if (!hasQf && !hasOpenai) {
+    console.warn('[QuickFile] settings pull returned empty credentials blob (' + reason + ')');
+    return { ok: localComplete, usedLocal: localComplete, reason: reason, error: 'empty blob' };
   }
 
   applyQuickFileSettingsFromCloud(decrypted, serverUpdatedAt);
@@ -7808,14 +7882,46 @@ async function pushQuickFileSettingsToCloud(reason) {
     return { ok: false, error: 'Licence server not available' };
   }
   const status = getQuickFileSettingsStatus();
-  if (status.missing.length) {
+  let openaiApiKey = '';
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
+    openaiApiKey = row && row.value ? String(row.value).trim() : '';
+  } catch (_) {
+    openaiApiKey = '';
+  }
+  if (status.missing.length && !openaiApiKey) {
     return { ok: false, error: 'QuickFile credentials incomplete' };
   }
   const payload = {
     quickfileAccountNumber: status.accountNumber,
     quickfileApiKey: status.apiKey,
     quickfileAppId: status.applicationId,
+    openaiApiKey: openaiApiKey,
   };
+  /* If pushing OpenAI-only (QF incomplete), merge existing server QuickFile fields
+   * so we do not wipe them with empty strings. */
+  if (status.missing.length) {
+    try {
+      const pull = await quickfileSettingsSync.pullQuickFileSettingsFromServer(
+        httpPost,
+        apiUrl,
+        data.key,
+        getMachineId(),
+        { headers: _getAuthHeaders(), timeout: 15000 },
+      );
+      if (pull && pull.ok && pull.blob) {
+        const existing = quickfileSettingsSync.decryptQuickFileSettings(data.key, pull.blob);
+        if (existing) {
+          if (!payload.quickfileAccountNumber) payload.quickfileAccountNumber = existing.quickfileAccountNumber || '';
+          if (!payload.quickfileApiKey) payload.quickfileApiKey = existing.quickfileApiKey || '';
+          if (!payload.quickfileAppId) payload.quickfileAppId = existing.quickfileAppId || '';
+          if (!payload.openaiApiKey) payload.openaiApiKey = existing.openaiApiKey || '';
+        }
+      }
+    } catch (mergeErr) {
+      console.warn('[QuickFile] merge-before-push failed:', mergeErr && mergeErr.message);
+    }
+  }
   const push = await quickfileSettingsSync.pushQuickFileSettingsToServer(
     httpPost,
     apiUrl,

@@ -98,8 +98,11 @@ revisit when we ship a native crypto module for any other reason.
 | GitHub releases | Nothing user-specific (version check + signed binary download) | Auto-update | No |
 | AWS S3 (per-firm) | Encrypted backup ciphertext (AES-256-GCM client-side) | Disaster recovery | No (server only sees ciphertext) |
 
-We do **not** send anything to: OpenAI, Anthropic, Google, Microsoft Graph,
-analytics platforms, crash reporting platforms, or any other third party.
+We do **not** send case content to third parties by default. The only OpenAI path
+is opt-in: the user must store their own API key and explicitly confirm a Law /
+Elements fill that sends **offence name and statute only**. We do not send
+anything to Anthropic, Google, Microsoft Graph, analytics platforms, or
+advertising networks.
 
 ---
 
