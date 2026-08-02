@@ -56,11 +56,17 @@ CustodyNote does **not** send case content to OpenAI, Anthropic, Google,
 Microsoft Graph, analytics services, advertising networks, or any other third
 party by default.
 
-**Pro AI summary drafts (opt-in):** Pro users may request a local structured
-draft built only from fields already on the open record. That path never leaves
-the device. A future UK-region cloud AI path will require a separate explicit
-confirmation and will not run silently. Cloud AI is not enabled until a
-provider endpoint is configured.
+**OpenAI Law / Elements fill (opt-in):** If you store your own OpenAI API key and
+tick the Case Assessment checkbox, the app may send **offence name and statute
+only** to OpenAI after an explicit confirmation. Client details and privileged
+notes are not included. The AI checkbox is never printed on the PDF.
+
+**Licence settings sync (opt-in via active subscription):** Preferences,
+QuickFile credentials, OpenAI API key, fee-earner defaults, templates, and firm
+workspace JSON may sync as an encrypted blob (licence-key ciphertext) to your
+Custody Note account so your other installs can pull them. Machine-local paths
+(backup folders, auto-import folders) and counters are not synced. The server
+stores ciphertext only.
 
 ### 2.3 What is NEVER stored or transmitted
 
@@ -69,8 +75,8 @@ provider endpoint is configured.
 - The plaintext master key (sealed by the OS keychain).
 - Telemetry of case content. The app does not phone home except for licence
   validation, optional cloud backup, optional postcode lookup,
-  auto-update binary download from GitHub, and (only if the user explicitly
-  confirms) a future Pro AI cloud draft request.
+  auto-update binary download from GitHub, encrypted settings sync (above),
+  and (only if the user explicitly confirms) an OpenAI Law / Elements fill.
 
 ---
 
