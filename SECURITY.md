@@ -98,8 +98,11 @@ revisit when we ship a native crypto module for any other reason.
 | GitHub releases | Nothing user-specific (version check + signed binary download) | Auto-update | No |
 | AWS S3 (per-firm) | Encrypted backup ciphertext (AES-256-GCM client-side) | Disaster recovery | No (server only sees ciphertext) |
 
-We do **not** send anything to: OpenAI, Anthropic, Google, Microsoft Graph,
-analytics platforms, crash reporting platforms, or any other third party.
+We do **not** send case content to third parties by default. Opt-in OpenAI Law /
+Elements fill sends offence name/statute only after confirmation, using the
+user's own API key. Licence settings sync uploads an encrypted preferences blob
+(ciphertext only) to the Custody Note account. We do not send anything to
+Anthropic, Google, Microsoft Graph, analytics platforms, or advertising networks.
 
 ---
 

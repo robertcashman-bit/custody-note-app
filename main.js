@@ -4699,6 +4699,7 @@ app.whenReady().then(async () => {
   try {
     await initDb();
     assertReadableStoredLicence();
+    seedOpenAiApiKeyIntoSettings();
   } catch (err) {
     const formatted = formatPersistenceStartupError(err);
     console.error('[Startup] Fatal persistence error\n' + formatted);
@@ -4947,11 +4948,73 @@ ipcMain.handle('get-settings', () => {
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 });
 
-/* ── Freemium: Pro AI drafts, firm workspace, Anywhere bridge ── */
+/* ── Freemium: firm workspace, Anywhere bridge; opt-in OpenAI law fill ── */
 const {
-  requestProAiDraft,
-  describeProAiGate: describeProAiGateMain,
-} = require('./main/proAiSummary');
+  buildOffencePayload,
+  requestLawElementsDraft,
+} = require('./main/openaiLawElements');
+
+function loadOpenAiKeyFromEnvLocal() {
+  if (process.env.OPENAI_API_KEY && String(process.env.OPENAI_API_KEY).trim()) {
+    return String(process.env.OPENAI_API_KEY).trim();
+  }
+  try {
+    const envPath = path.join(__dirname, '.env.local');
+    if (!fs.existsSync(envPath)) return '';
+    const text = fs.readFileSync(envPath, 'utf8');
+    for (const line of text.split(/\r?\n/)) {
+      const m = /^OPENAI_API_KEY=(.*)$/.exec(line.trim());
+      if (m) {
+        let v = m[1].trim();
+        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+          v = v.slice(1, -1);
+        }
+        return v;
+      }
+    }
+  } catch (_) {}
+  return '';
+}
+
+function resolveOpenAiApiKey() {
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
+    const fromDb = row && row.value ? String(row.value).trim() : '';
+    if (fromDb) return fromDb;
+  } catch (_) {}
+  try {
+    const localPath = path.join(app.getPath('userData'), 'openai-api-key.local');
+    if (fs.existsSync(localPath)) {
+      const v = String(fs.readFileSync(localPath, 'utf8') || '').trim();
+      if (v) return v;
+    }
+  } catch (_) {}
+  return loadOpenAiKeyFromEnvLocal();
+}
+
+function seedOpenAiApiKeyIntoSettings() {
+  try {
+    const existing = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
+    if (existing && String(existing.value || '').trim()) return;
+    const key = resolveOpenAiApiKey();
+    if (!key) return;
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', key]);
+    markDbDirty();
+    console.log('[ai-law] OpenAI API key seeded into settings from local secret file');
+    setTimeout(function () {
+      if (typeof scheduleUserSettingsCloudPush === 'function') {
+        scheduleUserSettingsCloudPush('openai-seed');
+      } else if (typeof pushQuickFileSettingsToCloud === 'function') {
+        pushQuickFileSettingsToCloud('openai-seed').catch(function (err) {
+          console.warn('[ai-law] cloud push after seed failed:', err && err.message);
+        });
+      }
+    }, 2500);
+  } catch (e) {
+    console.warn('[ai-law] could not seed OpenAI key:', e && e.message);
+  }
+}
+
 const {
   normaliseFirmWorkspace,
   addSeat: firmAddSeat,
@@ -4984,18 +5047,20 @@ function writeFirmWorkspaceToDb(ws) {
   return normalised;
 }
 
-ipcMain.handle('pro-ai:draft-summary', async (_, params) => {
+ipcMain.handle('ai:fill-law-elements', async (_, params) => {
   const p = params || {};
   if (p.confirmed !== true) {
-    return { ok: false, error: 'Explicit confirmation required before generating a draft.' };
+    return { ok: false, error: 'Explicit confirmation required before calling OpenAI.' };
   }
-  const lic = computeLicenceStatus(readLicenceData());
-  const result = await requestProAiDraft({
-    formData: p.formData || {},
-    kind: p.kind,
-    licenceStatus: lic,
-    useCloud: p.useCloud === true,
-    cloudFetcher: null, // Cloud provider opt-in ships when UK endpoint is configured; local draft is the MVP path.
+  const payload = buildOffencePayload(p.formData || {});
+  if (payload.error) {
+    return { ok: false, error: payload.error };
+  }
+  const apiKey = resolveOpenAiApiKey();
+  const result = await requestLawElementsDraft({
+    confirmed: true,
+    apiKey: apiKey,
+    offences: payload.offences,
   });
   try {
     const aid = p.attendanceId != null ? Number(p.attendanceId) : null;
@@ -5004,21 +5069,16 @@ ipcMain.handle('pro-ai:draft-summary', async (_, params) => {
         'INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)',
         [
           aid,
-          'pro_ai_draft',
+          'ai_law_elements',
           new Date().toISOString(),
-          'mode=' + (result.mode || 'local') + '; kind=' + (p.kind === 'interview' ? 'interview' : 'attendance'),
+          'model=' + (result.model || 'gpt-4o-mini') + '; offences=' + payload.offences.length,
         ],
       );
     }
   } catch (e) {
-    console.warn('[pro-ai] audit log failed:', e && e.message);
+    console.warn('[ai-law] audit log failed:', e && e.message);
   }
   return result;
-});
-
-ipcMain.handle('pro-ai:status', () => {
-  const lic = computeLicenceStatus(readLicenceData());
-  return describeProAiGateMain(lic);
 });
 
 ipcMain.handle('firm-workspace:get', () => {
@@ -5156,12 +5216,13 @@ ipcMain.handle('set-settings', (_, settings) => {
   if (!settings || typeof settings !== 'object') return { ok: false, error: 'Invalid settings payload' };
   const rejected = [];
   let wroteQuickFile = false;
+  let wroteSyncable = false;
   for (const [key, value] of Object.entries(settings)) {
     if (_URL_LIKE_SETTINGS.has(key) && !_isAllowedSettingsUrl(value)) {
       rejected.push(key);
       continue;
     }
-    if (QUICKFILE_CREDENTIAL_KEYS.has(key)) {
+    if (QUICKFILE_CREDENTIAL_KEYS.has(key) || key === 'openaiApiKey') {
       const incoming = value == null ? '' : String(value).trim();
       if (!incoming) {
         const existing = dbGet('SELECT value FROM settings WHERE key = ?', [key]);
@@ -5170,15 +5231,21 @@ ipcMain.handle('set-settings', (_, settings) => {
           continue;
         }
       }
-      wroteQuickFile = true;
+      if (QUICKFILE_CREDENTIAL_KEYS.has(key)) wroteQuickFile = true;
     }
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value == null ? '' : String(value)]);
+    if (typeof quickfileSettingsSync !== 'undefined' && quickfileSettingsSync.isSyncableSettingsKey && quickfileSettingsSync.isSyncableSettingsKey(key)) {
+      wroteSyncable = true;
+    }
   }
   markDbDirty();
   if (wroteQuickFile && typeof flushDbSync === 'function') {
     try { flushDbSync(); } catch (flushErr) {
       console.warn('[set-settings] flushDbSync after QuickFile keys failed:', flushErr && flushErr.message);
     }
+  }
+  if (wroteSyncable && typeof scheduleUserSettingsCloudPush === 'function') {
+    scheduleUserSettingsCloudPush('set-settings');
   }
   if (rejected.length) {
     return { ok: true, rejectedSettings: rejected };
@@ -7731,9 +7798,20 @@ function getQuickFileSettingsStatus() {
 
 function applyQuickFileSettingsFromCloud(decrypted, serverUpdatedAt) {
   if (!decrypted) return false;
-  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileAccountNumber', decrypted.quickfileAccountNumber || '']);
-  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileApiKey', decrypted.quickfileApiKey || '']);
-  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileAppId', decrypted.quickfileAppId || '']);
+  const picked = quickfileSettingsSync.pickSyncableSettings(decrypted);
+  const keys = quickfileSettingsSync.SYNCABLE_SETTINGS_KEYS;
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const incoming = String(picked[key] || '');
+    /* Never wipe a populated local value with an empty cloud value. */
+    if (!incoming.trim()) {
+      try {
+        const existing = dbGet('SELECT value FROM settings WHERE key = ?', [key]);
+        if (existing && String(existing.value || '').trim()) continue;
+      } catch (_) {}
+    }
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, incoming]);
+  }
   if (serverUpdatedAt) {
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsServerUpdatedAt', serverUpdatedAt]);
   }
@@ -7741,10 +7819,16 @@ function applyQuickFileSettingsFromCloud(decrypted, serverUpdatedAt) {
   markDbDirty();
   if (typeof flushDbSync === 'function') {
     try { flushDbSync(); } catch (flushErr) {
-      console.warn('[QuickFile] flushDbSync after cloud pull failed:', flushErr && flushErr.message);
+      console.warn('[SettingsSync] flushDbSync after cloud pull failed:', flushErr && flushErr.message);
     }
   }
   return true;
+}
+
+function collectSyncableSettingsFromDb() {
+  const rows = dbAll('SELECT key, value FROM settings');
+  const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  return quickfileSettingsSync.pickSyncableSettings(map);
 }
 
 async function ensureQuickFileSettingsFromServer(opts) {
@@ -7752,6 +7836,8 @@ async function ensureQuickFileSettingsFromServer(opts) {
   const force = !!(opts && opts.force);
   const status = getQuickFileSettingsStatus();
   const localComplete = status.missing.length === 0;
+  const localSyncable = collectSyncableSettingsFromDb();
+  const localHasContent = quickfileSettingsSync.hasAnySyncableContent(localSyncable);
   const rows = dbAll('SELECT key, value FROM settings');
   const localMeta = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const localServerUpdatedAt = String(localMeta.quickfileSettingsServerUpdatedAt || '').trim();
@@ -7759,11 +7845,11 @@ async function ensureQuickFileSettingsFromServer(opts) {
   const apiUrl = getManagedCloudApiUrl();
   const data = readLicenceData();
   if (!apiUrl || !data || !data.key) {
-    return { ok: localComplete, usedLocal: localComplete, reason: reason, skipped: 'no-licence-or-api' };
+    return { ok: localComplete || localHasContent, usedLocal: true, reason: reason, skipped: 'no-licence-or-api' };
   }
 
-  /* Incomplete local credentials: always pull from server (new machine / fresh install). */
-  if (localComplete && !force) {
+  /* Fresh installs always pull; otherwise respect a short local cache. */
+  if (localHasContent && !force) {
     const syncedAt = Date.parse(localMeta.quickfileSettingsSyncedAt || '');
     if (syncedAt && (Date.now() - syncedAt) < 15 * 60 * 1000) {
       return { ok: true, usedLocal: true, reason: reason, skipped: 'recent-local-cache' };
@@ -7779,25 +7865,29 @@ async function ensureQuickFileSettingsFromServer(opts) {
   );
 
   if (!pull.ok) {
-    console.warn('[QuickFile] settings pull failed (' + reason + '):', pull.error || 'unknown');
-    return { ok: localComplete, usedLocal: localComplete, reason: reason, error: pull.error || 'pull failed' };
+    console.warn('[SettingsSync] pull failed (' + reason + '):', pull.error || 'unknown');
+    return { ok: localComplete || localHasContent, usedLocal: true, reason: reason, error: pull.error || 'pull failed' };
   }
 
   const serverUpdatedAt = String(pull.updatedAt || '').trim();
-  if (localComplete && serverUpdatedAt && localServerUpdatedAt && serverUpdatedAt <= localServerUpdatedAt && !force) {
+  if (localHasContent && serverUpdatedAt && localServerUpdatedAt && serverUpdatedAt <= localServerUpdatedAt && !force) {
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileSettingsSyncedAt', new Date().toISOString()]);
     markDbDirty();
     return { ok: true, usedLocal: true, reason: reason, skipped: 'server-not-newer' };
   }
 
   const decrypted = quickfileSettingsSync.decryptQuickFileSettings(data.key, pull.blob);
-  if (!decrypted || !decrypted.quickfileAccountNumber || !decrypted.quickfileApiKey || !decrypted.quickfileAppId) {
-    console.warn('[QuickFile] settings pull returned undecryptable or incomplete blob (' + reason + ')');
-    return { ok: localComplete, usedLocal: localComplete, reason: reason, error: 'decrypt failed' };
+  if (!decrypted) {
+    console.warn('[SettingsSync] pull returned undecryptable blob (' + reason + ')');
+    return { ok: localComplete || localHasContent, usedLocal: true, reason: reason, error: 'decrypt failed' };
+  }
+  if (!quickfileSettingsSync.hasAnySyncableContent(decrypted)) {
+    console.warn('[SettingsSync] pull returned empty settings blob (' + reason + ')');
+    return { ok: localComplete || localHasContent, usedLocal: true, reason: reason, error: 'empty blob' };
   }
 
   applyQuickFileSettingsFromCloud(decrypted, serverUpdatedAt);
-  console.info('[QuickFile] settings pulled from server (' + reason + ') updatedAt=' + (serverUpdatedAt || '?'));
+  console.info('[SettingsSync] settings pulled from server (' + reason + ') updatedAt=' + (serverUpdatedAt || '?'));
   return { ok: true, usedLocal: false, reason: reason, updatedAt: serverUpdatedAt };
 }
 
@@ -7807,22 +7897,43 @@ async function pushQuickFileSettingsToCloud(reason) {
   if (!apiUrl || !data || !data.key) {
     return { ok: false, error: 'Licence server not available' };
   }
-  const status = getQuickFileSettingsStatus();
-  if (status.missing.length) {
-    return { ok: false, error: 'QuickFile credentials incomplete' };
+  let payload = collectSyncableSettingsFromDb();
+  if (!quickfileSettingsSync.hasAnySyncableContent(payload)) {
+    return { ok: false, error: 'Nothing to sync yet' };
   }
-  const payload = {
-    quickfileAccountNumber: status.accountNumber,
-    quickfileApiKey: status.apiKey,
-    quickfileAppId: status.applicationId,
-  };
+  /* Merge with server so empty local fields do not wipe other devices. */
+  try {
+    const pull = await quickfileSettingsSync.pullQuickFileSettingsFromServer(
+      httpPost,
+      apiUrl,
+      data.key,
+      getMachineId(),
+      { headers: _getAuthHeaders(), timeout: 15000 },
+    );
+    if (pull && pull.ok && pull.blob) {
+      const existing = quickfileSettingsSync.decryptQuickFileSettings(data.key, pull.blob);
+      if (existing) {
+        const keys = quickfileSettingsSync.SYNCABLE_SETTINGS_KEYS;
+        const merged = {};
+        for (let i = 0; i < keys.length; i++) {
+          const key = keys[i];
+          const localVal = String(payload[key] || '').trim();
+          const remoteVal = String(existing[key] || '').trim();
+          merged[key] = localVal || remoteVal;
+        }
+        payload = merged;
+      }
+    }
+  } catch (mergeErr) {
+    console.warn('[SettingsSync] merge-before-push failed:', mergeErr && mergeErr.message);
+  }
   const push = await quickfileSettingsSync.pushQuickFileSettingsToServer(
     httpPost,
     apiUrl,
     data.key,
     getMachineId(),
     payload,
-    { headers: _getAuthHeaders(), timeout: 15000 }
+    { headers: _getAuthHeaders(), timeout: 20000 }
   );
   if (push.ok) {
     if (push.updatedAt) {
@@ -7833,11 +7944,22 @@ async function pushQuickFileSettingsToCloud(reason) {
         try { flushDbSync(); } catch (_) {}
       }
     }
-    console.info('[QuickFile] settings pushed to server (' + (reason || 'save') + ')');
+    console.info('[SettingsSync] settings pushed to server (' + (reason || 'save') + ')');
   } else {
-    console.warn('[QuickFile] settings push failed:', push.error || 'unknown');
+    console.warn('[SettingsSync] settings push failed:', push.error || 'unknown');
   }
   return push;
+}
+
+let _settingsSyncPushTimer = null;
+function scheduleUserSettingsCloudPush(reason) {
+  if (_settingsSyncPushTimer) clearTimeout(_settingsSyncPushTimer);
+  _settingsSyncPushTimer = setTimeout(function () {
+    _settingsSyncPushTimer = null;
+    pushQuickFileSettingsToCloud(reason || 'settings-change').catch(function (err) {
+      console.warn('[SettingsSync] debounced push failed:', err && err.message);
+    });
+  }, 2000);
 }
 
 function getQuickFileAuth() {

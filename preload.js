@@ -377,9 +377,8 @@ contextBridge.exposeInMainWorld('api', {
   getAutoUpdateState: () => ipcRenderer.invoke('get-auto-update-state'),
   appUpdateResetLoop: () => ipcRenderer.invoke('app-update-reset-loop'),
   appUpdateDiagnosticInstall: () => ipcRenderer.invoke('app-update-diagnostic-install'),
-  /* Pro AI / firm workspace / Anywhere bridge */
-  proAiDraftSummary: (params) => ipcRenderer.invoke('pro-ai:draft-summary', params || {}),
-  proAiStatus: () => ipcRenderer.invoke('pro-ai:status'),
+  /* Opt-in OpenAI law fill / firm workspace / Anywhere bridge */
+  aiFillLawElements: (params) => ipcRenderer.invoke('ai:fill-law-elements', params || {}),
   firmWorkspaceGet: () => ipcRenderer.invoke('firm-workspace:get'),
   firmWorkspaceSave: (payload) => ipcRenderer.invoke('firm-workspace:save', payload || {}),
   firmWorkspaceAddSeat: (params) => ipcRenderer.invoke('firm-workspace:add-seat', params || {}),
