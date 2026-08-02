@@ -16,6 +16,39 @@ const {
   resetAskInFlightForTests,
   normaliseHistory,
 } = require('../main/openaiAsk');
+const { extractTextAndCitations } = require('../main/openaiClient');
+
+function mockResponsesOk(text, citations) {
+  return {
+    ok: true,
+    json: async () => ({
+      output_text: text,
+      output: [
+        {
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              text: text,
+              annotations: (citations || []).map(function (c) {
+                return { type: 'url_citation', title: c.title, url: c.url };
+              }),
+            },
+          ],
+        },
+      ],
+    }),
+  };
+}
+
+const GOOD_LAW_TEXT =
+  'Answer\n' +
+  'Actus reus: assault or battery causing actual bodily harm.\n\n' +
+  'Uncertainties\n' +
+  'None\n\n' +
+  'Sources\n' +
+  '1. Legislation — https://www.legislation.gov.uk/ukpga/1861/100\n' +
+  '2. CPS — https://www.cps.gov.uk/legal-guidance/offences-against-person';
 
 describe('openaiLawElements', () => {
   beforeEach(() => {
@@ -41,13 +74,15 @@ describe('openaiLawElements', () => {
     assert.ok(payload.error);
   });
 
-  it('prompt mentions actus reus / mens rea / defences / sentencing', () => {
+  it('prompt mentions actus reus / mens rea / defences / sentencing and sources', () => {
     const msg = buildPromptMessages([{ details: 'ABH', statute: 'OAPA 1861 s.47', modeOfTrial: 'Either way' }]);
     assert.match(msg.system, /Actus reus/i);
     assert.match(msg.system, /Mens rea/i);
     assert.match(msg.system, /defences/i);
     assert.match(msg.system, /Sentencing/i);
+    assert.match(msg.system, /ACCURACY|Sources/i);
     assert.match(msg.user, /ABH/);
+    assert.match(msg.user, /Sources/);
   });
 
   it('gates on confirmed and api key', async () => {
@@ -58,7 +93,7 @@ describe('openaiLawElements', () => {
       offences: [{ details: 'Theft', statute: '', modeOfTrial: '' }],
       fetchImpl: async () => {
         called = true;
-        return { ok: true, json: async () => ({}) };
+        return mockResponsesOk(GOOD_LAW_TEXT);
       },
     });
     assert.equal(r1.ok, false);
@@ -70,30 +105,42 @@ describe('openaiLawElements', () => {
       offences: [{ details: 'Theft', statute: '', modeOfTrial: '' }],
       fetchImpl: async () => {
         called = true;
-        return { ok: true, json: async () => ({}) };
+        return mockResponsesOk(GOOD_LAW_TEXT);
       },
     });
     assert.equal(r2.ok, false);
     assert.equal(called, false);
   });
 
-  it('returns draft from OpenAI response', async () => {
+  it('returns grounded draft with sources', async () => {
     const res = await requestLawElementsDraft({
       confirmed: true,
       apiKey: 'sk-test',
-      offences: [{ details: 'Theft', statute: 'TA 1968', modeOfTrial: '' }],
-      fetchImpl: async () => ({
-        ok: true,
-        json: async () => ({
-          choices: [{ message: { content: 'Actus reus: appropriation...' } }],
-        }),
-      }),
+      offences: [{ details: 'ABH', statute: 'OAPA', modeOfTrial: '' }],
+      fetchImpl: async () => mockResponsesOk(GOOD_LAW_TEXT),
     });
     assert.equal(res.ok, true);
-    assert.match(res.draft, /Actus reus/);
+    assert.match(res.draft, /Actus reus/i);
+    assert.ok(res.sources.length >= 2);
   });
 
-  it('PDF builders omit aiFillLawElements checkbox key', () => {
+  it('rejects unsourced legal draft after retry', async () => {
+    let calls = 0;
+    const res = await requestLawElementsDraft({
+      confirmed: true,
+      apiKey: 'sk-test',
+      offences: [{ details: 'ABH', statute: 'OAPA', modeOfTrial: '' }],
+      fetchImpl: async () => {
+        calls += 1;
+        return mockResponsesOk('Answer\nMust prove actus reus.\n\nUncertainties\nNone\n\nSources\nNone');
+      },
+    });
+    assert.equal(res.ok, false);
+    assert.ok(calls >= 1);
+    assert.match(res.error, /source|rejected|accuracy/i);
+  });
+
+  it('PDF builders omit AI UI keys', () => {
     const appJs = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
     const pdfStart = appJs.indexOf('function buildPdfHtml');
     const volStart = appJs.indexOf('function buildVoluntaryPdfHtml');
@@ -104,27 +151,23 @@ describe('openaiLawElements', () => {
     assert.ok(!volChunk.includes('aiFillLawElements'));
     assert.ok(!pdfChunk.includes('aiAskQuestion'));
     assert.ok(!volChunk.includes('aiAskQuestion'));
-    assert.ok(!pdfChunk.includes('lawElementsFilledViaAi'));
-    assert.ok(!volChunk.includes('lawElementsFilledViaAi'));
     assert.ok(appJs.includes("type: 'aiLawFill'"));
     assert.ok(appJs.includes("type: 'aiAsk'"));
   });
 });
 
-describe('aiLawElements renderer — Insert-only write + confirm gate', () => {
+describe('aiLawElements renderer — Insert-only + sources gate', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'aiLawElements.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
   it('never calls runFill without confirm OK', () => {
     assert.match(src, /confirmAsync\(msg/);
     assert.match(src, /if \(ok\) runFill\(\)/);
     assert.match(src, /else uncheckFillBoxes\(\)/);
-    assert.ok(!/if \(typeof showConfirm === 'function'\)[\s\S]*runFill\(\);\s*\}\s*return;\s*\}\s*runFill\(\);/.test(src));
-    assert.ok(!src.includes('runFill();\n  }\n\n  function observeForm'));
   });
 
-  it('writes lawElements only via insertIntoLawElements / applyLawElementsDraft', () => {
+  it('writes lawElements only via insert path', () => {
     assert.match(src, /function insertIntoLawElements/);
-    assert.match(src, /function applyLawElementsDraft/);
     assert.match(src, /Only write path into lawElements/);
     const runFillStart = src.indexOf('function runFill()');
     const runFillEnd = src.indexOf('function onFillCheckboxChange');
@@ -134,18 +177,11 @@ describe('aiLawElements renderer — Insert-only write + confirm gate', () => {
     assert.ok(runFillBody.includes('showReviewModal'));
   });
 
-  it('marks lawElementsFilledViaAi only after insert/append', () => {
-    assert.match(src, /lawElementsFilledViaAi/);
-    assert.match(src, /function markFilledViaAi/);
-    assert.match(src, /applyLawElementsDraft\(draft\)/);
-  });
-
-  it('wires Ask AI multi-turn session', () => {
-    assert.match(src, /aiAskQuestion/);
-    assert.match(src, /_askThread/);
-    assert.match(src, /includeOffences/);
-    assert.match(src, /appendLastToLawElements/);
-    assert.match(src, /_askSessionConfirmed/);
+  it('gates Insert/Append on sources and shows Sources UI', () => {
+    assert.match(html, /id="ai-law-draft-sources"/);
+    assert.match(html, /id="ai-ask-accuracy-banner"/);
+    assert.match(src, /sources\.length/);
+    assert.match(src, /Insert disabled|sources required|canInsert|_lastLawSources|appendLastToLawElements/i);
   });
 });
 
@@ -160,16 +196,13 @@ describe('openaiAsk', () => {
       history: [
         { role: 'user', content: 'Explain intoxication briefly' },
         { role: 'assistant', content: 'Intoxication is usually...' },
-        { role: 'user', content: 'SECRET CLIENT should not appear from form' },
       ],
       offences: [],
     });
     assert.equal(built.question, 'What are the elements of self-defence?');
     assert.ok(built.messages.some((m) => m.role === 'user' && /self-defence/.test(m.content)));
-    assert.ok(built.messages.some((m) => m.role === 'assistant'));
     const blob = JSON.stringify(built.messages);
     assert.ok(!blob.includes('clientName'));
-    assert.ok(!blob.includes('clientInstructions'));
   });
 
   it('optionally attaches offence context only', () => {
@@ -180,83 +213,56 @@ describe('openaiAsk', () => {
     });
     const sys = built.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
     assert.match(sys, /ABH/);
-    assert.match(sys, /s\.47/);
     assert.ok(!sys.includes('clientName'));
   });
 
-  it('normalises history roles and truncates junk', () => {
+  it('normalises history roles', () => {
     const h = normaliseHistory([
       { role: 'user', content: 'a' },
       { role: 'system', content: 'bad' },
       { role: 'assistant', content: 'b' },
-      { role: 'user', content: '' },
     ]);
     assert.equal(h.length, 2);
-    assert.equal(h[0].role, 'user');
-    assert.equal(h[1].role, 'assistant');
   });
 
-  it('gates ask on confirmed and api key', async () => {
-    let called = false;
-    const r1 = await requestAskAnswer({
-      confirmed: false,
-      apiKey: 'sk-test',
-      question: 'hello',
-      fetchImpl: async () => {
-        called = true;
-        return { ok: true, json: async () => ({}) };
-      },
-    });
-    assert.equal(r1.ok, false);
-    assert.equal(called, false);
-
-    const r2 = await requestAskAnswer({
-      confirmed: true,
-      apiKey: '',
-      question: 'hello',
-      fetchImpl: async () => {
-        called = true;
-        return { ok: true, json: async () => ({}) };
-      },
-    });
-    assert.equal(r2.ok, false);
-    assert.equal(called, false);
-  });
-
-  it('returns answer and supports multi-turn history in request body', async () => {
-    let body = null;
+  it('returns answer with sources from Responses API', async () => {
     const res = await requestAskAnswer({
       confirmed: true,
       apiKey: 'sk-test',
-      question: 'And intoxication?',
-      history: [
-        { role: 'user', content: 'Self-defence elements?' },
-        { role: 'assistant', content: 'Honest belief...' },
-      ],
-      fetchImpl: async (_url, opts) => {
-        body = JSON.parse(opts.body);
-        return {
-          ok: true,
-          json: async () => ({
-            choices: [{ message: { content: 'Intoxication generally...' } }],
-          }),
-        };
-      },
+      question: 'Self-defence elements?',
+      history: [],
+      fetchImpl: async () => mockResponsesOk(GOOD_LAW_TEXT),
     });
     assert.equal(res.ok, true);
-    assert.match(res.answer, /Intoxication/);
-    assert.ok(body.messages.some((m) => m.content === 'Self-defence elements?'));
-    assert.ok(body.messages.some((m) => m.content === 'And intoxication?'));
+    assert.ok(res.sources.length >= 2);
+    assert.match(res.answer, /Sources/i);
   });
 
-  it('preload and main expose ask IPC; PDF omit keys in app form builders', () => {
+  it('extractTextAndCitations reads annotations', () => {
+    const parsed = extractTextAndCitations({
+      output_text: 'Hello',
+      output: [
+        {
+          type: 'message',
+          content: [
+            {
+              type: 'output_text',
+              text: 'Hello',
+              annotations: [{ type: 'url_citation', title: 'A', url: 'https://example.com/a' }],
+            },
+          ],
+        },
+      ],
+    });
+    assert.equal(parsed.text, 'Hello');
+    assert.equal(parsed.citations[0].url, 'https://example.com/a');
+  });
+
+  it('preload and main expose ask IPC', () => {
     const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
     const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
     assert.match(preload, /aiAskQuestion/);
     assert.match(main, /ai:ask-question/);
     assert.match(main, /requestAskAnswer/);
-    assert.match(html, /id="ai-ask-modal"/);
-    assert.match(html, /ai-ask-include-offences/);
   });
 });

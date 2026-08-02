@@ -1,21 +1,22 @@
 /**
- * Opt-in free-form OpenAI Q&A for solicitors.
+ * Opt-in free-form OpenAI Q&A for solicitors (web-search grounded + accuracy gate).
  * Sends the typed question + optional session history (+ optional offence names).
  * Never auto-pulls client or privileged form fields.
  */
 
 'use strict';
 
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const { requestGroundedLegalAnswer, DEFAULT_MODEL, RESPONSES_URL } = require('./openaiClient');
+const { ACCURACY_SYSTEM_RULES } = require('./aiAccuracyPolicy');
 
 let _inFlight = false;
 
 const ASK_SYSTEM_PROMPT =
   'You are a UK criminal defence solicitor assistant helping a qualified solicitor. ' +
-  'Answer the question asked clearly and practically. This is a draft for solicitor review — not legal advice. ' +
+  'Answer the question asked clearly and practically. ' +
   'Do not invent case facts about a specific client. Do not require or request client identifiers. ' +
-  'UK law only unless the user asks about another jurisdiction.';
+  'UK law only unless the user asks about another jurisdiction. ' +
+  'Use web search. Follow the ACCURACY RULES and required Sources format.';
 
 function normaliseHistory(history) {
   if (!Array.isArray(history)) return [];
@@ -85,54 +86,26 @@ async function requestAskAnswer(opts) {
     return { ok: false, error: 'An AI request is already in progress.' };
   }
 
-  const model = String(options.model || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
-  const fetchFn = typeof options.fetchImpl === 'function' ? options.fetchImpl : fetch;
-
   _inFlight = true;
   try {
-    const res = await fetchFn(OPENAI_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + apiKey,
-      },
-      body: JSON.stringify({
-        model: model,
-        temperature: 0.4,
-        messages: built.messages,
-      }),
+    const result = await requestGroundedLegalAnswer({
+      apiKey: apiKey,
+      model: options.model,
+      fetchImpl: options.fetchImpl,
+      inputMessages: built.messages,
+      requireWebSearch: true,
+      retryOnValidationFail: true,
     });
-    let body = null;
-    try {
-      body = await res.json();
-    } catch (_) {
-      body = null;
-    }
-    if (!res.ok) {
-      const msg =
-        (body && body.error && body.error.message) ||
-        'OpenAI request failed (HTTP ' + res.status + ')';
-      return { ok: false, error: msg };
-    }
-    const text =
-      body &&
-      body.choices &&
-      body.choices[0] &&
-      body.choices[0].message &&
-      body.choices[0].message.content
-        ? String(body.choices[0].message.content).trim()
-        : '';
-    if (!text) {
-      return { ok: false, error: 'OpenAI returned an empty response.' };
-    }
+    if (!result.ok) return result;
     return {
       ok: true,
-      answer: text,
-      model: model,
-      message: 'AI answer — review before relying on it. Not legal advice.',
+      answer: result.text,
+      sources: result.sources || [],
+      uncertainties: result.uncertainties || '',
+      refusal: !!result.refusal,
+      model: result.model || DEFAULT_MODEL,
+      message: result.message,
     };
-  } catch (e) {
-    return { ok: false, error: (e && e.message) || 'OpenAI request failed' };
   } finally {
     _inFlight = false;
   }
@@ -144,11 +117,12 @@ function resetAskInFlightForTests() {
 
 module.exports = {
   ASK_SYSTEM_PROMPT,
+  ACCURACY_SYSTEM_RULES,
   buildAskMessages,
   normaliseHistory,
   formatOffencesContext,
   requestAskAnswer,
   resetAskInFlightForTests,
   DEFAULT_MODEL,
-  OPENAI_URL,
+  OPENAI_URL: RESPONSES_URL,
 };

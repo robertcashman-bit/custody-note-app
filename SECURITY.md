@@ -100,12 +100,14 @@ revisit when we ship a native crypto module for any other reason.
 
 We do **not** send case content to third parties by default. Opt-in OpenAI Law /
 Elements fill sends offence name/statute only after confirmation, using the
-user's own API key. Opt-in Ask AI sends the questions you type (plus session
-follow-ups, and optionally offence names/statutes) after confirmation — nothing
-else from the note is auto-attached. Licence settings sync uploads an encrypted
-preferences blob (ciphertext only) to the Custody Note account. We do not send
-anything to Anthropic, Google, Microsoft Graph, analytics platforms, or
-advertising networks.
+user's own API key, with OpenAI web search for grounding. Opt-in Ask AI sends
+the questions you type (plus session follow-ups, and optionally offence
+names/statutes) after confirmation — nothing else from the note is auto-attached.
+Both features require Sources in the response; unsourced legal answers are
+rejected by the app before display for Insert/Append. Licence settings sync
+uploads an encrypted preferences blob (ciphertext only) to the Custody Note
+account. We do not send anything to Anthropic, Google, Microsoft Graph,
+analytics platforms, or advertising networks.
 
 ---
 

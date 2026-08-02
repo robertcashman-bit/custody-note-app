@@ -1,7 +1,6 @@
 /**
  * Opt-in AI: Law / Elements fill + free-form Ask AI session.
- * Law fill: checkbox → confirm → IPC → review modal → Insert only into lawElements.
- * Ask AI: checkbox → multi-turn modal → Copy / Append only on explicit click.
+ * Accuracy: web-sourced answers only; Sources mandatory; Insert/Append gated.
  */
 (function () {
   'use strict';
@@ -9,7 +8,8 @@
   var _fillRunning = false;
   var _askRunning = false;
   var _askSessionConfirmed = false;
-  var _askThread = []; /* { role, content } */
+  var _askThread = []; /* { role, content, sources? } */
+  var _lastLawSources = [];
 
   function toast(msg, type, ms) {
     if (typeof showToast === 'function') showToast(msg, type || 'info', ms);
@@ -71,21 +71,126 @@
     return Promise.resolve();
   }
 
+  function escapeHtml(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function sourcesPass(sources, refusal) {
+    if (refusal) return true;
+    return Array.isArray(sources) && sources.length >= 2;
+  }
+
+  function formatSourcesHtml(sources) {
+    if (!Array.isArray(sources) || !sources.length) {
+      return '<p class="settings-hint" style="margin:0;">No sources — Insert/Append blocked for legal answers.</p>';
+    }
+    var items = sources
+      .map(function (s, i) {
+        var url = String((s && s.url) || '').trim();
+        var title = String((s && s.title) || url).trim() || url;
+        if (!url) return '';
+        return (
+          '<li style="margin:0.2rem 0;">' +
+          (i + 1) +
+          '. <a href="' +
+          escapeHtml(url) +
+          '" data-external-url="' +
+          escapeHtml(url) +
+          '">' +
+          escapeHtml(title) +
+          '</a></li>'
+        );
+      })
+      .filter(Boolean)
+      .join('');
+    return '<ol style="margin:0.25rem 0 0 1.1rem;padding:0;font-size:0.85rem;">' + items + '</ol>';
+  }
+
+  function formatSourcesPlain(sources) {
+    if (!Array.isArray(sources) || !sources.length) return '';
+    return sources
+      .map(function (s, i) {
+        return i + 1 + '. ' + (s.title || s.url) + ' — ' + s.url;
+      })
+      .join('\n');
+  }
+
+  function openExternalUrl(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return;
+    if (window.api && typeof window.api.openExternal === 'function') {
+      window.api.openExternal(url);
+      return;
+    }
+    if (window.api && typeof window.api.openExternalUrl === 'function') {
+      window.api.openExternalUrl(url);
+      return;
+    }
+    try {
+      window.open(url, '_blank', 'noopener');
+    } catch (_) {}
+  }
+
+  function wireSourcesClicks(root) {
+    if (!root) return;
+    root.querySelectorAll('a[data-external-url]').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        openExternalUrl(a.getAttribute('data-external-url') || a.href);
+      });
+    });
+  }
+
+  function setInsertEnabled(enabled) {
+    var insertBtn = document.getElementById('ai-law-draft-insert');
+    if (!insertBtn) return;
+    insertBtn.disabled = !enabled;
+    insertBtn.title = enabled
+      ? 'Insert into Law / Elements'
+      : 'Insert disabled — sources required (at least two URLs)';
+  }
+
+  function setAskAppendEnabled(enabled) {
+    var btn = document.getElementById('ai-ask-append-law');
+    if (!btn) return;
+    btn.disabled = !enabled;
+    btn.title = enabled
+      ? 'Append last answer to Law / Elements'
+      : 'Append disabled — sources required (at least two URLs)';
+  }
+
   /* ── Law / Elements fill ── */
 
-  function showReviewModal(draft, meta) {
+  function showReviewModal(draft, meta, sources, refusal) {
     var modal = document.getElementById('ai-law-draft-modal');
     var text = document.getElementById('ai-law-draft-text');
     var metaEl = document.getElementById('ai-law-draft-meta');
+    var sourcesEl = document.getElementById('ai-law-draft-sources');
     if (!modal || !text) return;
     text.value = draft || '';
     if (metaEl) metaEl.textContent = meta || '';
+    _lastLawSources = Array.isArray(sources) ? sources.slice() : [];
+    if (sourcesEl) {
+      sourcesEl.innerHTML =
+        '<strong style="font-size:0.85rem;">Sources</strong>' + formatSourcesHtml(_lastLawSources);
+      wireSourcesClicks(sourcesEl);
+    }
+    setInsertEnabled(sourcesPass(_lastLawSources, !!refusal) && !refusal);
+    if (refusal) {
+      setInsertEnabled(false);
+      toast('AI could not verify from reliable sources — nothing to insert', 'warning', 6000);
+    }
     modal.style.display = '';
   }
 
   function hideReviewModal() {
     var modal = document.getElementById('ai-law-draft-modal');
     if (modal) modal.style.display = 'none';
+    _lastLawSources = [];
+    setInsertEnabled(false);
   }
 
   function uncheckFillBoxes() {
@@ -104,7 +209,7 @@
     } catch (_) {}
     document.querySelectorAll('[data-ai-law-status]').forEach(function (el) {
       el.textContent =
-        'Last inserted via AI — review before relying on it. Tick again only if you want a new draft (Insert required).';
+        'Last inserted via AI — review sources and primary materials before relying on it.';
       el.style.display = '';
     });
   }
@@ -112,23 +217,30 @@
   function applyLawElementsDraft(draft) {
     setField('lawElements', draft);
     markFilledViaAi();
-    toast('Inserted into Law / Elements of offence — review before saving', 'success', 5000);
+    toast('Inserted into Law / Elements of offence — verify sources before relying on it', 'success', 5000);
     hideReviewModal();
     uncheckFillBoxes();
   }
 
   /* Only write path into lawElements for AI fill — do not call from runFill. */
   function insertIntoLawElements() {
+    if (!sourcesPass(_lastLawSources, false)) {
+      toast('Insert disabled — sources required (at least two URLs)', 'warning');
+      return;
+    }
     var text = document.getElementById('ai-law-draft-text');
     var draft = text ? String(text.value || '').trim() : '';
     if (!draft) {
       toast('Nothing to insert', 'warning');
       return;
     }
+    if (!/\bSources\b/i.test(draft) && _lastLawSources.length) {
+      draft = draft + '\n\nSources\n' + formatSourcesPlain(_lastLawSources);
+    }
     var existing = getField('lawElements').trim();
     if (existing) {
       confirmAsync(
-        'Replace the current Law / Elements of offence text with this AI draft?',
+        'Replace the current Law / Elements of offence text with this AI draft (including Sources)?',
         'Insert AI draft',
       ).then(function (ok) {
         if (ok) applyLawElementsDraft(draft);
@@ -150,7 +262,7 @@
     }
     var data = getOpenFormData();
     _fillRunning = true;
-    toast('Requesting AI draft\u2026', 'info', 4000);
+    toast('Requesting web-sourced AI draft\u2026', 'info', 4000);
     window.api
       .aiFillLawElements({
         confirmed: true,
@@ -165,7 +277,12 @@
           return;
         }
         /* Review modal only — never write lawElements here. */
-        showReviewModal(res.draft, res.message || 'AI draft — review before inserting');
+        showReviewModal(
+          res.draft,
+          res.message || 'Web-sourced draft — verify before inserting',
+          res.sources || [],
+          !!res.refusal,
+        );
       })
       .catch(function (e) {
         _fillRunning = false;
@@ -178,11 +295,13 @@
     if (!cb.checked) return;
     var existing = getField('lawElements').trim();
     var msg =
-      'Send offence name(s) and statute(s) only to OpenAI to draft actus reus, mens rea, defences and sentencing guidelines?\n\n' +
-      'Client details and privileged notes are not sent. The draft opens for review only — nothing is inserted into Law / Elements until you press Insert.';
+      'Send offence name(s) and statute(s) only to OpenAI (with web search) to draft actus reus, mens rea, defences and sentencing?\n\n' +
+      'Answers must include Sources. Unsourced case law is blocked. ' +
+      'This is a draft for you to verify against primary materials — not legal advice.\n\n' +
+      'Client details are not sent. Nothing is inserted until you press Insert.';
     if (existing) {
       msg +=
-        '\n\nThis field already has saved text. Generating a draft will not change it until you choose Insert (you will be asked to replace).';
+        '\n\nThis field already has saved text. Generating a draft will not change it until you choose Insert.';
     }
     confirmAsync(msg, 'AI fill — Law / Elements').then(function (ok) {
       if (ok) runFill();
@@ -201,22 +320,36 @@
     } catch (_) {}
   }
 
+  function lastAssistantTurn() {
+    for (var i = _askThread.length - 1; i >= 0; i--) {
+      if (_askThread[i].role === 'assistant') return _askThread[i];
+    }
+    return null;
+  }
+
+  function updateAskAppendGate() {
+    var last = lastAssistantTurn();
+    if (!last) {
+      setAskAppendEnabled(false);
+      return;
+    }
+    setAskAppendEnabled(sourcesPass(last.sources, !!last.refusal) && !last.refusal);
+  }
+
   function renderAskThread() {
     var el = document.getElementById('ai-ask-thread');
     if (!el) return;
     if (!_askThread.length) {
       el.innerHTML =
-        '<p class="settings-hint" style="margin:0;">Ask any question. Follow-ups stay in this session until you close.</p>';
+        '<p class="settings-hint" style="margin:0;">Ask any question. Follow-ups stay in this session. Sources are required; unsourced case law is blocked.</p>';
+      updateAskAppendGate();
       return;
     }
     var html = '';
     for (var i = 0; i < _askThread.length; i++) {
       var t = _askThread[i];
       var label = t.role === 'assistant' ? 'AI' : 'You';
-      var body = String(t.content || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+      var body = escapeHtml(t.content || '').replace(/\n/g, '<br>');
       html +=
         '<div style="margin:0 0 0.75rem;padding:0.5rem 0.65rem;border-radius:6px;background:' +
         (t.role === 'assistant' ? 'rgba(15,23,42,0.04)' : 'rgba(37,99,235,0.06)') +
@@ -224,12 +357,22 @@
         '<div style="font-size:0.75rem;font-weight:600;margin-bottom:0.25rem;">' +
         label +
         '</div>' +
-        '<div style="white-space:pre-wrap;font-size:0.88rem;line-height:1.4;">' +
+        '<div style="font-size:0.88rem;line-height:1.4;">' +
         body +
-        '</div></div>';
+        '</div>';
+      if (t.role === 'assistant') {
+        html +=
+          '<div style="margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid rgba(15,23,42,0.08);">' +
+          '<strong style="font-size:0.8rem;">Sources</strong>' +
+          formatSourcesHtml(t.sources || []) +
+          '</div>';
+      }
+      html += '</div>';
     }
     el.innerHTML = html;
+    wireSourcesClicks(el);
     el.scrollTop = el.scrollHeight;
+    updateAskAppendGate();
   }
 
   function clearAskSession() {
@@ -263,38 +406,48 @@
   }
 
   function lastAssistantAnswer() {
-    for (var i = _askThread.length - 1; i >= 0; i--) {
-      if (_askThread[i].role === 'assistant') return String(_askThread[i].content || '');
-    }
-    return '';
+    var t = lastAssistantTurn();
+    return t ? String(t.content || '') : '';
   }
 
   function threadAsText() {
     return _askThread
       .map(function (t) {
-        return (t.role === 'assistant' ? 'AI' : 'You') + ':\n' + t.content;
+        var block = (t.role === 'assistant' ? 'AI' : 'You') + ':\n' + t.content;
+        if (t.role === 'assistant' && t.sources && t.sources.length) {
+          block += '\n\nSources\n' + formatSourcesPlain(t.sources);
+        }
+        return block;
       })
       .join('\n\n');
   }
 
   function appendLastToLawElements() {
-    var answer = lastAssistantAnswer().trim();
-    if (!answer) {
+    var last = lastAssistantTurn();
+    if (!last || !String(last.content || '').trim()) {
       toast('No AI answer to append yet', 'warning');
       return;
+    }
+    if (!sourcesPass(last.sources, !!last.refusal) || last.refusal) {
+      toast('Append disabled — sources required (at least two URLs)', 'warning');
+      return;
+    }
+    var answer = String(last.content || '').trim();
+    if (!/\bSources\b/i.test(answer) && last.sources && last.sources.length) {
+      answer = answer + '\n\nSources\n' + formatSourcesPlain(last.sources);
     }
     var existing = getField('lawElements').trim();
     var next = existing ? existing + '\n\n' + answer : answer;
     confirmAsync(
       existing
-        ? 'Append the last AI answer to Law / Elements of offence?'
-        : 'Insert the last AI answer into Law / Elements of offence?',
+        ? 'Append the last AI answer (with Sources) to Law / Elements of offence?'
+        : 'Insert the last AI answer (with Sources) into Law / Elements of offence?',
       'Append AI answer',
     ).then(function (ok) {
       if (!ok) return;
       setField('lawElements', next);
       markFilledViaAi();
-      toast('Appended to Law / Elements — review before saving', 'success', 5000);
+      toast('Appended to Law / Elements — verify sources before relying on it', 'success', 5000);
     });
   }
 
@@ -317,9 +470,11 @@
     function doSend() {
       var includeEl = document.getElementById('ai-ask-include-offences');
       var includeOffences = !!(includeEl && includeEl.checked);
-      var history = _askThread.slice();
+      var history = _askThread.map(function (t) {
+        return { role: t.role, content: t.content };
+      });
       _askRunning = true;
-      toast('Sending to AI\u2026', 'info', 3000);
+      toast('Sending (web search + sources required)\u2026', 'info', 3000);
       var sendBtn = document.getElementById('ai-ask-send');
       if (sendBtn) sendBtn.disabled = true;
       window.api
@@ -339,9 +494,17 @@
             return;
           }
           _askThread.push({ role: 'user', content: question });
-          _askThread.push({ role: 'assistant', content: res.answer || '' });
+          _askThread.push({
+            role: 'assistant',
+            content: res.answer || '',
+            sources: Array.isArray(res.sources) ? res.sources : [],
+            refusal: !!res.refusal,
+          });
           if (input) input.value = '';
           renderAskThread();
+          if (res.refusal) {
+            toast('AI could not verify from reliable sources', 'warning', 6000);
+          }
         })
         .catch(function (e) {
           _askRunning = false;
@@ -352,9 +515,10 @@
 
     if (!_askSessionConfirmed) {
       confirmAsync(
-        'Send what you type (and prior questions/answers in this session) to OpenAI?\n\n' +
-          'You control what is sent. Do not paste client names or privileged instructions unless you intend to.\n\n' +
-          'Nothing is written into the attendance note until you Copy or Append.',
+        'Send what you type (and prior turns in this session) to OpenAI with web search?\n\n' +
+          'Answers must include Sources. Unsourced case law is blocked. ' +
+          'This is a draft for solicitor verification — not legal advice.\n\n' +
+          'You control what is sent. Do not paste client names or privileged instructions unless you intend to.',
         'Ask AI',
       ).then(function (ok) {
         if (!ok) return;
@@ -387,6 +551,9 @@
   }
 
   function wireModals() {
+    setInsertEnabled(false);
+    setAskAppendEnabled(false);
+
     var copyBtn = document.getElementById('ai-law-draft-copy');
     var insertBtn = document.getElementById('ai-law-draft-insert');
     var closeBtn = document.getElementById('ai-law-draft-close');
