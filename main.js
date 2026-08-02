@@ -5293,7 +5293,7 @@ ipcMain.handle('attendance-search', (_, params) => {
   const p = total > 0 ? Math.min(requestedPage, totalPages) : 1;
   const offset = (p - 1) * ps;
   const rows = dbAll(
-    `SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, supervisor_approved_at, archived_at, deleted_at, deletion_reason, data
+    `SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, supervisor_approved_at, archived_at, deleted_at, deletion_reason, quickfile_invoice_id, quickfile_invoice_number, data
      FROM attendances ${where} ORDER BY ${orderCol} ${orderDir} LIMIT ? OFFSET ?`,
     [...params2, ps, offset]
   );
@@ -5549,6 +5549,7 @@ ipcMain.handle('attendance-unarchive', (_, id) => {
   const ev = dbGet('SELECT sync_version FROM attendances WHERE id=?', [id]);
   const nv = (ev && ev.sync_version || 1) + 1;
   dbRun('UPDATE attendances SET archived_at=NULL, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, nv, id]);
+  db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'unarchived', now]);
   markDbDirty();
   enqueueSyncForRecord(id);
   return true;

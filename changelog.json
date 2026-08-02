@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.63",
+      "version": "1.9.64",
       "date": "2026-08-02",
       "latest": true,
+      "changes": [
+        "Records list: Archive button on finalised matters; Archived and Deleted filters show the right records with Unarchive and Restore",
+        "Open record: Archive Record button appears once the note is finalised or completed",
+        "Unarchive is recorded in the audit log"
+      ]
+    },
+    {
+      "version": "1.9.63",
+      "date": "2026-08-02",
+      "latest": false,
       "changes": [
         "Consultation: tick “unknown NI no.” under National Insurance to fill the NI box with “- unknown -”",
         "Number of suspects defaults to 1 on new custody, voluntary, and telephone forms",

@@ -1707,6 +1707,14 @@ html.dark .home-attention-item:hover {
 .btn-list-action[data-action="newMatter"]:hover { background: #ede9fe; color: #5b21b6; }
 .btn-list-action[data-action="delete"] { color: #b91c1c; border-color: #dc2626; font-weight: 700; }
 .btn-list-action[data-action="delete"]:hover { background: #fef2f2; color: #991b1b; }
+.btn-list-action[data-action="archive"] { color: #92400e; border-color: #d97706; font-weight: 700; }
+.btn-list-action[data-action="archive"]:hover { background: #fffbeb; color: #78350f; }
+.btn-list-action[data-action="unarchive"],
+.btn-list-action[data-action="restore"] { color: #065f46; border-color: #059669; font-weight: 700; }
+.btn-list-action[data-action="unarchive"]:hover,
+.btn-list-action[data-action="restore"]:hover { background: #ecfdf5; color: #064e3b; }
+.badge.archived { background: #fef3c7; color: #92400e; }
+.badge.deleted { background: #fee2e2; color: #991b1b; }
 .btn-list-action.bill-btn {
   color: #b45309; border-color: #d97706; font-weight: 700;
 }
