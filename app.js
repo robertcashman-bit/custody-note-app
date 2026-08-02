@@ -6839,6 +6839,15 @@ var REQUIRED_FIELD_KEYS = [
             if (actionBtn.disabled) return;
             billAttendanceFromList(id);
             break;
+          case 'archive':
+            if (typeof archiveAttendance === 'function') archiveAttendance(id, title);
+            break;
+          case 'unarchive':
+            if (typeof unarchiveAttendance === 'function') unarchiveAttendance(id);
+            break;
+          case 'restore':
+            if (typeof restoreDeletedAttendance === 'function') restoreDeletedAttendance(id, title);
+            break;
           case 'delete': deleteAttendance(id, title); break;
         }
       } else if (e.target.closest('.list-item-text')) {
@@ -6847,11 +6856,58 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  function _loadListRows() {
+    if (listStatusFilter === 'archived') {
+      return window.api.attendanceSearch({ archived: true, page: 1, pageSize: 10000 }).then(function(res) {
+        return (res && res.rows) || [];
+      });
+    }
+    if (listStatusFilter === 'deleted') {
+      return window.api.attendanceSearch({ deleted: true, page: 1, pageSize: 10000 }).then(function(res) {
+        return (res && res.rows) || [];
+      });
+    }
+    return window.api.attendanceListFull();
+  }
+
+  function _renderListItemActionsHtml(r) {
+    var idAttr = esc(String(r.id));
+    if (listStatusFilter === 'deleted') {
+      return '<button type="button" class="btn-list-action" data-action="restore" data-id="' + idAttr + '" title="Restore this record to the active list">Restore</button>';
+    }
+    if (listStatusFilter === 'archived') {
+      return '<button type="button" class="btn-list-action amend-btn" data-action="amend" data-id="' + idAttr + '" title="Open record">Edit</button>' +
+        '<button type="button" class="btn-list-action" data-action="unarchive" data-id="' + idAttr + '" title="Restore this record to the active list">Unarchive</button>' +
+        '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>';
+    }
+    var canArchive = r.status === 'finalised' || r.status === 'completed';
+    var archiveBtn = canArchive
+      ? '<button type="button" class="btn-list-action" data-action="archive" data-id="' + idAttr + '" title="Archive this record">Archive</button>'
+      : '';
+    var billHtml = (typeof window._renderListBillButtonHtml === 'function'
+      ? window._renderListBillButtonHtml(r)
+      : (function () {
+        var billOn = isListBillEnabled(r);
+        var billTitle = billOn
+          ? 'Open Finish matter billing for this record'
+          : (r.archived_at
+            ? 'Archived records cannot be billed from the list'
+            : 'Finalise the attendance note before billing');
+        return '<button type="button" class="btn-list-action bill-btn' + (billOn ? '' : ' bill-btn--disabled') + '" data-action="bill" data-id="' + idAttr + '"' + (billOn ? '' : ' disabled') + ' title="' + esc(billTitle) + '">Bill</button>';
+      })());
+    return billHtml +
+      '<button type="button" class="btn-list-action amend-btn" data-action="amend" data-id="' + idAttr + '" title="Open record to edit (amend)">Edit</button>' +
+      '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for another client (same session)">Duplicate</button>' +
+      '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
+      archiveBtn +
+      '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>';
+  }
+
   function refreshList() {
     const ul = document.getElementById('attendance-list');
     if (!ul || !window.api) return;
     setupListDelegation();
-    window.api.attendanceListFull().then(function(rows) {
+    _loadListRows().then(function(rows) {
       var parsedCache = {};
       function getParsed(r) {
         if (!parsedCache[r.id]) parsedCache[r.id] = safeJson(r.data);
@@ -6889,7 +6945,10 @@ var REQUIRED_FIELD_KEYS = [
       ul.innerHTML = '';
       _listItemIndex = {};
       if (!filtered.length) {
-        ul.innerHTML = '<li class="empty-state"><p>No attendances yet. Click "New Attendance" to start.</p></li>';
+        var emptyMsg = 'No attendances yet. Click "New Attendance" to start.';
+        if (listStatusFilter === 'archived') emptyMsg = 'No archived records.';
+        else if (listStatusFilter === 'deleted') emptyMsg = 'No deleted records.';
+        ul.innerHTML = '<li class="empty-state"><p>' + emptyMsg + '</p></li>';
         renderListPagination(0);
         return;
       }
@@ -6944,7 +7003,7 @@ var REQUIRED_FIELD_KEYS = [
           data: d
         }, 2, 'list-health-badge');
         var billingBadge = '';
-        if (r.status === 'finalised' || r.quickfile_invoice_id) {
+        if (r.status === 'finalised' || r.status === 'completed' || r.quickfile_invoice_id) {
           var _hasInv = !!r.quickfile_invoice_id;
           var _hasAtt = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
           if (_hasInv) billingBadge = '<span class="record-billing-badge record-billing-badge--invoiced">Invoiced</span>';
@@ -6961,24 +7020,12 @@ var REQUIRED_FIELD_KEYS = [
               declBadge +
               healthBadges +
               billingBadge +
+              (listStatusFilter === 'archived' ? '<span class="badge archived">archived</span>' : '') +
+              (listStatusFilter === 'deleted' ? '<span class="badge deleted">deleted</span>' : '') +
               '<span class="badge ' + (r.status || 'draft') + '">' + (r.status || 'draft') + '</span>' +
             '</div>' +
             '<div class="list-item-btns" role="group" aria-label="Record actions">' +
-              (typeof window._renderListBillButtonHtml === 'function'
-                ? window._renderListBillButtonHtml(r)
-                : (function () {
-                var billOn = isListBillEnabled(r);
-                var billTitle = billOn
-                  ? 'Open Finish matter billing for this record'
-                  : (r.archived_at
-                    ? 'Archived records cannot be billed from the list'
-                    : 'Finalise the attendance note before billing');
-                return '<button type="button" class="btn-list-action bill-btn' + (billOn ? '' : ' bill-btn--disabled') + '" data-action="bill" data-id="' + esc(String(r.id)) + '"' + (billOn ? '' : ' disabled') + ' title="' + esc(billTitle) + '">Bill</button>';
-              })()) +
-              '<button type="button" class="btn-list-action amend-btn" data-action="amend" data-id="' + esc(String(r.id)) + '" title="Open record to edit (amend)">Edit</button>' +
-              '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for another client (same session)">Duplicate</button>' +
-              '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
-              '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>' +
+              _renderListItemActionsHtml(r) +
             '</div>' +
           '</div>';
         frag.appendChild(li);
@@ -7365,11 +7412,15 @@ var REQUIRED_FIELD_KEYS = [
     const postFinaliseBar = document.getElementById('form-post-finalise-bar');
     const archiveBtn = document.getElementById('form-archive-btn');
     const unarchiveBtn = document.getElementById('form-unarchive-btn');
-    /* §9 action buttons remain in DOM for delegated handlers but are never shown. */
+    /* §9 Finalise / Finish bars stay hidden — primary action is the header pill. */
     if (finaliseBar) finaliseBar.style.display = 'none';
     if (endBillingBtn) endBillingBtn.style.display = 'none';
     if (postFinaliseBar) postFinaliseBar.style.display = 'none';
-    if (archiveBtn) archiveBtn.style.display = 'none';
+    if (archiveBtn) {
+      var showArchive = !!(currentAttendanceId && !currentRecordArchived &&
+        (currentRecordStatus === 'finalised' || currentRecordStatus === 'completed'));
+      archiveBtn.style.display = showArchive ? '' : 'none';
+    }
     if (unarchiveBtn) {
       unarchiveBtn.style.display = (currentAttendanceId && currentRecordArchived) ? '' : 'none';
     }
