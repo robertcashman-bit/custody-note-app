@@ -4953,6 +4953,7 @@ const {
   buildOffencePayload,
   requestLawElementsDraft,
 } = require('./main/openaiLawElements');
+const { requestAskAnswer } = require('./main/openaiAsk');
 
 function loadOpenAiKeyFromEnvLocal() {
   if (process.env.OPENAI_API_KEY && String(process.env.OPENAI_API_KEY).trim()) {
@@ -5077,6 +5078,52 @@ ipcMain.handle('ai:fill-law-elements', async (_, params) => {
     }
   } catch (e) {
     console.warn('[ai-law] audit log failed:', e && e.message);
+  }
+  return result;
+});
+
+ipcMain.handle('ai:ask-question', async (_, params) => {
+  const p = params || {};
+  if (p.confirmed !== true) {
+    return { ok: false, error: 'Explicit confirmation required before calling OpenAI.' };
+  }
+  const question = String(p.question || '').trim();
+  if (!question) {
+    return { ok: false, error: 'Enter a question first.' };
+  }
+  let offences = [];
+  if (p.includeOffences === true) {
+    const payload = buildOffencePayload(p.formData || {});
+    offences = payload.offences || [];
+  }
+  const apiKey = resolveOpenAiApiKey();
+  const result = await requestAskAnswer({
+    confirmed: true,
+    apiKey: apiKey,
+    question: question,
+    history: Array.isArray(p.history) ? p.history : [],
+    offences: offences,
+  });
+  try {
+    const aid = p.attendanceId != null ? Number(p.attendanceId) : null;
+    if (aid && result && result.ok) {
+      dbRun(
+        'INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)',
+        [
+          aid,
+          'ai_ask_question',
+          new Date().toISOString(),
+          'model=' +
+            (result.model || 'gpt-4o-mini') +
+            '; offences=' +
+            offences.length +
+            '; history=' +
+            (Array.isArray(p.history) ? p.history.length : 0),
+        ],
+      );
+    }
+  } catch (e) {
+    console.warn('[ai-ask] audit log failed:', e && e.message);
   }
   return result;
 });

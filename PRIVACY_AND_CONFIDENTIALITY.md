@@ -59,7 +59,16 @@ party by default.
 **OpenAI Law / Elements fill (opt-in):** If you store your own OpenAI API key and
 tick the Case Assessment checkbox, the app may send **offence name and statute
 only** to OpenAI after an explicit confirmation. Client details and privileged
-notes are not included. The AI checkbox is never printed on the PDF.
+notes are not included. The draft is shown for review and is only written into
+the note when you press Insert. The AI checkbox is never printed on the PDF.
+
+**OpenAI Ask AI (opt-in):** A separate Case Assessment control opens a multi-turn
+Q&A session. The app sends the **questions you type**, prior turns in that
+session, and (only if you tick “Include offence names/statutes”) offence
+name/statute fields. Nothing else from the note is auto-attached. Answers stay
+in the modal until you Copy or Append. You control what is sent — do not paste
+client names or privileged instructions unless you intend to. The Ask AI UI is
+never printed on the PDF.
 
 **Licence settings sync (opt-in via active subscription):** Preferences,
 QuickFile credentials, OpenAI API key, fee-earner defaults, templates, and firm
@@ -76,7 +85,7 @@ stores ciphertext only.
 - Telemetry of case content. The app does not phone home except for licence
   validation, optional cloud backup, optional postcode lookup,
   auto-update binary download from GitHub, encrypted settings sync (above),
-  and (only if the user explicitly confirms) an OpenAI Law / Elements fill.
+  and (only if the user explicitly confirms) OpenAI Law / Elements fill or Ask AI.
 
 ---
 

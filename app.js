@@ -878,6 +878,7 @@ var LAA = {
         { key: 'gapsInEvidence', label: 'Gaps in Evidence', type: 'text', placeholder: 'e.g. None', cols: 2 },
         { key: 'aiFillLawElements', label: 'Fill Law / Elements with AI (offence name & statute only — not printed)', type: 'aiLawFill' },
         { key: 'lawElements', label: 'The Law / Elements of offence', type: 'textarea', cols: 2 },
+        { key: 'aiAskQuestion', label: 'Ask AI (any question — not printed)', type: 'aiAsk' },
         { key: 'caseAssessment', label: 'Case assessment (police case)', type: 'select', options: ['N/A','Strong','Medium','Weak'] },
         { key: 'caseAssessmentWhy', label: 'Assessment reasoning', type: 'textarea', placeholder: 'Why is the case assessed this way?', showIf: { field: 'caseAssessment', notValue: 'N/A' } },
         { key: 'likelySentence', label: 'Likely sentence if convicted', type: 'text', placeholder: 'e.g. Community order', cols: 2 },
@@ -1638,6 +1639,7 @@ var LAA = {
         { key: 'gapsInEvidence', label: 'Gaps in Evidence', type: 'text', placeholder: 'e.g. None', cols: 2 },
         { key: 'aiFillLawElements', label: 'Fill Law / Elements with AI (offence name & statute only — not printed)', type: 'aiLawFill' },
         { key: 'lawElements', label: 'The Law / Elements of offence', type: 'textarea', cols: 2 },
+        { key: 'aiAskQuestion', label: 'Ask AI (any question — not printed)', type: 'aiAsk' },
         { key: 'caseAssessment', label: 'Case assessment (police case)', type: 'select', options: ['N/A','Strong','Medium','Weak'] },
         { key: 'caseAssessmentWhy', label: 'Assessment reasoning', type: 'textarea', placeholder: 'Why is the case assessed this way?', showIf: { field: 'caseAssessment', notValue: 'N/A' } },
         { key: 'likelySentence', label: 'Likely sentence if convicted', type: 'text', placeholder: 'e.g. Community order', cols: 2 },
@@ -9446,7 +9448,7 @@ var REQUIRED_FIELD_KEYS = [
       }
       return;
     }
-    if (f.type === 'aiLawFill') {
+    if (f.type === 'aiLawFill' || f.type === 'aiAsk') {
       /* UI-only — never printed on PDF. */
       const wrap = document.createElement('div');
       wrap.className = 'form-group';
@@ -9464,7 +9466,31 @@ var REQUIRED_FIELD_KEYS = [
       const hint = document.createElement('p');
       hint.className = 'settings-hint';
       hint.style.margin = '0.25rem 0 0 1.5rem';
-      hint.textContent = 'Requires your OpenAI API key in Settings → Integrations. Review the draft before it is inserted.';
+      if (f.type === 'aiAsk') {
+        hint.textContent =
+          'Requires your OpenAI API key in Settings → Integrations. Ask any question; follow-ups stay in the session. Nothing is written into the note until you Copy or Append. You control what is sent — do not paste client names or privileged instructions unless you intend to.';
+      } else {
+        hint.textContent =
+          'Requires your OpenAI API key in Settings → Integrations. Draft opens for review only — nothing is inserted into Law / Elements until you press Insert.';
+        const status = document.createElement('p');
+        status.className = 'settings-hint';
+        status.setAttribute('data-ai-law-status', '1');
+        status.style.margin = '0.25rem 0 0 1.5rem';
+        status.style.color = 'var(--warning, #b45309)';
+        const savedLaw = String((formData && formData.lawElements) || '').trim();
+        const viaAi = String((formData && formData.lawElementsFilledViaAi) || '').trim();
+        if (viaAi) {
+          status.textContent =
+            'Last inserted via AI — review before relying on it. Tick again only if you want a new draft (Insert required).';
+        } else if (savedLaw) {
+          status.textContent =
+            'This field already has saved text. Ticking AI drafts a new version for review — nothing is inserted until you press Insert.';
+        } else {
+          status.style.display = 'none';
+          status.textContent = '';
+        }
+        wrap.appendChild(status);
+      }
       wrap.appendChild(hint);
       grid.appendChild(wrap);
       return;

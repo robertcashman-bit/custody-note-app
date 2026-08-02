@@ -2316,7 +2316,30 @@
         <button type="button" id="ai-law-draft-insert" class="btn btn-primary">Insert into Law / Elements</button>
         <button type="button" id="ai-law-draft-close" class="btn btn-secondary">Close</button>
       </div>
-      <p class="settings-hint" style="margin:0.75rem 0 0;">Edit before inserting. This is a starting point — not legal advice.</p>
+      <p class="settings-hint" style="margin:0.75rem 0 0;">Edit before inserting. This is a starting point — not legal advice. Nothing is saved into the note until you press Insert.</p>
+    </div>
+  </div>
+
+  <!-- Ask AI multi-turn session (UI-only — not printed) -->
+  <div id="ai-ask-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ai-ask-title">
+    <div class="first-launch-modal" style="max-width:720px;width:94%;max-height:90vh;display:flex;flex-direction:column;">
+      <h2 id="ai-ask-title" style="margin:0 0 0.35rem;">Ask AI</h2>
+      <p class="settings-hint" style="margin:0 0 0.75rem;">Any question — follow-ups stay in this session. You control what is sent. Do not paste client names or privileged instructions unless you intend to.</p>
+      <div id="ai-ask-thread" style="flex:1;min-height:180px;max-height:40vh;overflow:auto;border:1px solid var(--border,#e2e8f0);border-radius:8px;padding:0.65rem;margin-bottom:0.75rem;background:var(--surface,#fff);"></div>
+      <label for="ai-ask-input" class="settings-hint" style="display:block;margin-bottom:0.25rem;font-weight:600;color:inherit;">Your question</label>
+      <textarea id="ai-ask-input" class="settings-input" rows="3" style="width:100%;margin-bottom:0.5rem;" placeholder="e.g. What are the elements of self-defence?" aria-label="Ask AI question"></textarea>
+      <label class="checkbox-item" style="margin:0 0 0.75rem;font-size:0.85rem;">
+        <input type="checkbox" id="ai-ask-include-offences"> Include offence names/statutes from this note
+      </label>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+        <button type="button" id="ai-ask-send" class="btn btn-primary">Send</button>
+        <button type="button" id="ai-ask-copy-last" class="btn btn-secondary">Copy last answer</button>
+        <button type="button" id="ai-ask-copy-thread" class="btn btn-secondary">Copy thread</button>
+        <button type="button" id="ai-ask-append-law" class="btn btn-secondary">Append last to Law / Elements</button>
+        <button type="button" id="ai-ask-clear" class="btn btn-secondary">Clear thread</button>
+        <button type="button" id="ai-ask-close" class="btn btn-secondary">Close</button>
+      </div>
+      <p class="settings-hint" style="margin:0.75rem 0 0;">Cmd/Ctrl+Enter to send. Answers are not legal advice. Nothing is written into the note until you Copy or Append.</p>
     </div>
   </div>
 
