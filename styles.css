@@ -2028,6 +2028,19 @@ html.dark .form-group.firm-field select {
   margin: 0.35rem 0 0;
   line-height: 1.35;
 }
+.field-hint.outcome-decision-disclaimer {
+  font-size: 0.8rem;
+  color: #dc2626;
+  margin: 0.35rem 0 0;
+  line-height: 1.35;
+  font-weight: 500;
+}
+html.dark .field-hint.outcome-decision-disclaimer {
+  color: #f87171;
+}
+html:not(.dark) #view-form .field-hint.outcome-decision-disclaimer {
+  color: #dc2626;
+}
 .input-error {
   border-color: #dc2626 !important;
   box-shadow: 0 0 0 1px #dc2626 !important;
@@ -2837,6 +2850,9 @@ html.dark .laa-decl-block .laa-fraud-warning {
 .address-nfa-label { font-weight: 600; }
 input.address-nfa-locked { background: var(--input-disabled-bg, #f1f5f9); color: var(--text-muted, #64748b); }
 html.dark input.address-nfa-locked { background: rgba(148,163,184,0.12); }
+.ni-unknown-label { margin-top: 0.25rem; font-weight: 500; font-size: 0.9rem; }
+input.ni-unknown-locked { background: var(--input-disabled-bg, #f1f5f9); color: var(--text-muted, #64748b); }
+html.dark input.ni-unknown-locked { background: rgba(148,163,184,0.12); }
 
 /* ═══ MULTI-INTERVIEW ═══ */
 .interview-notes-warning {

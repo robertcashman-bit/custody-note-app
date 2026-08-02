@@ -1794,7 +1794,7 @@ var clientLookupKeys = [
     'nationality','nationalityOther','ethnicOriginCode','disabilityCode',
     'clientPhone','clientEmail','clientEmailConsent',
     'addressNfa','address1','address2','address3','city','county','postCode',
-    'niNumber','arcNumber',
+    'niNumber','niNumberUnknown','arcNumber',
     'maritalStatus','employmentStatus',
     'accommodationStatus','accommodationDetails',
     'benefits','benefitType','benefitOther','benefitNotes',
@@ -2061,6 +2061,35 @@ var REQUIRED_FIELD_KEYS = [
     scheduleQuietSave();
   }
 
+  function applyNiNumberUnknownState(checked, formEl) {
+    formEl = formEl || document.getElementById('attendance-form') || document;
+    formData.niNumberUnknown = checked ? 'Yes' : 'No';
+    if (checked) {
+      formData.niNumber = NI_UNKNOWN_SENTINEL;
+    } else if (isNiUnknown(formData.niNumber)) {
+      formData.niNumber = '';
+    }
+    var el = formEl.querySelector('[data-field="niNumber"]');
+    if (el) {
+      if (checked) {
+        el.value = NI_UNKNOWN_SENTINEL;
+        el.readOnly = true;
+        el.classList.add('ni-unknown-locked');
+        el.classList.remove('input-error');
+        var errEl = el.parentNode && el.parentNode.querySelector('.field-error');
+        if (errEl) errEl.style.display = 'none';
+      } else {
+        el.readOnly = false;
+        el.classList.remove('ni-unknown-locked');
+        if (isNiUnknown(el.value)) el.value = '';
+      }
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    var unknownCb = formEl.querySelector('[data-field="niNumberUnknown"]');
+    if (unknownCb) unknownCb.checked = !!checked;
+    scheduleQuietSave();
+  }
+
   function buildLaaDeclarationFormHtmlForUi(variant, refDataSource) {
     var L = getLaaDeclarationPdfHelpers();
     var rd = refDataSource || refData;
@@ -2318,6 +2347,18 @@ var REQUIRED_FIELD_KEYS = [
   }
   var EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   var NI_REGEX = /^[A-Za-z]{2}\d{6}[A-Za-z]$/;
+  var NI_UNKNOWN_SENTINEL = '- unknown -';
+
+  function isNiUnknown(v) {
+    return String(v || '').trim().toLowerCase() === NI_UNKNOWN_SENTINEL;
+  }
+
+  function isValidNiOrUnknown(v) {
+    var raw = String(v || '').trim();
+    if (!raw) return true;
+    if (isNiUnknown(raw)) return true;
+    return NI_REGEX.test(raw.replace(/\s/g, ''));
+  }
 
   function _getOrCreateFieldError(inputEl) {
     var errEl = inputEl.parentNode.querySelector('.field-error');
@@ -2383,22 +2424,24 @@ var REQUIRED_FIELD_KEYS = [
 
   function attachNiNumberValidation(inputEl) {
     inputEl.addEventListener('blur', function () {
-      var v = (inputEl.value || '').trim().replace(/\s/g, '');
+      var raw = (inputEl.value || '').trim();
       var errEl = _getOrCreateFieldError(inputEl);
-      if (v && !NI_REGEX.test(v)) {
+      if (raw && !isValidNiOrUnknown(raw)) {
         errEl.textContent = 'NI Number format: AB123456C (2 letters, 6 digits, 1 letter)';
         errEl.style.display = 'block';
         inputEl.classList.add('input-error');
       } else {
         errEl.style.display = 'none';
         inputEl.classList.remove('input-error');
-        if (v && NI_REGEX.test(v)) inputEl.value = v.toUpperCase();
+        if (raw && !isNiUnknown(raw) && NI_REGEX.test(raw.replace(/\s/g, ''))) {
+          inputEl.value = raw.replace(/\s/g, '').toUpperCase();
+        }
       }
     });
     inputEl.addEventListener('input', function () {
-      var v = (inputEl.value || '').trim().replace(/\s/g, '');
+      var raw = (inputEl.value || '').trim();
       var errEl = _getOrCreateFieldError(inputEl);
-      if (!v || NI_REGEX.test(v)) {
+      if (!raw || isValidNiOrUnknown(raw)) {
         errEl.style.display = 'none';
         inputEl.classList.remove('input-error');
       }
@@ -5093,6 +5136,8 @@ var REQUIRED_FIELD_KEYS = [
     if (!formData.voluntaryInterview) formData.voluntaryInterview = 'No';
     if (!formData.juvenileVulnerable) formData.juvenileVulnerable = 'Not Applicable';
     if (!formData.coSuspects) formData.coSuspects = 'No';
+    if (!formData.numSuspects) formData.numSuspects = '1';
+    if (!formData.numberOfSuspects) formData.numberOfSuspects = '1';
     if (!formData.cctvVisual) formData.cctvVisual = 'No';
     if (!formData.exhibitsToInspect) formData.exhibitsToInspect = 'No';
     if (!formData.writtenEvidence) formData.writtenEvidence = 'No';
@@ -6985,7 +7030,7 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── DUPLICATE ATTENDANCE: implemented globally in renderer/views/list.js (duplicateAttendance) ─── */
 
   /* ─── NEW MATTER (SAME CLIENT) ─── Copy only client personal details; new file number on save */
-  var clientPersonalKeys = ['title','forename','middleName','surname','dob','gender','addressNfa','address1','address2','address3','city','county','postCode','clientPhone','clientEmail','clientEmailConsent','nationality','nationalityOther','accommodationStatus','accommodationDetails','maritalStatus','employmentStatus','niNumber','arcNumber','benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes','clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason','ethnicOriginCode','disabilityCode','riskAssessment','juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress','interpreterName','interpreterLanguage','languageIssues'];
+  var clientPersonalKeys = ['title','forename','middleName','surname','dob','gender','addressNfa','address1','address2','address3','city','county','postCode','clientPhone','clientEmail','clientEmailConsent','nationality','nationalityOther','accommodationStatus','accommodationDetails','maritalStatus','employmentStatus','niNumber','niNumberUnknown','arcNumber','benefits','benefitType','benefitOther','benefitNotes','passportedBenefit','grossIncome','partnerIncome','partnerName','dependants','capitalClient','capitalPartner','capitalTotal','incomeNotes','clientInvolvedAnotherWay','clientInvolvedDetails','counselInstructed','advocacyReason','ethnicOriginCode','disabilityCode','riskAssessment','juvenileVulnerable','appropriateAdultName','appropriateAdultRelation','appropriateAdultPhone','appropriateAdultEmail','appropriateAdultOrganisation','appropriateAdultAddress','interpreterName','interpreterLanguage','languageIssues'];
 
   function newMatterFromAttendance(id) {
     window.api.attendanceGet(id).then(row => {
@@ -7105,7 +7150,7 @@ var REQUIRED_FIELD_KEYS = [
     var sharedKeys = [
       'title','forename','middleName','surname','gender','dob','nationality','nationalityOther',
       'clientPhone','clientEmail','addressNfa','address1','address2','address3','city','county','postCode',
-      'niNumber','arcNumber','clientType','benefits','benefitType','benefitOther','passportedBenefit','employmentStatus',
+      'niNumber','niNumberUnknown','arcNumber','clientType','benefits','benefitType','benefitOther','passportedBenefit','employmentStatus',
       'ethnicOriginCode','disabilityCode',
       'policeStationId','policeStationName','schemeId','firmId','firmName','firmLaaAccount',
       'firmContactName','firmContactPhone','firmContactEmail','feeEarnerName',
@@ -11363,6 +11408,28 @@ var REQUIRED_FIELD_KEYS = [
         telWrap.appendChild(btn);
       });
       wrap.appendChild(telWrap);
+    } else if (f.key === 'niNumber') {
+      wrap.appendChild(input);
+      const unknownLbl = document.createElement('label');
+      unknownLbl.className = 'checkbox-item ni-unknown-label';
+      const unknownCb = document.createElement('input');
+      unknownCb.type = 'checkbox';
+      unknownCb.dataset.field = 'niNumberUnknown';
+      const isUnknown = data.niNumberUnknown === 'Yes' || isNiUnknown(data.niNumber);
+      unknownCb.checked = !!isUnknown;
+      if (isUnknown && data.niNumberUnknown !== 'Yes') {
+        data.niNumberUnknown = 'Yes';
+        formData.niNumberUnknown = 'Yes';
+      }
+      unknownCb.addEventListener('change', function () {
+        applyNiNumberUnknownState(unknownCb.checked);
+      });
+      unknownLbl.appendChild(unknownCb);
+      unknownLbl.appendChild(document.createTextNode(' unknown NI no.'));
+      wrap.appendChild(unknownLbl);
+      if (isUnknown) {
+        requestAnimationFrame(function () { applyNiNumberUnknownState(true); });
+      }
     } else {
       wrap.appendChild(input);
     }
@@ -11372,6 +11439,13 @@ var REQUIRED_FIELD_KEYS = [
       sbtHint.className = 'field-hint sbt-hint';
       sbtHint.textContent = 'LAA requirement: select the work undertaken that shows sufficient benefit to the client. Add any extra details in the notes field below.';
       wrap.appendChild(sbtHint);
+    }
+
+    if (f.key === 'outcomeDecision') {
+      const outcomeDisclaimer = document.createElement('p');
+      outcomeDisclaimer.className = 'field-hint outcome-decision-disclaimer';
+      outcomeDisclaimer.textContent = 'We make every effort to obtain correct information from custody staff/officers with regard to results. However you are always advised to double check. They are prone to misinformation/error.';
+      wrap.appendChild(outcomeDisclaimer);
     }
 
     if (f.key === 'reasonsForAdviceSelect') {
@@ -13013,9 +13087,12 @@ var REQUIRED_FIELD_KEYS = [
     }
     if (formData.languageIssues === 'Yes' && !(formData.interpreterLanguage || '').trim()) m.push({ key: 'interpreterLanguage', label: 'Language required', section: 2 });
 
-    var niVol = (formData.niNumber || '').trim().replace(/\s/g, '').toUpperCase();
-    if (niVol && !/^[A-Z]{2}\d{6}[A-Z]$/.test(niVol)) {
-      m.push({ key: 'niNumber', label: 'NI Number format invalid (expected AB123456C)', section: 5 });
+    var niVolRaw = (formData.niNumber || '').trim();
+    if (niVolRaw && niVolRaw.toLowerCase() !== '- unknown -') {
+      var niVol = niVolRaw.replace(/\s/g, '').toUpperCase();
+      if (!/^[A-Z]{2}\d{6}[A-Z]$/.test(niVol)) {
+        m.push({ key: 'niNumber', label: 'NI Number format invalid (expected AB123456C)', section: 5 });
+      }
     }
     var dobVol = (formData.dob || '').trim();
     if (dobVol) {
@@ -13112,9 +13189,12 @@ var REQUIRED_FIELD_KEYS = [
       if (!(formData.appropriateAdultPhone || '').trim()) m.push({ key: 'appropriateAdultPhone', label: 'AA contact number', section: 2 });
     }
 
-    var ni = (formData.niNumber || '').trim().replace(/\s/g, '').toUpperCase();
-    if (ni && !/^[A-Z]{2}\d{6}[A-Z]$/.test(ni)) {
-      m.push({ key: 'niNumber', label: 'NI Number format invalid (expected AB123456C)', section: 5 });
+    var niRaw = (formData.niNumber || '').trim();
+    if (niRaw && niRaw.toLowerCase() !== '- unknown -') {
+      var ni = niRaw.replace(/\s/g, '').toUpperCase();
+      if (!/^[A-Z]{2}\d{6}[A-Z]$/.test(ni)) {
+        m.push({ key: 'niNumber', label: 'NI Number format invalid (expected AB123456C)', section: 5 });
+      }
     }
 
     var dob = (formData.dob || '').trim();
