@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.66",
+      "version": "1.9.67",
       "date": "2026-08-02",
       "latest": true,
+      "changes": [
+        "AI answers (Ask AI and Law / Elements fill) now use web search and must include Sources — unsourced or unverified case-law style claims are blocked",
+        "Insert and Append stay disabled until at least two source URLs are present; Sources are shown in the review UI",
+        "Accuracy rules baked in: no hallucinations, if in doubt do not quote, solicitor must still verify primary materials"
+      ]
+    },
+    {
+      "version": "1.9.66",
+      "date": "2026-08-02",
+      "latest": false,
       "changes": [
         "Case Assessment: Ask AI — tick to open a multi-turn Q&A session for any legal question (follow-ups stay open until you close); Copy or Append to Law / Elements only when you choose",
         "Law / Elements AI fill: draft stays in the review modal until you press Insert; clear notice when the field already has saved text",
