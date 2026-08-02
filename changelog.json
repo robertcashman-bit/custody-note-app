@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.64",
+      "version": "1.9.65",
       "date": "2026-08-02",
       "latest": true,
+      "changes": [
+        "Case Assessment: optional AI fill for Law / Elements of offence (actus reus, mens rea, defences, sentencing) using your own OpenAI API key — review before insert; checkbox never appears on the PDF",
+        "Settings: store your OpenAI API key (synced with other Custody Note settings across devices when licensed)",
+        "Removed the previous Pro AI summary feature",
+        "Settings sync: larger cloud blob so credentials and preferences stay in sync across installs"
+      ]
+    },
+    {
+      "version": "1.9.64",
+      "date": "2026-08-02",
+      "latest": false,
       "changes": [
         "Records list: Archive button on finalised matters; Archived and Deleted filters show the right records with Unarchive and Restore",
         "Open record: Archive Record button appears once the note is finalised or completed",
