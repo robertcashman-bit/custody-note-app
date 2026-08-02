@@ -1,12 +1,11 @@
 /**
- * Opt-in OpenAI fill for The Law / Elements of offence.
+ * Opt-in OpenAI fill for The Law / Elements of offence (web-search grounded + accuracy gate).
  * Sends offence name + statute only — never client or privileged case content.
  */
 
 'use strict';
 
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const { requestGroundedLegalAnswer, DEFAULT_MODEL, RESPONSES_URL } = require('./openaiClient');
 
 let _inFlight = false;
 
@@ -40,12 +39,14 @@ function buildPromptMessages(offences) {
     system:
       'You are a UK criminal defence solicitor assistant. Draft concise attendance-note content for "The Law / Elements of offence". ' +
       'Cover for each offence: (1) Actus reus, (2) Mens rea, (3) Common defences, (4) Sentencing guidelines summary (Sentencing Council / magistrates where relevant). ' +
-      'Use clear headings. UK law only. This is a draft for a qualified solicitor to review — not legal advice. ' +
+      'Use clear headings. UK law only. Use web search. Follow ACCURACY RULES — no unsourced case law; mandatory Sources. ' +
       'Do not invent case facts. Do not ask for client details.',
     user:
       'Offence(s) on the attendance note:\n' +
       lines.join('\n') +
-      '\n\nProduce structured text suitable to paste into the Law / Elements of offence field.',
+      '\n\nProduce structured text suitable to paste into the Law / Elements of offence field. ' +
+      'Include Answer / Uncertainties / Sources headings. At least two source URLs. ' +
+      'Do not cite case law unless a retrieved source URL supports it.',
   };
 }
 
@@ -66,57 +67,29 @@ async function requestLawElementsDraft(opts) {
   }
 
   const messages = buildPromptMessages(options.offences);
-  const model = String(options.model || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
-  const fetchFn = typeof options.fetchImpl === 'function' ? options.fetchImpl : fetch;
-
   _inFlight = true;
   try {
-    const res = await fetchFn(OPENAI_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + apiKey,
-      },
-      body: JSON.stringify({
-        model: model,
-        temperature: 0.3,
-        messages: [
-          { role: 'system', content: messages.system },
-          { role: 'user', content: messages.user },
-        ],
-      }),
+    const result = await requestGroundedLegalAnswer({
+      apiKey: apiKey,
+      model: options.model,
+      fetchImpl: options.fetchImpl,
+      inputMessages: [
+        { role: 'system', content: messages.system },
+        { role: 'user', content: messages.user },
+      ],
+      requireWebSearch: true,
+      retryOnValidationFail: true,
     });
-    let body = null;
-    try {
-      body = await res.json();
-    } catch (_) {
-      body = null;
-    }
-    if (!res.ok) {
-      const msg =
-        (body && body.error && body.error.message) ||
-        'OpenAI request failed (HTTP ' + res.status + ')';
-      return { ok: false, error: msg };
-    }
-    const text =
-      body &&
-      body.choices &&
-      body.choices[0] &&
-      body.choices[0].message &&
-      body.choices[0].message.content
-        ? String(body.choices[0].message.content).trim()
-        : '';
-    if (!text) {
-      return { ok: false, error: 'OpenAI returned an empty response.' };
-    }
+    if (!result.ok) return result;
     return {
       ok: true,
-      draft: text,
-      model: model,
-      message: 'AI draft — review before inserting. Not legal advice.',
+      draft: result.text,
+      sources: result.sources || [],
+      uncertainties: result.uncertainties || '',
+      refusal: !!result.refusal,
+      model: result.model || DEFAULT_MODEL,
+      message: result.message,
     };
-  } catch (e) {
-    return { ok: false, error: (e && e.message) || 'OpenAI request failed' };
   } finally {
     _inFlight = false;
   }
@@ -132,5 +105,5 @@ module.exports = {
   requestLawElementsDraft,
   resetInFlightForTests,
   DEFAULT_MODEL,
-  OPENAI_URL,
+  OPENAI_URL: RESPONSES_URL,
 };

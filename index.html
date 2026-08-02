@@ -2310,13 +2310,15 @@
     <div class="first-launch-modal" style="max-width:640px;width:94%;">
       <h2 id="ai-law-draft-title" style="margin:0 0 0.5rem;">AI draft — Law / Elements</h2>
       <p id="ai-law-draft-meta" class="settings-hint" style="margin:0 0 0.75rem;"></p>
-      <textarea id="ai-law-draft-text" class="settings-input" rows="14" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.85rem;" aria-label="Editable AI law draft"></textarea>
+      <p class="settings-hint" style="margin:0 0 0.5rem;color:var(--warning,#b45309);">Sources required. Unsourced case law is blocked. Verify primary materials before relying on this draft.</p>
+      <textarea id="ai-law-draft-text" class="settings-input" rows="12" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.85rem;" aria-label="Editable AI law draft"></textarea>
+      <div id="ai-law-draft-sources" style="margin-top:0.65rem;padding:0.55rem 0.65rem;border:1px solid var(--border,#e2e8f0);border-radius:8px;background:rgba(15,23,42,0.03);"></div>
       <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem;">
         <button type="button" id="ai-law-draft-copy" class="btn btn-secondary">Copy</button>
-        <button type="button" id="ai-law-draft-insert" class="btn btn-primary">Insert into Law / Elements</button>
+        <button type="button" id="ai-law-draft-insert" class="btn btn-primary" disabled>Insert into Law / Elements</button>
         <button type="button" id="ai-law-draft-close" class="btn btn-secondary">Close</button>
       </div>
-      <p class="settings-hint" style="margin:0.75rem 0 0;">Edit before inserting. This is a starting point — not legal advice. Nothing is saved into the note until you press Insert.</p>
+      <p class="settings-hint" style="margin:0.75rem 0 0;">Insert stays disabled until at least two source URLs are present. Not legal advice. Nothing is saved into the note until you press Insert.</p>
     </div>
   </div>
 
@@ -2324,7 +2326,7 @@
   <div id="ai-ask-modal" class="first-launch-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="ai-ask-title">
     <div class="first-launch-modal" style="max-width:720px;width:94%;max-height:90vh;display:flex;flex-direction:column;">
       <h2 id="ai-ask-title" style="margin:0 0 0.35rem;">Ask AI</h2>
-      <p class="settings-hint" style="margin:0 0 0.75rem;">Any question — follow-ups stay in this session. You control what is sent. Do not paste client names or privileged instructions unless you intend to.</p>
+      <p id="ai-ask-accuracy-banner" class="settings-hint" style="margin:0 0 0.75rem;color:var(--warning,#b45309);">Sources required. Unsourced case law is blocked. Web-sourced drafts are for solicitor verification — not legal advice. You control what is sent; do not paste client names or privileged instructions unless you intend to.</p>
       <div id="ai-ask-thread" style="flex:1;min-height:180px;max-height:40vh;overflow:auto;border:1px solid var(--border,#e2e8f0);border-radius:8px;padding:0.65rem;margin-bottom:0.75rem;background:var(--surface,#fff);"></div>
       <label for="ai-ask-input" class="settings-hint" style="display:block;margin-bottom:0.25rem;font-weight:600;color:inherit;">Your question</label>
       <textarea id="ai-ask-input" class="settings-input" rows="3" style="width:100%;margin-bottom:0.5rem;" placeholder="e.g. What are the elements of self-defence?" aria-label="Ask AI question"></textarea>
@@ -2335,7 +2337,7 @@
         <button type="button" id="ai-ask-send" class="btn btn-primary">Send</button>
         <button type="button" id="ai-ask-copy-last" class="btn btn-secondary">Copy last answer</button>
         <button type="button" id="ai-ask-copy-thread" class="btn btn-secondary">Copy thread</button>
-        <button type="button" id="ai-ask-append-law" class="btn btn-secondary">Append last to Law / Elements</button>
+        <button type="button" id="ai-ask-append-law" class="btn btn-secondary" disabled title="Append disabled until sources are present">Append last to Law / Elements</button>
         <button type="button" id="ai-ask-clear" class="btn btn-secondary">Clear thread</button>
         <button type="button" id="ai-ask-close" class="btn btn-secondary">Close</button>
       </div>
