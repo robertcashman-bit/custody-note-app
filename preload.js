@@ -379,6 +379,7 @@ contextBridge.exposeInMainWorld('api', {
   appUpdateDiagnosticInstall: () => ipcRenderer.invoke('app-update-diagnostic-install'),
   /* Opt-in OpenAI law fill / firm workspace / Anywhere bridge */
   aiFillLawElements: (params) => ipcRenderer.invoke('ai:fill-law-elements', params || {}),
+  aiAskQuestion: (params) => ipcRenderer.invoke('ai:ask-question', params || {}),
   firmWorkspaceGet: () => ipcRenderer.invoke('firm-workspace:get'),
   firmWorkspaceSave: (payload) => ipcRenderer.invoke('firm-workspace:save', payload || {}),
   firmWorkspaceAddSeat: (params) => ipcRenderer.invoke('firm-workspace:add-seat', params || {}),
