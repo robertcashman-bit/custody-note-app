@@ -2516,7 +2516,16 @@ function createWindow() {
     },
     title: 'Custody Note',
   });
-  const isCaptureMode = process.env.CAPTURE_SCREENSHOTS === '1';
+  /* Marketing screenshot capture (capturePage) is dev-only unless explicitly
+     overridden — packaged installers must never silently screenshot the UI. */
+  const isCaptureMode =
+    process.env.CAPTURE_SCREENSHOTS === '1' &&
+    (!app.isPackaged || process.env.CUSTODYNOTE_ENABLE_MARKETING_CAPTURE === '1');
+  if (process.env.CAPTURE_SCREENSHOTS === '1' && app.isPackaged && !isCaptureMode) {
+    _safeLog.warn(
+      '[Capture] CAPTURE_SCREENSHOTS ignored in packaged build — set CUSTODYNOTE_ENABLE_MARKETING_CAPTURE=1 to override'
+    );
+  }
   mainWindow.once('ready-to-show', () => {
     if (!isCaptureMode) {
       mainWindow.show();
@@ -9260,7 +9269,7 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
     console.warn('[officer-email-drafts-open-outlook] isSafeExternalUrl rejected url', { urlLength: url.length });
     return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
   }
-  if (truncated) {
+  if (bodyT.trim()) {
     try {
       clipboard.writeText(fullPlainTextForClipboard);
     } catch (clipErr) {
@@ -9318,7 +9327,7 @@ ipcMain.handle('officer-email-drafts-open-one-off-outlook', async (_, fields) =>
     console.warn('[officer-email-drafts-open-one-off-outlook] isSafeExternalUrl rejected url', { urlLength: url.length });
     return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
   }
-  if (composed.truncated) {
+  if (bodyT.trim()) {
     try {
       clipboard.writeText(composed.fullPlainTextForClipboard);
     } catch (clipErr) {

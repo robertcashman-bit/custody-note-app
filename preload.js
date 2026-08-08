@@ -67,8 +67,10 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
       .replace(/\n/g, '\r\n');
   }
 
-  function buildOutlookWebComposeUrl(fields) {
+  function buildOutlookWebComposeUrl(fields, options) {
     var f = fields || {};
+    var opts = options || {};
+    var includeBody = opts.includeBody === true;
     var toS = String(f.to != null ? f.to : '').trim();
     var ccS = String(f.cc != null ? f.cc : '');
     var subS = String(f.subject != null ? f.subject : '');
@@ -77,7 +79,7 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
     if (toS) parts.push('to=' + encodeURIComponent(toS));
     if (String(ccS).trim()) parts.push('cc=' + encodeURIComponent(ccS));
     if (subS) parts.push('subject=' + encodeURIComponent(subS));
-    if (bodS) parts.push('body=' + encodeURIComponent(bodS));
+    if (includeBody && bodS) parts.push('body=' + encodeURIComponent(bodS));
     return parts.length
       ? 'https://outlook.office.com/mail/0/deeplink/compose?' + parts.join('&')
       : 'https://outlook.office.com/mail/0/deeplink/compose';
@@ -90,7 +92,7 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
       cc: d.cc,
       subject: d.subject,
       body: d.body,
-    });
+    }, { includeBody: false });
   }
 
   function savePendingEmailDraft(draft, storage) {
@@ -155,6 +157,16 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
 
     try {
       if (m === 'outlook-web') {
+        if (d.body) {
+          try {
+            var clipEnv = env || {};
+            var nav = clipEnv.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+            var clipText = buildFullEmailClipboardText(d);
+            if (nav && nav.clipboard && nav.clipboard.writeText) {
+              nav.clipboard.writeText(clipText).catch(function () {});
+            }
+          } catch (_) {}
+        }
         var opened = win.open(link, '_blank', 'noopener,noreferrer');
         if (!opened) {
           console.error('openEmailDraft: browser blocked popup (window.open returned null)');
