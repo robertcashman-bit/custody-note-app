@@ -4,6 +4,8 @@
 
 'use strict';
 
+const safeLog = require('../lib/safeLog');
+
 const {
   ACCURACY_SYSTEM_RULES,
   REQUIRED_OUTPUT_SHAPE,
@@ -15,6 +17,13 @@ const RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const DEFAULT_MODEL = process.env.OPENAI_MODEL && String(process.env.OPENAI_MODEL).trim()
   ? String(process.env.OPENAI_MODEL).trim()
   : 'gpt-4o';
+
+/** Log OpenAI metadata only — never prompts, offences, or client context. */
+function debugOpenAiMeta(label, meta) {
+  if (process.env.CUSTODYNOTE_DEBUG === '1') {
+    safeLog.debug('[openai]', label, meta || {});
+  }
+}
 
 function buildWebSearchTool() {
   /* Domain filters when supported by the API; ignored safely if not. */
@@ -90,6 +99,12 @@ async function requestGroundedLegalAnswer(opts) {
   const requireWebSearch = options.requireWebSearch !== false;
   const retryOnFail = options.retryOnValidationFail !== false;
 
+  debugOpenAiMeta('request', {
+    model: model,
+    messageCount: inputMessages.length,
+    requireWebSearch: requireWebSearch,
+  });
+
   const systemBits = [ACCURACY_SYSTEM_RULES, REQUIRED_OUTPUT_SHAPE];
   const input = [
     { role: 'system', content: systemBits.join('\n\n') },
@@ -127,6 +142,7 @@ async function requestGroundedLegalAnswer(opts) {
       const errMsg =
         (json && json.error && json.error.message) ||
         'OpenAI request failed (HTTP ' + res.status + ')';
+      debugOpenAiMeta('http-error', { status: res.status, message: errMsg });
       if (
         /unknown|invalid|unsupported|tool_choice|filters|allowed_domains/i.test(errMsg) &&
         !options._simplified
@@ -250,4 +266,5 @@ module.exports = {
   buildWebSearchTool,
   extractTextAndCitations,
   requestGroundedLegalAnswer,
+  debugOpenAiMeta,
 };
