@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.68",
+      "date": "2026-08-12",
+      "latest": true,
+      "changes": [
+        "Admin licences are never revoked in the app and are always re-checked online on startup",
+        "Fixes a false “licence has been revoked” screen after installing the latest version when signed in as admin",
+        "A cached revoked stamp is confirmed with the licence server before locking the app; Free/trial keys are not stamped revoked by a failed server check"
+      ]
+    },
+    {
       "version": "1.9.67",
       "date": "2026-08-02",
-      "latest": true,
+      "latest": false,
       "changes": [
         "AI answers (Ask AI and Law / Elements fill) now use web search and must include Sources — unsourced or unverified case-law style claims are blocked",
         "Insert and Append stay disabled until at least two source URLs are present; Sources are shown in the review UI",
