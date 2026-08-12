@@ -124,6 +124,14 @@ const _safeLog = require('./lib/safeLog');
 const officerEmailDrafts = require('./lib/officerEmailDrafts');
 const outlookWebCompose = require('./lib/outlookWebCompose');
 const openExternalUrlModule = require('./lib/openExternalUrl');
+const {
+  resolveAdminEmails,
+  isAdminEmail,
+} = require('./main/licenceAdminEmails');
+const {
+  shouldSkipOnlineValidation,
+  applyOnlineValidationResult,
+} = require('./main/licenceValidationPolicy');
 
 let mainWindow;
 let db;
@@ -1879,11 +1887,21 @@ async function checkCloudBackupEntitlement() {
     if (resp && resp.valid === false) {
       _cloudBackupEnabled = false;
       _lastManagedCloudError = resp.message || resp.error || 'Licence validation failed. Check your licence and try again.';
-      if (resp.expiresAt) data.expiresAt = resp.expiresAt;
-      if (resp.email) data.email = resp.email;
-      if (resp.status) data.status = resp.status;
-      if (resp.isTrial !== undefined) data.isTrial = !!resp.isTrial;
-      if (resp.entitlements !== undefined) data.entitlements = resp.entitlements;
+      // Same revoke policy as licence:validate — never stamp admin or
+      // synthetic Free/trial keys as revoked from a backup entitlement check.
+      applyOnlineValidationResult(
+        data,
+        {
+          valid: false,
+          expiresAt: resp.expiresAt || null,
+          email: resp.email || '',
+          isTrial: resp.isTrial,
+          serverStatus: resp.status || 'revoked',
+          entitlements: resp.entitlements,
+          message: _lastManagedCloudError,
+        },
+        { adminEmails: getAdminEmailsLocal() }
+      );
       writeLicenceData(data);
       console.warn('[CloudBackup] Entitlement blocked:', _lastManagedCloudError);
       emitCloudBackupStatus({
@@ -4262,24 +4280,29 @@ async function validateLicenceOnline(key, machineId) {
   }
 }
 
-// Admin email allow-list. Previously contained two hardcoded personal email
-// addresses (`robertdavidcashman@gmail.com`, `nerijus83@gmail.com`) which
-// granted unconditional admin entitlements to any installation that had a
-// licence registered against either address. That is unsafe in a multi-user
-// product because (a) the owners of those addresses change over time, (b) it
-// blurs the audit trail, and (c) an attacker who can register a licence
-// against one of those emails on the licence server gets full admin.
-//
-// The list is now strictly opt-in via the `CUSTODY_ADMIN_EMAILS` env var
-// (comma-separated). If the env var is unset or empty, NO local install
-// treats any user as an admin. This means the licence server remains the
-// single source of truth for entitlements.
-//
-// Set CUSTODY_ADMIN_EMAILS only on machines used for support/admin work.
-const ADMIN_EMAILS_LOCAL = (process.env.CUSTODY_ADMIN_EMAILS || '')
-  .split(',')
-  .map(e => e.trim().toLowerCase())
-  .filter(Boolean);
+// Admin email allow-list for product-owner licences.
+// Prefer CUSTODY_ADMIN_EMAILS (comma-separated) or licence-config.json
+// adminEmails. When neither is set, fall back to the built-in product-owner
+// list so packaged installs still treat admin licences as non-revocable and
+// always re-check them online. See main/licenceAdminEmails.js.
+function readLicenceConfigAdminEmails() {
+  try {
+    const cfgPath = path.join(app.getPath('userData'), 'licence-config.json');
+    if (!fs.existsSync(cfgPath)) return [];
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+    return Array.isArray(cfg.adminEmails) ? cfg.adminEmails : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function getAdminEmailsLocal() {
+  return resolveAdminEmails({
+    envValue: process.env.CUSTODY_ADMIN_EMAILS,
+    configEmails: readLicenceConfigAdminEmails(),
+    includeBuiltin: true,
+  });
+}
 
 const { computeLicenceStatus: computeLicenceStatusCore } = require('./main/computeLicenceStatus');
 
@@ -4287,7 +4310,7 @@ function computeLicenceStatus(data) {
   return computeLicenceStatusCore(data, {
     graceDays: LICENCE_GRACE_DAYS,
     trialDays: TRIAL_DAYS,
-    adminEmails: ADMIN_EMAILS_LOCAL,
+    adminEmails: getAdminEmailsLocal(),
     freeTierEnabled: isFreeTierEnabled(),
   });
 }
@@ -4371,29 +4394,39 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
 ipcMain.handle('licence:validate', async () => {
   const data = readLicenceData();
   if (!data || (!data.key && !data.authToken)) return { valid: false, status: { status: 'none' } };
+  const adminEmails = getAdminEmailsLocal();
+
+  // Local Free/trial keys are not server subscriptions — never stamp them revoked.
+  if (shouldSkipOnlineValidation(data)) {
+    if (data.status === 'revoked' || data.status === 'invalid') {
+      data.status = 'active';
+      writeLicenceData(data);
+    }
+    return { valid: true, status: computeLicenceStatus(data) };
+  }
+
   const machineId = getMachineId();
   const result = await validateLicenceOnline(String(data.key || ''), machineId);
-  if (result.valid === true) {
-    data.lastValidated = new Date().toISOString();
-    if (result.expiresAt) data.expiresAt = result.expiresAt;
-    if (result.email) data.email = result.email;
-    if (result.isTrial !== undefined) data.isTrial = !!result.isTrial;
-    if (result.serverStatus) data.status = result.serverStatus;
-    if (result.entitlements !== undefined) data.entitlements = result.entitlements;
+  const apply = applyOnlineValidationResult(data, result, { adminEmails });
+
+  if (apply.persisted) {
     writeLicenceData(data);
+  }
+
+  if (result.valid === true) {
     retrySyncQueueAfterLicenceSuccess();
     checkCloudBackupEntitlement().catch(() => {});
     ensureQuickFileSettingsFromServer({ reason: 'licence-validate' }).catch(function (e) {
       console.warn('[QuickFile] background settings pull after licence validate failed:', e && e.message);
     });
   } else if (result.valid === false) {
-    const serverStatus = result.serverStatus || 'revoked';
-    if (serverStatus === 'expired') data.expiresAt = result.expiresAt || data.expiresAt;
-    data.status = serverStatus;
-    writeLicenceData(data);
     const status = computeLicenceStatus(data);
+    // Admin licences stay active even when the server returns invalid/revoked.
+    if (isAdminEmail(data.email, adminEmails)) {
+      return { valid: true, status, checkedOnline: true };
+    }
     status.message = result.message || status.message || 'Licence is not valid';
-    return { valid: false, status };
+    return { valid: false, status, checkedOnline: true };
   }
   if (result.offline) {
     return {
@@ -4403,7 +4436,7 @@ ipcMain.handle('licence:validate', async () => {
       message: result.message || 'Could not reach validation server',
     };
   }
-  return { valid: result.valid === true, status: computeLicenceStatus(data) };
+  return { valid: result.valid === true, status: computeLicenceStatus(data), checkedOnline: true };
 });
 
 ipcMain.handle('licence:deactivate', () => {
