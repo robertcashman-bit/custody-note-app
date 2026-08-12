@@ -49,7 +49,7 @@ function computeLicenceStatus(data, options) {
     };
   }
 
-  const isAdmin = data.email && adminEmails.includes(String(data.email).toLowerCase());
+  const isAdmin = !!(data.email && adminEmails.includes(String(data.email).toLowerCase()));
   const isAddonValid = (exp) => exp && new Date(exp).getTime() > Date.now();
   const addons = {
     quickfile: isAdmin || isAddonValid(data.entitlements?.quickfile?.expiresAt),
@@ -58,7 +58,34 @@ function computeLicenceStatus(data, options) {
 
   let tier = resolveTier(data);
 
-  if (data.status === 'revoked' || data.status === 'invalid') {
+  // Product-owner admin licences are never revoked/expired in the client.
+  // Online validation still runs on startup so entitlements stay fresh.
+  if (isAdmin) {
+    return {
+      status: 'active',
+      message: 'Admin licence — always active.',
+      key: data.key,
+      email: data.email || '',
+      expiresAt: data.expiresAt || null,
+      activatedAt: data.activatedAt,
+      lastValidated: data.lastValidated,
+      isTrial: false,
+      isFree: false,
+      isAdmin: true,
+      trialDays: undefined,
+      addons: { quickfile: true, emailAddon: true },
+      entitlements: data.entitlements || null,
+      graceDays,
+      tier: 'pro',
+      createAllowed: true,
+    };
+  }
+
+  // Synthetic Free keys are local-only; a stale revoked stamp must not block them.
+  if (
+    (data.status === 'revoked' || data.status === 'invalid') &&
+    !(freeTierEnabled && (tier === 'free' || keyLooksFree(data.key)))
+  ) {
     return {
       status: 'revoked',
       message: 'Licence has been revoked. Please enter a new licence key or contact support.',

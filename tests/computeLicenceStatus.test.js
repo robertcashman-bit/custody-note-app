@@ -114,3 +114,76 @@ describe('computeLicenceStatus freemium Free forever', () => {
     assert.equal(resolveTier({ key: 'CN-AAAA-BBBB-CCCC-DDDD' }), 'pro');
   });
 });
+
+describe('computeLicenceStatus admin never revoked', () => {
+  const adminEmail = 'robertdavidcashman@gmail.com';
+  const adminOpts = { adminEmails: [adminEmail] };
+
+  it('treats admin as active even when stored status is revoked', () => {
+    const st = computeLicenceStatus(
+      {
+        key: 'CN-AAAA-BBBB-CCCC-DDDD',
+        email: adminEmail,
+        status: 'revoked',
+      },
+      adminOpts
+    );
+    assert.equal(st.status, 'active');
+    assert.equal(st.isAdmin, true);
+    assert.equal(st.createAllowed, true);
+    assert.equal(st.tier, 'pro');
+    assert.equal(st.addons.quickfile, true);
+    assert.equal(st.addons.emailAddon, true);
+  });
+
+  it('treats admin as active even when status is already_used or expired', () => {
+    const past = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const used = computeLicenceStatus(
+      {
+        key: 'CN-AAAA-BBBB-CCCC-DDDD',
+        email: adminEmail,
+        status: 'already_used',
+      },
+      adminOpts
+    );
+    assert.equal(used.status, 'active');
+    assert.equal(used.isAdmin, true);
+
+    const expired = computeLicenceStatus(
+      {
+        key: 'CN-AAAA-BBBB-CCCC-DDDD',
+        email: adminEmail,
+        status: 'active',
+        expiresAt: past,
+      },
+      { ...adminOpts, freeTierEnabled: false }
+    );
+    assert.equal(expired.status, 'active');
+    assert.equal(expired.isAdmin, true);
+  });
+
+  it('still revokes non-admin licences', () => {
+    const st = computeLicenceStatus(
+      {
+        key: 'CN-AAAA-BBBB-CCCC-DDDD',
+        email: 'user@example.com',
+        status: 'revoked',
+      },
+      adminOpts
+    );
+    assert.equal(st.status, 'revoked');
+    assert.equal(st.createAllowed, false);
+  });
+
+  it('does not treat a stale revoked stamp on FREE-* as revoked', () => {
+    const st = computeLicenceStatus({
+      key: 'FREE-ABCDEF0123456789',
+      status: 'revoked',
+      isFree: true,
+      tier: 'free',
+    });
+    assert.equal(st.status, 'active');
+    assert.equal(st.tier, 'free');
+    assert.equal(st.createAllowed, true);
+  });
+});
