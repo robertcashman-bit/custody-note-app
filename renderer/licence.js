@@ -552,11 +552,51 @@
       }
 
       if (status.status === 'revoked') {
-        window.__licenceExpired = true;
-        window.__licenceNeedsValidation = false;
+        // Always re-check online before locking the UI on a cached revoked
+        // stamp — admin licences must never stay revoked, and a prior false
+        // positive (e.g. Free key / transient server error) must recover.
         hideOverlay();
         markReady();
-        showExpiryBanner(status.message || 'Your licence has been revoked.');
+        window.__licenceNeedsValidation = true;
+        showExpiryBanner(status.message || 'Your licence has been revoked. Checking with the licence server…');
+        if (!window.api || !window.api.licenceValidate) {
+          window.__licenceExpired = true;
+          window.__licenceNeedsValidation = false;
+          return;
+        }
+        window.api.licenceValidate().then(function (result) {
+          var st = (result && result.status) || {};
+          if (result && result.valid === true) {
+            handleValidationSuccess();
+            enterAppWithOptionalValidation(st.status ? st : status);
+            return;
+          }
+          if (result && result.offline) {
+            // Offline: keep creating if server couldn't be reached — do not
+            // treat cached revoked as final without a live confirmation.
+            window.__licenceExpired = false;
+            window.__licenceNeedsValidation = true;
+            showGraceBanner({
+              message: result.message || 'Could not reach the licence server to confirm revocation. Connect to the internet to verify.',
+              graceDays: status.graceDays || 60,
+            });
+            startRevalidation();
+            return;
+          }
+          if (st.status === 'revoked' || st.status === 'invalid') {
+            window.__licenceExpired = true;
+            window.__licenceNeedsValidation = false;
+            showExpiryBanner(st.message || status.message || 'Your licence has been revoked.');
+            return;
+          }
+          handleValidationSuccess();
+          enterAppWithOptionalValidation(st);
+        }).catch(function (e) {
+          console.error('[licence-validate-revoked]', e);
+          window.__licenceExpired = true;
+          window.__licenceNeedsValidation = false;
+          showExpiryBanner(status.message || 'Your licence has been revoked.');
+        });
         return;
       }
 
