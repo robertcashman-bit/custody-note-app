@@ -112,6 +112,9 @@ function createMockCtx(overrides = {}) {
   const ctx = {
     db: true, dbRun, dbGet, dbAll,
     flushDb: () => {},
+    sleep: async () => {},
+    inCycleRetryBaseMs: 0,
+    inCycleRetryJitterMs: 0,
     getSyncApiUrl: () => 'https://test.example.com',
     readLicenceData: () => ({ key: 'test-key' }),
     getMachineId: () => 'test-machine',
