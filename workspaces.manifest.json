@@ -39,6 +39,14 @@
       "github": "robertcashman-bit/custody-note-app",
       "branch": "master",
       "vercel": null
+    },
+    {
+      "name": "CustodyNoteAnywhere",
+      "dir": "custodynote-anywhere",
+      "homeDir": "custodynote-anywhere",
+      "github": "robertcashman-bit/custodynote-anywhere",
+      "branch": "master",
+      "vercel": "custodynote-anywhere"
     }
   ]
 }

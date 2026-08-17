@@ -1,25 +1,34 @@
 {
   "folders": [
     {
-      "name": "PoliceStationAgent.com",
-      "path": "one"
+      "name": "Police Station Agent",
+      "path": "../policestationagent"
     },
     {
-      "name": "PoliceStationRepUK.com",
-      "path": "Policestationrepuk"
+      "name": "Police Station Rep UK",
+      "path": "../Policestationrepuk"
     },
     {
-      "name": "CustodyNote website",
-      "path": "custody-note-website"
+      "name": "Custody Note website",
+      "path": "../custody-note-website"
     },
     {
-      "name": "PSRUKTrain.com",
-      "path": "pstrain-rebuild"
+      "name": "PSR Train",
+      "path": "../pstrain-rebuild"
     },
     {
-      "name": "CustodyNoteApp",
+      "name": "Custody Note app",
       "path": "."
+    },
+    {
+      "name": "Custody Note Anywhere",
+      "path": "../custodynote-anywhere"
     }
   ],
-  "settings": {}
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/.next": true
+    }
+  }
 }
