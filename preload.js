@@ -400,6 +400,7 @@ contextBridge.exposeInMainWorld('api', {
   firmWorkspaceRemoveTemplate: (params) => ipcRenderer.invoke('firm-workspace:remove-template', params || {}),
   anywhereBridgeImport: (params) => ipcRenderer.invoke('anywhere-bridge:import', params || {}),
   anywhereBridgeChooseAndImport: () => ipcRenderer.invoke('anywhere-bridge:choose-and-import'),
+  anywhereBridgeChooseAndExport: () => ipcRenderer.invoke('anywhere-bridge:choose-and-export'),
 });
 
 contextBridge.exposeInMainWorld('custodyNoteBuildInfo', {
