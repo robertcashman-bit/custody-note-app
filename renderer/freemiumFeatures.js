@@ -137,6 +137,11 @@
       anywhereBtn.addEventListener('click', function () {
         var status = document.getElementById('anywhere-bridge-status');
         if (status) status.textContent = 'Opening file picker\u2026';
+        if (!window.api || typeof window.api.anywhereBridgeChooseAndImport !== 'function') {
+          if (status) status.textContent = 'Import unavailable in this build';
+          toast('Anywhere import unavailable', 'error');
+          return;
+        }
         window.api.anywhereBridgeChooseAndImport().then(function (res) {
           if (res && res.cancelled) {
             if (status) status.textContent = '';
@@ -147,17 +152,55 @@
             toast((res && res.error) || 'Anywhere import failed', 'error', 6000);
             return;
           }
-          var msg =
-            'Imported ' +
-            (res.imported || 0) +
-            ' of ' +
-            (res.total || 0) +
-            ' Anywhere record(s) as drafts.';
+          var parts = [
+            'Imported ' + (res.imported || 0) + ' new',
+            'updated ' + (res.updated || 0),
+          ];
+          if (res.skipped) parts.push('skipped ' + res.skipped + ' locked');
+          var msg = parts.join(', ') + ' of ' + (res.total || 0) + ' Anywhere record(s).';
+          if (res.errors && res.errors.length) {
+            msg += ' Some rows failed: ' + res.errors[0];
+          }
           if (status) status.textContent = msg;
-          toast(msg, 'success', 6000);
+          toast(msg, res.errors && res.errors.length ? 'info' : 'success', 7000);
           try {
             if (typeof loadList === 'function') loadList();
           } catch (_) {}
+        }).catch(function (e) {
+          var err = (e && e.message) || 'Anywhere import failed';
+          if (status) status.textContent = err;
+          toast(err, 'error', 6000);
+        });
+      });
+    }
+
+    var anywhereExportBtn = document.getElementById('btn-anywhere-bridge-export');
+    if (anywhereExportBtn) {
+      anywhereExportBtn.addEventListener('click', function () {
+        var status = document.getElementById('anywhere-bridge-status');
+        if (status) status.textContent = 'Preparing export\u2026';
+        if (!window.api || typeof window.api.anywhereBridgeChooseAndExport !== 'function') {
+          if (status) status.textContent = 'Export unavailable in this build';
+          toast('Anywhere export unavailable', 'error');
+          return;
+        }
+        window.api.anywhereBridgeChooseAndExport().then(function (res) {
+          if (res && res.cancelled) {
+            if (status) status.textContent = '';
+            return;
+          }
+          if (!res || !res.ok) {
+            if (status) status.textContent = (res && res.error) || 'Export failed';
+            toast((res && res.error) || 'Anywhere export failed', 'error', 6000);
+            return;
+          }
+          var msg = 'Exported ' + (res.exported || 0) + ' record(s) for Anywhere.';
+          if (status) status.textContent = msg;
+          toast(msg, 'success', 6000);
+        }).catch(function (e) {
+          var err = (e && e.message) || 'Anywhere export failed';
+          if (status) status.textContent = err;
+          toast(err, 'error', 6000);
         });
       });
     }
