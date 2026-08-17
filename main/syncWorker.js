@@ -30,7 +30,8 @@
  *    start, all blocked items get one free retry (version update may fix it).
  *
  * Connectivity states: offline | internet_available_api_unreachable | api_available | auth_required
- * Retry schedule: 1=0s, 2=10s, 3=30s, 4=2m, 5=10m, 6=30m → then failed
+ * Cross-cycle retry schedule: 1=0s, 2=10s, 3=30s, 4=2m, 5=10m, 6=30m → then failed
+ * In-cycle HTTP retry: up to 3 attempts with ~2s/4s/8s + jitter before queue markFailed / Sync error
  */
 const crypto = require('crypto');
 const { encryptSyncEnvelope } = require('../lib/syncRecordCrypto');
@@ -48,6 +49,15 @@ const HEALTH_CHECK_SKIP_WINDOW_MS = 60_000;
 const BLOCKED_RECOVERY_COOLDOWN_MS = 30 * 60_000;
 const MAX_BLOCKED_AUTO_RECOVERIES = 3;
 
+/** In-cycle HTTP retries absorb flaky custody-suite Wi-Fi before surfacing Sync error. */
+const IN_CYCLE_MAX_ATTEMPTS = 3;
+const IN_CYCLE_RETRY_BASE_MS = 2000;
+const IN_CYCLE_RETRY_JITTER_MS = 500;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Classify errors: retryable vs permanent */
 function isRetryableError(err) {
   if (!err) return false;
@@ -55,12 +65,51 @@ function isRetryableError(err) {
   const code = err.code || err.statusCode;
   if (code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ECONNRESET' ||
       code === 'ENETUNREACH' || code === 'EAI_AGAIN') return true;
-  if (msg.includes('timeout') || msg.includes('network') || msg.includes('aborted')) return true;
+  if (msg.includes('timeout') || msg.includes('network') || msg.includes('aborted') || msg.includes('hard timeout')) return true;
+  if (msg.includes('too many requests') || msg.includes('pull failed') || msg.includes('push failed')) return true;
   const m = msg.match(/server error (\d+)/i);
-  const status = code || (m && parseInt(m[1], 10));
+  const status = (typeof code === 'number' ? code : null) || (m && parseInt(m[1], 10));
   if (status >= 500 || status === 429) return true;
   if ([400, 401, 403, 404, 422].includes(status)) return false;
   return true;
+}
+
+/**
+ * Retry transient failures within a single sync cycle (exponential backoff + jitter).
+ * Permanent 4xx errors fail immediately. Does not touch the queue — callers only
+ * markFailed / notify Sync error after this throws.
+ *
+ * opts: { maxAttempts, baseMs, jitterMs, sleep, isRetryable, onRetry, direction }
+ */
+async function withRetry(fn, opts) {
+  const o = opts || {};
+  const maxAttempts = o.maxAttempts != null ? o.maxAttempts : IN_CYCLE_MAX_ATTEMPTS;
+  const baseMs = o.baseMs != null ? o.baseMs : IN_CYCLE_RETRY_BASE_MS;
+  const jitterMs = o.jitterMs != null ? o.jitterMs : IN_CYCLE_RETRY_JITTER_MS;
+  const sleepFn = typeof o.sleep === 'function' ? o.sleep : sleep;
+  const classify = typeof o.isRetryable === 'function' ? o.isRetryable : isRetryableError;
+  const direction = o.direction || 'sync';
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn(attempt);
+    } catch (e) {
+      lastErr = e;
+      const retryable = classify(e);
+      if (!retryable || attempt >= maxAttempts) throw e;
+      const delay =
+        baseMs * Math.pow(2, attempt - 1) +
+        Math.floor(Math.random() * (jitterMs + 1));
+      console.warn(
+        '[SyncWorker] Transient ' + direction + ' failure (attempt ' + attempt + '/' + maxAttempts +
+          '), retrying in ' + delay + 'ms:',
+        e && e.message ? e.message : e
+      );
+      if (typeof o.onRetry === 'function') o.onRetry(attempt, delay, e);
+      await sleepFn(delay);
+    }
+  }
+  throw lastErr;
 }
 
 /** Exponential backoff: next attempt after RETRY_DELAYS_MS[retry_count] */
@@ -252,7 +301,17 @@ function createSyncWorker(ctx) {
     };
   }
 
-  /** Push up to PUSH_HTTP_BATCH_SIZE records in one HTTP request. */
+  function inCycleRetryOpts(direction) {
+    return {
+      direction,
+      sleep: typeof ctx.sleep === 'function' ? ctx.sleep : sleep,
+      maxAttempts: ctx.inCycleMaxAttempts != null ? ctx.inCycleMaxAttempts : IN_CYCLE_MAX_ATTEMPTS,
+      baseMs: ctx.inCycleRetryBaseMs != null ? ctx.inCycleRetryBaseMs : IN_CYCLE_RETRY_BASE_MS,
+      jitterMs: ctx.inCycleRetryJitterMs != null ? ctx.inCycleRetryJitterMs : IN_CYCLE_RETRY_JITTER_MS,
+    };
+  }
+
+  /** Push up to PUSH_HTTP_BATCH_SIZE records in one HTTP request (with in-cycle retry). */
   async function pushRecordBatch(queueItems) {
     const apiUrl = ctx.getSyncApiUrl && ctx.getSyncApiUrl();
     if (!apiUrl) throw new Error('No API URL');
@@ -260,16 +319,24 @@ function createSyncWorker(ctx) {
     if (!data || !data.key) throw new Error('No licence');
     const payloads = queueItems.map((item) => buildPushPayload(item));
     const correlationId = generateCorrelationId();
-    const resp = await ctx.httpPost(
-      `${apiUrl.replace(/\/$/, '')}/api/sync/push`,
-      {
-        key: data.key,
-        machineId: ctx.getMachineId(),
-        records: payloads.map((p) => p.record),
-      },
-      { timeout: SYNC_REQUEST_TIMEOUT_MS, correlationId }
-    );
-    if (!resp || !resp.ok) throw new Error(resp && resp.error ? resp.error : 'Push failed');
+    const url = `${apiUrl.replace(/\/$/, '')}/api/sync/push`;
+    const body = {
+      key: data.key,
+      machineId: ctx.getMachineId(),
+      records: payloads.map((p) => p.record),
+    };
+    await withRetry(async () => {
+      const resp = await ctx.httpPost(url, body, {
+        timeout: SYNC_REQUEST_TIMEOUT_MS,
+        headers: { 'X-Correlation-Id': correlationId },
+      });
+      if (!resp || !resp.ok) {
+        const err = new Error(resp && resp.error ? resp.error : 'Push failed');
+        if (resp && resp.statusCode) err.statusCode = resp.statusCode;
+        throw err;
+      }
+      return resp;
+    }, inCycleRetryOpts('push'));
     return payloads;
   }
 
@@ -405,11 +472,15 @@ function createSyncWorker(ctx) {
       recoverStuckItems();
       await processBatch();
       if (ctx.syncPull) {
-        const pullResult = await ctx.syncPull().catch((e) => {
+        /* In-cycle pull retry: transient pull blips must not flash Sync error. */
+        let pullResult;
+        try {
+          pullResult = await withRetry(() => ctx.syncPull(), inCycleRetryOpts('pull'));
+        } catch (e) {
           _lastError = e && e.message ? e.message : String(e);
           notifyRenderer({ status: 'error', lastError: _lastError, retryable: isRetryableError(e) });
-          return { pulled: 0, decryptFailed: 0, received: 0 };
-        });
+          pullResult = { pulled: 0, decryptFailed: 0, received: 0 };
+        }
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('records-updated-from-sync', { count: pullResult.pulled });
         }
@@ -550,6 +621,8 @@ module.exports = {
   generateQueueId,
   isRetryableError,
   getNextAttemptMs,
+  withRetry,
+  sleep,
   SYNC_POLL_INTERVAL_MS,
   SCHEDULE_SOON_DEBOUNCE_MS,
   RETRY_DELAYS_MS,
@@ -561,4 +634,7 @@ module.exports = {
   MAX_RECORDS_PER_CYCLE,
   BLOCKED_RECOVERY_COOLDOWN_MS,
   MAX_BLOCKED_AUTO_RECOVERIES,
+  IN_CYCLE_MAX_ATTEMPTS,
+  IN_CYCLE_RETRY_BASE_MS,
+  IN_CYCLE_RETRY_JITTER_MS,
 };

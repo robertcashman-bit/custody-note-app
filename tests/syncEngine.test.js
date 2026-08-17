@@ -7,7 +7,7 @@
  */
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert');
-const { createSyncWorker, isRetryableError, MAX_RECORDS_PER_CYCLE, PUSH_HTTP_BATCH_SIZE, HEALTH_CHECK_TIMEOUT_MS } = require('../main/syncWorker');
+const { createSyncWorker, isRetryableError, MAX_RECORDS_PER_CYCLE, PUSH_HTTP_BATCH_SIZE, HEALTH_CHECK_TIMEOUT_MS, IN_CYCLE_MAX_ATTEMPTS } = require('../main/syncWorker');
 
 function createMockCtx(overrides = {}) {
   const tables = {
@@ -133,6 +133,9 @@ function createMockCtx(overrides = {}) {
     dbGet,
     dbAll,
     flushDb: () => {},
+    sleep: async () => {},
+    inCycleRetryBaseMs: 0,
+    inCycleRetryJitterMs: 0,
     getSyncApiUrl: () => 'https://test.example.com',
     readLicenceData: () => ({ key: 'test-key' }),
     getMachineId: () => 'test-machine',
@@ -288,12 +291,12 @@ describe('Sync Engine: Queue recovery (batch processing)', () => {
     assert.strictEqual(synced, total);
   });
 
-  it('stops batch on first network error', async () => {
+  it('stops batch on first network error after in-cycle retries', async () => {
     const mock = createMockCtx();
     let callCount = 0;
     mock.ctx.httpPost = async () => {
       callCount++;
-      if (callCount === 2) { const e = new Error('Timeout'); e.code = 'ETIMEDOUT'; throw e; }
+      if (callCount > 1) { const e = new Error('Timeout'); e.code = 'ETIMEDOUT'; throw e; }
       return { ok: true, written: 1 };
     };
     const firstBatch = PUSH_HTTP_BATCH_SIZE;
@@ -304,7 +307,7 @@ describe('Sync Engine: Queue recovery (batch processing)', () => {
     await worker.runCycle();
     const synced = mock.tables.sync_queue.filter(r => r.status === 'synced').length;
     assert.strictEqual(synced, firstBatch);
-    assert.strictEqual(callCount, 2);
+    assert.strictEqual(callCount, 1 + IN_CYCLE_MAX_ATTEMPTS);
   });
 
   it('recovers failed items after 5 min cooldown', async () => {
