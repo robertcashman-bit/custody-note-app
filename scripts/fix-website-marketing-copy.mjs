@@ -188,11 +188,28 @@ const REPLACEMENTS = [
     { optional: true },
   ],
 
-  // Security next-steps
+  // Security / guides next-steps (several phrasings)
   ['Pricing — Pro £9.99/month', 'Pricing — Pro planned after beta (~£9.99/month)'],
   ['Pricing — Pro £{"9.99"}/month', 'Pricing — Pro planned after beta (~£9.99/month)', { optional: true }],
+  ['Pro £9.99/month', 'Pro planned after beta (~£9.99/month)', { optional: true }],
+  ['/pricing">Pro £9.99', '/pricing">Pro planned after beta (~£9.99', { optional: true }],
 
-  // Homepage honesty — Pro-planned features
+  // product-tips.json on the website
+  [
+    'Core notes, PDF and local backup stay free. Pro (£9.99/mo) adds managed cloud backup.',
+    'Free during beta. No credit card. Paid Pro planned after beta. Core notes, PDF and local backup stay free while we test; managed cloud backup is planned for Pro.',
+    { optional: true },
+  ],
+  [
+    'In beta — free while we test. Core notes, PDF and local backup stay free. Pro (~£9.99/mo) is planned after beta.',
+    'Free during beta. No credit card. Paid Pro planned after beta. Core notes, PDF and local backup stay free while we test; managed cloud backup is planned for Pro.',
+    { optional: true },
+  ],
+  [
+    'Share Custody Note with another rep — Free during beta, no credit card.',
+    'Share Custody Note with another rep — Free during beta. No credit card. Paid Pro planned after beta.',
+    { optional: true },
+  ],
   [
     'AES-256 local encryption. Optional encrypted cloud backup to AWS London. Sync across your devices (Windows; Mac where enabled) when enabled.',
     'AES-256 local encryption and local backup on Free during beta. Managed cloud backup and cross-device sync are planned for Pro after beta.',
@@ -417,3 +434,15 @@ if (changedFiles === 0) {
 }
 
 console.log('[fix-website-marketing-copy] OK —', BETA_LINE);
+
+// Emit a short applied-hits report for CI artifacts / PR review
+try {
+  const reportPath = join(WEBSITE_ROOT, '.copy-fix-report.json');
+  writeFileSync(
+    reportPath,
+    JSON.stringify({ changedFiles, applied, betaLine: BETA_LINE }, null, 2) + '\n'
+  );
+  console.log('[fix-website-marketing-copy] wrote', reportPath);
+} catch (e) {
+  console.warn('[fix-website-marketing-copy] could not write report:', e.message);
+}

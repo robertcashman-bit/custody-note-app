@@ -33,6 +33,15 @@ jobs:
           WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
         run: node scripts/fix-website-marketing-copy.mjs
 
+      - name: Upload copy-fix report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-copy-fix-report
+          path: |
+            custody-note-website/.copy-fix-report.json
+          if-no-files-found: ignore
+
       - name: Commit and push website branch
         working-directory: custody-note-website
         env:
@@ -43,6 +52,8 @@ jobs:
           git config user.email "cursoragent@cursor.com"
           BRANCH="cursor/marketing-legal-copy-24e3"
           git checkout -B "$BRANCH"
+          # Do not commit the local CI report file
+          rm -f .copy-fix-report.json
           git add -A
           if git diff --cached --quiet; then
             echo "No website file changes to commit"
