@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Verify https://custodynote.com/ first-screen markers after a production deploy.
- * Exit 0 only when the new display is live (or left the stale pre-PR2/3 build).
+ * Exit 0 only when the new display (website PR #3) is live.
  *
  * Usage: node scripts/verify-custodynote-live.mjs [--html /tmp/live.html] [--write-proof /tmp/live-proof]
  */
@@ -57,8 +57,10 @@ async function main() {
     'no Free note generator': !html.includes('Free note generator'),
     'Download for Windows present': html.includes('Download for Windows'),
     'max-w-lg present': html.includes('max-w-lg'),
+    'max-w-lg count': (html.match(/max-w-lg/g) || []).length,
     'Companies House present': html.includes('Companies House') || html.includes('09900871'),
     'hero-main-ui present': html.includes('hero-main-ui'),
+    'See Example Note present': html.includes('See Example Note'),
   };
 
   for (const [k, v] of Object.entries(checks)) {
@@ -83,20 +85,20 @@ async function main() {
     fs.writeFileSync(path.join(proofDir, 'markers.txt'), `${lines.join('\n')}\n`);
   }
 
-  // Pass when CTA pair matches and we left the stale pre-PR2/3 build
-  // (enlarged hero drops max-w-lg, or PR #2 Companies House is present).
-  const leftStale = !checks['max-w-lg present'] || checks['Companies House present'];
-  const ok =
+  // PR #3 display: enlarged hero drops max-w-lg; hero CTA row drops See Example Note /
+  // Free note generator; Download free + View Features remain.
+  const displayLive =
     checks['Download free'] &&
     checks['View Features'] &&
     checks['no Free note generator'] &&
-    leftStale;
+    !checks['max-w-lg present'] &&
+    !checks['See Example Note present'];
 
-  if (!ok) {
-    console.error('LIVE verification FAILED — production still looks like the stale homepage.');
+  if (!displayLive) {
+    console.error('LIVE verification FAILED — production still looks like the pre-display homepage.');
     process.exit(1);
   }
-  console.log('LIVE verification OK');
+  console.log('LIVE verification OK — new display markers present');
 }
 
 main().catch((err) => {

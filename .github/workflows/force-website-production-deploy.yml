@@ -194,7 +194,7 @@ jobs:
           echo "Polling $PRODUCTION_URL for new first-screen markers..."
           ok=0
           for i in $(seq 1 24); do
-            if node scripts/verify-custodynote-live.mjs --html /tmp/live.html --write-proof /tmp/live-proof; then
+            if node scripts/verify-custodynote-live.cjs --html /tmp/live.html --write-proof /tmp/live-proof; then
               echo "LIVE markers OK on attempt $i"
               ok=1
               break
