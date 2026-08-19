@@ -10,7 +10,7 @@ on:
       pr_number:
         description: Website PR number to merge
         required: true
-        default: '2'
+        default: '3'
   push:
     branches:
       - master
@@ -27,7 +27,7 @@ jobs:
       - name: Mark ready and squash-merge website PR
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
-          PR: ${{ github.event.inputs.pr_number || '2' }}
+          PR: ${{ github.event.inputs.pr_number || '3' }}
         run: |
           set -euo pipefail
           REPO="robertcashman-bit/custody-note-website"
