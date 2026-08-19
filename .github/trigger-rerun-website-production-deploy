@@ -1,3 +1,3 @@
 # Sentinel: re-dispatch website Deploy and IndexNow (repo has VERCEL_TOKEN).
-requested_at: 2026-08-19T17:25:00Z
-reason: master 5140b9c deploy run reported success but live HTML etag unchanged — re-run and capture full deploy output
+requested_at: 2026-08-19T17:36:30Z
+reason: website PR #4 merged at 7da99aa — dispatch Deploy and IndexNow so custodynote.com gets product-first hero
