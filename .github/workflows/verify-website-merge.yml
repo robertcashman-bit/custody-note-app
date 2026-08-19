@@ -26,12 +26,14 @@ jobs:
           echo "== master tip =="
           gh api "repos/$REPO/commits/master" --jq '{sha:.sha,date:.commit.committer.date,message:.commit.message}'
           echo
-          echo "== Recent deployments (GitHub) =="
-          gh api "repos/$REPO/deployments?per_page=5" --jq '.[]|{id,environment,sha,ref,created_at,creator:.creator.login}' || echo "(no deployments API data)"
-          echo
           echo "== Check runs on master tip =="
           SHA=$(gh api "repos/$REPO/commits/master" --jq .sha)
-          gh api "repos/$REPO/commits/$SHA/check-runs" --jq '.check_runs[:10]|map({name,status,conclusion,started_at,details_url})' || true
+          gh api "repos/$REPO/commits/$SHA/check-runs" --jq '.check_runs[:15]|map({name,status,conclusion,started_at,details_url})'
           echo
-          echo "== PR comments / status (Vercel bot) =="
-          gh api "repos/$REPO/issues/2/comments?per_page=20" --jq '.[]|{user:.user.login,created_at,body:.body[0:240]}' || true
+          echo "== Website Actions run for merge commit =="
+          gh run list --repo "$REPO" --branch master --limit 3 --json databaseId,name,status,conclusion,url,headSha,event,createdAt
+          RUN_ID=$(gh run list --repo "$REPO" --branch master --limit 1 --json databaseId -q '.[0].databaseId')
+          echo "RUN_ID=$RUN_ID"
+          echo
+          echo "== Deploy job log (vercel / production hints) =="
+          gh run view "$RUN_ID" --repo "$REPO" --log 2>&1 | rg -i 'vercel|production|deploy|https://|Ready|Aliased|custodynote|Error|fail|success' | head -80
