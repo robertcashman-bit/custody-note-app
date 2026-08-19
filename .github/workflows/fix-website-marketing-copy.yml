@@ -1,6 +1,6 @@
 name: Fix website marketing copy
 
-# One-shot honesty pass for custodynote.com (private sibling repo).
+# Honesty pass for custodynote.com (private sibling repo).
 # Uses GH_PAT (same secret as deploy-website) to clone, edit, push a PR branch.
 on:
   workflow_dispatch:
@@ -28,18 +28,57 @@ jobs:
           path: custody-note-website
           token: ${{ secrets.GH_PAT }}
 
+      - name: Snapshot key website sources (pre-fix)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/website-src-snapshot
+          cd custody-note-website
+          # Collect likely pages/components for review + precise edits
+          find app components lib -type f \( -name '*.tsx' -o -name '*.ts' -o -name '*.jsx' -o -name '*.js' \) \
+            | while read -r f; do
+                case "$f" in
+                  *page.tsx|*layout.tsx|*Cookie*|*cookie*|*Header*|*Nav*|*Footer*|*Cta*|*CTA*|*Banner*|*site.ts|*cta-analytics*|*linkable*)
+                    mkdir -p "/tmp/website-src-snapshot/$(dirname "$f")"
+                    cp "$f" "/tmp/website-src-snapshot/$f"
+                    ;;
+                esac
+              done
+          # Always include homepage + features + app + about
+          for f in app/page.tsx app/features/page.tsx app/app/page.tsx app/about/page.tsx app/download/page.tsx app/layout.tsx; do
+            if [ -f "$f" ]; then
+              mkdir -p "/tmp/website-src-snapshot/$(dirname "$f")"
+              cp "$f" "/tmp/website-src-snapshot/$f"
+            fi
+          done
+          find /tmp/website-src-snapshot -type f | sort | tee /tmp/website-src-snapshot/FILES.txt
+          # Grep helpers for the duplicate CTA and Cookies path
+          rg -n "Still writing custody notes|/Cookies|/trial|Open Custody Note|Free Forever|Free during beta to test|Free Trial|Try Custody Note" \
+            /tmp/website-src-snapshot > /tmp/website-src-snapshot/HITS.txt || true
+
+      - name: Upload website source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-src-snapshot
+          path: /tmp/website-src-snapshot
+
       - name: Apply marketing/legal copy fixes
         env:
           WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
         run: node scripts/fix-website-marketing-copy.mjs
 
-      - name: Upload copy-fix report
+      - name: Upload copy-fix report and post-fix key pages
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: website-copy-fix-report
           path: |
             custody-note-website/.copy-fix-report.json
+            custody-note-website/app/page.tsx
+            custody-note-website/app/features/page.tsx
+            custody-note-website/app/app/page.tsx
+            custody-note-website/app/about/page.tsx
+            custody-note-website/app/download/page.tsx
+            custody-note-website/components
           if-no-files-found: ignore
 
       - name: Commit and push website branch
@@ -52,7 +91,6 @@ jobs:
           git config user.email "cursoragent@cursor.com"
           BRANCH="cursor/marketing-legal-copy-24e3"
           git checkout -B "$BRANCH"
-          # Do not commit the local CI report file
           rm -f .copy-fix-report.json
           git add -A
           if git diff --cached --quiet; then
@@ -60,10 +98,10 @@ jobs:
             exit 0
           fi
           git commit -m "$(cat <<'EOF'
-          fix(copy): align beta commercial and Companies House disclosures
+          fix(copy): beta commercial honesty + walkthrough fixes
 
-          Single commercial line; remove non-working subscribe/trial CTAs;
-          honest Free vs Pro-planned claims; statutory company details on About/legal.
+          Cookie /cookies path, homepage CTA dedupe, /app download landing,
+          features grammar, trial CTAs → download, Companies House disclosures.
           EOF
           )"
           git push -u origin "$BRANCH" --force
@@ -78,28 +116,37 @@ jobs:
           if gh pr view "$BRANCH" --json url >/dev/null 2>&1; then
             echo "Website PR already exists for $BRANCH"
             gh pr view "$BRANCH" --json url,title -q '"\(.title) \(.url)"'
+            # Refresh body with latest scope
+            gh pr edit "$BRANCH" --body "$(cat <<'EOF'
+          ## Summary
+          Marketing/legal honesty pass for custodynote.com during free beta (payments not wired).
+
+          ### Commercial
+          - One line: **Free during beta. No credit card. Paid Pro planned after beta.**
+          - Download: remove Free Trial title, free forever body, and Subscribe £9.99 CTA
+          - Pricing: stop “Shipping now / Available now for Pro”; label Pro AI / multi-site as planned
+          - Homepage: Pro-planned cloud/sync labels; example workflow notes; **dedupe repeated “Still writing…” CTAs**
+          - Nav/footer: Free Forever → Download free; `/trial` CTAs → `/download`; stop Free Trial / Try wording
+          - Cookie banner: `/Cookies` → `/cookies`
+          - `/app`: honest download landing (no fake Open web-app)
+          - `/features`: fix broken “with a Free during beta to test…” grammar
+          - Terms dated **19 August 2026**; Privacy billing language future-proofed
+
+          ### Legal entity
+          - About + legal footers: DEFENCELEGALSERVICES LIMITED, Companies House **09900871**, registered office, CH link
+
+          ### Out of scope
+          - No Lemon Squeezy / checkout / billing
+          - Companion desktop app PR: custody-note-app `cursor/marketing-legal-copy-24e3`
+
+          EOF
+          )"
             exit 0
           fi
           gh pr create --base master --head "$BRANCH" --title "fix(copy): beta commercial line + Companies House disclosures" --body "$(cat <<'EOF'
           ## Summary
           Marketing/legal honesty pass for custodynote.com during free beta (payments not wired).
 
-          ### Commercial
-          - One line: **Free during beta. No credit card. Paid Pro planned after beta.**
-          - Download: remove Free Trial title, free forever body, and Subscribe for £9.99 CTA
-          - Pricing: stop “Shipping now / Available now for Pro”; label Pro AI / multi-site as planned; authority docs noted as included in beta
-          - Homepage: label cloud backup/sync as Pro-planned; clarify example workflow notes are not testimonials
-          - Nav/footer: replace “Free Forever” with “Download free”; CTA analytics `start-free-trial` → `download-free`
-          - Security: “Pro £9.99/month” → planned after beta
-          - Terms (dated 19 August 2026): beta-true commercial clauses (no live auto-renew/subscription sale)
-          - Privacy: billing language future-proofed; Pro AI marked planned
-
-          ### Legal entity
-          - About (+ terms/privacy if missing): DEFENCELEGALSERVICES LIMITED, Companies House **09900871**, registered office Greenacre London Road, West Kingsdown, Sevenoaks, England, TN15 6ER, CH link
-
-          ### Out of scope
-          - No Lemon Squeezy / checkout / billing implementation
-          - Desktop app string fixes ship in the companion custody-note-app PR on the same branch name
-
+          Companion app PR uses the same branch name on custody-note-app.
           EOF
           )"

@@ -188,6 +188,76 @@ const REPLACEMENTS = [
     { optional: true },
   ],
 
+  // --- Live walkthrough extras (19 Aug 2026) ---
+  // Cookie banner capital-C path 404s; footer /cookies is correct
+  ['href="/Cookies"', 'href="/cookies"'],
+  ["href='/Cookies'", "href='/cookies'"],
+  ['"/Cookies"', '"/cookies"'],
+  ["'/Cookies'", "'/cookies'"],
+  ['`/Cookies`', '`/cookies`'],
+
+  // Trial CTAs → download (no timed trial product)
+  ['href="/trial"', 'href="/download"'],
+  ["href='/trial'", "href='/download'"],
+  ['"/trial"', '"/download"', { optional: true }],
+  [">Try Custody Note<", ">Download Custody Note<"],
+  ['"Try Custody Note"', '"Download Custody Note"'],
+  ["'Try Custody Note'", "'Download Custody Note'"],
+  ['>Free Trial<', '>Download free<'],
+  ['"Free Trial"', '"Download free"', { optional: true }],
+  [' children: "Free Trial"', ' children: "Download free"', { optional: true }],
+
+  // /features broken token-replace grammar
+  [
+    'with a Free during beta to test it in practice',
+    'free during beta so you can test it in practice',
+  ],
+  [
+    'with a{" "}Free during beta{" "}to test it in practice',
+    'free during beta so you can test it in practice',
+    { optional: true },
+  ],
+  [
+    'with a <FreeLabel /> to test it in practice',
+    'free during beta so you can test it in practice',
+    { optional: true },
+  ],
+  [
+    'Free during beta gives you time to assess',
+    'The free beta gives you time to assess',
+  ],
+  [
+    'with a free trial to test it in practice',
+    'free during beta so you can test it in practice',
+    { optional: true },
+  ],
+
+  // /app — honest download landing (no fake Open web-app)
+  ['Open Custody Note App', 'Download Custody Note'],
+  ['Open Custody Note |', 'Download Custody Note |', { optional: true }],
+  ['>Open App<', '>Download<', { optional: true }],
+  ['"Open App"', '"Download"', { optional: true }],
+  [
+    'Launch or download Custody Note',
+    'Download Custody Note',
+    { optional: true },
+  ],
+  [
+    'Download free and use core features forever. Free during beta — no credit card required',
+    'Free during beta. No credit card. Paid Pro planned after beta.',
+    { optional: true },
+  ],
+  [
+    'use core features forever',
+    'use core features free during beta',
+    { optional: true },
+  ],
+  [
+    'Ready to try structured attendance notes?',
+    'Ready for structured attendance notes?',
+    { optional: true },
+  ],
+
   // Security / guides next-steps (several phrasings)
   ['Pricing — Pro £9.99/month', 'Pricing — Pro planned after beta (~£9.99/month)'],
   ['Pricing — Pro £{"9.99"}/month', 'Pricing — Pro planned after beta (~£9.99/month)', { optional: true }],
@@ -364,6 +434,156 @@ for (const file of files) {
   }
 }
 
+/**
+ * Homepage: "Still writing custody notes manually?" CTA is repeated many times.
+ * Keep the first two occurrences of the distinctive CTA wrapper; drop the rest.
+ */
+function dedupeHomepageCtas(text) {
+  const marker = 'Still writing custody notes manually?';
+  const count = text.split(marker).length - 1;
+  if (count <= 2) return { text, removed: 0, count };
+
+  // 1) Repeated self-closing / paired component usages that contain the marker nearby
+  //    e.g. <HomeBottomCta /> ... <HomeBottomCta />
+  const componentUsages = [];
+  const compRe =
+    /<([A-Z][\w.]*)(\s[^>]*)?\/>|<([A-Z][\w.]*)(\s[^>]*)?>[\s\S]*?<\/\3>/g;
+  let m;
+  while ((m = compRe.exec(text))) {
+    const chunk = m[0];
+    if (chunk.includes(marker)) {
+      componentUsages.push({ start: m.index, end: m.index + chunk.length, chunk });
+    }
+  }
+  if (componentUsages.length > 2) {
+    // Remove from the end so indices stay valid
+    let next = text;
+    for (let i = componentUsages.length - 1; i >= 2; i--) {
+      const u = componentUsages[i];
+      next = next.slice(0, u.start) + next.slice(u.end);
+    }
+    return { text: next, removed: componentUsages.length - 2, count, mode: 'component' };
+  }
+
+  // 2) Inline JSX blocks with the distinctive gradient wrapper from production
+  const blockRe =
+    /<div[^>]*from-blue-600\/15 to-transparent[^>]*>[\s\S]*?Still writing custody notes manually\?[\s\S]*?(?:<\/div>\s*){2,6}/g;
+  const blocks = [...text.matchAll(blockRe)];
+  if (blocks.length > 2) {
+    let next = text;
+    for (let i = blocks.length - 1; i >= 2; i--) {
+      const b = blocks[i];
+      next = next.slice(0, b.index) + next.slice(b.index + b[0].length);
+    }
+    return { text: next, removed: blocks.length - 2, count, mode: 'div-block' };
+  }
+
+  // 3) Fallback: if the same multi-line snippet containing the marker is copy-pasted,
+  //    keep first 2 full section-like occurrences keyed by a 120-char window.
+  const windows = [];
+  let idx = 0;
+  while ((idx = text.indexOf(marker, idx)) !== -1) {
+    const start = Math.max(0, idx - 180);
+    const end = Math.min(text.length, idx + marker.length + 420);
+    windows.push({ start, end, idx });
+    idx += marker.length;
+  }
+  if (windows.length > 2) {
+    // Expand to nearest blank-line separated blocks when possible
+    let next = text;
+    for (let i = windows.length - 1; i >= 2; i--) {
+      let s = windows[i].start;
+      let e = windows[i].end;
+      const beforeNl = next.lastIndexOf('\n\n', windows[i].idx);
+      const afterNl = next.indexOf('\n\n', windows[i].idx + marker.length);
+      if (beforeNl !== -1 && windows[i].idx - beforeNl < 500) s = beforeNl;
+      if (afterNl !== -1 && afterNl - windows[i].idx < 800) e = afterNl;
+      next = next.slice(0, s) + next.slice(e);
+    }
+    return { text: next, removed: windows.length - 2, count, mode: 'window' };
+  }
+
+  return { text, removed: 0, count, mode: 'none' };
+}
+
+/** Features page: fix mid-sentence Free-label token that reads "with a Free during beta to test…" */
+function fixFeaturesGrammar(text) {
+  let next = text;
+  const patterns = [
+    // JSX expression forms
+    [
+      /with a\s*\{\s*[\w.]+\s*\}\s*to test it in practice/g,
+      'free during beta so you can test it in practice',
+    ],
+    [
+      /with a\s*\{\/\*\s*[\s\S]*?\*\/\s*\}\s*\{\s*[\w.]+\s*\}\s*to test it in practice/g,
+      'free during beta so you can test it in practice',
+    ],
+    [
+      /with a\s*<[^>]+>\s*Free during beta\s*<\/[^>]+>\s*to test it in practice/g,
+      'free during beta so you can test it in practice',
+    ],
+    // Broken concatenation left by prior replace
+    [
+      /with a(\s*\{\s*["']?\s*\}?\s*)+Free during beta(\s*\{\s*["']?\s*\}?\s*)+to test it in practice/g,
+      'free during beta so you can test it in practice',
+    ],
+  ];
+  let hits = 0;
+  for (const [re, rep] of patterns) {
+    const before = next;
+    next = next.replace(re, rep);
+    if (next !== before) hits++;
+  }
+  return { text: next, hits };
+}
+
+// Structural passes on key routes
+for (const file of files) {
+  const rel = relative(WEBSITE_ROOT, file).replace(/\\/g, '/');
+  let text = readFileSync(file, 'utf8');
+  let touched = false;
+
+  if (rel === 'app/page.tsx' || rel.endsWith('/app/page.tsx')) {
+    // Only the marketing homepage at app/page.tsx (not app/app/page.tsx)
+    if (rel === 'app/page.tsx') {
+      const r = dedupeHomepageCtas(text);
+      if (r.removed > 0) {
+        console.log(
+          `[fix] homepage CTA dedupe: kept 2 of ${r.count} (${r.mode}), removed ${r.removed} in ${rel}`
+        );
+        text = r.text;
+        touched = true;
+        applied.push({ file: rel, find: 'Still writing CTA dedupe', count: r.removed });
+      } else {
+        console.log(`[fix] homepage CTA count=${r.count} mode=${r.mode || 'n/a'} (no dedupe)`);
+      }
+    }
+  }
+
+  if (rel.includes('features') && rel.endsWith('page.tsx')) {
+    const r = fixFeaturesGrammar(text);
+    if (r.hits > 0 || text.includes('with a Free during beta to test')) {
+      // Also handle simple remaining string if structural regex missed
+      const before = text;
+      text = r.text.replace(
+        /with a Free during beta to test it in practice/g,
+        'free during beta so you can test it in practice'
+      );
+      if (text !== before) {
+        touched = true;
+        applied.push({ file: rel, find: 'features grammar', count: 1 });
+        console.log('[fix] features grammar repaired in', rel);
+      }
+    }
+  }
+
+  if (touched) {
+    writeFileSync(file, text);
+    changedFiles++;
+  }
+}
+
 // Inject company block into about / terms / privacy if still missing company number
 function ensureCompanyNumber(fileHints, insertAfterNeedle) {
   for (const file of files) {
@@ -398,6 +618,10 @@ const FORBIDDEN_LEFTOVERS = [
   'Available now for Pro',
   'data-cta="start-free-trial"',
   'Pricing — Pro £9.99/month',
+  'href="/Cookies"',
+  'href="/trial"',
+  'with a Free during beta to test it in practice',
+  'Open Custody Note App',
 ];
 
 const allText = files.map((f) => {
@@ -413,6 +637,16 @@ for (const s of FORBIDDEN_LEFTOVERS) {
   if (allText.includes(s)) leftovers.push(s);
 }
 
+// Soft-check homepage CTA duplication (warn in report, hard-fail if still extreme)
+const homePage = files.find((f) => relative(WEBSITE_ROOT, f).replace(/\\/g, '/') === 'app/page.tsx');
+let homeCtaCount = 0;
+if (homePage) {
+  homeCtaCount = readFileSync(homePage, 'utf8').split('Still writing custody notes manually?').length - 1;
+  if (homeCtaCount > 2) {
+    leftovers.push(`homepage Still writing CTA still repeated ${homeCtaCount} times (want <=2)`);
+  }
+}
+
 if (!allText.includes('09900871')) {
   console.error('[fix-website-marketing-copy] Companies House number 09900871 not found after edits');
   process.exit(4);
@@ -420,6 +654,7 @@ if (!allText.includes('09900871')) {
 
 console.log('\n[fix-website-marketing-copy] changed files:', changedFiles);
 console.log('[fix-website-marketing-copy] applied hit rows:', applied.length);
+console.log('[fix-website-marketing-copy] homepage CTA count:', homeCtaCount);
 if (leftovers.length) {
   console.error(
     '[fix-website-marketing-copy] leftover commercial strings still present (fix incomplete):\n - ' +
@@ -439,7 +674,7 @@ try {
   const reportPath = join(WEBSITE_ROOT, '.copy-fix-report.json');
   writeFileSync(
     reportPath,
-    JSON.stringify({ changedFiles, applied, betaLine: BETA_LINE }, null, 2) + '\n'
+    JSON.stringify({ changedFiles, applied, betaLine: BETA_LINE, homeCtaCount }, null, 2) + '\n'
   );
   console.log('[fix-website-marketing-copy] wrote', reportPath);
 } catch (e) {
