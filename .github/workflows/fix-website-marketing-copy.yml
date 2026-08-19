@@ -1,0 +1,94 @@
+name: Fix website marketing copy
+
+# One-shot honesty pass for custodynote.com (private sibling repo).
+# Uses GH_PAT (same secret as deploy-website) to clone, edit, push a PR branch.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cursor/marketing-legal-copy-24e3
+    paths:
+      - scripts/fix-website-marketing-copy.mjs
+      - .github/workflows/fix-website-marketing-copy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  fix-website:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Checkout website
+        uses: actions/checkout@v4
+        with:
+          repository: robertcashman-bit/custody-note-website
+          path: custody-note-website
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Apply marketing/legal copy fixes
+        env:
+          WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
+        run: node scripts/fix-website-marketing-copy.mjs
+
+      - name: Commit and push website branch
+        working-directory: custody-note-website
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          git config user.name "Cursor Agent"
+          git config user.email "cursoragent@cursor.com"
+          BRANCH="cursor/marketing-legal-copy-24e3"
+          git checkout -B "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No website file changes to commit"
+            exit 0
+          fi
+          git commit -m "$(cat <<'EOF'
+          fix(copy): align beta commercial and Companies House disclosures
+
+          Single commercial line; remove non-working subscribe/trial CTAs;
+          honest Free vs Pro-planned claims; statutory company details on About/legal.
+          EOF
+          )"
+          git push -u origin "$BRANCH" --force-with-lease
+
+      - name: Open or update website PR
+        working-directory: custody-note-website
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          BRANCH="cursor/marketing-legal-copy-24e3"
+          if gh pr view "$BRANCH" --json url >/dev/null 2>&1; then
+            echo "Website PR already exists for $BRANCH"
+            gh pr view "$BRANCH" --json url,title -q '"\(.title) \(.url)"'
+            exit 0
+          fi
+          gh pr create --base master --head "$BRANCH" --title "fix(copy): beta commercial line + Companies House disclosures" --body "$(cat <<'EOF'
+          ## Summary
+          Marketing/legal honesty pass for custodynote.com during free beta (payments not wired).
+
+          ### Commercial
+          - One line: **Free during beta. No credit card. Paid Pro planned after beta.**
+          - Download: remove Free Trial title, free forever body, and Subscribe for £9.99 CTA
+          - Pricing: stop “Shipping now / Available now for Pro”; label Pro AI / multi-site as planned; authority docs noted as included in beta
+          - Homepage: label cloud backup/sync as Pro-planned; clarify example workflow notes are not testimonials
+          - Nav/footer: replace “Free Forever” with “Download free”; CTA analytics `start-free-trial` → `download-free`
+          - Security: “Pro £9.99/month” → planned after beta
+          - Terms (dated 19 August 2026): beta-true commercial clauses (no live auto-renew/subscription sale)
+          - Privacy: billing language future-proofed; Pro AI marked planned
+
+          ### Legal entity
+          - About (+ terms/privacy if missing): DEFENCELEGALSERVICES LIMITED, Companies House **09900871**, registered office Greenacre London Road, West Kingsdown, Sevenoaks, England, TN15 6ER, CH link
+
+          ### Out of scope
+          - No Lemon Squeezy / checkout / billing implementation
+          - Desktop app string fixes ship in the companion custody-note-app PR on the same branch name
+
+          EOF
+          )"
