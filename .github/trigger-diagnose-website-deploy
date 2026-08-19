@@ -1,0 +1,3 @@
+# Sentinel: diagnose private website deploy path + confirm master has display PR.
+requested_at: 2026-08-19T17:22:00Z
+reason: VERCEL_TOKEN missing on app repo; need website Deploy workflow/logs + master source proof
