@@ -37,14 +37,14 @@ jobs:
           find app components lib -type f \( -name '*.tsx' -o -name '*.ts' -o -name '*.jsx' -o -name '*.js' \) \
             | while read -r f; do
                 case "$f" in
-                  *page.tsx|*layout.tsx|*Cookie*|*cookie*|*Header*|*Nav*|*Footer*|*Cta*|*CTA*|*Banner*|*site.ts|*cta-analytics*|*linkable*)
+                  *page.tsx|*layout.tsx|*Cookie*|*cookie*|*Header*|*Nav*|*Footer*|*Cta*|*CTA*|*Banner*|*site.ts|*product-copy*|*cta-analytics*|*linkable*)
                     mkdir -p "/tmp/website-src-snapshot/$(dirname "$f")"
                     cp "$f" "/tmp/website-src-snapshot/$f"
                     ;;
                 esac
               done
-          # Always include homepage + features + app + about
-          for f in app/page.tsx app/features/page.tsx app/app/page.tsx app/about/page.tsx app/download/page.tsx app/layout.tsx; do
+          # Always include homepage + features + app + about + product-copy
+          for f in app/page.tsx app/features/page.tsx app/app/page.tsx app/about/page.tsx app/download/page.tsx app/layout.tsx lib/product-copy.ts lib/site.ts; do
             if [ -f "$f" ]; then
               mkdir -p "/tmp/website-src-snapshot/$(dirname "$f")"
               cp "$f" "/tmp/website-src-snapshot/$f"
@@ -52,7 +52,7 @@ jobs:
           done
           find /tmp/website-src-snapshot -type f | sort | tee /tmp/website-src-snapshot/FILES.txt
           # Grep helpers for the duplicate CTA and Cookies path
-          rg -n "Still writing custody notes|/Cookies|/trial|Open Custody Note|Free Forever|Free during beta to test|Free Trial|Try Custody Note" \
+          rg -n "Still writing custody notes|/Cookies|/trial|Open Custody Note|Free Forever|Free during beta to test|Free Trial|Try Custody Note|InlineCtaStrip|TRIAL_LABEL" \
             /tmp/website-src-snapshot > /tmp/website-src-snapshot/HITS.txt || true
 
       - name: Upload website source snapshot
@@ -78,6 +78,8 @@ jobs:
             custody-note-website/app/app/page.tsx
             custody-note-website/app/about/page.tsx
             custody-note-website/app/download/page.tsx
+            custody-note-website/lib/site.ts
+            custody-note-website/lib/product-copy.ts
             custody-note-website/components
           if-no-files-found: ignore
 

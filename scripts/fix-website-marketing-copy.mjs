@@ -25,26 +25,6 @@ const BETA_LINE = 'Free during beta. No credit card. Paid Pro planned after beta
 const BETA_LINE_PRICE =
   'Free during beta. No credit card. Paid Pro planned after beta (around £9.99/month).';
 
-const COMPANY_BLOCK_MD = [
-  '**Publisher:** DEFENCELEGALSERVICES LIMITED (Companies House company number 09900871), trading as Police Station Agent (familiar trading style: Defence Legal Services Ltd).',
-  '',
-  '**Registered office:** Greenacre London Road, West Kingsdown, Sevenoaks, England, TN15 6ER.',
-  '',
-  '**Incorporated:** 3 December 2015. Private limited company registered in England and Wales. SIC 69102 Solicitors.',
-  '',
-  '**Director:** Robert David Cashman.',
-  '',
-  '**Companies House:** [find-and-update.company-information.service.gov.uk/company/09900871](https://find-and-update.company-information.service.gov.uk/company/09900871)',
-].join('\n');
-
-const COMPANY_BLOCK_PLAIN = [
-  'DEFENCELEGALSERVICES LIMITED (Companies House company number 09900871), trading as Police Station Agent (familiar trading style: Defence Legal Services Ltd).',
-  'Registered office: Greenacre London Road, West Kingsdown, Sevenoaks, England, TN15 6ER.',
-  'Incorporated 3 December 2015. Private limited company registered in England and Wales. SIC 69102 Solicitors.',
-  'Director: Robert David Cashman.',
-  'Companies House: https://find-and-update.company-information.service.gov.uk/company/09900871',
-].join(' ');
-
 const SKIP_DIRS = new Set([
   'node_modules',
   '.git',
@@ -144,16 +124,8 @@ const REPLACEMENTS = [
   ["data-cta='start-free-trial'", "data-cta='download-free'"],
   ['"start-free-trial"', '"download-free"'],
 
-  // About — Companies House
-  [
-    'Company registration details available on request via Contact',
-    COMPANY_BLOCK_PLAIN,
-  ],
-  [
-    'Company registration details available on request via',
-    COMPANY_BLOCK_PLAIN + ' See also',
-    { optional: true },
-  ],
+  // About Companies House: do NOT inject plain/markdown into JSX.
+  // Precise patch sets lib/site.ts defaults (COMPANY_NUMBER / REGISTERED_OFFICE).
 
   // Pricing — do not claim Pro is purchasable / AI shipping now
   ['Shipping now', 'Planned after beta'],
@@ -199,28 +171,17 @@ const REPLACEMENTS = [
   // Trial CTAs → download (no timed trial product)
   ['href="/trial"', 'href="/download"'],
   ["href='/trial'", "href='/download'"],
-  ['"/trial"', '"/download"', { optional: true }],
-  [">Try Custody Note<", ">Download Custody Note<"],
-  ['"Try Custody Note"', '"Download Custody Note"'],
-  ["'Try Custody Note'", "'Download Custody Note'"],
-  ['>Free Trial<', '>Download free<'],
-  ['"Free Trial"', '"Download free"', { optional: true }],
-  [' children: "Free Trial"', ' children: "Download free"', { optional: true }],
+  ['href={"/trial"}', 'href={"/download"}', { optional: true }],
+  ['href={\'/trial\'}', 'href={\'/download\'}', { optional: true }],
+  // Plain JSX text nodes (no surrounding quotes/brackets)
+  ['Try Custody Note', 'Download Custody Note'],
+  ['Free Trial', 'Download free'],
+  ['>Open App<', '>Download<', { optional: true }],
 
-  // /features broken token-replace grammar
+  // /features broken token-replace grammar (rendered copy leftovers)
   [
     'with a Free during beta to test it in practice',
     'free during beta so you can test it in practice',
-  ],
-  [
-    'with a{" "}Free during beta{" "}to test it in practice',
-    'free during beta so you can test it in practice',
-    { optional: true },
-  ],
-  [
-    'with a <FreeLabel /> to test it in practice',
-    'free during beta so you can test it in practice',
-    { optional: true },
   ],
   [
     'Free during beta gives you time to assess',
@@ -233,15 +194,14 @@ const REPLACEMENTS = [
   ],
 
   // /app — honest download landing (no fake Open web-app)
-  ['Open Custody Note App', 'Download Custody Note'],
-  ['Open Custody Note |', 'Download Custody Note |', { optional: true }],
-  ['>Open App<', '>Download<', { optional: true }],
-  ['"Open App"', '"Download"', { optional: true }],
+  ['title: "Open Custody Note App"', 'title: "Download Custody Note"'],
   [
-    'Launch or download Custody Note',
-    'Download Custody Note',
-    { optional: true },
+    'Open Custody Note\n        </h1>',
+    'Download Custody Note\n        </h1>',
   ],
+  ['Open Custody Note App', 'Download for Windows & Mac'],
+  ['Launch or download Custody Note', 'Download Custody Note'],
+  ['>Open App<', '>Download<', { optional: true }],
   [
     'Download free and use core features forever. Free during beta — no credit card required',
     'Free during beta. No credit card. Paid Pro planned after beta.',
@@ -435,178 +395,295 @@ for (const file of files) {
 }
 
 /**
- * Homepage: "Still writing custody notes manually?" CTA is repeated many times.
- * Keep the first two occurrences of the distinctive CTA wrapper; drop the rest.
+ * Precise patches for known website files (from source snapshot / live walk).
+ * Runs on a clean master checkout each CI run.
  */
-function dedupeHomepageCtas(text) {
-  const marker = 'Still writing custody notes manually?';
-  const count = text.split(marker).length - 1;
-  if (count <= 2) return { text, removed: 0, count };
-
-  // 1) Repeated self-closing / paired component usages that contain the marker nearby
-  //    e.g. <HomeBottomCta /> ... <HomeBottomCta />
-  const componentUsages = [];
-  const compRe =
-    /<([A-Z][\w.]*)(\s[^>]*)?\/>|<([A-Z][\w.]*)(\s[^>]*)?>[\s\S]*?<\/\3>/g;
-  let m;
-  while ((m = compRe.exec(text))) {
-    const chunk = m[0];
-    if (chunk.includes(marker)) {
-      componentUsages.push({ start: m.index, end: m.index + chunk.length, chunk });
-    }
+function patchFile(relPath, transform) {
+  const full = join(WEBSITE_ROOT, relPath);
+  if (!existsSync(full)) {
+    console.warn('[fix] missing', relPath);
+    return false;
   }
-  if (componentUsages.length > 2) {
-    // Remove from the end so indices stay valid
-    let next = text;
-    for (let i = componentUsages.length - 1; i >= 2; i--) {
-      const u = componentUsages[i];
-      next = next.slice(0, u.start) + next.slice(u.end);
-    }
-    return { text: next, removed: componentUsages.length - 2, count, mode: 'component' };
-  }
-
-  // 2) Inline JSX blocks with the distinctive gradient wrapper from production
-  const blockRe =
-    /<div[^>]*from-blue-600\/15 to-transparent[^>]*>[\s\S]*?Still writing custody notes manually\?[\s\S]*?(?:<\/div>\s*){2,6}/g;
-  const blocks = [...text.matchAll(blockRe)];
-  if (blocks.length > 2) {
-    let next = text;
-    for (let i = blocks.length - 1; i >= 2; i--) {
-      const b = blocks[i];
-      next = next.slice(0, b.index) + next.slice(b.index + b[0].length);
-    }
-    return { text: next, removed: blocks.length - 2, count, mode: 'div-block' };
-  }
-
-  // 3) Fallback: if the same multi-line snippet containing the marker is copy-pasted,
-  //    keep first 2 full section-like occurrences keyed by a 120-char window.
-  const windows = [];
-  let idx = 0;
-  while ((idx = text.indexOf(marker, idx)) !== -1) {
-    const start = Math.max(0, idx - 180);
-    const end = Math.min(text.length, idx + marker.length + 420);
-    windows.push({ start, end, idx });
-    idx += marker.length;
-  }
-  if (windows.length > 2) {
-    // Expand to nearest blank-line separated blocks when possible
-    let next = text;
-    for (let i = windows.length - 1; i >= 2; i--) {
-      let s = windows[i].start;
-      let e = windows[i].end;
-      const beforeNl = next.lastIndexOf('\n\n', windows[i].idx);
-      const afterNl = next.indexOf('\n\n', windows[i].idx + marker.length);
-      if (beforeNl !== -1 && windows[i].idx - beforeNl < 500) s = beforeNl;
-      if (afterNl !== -1 && afterNl - windows[i].idx < 800) e = afterNl;
-      next = next.slice(0, s) + next.slice(e);
-    }
-    return { text: next, removed: windows.length - 2, count, mode: 'window' };
-  }
-
-  return { text, removed: 0, count, mode: 'none' };
+  const before = readFileSync(full, 'utf8');
+  const after = transform(before);
+  if (after == null || after === before) return false;
+  writeFileSync(full, after);
+  changedFiles++;
+  console.log('[fix] patched', relPath);
+  applied.push({ file: relPath, find: 'precise-patch', count: 1 });
+  return true;
 }
 
-/** Features page: fix mid-sentence Free-label token that reads "with a Free during beta to test…" */
-function fixFeaturesGrammar(text) {
-  let next = text;
-  const patterns = [
-    // JSX expression forms
-    [
-      /with a\s*\{\s*[\w.]+\s*\}\s*to test it in practice/g,
-      'free during beta so you can test it in practice',
-    ],
-    [
-      /with a\s*\{\/\*\s*[\s\S]*?\*\/\s*\}\s*\{\s*[\w.]+\s*\}\s*to test it in practice/g,
-      'free during beta so you can test it in practice',
-    ],
-    [
-      /with a\s*<[^>]+>\s*Free during beta\s*<\/[^>]+>\s*to test it in practice/g,
-      'free during beta so you can test it in practice',
-    ],
-    // Broken concatenation left by prior replace
-    [
-      /with a(\s*\{\s*["']?\s*\}?\s*)+Free during beta(\s*\{\s*["']?\s*\}?\s*)+to test it in practice/g,
-      'free during beta so you can test it in practice',
-    ],
-  ];
-  let hits = 0;
-  for (const [re, rep] of patterns) {
-    const before = next;
-    next = next.replace(re, rep);
-    if (next !== before) hits++;
-  }
-  return { text: next, hits };
+function dedupeInlineCtaStrips(text, keep = 2) {
+  let n = 0;
+  const next = text.replace(/[ \t]*<InlineCtaStrip\s*\/>\s*\n?/g, (match) => {
+    n += 1;
+    return n <= keep ? match : '';
+  });
+  return { text: next, total: n, kept: Math.min(keep, n) };
 }
 
-// Structural passes on key routes
-for (const file of files) {
-  const rel = relative(WEBSITE_ROOT, file).replace(/\\/g, '/');
-  let text = readFileSync(file, 'utf8');
-  let touched = false;
+function applyPreciseFilePatches() {
+  // --- Company defaults (About already renders COMPANY_NUMBER / REGISTERED_OFFICE) ---
+  patchFile('lib/site.ts', (t) =>
+    t
+      .replace(
+        /export const COMPANY_NUMBER =\s*process\.env\.NEXT_PUBLIC_COMPANY_NUMBER\?\.trim\(\) \|\| "";/,
+        'export const COMPANY_NUMBER =\n  process.env.NEXT_PUBLIC_COMPANY_NUMBER?.trim() || "09900871";'
+      )
+      .replace(
+        /export const REGISTERED_OFFICE =\s*process\.env\.NEXT_PUBLIC_REGISTERED_OFFICE\?\.trim\(\) \|\| "";/,
+        'export const REGISTERED_OFFICE =\n  process.env.NEXT_PUBLIC_REGISTERED_OFFICE?.trim() ||\n  "Greenacre London Road, West Kingsdown, Sevenoaks, England, TN15 6ER";'
+      )
+      .replace(
+        /export const LEGAL_LAST_UPDATED = "[^"]+";/,
+        'export const LEGAL_LAST_UPDATED = "19 August 2026";'
+      )
+  );
 
-  if (rel === 'app/page.tsx' || rel.endsWith('/app/page.tsx')) {
-    // Only the marketing homepage at app/page.tsx (not app/app/page.tsx)
-    if (rel === 'app/page.tsx') {
-      const r = dedupeHomepageCtas(text);
-      if (r.removed > 0) {
-        console.log(
-          `[fix] homepage CTA dedupe: kept 2 of ${r.count} (${r.mode}), removed ${r.removed} in ${rel}`
+  // --- product-copy: one commercial line; no trial CTA wording; APP_OPEN = download ---
+  patchFile('lib/product-copy.ts', (t) => {
+    let next = t;
+    next = next.replace(
+      /export const APP_OPEN_URL\s*=\s*[^;]+;/,
+      'export const APP_OPEN_URL = "/download";'
+    );
+    next = next.replace(
+      /export const TRIAL_CTA_PRIMARY\s*=\s*[^;]+;/,
+      'export const TRIAL_CTA_PRIMARY = "Download free";'
+    );
+    next = next.replace(
+      /export const TRIAL_LABEL\s*=\s*[^;]+;/,
+      'export const TRIAL_LABEL = "free during beta";'
+    );
+    next = next.replace(
+      /export const FREE_FOREVER_TAGLINE\s*=\s*[^;]+;/,
+      'export const FREE_FOREVER_TAGLINE =\n  "Free during beta. No credit card. Paid Pro planned after beta.";'
+    );
+    next = next.replace(
+      /export const FREE_FOREVER_LABEL\s*=\s*[^;]+;/,
+      'export const FREE_FOREVER_LABEL = "Free during beta";'
+    );
+    next = next.replace(
+      /export const FREE_DOWNLOAD_CTA\s*=\s*[^;]+;/,
+      'export const FREE_DOWNLOAD_CTA = "Download free";'
+    );
+    next = next.replace(/Free forever/gi, 'Free during beta');
+    next = next.replace(/Start free trial/gi, 'Download free');
+    next = next.replace(/["']\/trial["']/, '"/download"');
+    return next;
+  });
+
+  // --- Cookie banner ---
+  patchFile('components/CookieBanner.tsx', (t) =>
+    t.replaceAll('href="/Cookies"', 'href="/cookies"').replaceAll("href='/Cookies'", "href='/cookies'")
+  );
+
+  // --- Floating / sticky trial CTAs ---
+  patchFile('components/FloatingTrialCta.tsx', (t) =>
+    t
+      .replaceAll('href="/trial"', 'href="/download"')
+      .replaceAll('Try Custody Note', 'Download Custody Note')
+  );
+  patchFile('components/StickyDownloadCta.tsx', (t) =>
+    t
+      .replaceAll('href="/trial"', 'href="/download"')
+      .replaceAll('Free Trial', 'Download free')
+  );
+
+  // --- Header nav trial CTA ---
+  patchFile('components/Header.tsx', (t) =>
+    t.replaceAll('href="/trial"', 'href="/download"')
+  );
+
+  // --- PageCta: single honest download path (no fake Open web-app button) ---
+  patchFile('components/PageCta.tsx', (t) => {
+    let next = t;
+    next = next.replace(
+      /description = `Download free and use core features[^`]*\$\{FREE_FOREVER_TAGLINE\}`/,
+      'description = FREE_FOREVER_TAGLINE'
+    );
+    next = next.replace(
+      /title = "Ready to try structured attendance notes\?"/,
+      'title = "Ready for structured attendance notes?"'
+    );
+    // Drop the middle APP_OPEN_URL button (duplicate of download)
+    next = next.replace(
+      /\n\s*<Link\s*\n\s*href=\{APP_OPEN_URL\}[\s\S]*?<\/Link>/,
+      ''
+    );
+    // Remove unused APP_OPEN_URL import
+    next = next.replace(/\n\s*APP_OPEN_URL,/, '');
+    next = next.replace(/APP_OPEN_URL,\n\s*/, '');
+    next = next.replaceAll('Open Custody Note App', 'Download Custody Note');
+    return next;
+  });
+
+  // --- Homepage: keep two InlineCtaStrip bands, remove the rest ---
+  patchFile('app/page.tsx', (t) => {
+    const { text, total, kept } = dedupeInlineCtaStrips(t, 2);
+    console.log(`[fix] homepage InlineCtaStrip: ${total} → kept ${kept}`);
+    if (total <= 2) return t;
+    return text;
+  });
+
+  // --- Features hero grammar (TRIAL_LABEL mid-sentence) ---
+  patchFile('app/features/page.tsx', (t) => {
+    let next = t.replace(
+      /Police station attendance note software designed to help criminal\s*\n\s*defence professionals work in a clear, consistent format — with a\{" "\}\s*\n\s*\{TRIAL_LABEL\} to test it in practice\./,
+      'Police station attendance note software designed to help criminal defence professionals work in a clear, consistent format — free during beta so you can test it in practice.'
+    );
+    next = next.replace(
+      /with a\{" "\}\s*\n\s*\{TRIAL_LABEL\} to test it in practice\./g,
+      'free during beta so you can test it in practice.'
+    );
+    next = next.replace(
+      /\{TRIAL_LABEL\} to test it in practice\./g,
+      'free during beta so you can test it in practice.'
+    );
+    next = next.replace(
+      /Free during beta gives you time to assess/g,
+      'The free beta gives you time to assess'
+    );
+    next = next.replace(
+      /description="The free beta gives you time to assess whether the structure fits the way you work at the police station\."/,
+      'description="The free beta gives you time to assess whether the structure fits the way you work at the police station."'
+    );
+    // Drop unused TRIAL_LABEL import
+    if (!next.includes('{TRIAL_LABEL}') && !next.includes('TRIAL_LABEL,')) {
+      next = next.replace(
+        /import \{ TRIAL_LABEL \} from "@\/lib\/product-copy";\n/,
+        ''
+      );
+    }
+    return next;
+  });
+
+  // --- /app honest download landing (single download CTA; no fake Open) ---
+  patchFile('app/app/page.tsx', (t) => {
+    let next = t;
+    next = next.replace(
+      /title: "Open Custody Note App"/,
+      'title: "Download Custody Note"'
+    );
+    next = next.replace(
+      /title: "Download Custody Note"/,
+      'title: "Download Custody Note"'
+    );
+    next = next.replace(
+      /Launch or download Custody Note/,
+      'Download Custody Note'
+    );
+    next = next.replace(
+      /Open Custody Note\s*\n\s*<\/h1>/,
+      'Download Custody Note\n        </h1>'
+    );
+    // Collapse dual CTA row to one download button
+    next = next.replace(
+      /<div className="flex flex-col gap-3 sm:flex-row justify-center mb-10">[\s\S]*?<\/div>\s*\n\s*<p className="text-sm text-blue-100\/55 mb-12">/,
+      `<div className="flex flex-col gap-3 sm:flex-row justify-center mb-10">
+          <Link
+            href="/download"
+            className="inline-flex min-h-[52px] items-center justify-center rounded-xl bg-blue-600 px-8 py-4 text-lg font-semibold text-white hover:bg-blue-500 transition-colors"
+          >
+            Download for Windows &amp; Mac
+          </Link>
+        </div>
+        <p className="text-sm text-blue-100/55 mb-12">`
+    );
+    next = next.replaceAll('Open Custody Note App', 'Download for Windows & Mac');
+    // Always drop unused APP_OPEN_URL import after CTA rewrite
+    next = next.replace(/import \{ APP_OPEN_URL, PRODUCT_SHORT_DESCRIPTION \}/, 'import { PRODUCT_SHORT_DESCRIPTION }');
+    next = next.replace(/APP_OPEN_URL, /, '');
+    next = next.replace(/, APP_OPEN_URL/, '');
+    return next;
+  });
+
+  // --- About: always show statutory details (not env-gated empty / not plain-text dump) ---
+  patchFile('app/about/page.tsx', (t) => {
+    const block = `{/* Statutory company details (Companies House) */}
+            <p className="mt-3">
+              <strong className="text-white">Registered name:</strong>{" "}
+              DEFENCELEGALSERVICES LIMITED
+            </p>
+            <p className="mt-3">
+              <strong className="text-white">Companies House:</strong>{" "}
+              <a
+                href="https://find-and-update.company-information.service.gov.uk/company/09900871"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:underline"
+              >
+                {COMPANY_NUMBER || "09900871"}
+              </a>
+            </p>
+            <p className="mt-3">
+              <strong className="text-white">Registered office:</strong>{" "}
+              {REGISTERED_OFFICE ||
+                "Greenacre London Road, West Kingsdown, Sevenoaks, England, TN15 6ER"}
+            </p>
+            <p className="mt-3 text-sm text-blue-100/70">
+              Incorporated 3 December 2015. Private limited company registered in
+              England and Wales. SIC 69102 Solicitors. Director: Robert David
+              Cashman.
+            </p>`;
+
+    let next = t.replace(
+      /\{COMPANY_NUMBER \? \([\s\S]*?\) : \(\s*<p className="mt-3 text-sm text-blue-100\/55">[\s\S]*?<\/p>\s*\)\}/,
+      block
+    );
+    if (next === t) {
+      // Already partially rewritten or structure differs — ensure CH number present
+      if (!next.includes('09900871')) {
+        next = next.replace(
+          /provides legal advice or representation\.\s*<\/p>/,
+          `provides legal advice or representation.
+            </p>
+            ${block}`
         );
-        text = r.text;
-        touched = true;
-        applied.push({ file: rel, find: 'Still writing CTA dedupe', count: r.removed });
-      } else {
-        console.log(`[fix] homepage CTA count=${r.count} mode=${r.mode || 'n/a'} (no dedupe)`);
       }
     }
-  }
+    return next;
+  });
 
-  if (rel.includes('features') && rel.endsWith('page.tsx')) {
-    const r = fixFeaturesGrammar(text);
-    if (r.hits > 0 || text.includes('with a Free during beta to test')) {
-      // Also handle simple remaining string if structural regex missed
-      const before = text;
-      text = r.text.replace(
-        /with a Free during beta to test it in practice/g,
-        'free during beta so you can test it in practice'
+  // --- Footer: Free Forever label + compact statutory line (valid JSX, not markdown) ---
+  patchFile('components/Footer.tsx', (t) => {
+    let next = t
+      .replaceAll('>Free Forever<', '>Download free<')
+      .replaceAll('>Open App<', '>Download<');
+    // Strip any prior markdown company dump inside the publisher <p>
+    next = next.replace(
+      /Defence Legal Services Ltd\s*\n\s*\n\*\*Publisher:\*\*[\s\S]*?\*\*Companies House:\*\*[^\n]*\n\s*\n\s*<br \/>\s*\n\s*t\/a Police Station Agent — product publisher/,
+      `Defence Legal Services Ltd
+              <br />
+              t/a Police Station Agent — product publisher`
+    );
+    if (!next.includes('09900871')) {
+      next = next.replace(
+        /t\/a Police Station Agent — product publisher\s*<\/p>/,
+        `t/a Police Station Agent — product publisher
+            </p>
+            <p className="mt-2 text-xs text-blue-100/55 leading-relaxed">
+              DEFENCELEGALSERVICES LIMITED (Companies House{" "}
+              <a
+                href="https://find-and-update.company-information.service.gov.uk/company/09900871"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-300/80 hover:underline"
+              >
+                09900871
+              </a>
+              ). Registered office: Greenacre London Road, West Kingsdown,
+              Sevenoaks, England, TN15 6ER.
+            </p>`
       );
-      if (text !== before) {
-        touched = true;
-        applied.push({ file: rel, find: 'features grammar', count: 1 });
-        console.log('[fix] features grammar repaired in', rel);
-      }
     }
-  }
-
-  if (touched) {
-    writeFileSync(file, text);
-    changedFiles++;
-  }
+    return next;
+  });
 }
 
-// Inject company block into about / terms / privacy if still missing company number
-function ensureCompanyNumber(fileHints, insertAfterNeedle) {
-  for (const file of files) {
-    const rel = relative(WEBSITE_ROOT, file).replace(/\\/g, '/');
-    if (!fileHints.some((h) => rel.toLowerCase().includes(h))) continue;
-    let text = readFileSync(file, 'utf8');
-    if (text.includes('09900871')) continue;
-    if (insertAfterNeedle && text.includes(insertAfterNeedle)) {
-      text = text.replace(
-        insertAfterNeedle,
-        insertAfterNeedle + '\n\n' + COMPANY_BLOCK_MD + '\n'
-      );
-      writeFileSync(file, text);
-      changedFiles++;
-      console.log('[fix] injected Companies House block into', rel);
-    }
-  }
-}
-
-ensureCompanyNumber(['about'], 'Police Station Agent');
-ensureCompanyNumber(['terms'], 'Police Station Agent');
-ensureCompanyNumber(['privacy'], 'Police Station Agent');
-ensureCompanyNumber(['footer', 'site-footer', 'legal'], 'Defence Legal Services Ltd');
+// Apply string replacements first (already done above in loop), then precise patches
+applyPreciseFilePatches();
 
 // Critical leftovers — must not remain after a successful honesty pass
 const FORBIDDEN_LEFTOVERS = [
@@ -622,6 +699,10 @@ const FORBIDDEN_LEFTOVERS = [
   'href="/trial"',
   'with a Free during beta to test it in practice',
   'Open Custody Note App',
+  'Try Custody Note',
+  'Free Forever',
+  '**Publisher:**',
+  '{TRIAL_LABEL} to test it in practice',
 ];
 
 const allText = files.map((f) => {
@@ -637,13 +718,13 @@ for (const s of FORBIDDEN_LEFTOVERS) {
   if (allText.includes(s)) leftovers.push(s);
 }
 
-// Soft-check homepage CTA duplication (warn in report, hard-fail if still extreme)
+// Soft-check homepage CTA duplication
 const homePage = files.find((f) => relative(WEBSITE_ROOT, f).replace(/\\/g, '/') === 'app/page.tsx');
 let homeCtaCount = 0;
 if (homePage) {
-  homeCtaCount = readFileSync(homePage, 'utf8').split('Still writing custody notes manually?').length - 1;
+  homeCtaCount = (readFileSync(homePage, 'utf8').match(/<InlineCtaStrip\s*\/>/g) || []).length;
   if (homeCtaCount > 2) {
-    leftovers.push(`homepage Still writing CTA still repeated ${homeCtaCount} times (want <=2)`);
+    leftovers.push(`homepage InlineCtaStrip still repeated ${homeCtaCount} times (want ≤2)`);
   }
 }
 
