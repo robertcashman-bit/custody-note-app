@@ -1,0 +1,59 @@
+name: Merge website copy PR
+
+# One-shot: mark ready + squash-merge custody-note-website PR (marketing copy).
+# Uses GH_PAT (same secret as deploy-website / fix-website-marketing-copy).
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Website PR number to merge
+        required: true
+        default: '2'
+
+permissions:
+  contents: read
+
+jobs:
+  merge-website:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark ready and squash-merge website PR
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          PR: ${{ github.event.inputs.pr_number }}
+        run: |
+          set -euo pipefail
+          REPO="robertcashman-bit/custody-note-website"
+
+          echo "== Before =="
+          gh pr view "$PR" --repo "$REPO" --json number,title,state,isDraft,mergeable,mergeStateStatus,url,headRefOid,baseRefName,headRefName
+
+          # Mark ready for review if draft
+          if gh pr view "$PR" --repo "$REPO" --json isDraft -q .isDraft | grep -q true; then
+            gh pr ready "$PR" --repo "$REPO"
+            echo "Marked PR #$PR ready"
+          else
+            echo "PR #$PR already ready"
+          fi
+
+          MERGEABLE=$(gh pr view "$PR" --repo "$REPO" --json mergeable -q .mergeable)
+          STATE=$(gh pr view "$PR" --repo "$REPO" --json mergeStateStatus -q .mergeStateStatus)
+          echo "mergeable=$MERGEABLE mergeStateStatus=$STATE"
+
+          if [ "$MERGEABLE" != "MERGEABLE" ]; then
+            echo "::error::PR #$PR is not MERGEABLE ($MERGEABLE / $STATE)"
+            gh pr view "$PR" --repo "$REPO"
+            exit 1
+          fi
+
+          # Prefer squash; fall back to merge if squash blocked
+          if gh pr merge "$PR" --repo "$REPO" --squash --delete-branch; then
+            echo "Squash-merged PR #$PR"
+          else
+            echo "Squash failed; trying --merge"
+            gh pr merge "$PR" --repo "$REPO" --merge --delete-branch
+          fi
+
+          echo "== After =="
+          gh pr view "$PR" --repo "$REPO" --json number,title,state,mergedAt,mergeCommit,url
+          echo "MERGE_COMMIT=$(gh pr view "$PR" --repo "$REPO" --json mergeCommit -q .mergeCommit.oid)"

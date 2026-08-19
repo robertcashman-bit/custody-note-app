@@ -25,13 +25,13 @@
     {
       id: 'free-pro',
       title: 'Free during beta',
-      body: 'Core notes, PDF and local backup stay free. Pro (£9.99/mo) adds managed cloud backup.',
+      body: 'Free during beta. No credit card. Paid Pro planned after beta. Core notes, PDF and local backup stay free while we test; managed cloud backup is planned for Pro.',
       href: 'https://custodynote.com/pricing',
     },
     {
       id: 'invite',
       title: 'Invite a colleague',
-      body: 'Share Custody Note with another rep — free during beta while we test, no credit card.',
+      body: 'Share Custody Note with another rep — free during beta. No credit card. Paid Pro planned after beta.',
       href: 'https://custodynote.com/download',
     },
     {

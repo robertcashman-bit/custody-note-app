@@ -144,7 +144,7 @@ function computeLicenceStatus(data, options) {
             ? 'You are on free beta access. Pro (cloud backup) is planned after beta.'
             : 'Your Pro subscription expired on ' +
               new Date(data.expiresAt).toLocaleDateString('en-GB') +
-              '. Core features remain available on Free — renew Pro for cloud backup and advanced tools.',
+              '. Core features remain available on free beta access — Paid Pro planned after beta for cloud backup and advanced tools.',
           key: data.key,
           email: data.email,
           daysRemaining: 0,

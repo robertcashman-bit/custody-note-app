@@ -1862,7 +1862,7 @@ async function checkCloudBackupEntitlement() {
     emitCloudBackupStatus({ enabled: false, isTrial: false, lastError: null });
     return;
   }
-  // Free forever and local trial do not include managed AWS cloud backup (Pro only).
+  // Free during beta and local trial do not include managed AWS cloud backup (Pro planned after beta).
   if ((isFree || isTrial) && !hasAuth) {
     _cloudBackupEnabled = false;
     _lastManagedCloudError = null;
@@ -3904,7 +3904,7 @@ const LICENCE_GRACE_DAYS = 60;
 const LICENCE_REVALIDATE_HOURS = 24;
 const TRIAL_DAYS = 30;
 
-/** Freemium Free forever — set FREE_TIER_ENABLED=0 or licence-config freeTierEnabled:false to roll back to timed trial. */
+/** Freemium free during beta — set FREE_TIER_ENABLED=0 or licence-config freeTierEnabled:false to roll back to timed trial. */
 function isFreeTierEnabled() {
   if (process.env.FREE_TIER_ENABLED === '0' || process.env.FREE_TIER_ENABLED === 'false') return false;
   try {

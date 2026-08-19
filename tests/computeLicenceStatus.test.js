@@ -67,7 +67,7 @@ describe('computeLicenceStatus grace period', () => {
   });
 });
 
-describe('computeLicenceStatus freemium Free forever', () => {
+describe('computeLicenceStatus freemium free during beta', () => {
   it('treats FREE-* as active free with createAllowed', () => {
     const st = computeLicenceStatus({
       key: 'FREE-ABCDEF0123456789',
