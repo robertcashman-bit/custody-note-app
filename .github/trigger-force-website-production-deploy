@@ -2,10 +2,10 @@
 # robertcashman-bit/custody-note-website (custodynote.com), same pattern as
 # policestationagent web44ai Deploy Production (CLI deploy; Git not required).
 #
-# requested_at: 2026-08-19T17:20:00Z
-# reason: live site still on pre-PR2/PR3 HTML (max-w-lg + no Companies House)
+# requested_at: 2026-08-19T17:35:00Z
+# reason: website PR #4 merged (7da99aa) — product-first hero; Git auto-deploy not live yet
 force_website_production_deploy: true
 target: custodynote.com
 website_repo: robertcashman-bit/custody-note-website
 vercel_project: custody-note-website
-expected_master_contains: 5140b9c
+expected_master_contains: 7da99aa
