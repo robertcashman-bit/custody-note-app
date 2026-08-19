@@ -40,6 +40,8 @@
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
     "prepare-trial": "node scripts/prepare-trial.js",
     "capture-screenshots": "node scripts/capture-screenshots.js",
+    "capture:marketing-demo": "node scripts/capture-marketing-demo-screens.mjs",
+    "strengthen:website-display": "node scripts/strengthen-website-product-display.mjs",
     "security:audit": "node scripts/security-audit.mjs",
     "security:scan": "node scripts/security-audit.mjs",
     "build:icns": "node scripts/build-icns.mjs",
@@ -166,7 +168,9 @@
       "!scripts/sync-website.mjs",
       "!scripts/capture-screenshots.js",
       "!scripts/prepare-trial.js",
-      "!scripts/inspect-db-electron.cjs"
+      "!scripts/inspect-db-electron.cjs",
+      "!website-product-shots",
+      "!website-product-shots/**"
     ],
     "publish": {
       "provider": "github",
