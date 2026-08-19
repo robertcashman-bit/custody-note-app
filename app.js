@@ -3903,11 +3903,11 @@ var REQUIRED_FIELD_KEYS = [
       if (st && st.isTrial) {
         var trialDays = st.daysRemaining != null ? ' \u2014 ' + st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : '';
         if (titleEl) titleEl.textContent = 'Free trial' + trialDays;
-        if (subEl) subEl.innerHTML = 'Enter your paid licence key to activate cloud backup and full access. <strong>custodynote.com/pricing</strong>';
+        if (subEl) subEl.innerHTML = 'Enter a licence key if you have one. Managed cloud backup is planned for Pro after beta. <strong>Free during beta. No credit card. Paid Pro planned after beta.</strong>';
         if (btnEl) btnEl.textContent = 'Enter licence key \u2192';
       } else {
         if (titleEl) titleEl.textContent = 'Enter your licence key';
-        if (subEl) subEl.innerHTML = 'Paste the key from your email. Get a free trial or buy at <strong>custodynote.com</strong>';
+        if (subEl) subEl.innerHTML = 'Paste a licence key if you have one. <strong>Free during beta. No credit card. Paid Pro planned after beta.</strong>';
         if (btnEl) btnEl.textContent = 'Enter key \u2192';
       }
     }).catch(function() {
@@ -5904,11 +5904,11 @@ var REQUIRED_FIELD_KEYS = [
           if (isSub) isSub.style.display = 'none';
           if (reasonEl) {
             if (status && status.isTrial) {
-              reasonEl.innerHTML = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/pricing</a> to enable it.';
+              reasonEl.innerHTML = 'You are on a <strong>trial licence</strong>. Managed cloud backup is planned for Pro after beta. <strong>Free during beta. No credit card. Paid Pro planned after beta.</strong> See <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">custodynote.com/pricing</a>.';
             } else if (status && status.lastError) {
               reasonEl.textContent = 'Cloud backup verification failed: ' + status.lastError + '. Check your internet connection and try again.';
             } else {
-              reasonEl.innerHTML = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com</a>, then sign in or enter your licence key in Settings \u203a Licence.';
+              reasonEl.innerHTML = 'Managed cloud backup is planned for Pro after beta. Free during beta. No credit card. Paid Pro planned after beta. If you already have a Pro key, sign in or enter it in Settings \u203a Licence. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Pricing</a>';
             }
           }
         }
@@ -7515,7 +7515,7 @@ var REQUIRED_FIELD_KEYS = [
     setTimeout(function () {
       if (typeof showConfirm !== 'function') return;
       showConfirm(
-        'Invite a colleague to Custody Note?\n\nFree during beta — no credit card. We will copy a short message you can paste into WhatsApp or email.',
+        'Invite a colleague to Custody Note?\n\nFree during beta. No credit card. Paid Pro planned after beta. We will copy a short message you can paste into WhatsApp or email.',
         'Share Custody Note'
       ).then(function (ok) {
         try { localStorage.setItem('cn_referral_invite_done', '1'); } catch (_) {}
@@ -7528,7 +7528,7 @@ var REQUIRED_FIELD_KEYS = [
         } catch (_) {}
         var text =
           'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\n' +
-          'Download free: ' + url + '\n\nFree during beta (we are testing) · Pro planned after beta (~£9.99/mo).';
+          'Download free: ' + url + '\n\nFree during beta. No credit card. Paid Pro planned after beta.';
         var copied = false;
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -15272,7 +15272,7 @@ pdfAuditFooterHtml(d, settings) +
 
   function showLicenceGateToast() {
     if (window.__licenceExpired) {
-      showToast('Renew Pro at custodynote.com/pricing for cloud backup, or continue on Free for core notes.', 'warning', 5000);
+      showToast('Core notes stay available on free beta access. Managed cloud backup is planned for Pro after beta — see custodynote.com/pricing.', 'warning', 5000);
       return true;
     }
     return false;
@@ -18204,9 +18204,9 @@ pdfAuditFooterHtml(d, settings) +
       var settingsCta = ' <button type="button" id="home-cloud-backup-cta" style="background:none;border:none;padding:0;color:#1e40af;cursor:pointer;font-size:0.8rem;text-decoration:underline;font-weight:600;">Go to Settings &rarr;</button>';
       var reasonEl = document.getElementById('cloud-backup-unavailable-reason');
       var homeReasonEl = document.getElementById('home-cloud-backup-reason');
-      var trialHtml = 'You are on a <strong>trial licence</strong>. Cloud backup is included with paid subscriptions only. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com/pricing</a> to enable it.';
-      var defaultSettingsHtml = 'Cloud backup is included with paid subscriptions. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Subscribe at custodynote.com</a>, then sign in or enter your licence key in Settings \u203a Licence.';
-      var defaultHomeHtml = 'Cloud backup is included with paid subscriptions — your data is currently backed up locally only.' + settingsCta;
+      var trialHtml = 'You are on a <strong>trial licence</strong>. Managed cloud backup is planned for Pro after beta. <strong>Free during beta. No credit card. Paid Pro planned after beta.</strong> See <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">custodynote.com/pricing</a>.';
+      var defaultSettingsHtml = 'Managed cloud backup is planned for Pro after beta. Free during beta. No credit card. Paid Pro planned after beta. If you already have a Pro key, sign in or enter it in Settings \u203a Licence. <a href="https://custodynote.com/pricing" target="_blank" rel="noopener" style="color:#1e40af;">Pricing</a>';
+      var defaultHomeHtml = 'Managed cloud backup is planned for Pro after beta — during beta your data is backed up locally. Free during beta. No credit card. Paid Pro planned after beta.' + settingsCta;
       if (data && data.isTrial) {
         if (reasonEl) reasonEl.innerHTML = trialHtml;
         if (homeReasonEl) homeReasonEl.innerHTML = trialHtml + settingsCta;
@@ -18478,10 +18478,10 @@ pdfAuditFooterHtml(d, settings) +
           if (l2El) l2El.textContent = data.lastSuccess ? 'Last upload: ' + new Date(data.lastSuccess).toLocaleString('en-GB') : 'Backup active — no uploads yet this session';
         } else if (data.isTrial) {
           setBlock('sysstat-backup-icon','ℹ️','#2563eb','sysstat-backup-line1','Local backup only — trial licence','sysstat-backup-line2','');
-          if (l2El) l2El.textContent = 'Cloud backup is not included in the free trial. Subscribe at custodynote.com/pricing to enable it.';
+          if (l2El) l2El.textContent = 'Cloud backup is not included on trial keys. Managed cloud backup is planned for Pro after beta — see custodynote.com/pricing.';
         } else {
           setBlock('sysstat-backup-icon','⚠️','#d97706','sysstat-backup-line1','Local backup only','sysstat-backup-line2','');
-          var reason = data.lastError || 'Cloud backup requires a paid subscription. Subscribe at custodynote.com/pricing.';
+          var reason = data.lastError || 'Managed cloud backup is planned for Pro after beta. Free during beta. No credit card. Paid Pro planned after beta.';
           if (l2El) l2El.textContent = reason;
         }
       }
@@ -19245,7 +19245,7 @@ pdfAuditFooterHtml(d, settings) +
       shareAppUrl = getShareInviteUrl();
       var subject = 'Custody Note – custody notes app for police station reps';
       var body =
-        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + shareAppUrl + '\n\nFree during beta (we are testing) · Pro planned after beta (~£9.99/mo).';
+        'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + shareAppUrl + '\n\nFree during beta. No credit card. Paid Pro planned after beta.';
       copyOutlookComposeFields('', subject, body, {
         allowEmptyTo: true,
         successToast: 'Copied — paste into Outlook or any mail client',

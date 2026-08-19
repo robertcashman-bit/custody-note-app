@@ -479,13 +479,13 @@
       try {
         if (!localStorage.getItem('cn_free_banner_dismissed')) {
           showWarningBanner(
-            'You are on free beta access — Custody Note is in beta, which is why it is free while we test. Pro (£9.99/mo) is planned after beta.',
+            'Free during beta. No credit card. Paid Pro planned after beta. You are on free beta access while we test.',
             null,
             { dismissKey: 'cn_free_banner_dismissed' }
           );
         }
       } catch (_) {
-        showWarningBanner('You are on free beta access — Custody Note is in beta, which is why it is free while we test. Pro (£9.99/mo) is planned after beta.', null);
+        showWarningBanner('Free during beta. No credit card. Paid Pro planned after beta. You are on free beta access while we test.', null);
       }
     } else if (status && status.isTrial && status.daysRemaining != null && status.status === 'active') {
       var trialMsg = 'Free trial: ' + status.daysRemaining + ' day' + (status.daysRemaining !== 1 ? 's' : '') + ' remaining';
@@ -611,7 +611,7 @@
         markReady();
         startRevalidation();
         var expiredMsg = status.isTrial
-          ? 'Your free trial has ended. Subscribe to continue.'
+          ? 'Your free trial has ended. Free during beta. No credit card. Paid Pro planned after beta — see custodynote.com/pricing.'
           : (status.message || 'Your subscription has expired.');
         showExpiryBanner(expiredMsg);
         return;
