@@ -42,6 +42,7 @@
     "capture-screenshots": "node scripts/capture-screenshots.js",
     "capture:marketing-demo": "node scripts/capture-marketing-demo-screens.mjs",
     "strengthen:website-display": "node scripts/strengthen-website-product-display.mjs",
+    "redesign:website-hero": "node scripts/redesign-website-hero.mjs",
     "security:audit": "node scripts/security-audit.mjs",
     "security:scan": "node scripts/security-audit.mjs",
     "build:icns": "node scripts/build-icns.mjs",
