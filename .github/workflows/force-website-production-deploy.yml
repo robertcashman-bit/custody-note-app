@@ -27,8 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # Hardcoded same as custody-note-website Deploy and IndexNow (web44ai pattern).
+      # Secrets may override if set.
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID || 'team_wbvkpoLfvbg9qFwg5LqJLAjN' }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID || 'prj_zPV1EYswHU0Nih1iASwSOxEY64NN' }}
       WEBSITE_REPO: robertcashman-bit/custody-note-website
       EXPECTED_PROJECT: custody-note-website
       PRODUCTION_URL: https://custodynote.com/
