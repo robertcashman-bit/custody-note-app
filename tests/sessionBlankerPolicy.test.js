@@ -58,6 +58,34 @@ describe('sessionBlankerPolicy — credential-free dismiss rules', () => {
       homeHasActiveMatters: true,
     }), false);
   });
+
+  it('blocks dismiss when home shows recent cases with client names', () => {
+    assert.equal(mayDismissCredentialFreeBlanker({
+      homeViewActive: true,
+      homeHasRecentCases: true,
+    }), false);
+  });
+
+  it('blocks dismiss when home focus meta shows client text', () => {
+    assert.equal(mayDismissCredentialFreeBlanker({
+      homeViewActive: true,
+      homeFocusHasClientText: true,
+    }), false);
+  });
+
+  it('blocks dismiss when quick capture has client/case fields', () => {
+    assert.equal(mayDismissCredentialFreeBlanker({
+      quickCaptureViewActive: true,
+      quickCaptureHasClientData: true,
+    }), false);
+  });
+
+  it('allows dismiss on empty quick capture view', () => {
+    assert.equal(mayDismissCredentialFreeBlanker({
+      quickCaptureViewActive: true,
+      quickCaptureHasClientData: false,
+    }), true);
+  });
 });
 
 describe('app.js wires blanker dismiss policy', () => {
@@ -66,6 +94,24 @@ describe('app.js wires blanker dismiss policy', () => {
 
   it('loads sessionBlankerPolicy in the renderer', () => {
     assert.match(indexHtml, /sessionBlankerPolicy\.js/);
+  });
+
+  it('detects list rows via li[data-id] (not missing .list-item class)', () => {
+    assert.match(appJs, /#attendance-list li\[data-id\]/);
+    assert.ok(
+      !/#attendance-list \.list-item,\s*\.list-item/.test(appJs),
+      'must not use the broken .list-item selector for blanker row detection'
+    );
+  });
+
+  it('gathers quick capture and home recent/focus surfaces for blanker state', () => {
+    assert.match(appJs, /view-quickcapture/);
+    assert.match(appJs, /qc-forename/);
+    assert.match(appJs, /home-recent-list/);
+    assert.match(appJs, /home-focus-meta/);
+    assert.match(appJs, /homeHasRecentCases/);
+    assert.match(appJs, /homeFocusHasClientText/);
+    assert.match(appJs, /quickCaptureHasClientData/);
   });
 
   it('only renders dismiss when allowDismiss is true', () => {

@@ -20146,15 +20146,40 @@ pdfAuditFooterHtml(d, settings) +
     var formView = document.getElementById('view-form');
     var listView = document.getElementById('view-list');
     var homeView = document.getElementById('view-home');
+    var qcView = document.getElementById('view-quickcapture');
     var ctx = document.getElementById('form-context-bar');
     var homeActive = document.getElementById('home-active-matters');
+    var homeRecent = document.getElementById('home-recent-list');
+    var homeFocusMeta = document.getElementById('home-focus-meta');
     var listHasRows = false;
     if (listView && listView.classList.contains('active')) {
-      listHasRows = !!(listView.querySelector('#attendance-list .list-item, .list-item'));
+      /* Rows are plain li[data-id] with .list-item-text children — not .list-item. */
+      listHasRows = !!(listView.querySelector('#attendance-list li[data-id]'));
+    }
+    var qcHasClientData = false;
+    if (qcView && qcView.classList.contains('active')) {
+      var qcIds = ['qc-forename', 'qc-surname', 'qc-offence', 'qc-dscc'];
+      for (var qi = 0; qi < qcIds.length; qi++) {
+        var qcEl = document.getElementById(qcIds[qi]);
+        if (qcEl && String(qcEl.value || '').trim()) {
+          qcHasClientData = true;
+          break;
+        }
+      }
     }
     var homeHasActive = false;
-    if (homeView && homeView.classList.contains('active') && homeActive) {
-      homeHasActive = !!homeActive.querySelector('.home-active-item');
+    var homeHasRecent = false;
+    var homeFocusHasClient = false;
+    if (homeView && homeView.classList.contains('active')) {
+      if (homeActive) homeHasActive = !!homeActive.querySelector('.home-active-item');
+      if (homeRecent) homeHasRecent = !!homeRecent.querySelector('.home-recent-item');
+      if (homeFocusMeta) {
+        var focusText = String(homeFocusMeta.textContent || '').trim();
+        /* Placeholder copy is safe; any other meta text may include a client name. */
+        homeFocusHasClient = !!(focusText
+          && focusText !== 'Checking your most recent record.'
+          && focusText !== 'No active draft needs attention right now.');
+      }
     }
     var meaningful = false;
     try {
@@ -20179,8 +20204,12 @@ pdfAuditFooterHtml(d, settings) +
       formContextBarHasText: !!(ctx && (ctx.textContent || '').trim()),
       listViewActive: !!(listView && listView.classList.contains('active')),
       listHasRows: listHasRows,
+      quickCaptureViewActive: !!(qcView && qcView.classList.contains('active')),
+      quickCaptureHasClientData: qcHasClientData,
       homeViewActive: !!(homeView && homeView.classList.contains('active')),
       homeHasActiveMatters: homeHasActive,
+      homeHasRecentCases: homeHasRecent,
+      homeFocusHasClientText: homeFocusHasClient,
     };
   }
 
@@ -20200,7 +20229,9 @@ pdfAuditFooterHtml(d, settings) +
           allowDismiss = false;
         } else if (state.listViewActive && state.listHasRows) {
           allowDismiss = false;
-        } else if (state.homeViewActive && state.homeHasActiveMatters) {
+        } else if (state.quickCaptureViewActive && state.quickCaptureHasClientData) {
+          allowDismiss = false;
+        } else if (state.homeViewActive && (state.homeHasActiveMatters || state.homeHasRecentCases || state.homeFocusHasClientText)) {
           allowDismiss = false;
         }
       } catch (_) {
