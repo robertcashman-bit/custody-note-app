@@ -66,7 +66,7 @@ jobs:
           honest Free vs Pro-planned claims; statutory company details on About/legal.
           EOF
           )"
-          git push -u origin "$BRANCH" --force-with-lease
+          git push -u origin "$BRANCH" --force
 
       - name: Open or update website PR
         working-directory: custody-note-website

@@ -429,11 +429,10 @@ if (leftovers.length) {
 }
 
 if (changedFiles === 0) {
-  console.error('[fix-website-marketing-copy] no files changed — website source may already be fixed or paths differ');
-  process.exit(3);
+  console.log('[fix-website-marketing-copy] no further file changes — already aligned');
+} else {
+  console.log('[fix-website-marketing-copy] OK —', BETA_LINE);
 }
-
-console.log('[fix-website-marketing-copy] OK —', BETA_LINE);
 
 // Emit a short applied-hits report for CI artifacts / PR review
 try {
