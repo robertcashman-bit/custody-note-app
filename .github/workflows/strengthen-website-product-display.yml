@@ -1,0 +1,102 @@
+name: Strengthen website product display
+
+# Replaces empty marketing records screenshots and reduces CTA noise on
+# custodynote.com (private sibling repo robertcashman-bit/custody-note-website).
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - cursor/product-display-shots-1d4f
+    paths:
+      - scripts/strengthen-website-product-display.mjs
+      - scripts/capture-marketing-demo-screens.mjs
+      - website-product-shots/screenshots/**
+      - .github/workflows/strengthen-website-product-display.yml
+
+permissions:
+  contents: read
+
+jobs:
+  strengthen-website:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+
+      - name: Checkout website
+        uses: actions/checkout@v4
+        with:
+          repository: robertcashman-bit/custody-note-website
+          path: custody-note-website
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Apply product-display strengthen script
+        env:
+          WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
+        run: node scripts/strengthen-website-product-display.mjs
+
+      - name: Commit and push website branch
+        working-directory: custody-note-website
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          git config user.name "Cursor Agent"
+          git config user.email "cursoragent@cursor.com"
+          BRANCH="cursor/product-display-shots-1d4f"
+          git checkout -B "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No website file changes to commit"
+            exit 0
+          fi
+          git commit -m "$(cat <<'EOF'
+          fix(marketing): filled SAMPLE records shots + quieter CTAs
+
+          Replace empty All Records product shots with real-app screenshots
+          seeded with obvious SAMPLE / demonstration-only data. Show the
+          floating download button only after scroll; drop the redundant nav
+          Download text link and banner button so homepage CTA paths do not
+          compete four ways on first paint.
+          EOF
+          )"
+          git push -u origin "$BRANCH" --force
+
+      - name: Open or update website PR
+        working-directory: custody-note-website
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          BRANCH="cursor/product-display-shots-1d4f"
+          BODY="$(cat <<'EOF'
+          ## Summary
+          Strengthen product **display** on custodynote.com (screenshots + CTA noise).
+
+          ### Product shots
+          - Replace empty `records-list` / `app/records-list` shots (“No attendances found”) with a **filled** real-app screenshot
+          - Seeded SAMPLE demo rows only (e.g. `SAMPLE — Jane Doe (demonstration only)`) — no real client data, no fake portrait photos
+          - Updates solicitor-software landing + homepage “Inside the app” grid
+
+          ### CTA shout
+          - Floating ⚡ download: **only after scroll** (hidden on `/download` and `/app`)
+          - Remove redundant nav text “Download” (keep Download free button)
+          - Top promo banner is messaging-only — primary CTAs remain in nav + page heroes
+
+          ### Constraints respected
+          - Free during beta / no credit card; paid Pro planned after beta (existing copy)
+          - Defence Legal Services Ltd; not inventing testimonials, download counts, or security claims
+          - Dark professional look preserved
+
+          Companion assets/scripts live on custody-note-app branch `cursor/product-display-shots-1d4f`.
+          EOF
+          )"
+          if gh pr view "$BRANCH" --json url >/dev/null 2>&1; then
+            echo "Website PR already exists for $BRANCH"
+            gh pr edit "$BRANCH" --title "fix(marketing): filled SAMPLE records shots + quieter CTAs" --body "$BODY"
+            gh pr view "$BRANCH" --json url,title -q '"\(.title) \(.url)"'
+            exit 0
+          fi
+          gh pr create --base master --head "$BRANCH" \
+            --title "fix(marketing): filled SAMPLE records shots + quieter CTAs" \
+            --body "$BODY"
