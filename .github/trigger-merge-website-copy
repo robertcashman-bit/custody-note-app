@@ -1,4 +1,4 @@
-# Sentinel: push this file to master to run Merge website copy PR (website PR #3).
-# Timestamp: 2026-08-19T17:04:00Z — merge product-display hero/CTA PR for Vercel production.
-merge_website_pr: 3
+# Sentinel: push this file to master to run Merge website copy PR (website PR #4).
+# Timestamp: 2026-08-19T17:34:00Z — merge product-first hero PR for Vercel production.
+merge_website_pr: 4
 requested_by: robert-explicit-merge-request
