@@ -1,10 +1,15 @@
 /**
- * Strengthen custodynote.com product display:
- * 1. Replace empty records-list (and related empty) screenshots with filled SAMPLE shots
- * 2. Reduce CTA shout: floating button only after scroll; drop redundant nav "Download" text link;
- *    make top promo banner text-only (nav + hero remain the primary CTAs)
+ * Strengthen custodynote.com product DISPLAY (visual + CTA noise).
  *
- * Run against a clone of robertcashman-bit/custody-note-website:
+ * Priorities:
+ * 1. Homepage hero screenshot — larger, window-chrome framed, equal to headline
+ *    (keeps existing filled hero-main-ui dashboard shot — no empty state)
+ * 2. Hero CTAs — one primary + one secondary only; floating pill delayed past hero
+ * 3. Replace empty records-list shots with filled SAMPLE attendances
+ * 4. Light framing for InlineScreenshot / ProductScreenshot; no new photography,
+ *    testimonials, or security claims; keep free-during-beta copy
+ *
+ * Run:
  *   WEBSITE_ROOT=../custody-note-website node scripts/strengthen-website-product-display.mjs
  */
 import {
@@ -16,7 +21,7 @@ import {
   readdirSync,
   statSync,
 } from 'fs';
-import { join, dirname, relative } from 'path';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -47,6 +52,22 @@ function write(rel, content) {
   return true;
 }
 
+function patch(rel, transform, { required = false } = {}) {
+  const full = join(WEBSITE_ROOT, rel);
+  if (!existsSync(full)) {
+    console.warn('[strengthen-website] missing', rel);
+    if (required) process.exit(1);
+    return false;
+  }
+  const prev = readFileSync(full, 'utf8');
+  const next = transform(prev);
+  if (next == null || next === prev) {
+    console.warn('[strengthen-website] no-op patch', rel);
+    return false;
+  }
+  return write(rel, next);
+}
+
 function copyAsset(fromRel, toRel) {
   const src = join(ASSETS, fromRel);
   if (!existsSync(src)) {
@@ -60,22 +81,16 @@ function copyAsset(fromRel, toRel) {
   return true;
 }
 
-/* ─── 1. Screenshots ─────────────────────────────────────────── */
+/* ─── 1. Filled SAMPLE records shots ─────────────────────────── */
 copyAsset('records-list.webp', 'records-list.webp');
 copyAsset('app/records-list.webp', 'app/records-list.webp');
 copyAsset('records-list.png', 'records-list.png');
 copyAsset('app/records-list.png', 'app/records-list.png');
-/* Homepage "Inside the app" also shows empty billing-docs — only replace if we have a filled one with real list rows */
-const billingWebp = join(ASSETS, 'billing-docs.webp');
-if (existsSync(billingWebp) && statSync(billingWebp).size > 20000) {
-  copyAsset('billing-docs.webp', 'billing-docs.webp');
-}
 
-/* ─── 2. Floating CTA — only after scroll ────────────────────── */
-const floatingPath = 'components/FloatingTrialCta.tsx';
-const floatingFull = join(WEBSITE_ROOT, floatingPath);
-if (existsSync(floatingFull)) {
-  const nextFloating = `"use client";
+/* ─── 2. Floating CTA — delayed past the hero viewport ───────── */
+write(
+  'components/FloatingTrialCta.tsx',
+  `"use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -83,11 +98,11 @@ import { usePathname } from "next/navigation";
 import { CTA } from "@/lib/cta-analytics";
 
 const HIDE_ON = new Set(["/download", "/app"]);
-const SHOW_AFTER_PX = 480;
 
 /**
- * Desktop floating download CTA — appears only after the user scrolls,
- * so it does not compete with banner / nav / hero CTAs on first paint.
+ * Desktop floating download CTA — hidden on the hero / first screen.
+ * Appears only after the user scrolls roughly one viewport so it never
+ * sits on top of the homepage product shot or primary CTAs.
  * Mobile uses StickyDownloadCta instead.
  */
 export default function FloatingTrialCta() {
@@ -96,12 +111,17 @@ export default function FloatingTrialCta() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const threshold = () => Math.max(720, Math.round(window.innerHeight * 0.95));
     const onScroll = () => {
-      setVisible(window.scrollY > SHOW_AFTER_PX);
+      setVisible(window.scrollY > threshold());
     };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
   }, []);
 
   if (!pathname || HIDE_ON.has(pathname) || !visible) return null;
@@ -114,54 +134,32 @@ export default function FloatingTrialCta() {
         data-event="demo_request"
         className="pointer-events-auto flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-900/40 transition-colors hover:bg-blue-500"
       >
-        <span aria-hidden className="text-base">
-          ↓
-        </span>
         Download Custody Note
       </Link>
     </div>
   );
 }
-`;
-  write(floatingPath, nextFloating);
-} else {
-  console.warn('[strengthen-website] missing', floatingPath);
-}
+`
+);
 
 /* ─── 3. Header — drop redundant text "Download" link ────────── */
-const headerPath = 'components/Header.tsx';
-const headerFull = join(WEBSITE_ROOT, headerPath);
-if (existsSync(headerFull)) {
-  let header = readFileSync(headerFull, 'utf8');
-  /* Remove the standalone Download text link that sits beside Download free */
-  const withoutDup = header.replace(
+patch('components/Header.tsx', (header) =>
+  header.replace(
     /\s*<Link\s+href="\/download"\s+data-cta=\{CTA\.DOWNLOAD\}[\s\S]*?>\s*Download\s*<\/Link>/,
     ''
-  );
-  if (withoutDup !== header) {
-    write(headerPath, withoutDup);
-  } else {
-    console.warn('[strengthen-website] Header Download text link pattern not found — leave as-is');
-  }
-}
-
-/* Also clean mobile menu if it duplicates Download + Download free */
-const mobilePath = 'components/HeaderMobileMenu.tsx';
-const mobileFull = join(WEBSITE_ROOT, mobilePath);
-if (existsSync(mobileFull)) {
-  let mobile = readFileSync(mobileFull, 'utf8');
-  const cleaned = mobile.replace(
+  )
+);
+patch('components/HeaderMobileMenu.tsx', (mobile) =>
+  mobile.replace(
     /\s*<Link\s+href="\/download"\s+data-cta=\{CTA\.DOWNLOAD\}[\s\S]*?>\s*Download\s*<\/Link>/,
     ''
-  );
-  if (cleaned !== mobile) write(mobilePath, cleaned);
-}
+  )
+);
 
-/* ─── 4. Global promo banner — text only (CTA lives in nav/hero) ─ */
-const bannerPath = 'components/GlobalPromoBanner.tsx';
-const bannerFull = join(WEBSITE_ROOT, bannerPath);
-if (existsSync(bannerFull)) {
-  const nextBanner = `import { FREE_FOREVER_TAGLINE } from "@/lib/product-copy";
+/* ─── 4. Promo banner — messaging only ───────────────────────── */
+write(
+  'components/GlobalPromoBanner.tsx',
+  `import { FREE_FOREVER_TAGLINE } from "@/lib/product-copy";
 
 /**
  * Site-wide announcement strip — messaging only.
@@ -178,73 +176,293 @@ export default function GlobalPromoBanner() {
     </div>
   );
 }
-`;
-  write(bannerPath, nextBanner);
-}
+`
+);
 
-/* ─── 5. Soften homepage Inside-the-app caption if still empty-ish ─ */
-const pagePath = 'app/page.tsx';
-const pageFull = join(WEBSITE_ROOT, pagePath);
-if (existsSync(pageFull)) {
-  let page = readFileSync(pageFull, 'utf8');
-  let next = page;
-  next = next.replace(
-    'alt="Custody Note records list with search, filters for All, Drafts, Finalised, Archived, and quick actions"',
-    'alt="Custody Note records list with SAMPLE demonstration attendances, search, and status filters"'
-  );
-  next = next.replace(
-    'caption="All records at a glance"',
-    'caption="Sample records list — demonstration data only"'
-  );
-  if (next !== page) write(pagePath, next);
-}
+/* ─── 5. ProductScreenshot — stronger window chrome / shadow ─── */
+write(
+  'components/ProductScreenshot.tsx',
+  `import Image from "next/image";
 
-/* Solicitor / SEO landing pages pull from InlineScreenshot catalog — update caption if present */
-function walkTsx(dir, out = []) {
-  if (!existsSync(dir)) return out;
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    const st = statSync(p);
-    if (st.isDirectory()) walkTsx(p, out);
-    else if (name.endsWith('.tsx') || name.endsWith('.ts')) out.push(p);
+type ProductScreenshotProps = {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  /** Set on the first above-the-fold image only (LCP). */
+  priority?: boolean;
+  className?: string;
+  caption?: string;
+  sizes?: string;
+  /** Larger hero treatment — equal visual weight to headline copy. */
+  hero?: boolean;
+};
+
+export default function ProductScreenshot({
+  src,
+  alt,
+  width,
+  height,
+  priority,
+  className,
+  caption,
+  sizes,
+  hero,
+}: ProductScreenshotProps) {
+  return (
+    <figure className={className}>
+      <div
+        className={
+          hero
+            ? "relative overflow-hidden rounded-2xl border border-white/15 bg-brand-950 shadow-[0_28px_80px_-12px_rgba(0,0,0,0.75)] ring-1 ring-white/10"
+            : "relative overflow-hidden rounded-2xl border border-white/10 bg-brand-900/50 shadow-2xl shadow-black/40 ring-1 ring-white/5"
+        }
+      >
+        <div
+          className={
+            hero
+              ? "flex items-center gap-2 border-b border-white/10 bg-brand-900/90 px-4 py-2.5"
+              : "flex items-center gap-2 border-b border-white/10 bg-brand-900/70 px-3 py-2"
+          }
+          aria-hidden
+        >
+          <span className="h-2.5 w-2.5 rounded-full bg-red-400/80" />
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
+          <span className="ml-2 truncate text-[11px] text-blue-100/45">
+            Custody Note
+          </span>
+        </div>
+        <Image
+          src={src}
+          alt={alt}
+          width={width}
+          height={height}
+          sizes={
+            sizes ??
+            (hero
+              ? "(max-width: 1024px) 100vw, 720px"
+              : "(max-width: 768px) 100vw, 640px")
+          }
+          priority={priority}
+          className="h-auto w-full object-cover object-top"
+        />
+      </div>
+      {caption ? (
+        <figcaption className="mt-2 text-center text-xs text-blue-100/80">
+          {caption}
+        </figcaption>
+      ) : null}
+    </figure>
+  );
+}
+`
+);
+
+/* ─── 6. Homepage hero — larger shot + quiet CTAs ────────────── */
+patch(
+  'app/page.tsx',
+  (page) => {
+    let next = page;
+
+    /* Widen hero grid and give the screenshot column equal/larger weight */
+    next = next.replace(
+      'relative mx-auto grid max-w-6xl gap-12 px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-2 lg:items-center lg:gap-10 lg:text-left',
+      'relative mx-auto grid max-w-7xl gap-10 px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)] lg:items-center lg:gap-12 lg:text-left'
+    );
+
+    /* Hero CTAs: primary Download free + secondary View Features only.
+       Remove Free note generator from the first screen.
+       Remove competing Windows/Mac download buttons from the hero —
+       platform choice lives on /download (reached by the primary CTA). */
+    const noisyCtaBlock = `              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
+                <Link
+                  href="/download"
+                  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-blue-900/30 transition-colors hover:bg-blue-500"
+                >
+                  {FREE_DOWNLOAD_CTA}
+                </Link>
+                <Link
+                  href="/features"
+                  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl border border-white/20 px-8 py-4 text-lg font-medium text-white transition-colors hover:border-white/40 hover:bg-white/5"
+                >
+                  View Features
+                </Link>
+                <Link
+                  href="/free-police-station-attendance-note-generator"
+                  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 px-8 py-4 text-lg font-medium text-sky-100 transition-colors hover:border-sky-400/50 hover:bg-sky-500/15"
+                >
+                  Free note generator (UK)
+                </Link>
+              </div>
+              <p className="mt-4 text-xs text-blue-200/50">
+                Windows 10+ and macOS (Apple Silicon &amp; Intel) &middot;{" "}
+                {FREE_FOREVER_LABEL} on core features &middot; No credit card required
+              </p>
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
+                <a
+                  href={windowsUrl}
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/20 px-6 py-3 text-sm font-medium text-white transition-colors hover:border-white/40 hover:bg-white/5"
+                >
+                  Download for Windows
+                </a>
+                <MacDownloadPicker
+                  version={version}
+                  arm64Url={macUrls.arm64}
+                  x64Url={macUrls.x64}
+                  compact
+                />
+              </div>`;
+
+    const quietCtaBlock = `              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">
+                <Link
+                  href="/download"
+                  data-cta={CTA.START_TRIAL}
+                  data-event="demo_request"
+                  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl bg-blue-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-blue-900/30 transition-colors hover:bg-blue-500"
+                >
+                  {FREE_DOWNLOAD_CTA}
+                </Link>
+                <Link
+                  href="/features"
+                  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-xl border border-white/20 px-8 py-4 text-lg font-medium text-white transition-colors hover:border-white/40 hover:bg-white/5"
+                >
+                  View Features
+                </Link>
+              </div>
+              <p className="mt-4 text-xs text-blue-200/50">
+                Windows 10+ and macOS (Apple Silicon &amp; Intel) &middot;{" "}
+                {FREE_FOREVER_LABEL} on core features &middot; No credit card required
+              </p>`;
+
+    if (next.includes(noisyCtaBlock)) {
+      next = next.replace(noisyCtaBlock, quietCtaBlock);
+    } else if (
+      next.includes('Free note generator (UK)') &&
+      next.includes('Download for Windows')
+    ) {
+      /* Idempotent / already-partially-patched fallback via regex */
+      next = next.replace(
+        /<div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-start">[\s\S]*?<MacDownloadPicker[\s\S]*?\/>\s*<\/div>/,
+        quietCtaBlock.trim()
+      );
+    }
+
+    /* Hero product shot: drop max-w-lg, pass hero framing, larger sizes */
+    const oldShot = `            {/* Product screenshot */}
+            <div className="relative mx-auto w-full max-w-lg lg:mx-0">
+              <ProductScreenshot
+                src="/screenshots/hero-main-ui.webp"
+                alt="Custody Note dashboard showing Custody Attendance, Voluntary Attendance, Telephone Advice, and Quick Capture cards"
+                width={1600}
+                height={950}
+                priority
+                sizes="(max-width: 1024px) 100vw, 512px"
+              />
+            </div>`;
+
+    const newShot = `            {/* Product screenshot — visual equal of the headline */}
+            <div className="relative mx-auto w-full max-w-2xl lg:max-w-none lg:mx-0">
+              <div className="pointer-events-none absolute -inset-6 -z-10 rounded-[2rem] bg-blue-500/15 blur-3xl" aria-hidden />
+              <ProductScreenshot
+                src="/screenshots/hero-main-ui.webp"
+                alt="Custody Note dashboard showing Custody Attendance, Voluntary Attendance, Telephone Advice, and Quick Capture cards"
+                width={1600}
+                height={950}
+                priority
+                hero
+                sizes="(max-width: 1024px) 100vw, 720px"
+              />
+            </div>`;
+
+    if (next.includes(oldShot)) {
+      next = next.replace(oldShot, newShot);
+    } else if (next.includes('src="/screenshots/hero-main-ui.webp"')) {
+      next = next.replace(
+        /\{?\/\* Product screenshot \*\/\}?\s*<div className="relative mx-auto w-full max-w-lg lg:mx-0">[\s\S]*?src="\/screenshots\/hero-main-ui\.webp"[\s\S]*?<\/div>/,
+        newShot.trim()
+      );
+      /* Ensure hero prop present even if wrapper already widened */
+      if (!next.includes('hero\n') && !next.includes('hero ')) {
+        next = next.replace(
+          /(src="\/screenshots\/hero-main-ui\.webp"[\s\S]*?priority\n)/,
+          '$1                hero\n'
+        );
+      }
+      next = next.replace(
+        'sizes="(max-width: 1024px) 100vw, 512px"',
+        'sizes="(max-width: 1024px) 100vw, 720px"'
+      );
+      next = next.replace(
+        'className="relative mx-auto w-full max-w-lg lg:mx-0"',
+        'className="relative mx-auto w-full max-w-2xl lg:max-w-none lg:mx-0"'
+      );
+    }
+
+    /* Inside-the-app captions — filled SAMPLE records */
+    next = next.replace(
+      'alt="Custody Note records list with search, filters for All, Drafts, Finalised, Archived, and quick actions"',
+      'alt="Custody Note records list with SAMPLE demonstration attendances, search, and status filters"'
+    );
+    next = next.replace(
+      'caption="All records at a glance"',
+      'caption="Sample records list — demonstration data only"'
+    );
+    next = next.replace(
+      'caption="Sample records list — demonstration data only"',
+      'caption="Sample records list — demonstration data only"'
+    );
+
+    return next;
+  },
+  { required: true }
+);
+
+/* ─── 7. InlineScreenshot — slightly larger frame on SEO pages ─ */
+patch('components/InlineScreenshot.tsx', (src) => {
+  let next = src;
+  if (!next.includes('hero?:')) {
+    /* enlarge default frame */
+    next = next.replace(
+      'className={`my-8 ${className ?? ""}`.trim()}',
+      'className={`my-10 ${className ?? ""}`.trim()}'
+    );
+    next = next.replace(
+      'sizes={sizes ?? "(max-width: 768px) 100vw, 720px"}',
+      'sizes={sizes ?? "(max-width: 768px) 100vw, 860px"}'
+    );
   }
-  return out;
-}
+  return next;
+});
 
-const libScreenshots = join(WEBSITE_ROOT, 'lib', 'screenshots.ts');
-if (existsSync(libScreenshots)) {
-  let sc = readFileSync(libScreenshots, 'utf8');
-  let next = sc;
-  /* Prefer captions that admit sample/demo data */
-  next = next.replace(
+/* ─── 8. Screenshot catalog + solicitor page caption ─────────── */
+patch('lib/screenshots.ts', (sc) =>
+  sc.replace(
     /recordsList:\s*\{[\s\S]*?caption:\s*"[^"]*"/,
     (block) =>
       block.replace(
         /caption:\s*"[^"]*"/,
         'caption: "Sample attendances (demonstration data) — search and filter across records"'
       )
-  );
-  if (next !== sc) write('lib/screenshots.ts', next);
-}
-
-const solicitorPage = join(
-  WEBSITE_ROOT,
-  'app',
-  'criminal-defence-solicitor-software',
-  'page.tsx'
+  )
 );
-if (existsSync(solicitorPage)) {
-  let p = readFileSync(solicitorPage, 'utf8');
-  const next = p.replace(
-    'caption="All Records — search across every attendance by client, UFN, station, custody number or date."',
-    'caption="All Records with SAMPLE demonstration attendances — search by client, UFN, station, custody number or date."'
-  );
-  if (next !== p) write('app/criminal-defence-solicitor-software/page.tsx', next);
-}
+
+patch('app/criminal-defence-solicitor-software/page.tsx', (p) =>
+  p
+    .replace(
+      'caption="All Records — search across every attendance by client, UFN, station, custody number or date."',
+      'caption="All Records with SAMPLE demonstration attendances — search by client, UFN, station, custody number or date."'
+    )
+    .replace(
+      'caption="All Records with SAMPLE demonstration attendances — search by client, UFN, station, custody number or date."',
+      'caption="All Records with SAMPLE demonstration attendances — search by client, UFN, station, custody number or date."'
+    )
+);
 
 console.log('[strengthen-website] changed files (' + changed.length + '):');
 for (const f of changed) console.log(' -', f);
 if (!changed.length) {
   console.log('[strengthen-website] no file changes (already applied?)');
+  process.exit(1);
 }
 process.exit(0);
