@@ -1,0 +1,37 @@
+name: Verify website merge + Vercel
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - '.github/trigger-verify-website-merge'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm website PR merged and inspect deployments
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          set -euo pipefail
+          REPO="robertcashman-bit/custody-note-website"
+          echo "== PR #2 =="
+          gh pr view 2 --repo "$REPO" --json number,title,state,mergedAt,mergeCommit,url
+          echo
+          echo "== master tip =="
+          gh api "repos/$REPO/commits/master" --jq '{sha:.sha,date:.commit.committer.date,message:.commit.message}'
+          echo
+          echo "== Recent deployments (GitHub) =="
+          gh api "repos/$REPO/deployments?per_page=5" --jq '.[]|{id,environment,sha,ref,created_at,creator:.creator.login}' || echo "(no deployments API data)"
+          echo
+          echo "== Check runs on master tip =="
+          SHA=$(gh api "repos/$REPO/commits/master" --jq .sha)
+          gh api "repos/$REPO/commits/$SHA/check-runs" --jq '.check_runs[:10]|map({name,status,conclusion,started_at,details_url})' || true
+          echo
+          echo "== PR comments / status (Vercel bot) =="
+          gh api "repos/$REPO/issues/2/comments?per_page=20" --jq '.[]|{user:.user.login,created_at,body:.body[0:240]}' || true
