@@ -1,9 +1,7 @@
 #!/usr/bin/env node
 /**
  * Verify https://custodynote.com/ first-screen markers after a production deploy.
- * Exit 0 only when the new display (website PR #3) is live.
- *
- * Usage: node scripts/verify-custodynote-live.mjs [--html /tmp/live.html] [--write-proof /tmp/live-proof]
+ * Checks the hero HTML chunk (before the "custody desk" section), not the full page.
  */
 const fs = require('fs');
 const path = require('path');
@@ -39,6 +37,11 @@ function fetchText(url) {
   });
 }
 
+function heroChunk(html) {
+  const end = html.indexOf('The custody desk does not wait');
+  return end > 0 ? html.slice(0, end) : html.slice(0, 20000);
+}
+
 async function main() {
   const htmlPath = argValue('--html');
   const proofDir = argValue('--write-proof');
@@ -50,55 +53,36 @@ async function main() {
     html = await fetchText(`${url}${url.includes('?') ? '&' : '?'}cb=${Date.now()}`);
     if (htmlPath) fs.writeFileSync(htmlPath, html);
   }
+  const hero = heroChunk(html);
 
   const checks = {
-    'Download free': html.includes('Download free'),
-    'View Features': html.includes('View Features'),
-    'no Free note generator': !html.includes('Free note generator'),
-    'Download for Windows present': html.includes('Download for Windows'),
-    'max-w-lg present': html.includes('max-w-lg'),
-    'max-w-lg count': (html.match(/max-w-lg/g) || []).length,
-    'Companies House present': html.includes('Companies House') || html.includes('09900871'),
-    'hero-main-ui present': html.includes('hero-main-ui'),
-    'See Example Note present': html.includes('See Example Note'),
+    'hero has Download free': hero.includes('Download free'),
+    'hero has View Features': hero.includes('View Features'),
+    'hero no See Example Note': !hero.includes('See Example Note'),
+    'hero no Free note generator': !hero.includes('Free note generator'),
+    'hero no Download for Windows': !hero.includes('Download for Windows'),
+    'hero enlarged shot (max-w-2xl lg:max-w-none)': hero.includes('max-w-2xl lg:max-w-none'),
+    'hero no old max-w-lg wrapper': !hero.includes('max-w-lg lg:mx-0'),
+    'hero glow blur-3xl': hero.includes('blur-3xl'),
   };
 
-  for (const [k, v] of Object.entries(checks)) {
-    console.log(`${k}: ${v}`);
-  }
-  console.log(`bytes: ${html.length}`);
+  for (const [k, v] of Object.entries(checks)) console.log(`${k}: ${v}`);
+  console.log(`bytes: ${html.length} heroBytes: ${hero.length}`);
 
   if (proofDir) {
     fs.mkdirSync(proofDir, { recursive: true });
-    const lines = Object.entries(checks).map(([k, v]) => `${k}: ${v}`);
-    const anchorRe = /<a[^>]*>([\s\S]*?)<\/a>/gi;
-    let m;
-    while ((m = anchorRe.exec(html))) {
-      const t = m[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-      if (
-        t &&
-        ['download', 'feature', 'generator', 'example'].some((k) => t.toLowerCase().includes(k))
-      ) {
-        lines.push(`A: ${t.slice(0, 100)}`);
-      }
-    }
-    fs.writeFileSync(path.join(proofDir, 'markers.txt'), `${lines.join('\n')}\n`);
+    fs.writeFileSync(
+      path.join(proofDir, 'markers.txt'),
+      Object.entries(checks).map(([k, v]) => `${k}: ${v}`).join('\n') + '\n'
+    );
   }
 
-  // PR #3 display: enlarged hero drops max-w-lg; hero CTA row drops See Example Note /
-  // Free note generator; Download free + View Features remain.
-  const displayLive =
-    checks['Download free'] &&
-    checks['View Features'] &&
-    checks['no Free note generator'] &&
-    !checks['max-w-lg present'] &&
-    !checks['See Example Note present'];
-
-  if (!displayLive) {
-    console.error('LIVE verification FAILED — production still looks like the pre-display homepage.');
+  const ok = Object.values(checks).every(Boolean);
+  if (!ok) {
+    console.error('LIVE verification FAILED — first screen does not match display PR #3.');
     process.exit(1);
   }
-  console.log('LIVE verification OK — new display markers present');
+  console.log('LIVE verification OK — first screen matches new display');
 }
 
 main().catch((err) => {
