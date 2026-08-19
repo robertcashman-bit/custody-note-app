@@ -280,7 +280,7 @@ const NEW_HERO = `        {/* Hero — product-first (Clio / LEAP pattern): app 
                   {FREE_DOWNLOAD_CTA}
                 </Link>
                 <Link
-                  href="#demo-video"
+                  href="/demo"
                   className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-white/20 px-7 py-3.5 text-base font-medium text-white transition-colors hover:border-white/40 hover:bg-white/5"
                 >
                   Watch demo
