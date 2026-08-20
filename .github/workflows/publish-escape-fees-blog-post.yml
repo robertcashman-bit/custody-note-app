@@ -53,16 +53,16 @@ jobs:
           )
           echo "Approx visible words: $WORDS"
           # Fail on affirmative grade-fee billing language. FAQ may say grades do NOT apply.
-          if rg -n "graded fee|higher grade rate|lower grade rate|paid at grade|according to grade|grade A rate|grade B rate|grade C rate" "$PAGE"; then
+          if grep -nE "graded fee|higher grade rate|lower grade rate|paid at grade|according to grade|grade A rate|grade B rate|grade C rate" "$PAGE"; then
             echo "Unexpected affirmative grade-fee language found" >&2
             exit 1
           fi
           # Must state fees are not graded / one fixed fee
-          rg -n "not graded|are not graded" "$PAGE"
-          rg -n "whoever attended" "$PAGE"
+          grep -nE "not graded|are not graded" "$PAGE"
+          grep -n "whoever attended" "$PAGE"
           test -f custody-note-website/public/images/blog/police-station-escape-fees-2026/featured.jpg
           test -f custody-note-website/public/images/blog/police-station-escape-fees-2026/og.jpg
-          rg -n 'slug: "police-station-escape-fees-2026"' custody-note-website/lib/staticBlogPosts.ts
+          grep -n 'slug: "police-station-escape-fees-2026"' custody-note-website/lib/staticBlogPosts.ts
 
       - name: Upload applied website files
         uses: actions/upload-artifact@v4
