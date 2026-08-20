@@ -3,6 +3,12 @@ name: Dump website blog scaffold
 # Pull key blog files from private custody-note-website so agents can match patterns.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - cursor/blog-police-station-escape-fees-292b
+    paths:
+      - .github/workflows/dump-website-blog-scaffold.yml
+      - .github/trigger-dump-website-blog-scaffold
 
 permissions:
   contents: read
