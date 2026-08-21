@@ -70,7 +70,7 @@ Officer email and compose flows placed email **bodies in URL query strings** (`b
 ### Fix
 - `buildOutlookWebComposeUrl()` omits `body` unless `includeBody: true` (opt-in, not used in production paths).
 - `truncateOutlookComposeForShellOpen()` always builds subject-only URLs; `truncated: true` when a body exists (signals clipboard paste).
-- Main-process officer-email handlers **always** copy full compose text to clipboard when body is non-empty.
+- Main-process officer-email handlers **always** copy **body-only** plain text to the clipboard when body is non-empty (To/Subject are already in the compose URL; a To:/Subject: header blob causes Outlook paste to leave the body empty).
 - Preload / `lib/emailComposeDraft.js` mirror subject-only URLs and copy body to clipboard before `window.open`.
 
 `mailto:` links still include body (OS handoff limitation) — unchanged.

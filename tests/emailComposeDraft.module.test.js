@@ -264,6 +264,32 @@ describe('openEmailDraft (mock env)', () => {
     assert.strictEqual(opened.length, 1);
   });
 
+  it('outlook-web copies body-only text to clipboard (not To/Subject header blob)', () => {
+    var written = null;
+    var win = {
+      open: function () { return {}; },
+      location: {},
+    };
+    var ok = openEmailDraft(
+      { to: 'o@police.uk', subject: 'Disclosure', body: 'Dear Officer,\nPlease reply.' },
+      'outlook-web',
+      {
+        window: win,
+        navigator: {
+          clipboard: {
+            writeText: function (s) {
+              written = s;
+              return Promise.resolve();
+            },
+          },
+        },
+      }
+    );
+    assert.strictEqual(ok, true);
+    assert.strictEqual(written, 'Dear Officer,\nPlease reply.');
+    assert.ok(!String(written).startsWith('To:'), 'must not paste To:/Subject: headers into Outlook body');
+  });
+
   it('outlook-web returns false when window.open returns null (popup blocked)', () => {
     var logged = [];
     var origErr = console.error;

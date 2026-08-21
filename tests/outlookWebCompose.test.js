@@ -5,6 +5,7 @@ const assert = require('node:assert');
 const {
   buildOutlookWebComposeUrl,
   buildFullComposePlainTextForClipboard,
+  buildBodyPlainTextForClipboard,
   truncateOutlookComposeForShellOpen,
   OUTLOOK_WEB_COMPOSE_BASE,
 } = require('../lib/outlookWebCompose');
@@ -74,16 +75,40 @@ describe('outlookWebCompose.buildFullComposePlainTextForClipboard', () => {
   });
 });
 
+describe('outlookWebCompose.buildBodyPlainTextForClipboard', () => {
+  it('returns body only (no To/Subject headers)', () => {
+    const t = buildBodyPlainTextForClipboard({
+      to: 'a@b.c',
+      subject: 'S',
+      body: 'Dear Officer,\nPlease send disclosure.',
+    });
+    assert.strictEqual(t, 'Dear Officer,\nPlease send disclosure.');
+    assert.ok(!t.startsWith('To:'), 'must not include To header');
+    assert.ok(!t.includes('Subject:'), 'must not include Subject header');
+  });
+
+  it('accepts a raw body string', () => {
+    assert.strictEqual(buildBodyPlainTextForClipboard('Line one\nLine two'), 'Line one\nLine two');
+  });
+});
+
 describe('outlookWebCompose.truncateOutlookComposeForShellOpen', () => {
-  it('never places body in URL; clipboard holds full message', () => {
+  it('never places body in URL; bodyPlainTextForClipboard is body-only for paste', () => {
+    const body = 'Dear Officer,\n\nPlease send initial disclosure by reply to this email.\n\nMany thanks.\n\nRobert';
     const r = truncateOutlookComposeForShellOpen(
-      { to: 'a@b.c', subject: 'S', body: 'short confidential note' },
+      { to: 'a@b.c', subject: 'S', body },
       { maxUrlLength: 50_000 }
     );
     assert.strictEqual(r.truncated, true);
     assert.ok(!r.url.includes('body='), r.url);
     assert.strictEqual(r.bodyUsedInUrl, '');
-    assert.ok(r.fullPlainTextForClipboard.includes('short confidential note'));
+    assert.strictEqual(
+      r.bodyPlainTextForClipboard,
+      body,
+      'Open-Outlook clipboard must be the template body only (paste into Outlook body field)'
+    );
+    assert.ok(!r.bodyPlainTextForClipboard.startsWith('To:'), 'regression: To:/Subject: header blob breaks Outlook paste');
+    assert.ok(r.fullPlainTextForClipboard.includes(body), 'full draft text still available for copy-whole-draft');
     assert.strictEqual(r.urlLength, r.url.length);
   });
 
@@ -94,9 +119,10 @@ describe('outlookWebCompose.truncateOutlookComposeForShellOpen', () => {
     );
     assert.strictEqual(r.truncated, false);
     assert.ok(!r.url.includes('body='));
+    assert.strictEqual(r.bodyPlainTextForClipboard, '');
   });
 
-  it('long body stays off URL; clipboard preserves full text', () => {
+  it('long body stays off URL; body clipboard preserves full text', () => {
     const body = 'X'.repeat(25_000);
     const r = truncateOutlookComposeForShellOpen(
       { to: 'officer@met.police.uk', subject: 'Custody note', body },
@@ -105,7 +131,7 @@ describe('outlookWebCompose.truncateOutlookComposeForShellOpen', () => {
     assert.strictEqual(r.truncated, true);
     assert.ok(r.url.length <= 4000, `url length ${r.url.length}`);
     assert.ok(!r.url.includes('body='));
-    assert.ok(r.fullPlainTextForClipboard.includes(body), 'clipboard text must include full body');
+    assert.strictEqual(r.bodyPlainTextForClipboard, body, 'clipboard text must be the full body only');
   });
 
   it('expands with many ampersands still keeps body off URL', () => {
@@ -117,6 +143,7 @@ describe('outlookWebCompose.truncateOutlookComposeForShellOpen', () => {
     assert.strictEqual(r.truncated, true);
     assert.ok(r.url.length <= 3500);
     assert.ok(!r.url.includes('body='));
-    assert.ok(r.fullPlainTextForClipboard.includes('MARK'));
+    assert.strictEqual(r.bodyPlainTextForClipboard, body);
+    assert.ok(r.bodyPlainTextForClipboard.includes('MARK'));
   });
 });
