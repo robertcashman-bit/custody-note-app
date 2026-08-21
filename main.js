@@ -9292,7 +9292,7 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   const toT = officerEmailDrafts.trimMax(row.to_email, officerEmailDrafts.MAX_LENGTHS.toEmail);
   const subT = officerEmailDrafts.trimMax(row.subject, officerEmailDrafts.MAX_LENGTHS.subject);
   const bodyT = officerEmailDrafts.str(row.body);
-  const { url, truncated, fullPlainTextForClipboard } = outlookWebCompose.truncateOutlookComposeForShellOpen({
+  const { url, truncated, bodyPlainTextForClipboard } = outlookWebCompose.truncateOutlookComposeForShellOpen({
     to: toT,
     cc: '',
     subject: subT,
@@ -9302,9 +9302,11 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
     console.warn('[officer-email-drafts-open-outlook] isSafeExternalUrl rejected url', { urlLength: url.length });
     return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
   }
+  /* Body only: To/Subject are already in the compose URL. Pasting a To:/Subject:
+     header block into Outlook's body often yields an empty message body. */
   if (bodyT.trim()) {
     try {
-      clipboard.writeText(fullPlainTextForClipboard);
+      clipboard.writeText(bodyPlainTextForClipboard);
     } catch (clipErr) {
       console.warn('[officer-email-drafts-open-outlook] clipboard write failed', clipErr);
     }
@@ -9360,9 +9362,10 @@ ipcMain.handle('officer-email-drafts-open-one-off-outlook', async (_, fields) =>
     console.warn('[officer-email-drafts-open-one-off-outlook] isSafeExternalUrl rejected url', { urlLength: url.length });
     return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
   }
+  /* Body only — same paste-into-Outlook-body contract as open-outlook. */
   if (bodyT.trim()) {
     try {
-      clipboard.writeText(composed.fullPlainTextForClipboard);
+      clipboard.writeText(composed.bodyPlainTextForClipboard);
     } catch (clipErr) {
       console.warn('[officer-email-drafts-open-one-off-outlook] clipboard fallback failed:', clipErr && clipErr.message);
     }

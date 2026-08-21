@@ -161,9 +161,9 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
           try {
             var clipEnv = env || {};
             var nav = clipEnv.navigator || (typeof navigator !== 'undefined' ? navigator : null);
-            var clipText = buildFullEmailClipboardText(d);
+            /* Body only — To/Subject are in the subject-only compose URL. */
             if (nav && nav.clipboard && nav.clipboard.writeText) {
-              nav.clipboard.writeText(clipText).catch(function () {});
+              nav.clipboard.writeText(String(d.body || '')).catch(function () {});
             }
           } catch (_) {}
         }
