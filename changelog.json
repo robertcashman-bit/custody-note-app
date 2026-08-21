@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.9.69",
+      "date": "2026-08-21",
+      "latest": true,
+      "changes": [
+        "Officer Emails now copy the email body only so paste into Outlook includes the template body"
+      ]
+    },
+    {
       "version": "1.9.68",
       "date": "2026-08-12",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Admin licences are never revoked in the app and are always re-checked online on startup",
         "Fixes a false “licence has been revoked” screen after installing the latest version when signed in as admin",
