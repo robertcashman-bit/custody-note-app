@@ -81,6 +81,9 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+    outputs:
+      # '1' when notarization preflight failed — deploy-website softens Mac copy.
+      skip_notarize: ${{ steps.notary-preflight.outcome != 'success' && '1' || '0' }}
     steps:
       - name: Checkout app
         uses: actions/checkout@v4
@@ -249,7 +252,7 @@ jobs:
   # the overall workflow.
   deploy-website:
     runs-on: ubuntu-latest
-    needs: publish-release
+    needs: [publish-release, release-mac]
     continue-on-error: true
     steps:
       - name: Checkout app
@@ -291,14 +294,22 @@ jobs:
         working-directory: custody-note-app
         env:
           WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
+          # Soften only when Mac build skipped notarization (Developer ID signed only).
+          SOFTEN_NOTARY_COPY: ${{ needs.release-mac.outputs.skip_notarize }}
         run: |
           set -euo pipefail
           node scripts/bump-website-download-version.mjs
           cd "$WEBSITE_ROOT"
+          # Report is written under the app root; drop any leftover under the website clone.
+          rm -f .bump-website-download-report.json
           if [ -n "$(git status --porcelain)" ]; then
             git add -A
             VERSION=$(node -p "require('${{ github.workspace }}/custody-note-app/package.json').version")
-            git commit -m "Download: bump to v${VERSION} (Developer ID signed Mac; notarization pending)"
+            if [ "${SOFTEN_NOTARY_COPY}" = "1" ]; then
+              git commit -m "Download: bump to v${VERSION} (Developer ID signed Mac; notarization pending)"
+            else
+              git commit -m "Download: bump to v${VERSION}"
+            fi
             BRANCH=$(git rev-parse --abbrev-ref HEAD)
             git pull --rebase origin "$BRANCH" || true
             git push origin "HEAD:${BRANCH}"
