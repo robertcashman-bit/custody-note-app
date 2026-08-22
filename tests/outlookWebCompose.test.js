@@ -193,6 +193,9 @@ describe('outlookWebCompose.prepareOutlookComposeForOpen — body in Outlook', (
     assert.strictEqual(r.method, 'outlook-desktop-eml');
     assert.strictEqual(r.bodyPlacedInCompose, true);
     assert.ok(r.emlContent.includes('X-Unsent: 1'));
+    assert.ok(r.emlContent.includes('Content-Type: text/html; charset=utf-8'));
+    assert.ok(r.emlContent.includes('Content-Transfer-Encoding: quoted-printable'));
+    assert.ok(r.emlContent.includes('X-Uniform-Type-Identifier: com.apple.mail-draft'));
     assert.strictEqual(extractEmlPlainBody(r.emlContent), body);
     assert.ok(!r.url.includes('body='), 'long body stays off URL');
   });
@@ -228,7 +231,25 @@ describe('outlookComposeEml — body round-trip', () => {
       body: SPECIAL_BODY,
     });
     assert.ok(eml.includes('X-Unsent: 1'));
+    assert.ok(eml.includes('Content-Type: text/html; charset=utf-8'));
+    assert.ok(eml.includes('Content-Transfer-Encoding: quoted-printable'));
+    assert.ok(eml.includes('X-Uniform-Type-Identifier: com.apple.mail-draft'));
+    assert.ok(eml.includes('Smith &amp; Jones'), 'HTML-escapes ampersands in body');
     assert.strictEqual(extractEmlPlainBody(eml), SPECIAL_BODY);
+  });
+
+  it('quoted-printable payload is 7-bit (no raw UTF-8 high bytes in file)', () => {
+    const eml = buildOutlookComposeEmlContent({
+      to: 'o@police.uk',
+      subject: 'Unicode',
+      body: 'Pound £ and dash — and café',
+    });
+    const payloadStart = eml.indexOf('\r\n\r\n') + 4;
+    const payload = eml.slice(payloadStart);
+    for (let i = 0; i < payload.length; i++) {
+      assert.ok(payload.charCodeAt(i) <= 0x7f, 'EML payload must be 7-bit for New Outlook file encoding');
+    }
+    assert.strictEqual(extractEmlPlainBody(eml), 'Pound £ and dash — and café');
   });
 
   it('strips CR/LF injection from To/Subject headers', () => {
