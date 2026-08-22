@@ -110,16 +110,24 @@ function detectFromVersion(files) {
 }
 
 const files = walk(WEBSITE_ROOT);
-const FROM_VERSION = detectFromVersion(files);
-if (!FROM_VERSION) {
-  console.error(
-    '[bump-website-download] Could not detect FROM_VERSION. Set FROM_VERSION=1.9.68 explicitly.',
-  );
-  process.exit(1);
-}
+// Never rewrite historical versions inside releases.json / blog imports —
+// sync-website.mjs owns those. Version pin bumps are for download UI + API routes.
+const mutableFiles = files.filter((f) => {
+  const rel = relative(WEBSITE_ROOT, f).replace(/\\/g, '/');
+  if (rel === 'data/releases.json') return false;
+  if (rel === 'data/blog-imports.json') return false;
+  if (rel.startsWith('data/blog-imports/')) return false;
+  return true;
+});
 
-if (FROM_VERSION === TO_VERSION) {
-  console.log(`[bump-website-download] Already at ${TO_VERSION} — nothing to bump.`);
+let FROM_VERSION = detectFromVersion(files);
+if (!FROM_VERSION) {
+  FROM_VERSION = TO_VERSION;
+  console.log(
+    `[bump-website-download] No prior version pin found; treating as already at ${TO_VERSION} (copy-only pass).`,
+  );
+} else if (FROM_VERSION === TO_VERSION) {
+  console.log(`[bump-website-download] Already at ${TO_VERSION} — applying copy softening only.`);
 } else {
   console.log(`[bump-website-download] ${FROM_VERSION} → ${TO_VERSION}`);
 }
@@ -197,7 +205,7 @@ const report = {
   copyMisses: [],
 };
 
-for (const file of files) {
+for (const file of mutableFiles) {
   let text = readFileSync(file, 'utf8');
   let next = text;
   let changed = false;
