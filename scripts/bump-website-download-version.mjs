@@ -155,6 +155,37 @@ const COPY_REPLACEMENTS = [
     'Developer ID signed',
     { optional: true },
   ],
+  [
+    'signed &amp; notarised',
+    'Developer ID signed',
+    { optional: true },
+  ],
+  // Fragment forms used in MacDownload client components / split JSX
+  [
+    '· signed & notarised ·',
+    '· Developer ID signed ·',
+    { optional: true },
+  ],
+  [
+    '· signed &amp; notarised ·',
+    '· Developer ID signed ·',
+    { optional: true },
+  ],
+  [
+    'signed {"&"} notarised',
+    'Developer ID signed',
+    { optional: true },
+  ],
+  [
+    'signed {\'&\'} notarised',
+    'Developer ID signed',
+    { optional: true },
+  ],
+  [
+    'signed {"\\u0026"} notarised',
+    'Developer ID signed',
+    { optional: true },
+  ],
 ];
 
 const report = {
