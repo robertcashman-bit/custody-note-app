@@ -9259,22 +9259,150 @@ ipcMain.handle('officer-email-drafts-compose-url', (_, payload) => {
   const toT = officerEmailDrafts.trimMax(to, officerEmailDrafts.MAX_LENGTHS.toEmail);
   const subT = officerEmailDrafts.trimMax(subject, officerEmailDrafts.MAX_LENGTHS.subject);
   const bodyT = officerEmailDrafts.str(body);
-  const composed = outlookWebCompose.truncateOutlookComposeForShellOpen({
+  const composed = outlookWebCompose.prepareOutlookComposeForOpen({
     to: toT,
     cc: '',
     subject: subT,
     body: bodyT,
   });
+  /* Copy-link returns the OWA URL (with body when it fits). Long drafts that
+     would use .eml still get a subject/to link for sharing — body is in the draft. */
   if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(composed.url)) {
     return { ok: false, errors: ['Could not build a safe Outlook Web link.'] };
   }
   return {
     ok: true,
     url: composed.url,
-    truncated: composed.truncated,
+    truncated: composed.method === 'outlook-desktop-eml',
     urlLength: composed.url.length,
+    method: composed.method,
+    bodyPlacedInCompose: composed.bodyPlacedInCompose,
   };
 });
+
+/**
+ * Open Outlook with the current to/subject/body placed IN the compose window.
+ * Short messages → Outlook Web URL (body query param). Longer messages → .eml
+ * draft via shell.openPath. Never opens with an empty body when body text exists.
+ */
+async function _openOfficerEmailInOutlook(toT, subT, bodyT, logTag) {
+  const composed = outlookWebCompose.prepareOutlookComposeForOpen({
+    to: toT,
+    cc: '',
+    subject: subT,
+    body: bodyT,
+  });
+  if (bodyT.trim() && !composed.bodyPlacedInCompose) {
+    console.warn('[' + logTag + '] refusing to open Outlook with empty body when draft has text');
+    return {
+      ok: false,
+      errors: ['Could not place the email body into Outlook. Please try again or use Copy body.'],
+    };
+  }
+
+  /* E2E / isolated-userdata test hook: record the launch payload without
+     opening a real Outlook GUI (unavailable in CI). Enabled only when
+     CUSTODYNOTE_TEST_USERDATA is set (Playwright Electron specs). */
+  if (process.env.CUSTODYNOTE_TEST_USERDATA) {
+    try {
+      const capturePath = path.join(String(process.env.CUSTODYNOTE_TEST_USERDATA), 'last-outlook-launch.json');
+      fs.writeFileSync(
+        capturePath,
+        JSON.stringify({
+          logTag,
+          method: composed.method,
+          to: toT,
+          subject: subT,
+          body: bodyT,
+          url: composed.url,
+          bodyUsedInUrl: composed.bodyUsedInUrl || '',
+          emlContent: composed.method === 'outlook-desktop-eml' ? composed.emlContent : '',
+          bodyPlacedInCompose: composed.bodyPlacedInCompose,
+          capturedAt: new Date().toISOString(),
+        }),
+        'utf8'
+      );
+      console.info('[' + logTag + '] e2e capture written', { method: composed.method, bodyLength: bodyT.length });
+      return {
+        ok: true,
+        truncated: false,
+        urlLength: composed.urlLength,
+        openMethod: 'e2e-capture',
+        method: composed.method,
+        bodyPlacedInCompose: composed.bodyPlacedInCompose,
+      };
+    } catch (capErr) {
+      console.warn('[' + logTag + '] e2e capture failed', capErr && capErr.message);
+    }
+  }
+
+  let openMethod = null;
+  let urlLength = composed.urlLength;
+
+  if (composed.method === 'outlook-desktop-eml') {
+    try {
+      const draftsDir = path.join(app.getPath('userData'), 'outlook-drafts');
+      fs.mkdirSync(draftsDir, { recursive: true });
+      const stamp = Date.now().toString(36) + '-' + crypto.randomBytes(3).toString('hex');
+      const filePath = path.join(draftsDir, 'draft-' + stamp + '.eml');
+      fs.writeFileSync(filePath, composed.emlContent, { encoding: 'utf8' });
+      console.info('[' + logTag + '] opening .eml draft', {
+        bodyLength: bodyT.length,
+        fileName: path.basename(filePath),
+      });
+      const openErr = await shell.openPath(filePath);
+      if (openErr) {
+        try { fs.unlinkSync(filePath); } catch (_) { /* best effort */ }
+        throw new Error(openErr || 'shell.openPath failed');
+      }
+      openMethod = 'shell-openPath-eml';
+      setTimeout(function () {
+        try { fs.unlinkSync(filePath); } catch (_) { /* best effort */ }
+      }, 5 * 60 * 1000).unref?.();
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      console.warn('[' + logTag + '] .eml open failed', msg);
+      return {
+        ok: false,
+        errors: [msg || 'Outlook could not be opened. You can still copy the recipient, subject and body manually.'],
+      };
+    }
+  } else {
+    const url = composed.url;
+    if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
+      console.warn('[' + logTag + '] isSafeExternalUrl rejected url', { urlLength: url.length });
+      return {
+        ok: false,
+        errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'],
+      };
+    }
+    try {
+      console.info('[' + logTag + '] invoking openExternalUrl', {
+        urlLength: url.length,
+        bodyInUrl: !!composed.bodyUsedInUrl,
+      });
+      const openRes = await openExternalUrlModule.openExternalUrl(url, { electronShell: shell });
+      openMethod = openRes && openRes.method ? openRes.method : 'outlook-web';
+      console.info('[' + logTag + '] openExternalUrl resolved', openRes);
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      console.warn('[' + logTag + '] openExternalUrl failed', msg);
+      return {
+        ok: false,
+        errors: [msg || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'],
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    truncated: false,
+    urlLength,
+    openMethod,
+    method: composed.method,
+    bodyPlacedInCompose: composed.bodyPlacedInCompose,
+  };
+}
 
 ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   if (!draftId) return { ok: false, errors: ['draftId required'] };
@@ -9292,36 +9420,8 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   const toT = officerEmailDrafts.trimMax(row.to_email, officerEmailDrafts.MAX_LENGTHS.toEmail);
   const subT = officerEmailDrafts.trimMax(row.subject, officerEmailDrafts.MAX_LENGTHS.subject);
   const bodyT = officerEmailDrafts.str(row.body);
-  const { url, truncated, bodyPlainTextForClipboard } = outlookWebCompose.truncateOutlookComposeForShellOpen({
-    to: toT,
-    cc: '',
-    subject: subT,
-    body: bodyT,
-  });
-  if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
-    console.warn('[officer-email-drafts-open-outlook] isSafeExternalUrl rejected url', { urlLength: url.length });
-    return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
-  }
-  /* Body only: To/Subject are already in the compose URL. Pasting a To:/Subject:
-     header block into Outlook's body often yields an empty message body. */
-  if (bodyT.trim()) {
-    try {
-      clipboard.writeText(bodyPlainTextForClipboard);
-    } catch (clipErr) {
-      console.warn('[officer-email-drafts-open-outlook] clipboard write failed', clipErr);
-    }
-  }
-  let openMethod = null;
-  try {
-    console.info('[officer-email-drafts-open-outlook] invoking openExternalUrl', { urlLength: url.length, truncated: !!truncated });
-    const openRes = await openExternalUrlModule.openExternalUrl(url, { electronShell: shell });
-    openMethod = openRes && openRes.method ? openRes.method : null;
-    console.info('[officer-email-drafts-open-outlook] openExternalUrl resolved', openRes);
-  } catch (err) {
-    const msg = (err && err.message) ? err.message : String(err);
-    console.warn('[officer-email-drafts-open-outlook] openExternalUrl failed', msg);
-    return { ok: false, errors: [msg || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
-  }
+  const launch = await _openOfficerEmailInOutlook(toT, subT, bodyT, 'officer-email-drafts-open-outlook');
+  if (!launch.ok) return launch;
   const now = new Date().toISOString();
   if (row.status === 'opened_in_outlook') {
     dbRun(`UPDATE officer_email_drafts SET opened_in_outlook_at=?, updated_at=? WHERE id=?`, [now, now, String(draftId)]);
@@ -9336,9 +9436,11 @@ ipcMain.handle('officer-email-drafts-open-outlook', async (_, draftId) => {
   return {
     ok: true,
     draft: _officerDraftRowToApi(dbGet('SELECT * FROM officer_email_drafts WHERE id = ?', [String(draftId)])),
-    truncated,
-    urlLength: url.length,
-    openMethod,
+    truncated: false,
+    urlLength: launch.urlLength,
+    openMethod: launch.openMethod,
+    method: launch.method,
+    bodyPlacedInCompose: launch.bodyPlacedInCompose,
   };
 });
 
@@ -9351,37 +9453,16 @@ ipcMain.handle('officer-email-drafts-open-one-off-outlook', async (_, fields) =>
   const toT = officerEmailDrafts.trimMax(n.toEmail, officerEmailDrafts.MAX_LENGTHS.toEmail);
   const subT = officerEmailDrafts.trimMax(n.subject, officerEmailDrafts.MAX_LENGTHS.subject);
   const bodyT = officerEmailDrafts.str(n.body);
-  const composed = outlookWebCompose.truncateOutlookComposeForShellOpen({
-    to: toT,
-    cc: '',
-    subject: subT,
-    body: bodyT,
-  });
-  const url = composed.url;
-  if (typeof isSafeExternalUrl === 'function' && !isSafeExternalUrl(url)) {
-    console.warn('[officer-email-drafts-open-one-off-outlook] isSafeExternalUrl rejected url', { urlLength: url.length });
-    return { ok: false, errors: ['Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
-  }
-  /* Body only — same paste-into-Outlook-body contract as open-outlook. */
-  if (bodyT.trim()) {
-    try {
-      clipboard.writeText(composed.bodyPlainTextForClipboard);
-    } catch (clipErr) {
-      console.warn('[officer-email-drafts-open-one-off-outlook] clipboard fallback failed:', clipErr && clipErr.message);
-    }
-  }
-  let oneOffOpenMethod = null;
-  try {
-    console.info('[officer-email-drafts-open-one-off-outlook] invoking openExternalUrl', { urlLength: url.length, truncated: !!composed.truncated });
-    const openRes = await openExternalUrlModule.openExternalUrl(url, { electronShell: shell });
-    oneOffOpenMethod = openRes && openRes.method ? openRes.method : null;
-    console.info('[officer-email-drafts-open-one-off-outlook] openExternalUrl resolved', openRes);
-  } catch (err) {
-    const msg = (err && err.message) ? err.message : String(err);
-    console.warn('[officer-email-drafts-open-one-off-outlook] openExternalUrl failed', msg);
-    return { ok: false, errors: [msg || 'Outlook Web could not be opened. You can still copy the recipient, subject and body manually.'] };
-  }
-  return { ok: true, truncated: composed.truncated, urlLength: composed.url.length, openMethod: oneOffOpenMethod };
+  const launch = await _openOfficerEmailInOutlook(toT, subT, bodyT, 'officer-email-drafts-open-one-off-outlook');
+  if (!launch.ok) return launch;
+  return {
+    ok: true,
+    truncated: false,
+    urlLength: launch.urlLength,
+    openMethod: launch.openMethod,
+    method: launch.method,
+    bodyPlacedInCompose: launch.bodyPlacedInCompose,
+  };
 });
 
 ipcMain.handle('officer-email-drafts-copy', (_, text) => {

@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.70",
+      "date": "2026-08-22",
+      "latest": true,
+      "changes": [
+        "Officer Emails: Open Outlook now places the current email-box text into Outlook as the message body (Outlook Web when the URL fits; Outlook desktop .eml draft when it does not)",
+        "Removes the clipboard-paste workaround so you no longer need to paste the body after Outlook opens",
+        "Uses the live edited or typed body at click time — not a stale generated template"
+      ]
+    },
+    {
       "version": "1.9.69",
       "date": "2026-08-21",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Officer Emails now copy the email body only so paste into Outlook includes the template body"
       ]
