@@ -60,6 +60,8 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
   }
 
   /* Must mirror lib/outlookWebCompose.js (see tests/preloadOutlookWebComposeParity.test.js). */
+  var OUTLOOK_WEB_COMPOSE_URL_MAX_SAFE_LENGTH = 1800;
+
   function normalizeBodyToCrlf(body) {
     return String(body == null ? '' : body)
       .replace(/\r\n/g, '\n')
@@ -85,14 +87,43 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
       : 'https://outlook.office.com/mail/0/deeplink/compose';
   }
 
+  function prepareOutlookComposeForOpen(fields, optionsOrMax) {
+    var f = fields || {};
+    var maxLen = OUTLOOK_WEB_COMPOSE_URL_MAX_SAFE_LENGTH;
+    if (typeof optionsOrMax === 'number' && optionsOrMax > 0) maxLen = optionsOrMax;
+    else if (optionsOrMax && typeof optionsOrMax.maxUrlLength === 'number' && optionsOrMax.maxUrlLength > 0) {
+      maxLen = optionsOrMax.maxUrlLength;
+    }
+    var toS = String(f.to != null ? f.to : '').trim();
+    var ccS = String(f.cc != null ? f.cc : '');
+    var subS = String(f.subject != null ? f.subject : '');
+    var rawBody = String(f.body != null ? f.body : '');
+    var hasBody = Boolean(rawBody.trim());
+    var urlWithBody = buildOutlookWebComposeUrl(
+      { to: toS, cc: ccS, subject: subS, body: rawBody },
+      { includeBody: true }
+    );
+    if (!hasBody || urlWithBody.length <= maxLen) {
+      return { method: 'outlook-web', url: urlWithBody, bodyPlacedInCompose: hasBody };
+    }
+    return {
+      method: 'outlook-desktop-eml',
+      url: buildOutlookWebComposeUrl(
+        { to: toS, cc: ccS, subject: subS, body: '' },
+        { includeBody: false }
+      ),
+      bodyPlacedInCompose: false,
+    };
+  }
+
   function buildOutlookWebComposeLink(draft) {
     var d = normalizeDraft(draft);
-    return buildOutlookWebComposeUrl({
+    return prepareOutlookComposeForOpen({
       to: d.to,
       cc: d.cc,
       subject: d.subject,
       body: d.body,
-    }, { includeBody: false });
+    }).url;
   }
 
   function savePendingEmailDraft(draft, storage) {
@@ -157,11 +188,17 @@ const custodyEmailComposeDraft = (function buildEmailComposeDraft() {
 
     try {
       if (m === 'outlook-web') {
-        if (d.body) {
+        var prepared = prepareOutlookComposeForOpen({
+          to: d.to,
+          cc: d.cc,
+          subject: d.subject,
+          body: d.body,
+        });
+        link = prepared.url;
+        if (d.body && prepared.method !== 'outlook-web') {
           try {
             var clipEnv = env || {};
             var nav = clipEnv.navigator || (typeof navigator !== 'undefined' ? navigator : null);
-            /* Body only — To/Subject are in the subject-only compose URL. */
             if (nav && nav.clipboard && nav.clipboard.writeText) {
               nav.clipboard.writeText(String(d.body || '')).catch(function () {});
             }
