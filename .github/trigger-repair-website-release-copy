@@ -1,0 +1,3 @@
+# Push this file on master to run Repair website release copy.
+repair-requested-at: 2026-08-22T14:45:00Z
+reason: restore-releases-json-after-bump-corruption-and-fix-mac-copy
