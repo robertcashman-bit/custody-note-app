@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 /**
- * Produces a signed + notarised macOS .dmg for distribution.
+ * Produces a Developer ID–signed macOS .dmg for distribution (notarised by default).
  *
- * Prerequisites (all environment variables MUST be set in your shell):
- *   APPLE_ID                       Your Apple ID email (the Developer Program one)
- *   APPLE_APP_SPECIFIC_PASSWORD    App-specific password from appleid.apple.com
- *                                  Looks like "xxxx-xxxx-xxxx-xxxx".
- *   APPLE_TEAM_ID                  10-character Team ID from developer.apple.com.
+ * Prerequisites:
+ *   APPLE_TEAM_ID                  10-character Team ID from developer.apple.com (required).
+ *   APPLE_ID                       Apple ID email (required unless CN_SKIP_NOTARIZE=1).
+ *   APPLE_APP_SPECIFIC_PASSWORD    App-specific password (required unless CN_SKIP_NOTARIZE=1).
+ *   CN_SKIP_NOTARIZE=1             Codesign + publish without notarytool (CI fallback when
+ *                                  APPLE_APP_SPECIFIC_PASSWORD is stale). Gatekeeper may need
+ *                                  right-click → Open until credentials are refreshed.
  *
  * Additional prerequisites on this Mac:
  *   - Active Apple Developer Program membership.
@@ -80,6 +82,13 @@ const IS_CI = !!process.env.CI || !!process.env.GITHUB_ACTIONS;
  * its outputs to the same draft release the Windows job populates. */
 const PUBLISH_MODE = process.env.CN_PUBLISH || null;
 
+/* CN_SKIP_NOTARIZE=1 — Developer ID codesign + upload without notarytool.
+ * Used when APPLE_APP_SPECIFIC_PASSWORD is stale but the .p12 still imports.
+ * Gatekeeper may require right-click → Open until credentials are refreshed. */
+const SKIP_NOTARIZE =
+  process.env.CN_SKIP_NOTARIZE === '1' ||
+  /^true$/i.test(String(process.env.CN_SKIP_NOTARIZE || ''));
+
 function fail(msg) {
   console.error(`[build:mac:signed] FAIL: ${msg}`);
   process.exit(1);
@@ -87,6 +96,10 @@ function fail(msg) {
 
 function info(msg) {
   console.log(`[build:mac:signed] ${msg}`);
+}
+
+function warn(msg) {
+  console.warn(`[build:mac:signed] WARN: ${msg}`);
 }
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -98,21 +111,6 @@ if (process.platform !== 'darwin') {
   fail(`must run on macOS (this host is ${process.platform}). Signed builds use Apple-only tooling (codesign, notarytool, spctl).`);
 }
 
-const REQUIRED_ENV = ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID'];
-const missing = REQUIRED_ENV.filter((k) => !process.env[k] || !String(process.env[k]).trim());
-if (missing.length > 0) {
-  fail(
-    `missing environment variable(s): ${missing.join(', ')}\n\n` +
-    `Set them in your shell before running this build, e.g.:\n` +
-    `    export APPLE_ID="you@example.com"\n` +
-    `    export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"\n` +
-    `    export APPLE_TEAM_ID="A1B2C3D4E5"\n` +
-    `    npm run build:mac:signed\n\n` +
-    `These values live only in your shell environment for the duration of the\n` +
-    `build. They are NEVER read from or written to the repository.`
-  );
-}
-
 function normalizeAppPassword(raw) {
   let s = String(raw || '').trim().replace(/\s+/g, '');
   if (/^[a-z0-9]{16}$/i.test(s)) {
@@ -121,13 +119,13 @@ function normalizeAppPassword(raw) {
   return s;
 }
 
-const APPLE_ID = process.env.APPLE_ID.trim();
-const APPLE_APP_SPECIFIC_PASSWORD = normalizeAppPassword(process.env.APPLE_APP_SPECIFIC_PASSWORD);
-const APPLE_TEAM_ID = process.env.APPLE_TEAM_ID.trim();
-process.env.APPLE_APP_SPECIFIC_PASSWORD = APPLE_APP_SPECIFIC_PASSWORD;
-
-if (!APPLE_ID.includes('@')) {
-  fail(`APPLE_ID="${APPLE_ID}" does not look like an email address.`);
+const APPLE_TEAM_ID = String(process.env.APPLE_TEAM_ID || '').trim();
+if (!APPLE_TEAM_ID) {
+  fail(
+    `missing environment variable: APPLE_TEAM_ID\n\n` +
+    `Set it before running this build (needed to select the Developer ID identity).\n` +
+    `Find yours at https://developer.apple.com/account → Membership.`
+  );
 }
 
 if (!/^[A-Z0-9]{10}$/.test(APPLE_TEAM_ID)) {
@@ -137,15 +135,52 @@ if (!/^[A-Z0-9]{10}$/.test(APPLE_TEAM_ID)) {
   );
 }
 
-if (!/^[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/i.test(APPLE_APP_SPECIFIC_PASSWORD)) {
-  /* Apple's app-specific passwords are formatted as four 4-character groups
-   * separated by hyphens. If yours doesn't match, you probably copied the
-   * regular Apple ID password by mistake. */
-  fail(
-    `APPLE_APP_SPECIFIC_PASSWORD does not match Apple's "xxxx-xxxx-xxxx-xxxx" format.\n` +
-    `Generate one at https://appleid.apple.com/ → Sign-In and Security →\n` +
-    `App-Specific Passwords. Do NOT use your regular Apple ID password here.`
+let APPLE_ID = String(process.env.APPLE_ID || '').trim();
+let APPLE_APP_SPECIFIC_PASSWORD = normalizeAppPassword(process.env.APPLE_APP_SPECIFIC_PASSWORD);
+
+if (SKIP_NOTARIZE) {
+  info(
+    'CN_SKIP_NOTARIZE=1 — will Developer ID–sign and upload without notarization. ' +
+    'First launch on a fresh Mac may need right-click → Open until notary credentials are fixed.'
   );
+  // Notary env is optional when skipping; keep whatever is present for logging only.
+  if (APPLE_APP_SPECIFIC_PASSWORD) {
+    process.env.APPLE_APP_SPECIFIC_PASSWORD = APPLE_APP_SPECIFIC_PASSWORD;
+  }
+} else {
+  const missing = ['APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD'].filter(
+    (k) => !process.env[k] || !String(process.env[k]).trim(),
+  );
+  if (missing.length > 0) {
+    fail(
+      `missing environment variable(s): ${missing.join(', ')}\n\n` +
+      `Set them in your shell before running this build, e.g.:\n` +
+      `    export APPLE_ID="you@example.com"\n` +
+      `    export APPLE_APP_SPECIFIC_PASSWORD="xxxx-xxxx-xxxx-xxxx"\n` +
+      `    export APPLE_TEAM_ID="A1B2C3D4E5"\n` +
+      `    npm run build:mac:signed\n\n` +
+      `Or set CN_SKIP_NOTARIZE=1 to codesign + publish without notarization.\n` +
+      `These values live only in your shell environment for the duration of the\n` +
+      `build. They are NEVER read from or written to the repository.`
+    );
+  }
+
+  if (!APPLE_ID.includes('@')) {
+    fail(`APPLE_ID="${APPLE_ID}" does not look like an email address.`);
+  }
+
+  if (!/^[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/i.test(APPLE_APP_SPECIFIC_PASSWORD)) {
+    /* Apple's app-specific passwords are formatted as four 4-character groups
+     * separated by hyphens. If yours doesn't match, you probably copied the
+     * regular Apple ID password by mistake. */
+    fail(
+      `APPLE_APP_SPECIFIC_PASSWORD does not match Apple's "xxxx-xxxx-xxxx-xxxx" format.\n` +
+      `Generate one at https://appleid.apple.com/ → Sign-In and Security →\n` +
+      `App-Specific Passwords. Do NOT use your regular Apple ID password here.`
+    );
+  }
+
+  process.env.APPLE_APP_SPECIFIC_PASSWORD = APPLE_APP_SPECIFIC_PASSWORD;
 }
 
 if (!existsSync(ENTITLEMENTS_ABS)) {
@@ -174,7 +209,11 @@ if (!teamRe.test(idOut)) {
   );
 }
 info(`Developer ID Application certificate present in Keychain for team ${APPLE_TEAM_ID}`);
-info(`APPLE_ID=${APPLE_ID} APPLE_TEAM_ID=${APPLE_TEAM_ID}`);
+info(
+  SKIP_NOTARIZE
+    ? `APPLE_TEAM_ID=${APPLE_TEAM_ID} (notarization skipped)`
+    : `APPLE_ID=${APPLE_ID} APPLE_TEAM_ID=${APPLE_TEAM_ID}`,
+);
 
 /* ────────────────────────────────────────────────────────────────────────
  * Build a config override that takes the unsigned package.json baseline and
@@ -219,9 +258,10 @@ const overrideMac = {
   entitlementsInherit: ENTITLEMENTS_REL,
   /* electron-builder 26.x: `notarize` is a boolean. Credentials and team
    * ID are read from APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
-   * env vars (validated above). Earlier versions accepted an object with
-   * teamId here; that schema was removed in 26.0. */
-  notarize: true,
+   * env vars (validated above when notarizing). Earlier versions accepted an
+   * object with teamId here; that schema was removed in 26.0.
+   * CN_SKIP_NOTARIZE=1 keeps codesign but skips notarytool (stale ASP). */
+  notarize: !SKIP_NOTARIZE,
 };
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -292,7 +332,11 @@ if (PUBLISH_MODE) {
   info(`CN_PUBLISH=${PUBLISH_MODE} — electron-builder will upload artefacts and latest-mac.yml to the matching GitHub release.`);
 }
 
-info('starting electron-builder (signing + notarisation can take 5–15 minutes)…');
+info(
+  SKIP_NOTARIZE
+    ? 'starting electron-builder (Developer ID signing only — notarisation skipped)…'
+    : 'starting electron-builder (signing + notarisation can take 5–15 minutes)…'
+);
 const electronBuilder = await import('electron-builder');
 const { build, Platform } = electronBuilder;
 
@@ -323,39 +367,81 @@ for (const a of artefacts || []) {
 }
 
 /* ────────────────────────────────────────────────────────────────────────
- * Post-build Gatekeeper assessment. spctl --assess returns 0 only if the
- * .app is signed AND notarised AND the ticket is stapled. Anything else
- * means an end user double-clicking the .dmg will hit a warning.
+ * Post-build assessment.
+ * - Full path: spctl --assess (signed + notarised + stapled).
+ * - CN_SKIP_NOTARIZE: codesign --verify only (spctl will fail without a
+ *   notarization ticket; that is expected and must not block publish).
  * ──────────────────────────────────────────────────────────────────────── */
 
-info('running spctl --assess on each built .app …');
 let anyFailed = false;
-for (const dir of ['mac', 'mac-arm64']) {
-  const appPath = join(APP_ROOT, 'dist', dir, 'Custody Note.app');
-  if (!existsSync(appPath)) {
-    info(`  (skipped, not present: ${appPath})`);
-    continue;
+if (SKIP_NOTARIZE) {
+  info('running codesign --verify on each built .app (notarization skipped) …');
+  for (const dir of ['mac', 'mac-arm64']) {
+    const appPath = join(APP_ROOT, 'dist', dir, 'Custody Note.app');
+    if (!existsSync(appPath)) {
+      info(`  (skipped, not present: ${appPath})`);
+      continue;
+    }
+    const r = spawnSync(
+      'codesign',
+      ['--verify', '--deep', '--strict', '--verbose=2', appPath],
+      { encoding: 'utf8' },
+    );
+    const out = ((r.stderr || '') + (r.stdout || '')).trim();
+    if (r.status !== 0) {
+      anyFailed = true;
+      console.error(
+        `[build:mac:signed] FAIL: codesign --verify rejected ${appPath}\n` +
+        out.split('\n').map((l) => '    ' + l).join('\n'),
+      );
+    } else {
+      info(`  OK ${appPath} — Developer ID signature verified`);
+      if (out) info(`    ${out.split('\n')[0]}`);
+    }
   }
-  const r = spawnSync('spctl', ['--assess', '--verbose=4', '--type', 'execute', appPath], {
-    encoding: 'utf8',
-  });
-  const out = ((r.stderr || '') + (r.stdout || '')).trim();
-  if (r.status !== 0) {
-    anyFailed = true;
-    console.error(`[build:mac:signed] FAIL: spctl rejected ${appPath}\n${out.split('\n').map((l) => '    ' + l).join('\n')}`);
-  } else {
-    info(`  OK ${appPath} — ${out}`);
-  }
-}
 
-if (anyFailed) {
-  fail(
-    `at least one .app was rejected by Gatekeeper. Likely causes:\n` +
-    `  - notarisation silently failed (check the electron-builder output above for "notarytool" errors)\n` +
-    `  - the entitlements requested are not permitted for your certificate\n` +
-    `  - the certificate is "Developer ID Application" but expired or revoked\n` +
-    `Do NOT distribute the .dmg until spctl passes.`
+  if (anyFailed) {
+    fail(
+      `at least one .app failed codesign --verify. Do NOT distribute until the ` +
+      `Developer ID signature is valid.`,
+    );
+  }
+
+  warn(
+    'Signed (not notarised) build OK. First launch on a fresh Mac may require ' +
+    'right-click → Open until APPLE_APP_SPECIFIC_PASSWORD is refreshed and a ' +
+    'notarised rebuild is published.',
   );
-}
+  info('Artefacts ready for distribution in dist/.');
+} else {
+  info('running spctl --assess on each built .app …');
+  for (const dir of ['mac', 'mac-arm64']) {
+    const appPath = join(APP_ROOT, 'dist', dir, 'Custody Note.app');
+    if (!existsSync(appPath)) {
+      info(`  (skipped, not present: ${appPath})`);
+      continue;
+    }
+    const r = spawnSync('spctl', ['--assess', '--verbose=4', '--type', 'execute', appPath], {
+      encoding: 'utf8',
+    });
+    const out = ((r.stderr || '') + (r.stdout || '')).trim();
+    if (r.status !== 0) {
+      anyFailed = true;
+      console.error(`[build:mac:signed] FAIL: spctl rejected ${appPath}\n${out.split('\n').map((l) => '    ' + l).join('\n')}`);
+    } else {
+      info(`  OK ${appPath} — ${out}`);
+    }
+  }
 
-info('signed + notarised build OK. Artefacts ready for distribution in dist/.');
+  if (anyFailed) {
+    fail(
+      `at least one .app was rejected by Gatekeeper. Likely causes:\n` +
+      `  - notarisation silently failed (check the electron-builder output above for "notarytool" errors)\n` +
+      `  - the entitlements requested are not permitted for your certificate\n` +
+      `  - the certificate is "Developer ID Application" but expired or revoked\n` +
+      `Do NOT distribute the .dmg until spctl passes.`,
+    );
+  }
+
+  info('signed + notarised build OK. Artefacts ready for distribution in dist/.');
+}

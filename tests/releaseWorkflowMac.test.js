@@ -40,6 +40,16 @@ describe('release-publish.yml — cross-platform build pipeline', () => {
     }
   });
 
+  it('continues Mac signing when notarization preflight fails', () => {
+    assert.match(wf, /id:\s*notary-preflight/);
+    assert.match(wf, /continue-on-error:\s*true/);
+    assert.match(wf, /CN_SKIP_NOTARIZE/);
+    const preflightIdx = wf.indexOf('id: notary-preflight');
+    const buildIdx = wf.indexOf('npm run build:mac:signed');
+    assert.ok(preflightIdx !== -1 && buildIdx !== -1);
+    assert.ok(preflightIdx < buildIdx, 'preflight must run before Mac build');
+  });
+
   it('publishes the release only after BOTH platform asset sets are present', () => {
     assert.match(wf, /^\s*publish-release:/m);
     assert.match(wf, /needs:\s*\[release-windows,\s*release-mac\]/);

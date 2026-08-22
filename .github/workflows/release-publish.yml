@@ -1,18 +1,22 @@
 # On push of a version tag (e.g. v1.4.24), build the Windows installer AND the
-# signed/notarised macOS .dmg/.zip, publish both to GitHub Releases, then sync
-# the marketing website to Vercel.
+# signed macOS .dmg/.zip (notarised when Apple credentials pass preflight),
+# publish both to GitHub Releases, then sync the marketing website to Vercel.
 #
 # Prerequisites (Settings > Secrets and variables > Actions):
 # Required for Windows build (provided automatically):
 # - GITHUB_TOKEN  — automatic, used to create the app release.
 #
-# Required for macOS signed + notarised build:
-# - APPLE_ID                       — Apple Developer Program email.
-# - APPLE_APP_SPECIFIC_PASSWORD    — App-specific password (xxxx-xxxx-xxxx-xxxx).
-# - APPLE_TEAM_ID                  — 10-character Apple Team ID.
+# Required for macOS Developer ID–signed build:
 # - MAC_CERTIFICATE_P12_BASE64     — Base64-encoded Developer ID Application .p12 bundle.
 # - MAC_CERTIFICATE_P12_PASSWORD   — Passphrase used when the .p12 was exported.
 # - MAC_KEYCHAIN_PASSWORD          — Random passphrase for the temporary CI keychain.
+# - APPLE_TEAM_ID                  — 10-character Apple Team ID (identity selection).
+#
+# Required for notarisation (optional — stale credentials no longer skip signing):
+# - APPLE_ID                       — Apple Developer Program email.
+# - APPLE_APP_SPECIFIC_PASSWORD    — App-specific password (xxxx-xxxx-xxxx-xxxx).
+# When notarization preflight fails, release-mac still codesigns + uploads with
+# CN_SKIP_NOTARIZE=1 (Gatekeeper may need right-click → Open until ASP is refreshed).
 #
 # Optional (website deploy):
 # - VERCEL_TOKEN  — Vercel dashboard > Settings > Tokens.
@@ -118,21 +122,34 @@ jobs:
 
           rm -f "$CERT_PATH"
 
+      # Soft preflight: a stale APPLE_APP_SPECIFIC_PASSWORD must NOT skip signing.
+      # When this step fails, CN_SKIP_NOTARIZE=1 still produces Developer ID–signed
+      # arm64+x64 dmg/zip + latest-mac.yml (Gatekeeper may require right-click → Open
+      # until notarization credentials are refreshed).
       - name: Preflight Apple notarization credentials
+        id: notary-preflight
+        continue-on-error: true
         env:
           APPLE_ID:                    ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID:               ${{ secrets.APPLE_TEAM_ID }}
         run: node scripts/preflight-apple-notary.mjs
 
-      - name: Build, sign, notarise + upload macOS assets
+      - name: Build, sign (+ optional notarise) + upload macOS assets
         env:
           GH_TOKEN:                    ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID:                    ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID:               ${{ secrets.APPLE_TEAM_ID }}
           CN_PUBLISH:                  always
-        run: npm run build:mac:signed
+          CN_SKIP_NOTARIZE: ${{ steps.notary-preflight.outcome != 'success' && '1' || '0' }}
+        run: |
+          if [ "${CN_SKIP_NOTARIZE}" = "1" ]; then
+            echo "::warning::Notarization preflight failed — building Developer ID–signed Mac assets without notarization."
+          else
+            echo "Notarization preflight OK — building signed + notarised Mac assets."
+          fi
+          npm run build:mac:signed
 
       - name: Regenerate latest-mac.yml from uploaded Mac assets
         env:
@@ -269,3 +286,23 @@ jobs:
         env:
           WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
         run: node scripts/sync-website.mjs
+
+      - name: Bump download page version + soften Mac notarization copy
+        working-directory: custody-note-app
+        env:
+          WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
+        run: |
+          set -euo pipefail
+          node scripts/bump-website-download-version.mjs
+          cd "$WEBSITE_ROOT"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            VERSION=$(node -p "require('${{ github.workspace }}/custody-note-app/package.json').version")
+            git commit -m "Download: bump to v${VERSION} (Developer ID signed Mac; notarization pending)"
+            BRANCH=$(git rev-parse --abbrev-ref HEAD)
+            git pull --rebase origin "$BRANCH" || true
+            git push origin "HEAD:${BRANCH}"
+            echo "Pushed download-page bump to website ${BRANCH}."
+          else
+            echo "Website download page already matched app version / copy."
+          fi
