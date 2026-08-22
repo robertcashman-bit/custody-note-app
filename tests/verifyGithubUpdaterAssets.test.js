@@ -37,8 +37,10 @@ describe('verify-github-updater-assets helpers', async () => {
 });
 
 describe('release workflow hardening', () => {
-  it('preflights Apple credentials before the Mac build', () => {
+  it('preflights Apple credentials before the Mac build (soft — does not skip signing)', () => {
     assert.match(workflow, /preflight-apple-notary\.mjs/);
+    assert.match(workflow, /continue-on-error:\s*true/);
+    assert.match(workflow, /CN_SKIP_NOTARIZE/);
     const preflightIdx = workflow.indexOf('preflight-apple-notary.mjs');
     const buildIdx = workflow.indexOf('npm run build:mac:signed');
     assert.ok(preflightIdx !== -1 && buildIdx !== -1);
