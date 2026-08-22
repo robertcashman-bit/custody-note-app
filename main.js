@@ -9300,6 +9300,42 @@ async function _openOfficerEmailInOutlook(toT, subT, bodyT, logTag) {
     };
   }
 
+  /* E2E / isolated-userdata test hook: record the launch payload without
+     opening a real Outlook GUI (unavailable in CI). Enabled only when
+     CUSTODYNOTE_TEST_USERDATA is set (Playwright Electron specs). */
+  if (process.env.CUSTODYNOTE_TEST_USERDATA) {
+    try {
+      const capturePath = path.join(String(process.env.CUSTODYNOTE_TEST_USERDATA), 'last-outlook-launch.json');
+      fs.writeFileSync(
+        capturePath,
+        JSON.stringify({
+          logTag,
+          method: composed.method,
+          to: toT,
+          subject: subT,
+          body: bodyT,
+          url: composed.url,
+          bodyUsedInUrl: composed.bodyUsedInUrl || '',
+          emlContent: composed.method === 'outlook-desktop-eml' ? composed.emlContent : '',
+          bodyPlacedInCompose: composed.bodyPlacedInCompose,
+          capturedAt: new Date().toISOString(),
+        }),
+        'utf8'
+      );
+      console.info('[' + logTag + '] e2e capture written', { method: composed.method, bodyLength: bodyT.length });
+      return {
+        ok: true,
+        truncated: false,
+        urlLength: composed.urlLength,
+        openMethod: 'e2e-capture',
+        method: composed.method,
+        bodyPlacedInCompose: composed.bodyPlacedInCompose,
+      };
+    } catch (capErr) {
+      console.warn('[' + logTag + '] e2e capture failed', capErr && capErr.message);
+    }
+  }
+
   let openMethod = null;
   let urlLength = composed.urlLength;
 
