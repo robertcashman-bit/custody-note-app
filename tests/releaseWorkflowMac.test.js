@@ -63,7 +63,8 @@ describe('release-publish.yml — cross-platform build pipeline', () => {
 
   it('deploys the website only after the release is fully published', () => {
     assert.match(wf, /^\s*deploy-website:/m);
-    assert.match(wf, /needs:\s*publish-release/);
+    assert.match(wf, /needs:\s*\[publish-release,\s*release-mac\]/);
+    assert.match(wf, /SOFTEN_NOTARY_COPY:\s*\$\{\{\s*needs\.release-mac\.outputs\.skip_notarize\s*\}\}/);
   });
 
   it('does not have the legacy single-platform "release" job', () => {

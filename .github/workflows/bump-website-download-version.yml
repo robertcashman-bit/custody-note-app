@@ -54,6 +54,8 @@ jobs:
       - name: Bump download version + soften Mac copy
         env:
           WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
+          # Standalone bump is for Developer ID–signed / notarization-pending Mac builds.
+          SOFTEN_NOTARY_COPY: '1'
         run: node scripts/bump-website-download-version.mjs
 
       - name: Commit and push website
@@ -65,6 +67,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           VERSION=$(node -p "require('${{ github.workspace }}/package.json').version")
+          # Report lives in the app root; also drop any leftover under the website clone.
+          rm -f .bump-website-download-report.json
           if [ -z "$(git status --porcelain)" ]; then
             echo "No website changes to commit."
             exit 0
@@ -81,7 +85,7 @@ jobs:
         with:
           name: bump-website-download-report
           path: |
-            custody-note-website/.bump-website-download-report.json
+            .bump-website-download-report.json
             custody-note-website/app/download/page.tsx
             custody-note-website/data/releases.json
           if-no-files-found: ignore

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Bump custodynote.com download page + stats API defaults to the app package
- * version, and soften Mac notarization marketing copy when shipping a
+ * version, and optionally soften Mac notarization marketing copy when shipping a
  * Developer ID–signed (not yet notarised) build.
  *
  * Run against a clone of robertcashman-bit/custody-note-website:
@@ -11,7 +11,7 @@
  *   WEBSITE_ROOT — path to website clone (required)
  *   FROM_VERSION — previous version string (default: detect from website sources)
  *   TO_VERSION — target version (default: app package.json version)
- *   SOFTEN_NOTARY_COPY — "0" to skip copy softening (default: soften)
+ *   SOFTEN_NOTARY_COPY — "1" to soften notarization marketing copy (default: off)
  */
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'fs';
 import { join, relative } from 'path';
@@ -72,6 +72,18 @@ function walk(dir, out = []) {
   return out;
 }
 
+/** Live download / product pins only — never changelog history (releases.json). */
+function isDownloadVersionScope(rel) {
+  if (rel.endsWith('releases.json') || rel.includes('/releases.json')) return false;
+  return (
+    rel.includes('download') ||
+    rel.includes('stats/download') ||
+    rel.includes('lib/site') ||
+    rel.includes('product-copy') ||
+    rel.includes('MacDownload')
+  );
+}
+
 function detectFromVersion(files) {
   if (process.env.FROM_VERSION && process.env.FROM_VERSION.trim()) {
     return process.env.FROM_VERSION.trim();
@@ -79,17 +91,8 @@ function detectFromVersion(files) {
   const counts = new Map();
   const re = /\b1\.\d+\.\d+\b/g;
   for (const f of files) {
-    // Prefer download + API routes for the live product version pin.
     const rel = relative(WEBSITE_ROOT, f).replace(/\\/g, '/');
-    if (
-      !rel.includes('download') &&
-      !rel.includes('stats/download') &&
-      !rel.endsWith('releases.json') &&
-      !rel.includes('lib/site') &&
-      !rel.includes('product-copy')
-    ) {
-      continue;
-    }
+    if (!isDownloadVersionScope(rel)) continue;
     const text = readFileSync(f, 'utf8');
     let m;
     while ((m = re.exec(text))) {
@@ -106,7 +109,14 @@ function detectFromVersion(files) {
       bestN = n;
     }
   }
-  return best;
+  if (best) return best;
+  // Download pins already match TO_VERSION — treat as a no-op bump.
+  for (const f of files) {
+    const rel = relative(WEBSITE_ROOT, f).replace(/\\/g, '/');
+    if (!isDownloadVersionScope(rel)) continue;
+    if (readFileSync(f, 'utf8').includes(TO_VERSION)) return TO_VERSION;
+  }
+  return null;
 }
 
 const files = walk(WEBSITE_ROOT);
@@ -124,9 +134,10 @@ if (FROM_VERSION === TO_VERSION) {
   console.log(`[bump-website-download] ${FROM_VERSION} → ${TO_VERSION}`);
 }
 
-const soften = process.env.SOFTEN_NOTARY_COPY !== '0';
+// Opt-in only — wire from CN_SKIP_NOTARIZE / Mac preflight in release workflows.
+const soften = process.env.SOFTEN_NOTARY_COPY === '1';
 
-/** Ordered string replacements applied after version bump. */
+/** Ordered string replacements applied after version bump (download marketing only). */
 const COPY_REPLACEMENTS = [
   [
     'macOS 11 or later · Apple Silicon & Intel · signed & notarised · ~130 MB',
@@ -160,6 +171,7 @@ const COPY_REPLACEMENTS = [
 const report = {
   from: FROM_VERSION,
   to: TO_VERSION,
+  soften,
   versionReplacements: 0,
   filesTouched: [],
   copyHits: [],
@@ -167,24 +179,24 @@ const report = {
 };
 
 for (const file of files) {
+  const rel = relative(WEBSITE_ROOT, file).replace(/\\/g, '/');
+  const inScope = isDownloadVersionScope(rel);
   let text = readFileSync(file, 'utf8');
   let next = text;
   let changed = false;
 
-  if (FROM_VERSION !== TO_VERSION && next.includes(FROM_VERSION)) {
+  if (inScope && FROM_VERSION !== TO_VERSION && next.includes(FROM_VERSION)) {
     const occurrences = next.split(FROM_VERSION).length - 1;
     next = next.split(FROM_VERSION).join(TO_VERSION);
     report.versionReplacements += occurrences;
     changed = true;
   }
 
-  if (soften) {
+  if (inScope && soften) {
     for (const entry of COPY_REPLACEMENTS) {
       const [find, replace, opts = {}] = entry;
       if (!next.includes(find)) {
         if (!opts.optional) {
-          // Only record misses for high-priority download-related files.
-          const rel = relative(WEBSITE_ROOT, file).replace(/\\/g, '/');
           if (rel.includes('download') || rel.includes('MacDownload') || rel.includes('product-copy')) {
             report.copyMisses.push({ file: rel, find: find.slice(0, 80) });
           }
@@ -194,7 +206,7 @@ for (const file of files) {
       next = next.split(find).join(replace);
       changed = true;
       report.copyHits.push({
-        file: relative(WEBSITE_ROOT, file).replace(/\\/g, '/'),
+        file: rel,
         find: find.slice(0, 80),
       });
     }
@@ -202,12 +214,13 @@ for (const file of files) {
 
   if (changed && next !== text) {
     writeFileSync(file, next, 'utf8');
-    report.filesTouched.push(relative(WEBSITE_ROOT, file).replace(/\\/g, '/'));
+    report.filesTouched.push(rel);
   }
 }
 
+// Keep the CI report out of the website tree so `git add -A` cannot commit it.
 writeFileSync(
-  join(WEBSITE_ROOT, '.bump-website-download-report.json'),
+  join(APP_ROOT, '.bump-website-download-report.json'),
   JSON.stringify(report, null, 2) + '\n',
   'utf8',
 );
@@ -215,7 +228,9 @@ writeFileSync(
 console.log(
   `[bump-website-download] Touched ${report.filesTouched.length} file(s); ` +
     `${report.versionReplacements} version string replacement(s); ` +
-    `${report.copyHits.length} copy hit(s).`,
+    `${report.copyHits.length} copy hit(s)` +
+    (soften ? ' (soften on)' : ' (soften off)') +
+    '.',
 );
 
 if (FROM_VERSION !== TO_VERSION && report.versionReplacements === 0) {
