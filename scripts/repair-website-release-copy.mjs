@@ -2,7 +2,7 @@
 /**
  * After a release: restore website data/releases.json from the app changelog
  * (authoritative), and apply honest Mac download copy for a Developer ID
- * signed build. Does NOT globally rewrite historical version strings.
+ * signed build that may not yet be notarised.
  *
  *   WEBSITE_ROOT=../custody-note-website node scripts/repair-website-release-copy.mjs
  */
@@ -36,31 +36,66 @@ const targets = [
   'src/components/MacDownloadPicker.tsx',
 ];
 
+// Honest copy for Developer ID–signed builds when notarization is pending.
 const REPLACEMENTS = [
-  // Restore / clarify Mac card subtitle (component or page).
+  // Split JSX in MacDownloadPicker (signed\n&amp; notarised)
+  [
+    'signed\n        &amp; notarised &middot; ~130 MB',
+    'Developer ID signed &middot; ~130 MB',
+  ],
+  [
+    'signed\n        & notarised · ~130 MB',
+    'Developer ID signed · ~130 MB',
+    { optional: true },
+  ],
+  [
+    'Apple Silicon &amp; Intel &middot; signed &amp; notarised &middot; ~130 MB',
+    'Apple Silicon &amp; Intel &middot; Developer ID signed &middot; ~130 MB',
+    { optional: true },
+  ],
+  [
+    'Apple Silicon & Intel · signed & notarised · ~130 MB',
+    'Apple Silicon & Intel · Developer ID signed · ~130 MB',
+    { optional: true },
+  ],
+  [
+    'Developer ID signed & notarised',
+    'Developer ID signed',
+    { optional: true },
+  ],
+  [
+    'Developer ID signed and notarised',
+    'Developer ID signed',
+    { optional: true },
+  ],
   [
     'signed & notarised',
-    'Developer ID signed & notarised',
+    'Developer ID signed',
+    { optional: true },
   ],
   [
     'signed &amp; notarised',
-    'Developer ID signed &amp; notarised',
-    { optional: true },
-  ],
-  // Fix awkward partial rewrite from earlier global replace.
-  [
-    'The Mac download is Developer ID signed by Apple. You should not see an “unidentified developer” warning under normal circumstances. If macOS still blocks launch, use right-click → Open once, or check you downloaded the correct architecture (Apple Silicon vs Intel).',
-    'The Mac download is Developer ID signed and notarised by Apple. If macOS Gatekeeper blocks launch, use right-click → Open once, or check you downloaded the correct architecture (Apple Silicon vs Intel).',
+    'Developer ID signed',
     { optional: true },
   ],
   [
-    'The Mac download is Developer ID signed by Apple. You should not\n            see an &ldquo;unidentified developer&rdquo; warning under normal\n            circumstances. If macOS still blocks launch, use right-click &rarr;{" "}\n            Open once, or check you downloaded the correct architecture (Apple\n            Silicon vs Intel).',
-    'The Mac download is Developer ID signed and notarised by Apple. If\n            macOS Gatekeeper blocks launch, use right-click &rarr;{" "}\n            Open once, or check you downloaded the correct architecture (Apple\n            Silicon vs Intel).',
+    'On first launch, Custody Note is{" "}\n                <strong className="text-white">Developer ID signed</strong>.\n                If macOS Gatekeeper blocks the app, right-click Custody Note in\n                Applications and choose{" "}\n                <strong className="text-white">Open</strong> once.',
+    'Custody Note is{" "}\n                <strong className="text-white">Developer ID signed</strong>\n                (Apple notarization pending). On first launch macOS Gatekeeper\n                may block open — right-click Custody Note in Applications and\n                choose{" "}\n                <strong className="text-white">Open</strong> once.',
     { optional: true },
   ],
   [
     'On first launch, Custody Note is{" "}\n                <strong className="text-white">Developer ID signed</strong> and\n                should open normally. If macOS Gatekeeper blocks the app,\n                right-click Custody Note in Applications and choose{" "}\n                <strong className="text-white">Open</strong> once.',
-    'On first launch, Custody Note is{" "}\n                <strong className="text-white">Developer ID signed and notarised</strong>.\n                If macOS Gatekeeper blocks the app, right-click Custody Note in\n                Applications and choose{" "}\n                <strong className="text-white">Open</strong> once.',
+    'Custody Note is{" "}\n                <strong className="text-white">Developer ID signed</strong>\n                (Apple notarization pending). On first launch macOS Gatekeeper\n                may block open — right-click Custody Note in Applications and\n                choose{" "}\n                <strong className="text-white">Open</strong> once.',
+    { optional: true },
+  ],
+  [
+    'The Mac download is Developer ID signed and notarised by Apple. If\n            macOS Gatekeeper blocks launch, use right-click &rarr;{" "}\n            Open once, or check you downloaded the correct architecture (Apple\n            Silicon vs Intel).',
+    'The Mac download is Developer ID signed; Apple notarization is still\n            pending for this build, so Gatekeeper may require right-click &rarr;{" "}\n            Open once on first launch. Always download the correct architecture\n            (Apple Silicon vs Intel).',
+    { optional: true },
+  ],
+  [
+    'The Mac download is Developer ID signed by Apple. You should not\n            see an &ldquo;unidentified developer&rdquo; warning under normal\n            circumstances. If macOS still blocks launch, use right-click &rarr;{" "}\n            Open once, or check you downloaded the correct architecture (Apple\n            Silicon vs Intel).',
+    'The Mac download is Developer ID signed; Apple notarization is still\n            pending for this build, so Gatekeeper may require right-click &rarr;{" "}\n            Open once on first launch. Always download the correct architecture\n            (Apple Silicon vs Intel).',
     { optional: true },
   ],
 ];
@@ -74,11 +109,11 @@ for (const rel of targets) {
   let next = text;
   for (const [find, replace, opts = {}] of REPLACEMENTS) {
     if (!next.includes(find)) {
-      if (!opts.optional) report.misses.push({ file: rel, find: find.slice(0, 60) });
+      if (!opts.optional) report.misses.push({ file: rel, find: find.slice(0, 80) });
       continue;
     }
     next = next.split(find).join(replace);
-    report.hits.push({ file: rel, find: find.slice(0, 60) });
+    report.hits.push({ file: rel, find: find.slice(0, 80) });
   }
   if (next !== text) {
     writeFileSync(abs, next, 'utf8');
@@ -96,6 +131,9 @@ const versions = (releases.releases || []).map((r) => r.version);
 const dup = versions.length !== new Set(versions).size;
 console.log(`[repair-website] releases.json version=${releases.version}; entries=${versions.length}; duplicateVersions=${dup}`);
 console.log(`[repair-website] touched ${report.filesTouched.length} file(s); hits=${report.hits.length}`);
+if (report.misses.length) {
+  console.log('[repair-website] non-optional misses:', JSON.stringify(report.misses, null, 2));
+}
 if (dup) {
   console.error('[repair-website] WARNING: duplicate version entries still present after sync');
   process.exit(1);
