@@ -1,11 +1,10 @@
 # Sentinel: push this file to master to force a Vercel production deploy of
-# robertcashman-bit/custody-note-website (custodynote.com), same pattern as
-# policestationagent web44ai Deploy Production (CLI deploy; Git not required).
+# robertcashman-bit/custody-note-website (custodynote.com).
 #
-# requested_at: 2026-08-19T17:35:00Z
-# reason: website PR #4 merged (7da99aa) — product-first hero; Git auto-deploy not live yet
+force-requested-at: 2026-08-22T14:41:09Z
+reason: ship-1.9.69-after-signed-mac-release
+release-run: 32578953258
 force_website_production_deploy: true
 target: custodynote.com
 website_repo: robertcashman-bit/custody-note-website
 vercel_project: custody-note-website
-expected_master_contains: 7da99aa
