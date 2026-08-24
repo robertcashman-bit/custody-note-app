@@ -86,6 +86,34 @@ describe('sessionBlankerPolicy — credential-free dismiss rules', () => {
       quickCaptureHasClientData: false,
     }), true);
   });
+
+  it('blocks dismiss when floating scratchpad is open with text', () => {
+    assert.equal(mayDismissCredentialFreeBlanker({
+      scratchpadOpenWithText: true,
+      homeViewActive: true,
+    }), false);
+  });
+
+  it('allows dismiss when scratchpad is closed or empty', () => {
+    assert.equal(mayDismissCredentialFreeBlanker({
+      scratchpadOpenWithText: false,
+      homeViewActive: true,
+    }), true);
+  });
+
+  it('blocks dismiss when officer emails view has client/case fields', () => {
+    assert.equal(mayDismissCredentialFreeBlanker({
+      officerEmailsViewActive: true,
+      officerEmailsHasClientData: true,
+    }), false);
+  });
+
+  it('allows dismiss on empty officer emails view', () => {
+    assert.equal(mayDismissCredentialFreeBlanker({
+      officerEmailsViewActive: true,
+      officerEmailsHasClientData: false,
+    }), true);
+  });
 });
 
 describe('app.js wires blanker dismiss policy', () => {
@@ -112,6 +140,19 @@ describe('app.js wires blanker dismiss policy', () => {
     assert.match(appJs, /homeHasRecentCases/);
     assert.match(appJs, /homeFocusHasClientText/);
     assert.match(appJs, /quickCaptureHasClientData/);
+  });
+
+  it('gathers scratchpad and officer emails surfaces for blanker state', () => {
+    assert.match(appJs, /scratchpadOpenWithText/);
+    assert.match(appJs, /scratchpad-text/);
+    assert.match(appJs, /view-officer-emails/);
+    assert.match(appJs, /oes-client/);
+    assert.match(appJs, /officerEmailsHasClientData/);
+  });
+
+  it('treats form context bar placeholders as non-blocking', () => {
+    assert.match(appJs, /_formContextBarHasClientText/);
+    assert.match(appJs, /Client:\\u2014Station:\\u2014/);
   });
 
   it('only renders dismiss when allowDismiss is true', () => {
