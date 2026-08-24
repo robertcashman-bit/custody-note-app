@@ -1,9 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.9.71",
+      "date": "2026-08-24",
+      "latest": true,
+      "changes": [
+        "Session lock blanker can no longer be dismissed when client or case content is on screen",
+        "Database flushes to disk on lid close / OS lock and when finalising a record, so the last note is not lost",
+        "Backups folder is created automatically if missing (scheduled backups no longer skip quietly)",
+        "Mac keyboard shortcuts use Cmd (Windows still uses Ctrl); Help labels match",
+        "Settings sync no longer uploads API keys, QuickFile credentials, DSCC PIN, or scratchpad text; Help and security docs state licence-key escrow honestly"
+      ]
+    },
+    {
       "version": "1.9.70",
       "date": "2026-08-22",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Officer Emails: Open Outlook now places the current email-box text into Outlook as the message body (Outlook Web when the URL fits; Outlook desktop .eml draft when it does not)",
         "Removes the clipboard-paste workaround so you no longer need to paste the body after Outlook opens",
