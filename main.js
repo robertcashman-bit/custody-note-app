@@ -1450,6 +1450,9 @@ async function initDb() {
     // H20 — default to userData\Backups instead of Desktop (often OneDrive).
     db.run("INSERT INTO settings (key, value) VALUES (?, ?)", ['backupFolder', _defaultBackupFolder()]);
   }
+  // Fresh installs previously only stored the path and never mkdir'd it, so
+  // scheduled backups silently skipped via isBackupFolderReady(). Create now.
+  try { ensureBackupFolderExists(); } catch (_) {}
 
   loadStationsFromFile();
   try { migrateSchemeIdsToSchemeCodes(); } catch (e) { console.error('[migrateSchemeIdsToSchemeCodes] failed:', e && e.message); }
@@ -1626,11 +1629,24 @@ function markDbDirty() {
   scheduleSyncSoon();
 }
 
-function isBackupFolderReady() {
+/** Ensure the configured (or default) Backups directory exists on disk. */
+function ensureBackupFolderExists() {
   try {
     const dir = getBackupFolder();
-    return dir && fs.existsSync(dir);
-  } catch (_) { return false; }
+    if (!dir) return false;
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log('[Backup] Created backup folder:', dir);
+    }
+    return fs.existsSync(dir);
+  } catch (err) {
+    console.error('[Backup] Could not create backup folder:', err && err.message ? err.message : err);
+    return false;
+  }
+}
+
+function isBackupFolderReady() {
+  return ensureBackupFolderExists();
 }
 
 function runQuickBackup() {
@@ -5580,7 +5596,9 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       }
     }
     markDbDirty();
-    if (st === 'finalised' || st === 'completed') flushDb();
+    // Durability: finalise/complete must hit disk before the UI reports saved.
+    // flushDb() only kicks an async save; flushDbSync writes immediately.
+    if (st === 'finalised' || st === 'completed') flushDbSync();
     enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert');
     return id;
   }
@@ -6488,10 +6506,13 @@ ipcMain.handle('session-lock-status', () => getSecurityCredentialStatus());
 
 // Lock the renderer immediately when the OS reports lock-screen, suspend,
 // shutdown, or screen lock events. Treats those as "user has stepped away,
-// the session is no longer trusted". The renderer-side lock overlay handles
-// the actual UI; here we just notify it.
+// the session is no longer trusted". Persist the DB first so a power-loss
+// after "Saved" cannot drop the last debounce window (~30s).
 function _broadcastForceLock(reason) {
   try {
+    try { if (typeof flushDbSync === 'function') flushDbSync(); } catch (flushErr) {
+      console.error('[security] flushDbSync on force-lock failed:', flushErr && flushErr.message ? flushErr.message : flushErr);
+    }
     const wins = BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
     for (const w of wins) {
       if (w && !w.isDestroyed() && w.webContents) {
