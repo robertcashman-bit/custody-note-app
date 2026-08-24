@@ -20142,15 +20142,35 @@ pdfAuditFooterHtml(d, settings) +
     } catch (_) {}
   }
 
+  function _formContextBarHasClientText(ctx) {
+    if (!ctx) return false;
+    var left = ctx.querySelector('.context-left');
+    if (!left) {
+      /* Unexpected structure — fail closed if any text is present. */
+      return !!(ctx.textContent || '').trim();
+    }
+    var leftText = String(left.textContent || '').replace(/\s+/g, ' ').trim();
+    /* Empty/new forms always render Client/Station em-dash placeholders
+       (optionally preceded by an INVB Tel or Voluntary badge). */
+    var placeholderOnly = /^(INVB Tel|Voluntary)?Client:\u2014Station:\u2014$/.test(leftText);
+    if (!placeholderOnly) return true;
+    /* Outcome chip sits in the right pane and is real case content. */
+    if (ctx.querySelector('.outcome-chip')) return true;
+    return false;
+  }
+
   function _gatherCredentialFreeBlankerState() {
     var formView = document.getElementById('view-form');
     var listView = document.getElementById('view-list');
     var homeView = document.getElementById('view-home');
     var qcView = document.getElementById('view-quickcapture');
+    var officerEmailsView = document.getElementById('view-officer-emails');
     var ctx = document.getElementById('form-context-bar');
     var homeActive = document.getElementById('home-active-matters');
     var homeRecent = document.getElementById('home-recent-list');
     var homeFocusMeta = document.getElementById('home-focus-meta');
+    var scratchpad = document.getElementById('scratchpad');
+    var scratchpadText = document.getElementById('scratchpad-text');
     var listHasRows = false;
     if (listView && listView.classList.contains('active')) {
       /* Rows are plain li[data-id] with .list-item-text children — not .list-item. */
@@ -20166,6 +20186,24 @@ pdfAuditFooterHtml(d, settings) +
           break;
         }
       }
+    }
+    var officerEmailsHasClientData = false;
+    if (officerEmailsView && officerEmailsView.classList.contains('active')) {
+      var oesIds = [
+        'oes-client', 'oes-station', 'oes-offence', 'oes-subject', 'oes-body',
+        'oes-recipient', 'oes-to', 'oes-extra', 'oes-bail-date', 'oes-bail-cond'
+      ];
+      for (var oi = 0; oi < oesIds.length; oi++) {
+        var oesEl = document.getElementById(oesIds[oi]);
+        if (oesEl && String(oesEl.value || '').trim()) {
+          officerEmailsHasClientData = true;
+          break;
+        }
+      }
+    }
+    var scratchpadOpenWithText = false;
+    if (scratchpad && !scratchpad.classList.contains('hidden')) {
+      scratchpadOpenWithText = !!(scratchpadText && String(scratchpadText.value || '').trim());
     }
     var homeHasActive = false;
     var homeHasRecent = false;
@@ -20201,11 +20239,14 @@ pdfAuditFooterHtml(d, settings) +
       formViewActive: !!(formView && formView.classList.contains('active')),
       hasOpenAttendance: !!(typeof currentAttendanceId !== 'undefined' && currentAttendanceId),
       hasMeaningfulFormData: meaningful,
-      formContextBarHasText: !!(ctx && (ctx.textContent || '').trim()),
+      formContextBarHasText: _formContextBarHasClientText(ctx),
       listViewActive: !!(listView && listView.classList.contains('active')),
       listHasRows: listHasRows,
       quickCaptureViewActive: !!(qcView && qcView.classList.contains('active')),
       quickCaptureHasClientData: qcHasClientData,
+      officerEmailsViewActive: !!(officerEmailsView && officerEmailsView.classList.contains('active')),
+      officerEmailsHasClientData: officerEmailsHasClientData,
+      scratchpadOpenWithText: scratchpadOpenWithText,
       homeViewActive: !!(homeView && homeView.classList.contains('active')),
       homeHasActiveMatters: homeHasActive,
       homeHasRecentCases: homeHasRecent,
@@ -20225,11 +20266,15 @@ pdfAuditFooterHtml(d, settings) +
         var state = _gatherCredentialFreeBlankerState();
         if (policy && typeof policy.mayDismissCredentialFreeBlanker === 'function') {
           allowDismiss = policy.mayDismissCredentialFreeBlanker(state);
+        } else if (state.scratchpadOpenWithText) {
+          allowDismiss = false;
         } else if (state.formViewActive && (state.hasOpenAttendance || state.hasMeaningfulFormData || state.formContextBarHasText)) {
           allowDismiss = false;
         } else if (state.listViewActive && state.listHasRows) {
           allowDismiss = false;
         } else if (state.quickCaptureViewActive && state.quickCaptureHasClientData) {
+          allowDismiss = false;
+        } else if (state.officerEmailsViewActive && state.officerEmailsHasClientData) {
           allowDismiss = false;
         } else if (state.homeViewActive && (state.homeHasActiveMatters || state.homeHasRecentCases || state.homeFocusHasClientText)) {
           allowDismiss = false;
