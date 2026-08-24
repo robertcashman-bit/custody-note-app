@@ -1,4 +1,4 @@
 # Touch/push this file on master to run "Bump website download version".
 # Requires GitHub release assets for package.json version already present.
-bump-requested-at: 2026-08-22T21:47:46Z
-reason: deploy-v1.9.70-officer-email-outlook-body
+bump-requested-at: 2026-08-24T11:15:00Z
+reason: deploy-v1.9.71-p0-security-durability-after-release

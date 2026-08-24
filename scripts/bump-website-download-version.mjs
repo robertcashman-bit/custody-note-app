@@ -98,13 +98,19 @@ function detectFromVersion(files) {
       counts.set(v, (counts.get(v) || 0) + 1);
     }
   }
-  let best = null;
-  let bestN = 0;
-  for (const [v, n] of counts) {
-    if (n > bestN) {
-      best = v;
-      bestN = n;
+  // Prefer the newest prior pin (semver), not the most frequent string.
+  // Frequency can pick stale leftovers (e.g. 1.4.188) over the live pin (1.9.70).
+  function cmpSemver(a, b) {
+    const pa = String(a).split('.').map((x) => parseInt(x, 10) || 0);
+    const pb = String(b).split('.').map((x) => parseInt(x, 10) || 0);
+    for (let i = 0; i < 3; i++) {
+      if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
     }
+    return 0;
+  }
+  let best = null;
+  for (const v of counts.keys()) {
+    if (!best || cmpSemver(v, best) > 0) best = v;
   }
   return best;
 }
