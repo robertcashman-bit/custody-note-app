@@ -6504,6 +6504,23 @@ function verifySensitiveActionCredential(password, purpose) {
 
 ipcMain.handle('session-lock-status', () => getSecurityCredentialStatus());
 
+/* Quit from credential-free blanker (and similar controlled exits).
+   Sets _forceClose so the close-guard does not re-prompt, then app.quit()
+   so before-quit flushDbSync runs. */
+ipcMain.handle('app-quit', () => {
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow._forceClose = true;
+    }
+  } catch (_) {}
+  try {
+    app.quit();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
 // Lock the renderer immediately when the OS reports lock-screen, suspend,
 // shutdown, or screen lock events. Treats those as "user has stepped away,
 // the session is no longer trusted". Persist the DB first so a power-loss

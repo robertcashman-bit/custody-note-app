@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.72",
+      "date": "2026-08-25",
+      "latest": true,
+      "changes": [
+        "Credential-free session lock no longer dead-ends when no recovery/admin password is set and a case is open",
+        "Sensitive blanker offers Quit Custody Note (real app quit) and Unlock this session (with confirm), then prompts to set a recovery password",
+        "Empty screens still offer Dismiss; password lock is unchanged when a credential exists"
+      ]
+    },
+    {
       "version": "1.9.71",
       "date": "2026-08-24",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Session lock blanker can no longer be dismissed when client or case content is on screen",
         "Database flushes to disk on lid close / OS lock and when finalising a record, so the last note is not lost",
