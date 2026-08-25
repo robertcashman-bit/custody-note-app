@@ -15,6 +15,8 @@ const path = require('path');
 const appJsPath = path.join(__dirname, '..', 'app.js');
 const appJsSource = fs.readFileSync(appJsPath, 'utf8');
 
+const DefenceSummary = require('../lib/defenceSummary');
+
 function extractFunction(source, funcName) {
   const regex = new RegExp('function\\s+' + funcName + '\\s*\\(');
   const idx = source.indexOf('function ' + funcName);
@@ -30,16 +32,23 @@ function extractFunction(source, funcName) {
   return source.substring(idx, end);
 }
 
+function mismatchHelperBody() {
+  return extractFunction(appJsSource, 'pushOutcomeCodeMismatchError')
+    || 'function pushOutcomeCodeMismatchError(){}';
+}
+
 function buildValidationRunner(funcBody, funcName) {
   const wrappedCode = `
     var formData = {};
     var esc = function(s) { return String(s || ''); };
+    var window = { DefenceSummary: DefenceSummary };
+    ${mismatchHelperBody()}
     ${funcBody}
     return ${funcName};
   `;
-  const factory = new Function(wrappedCode);
+  const factory = new Function('DefenceSummary', wrappedCode);
   return function runValidation(data) {
-    const fn = factory();
+    const fn = factory(DefenceSummary);
     return fn.call({ formData: data }, data);
   };
 }
@@ -50,11 +59,12 @@ function buildBillingRunner() {
   const wrappedCode = `
     var formData;
     var esc = function(s) { return String(s || ''); };
+    var window = { DefenceSummary: DefenceSummary };
     ${funcBody}
     return function(data) { formData = data; return getBillingReadinessWarnings(); };
   `;
-  const factory = new Function(wrappedCode);
-  return factory();
+  const factory = new Function('DefenceSummary', wrappedCode);
+  return factory(DefenceSummary);
 }
 
 function buildAttendanceValidator() {
@@ -62,11 +72,13 @@ function buildAttendanceValidator() {
   if (!funcBody) throw new Error('Could not extract validateAttendanceForm');
   const wrappedCode = `
     var formData;
+    var window = { DefenceSummary: DefenceSummary };
+    ${mismatchHelperBody()}
     ${funcBody}
     return function(data) { formData = data; return validateAttendanceForm(); };
   `;
-  const factory = new Function(wrappedCode);
-  return factory();
+  const factory = new Function('DefenceSummary', wrappedCode);
+  return factory(DefenceSummary);
 }
 
 function buildTelephoneValidator() {
@@ -74,11 +86,13 @@ function buildTelephoneValidator() {
   if (!funcBody) throw new Error('Could not extract validateTelephoneForm');
   const wrappedCode = `
     var formData;
+    var window = { DefenceSummary: DefenceSummary };
+    ${mismatchHelperBody()}
     ${funcBody}
     return function(data) { formData = data; return validateTelephoneForm(); };
   `;
-  const factory = new Function(wrappedCode);
-  return factory();
+  const factory = new Function('DefenceSummary', wrappedCode);
+  return factory(DefenceSummary);
 }
 
 function buildVoluntaryValidator() {
@@ -86,11 +100,13 @@ function buildVoluntaryValidator() {
   if (!funcBody) throw new Error('Could not extract validateVoluntaryForm');
   const wrappedCode = `
     var formData;
+    var window = { DefenceSummary: DefenceSummary };
+    ${mismatchHelperBody()}
     ${funcBody}
     return function(data) { formData = data; return validateVoluntaryForm(); };
   `;
-  const factory = new Function(wrappedCode);
-  return factory();
+  const factory = new Function('DefenceSummary', wrappedCode);
+  return factory(DefenceSummary);
 }
 
 function baseAttendanceData(overrides = {}) {
@@ -209,6 +225,28 @@ describe('Finalise: Telephone form validation', () => {
     const dateErr = errors.find(e => e.key === 'caseConcludedDate');
     assert.ok(dateErr, 'Should require caseConcludedDate when concluded');
   });
+
+  it('rejects CN09 when telephone outcome is Released on pre-charge bail', { skip: !validate }, () => {
+    const data = baseTelephoneData({
+      outcomeDecision: 'Released on pre-charge bail',
+      outcomeCode: 'CN09 – Released no bail',
+      caseConcludedDate: '2025-01-15',
+    });
+    const errors = validate(data);
+    const codeErr = errors.find(e => e.key === 'outcomeCode' && /CN09|bail/i.test(e.label));
+    assert.ok(codeErr, 'CN09 must not be accepted for pre-charge bail');
+  });
+
+  it('accepts CN06 when telephone outcome is Charged', { skip: !validate }, () => {
+    const data = baseTelephoneData({
+      outcomeDecision: 'Charged',
+      outcomeCode: 'CN06 – Charge / Summons',
+      caseConcludedDate: '2025-01-15',
+    });
+    const errors = validate(data);
+    const mismatch = errors.find(e => e.key === 'outcomeCode' && /does not match|must not be used/i.test(e.label));
+    assert.strictEqual(mismatch, undefined);
+  });
 });
 
 
@@ -235,6 +273,51 @@ describe('Finalise: Voluntary form validation', () => {
     const errors = validate(data);
     const codeErr = errors.find(e => e.key === 'outcomeCode');
     assert.ok(codeErr, 'outcomeCode should be required when a definitive outcome is selected');
+  });
+
+  it('rejects CN09 when voluntary outcome is Released NFA (expects CN04)', { skip: !validate }, () => {
+    const data = baseVoluntaryData({
+      outcomeDecision: 'Released NFA',
+      outcomeCode: 'CN09 – Released no bail',
+      reasonsForAdvice: 'Advised',
+      clientInstructions: 'Instructions',
+      disclosureNarrative: 'Disclosure',
+    });
+    const errors = validate(data);
+    const mismatch = errors.find(e => e.key === 'outcomeCode' && /CN09|CN04|NFA/i.test(e.label));
+    assert.ok(mismatch, 'CN09 must not pair with NFA');
+  });
+});
+
+
+describe('Finalise: Attendance outcome code mismatch', () => {
+  let validate;
+  try { validate = buildAttendanceValidator(); } catch (_) {}
+
+  it('rejects CN09 when custody decision is Bail without charge', { skip: !validate }, () => {
+    const data = baseAttendanceData({
+      outcomeDecision: 'Bail without charge',
+      outcomeCode: 'CN09 – Released no bail',
+      bailDate: '2025-02-01',
+      clientDecision: 'No comment',
+      reasonsForAdvice: 'Advised no comment',
+    });
+    const errors = validate(data);
+    const mismatch = errors.find(e => e.key === 'outcomeCode' && /CN09|bail/i.test(e.label));
+    assert.ok(mismatch, 'Bail without charge must never finalise with CN09');
+  });
+
+  it('does not invent a CN09 mismatch when Bail without charge has no code', { skip: !validate }, () => {
+    const data = baseAttendanceData({
+      outcomeDecision: 'Bail without charge',
+      outcomeCode: '',
+      bailDate: '2025-02-01',
+      clientDecision: 'No comment',
+      reasonsForAdvice: 'Advised no comment',
+    });
+    const errors = validate(data);
+    const mismatch = errors.find(e => e.key === 'outcomeCode' && /CN09/i.test(e.label || ''));
+    assert.strictEqual(mismatch, undefined);
   });
 });
 
