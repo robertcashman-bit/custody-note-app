@@ -1321,7 +1321,9 @@ var LAA = {
           'CN08 \u2013 Fixed Penalty Notice',
           'CN09 \u2013 Released no bail',
           'CN10 \u2013 Bail varied / extended',
-          'CN11 \u2013 Bail not varied / extended'
+          'CN11 \u2013 Bail not varied / extended',
+          'CN12 \u2013 Pre-charge engagement agreed and concludes before investigation ends',
+          'CN13 \u2013 Pre-charge engagement not agreed'
         ], cols: 2 },
         { key: 'furtherAttendance', label: 'Further attendance likely?', type: 'select', options: ['Yes','No'] },
         { key: '_note_spec974', label: 'Spec 9.74: If telephone advice is followed by attendance, claim INVC only (not both INVB + INVC).', type: 'sectionNote', showIf: { field: 'furtherAttendance', value: 'Yes' } },
@@ -1743,6 +1745,8 @@ var LAA = {
         { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
           'CN04 \u2013 No further action','CN05 \u2013 Simple caution / reprimand / warning','CN06 \u2013 Charge / Summons','CN07 \u2013 Conditional caution','CN08 \u2013 Fixed penalty notice',
           'CN09 \u2013 Released no bail','CN10 \u2013 Bail varied / extended','CN11 \u2013 Bail not varied / extended',
+          'CN12 \u2013 Pre-charge engagement agreed and concludes before investigation ends',
+          'CN13 \u2013 Pre-charge engagement not agreed',
           'Draft'
         ], cols: 2 },
         { key: 'stageReachedOrFeeCode', label: 'Stage reached / Fee code', type: 'text', placeholder: 'e.g. INVC', cols: 2 },
@@ -7562,6 +7566,11 @@ var REQUIRED_FIELD_KEYS = [
     var voluntaryConcluded = d.attendanceMode === 'voluntary' ? (volOd && volOd !== 'Ongoing / Unknown') : false;
     if (!hasOutcomeDecision) w.push('Outcome missing');
     if (voluntaryConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code missing (matter concluded)');
+    var _DSWarn = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+    if (_DSWarn && typeof _DSWarn.getOutcomeCodeMismatchError === 'function') {
+      var _mismatch = _DSWarn.getOutcomeCodeMismatchError(d.outcomeDecision, d.outcomeCode);
+      if (_mismatch) w.push(_mismatch);
+    }
     if (d.attendanceMode === 'voluntary') {
       if (d.instructionSource === 'dscc' && !(d.dsccRef || '').trim() && d.dsccNotificationStatus === 'missing' && !(d.dsccReferenceMissingReason || '').trim() && d.dsccPrivateMatter !== 'Yes') w.push('DSCC reference or reason missing');
       if (d.attendanceSubType === 'voluntary_non_police_body' && !d.constablePresent) w.push('Constable present? required for non-police body');
@@ -7625,6 +7634,11 @@ var REQUIRED_FIELD_KEYS = [
     if (!od) w.push('Outcome');
     var voluntaryConcluded = d.attendanceMode === 'voluntary' ? (od && od !== 'Ongoing / Unknown') : false;
     if (voluntaryConcluded && !(d.outcomeCode || '').trim()) w.push('Outcome code');
+    var _DSHard = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+    if (_DSHard && typeof _DSHard.getOutcomeCodeMismatchError === 'function') {
+      var _hardMismatch = _DSHard.getOutcomeCodeMismatchError(d.outcomeDecision, d.outcomeCode);
+      if (_hardMismatch) w.push('Outcome code vs decision mismatch');
+    }
     var mins = parseInt((d.totalMinutes || '').toString(), 10);
     if (isNaN(mins) || mins <= 0) w.push('Time recording');
     if (d.attendanceMode === 'voluntary') {
@@ -8749,6 +8763,23 @@ var REQUIRED_FIELD_KEYS = [
               if (!formData.courtTime) {
                 formData.courtTime = '10:00';
                 setFieldValue('courtTime', '10:00');
+              }
+            }
+            /* Auto-suggest LAA outcome code from decision (never CN09 for bail). */
+            var _DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+            if (_DS && typeof _DS.suggestOutcomeCodeForDecision === 'function') {
+              var _suggestedCode = _DS.suggestOutcomeCodeForDecision(formData.outcomeDecision);
+              var _prevCode = (formData.outcomeCode || '').trim();
+              var _prevWasSuggested = !_prevCode || (_DS.OUTCOME_CODE_BY_DECISION && Object.keys(_DS.OUTCOME_CODE_BY_DECISION).some(function(k) {
+                return _DS.OUTCOME_CODE_BY_DECISION[k] === _prevCode;
+              })) || /^CN\d{2}\b/.test(_prevCode);
+              if (_suggestedCode && (!_prevCode || _prevWasSuggested)) {
+                formData.outcomeCode = _suggestedCode;
+                setFieldValueSilent('outcomeCode', _suggestedCode);
+              } else if (!_suggestedCode && _prevCode && _DS.isCn09ForbiddenDecision && _DS.isCn09ForbiddenDecision(formData.outcomeDecision)
+                && _DS.extractOutcomeCodePrefix && _DS.extractOutcomeCodePrefix(_prevCode) === 'CN09') {
+                formData.outcomeCode = '';
+                setFieldValueSilent('outcomeCode', '');
               }
             }
           }
@@ -13074,6 +13105,13 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   /* ─── VALIDATION: TELEPHONE ADVICE FORM (INVB) ─── */
+  function pushOutcomeCodeMismatchError(m, section) {
+    var DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+    if (!DS || typeof DS.getOutcomeCodeMismatchError !== 'function') return;
+    var msg = DS.getOutcomeCodeMismatchError(formData.outcomeDecision, formData.outcomeCode);
+    if (msg) m.push({ key: 'outcomeCode', label: msg, section: section });
+  }
+
   function validateTelephoneForm() {
     var m = [];
     var telDecision = (formData.outcomeDecision || '').trim();
@@ -13110,6 +13148,7 @@ var REQUIRED_FIELD_KEYS = [
       if (!(formData.outcomeCode || '').trim()) m.push({ key: 'outcomeCode', label: 'Outcome Code', section: 2 });
       if (!(formData.caseConcludedDate || '').trim()) m.push({ key: 'caseConcludedDate', label: 'Case concluded date', section: 2 });
     }
+    pushOutcomeCodeMismatchError(m, 2);
     if (formData.firstContactWithin45Mins === 'No') {
       var c45t = (formData.firstContactOver45MinsReasonCode || '').trim();
       if (!c45t) m.push({ key: 'firstContactOver45MinsReasonCode', label: 'Reason for delay (>45 mins)', section: 1 });
@@ -13159,6 +13198,7 @@ var REQUIRED_FIELD_KEYS = [
     if (volCaseConcluded && !(formData.outcomeCode || '').trim()) {
       m.push({ key: 'outcomeCode', label: 'Outcome code', section: 7 });
     }
+    pushOutcomeCodeMismatchError(m, 7);
     if (formData.instructionSource === 'dscc' && !(formData.dsccRef || '').trim() && formData.dsccNotificationStatus === 'missing' && !(formData.dsccReferenceMissingReason || '').trim() && formData.dsccPrivateMatter !== 'Yes') {
       m.push({ key: 'dsccReferenceMissingReason', label: 'Reason if DSCC reference missing', section: 0 });
     }
@@ -13331,6 +13371,8 @@ var REQUIRED_FIELD_KEYS = [
     if (bailOutcome === 'Bail without charge' && bailDate && attDate && bailDate < attDate) {
       m.push({ key: 'bailDate', label: 'Bail return date is before attendance date', section: 7 });
     }
+
+    pushOutcomeCodeMismatchError(m, 7);
 
     return m;
   }
