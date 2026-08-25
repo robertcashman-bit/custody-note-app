@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.72",
+      "version": "1.9.73",
       "date": "2026-08-25",
       "latest": true,
+      "changes": [
+        "LAA outcome codes: Bail without charge / pre-charge bail / Charged with Bail never auto-code or validate as CN09 (CN09 is RUI / released without bail only)",
+        "Charged* → CN06, Released NFA → CN04, RUI → CN09; wrong outcome-code pairs block finalise; CN12/CN13 added to telephone and voluntary dropdowns",
+        "QuickFile mileage line no longer shows a stray accented A before the pound (UTF-8 mojibake) — sends ASCII-safe \"Mileage (12.0 miles at 0.45 GBP/mile)\""
+      ]
+    },
+    {
+      "version": "1.9.72",
+      "date": "2026-08-25",
+      "latest": false,
       "changes": [
         "Credential-free session lock no longer dead-ends when no recovery/admin password is set and a case is open",
         "Sensitive blanker offers Quit Custody Note (real app quit) and Unlock this session (with confirm), then prompts to set a recovery password",
