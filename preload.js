@@ -314,6 +314,8 @@ contextBridge.exposeInMainWorld('api', {
   sessionLockStatus: () => ipcRenderer.invoke('session-lock-status'),
   sessionUnlock: (password) => ipcRenderer.invoke('session-unlock', password),
   onSessionForceLock: (cb) => ipcRenderer.on('session-force-lock', (_, data) => cb(data)),
+  /* Credential-free blanker escape: real app quit (before-quit flushes DB). */
+  quitApp: () => ipcRenderer.invoke('app-quit'),
   recoverKeyFromCloud: () => ipcRenderer.invoke('recover-key-from-cloud'),
   isDbEncrypted: () => ipcRenderer.invoke('is-db-encrypted'),
   isSafeStorageAvailable: () => ipcRenderer.invoke('is-safe-storage-available'),
