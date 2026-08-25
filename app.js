@@ -20254,68 +20254,205 @@ pdfAuditFooterHtml(d, settings) +
     };
   }
 
+  function _quitFromCredentialFreeBlanker() {
+    try {
+      if (window.api && typeof window.api.quitApp === 'function') {
+        window.api.quitApp();
+        return;
+      }
+    } catch (_) {}
+    try {
+      /* Last-resort: force-close via existing close-confirmed path if quit IPC missing. */
+      if (window.api && typeof window.api.confirmClose === 'function') {
+        window.api.confirmClose();
+      }
+    } catch (_) {}
+  }
+
+  function _removeCredentialFreeBlanker(div) {
+    try {
+      if (div && div.parentNode) div.parentNode.removeChild(div);
+    } catch (_) {}
+  }
+
   function _showCredentialFreeBlanker(reason) {
     try {
-      var existing = document.getElementById('cn-credentialfree-blanker');
-      if (existing) return;
       var policy = (typeof window !== 'undefined' && window.SessionBlankerPolicy)
         ? window.SessionBlankerPolicy
         : null;
-      var allowDismiss = true;
-      try {
-        var state = _gatherCredentialFreeBlankerState();
-        if (policy && typeof policy.mayDismissCredentialFreeBlanker === 'function') {
-          allowDismiss = policy.mayDismissCredentialFreeBlanker(state);
-        } else if (state.scratchpadOpenWithText) {
-          allowDismiss = false;
-        } else if (state.formViewActive && (state.hasOpenAttendance || state.hasMeaningfulFormData || state.formContextBarHasText)) {
-          allowDismiss = false;
-        } else if (state.listViewActive && state.listHasRows) {
-          allowDismiss = false;
-        } else if (state.quickCaptureViewActive && state.quickCaptureHasClientData) {
-          allowDismiss = false;
-        } else if (state.officerEmailsViewActive && state.officerEmailsHasClientData) {
-          allowDismiss = false;
-        } else if (state.homeViewActive && (state.homeHasActiveMatters || state.homeHasRecentCases || state.homeFocusHasClientText)) {
-          allowDismiss = false;
-        }
-      } catch (_) {
-        /* Fail closed: if we cannot prove the screen is empty, block dismiss. */
-        allowDismiss = false;
+      var existing = document.getElementById('cn-credentialfree-blanker');
+      if (existing) {
+        var hasEscape = policy && typeof policy.blankerHasEscapeControls === 'function'
+          ? policy.blankerHasEscapeControls(existing)
+          : !!(existing.querySelector('#cn-credentialfree-dismiss')
+            || existing.querySelector('#cn-credentialfree-quit')
+            || existing.querySelector('#cn-credentialfree-unlock-session'));
+        if (hasEscape) return;
+        /* Replace legacy dead-end overlay that offered no way back in. */
+        _removeCredentialFreeBlanker(existing);
       }
+
+      var presentation = null;
+      var gatherFailed = false;
+      var state = {};
+      try {
+        state = _gatherCredentialFreeBlankerState();
+      } catch (_) {
+        gatherFailed = true;
+      }
+      if (policy && typeof policy.resolveCredentialFreeBlankerPresentation === 'function') {
+        presentation = policy.resolveCredentialFreeBlankerPresentation(state, {
+          reason: reason,
+          gatherFailed: gatherFailed,
+        });
+      } else {
+        /* Fallback if policy script failed to load — never dead-end. */
+        var allowDismissFallback = false;
+        if (!gatherFailed) {
+          if (policy && typeof policy.mayDismissCredentialFreeBlanker === 'function') {
+            allowDismissFallback = policy.mayDismissCredentialFreeBlanker(state);
+          } else if (!state.scratchpadOpenWithText
+            && !(state.formViewActive && (state.hasOpenAttendance || state.hasMeaningfulFormData || state.formContextBarHasText))
+            && !(state.listViewActive && state.listHasRows)
+            && !(state.quickCaptureViewActive && state.quickCaptureHasClientData)
+            && !(state.officerEmailsViewActive && state.officerEmailsHasClientData)
+            && !(state.homeViewActive && (state.homeHasActiveMatters || state.homeHasRecentCases || state.homeFocusHasClientText))) {
+            allowDismissFallback = true;
+          }
+        }
+        presentation = allowDismissFallback
+          ? {
+              mode: 'safe-dismiss',
+              allowDismiss: true,
+              offerQuit: false,
+              offerUnlockThisSession: false,
+              heading: 'Session locked',
+              bodyHtml: '<p style="max-width:36rem;line-height:1.5;">Session locked by the OS. No password is set. You can dismiss if nothing sensitive is on screen.</p>',
+              unlockConfirmMessage: 'Client or case data will be visible on screen. Unlock this session anyway?',
+              afterUnlockToast: 'Set a recovery password in Settings > Security so the next lock can be unlocked properly.',
+            }
+          : {
+              mode: 'sensitive-escape',
+              allowDismiss: false,
+              offerQuit: true,
+              offerUnlockThisSession: true,
+              heading: 'Session locked',
+              bodyHtml: '<p style="max-width:36rem;line-height:1.5;">Session locked by the OS. No password is set and client data may be on screen. Quit and reopen, or unlock this session, then set a recovery password in Settings &gt; Security.</p>',
+              unlockConfirmMessage: 'Client or case data will be visible on screen. Unlock this session anyway?',
+              afterUnlockToast: 'Set a recovery password in Settings > Security so the next lock can be unlocked properly.',
+            };
+      }
+
       var div = document.createElement('div');
       div.id = 'cn-credentialfree-blanker';
       div.setAttribute('role', 'alertdialog');
       div.setAttribute('aria-modal', 'true');
+      div.setAttribute('data-blanker-mode', presentation.mode || '');
+      /* pointer-events auto on the overlay; do NOT capture Cmd+Q / Alt+F4 —
+         those are handled by the OS / Electron app menu and main process. */
       div.style.cssText =
         'position:fixed;inset:0;z-index:2147483647;background:#0f172a;color:#f8fafc;'
         + 'display:flex;align-items:center;justify-content:center;flex-direction:column;'
         + 'font-family:Segoe UI,Arial,sans-serif;padding:2rem;text-align:center;';
+
+      var btnStyle =
+        'margin:0.4rem;padding:0.55rem 1.25rem;border:1px solid #475569;'
+        + 'background:#1e293b;color:#f8fafc;border-radius:6px;cursor:pointer;font-size:0.95rem;';
+      var primaryBtnStyle =
+        'margin:0.4rem;padding:0.55rem 1.25rem;border:1px solid #38bdf8;'
+        + 'background:#0369a1;color:#f8fafc;border-radius:6px;cursor:pointer;font-size:0.95rem;';
+
       var bodyHtml =
-        '<h2 style="margin:0 0 1rem;font-size:1.5rem;">Session locked</h2>'
-        + '<p style="max-width:36rem;line-height:1.5;">'
-        + 'CustodyNote was locked because the operating system reported a '
-        + (reason ? '<code>' + reason.replace(/[<>&]/g, '') + '</code>' : 'lock event')
-        + '. To unlock, set a recovery password or admin password in Settings &gt; Security '
-        + 'and re-open the app.</p>';
-      if (allowDismiss) {
+        '<h2 style="margin:0 0 1rem;font-size:1.5rem;">'
+        + (presentation.heading || 'Session locked')
+        + '</h2>'
+        + (presentation.bodyHtml || '');
+
+      /* Always offer Quit on sensitive path; also offer Quit on safe-dismiss
+         so Mac Cmd+Q menu failure still has an in-app escape that hits main. */
+      var showQuit = !!(presentation.offerQuit || presentation.allowDismiss);
+      var showUnlock = !!presentation.offerUnlockThisSession;
+      var showDismiss = !!presentation.allowDismiss;
+
+      if (showDismiss && !showUnlock) {
         bodyHtml +=
-          '<button type="button" id="cn-credentialfree-dismiss" '
-          + 'style="margin-top:1.5rem;padding:0.5rem 1.25rem;border:1px solid #475569;'
-          + 'background:#1e293b;color:#f8fafc;border-radius:6px;cursor:pointer;">'
-          + 'Dismiss (no real client data)</button>';
+          '<div style="margin-top:1.5rem;display:flex;flex-wrap:wrap;justify-content:center;gap:0.25rem;">'
+          + '<button type="button" id="cn-credentialfree-dismiss" style="' + btnStyle + '">'
+          + 'Dismiss</button>'
+          + '<button type="button" id="cn-credentialfree-quit" style="' + primaryBtnStyle + '">'
+          + 'Quit Custody Note</button></div>';
       } else {
         bodyHtml +=
-          '<p style="max-width:36rem;margin-top:1.25rem;line-height:1.5;color:#cbd5e1;">'
-          + 'Client or case data may be on screen, so this lock cannot be dismissed. '
-          + 'Set a recovery or admin password in Settings &gt; Security, then unlock properly.</p>';
+          '<div id="cn-credentialfree-actions" style="margin-top:1.5rem;display:flex;flex-wrap:wrap;justify-content:center;gap:0.25rem;">'
+          + '<button type="button" id="cn-credentialfree-quit" style="' + primaryBtnStyle + '">'
+          + 'Quit Custody Note</button>'
+          + (showUnlock
+            ? '<button type="button" id="cn-credentialfree-unlock-session" style="' + btnStyle + '">'
+              + 'Unlock this session</button>'
+            : '')
+          + '</div>'
+          + '<div id="cn-credentialfree-confirm" style="display:none;max-width:36rem;margin-top:1.25rem;">'
+          + '<p style="line-height:1.5;color:#fde68a;" id="cn-credentialfree-confirm-msg"></p>'
+          + '<div style="margin-top:0.75rem;">'
+          + '<button type="button" id="cn-credentialfree-confirm-yes" style="' + primaryBtnStyle + '">Unlock and show data</button>'
+          + '<button type="button" id="cn-credentialfree-confirm-no" style="' + btnStyle + '">Cancel</button>'
+          + '</div></div>';
       }
+
       div.innerHTML = bodyHtml;
       document.body.appendChild(div);
-      var btn = document.getElementById('cn-credentialfree-dismiss');
-      if (btn) btn.addEventListener('click', function() {
-        try { div.parentNode.removeChild(div); } catch (_) {}
-      });
+
+      var dismissBtn = document.getElementById('cn-credentialfree-dismiss');
+      if (dismissBtn) {
+        dismissBtn.addEventListener('click', function() {
+          _removeCredentialFreeBlanker(div);
+        });
+      }
+
+      var quitBtn = document.getElementById('cn-credentialfree-quit');
+      if (quitBtn) {
+        quitBtn.addEventListener('click', function() {
+          _quitFromCredentialFreeBlanker();
+        });
+      }
+
+      var unlockBtn = document.getElementById('cn-credentialfree-unlock-session');
+      var confirmPanel = document.getElementById('cn-credentialfree-confirm');
+      var actionsPanel = document.getElementById('cn-credentialfree-actions');
+      var confirmMsg = document.getElementById('cn-credentialfree-confirm-msg');
+      var confirmYes = document.getElementById('cn-credentialfree-confirm-yes');
+      var confirmNo = document.getElementById('cn-credentialfree-confirm-no');
+      if (unlockBtn && confirmPanel) {
+        unlockBtn.addEventListener('click', function() {
+          if (confirmMsg) {
+            confirmMsg.textContent = presentation.unlockConfirmMessage
+              || 'Client or case data will be visible on screen. Unlock this session anyway?';
+          }
+          if (actionsPanel) actionsPanel.style.display = 'none';
+          confirmPanel.style.display = 'block';
+        });
+      }
+      if (confirmNo && confirmPanel && actionsPanel) {
+        confirmNo.addEventListener('click', function() {
+          confirmPanel.style.display = 'none';
+          actionsPanel.style.display = 'flex';
+        });
+      }
+      if (confirmYes) {
+        confirmYes.addEventListener('click', function() {
+          _removeCredentialFreeBlanker(div);
+          try {
+            if (typeof showToast === 'function') {
+              showToast(
+                presentation.afterUnlockToast
+                  || 'Set a recovery password in Settings > Security so the next lock can be unlocked properly.',
+                'warning',
+                7000
+              );
+            }
+          } catch (_) {}
+        });
+      }
     } catch (_) {}
   }
 
@@ -20453,6 +20590,20 @@ function _showPinTipIfNeeded() {
 function _initCloseGuard() {
   if (!window.api || !window.api.onCheckUnsavedChanges) return;
   window.api.onCheckUnsavedChanges(function() {
+    /* Credential-free blanker sits above confirm dialogs (max z-index).
+       Never open an unsaved-changes prompt behind it — that traps quit
+       (Alt+F4 / window close). Prefer real app quit via IPC. */
+    var blanker = document.getElementById('cn-credentialfree-blanker');
+    if (blanker) {
+      try {
+        if (typeof window.api.quitApp === 'function') {
+          window.api.quitApp();
+          return;
+        }
+      } catch (_) {}
+      try { window.api.confirmClose(); } catch (_) {}
+      return;
+    }
     var formActive = document.getElementById('view-form')?.classList.contains('active');
     var isDirty = formActive && currentRecordStatus === 'draft' && (_draftSaveInFlight || _draftSaveQueued || _quietSaveDebounceTimer);
     if (isDirty) {

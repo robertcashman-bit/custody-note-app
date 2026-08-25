@@ -996,6 +996,76 @@ function flushDbSync() {
   _saveDbInProgress = false;
 }
 
+/* Bound flush for quit / OS-lock paths. Sync writeFileSync can wedge the main
+ * process on a stuck disk/AV lock and block Cmd+Q forever. This path uses
+ * async IO so a timeout can still fire and force the process out. */
+const FLUSH_BOUND_DEFAULT_MS = 2500;
+
+function flushDbAsyncBounded(timeoutMs, label) {
+  const ms = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : FLUSH_BOUND_DEFAULT_MS;
+  const tag = label ? String(label) : 'flush';
+  if (!db) return Promise.resolve({ ok: true, skipped: true });
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      try { clearTimeout(timer); } catch (_) {}
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      console.error('[flushDbAsyncBounded] timed out after', ms, 'ms (' + tag + ') — continuing without waiting');
+      finish({ ok: false, timedOut: true });
+    }, ms);
+
+    try {
+      if (_dbSaveTimer) { clearTimeout(_dbSaveTimer); _dbSaveTimer = null; }
+      _dbDirty = false;
+      _dbSaveRequestedWhileBusy = false;
+      _dbWriteGeneration++;
+      const staleTmp = _dbInFlightTempPath;
+      _dbInFlightTempPath = null;
+      let encrypted = null;
+      try {
+        encrypted = getEncryptedDbExport();
+      } catch (err) {
+        console.error('[flushDbAsyncBounded] Encryption failed (' + tag + '):', err && err.message ? err.message : err);
+        _dbDirty = true;
+        _cachedDbExportDirty = true;
+        _saveDbInProgress = false;
+        finish({ ok: false, error: err && err.message ? err.message : String(err) });
+        return;
+      }
+      if (staleTmp) {
+        try { if (fs.existsSync(staleTmp)) fs.unlinkSync(staleTmp); } catch (_) {}
+      }
+      if (!encrypted) {
+        _saveDbInProgress = false;
+        finish({ ok: true, skipped: true });
+        return;
+      }
+      writeFileAtomicAsync(getDbPath(), encrypted).then(() => {
+        _saveDbInProgress = false;
+        finish({ ok: true });
+      }).catch((err) => {
+        console.error('[flushDbAsyncBounded] Write failed (' + tag + '):', err && err.message ? err.message : err);
+        _dbDirty = true;
+        _cachedDbExportDirty = true;
+        _saveDbInProgress = false;
+        finish({ ok: false, error: err && err.message ? err.message : String(err) });
+      });
+    } catch (err) {
+      console.error('[flushDbAsyncBounded] Failed (' + tag + '):', err && err.message ? err.message : err);
+      finish({ ok: false, error: err && err.message ? err.message : String(err) });
+    }
+  });
+}
+
+/* Quit lifecycle flags — declared early so createWindow close-guard can read them. */
+let _appIsQuitting = false;
+let _quitFlushState = 'idle'; /* idle | flushing | done */
+
 function dbRun(sql, params = []) {
   db.run(sql, params);
   markDbDirtyForSave();
@@ -2635,11 +2705,14 @@ function createWindow() {
     if (!mainWindow || mainWindow._forceClose) return;
     /* Automated tests (isolated userData): allow window to close so Playwright/e2e can exit */
     if (process.env.CUSTODYNOTE_TEST_USERDATA) return;
+    /* App is quitting (Cmd+Q / Quit menu / app-quit) — never block close. */
+    if (_appIsQuitting) return;
     e.preventDefault();
     mainWindow.webContents.send('check-unsaved-changes');
   });
-  ipcMain.once('close-confirmed', () => {
-    if (mainWindow) {
+  /* Use on (not once): Quit from blanker / repeated close confirms must always work. */
+  ipcMain.on('close-confirmed', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow._forceClose = true;
       mainWindow.close();
     }
@@ -4991,14 +5064,55 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => {
   console.log('[App] window-all-closed event');
   try { stopSyncTimer(); } catch (_) {}
-  try { if (db) { flushDbSync(); db.close(); db = null; } } catch (_) {}
-  app.quit();
+  /* Prefer bounded async flush; do not wedge quit on sync disk IO. */
+  const finishQuit = () => {
+    try { if (db) { db.close(); db = null; } } catch (_) {}
+    app.quit();
+  };
+  try {
+    flushDbAsyncBounded(FLUSH_BOUND_DEFAULT_MS, 'window-all-closed').finally(finishQuit);
+  } catch (_) {
+    try { if (db) { flushDbSync(); db.close(); db = null; } } catch (_) {}
+    app.quit();
+  }
 });
 
-app.on('before-quit', () => {
+/* Quit must never wedge on flush (Mac Cmd+Q / menu Quit / Windows Alt+F4 app quit).
+ * before-quit sets _forceClose immediately, then bounded async flush, then app.exit. */
+app.on('before-quit', (e) => {
   console.log('[App] before-quit event');
-  if (mainWindow) mainWindow._forceClose = true;
-  try { if (db) flushDbSync(); } catch (_) {}
+  _appIsQuitting = true;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow._forceClose = true;
+  } catch (_) {}
+
+  if (_quitFlushState === 'done') return;
+  if (_quitFlushState === 'flushing') {
+    e.preventDefault();
+    return;
+  }
+
+  e.preventDefault();
+  _quitFlushState = 'flushing';
+
+  const forceExit = () => {
+    _quitFlushState = 'done';
+    try { app.exit(0); } catch (_) {
+      try { process.exit(0); } catch (_) {}
+    }
+  };
+
+  const deadline = setTimeout(() => {
+    console.error('[App] quit flush deadline exceeded — forcing exit');
+    forceExit();
+  }, FLUSH_BOUND_DEFAULT_MS + 500);
+
+  flushDbAsyncBounded(FLUSH_BOUND_DEFAULT_MS, 'before-quit')
+    .catch(() => {})
+    .finally(() => {
+      try { clearTimeout(deadline); } catch (_) {}
+      forceExit();
+    });
 });
 
 ipcMain.handle('get-settings', () => {
@@ -6504,24 +6618,55 @@ function verifySensitiveActionCredential(password, purpose) {
 
 ipcMain.handle('session-lock-status', () => getSecurityCredentialStatus());
 
+/* Quit from credential-free blanker (and similar controlled exits).
+   Sets _forceClose so the close-guard does not re-prompt, then app.quit()
+   (bounded before-quit flush). Safety net: app.exit(0) if quit stalls. */
+ipcMain.handle('app-quit', () => {
+  _appIsQuitting = true;
+  try {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow._forceClose = true;
+    }
+  } catch (_) {}
+  setImmediate(() => {
+    try { app.quit(); } catch (_) {}
+  });
+  setTimeout(() => {
+    try {
+      if (_quitFlushState !== 'done') {
+        console.error('[app-quit] quit still pending — forcing app.exit(0)');
+        _quitFlushState = 'done';
+        app.exit(0);
+      }
+    } catch (_) {
+      try { process.exit(0); } catch (_) {}
+    }
+  }, FLUSH_BOUND_DEFAULT_MS + 1500);
+  return { ok: true };
+});
+
 // Lock the renderer immediately when the OS reports lock-screen, suspend,
 // shutdown, or screen lock events. Treats those as "user has stepped away,
-// the session is no longer trusted". Persist the DB first so a power-loss
-// after "Saved" cannot drop the last debounce window (~30s).
+// the session is no longer trusted". Persist the DB with a bound so a wedged
+// disk write cannot delay the blanker or later Cmd+Q.
 function _broadcastForceLock(reason) {
   try {
-    try { if (typeof flushDbSync === 'function') flushDbSync(); } catch (flushErr) {
-      console.error('[security] flushDbSync on force-lock failed:', flushErr && flushErr.message ? flushErr.message : flushErr);
-    }
-    const wins = BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
-    for (const w of wins) {
-      if (w && !w.isDestroyed() && w.webContents) {
-        try { w.webContents.send('session-force-lock', { reason: reason || 'os-event' }); }
-        catch (_) {}
+    const sendLock = () => {
+      const wins = BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
+      for (const w of wins) {
+        if (w && !w.isDestroyed() && w.webContents) {
+          try { w.webContents.send('session-force-lock', { reason: reason || 'os-event' }); }
+          catch (_) {}
+        }
       }
-    }
-    try { _securityLog && _securityLog.record && _securityLog.record('power_lock_triggered', { reason: reason || 'os-event' }); }
-    catch (_) {}
+      try { _securityLog && _securityLog.record && _securityLog.record('power_lock_triggered', { reason: reason || 'os-event' }); }
+      catch (_) {}
+    };
+    /* Obscure UI immediately; flush in parallel with a timeout. */
+    sendLock();
+    flushDbAsyncBounded(FLUSH_BOUND_DEFAULT_MS, 'force-lock').catch((flushErr) => {
+      console.error('[security] flushDbAsyncBounded on force-lock failed:', flushErr && flushErr.message ? flushErr.message : flushErr);
+    });
   } catch (_) {}
 }
 try {
