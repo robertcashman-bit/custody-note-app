@@ -20348,6 +20348,8 @@ pdfAuditFooterHtml(d, settings) +
       div.setAttribute('role', 'alertdialog');
       div.setAttribute('aria-modal', 'true');
       div.setAttribute('data-blanker-mode', presentation.mode || '');
+      /* pointer-events auto on the overlay; do NOT capture Cmd+Q / Alt+F4 —
+         those are handled by the OS / Electron app menu and main process. */
       div.style.cssText =
         'position:fixed;inset:0;z-index:2147483647;background:#0f172a;color:#f8fafc;'
         + 'display:flex;align-items:center;justify-content:center;flex-direction:column;'
@@ -20366,18 +20368,29 @@ pdfAuditFooterHtml(d, settings) +
         + '</h2>'
         + (presentation.bodyHtml || '');
 
-      if (presentation.allowDismiss) {
+      /* Always offer Quit on sensitive path; also offer Quit on safe-dismiss
+         so Mac Cmd+Q menu failure still has an in-app escape that hits main. */
+      var showQuit = !!(presentation.offerQuit || presentation.allowDismiss);
+      var showUnlock = !!presentation.offerUnlockThisSession;
+      var showDismiss = !!presentation.allowDismiss;
+
+      if (showDismiss && !showUnlock) {
         bodyHtml +=
-          '<div style="margin-top:1.5rem;">'
+          '<div style="margin-top:1.5rem;display:flex;flex-wrap:wrap;justify-content:center;gap:0.25rem;">'
           + '<button type="button" id="cn-credentialfree-dismiss" style="' + btnStyle + '">'
-          + 'Dismiss</button></div>';
+          + 'Dismiss</button>'
+          + '<button type="button" id="cn-credentialfree-quit" style="' + primaryBtnStyle + '">'
+          + 'Quit Custody Note</button></div>';
       } else {
         bodyHtml +=
           '<div id="cn-credentialfree-actions" style="margin-top:1.5rem;display:flex;flex-wrap:wrap;justify-content:center;gap:0.25rem;">'
           + '<button type="button" id="cn-credentialfree-quit" style="' + primaryBtnStyle + '">'
           + 'Quit Custody Note</button>'
-          + '<button type="button" id="cn-credentialfree-unlock-session" style="' + btnStyle + '">'
-          + 'Unlock this session</button></div>'
+          + (showUnlock
+            ? '<button type="button" id="cn-credentialfree-unlock-session" style="' + btnStyle + '">'
+              + 'Unlock this session</button>'
+            : '')
+          + '</div>'
           + '<div id="cn-credentialfree-confirm" style="display:none;max-width:36rem;margin-top:1.25rem;">'
           + '<p style="line-height:1.5;color:#fde68a;" id="cn-credentialfree-confirm-msg"></p>'
           + '<div style="margin-top:0.75rem;">'
@@ -20577,6 +20590,20 @@ function _showPinTipIfNeeded() {
 function _initCloseGuard() {
   if (!window.api || !window.api.onCheckUnsavedChanges) return;
   window.api.onCheckUnsavedChanges(function() {
+    /* Credential-free blanker sits above confirm dialogs (max z-index).
+       Never open an unsaved-changes prompt behind it — that traps quit
+       (Alt+F4 / window close). Prefer real app quit via IPC. */
+    var blanker = document.getElementById('cn-credentialfree-blanker');
+    if (blanker) {
+      try {
+        if (typeof window.api.quitApp === 'function') {
+          window.api.quitApp();
+          return;
+        }
+      } catch (_) {}
+      try { window.api.confirmClose(); } catch (_) {}
+      return;
+    }
     var formActive = document.getElementById('view-form')?.classList.contains('active');
     var isDirty = formActive && currentRecordStatus === 'draft' && (_draftSaveInFlight || _draftSaveQueued || _quietSaveDebounceTimer);
     if (isDirty) {

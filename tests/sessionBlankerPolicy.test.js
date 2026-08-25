@@ -282,9 +282,35 @@ describe('app.js wires blanker escape (not dead-end)', () => {
     assert.match(preloadJs, /quitApp:\s*\(\)\s*=>\s*ipcRenderer\.invoke\('app-quit'\)/);
     assert.match(mainJs, /ipcMain\.handle\('app-quit'/);
     const quitIdx = mainJs.indexOf("ipcMain.handle('app-quit'");
-    const quitBody = mainJs.slice(quitIdx, quitIdx + 400);
+    const quitBody = mainJs.slice(quitIdx, quitIdx + 700);
     assert.match(quitBody, /_forceClose\s*=\s*true/);
     assert.match(quitBody, /app\.quit\(\)/);
+    assert.match(quitBody, /app\.exit\(0\)/);
+  });
+
+  it('blanker Quit is always rendered (safe-dismiss and sensitive); never captures Cmd+Q', () => {
+    assert.match(appJs, /cn-credentialfree-quit/);
+    assert.match(appJs, /do NOT capture Cmd\+Q/);
+    assert.ok(
+      !/cn-credentialfree-blanker[\s\S]{0,800}preventDefault/.test(appJs),
+      'blanker must not preventDefault keyboard quit shortcuts'
+    );
+  });
+
+  it('close guard never prompts behind the blanker — quits via IPC instead', () => {
+    const guardFn = appJs.substring(appJs.indexOf('function _initCloseGuard'), appJs.indexOf('function safeInit'));
+    assert.match(guardFn, /cn-credentialfree-blanker/);
+    assert.match(guardFn, /quitApp/);
+  });
+
+  it('before-quit and force-lock use bounded flush so quit cannot wedge', () => {
+    assert.match(mainJs, /function flushDbAsyncBounded/);
+    const beforeQuitIdx = mainJs.indexOf("app.on('before-quit'");
+    const beforeQuitBody = mainJs.slice(beforeQuitIdx, beforeQuitIdx + 900);
+    assert.match(beforeQuitBody, /flushDbAsyncBounded/);
+    assert.match(beforeQuitBody, /app\.exit\(0\)/);
+    assert.match(mainJs, /ipcMain\.on\('close-confirmed'/);
+    assert.doesNotMatch(mainJs, /ipcMain\.once\('close-confirmed'/);
   });
 
   it('replaces legacy dead-end overlay instead of stacking a second copy', () => {

@@ -7,7 +7,9 @@
       "changes": [
         "Credential-free session lock no longer dead-ends when no recovery/admin password is set and a case is open",
         "Sensitive blanker offers Quit Custody Note (real app quit) and Unlock this session (with confirm), then prompts to set a recovery password",
-        "Empty screens still offer Dismiss; password lock is unchanged when a credential exists"
+        "Empty screens still offer Dismiss; password lock is unchanged when a credential exists",
+        "Session blanker never blocks Cmd+Q / Quit menu / Alt+F4; Quit always reaches main-process app.quit with a forced exit safety net",
+        "Database flush on lock and quit is time-bounded so a stuck disk write cannot wedge the app"
       ]
     },
     {
