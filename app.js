@@ -13139,7 +13139,13 @@ var REQUIRED_FIELD_KEYS = [
       if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
     });
     if (telCaseConcluded) {
-      if (!(formData.outcomeCode || '').trim()) m.push({ key: 'outcomeCode', label: 'Outcome Code', section: 2 });
+      /* First-grant police bail has no LAA investigation CN — blank outcomeCode is valid. */
+      var _DSTel = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+      var telFirstGrantBail = _DSTel && typeof _DSTel.isFirstGrantPoliceBailDecision === 'function'
+        && _DSTel.isFirstGrantPoliceBailDecision(telDecision);
+      if (!telFirstGrantBail && !(formData.outcomeCode || '').trim()) {
+        m.push({ key: 'outcomeCode', label: 'Outcome Code', section: 2 });
+      }
       if (!(formData.caseConcludedDate || '').trim()) m.push({ key: 'caseConcludedDate', label: 'Case concluded date', section: 2 });
     }
     pushOutcomeCodeMismatchError(m, 2);
