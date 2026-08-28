@@ -5196,9 +5196,11 @@ const {
   removeSharedTemplate: firmRemoveSharedTemplate,
 } = require('./main/firmWorkspace');
 const {
-  isBridgePayload,
-  buildBridgeFromAnywhereBackup,
+  buildBridgeFromDesktopRows,
+  normaliseToBridgePayload,
+  validateBridgePayload,
   mapBridgeAttendanceToDesktop,
+  safeJsonParse,
 } = require('./main/anywhereBridge');
 
 function readFirmWorkspaceFromDb() {
@@ -5337,50 +5339,116 @@ ipcMain.handle('firm-workspace:remove-template', (_, params) => {
   return { ok: true, workspace: writeFirmWorkspaceToDb(result.workspace) };
 });
 
+function findAttendanceIdByAnywhereImportId(anywhereId) {
+  if (!anywhereId || !db) return null;
+  try {
+    const row = dbGet(
+      `SELECT id FROM attendances
+        WHERE deleted_at IS NULL
+          AND json_extract(data, '$._importedFromAnywhereId') = ?
+        ORDER BY updated_at DESC LIMIT 1`,
+      [String(anywhereId)]
+    );
+    return row && row.id != null ? row.id : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function importAnywhereBridgePayload(payload) {
-  if (!isBridgePayload(payload)) {
-    if (Array.isArray(payload)) {
-      payload = buildBridgeFromAnywhereBackup({ attendances: payload });
-    } else if (payload && Array.isArray(payload.attendances)) {
-      // Anywhere backup JSON (app: custodynote-anywhere) or any attendances array
-      payload = buildBridgeFromAnywhereBackup(payload);
-    }
-  }
-  if (!isBridgePayload(payload)) {
-    return { ok: false, error: 'Not a valid Custody Note Anywhere bridge file (cn-anywhere-bridge v1).' };
-  }
+  const normalised = normaliseToBridgePayload(payload);
+  const validated = validateBridgePayload(normalised);
+  if (!validated.ok) return validated;
+  payload = normalised;
+
   let imported = 0;
+  let updated = 0;
+  let skipped = 0;
   const errors = [];
-  for (const item of payload.attendances) {
-    try {
-      const mapped = mapBridgeAttendanceToDesktop(item);
-      const now = new Date().toISOString();
-      const data = mapped.data || {};
-      const status = mapped.status || 'draft';
-      const clientName = [data.surname || '', data.forename || ''].filter(Boolean).join(', ');
-      const stationName = data.policeStationName || '';
-      const dsccRef = data.dsccRef || '';
-      const attendanceDate = data.date || '';
-      const workType = data.workType || '';
-      const newSyncId = typeof generateSyncId === 'function' ? generateSyncId() : ('local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8));
-      dbRun(
-        'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date, work_type, sync_id, sync_dirty, sync_version) VALUES (?,?,?,?,?,?,?,?,?,1,1)',
-        [JSON.stringify(data), status, now, clientName, stationName, dsccRef, attendanceDate, workType, newSyncId],
-      );
-      imported += 1;
-    } catch (e) {
-      errors.push(e && e.message ? e.message : String(e));
+
+  try { db.run('BEGIN TRANSACTION'); } catch (_) {}
+  try {
+    for (const item of payload.attendances) {
+      try {
+        const mapped = mapBridgeAttendanceToDesktop(item);
+        const now = new Date().toISOString();
+        const data = mapped.data || {};
+        const status = mapped.status || 'draft';
+        const clientName = [data.surname || '', data.forename || ''].filter(Boolean).join(', ');
+        const stationName = data.policeStationName || '';
+        const dsccRef = data.dsccRef || '';
+        const attendanceDate = data.date || '';
+        const workType = data.workType || '';
+        const dataJson = JSON.stringify(data);
+        const existingId = mapped.anywhereId ? findAttendanceIdByAnywhereImportId(mapped.anywhereId) : null;
+
+        if (existingId != null) {
+          dbRun(
+            `UPDATE attendances SET data=?, status=?, updated_at=?, client_name=?, station_name=?,
+             dscc_ref=?, attendance_date=?, work_type=?, sync_dirty=1,
+             sync_version=COALESCE(sync_version,1)+1
+             WHERE id=? AND deleted_at IS NULL AND archived_at IS NULL
+               AND status NOT IN ('finalised','completed')`,
+            [dataJson, status, now, clientName, stationName, dsccRef, attendanceDate, workType, existingId]
+          );
+          const stillDraft = dbGet(
+            `SELECT id FROM attendances WHERE id=? AND deleted_at IS NULL AND archived_at IS NULL
+               AND status NOT IN ('finalised','completed')`,
+            [existingId]
+          );
+          if (stillDraft) {
+            updated += 1;
+            try { enqueueSyncForRecord(existingId); } catch (_) {}
+          } else {
+            skipped += 1;
+          }
+        } else {
+          const newSyncId =
+            typeof generateSyncId === 'function'
+              ? generateSyncId()
+              : 'local-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+          dbRun(
+            'INSERT INTO attendances (data, status, updated_at, client_name, station_name, dscc_ref, attendance_date, work_type, sync_id, sync_dirty, sync_version) VALUES (?,?,?,?,?,?,?,?,?,1,1)',
+            [dataJson, status, now, clientName, stationName, dsccRef, attendanceDate, workType, newSyncId]
+          );
+          const inserted = dbGet('SELECT id FROM attendances WHERE sync_id=?', [newSyncId]);
+          imported += 1;
+          if (inserted && inserted.id != null) {
+            try { enqueueSyncForRecord(inserted.id); } catch (_) {}
+          }
+        }
+      } catch (e) {
+        errors.push(e && e.message ? e.message : String(e));
+      }
     }
+    try { db.run('COMMIT'); } catch (_) {}
+  } catch (e) {
+    try { db.run('ROLLBACK'); } catch (_) {}
+    return { ok: false, error: e && e.message ? e.message : 'Import failed' };
   }
+
   try { if (typeof markDbDirty === 'function') markDbDirty(); } catch (_) {}
-  return { ok: true, imported, errors: errors.slice(0, 5), total: payload.attendances.length };
+  try { if (typeof flushDb === 'function') flushDb(); } catch (_) {}
+  try { if (typeof scheduleSyncSoon === 'function') scheduleSyncSoon(); } catch (_) {}
+
+  return {
+    ok: true,
+    imported,
+    updated,
+    skipped,
+    errors: errors.slice(0, 8),
+    total: payload.attendances.length,
+  };
 }
 
 ipcMain.handle('anywhere-bridge:import', async (_, params) => {
   let payload = params && params.payload;
   if (!payload && params && params.filePath) {
     try {
-      payload = JSON.parse(fs.readFileSync(String(params.filePath), 'utf8'));
+      const raw = fs.readFileSync(String(params.filePath), 'utf8');
+      const parsed = safeJsonParse(raw);
+      if (!parsed.ok) return { ok: false, error: parsed.error };
+      payload = parsed.value;
     } catch (e) {
       return { ok: false, error: 'Could not read bridge file: ' + (e && e.message) };
     }
@@ -5401,13 +5469,52 @@ ipcMain.handle('anywhere-bridge:choose-and-import', async () => {
   }
   let payload;
   try {
-    payload = JSON.parse(fs.readFileSync(result.filePaths[0], 'utf8'));
+    const raw = fs.readFileSync(result.filePaths[0], 'utf8');
+    const parsed = safeJsonParse(raw);
+    if (!parsed.ok) return { ok: false, error: parsed.error };
+    payload = parsed.value;
   } catch (e) {
     return { ok: false, error: 'Could not read file: ' + (e && e.message) };
   }
   const out = importAnywhereBridgePayload(payload);
   if (out && out.ok) out.filePath = result.filePaths[0];
   return out;
+});
+
+ipcMain.handle('anywhere-bridge:choose-and-export', async () => {
+  const { dialog } = require('electron');
+  const win = BrowserWindow.getFocusedWindow() || mainWindow;
+  if (!db) return { ok: false, error: 'Database not ready' };
+  let rows;
+  try {
+    rows = dbAll(
+      `SELECT id, sync_id, status, updated_at, data
+         FROM attendances
+        WHERE deleted_at IS NULL AND archived_at IS NULL
+        ORDER BY updated_at DESC
+        LIMIT 500`
+    );
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Could not read attendances' };
+  }
+  if (!rows || rows.length === 0) {
+    return { ok: false, error: 'No local records to export.' };
+  }
+  const bridge = buildBridgeFromDesktopRows(rows);
+  const defaultName =
+    'cn-anywhere-bridge-' + new Date().toISOString().slice(0, 10) + '.json';
+  const save = await dialog.showSaveDialog(win || undefined, {
+    title: 'Export for Custody Note Anywhere',
+    defaultPath: defaultName,
+    filters: [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (save.canceled || !save.filePath) return { ok: false, cancelled: true };
+  try {
+    fs.writeFileSync(save.filePath, JSON.stringify(bridge, null, 2), 'utf8');
+  } catch (e) {
+    return { ok: false, error: 'Could not write file: ' + (e && e.message) };
+  }
+  return { ok: true, exported: bridge.attendances.length, filePath: save.filePath };
 });
 
 
