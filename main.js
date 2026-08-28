@@ -6650,6 +6650,10 @@ ipcMain.handle('app-quit', () => {
 // the session is no longer trusted". Persist the DB with a bound so a wedged
 // disk write cannot delay the blanker or later Cmd+Q.
 function _broadcastForceLock(reason) {
+  /* Playwright / isolated-userdata runs: OS lock-screen events on CI runners
+     (esp. Windows) must not raise the credential-free blanker — it blocks
+     Open Outlook and other UI clicks and flakes e2e. Production unchanged. */
+  if (process.env.CUSTODYNOTE_TEST_USERDATA) return;
   try {
     const sendLock = () => {
       const wins = BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
