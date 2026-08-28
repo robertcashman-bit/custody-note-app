@@ -8822,9 +8822,11 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
 
     const mileageCost = (mileageMiles || 0) * (mileageRate || 0.45);
     if (mileageCost > 0) {
+      const milesVal = mileageMiles || 0;
+      const rateVal = mileageRate || 0.45;
       lineItems.push(buildQuickFileItemLine(
         'Mileage',
-        (mileageMiles || 0) + ' miles @ Â£' + (mileageRate || 0.45).toFixed(2),
+        quickfileClient.formatQuickFileMileageDescription(milesVal, rateVal),
         mileageCost,
         1,
         vr
