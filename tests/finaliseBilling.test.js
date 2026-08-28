@@ -237,6 +237,17 @@ describe('Finalise: Telephone form validation', () => {
     assert.ok(codeErr, 'CN09 must not be accepted for pre-charge bail');
   });
 
+  it('allows blank outcomeCode when telephone outcome is Released on pre-charge bail', { skip: !validate }, () => {
+    const data = baseTelephoneData({
+      outcomeDecision: 'Released on pre-charge bail',
+      outcomeCode: '',
+      caseConcludedDate: '2025-01-15',
+    });
+    const errors = validate(data);
+    const codeErr = errors.find(e => e.key === 'outcomeCode');
+    assert.strictEqual(codeErr, undefined, 'First-grant bail has no investigation CN; blank must finalise');
+  });
+
   it('accepts CN06 when telephone outcome is Charged', { skip: !validate }, () => {
     const data = baseTelephoneData({
       outcomeDecision: 'Charged',

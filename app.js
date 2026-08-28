@@ -1743,7 +1743,8 @@ var LAA = {
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
-          'CN04 \u2013 No further action','CN05 \u2013 Simple caution / reprimand / warning','CN06 \u2013 Charge / Summons','CN07 \u2013 Conditional caution','CN08 \u2013 Fixed penalty notice',
+          'CN01 \u2013 No further instructions',
+          'CN04 \u2013 No further action','CN05 \u2013 Simple caution / reprimand / warning','CN06 \u2013 Charge / Summons','CN07 \u2013 Conditional Caution','CN08 \u2013 Fixed Penalty Notice',
           'CN09 \u2013 Released no bail','CN10 \u2013 Bail varied / extended','CN11 \u2013 Bail not varied / extended',
           'CN12 \u2013 Pre-charge engagement agreed and concludes before investigation ends',
           'CN13 \u2013 Pre-charge engagement not agreed',
@@ -8765,21 +8766,14 @@ var REQUIRED_FIELD_KEYS = [
                 setFieldValue('courtTime', '10:00');
               }
             }
-            /* Auto-suggest LAA outcome code from decision (never CN09 for bail). */
+            /* Auto-suggest LAA outcome code from decision (never CN09 for bail).
+               Switching to first-grant bail clears ANY leftover suggested CN (not only CN09). */
             var _DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
-            if (_DS && typeof _DS.suggestOutcomeCodeForDecision === 'function') {
-              var _suggestedCode = _DS.suggestOutcomeCodeForDecision(formData.outcomeDecision);
-              var _prevCode = (formData.outcomeCode || '').trim();
-              var _prevWasSuggested = !_prevCode || (_DS.OUTCOME_CODE_BY_DECISION && Object.keys(_DS.OUTCOME_CODE_BY_DECISION).some(function(k) {
-                return _DS.OUTCOME_CODE_BY_DECISION[k] === _prevCode;
-              })) || /^CN\d{2}\b/.test(_prevCode);
-              if (_suggestedCode && (!_prevCode || _prevWasSuggested)) {
-                formData.outcomeCode = _suggestedCode;
-                setFieldValueSilent('outcomeCode', _suggestedCode);
-              } else if (!_suggestedCode && _prevCode && _DS.isCn09ForbiddenDecision && _DS.isCn09ForbiddenDecision(formData.outcomeDecision)
-                && _DS.extractOutcomeCodePrefix && _DS.extractOutcomeCodePrefix(_prevCode) === 'CN09') {
-                formData.outcomeCode = '';
-                setFieldValueSilent('outcomeCode', '');
+            if (_DS && typeof _DS.resolveOutcomeCodeOnDecisionChange === 'function') {
+              var _resolvedCode = _DS.resolveOutcomeCodeOnDecisionChange(formData.outcomeDecision, formData.outcomeCode);
+              if (_resolvedCode !== (formData.outcomeCode || '').trim()) {
+                formData.outcomeCode = _resolvedCode;
+                setFieldValueSilent('outcomeCode', _resolvedCode);
               }
             }
           }
@@ -13145,7 +13139,13 @@ var REQUIRED_FIELD_KEYS = [
       if (!val || (typeof val === 'string' && !val.trim())) m.push(r);
     });
     if (telCaseConcluded) {
-      if (!(formData.outcomeCode || '').trim()) m.push({ key: 'outcomeCode', label: 'Outcome Code', section: 2 });
+      /* First-grant police bail has no LAA investigation CN — blank outcomeCode is valid. */
+      var _DSTel = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+      var telFirstGrantBail = _DSTel && typeof _DSTel.isFirstGrantPoliceBailDecision === 'function'
+        && _DSTel.isFirstGrantPoliceBailDecision(telDecision);
+      if (!telFirstGrantBail && !(formData.outcomeCode || '').trim()) {
+        m.push({ key: 'outcomeCode', label: 'Outcome Code', section: 2 });
+      }
       if (!(formData.caseConcludedDate || '').trim()) m.push({ key: 'caseConcludedDate', label: 'Case concluded date', section: 2 });
     }
     pushOutcomeCodeMismatchError(m, 2);

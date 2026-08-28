@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.74",
+      "date": "2026-08-28",
+      "latest": true,
+      "changes": [
+        "Switching to Bail without charge / Released on pre-charge bail now clears any leftover suggested LAA code (CN06/CN04/CN05/CN09 etc.), not only CN09",
+        "Finalise rejects charge / NFA / caution / RUI codes on first-grant bail matters (those have no investigation CN); Charged with Bail still CN06; RUI still CN09",
+        "Voluntary outcome-code dropdown labels now match auto-suggest exactly (CN07 Conditional Caution, CN08 Fixed Penalty Notice) and include CN01 for Handed back to DSCC"
+      ]
+    },
+    {
       "version": "1.9.73",
       "date": "2026-08-25",
-      "latest": true,
+      "latest": false,
       "changes": [
         "LAA outcome codes: Bail without charge / pre-charge bail / Charged with Bail never auto-code or validate as CN09 (CN09 is RUI / released without bail only)",
         "Charged* → CN06, Released NFA → CN04, RUI → CN09; wrong outcome-code pairs block finalise; CN12/CN13 added to telephone and voluntary dropdowns",
