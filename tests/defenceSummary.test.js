@@ -112,6 +112,23 @@ describe('defenceSummary — outcome code vs decision mismatch errors', () => {
     }
   });
 
+  it('errors when first-grant bail is paired with charge / NFA / caution leftovers', () => {
+    for (const decision of ['Bail without charge', 'Released on pre-charge bail']) {
+      for (const code of [
+        'CN06 \u2013 Charge / Summons',
+        'CN04 \u2013 No further action',
+        'CN05 \u2013 Simple caution / reprimand / warning',
+        'CN07 \u2013 Conditional Caution',
+        'CN08 \u2013 Fixed Penalty Notice',
+        'CN09 \u2013 Released no bail',
+      ]) {
+        const err = ds.getOutcomeCodeMismatchError(decision, code);
+        assert.ok(err, 'expected mismatch for ' + decision + ' + ' + code);
+        assert.match(err, /first grant|no LAA investigation/i);
+      }
+    }
+  });
+
   it('does not error when RUI is correctly CN09', () => {
     assert.strictEqual(
       ds.getOutcomeCodeMismatchError('Released Under Investigation', 'CN09 \u2013 Released no bail'),
@@ -146,6 +163,61 @@ describe('defenceSummary — outcome code vs decision mismatch errors', () => {
     const err = ds.getOutcomeCodeMismatchError('Bail without charge', 'CN10 \u2013 Bail varied / extended');
     assert.ok(err);
     assert.match(err, /INVK|vary|extend/i);
+  });
+});
+
+describe('defenceSummary — resolveOutcomeCodeOnDecisionChange (stale code clear)', () => {
+  it('Charged → CN06, then Bail without charge clears leftover CN06', () => {
+    const afterCharge = ds.resolveOutcomeCodeOnDecisionChange('Charged', '');
+    assert.strictEqual(afterCharge, 'CN06 \u2013 Charge / Summons');
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Bail without charge', afterCharge),
+      ''
+    );
+  });
+
+  it('clears CN04 / CN05 / CN09 leftovers when switching to first-grant bail', () => {
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Bail without charge', 'CN04 \u2013 No further action'),
+      ''
+    );
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Released on pre-charge bail', 'CN05 \u2013 Simple caution / reprimand / warning'),
+      ''
+    );
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Bail without charge', 'CN09 \u2013 Released no bail'),
+      ''
+    );
+  });
+
+  it('Charged with Bail still resolves to CN06 (does not clear)', () => {
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Charged with Bail', 'CN06 \u2013 Charge / Summons'),
+      'CN06 \u2013 Charge / Summons'
+    );
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Charged with Bail', ''),
+      'CN06 \u2013 Charge / Summons'
+    );
+  });
+
+  it('RUI still resolves to CN09', () => {
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Released Under Investigation', ''),
+      'CN09 \u2013 Released no bail'
+    );
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Released Under Investigation', 'CN06 \u2013 Charge / Summons'),
+      'CN09 \u2013 Released no bail'
+    );
+  });
+
+  it('preserves a manually entered non-CN value when switching decision', () => {
+    assert.strictEqual(
+      ds.resolveOutcomeCodeOnDecisionChange('Charged', 'Custom firm note'),
+      'Custom firm note'
+    );
   });
 });
 
@@ -214,13 +286,43 @@ describe('defenceSummary — app wiring', () => {
     assert.match(appJs, /CN13 \\u2013 Pre-charge engagement not agreed/);
   });
 
+  it('suggested OUTCOME_CODE_BY_DECISION labels match telephone and voluntary select options exactly', () => {
+    const map = ds.OUTCOME_CODE_BY_DECISION;
+    const mustMatch = [
+      map['Conditional Caution'],
+      map['Penalty Notice (PND)'],
+      map['Handed back to DSCC'],
+      map['Released NFA'],
+      map['Simple Caution'],
+      map['Charged'],
+    ];
+    for (const label of mustMatch) {
+      assert.ok(label, 'expected mapped label');
+      /* Escaped unicode en-dash as written in app.js option arrays */
+      const escaped = label.replace(/\u2013/g, '\\u2013');
+      assert.ok(
+        appJs.includes("'" + escaped + "'") || appJs.includes(escaped),
+        'expected app.js option string to match mapped label: ' + label
+      );
+    }
+    /* Voluntary options must use Title Case CN07/CN08 (not "Conditional caution") and include CN01 */
+    assert.match(appJs, /CN07 \\u2013 Conditional Caution/);
+    assert.match(appJs, /CN08 \\u2013 Fixed Penalty Notice/);
+    assert.doesNotMatch(appJs, /CN07 \\u2013 Conditional caution/);
+    assert.doesNotMatch(appJs, /CN08 \\u2013 Fixed penalty notice/);
+    assert.ok(
+      (appJs.match(/CN01 \\u2013 No further instructions/g) || []).length >= 2,
+      'telephone and voluntary dropdowns both need CN01'
+    );
+  });
+
   it('finalise validators call pushOutcomeCodeMismatchError', () => {
     assert.match(appJs, /function pushOutcomeCodeMismatchError/);
     assert.match(appJs, /pushOutcomeCodeMismatchError\(m, 2\)/);
     assert.match(appJs, /pushOutcomeCodeMismatchError\(m, 7\)/);
   });
 
-  it('outcomeDecision change suggests LAA code via DefenceSummary', () => {
-    assert.match(appJs, /suggestOutcomeCodeForDecision/);
+  it('outcomeDecision change resolves LAA code via DefenceSummary (clears stale on first-grant bail)', () => {
+    assert.match(appJs, /resolveOutcomeCodeOnDecisionChange/);
   });
 });
