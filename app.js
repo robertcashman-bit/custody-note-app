@@ -8563,6 +8563,104 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
+  /**
+   * Map legacy abbreviated PACE ground labels (pre v1.9.75) onto the current
+   * statutory s.24 / s.37 option strings. Unmapped values are left as-is
+   * (including existing "Other: …" entries).
+   */
+  function migrateLegacyPaceGrounds(data) {
+    if (!data || typeof data !== 'object') return;
+    var ARREST_MAP = {
+      "To ascertain the person's name/address": [
+        "To ascertain the person's name",
+        "To ascertain the person's address"
+      ],
+      'To prevent physical injury to self or others': [
+        'To prevent causing physical injury to himself or any other person'
+      ],
+      'To prevent damage to property': [
+        'To prevent causing loss of or damage to property'
+      ],
+      'To protect a child or vulnerable person': [
+        'To protect a child or other vulnerable person'
+      ],
+      'To allow prompt and effective investigation': [
+        "To allow the prompt and effective investigation of the offence or of the person's conduct"
+      ],
+      'To exercise search powers under PACE': [
+        "To allow the prompt and effective investigation of the offence or of the person's conduct"
+      ],
+      'To prevent disappearance of the person': [
+        'To prevent any prosecution being hindered by the disappearance of the person'
+      ]
+    };
+    var DETENTION_MAP = {
+      'To secure or preserve evidence': [
+        'To secure or preserve evidence relating to an offence for which the person is under arrest'
+      ],
+      'To obtain evidence by questioning': [
+        'To obtain such evidence by questioning the person'
+      ]
+    };
+    var INSUFFICIENT_RE = /^Insufficient evidence to charge\s*[–—-]?\s*further investigation needed$/i;
+
+    function migratePipe(raw, map, otherRe) {
+      if (!raw || typeof raw !== 'string') return raw;
+      var parts = raw.split('|').filter(Boolean);
+      if (!parts.length) return raw;
+      var out = [];
+      var seen = Object.create(null);
+      var changed = false;
+      function add(v) {
+        if (!v || seen[v]) return;
+        seen[v] = true;
+        out.push(v);
+      }
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        if (map[p]) {
+          map[p].forEach(add);
+          changed = true;
+        } else if (otherRe && otherRe.test(p)) {
+          add('Other: ' + p);
+          changed = true;
+        } else {
+          add(p);
+        }
+      }
+      return changed ? out.join('|') : raw;
+    }
+
+    if (data.groundsForArrest) {
+      var a = migratePipe(data.groundsForArrest, ARREST_MAP, null);
+      if (a !== data.groundsForArrest) data.groundsForArrest = a;
+    }
+    if (data.groundsForDetention) {
+      var d = migratePipe(data.groundsForDetention, DETENTION_MAP, INSUFFICIENT_RE);
+      if (d !== data.groundsForDetention) data.groundsForDetention = d;
+    }
+  }
+
+  /**
+   * Custody §8 has no outcomeCode field. Drafts that still hold a leftover
+   * investigation CN from an earlier decision (e.g. Charged → Bail without charge)
+   * would fail finalise with no on-form control to clear it — apply the same clear
+   * used when the user changes outcomeDecision.
+   */
+  function migrateStaleFirstGrantBailOutcomeCode(data) {
+    if (!data || typeof data !== 'object') return;
+    var DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+    if (!DS || typeof DS.resolveOutcomeCodeOnDecisionChange !== 'function') return;
+    if (typeof DS.isFirstGrantPoliceBailDecision !== 'function') return;
+    if (!DS.isFirstGrantPoliceBailDecision(data.outcomeDecision)) return;
+    /* Only auto-clear when the form has no visible outcomeCode control (custody). */
+    if (data._formType === 'telephone' || data.attendanceMode === 'voluntary') return;
+    var resolved = DS.resolveOutcomeCodeOnDecisionChange(data.outcomeDecision, data.outcomeCode);
+    if (resolved !== (data.outcomeCode || '').trim()) {
+      data.outcomeCode = resolved;
+    }
+  }
+
   function renderForm(data) {
     const form = document.getElementById('attendance-form');
     if (!form) return;
@@ -8579,6 +8677,14 @@ var REQUIRED_FIELD_KEYS = [
     if (!formData.oicEmail && formData.oicForceNo && String(formData.oicForceNo).indexOf('@') >= 0) {
       formData.oicEmail = formData.oicForceNo;
     }
+
+    // Backward-compat: map pre-s.24/s.37 statutory ground labels onto the current options
+    // so saved checkbox values still display and are not wiped on collect/save.
+    migrateLegacyPaceGrounds(formData);
+
+    // Backward-compat: custody has no outcomeCode control — clear leftover investigation
+    // CNs when the decision is already first-grant police bail (same as decision-change).
+    migrateStaleFirstGrantBailOutcomeCode(formData);
 
     // Backward-compat: older records have medication text but no medicationRequired selector.
     if (!formData.medicationRequired && formData.medication) {
@@ -13372,6 +13478,18 @@ var REQUIRED_FIELD_KEYS = [
     var bailDate = (formData.bailDate || '').trim();
     if (bailOutcome === 'Bail without charge' && bailDate && attDate && bailDate < attDate) {
       m.push({ key: 'bailDate', label: 'Bail return date is before attendance date', section: 7 });
+    }
+
+    /* Custody has no outcomeCode control — clear leftover CNs on first-grant bail
+       before mismatch check so drafts are not blocked with a hidden field error. */
+    var _DSAtt = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+    if (_DSAtt && typeof _DSAtt.isFirstGrantPoliceBailDecision === 'function'
+        && _DSAtt.isFirstGrantPoliceBailDecision(formData.outcomeDecision)
+        && typeof _DSAtt.resolveOutcomeCodeOnDecisionChange === 'function') {
+      var _attResolved = _DSAtt.resolveOutcomeCodeOnDecisionChange(formData.outcomeDecision, formData.outcomeCode);
+      if (_attResolved !== (formData.outcomeCode || '').trim()) {
+        formData.outcomeCode = _attResolved;
+      }
     }
 
     pushOutcomeCodeMismatchError(m, 7);

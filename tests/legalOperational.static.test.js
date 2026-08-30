@@ -133,6 +133,76 @@ describe('PACE s.24 / s.37 grounds (statutory lists)', () => {
   });
 });
 
+describe('PACE grounds legacy label migration', () => {
+  function extractFn(source, name) {
+    const idx = source.indexOf('function ' + name);
+    assert.ok(idx !== -1, name + ' missing');
+    let depth = 0;
+    let started = false;
+    let end = idx;
+    for (let i = idx; i < source.length; i++) {
+      if (source[i] === '{') { depth++; started = true; }
+      if (source[i] === '}') { depth--; }
+      if (started && depth === 0) { end = i + 1; break; }
+    }
+    return source.slice(idx, end);
+  }
+
+  const migrate = new Function(
+    extractFn(appJs, 'migrateLegacyPaceGrounds') + '; return migrateLegacyPaceGrounds;'
+  )();
+
+  it('maps old arrest limbs onto statutory labels (no silent wipe)', () => {
+    const d = {
+      groundsForArrest: [
+        "To ascertain the person's name/address",
+        'To prevent physical injury to self or others',
+        'To prevent damage to property',
+        'To prevent an offence against public decency',
+        'To protect a child or vulnerable person',
+        'To allow prompt and effective investigation',
+        'To exercise search powers under PACE',
+        'To prevent disappearance of the person',
+      ].join('|'),
+    };
+    migrate(d);
+    const parts = d.groundsForArrest.split('|');
+    assert.ok(parts.includes("To ascertain the person's name"));
+    assert.ok(parts.includes("To ascertain the person's address"));
+    assert.ok(parts.includes('To prevent causing physical injury to himself or any other person'));
+    assert.ok(parts.includes('To prevent causing loss of or damage to property'));
+    assert.ok(parts.includes('To prevent an offence against public decency'));
+    assert.ok(parts.includes('To protect a child or other vulnerable person'));
+    assert.ok(parts.includes("To allow the prompt and effective investigation of the offence or of the person's conduct"));
+    assert.ok(parts.includes('To prevent any prosecution being hindered by the disappearance of the person'));
+    assert.ok(!parts.includes('To exercise search powers under PACE'));
+  });
+
+  it('maps old detention limbs and preserves removed item as Other', () => {
+    const d = {
+      groundsForDetention: [
+        'To secure or preserve evidence',
+        'To obtain evidence by questioning',
+        'Insufficient evidence to charge \u2013 further investigation needed',
+      ].join('|'),
+    };
+    migrate(d);
+    const parts = d.groundsForDetention.split('|');
+    assert.ok(parts.includes('To secure or preserve evidence relating to an offence for which the person is under arrest'));
+    assert.ok(parts.includes('To obtain such evidence by questioning the person'));
+    assert.ok(parts.some((p) => p.startsWith('Other:') && /Insufficient evidence/i.test(p)));
+  });
+
+  it('leaves already-migrated values unchanged', () => {
+    const d = {
+      groundsForArrest: "To ascertain the person's name|To protect a child or other vulnerable person",
+    };
+    const before = d.groundsForArrest;
+    migrate(d);
+    assert.strictEqual(d.groundsForArrest, before);
+  });
+});
+
 describe('LAA police stations Annex A data', () => {
   const stations = JSON.parse(
     fs.readFileSync(path.join(root, 'data', 'police-stations-laa.json'), 'utf8')

@@ -305,7 +305,7 @@ describe('Finalise: Attendance outcome code mismatch', () => {
   let validate;
   try { validate = buildAttendanceValidator(); } catch (_) {}
 
-  it('rejects CN09 when custody decision is Bail without charge', { skip: !validate }, () => {
+  it('clears leftover CN09 on Bail without charge so custody can finalise', { skip: !validate }, () => {
     const data = baseAttendanceData({
       outcomeDecision: 'Bail without charge',
       outcomeCode: 'CN09 – Released no bail',
@@ -314,8 +314,23 @@ describe('Finalise: Attendance outcome code mismatch', () => {
       reasonsForAdvice: 'Advised no comment',
     });
     const errors = validate(data);
-    const mismatch = errors.find(e => e.key === 'outcomeCode' && /CN09|bail/i.test(e.label));
-    assert.ok(mismatch, 'Bail without charge must never finalise with CN09');
+    assert.strictEqual(data.outcomeCode, '', 'hidden leftover CN09 must be cleared on custody finalise');
+    const mismatch = errors.find(e => e.key === 'outcomeCode' && /CN09|bail|first grant/i.test(e.label));
+    assert.strictEqual(mismatch, undefined, 'Bail without charge must finalise after clearing leftover CN09');
+  });
+
+  it('clears leftover CN06 on Bail without charge so custody can finalise', { skip: !validate }, () => {
+    const data = baseAttendanceData({
+      outcomeDecision: 'Bail without charge',
+      outcomeCode: 'CN06 – Charge / Summons',
+      bailDate: '2025-02-01',
+      clientDecision: 'No comment',
+      reasonsForAdvice: 'Advised no comment',
+    });
+    const errors = validate(data);
+    assert.strictEqual(data.outcomeCode, '', 'hidden leftover CN06 must be cleared on custody finalise');
+    const mismatch = errors.find(e => e.key === 'outcomeCode');
+    assert.strictEqual(mismatch, undefined);
   });
 
   it('does not invent a CN09 mismatch when Bail without charge has no code', { skip: !validate }, () => {
