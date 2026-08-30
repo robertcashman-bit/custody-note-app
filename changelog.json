@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.75",
+      "date": "2026-08-30",
+      "latest": true,
+      "changes": [
+        "LAA police stations: added missing MA100 (Great Broughton, Whitehaven / Workington scheme 6007)",
+        "Station label cleanups: LN066 Tottenham Court Road; Llanelli scheme footnote stripped (WA005–WA008, WA902); BR904 Sedgemoor / Taunton Deane",
+        "PACE s.24 grounds for arrest aligned to statutory limbs (name/address split, highway obstruction, loss of or damage to property; search powers no longer a standalone ground)",
+        "PACE s.37 grounds for detention reduced to the two statutory options (secure/preserve evidence; obtain evidence by questioning)"
+      ]
+    },
+    {
       "version": "1.9.74",
       "date": "2026-08-28",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Switching to Bail without charge / Released on pre-charge bail now clears any leftover suggested LAA code (CN06/CN04/CN05/CN09 etc.), not only CN09",
         "Finalise rejects charge / NFA / caution / RUI codes on first-grant bail matters (those have no investigation CN); Charged with Bail still CN06; RUI still CN09",
