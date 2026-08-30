@@ -623,19 +623,21 @@ var LAA = {
         { key: 'voluntaryInterview', label: 'Voluntary Interview?', type: 'select', options: ['Yes','No'] },
         { key: '_note_voluntary', label: 'If voluntary interview, arrest/detention grounds and PACE clock do not apply.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'Yes' } },
         { key: 'groundsForArrest', label: 'Grounds for Arrest (PACE s.24)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
-          'To ascertain the person\'s name/address',
-          'To prevent physical injury to self or others',
-          'To prevent damage to property',
+          'To ascertain the person\'s name',
+          'To ascertain the person\'s address',
+          'To prevent causing physical injury to himself or any other person',
+          'To prevent suffering physical injury',
+          'To prevent causing loss of or damage to property',
           'To prevent an offence against public decency',
-          'To protect a child or vulnerable person',
-          'To allow prompt and effective investigation',
-          'To exercise search powers under PACE',
-          'To prevent disappearance of the person'
+          'To prevent causing an unlawful obstruction of the highway',
+          'To protect a child or other vulnerable person',
+          'To allow the prompt and effective investigation of the offence or of the person\'s conduct',
+          'To prevent any prosecution being hindered by the disappearance of the person'
         ] },
+        { key: '_note_arrest_search', label: 'PACE search powers may support the investigation ground (Code G para 2.9(e)); they are not a separate s.24 necessity criterion.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'groundsForDetention', label: 'Grounds for Detention (PACE s.37)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
-          'To secure or preserve evidence',
-          'To obtain evidence by questioning',
-          'Insufficient evidence to charge \u2013 further investigation needed'
+          'To secure or preserve evidence relating to an offence for which the person is under arrest',
+          'To obtain such evidence by questioning the person'
         ] },
         { key: 'dateOfArrest', label: 'Date of Arrest', type: 'date', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'timeOfArrest', label: 'Time of Arrest', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
