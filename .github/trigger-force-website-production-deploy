@@ -1,10 +1,1 @@
-# Sentinel: push this file to master to force a Vercel production deploy of
-# robertcashman-bit/custody-note-website (custodynote.com).
-#
-force-requested-at: 2026-08-25T18:40:00Z
-reason: ship-1.9.72-download-page-after-signed-release
-release-run: 32884107316
-force_website_production_deploy: true
-target: custodynote.com
-website_repo: robertcashman-bit/custody-note-website
-vercel_project: custody-note-website
+2026-08-30T14:20:09Z
