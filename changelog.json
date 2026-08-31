@@ -15,7 +15,7 @@
       "latest": false,
       "changes": [
         "LAA police stations: added missing MA100 (Great Broughton, Whitehaven / Workington scheme 6007)",
-        "Station label cleanups: LN066 Tottenham Court Road; Llanelli scheme footnote stripped (WA005\u2013WA008, WA902); BR904 Sedgemoor / Taunton Deane",
+        "Station label cleanups: LN066 Tottenham Court Road; Llanelli scheme footnote stripped (WA005–WA008, WA902); BR904 Sedgemoor / Taunton Deane",
         "PACE s.24 grounds for arrest aligned to statutory limbs (name/address split, highway obstruction, loss of or damage to property; search powers no longer a standalone ground)",
         "PACE s.37 grounds for detention reduced to the two statutory options (secure/preserve evidence; obtain evidence by questioning)"
       ]
@@ -36,8 +36,8 @@
       "latest": false,
       "changes": [
         "LAA outcome codes: Bail without charge / pre-charge bail / Charged with Bail never auto-code or validate as CN09 (CN09 is RUI / released without bail only)",
-        "Charged* \u2192 CN06, Released NFA \u2192 CN04, RUI \u2192 CN09; wrong outcome-code pairs block finalise; CN12/CN13 added to telephone and voluntary dropdowns",
-        "QuickFile mileage line no longer shows a stray accented A before the pound (UTF-8 mojibake) \u2014 sends ASCII-safe \"Mileage (12.0 miles at 0.45 GBP/mile)\""
+        "Charged* → CN06, Released NFA → CN04, RUI → CN09; wrong outcome-code pairs block finalise; CN12/CN13 added to telephone and voluntary dropdowns",
+        "QuickFile mileage line no longer shows a stray accented A before the pound (UTF-8 mojibake) — sends ASCII-safe \"Mileage (12.0 miles at 0.45 GBP/mile)\""
       ]
     },
     {
@@ -71,7 +71,7 @@
       "changes": [
         "Officer Emails: Open Outlook now places the current email-box text into Outlook as the message body (Outlook Web when the URL fits; Outlook desktop .eml draft when it does not)",
         "Removes the clipboard-paste workaround so you no longer need to paste the body after Outlook opens",
-        "Uses the live edited or typed body at click time \u2014 not a stale generated template"
+        "Uses the live edited or typed body at click time — not a stale generated template"
       ]
     },
     {
@@ -88,7 +88,7 @@
       "latest": false,
       "changes": [
         "Admin licences are never revoked in the app and are always re-checked online on startup",
-        "Fixes a false \u201clicence has been revoked\u201d screen after installing the latest version when signed in as admin",
+        "Fixes a false “licence has been revoked” screen after installing the latest version when signed in as admin",
         "A cached revoked stamp is confirmed with the licence server before locking the app; Free/trial keys are not stamped revoked by a failed server check"
       ]
     },
@@ -97,7 +97,7 @@
       "date": "2026-08-02",
       "latest": false,
       "changes": [
-        "AI answers (Ask AI and Law / Elements fill) now use web search and must include Sources \u2014 unsourced or unverified case-law style claims are blocked",
+        "AI answers (Ask AI and Law / Elements fill) now use web search and must include Sources — unsourced or unverified case-law style claims are blocked",
         "Insert and Append stay disabled until at least two source URLs are present; Sources are shown in the review UI",
         "Accuracy rules baked in: no hallucinations, if in doubt do not quote, solicitor must still verify primary materials"
       ]
@@ -107,7 +107,7 @@
       "date": "2026-08-02",
       "latest": false,
       "changes": [
-        "Case Assessment: Ask AI \u2014 tick to open a multi-turn Q&A session for any legal question (follow-ups stay open until you close); Copy or Append to Law / Elements only when you choose",
+        "Case Assessment: Ask AI — tick to open a multi-turn Q&A session for any legal question (follow-ups stay open until you close); Copy or Append to Law / Elements only when you choose",
         "Law / Elements AI fill: draft stays in the review modal until you press Insert; clear notice when the field already has saved text",
         "Ask AI and Law fill checkboxes are never printed on the PDF"
       ]
@@ -117,7 +117,7 @@
       "date": "2026-08-02",
       "latest": false,
       "changes": [
-        "Case Assessment: optional AI fill for Law / Elements of offence (actus reus, mens rea, defences, sentencing) using your own OpenAI API key \u2014 review before insert; checkbox never appears on the PDF",
+        "Case Assessment: optional AI fill for Law / Elements of offence (actus reus, mens rea, defences, sentencing) using your own OpenAI API key — review before insert; checkbox never appears on the PDF",
         "Settings: store your OpenAI API key (synced with other Custody Note settings across devices when licensed)",
         "Removed the previous Pro AI summary feature",
         "Settings sync: larger cloud blob so credentials and preferences stay in sync across installs"
@@ -138,7 +138,7 @@
       "date": "2026-08-02",
       "latest": false,
       "changes": [
-        "Consultation: tick \u201cunknown NI no.\u201d under National Insurance to fill the NI box with \u201c- unknown -\u201d",
+        "Consultation: tick “unknown NI no.” under National Insurance to fill the NI box with “- unknown -”",
         "Number of suspects defaults to 1 on new custody, voluntary, and telephone forms",
         "Station mileage: Tonbridge (BG039) set to 46 miles from base",
         "Outcome Decision: red disclaimer reminding users to double-check results from custody staff"
@@ -158,7 +158,7 @@
       "date": "2026-07-22",
       "latest": false,
       "changes": [
-        "Beta: Custody Note is free during public beta while we test with real police station work \u2014 no credit card to start",
+        "Beta: Custody Note is free during public beta while we test with real police station work — no credit card to start",
         "Copy: Free forever wording replaced with Free during beta across tips, licence banners, and share invites",
         "Pro: paid plans remain planned after beta (cloud backup and advanced tools)"
       ]
@@ -168,9 +168,9 @@
       "date": "2026-07-22",
       "latest": false,
       "changes": [
-        "Pro AI: opt-in local attendance and interview summary drafts (Pro only) \u2014 review and edit before insert; nothing sent to a cloud AI provider yet",
-        "Firm workspace: local seats, branding footer, and shared templates in Settings \u2192 Licence",
-        "Anywhere bridge: import JSON from Custody Note Anywhere in Settings \u2192 Backup (cn-anywhere-bridge v1)",
+        "Pro AI: opt-in local attendance and interview summary drafts (Pro only) — review and edit before insert; nothing sent to a cloud AI provider yet",
+        "Firm workspace: local seats, branding footer, and shared templates in Settings → Licence",
+        "Anywhere bridge: import JSON from Custody Note Anywhere in Settings → Backup (cn-anywhere-bridge v1)",
         "Privacy: documented opt-in Pro AI local drafts"
       ]
     },
@@ -180,7 +180,7 @@
       "latest": false,
       "changes": [
         "Settings: Free / Pro licence badges and Upgrade to Pro panel for Free installs",
-        "Settings: Pro AI summaries \u201cComing soon\u201d card (opt-in drafts will never send without your action)",
+        "Settings: Pro AI summaries “Coming soon” card (opt-in drafts will never send without your action)",
         "Settings: personal invite link (/r/:code) for sharing Free Custody Note",
         "Reliability: e2e no longer fails when the tips feed is briefly unavailable mid-deploy"
       ]
@@ -191,7 +191,7 @@
       "latest": false,
       "changes": [
         "Home Tips strip: rotating workflow tips (not legal advice), dismissible",
-        "PDF/Word: optional \u201cPrepared with Custody Note\u201d footer \u2014 toggle in Settings \u2192 Appearance",
+        "PDF/Word: optional “Prepared with Custody Note” footer — toggle in Settings → Appearance",
         "After finalise: one-time soft invite to share Free Custody Note with a colleague"
       ]
     },
@@ -200,8 +200,8 @@
       "date": "2026-07-22",
       "latest": false,
       "changes": [
-        "Free forever: first launch no longer starts a timed trial \u2014 core notes, PDF, billing and local backup stay available without a subscription",
-        "Pro (\u00a39.99/mo): managed cloud backup and advanced tools; expired Pro falls back to Free core instead of blocking new records",
+        "Free forever: first launch no longer starts a timed trial — core notes, PDF, billing and local backup stay available without a subscription",
+        "Pro (£9.99/mo): managed cloud backup and advanced tools; expired Pro falls back to Free core instead of blocking new records",
         "Onboarding: explore-first Free banner (dismissible); help and share copy updated for Free/Pro"
       ]
     },
@@ -227,8 +227,8 @@
       "latest": false,
       "changes": [
         "QuickFile: new instructing firms are created or matched in QuickFile automatically when you save them (if credentials are configured)",
-        "Billing: fixed false \u201cselect the instructing firm\u201d error when a firm was already selected on the record",
-        "LAA Declaration: \u201cClient signature not needed\u201d tick with optional reason \u2014 clears missing-signature warnings when marked",
+        "Billing: fixed false “select the instructing firm” error when a firm was already selected on the record",
+        "LAA Declaration: “Client signature not needed” tick with optional reason — clears missing-signature warnings when marked",
         "Firms: typing a name that is not on the list prompts you to add it and opens the add-firm form with the name filled in"
       ]
     },
@@ -247,7 +247,7 @@
       "date": "2026-07-07",
       "latest": false,
       "changes": [
-        "Cross-device sync: much faster catch-up \u2014 batch push sends up to 100 records per sync cycle (20 per request) instead of 5 one-at-a-time",
+        "Cross-device sync: much faster catch-up — batch push sends up to 100 records per sync cycle (20 per request) instead of 5 one-at-a-time",
         "Cross-device sync: quicker idle polling (10s) and faster sync after save (1s debounce) so missing records appear on other devices sooner",
         "Cross-device sync: fixed batch queue picker so in-flight items are not picked twice during a push round"
       ]
@@ -257,9 +257,9 @@
       "date": "2026-07-07",
       "latest": false,
       "changes": [
-        "Cross-device sync: one canonical encryption key per licence \u2014 fixes records still not syncing when two computers each had their own key and overwrote cloud escrow",
-        "Cross-device sync: second device adopts the first device\u2019s key and re-pushes its records under that key so every record decrypts on every computer",
-        "Cross-device sync: stops escrow ping-pong \u2014 devices no longer overwrite each other\u2019s cloud recovery key after every push"
+        "Cross-device sync: one canonical encryption key per licence — fixes records still not syncing when two computers each had their own key and overwrote cloud escrow",
+        "Cross-device sync: second device adopts the first device’s key and re-pushes its records under that key so every record decrypts on every computer",
+        "Cross-device sync: stops escrow ping-pong — devices no longer overwrite each other’s cloud recovery key after every push"
       ]
     },
     {
@@ -267,7 +267,7 @@
       "date": "2026-07-07",
       "latest": false,
       "changes": [
-        "Cross-device sync: automatic encryption key recovery from cloud when opening the app on a second computer \u2014 fixes records not appearing because each PC had its own key",
+        "Cross-device sync: automatic encryption key recovery from cloud when opening the app on a second computer — fixes records not appearing because each PC had its own key",
         "Cross-device sync: primary device uploads key escrow after push so other computers can decrypt synced records",
         "Cross-device sync: faster background sync (30s poll, 3s debounce) and longer push timeout for slow networks",
         "Cross-device sync: pulls all pending remote records in batches when catching up after long offline periods",
@@ -281,8 +281,8 @@
       "latest": false,
       "changes": [
         "Cross-device sync: footer now shows honest status (No remote records, decrypt failed, Up to date) instead of misleading Synced when nothing arrived",
-        "Cross-device sync: Full re-sync from cloud and Push all pending now in Settings \u2192 Backup",
-        "Cross-device sync: pull cursor no longer advances when records fail to decrypt \u2014 skipped records can be re-pulled after key recovery",
+        "Cross-device sync: Full re-sync from cloud and Push all pending now in Settings → Backup",
+        "Cross-device sync: pull cursor no longer advances when records fail to decrypt — skipped records can be re-pulled after key recovery",
         "Cross-device sync: empty secondary devices automatically run a full re-sync on startup",
         "Cross-device sync: warning toast when remote records cannot be decrypted"
       ]
@@ -292,9 +292,9 @@
       "date": "2026-07-07",
       "latest": false,
       "changes": [
-        "Address: No Fixed Abode (NFA) checkbox on client address fields \u2014 ticks to fill and lock address as NFA",
+        "Address: No Fixed Abode (NFA) checkbox on client address fields — ticks to fill and lock address as NFA",
         "LAA Declaration: Section 11, inline sign-off, and telephone sign-off now show the full official online applicant declaration (v7 Feb 2025), not the short CRM2 text",
-        "LAA Declaration: PDF output matches \u2014 full applicant declaration, partner declaration, fraud notice, and Fair Processing Notice",
+        "LAA Declaration: PDF output matches — full applicant declaration, partner declaration, fraud notice, and Fair Processing Notice",
         "LAA Declaration: full official privacy notice wording restored across app and PDF"
       ]
     },
@@ -303,9 +303,9 @@
       "date": "2026-07-05",
       "latest": false,
       "changes": [
-        "Licence: offline validation grace extended from 7 to 60 days \u2014 paid subscriptions no longer treated as expired just because the app has not been opened recently",
+        "Licence: offline validation grace extended from 7 to 60 days — paid subscriptions no longer treated as expired just because the app has not been opened recently",
         "Licence: stale validation shows a warning and auto-revalidates when online instead of blocking new records or forcing reactivation",
-        "Licence: Email my licence key added to the sign-in overlay and Settings \u203a Account (including grace and no-licence states)"
+        "Licence: Email my licence key added to the sign-in overlay and Settings › Account (including grace and no-licence states)"
       ]
     },
     {
@@ -313,7 +313,7 @@
       "date": "2026-06-22",
       "latest": false,
       "changes": [
-        "Fix: Home screen LAA form cards (CRM1, CRM2, CRM3, Applicant Declaration) now open a visible attendance picker \u2014 previously the modal opened off-screen when the home page was scrolled",
+        "Fix: Home screen LAA form cards (CRM1, CRM2, CRM3, Applicant Declaration) now open a visible attendance picker — previously the modal opened off-screen when the home page was scrolled",
         "LAA forms: automatic official template version check on startup; Settings shows active form versions and a Check for updates button",
         "LAA forms: when no attendances exist, choose Generate blank form or Create new attendance from the picker",
         "Release: Mac installers built by CI during deploy (avoids updater checksum race); GitHub release publish retries asset verification"
@@ -333,7 +333,7 @@
       "date": "2026-06-18",
       "latest": false,
       "changes": [
-        "Fix: LAA Declaration PDF now always includes the official CRM2 client declaration text \u2014 uses bundled reference data and hardcoded fallback when the wording module is unavailable",
+        "Fix: LAA Declaration PDF now always includes the official CRM2 client declaration text — uses bundled reference data and hardcoded fallback when the wording module is unavailable",
         "Fix: LAA declaration PDF styling renders correctly even without the wording module"
       ]
     },
@@ -342,7 +342,7 @@
       "date": "2026-06-18",
       "latest": false,
       "changes": [
-        "Release metadata only \u2014 LAA declaration PDF fix shipped in v1.9.43"
+        "Release metadata only — LAA declaration PDF fix shipped in v1.9.43"
       ]
     },
     {
@@ -350,7 +350,7 @@
       "date": "2026-06-18",
       "latest": false,
       "changes": [
-        "LAA Declaration: hardened so the attendance-note PDF can never silently omit the declaration \u2014 if the official wording can't load it now prints a clear 'update and re-export' notice instead of just the privacy line",
+        "LAA Declaration: hardened so the attendance-note PDF can never silently omit the declaration — if the official wording can't load it now prints a clear 'update and re-export' notice instead of just the privacy line",
         "LAA Declaration: added a real runtime test that verifies the full CRM2 and CRM14 declarations render in the PDF and in the app"
       ]
     },
@@ -359,7 +359,7 @@
       "date": "2026-06-17",
       "latest": false,
       "changes": [
-        "LAA Declaration: full-screen client sign now shows the official Privacy Notice and declaration above the signing pad \u2014 the primary tablet signing flow",
+        "LAA Declaration: full-screen client sign now shows the official Privacy Notice and declaration above the signing pad — the primary tablet signing flow",
         "LAA Declaration: inline declaration blocks always render official wording with a visible fallback if the module fails to load",
         "Fix: client signature attachment module uses browser-safe export so renderer script loading is reliable in Electron"
       ]
@@ -369,9 +369,9 @@
       "date": "2026-06-17",
       "latest": false,
       "changes": [
-        "LAA Declaration: Privacy Notice and official declaration text now appear in the app immediately before the client signs \u2014 in LAA Declaration, Attend (Section 6), telephone sign-off, and CRM14",
+        "LAA Declaration: Privacy Notice and official declaration text now appear in the app immediately before the client signs — in LAA Declaration, Attend (Section 6), telephone sign-off, and CRM14",
         "CRM14: full v7 applicant declaration (online criminal legal aid) shown in the form and in PDF section 14, with privacy notice and fraud warning",
-        "Single authoritative wording source in lib/laaDeclarationPdf.js \u2014 CRM2 Advice & Assistance, v7 applicant/partner/rep declarations, and LAA Privacy Notice shared between UI and PDF"
+        "Single authoritative wording source in lib/laaDeclarationPdf.js — CRM2 Advice & Assistance, v7 applicant/partner/rep declarations, and LAA Privacy Notice shared between UI and PDF"
       ]
     },
     {
@@ -379,8 +379,8 @@
       "date": "2026-06-17",
       "latest": false,
       "changes": [
-        "PDF: client name now always prints in the LAA Declaration (sections 11 / sign-off) \u2014 falls back to the record's name when the dedicated declaration field was left blank",
-        "PDF: LAA Declaration now uses the official Legal Aid Agency wording \u2014 full LAA Privacy Notice and the CRM2 Client's Declaration (Advice & Assistance)",
+        "PDF: client name now always prints in the LAA Declaration (sections 11 / sign-off) — falls back to the record's name when the dedicated declaration field was left blank",
+        "PDF: LAA Declaration now uses the official Legal Aid Agency wording — full LAA Privacy Notice and the CRM2 Client's Declaration (Advice & Assistance)",
         "PDF: CRM14 section now reproduces the official applicant declaration, fraud notice, and the full legal representative and partner declarations",
         "PDF: official declaration wording is built in so it prints correctly even if reference data fails to load"
       ]
@@ -390,10 +390,10 @@
       "date": "2026-06-15",
       "latest": false,
       "changes": [
-        "Security: cross-device sync now encrypts attendance records with AES-256-GCM before upload \u2014 server stores ciphertext only",
+        "Security: cross-device sync now encrypts attendance records with AES-256-GCM before upload — server stores ciphertext only",
         "Sync pull decrypts envelopes locally using your device encryption key; legacy plaintext sync records remain readable until re-synced",
         "PDF: Defence summary and section 8 now show outcome code, next date, next venue, interview position, and headline advice (derived from court date, client decision, and advice fields)",
-        "PDF: LAA Declaration (section 11) always prints \u2014 Privacy Notice, Applicant\u2019s Declaration, and CRM3 fields; no longer skipped when signatures are empty",
+        "PDF: LAA Declaration (section 11) always prints — Privacy Notice, Applicant’s Declaration, and CRM3 fields; no longer skipped when signatures are empty",
         "PDF: CRM14 section includes fraud warning and rep/partner declaration blocks; improved spacing on Defence summary and LAA blocks"
       ]
     },
@@ -404,7 +404,7 @@
       "changes": [
         "Officer Emails: prefill OIC name and email (and disclosure officer email when applicable) from the custody note",
         "Officer Emails: email sign-off uses your fee earner name from Settings instead of a hardcoded name",
-        "Records list: removed duplicate list rendering path \u2014 app.js refreshList is the single authoritative implementation",
+        "Records list: removed duplicate list rendering path — app.js refreshList is the single authoritative implementation",
         "Release pipeline: auto-repair Mac updater feed on checksum failure during publish"
       ]
     },
@@ -413,7 +413,7 @@
       "date": "2026-06-09",
       "latest": false,
       "changes": [
-        "Records list: Bill button restored on the main list \u2014 opens Finish matter billing without opening the form",
+        "Records list: Bill button restored on the main list — opens Finish matter billing without opening the form",
         "Release pipeline: fixed false CI failures when publishing draft GitHub releases (checksum verify and Mac deploy step)"
       ]
     },
@@ -422,7 +422,7 @@
       "date": "2026-06-09",
       "latest": false,
       "changes": [
-        "Officer Emails: seven new templates \u2014 chase police bail details, chase disclosure/custody record follow-ups, confirm outcome after attendance, custody record and detention log request, RUI confirmation, and matter stood down",
+        "Officer Emails: seven new templates — chase police bail details, chase disclosure/custody record follow-ups, confirm outcome after attendance, custody record and detention log request, RUI confirmation, and matter stood down",
         "Officer Emails: police bail and update-after-delay templates now ask for return police station(s); urgent disclosure includes disclosure destination"
       ]
     },
@@ -440,7 +440,7 @@
       "latest": false,
       "changes": [
         "Improved text contrast across Home, Records, Settings, the attendance form, and billing workflow in light and dark mode",
-        "Billing: fixed duplicate-invoice error toast \u2014 no more developer messages; clear guidance to Continue to Review & complete",
+        "Billing: fixed duplicate-invoice error toast — no more developer messages; clear guidance to Continue to Review & complete",
         "Billing Step 2 guide when invoice already exists is easier to read (no faded strikethrough text)"
       ]
     },
@@ -449,8 +449,8 @@
       "date": "2026-06-08",
       "latest": false,
       "changes": [
-        "Billing: open Billing from the bottom nav without a record open \u2014 choose a finalised matter (auto-selects if only one)",
-        "Records list: Bill button on each row \u2014 enabled when finalised or completed, greyed out until then",
+        "Billing: open Billing from the bottom nav without a record open — choose a finalised matter (auto-selects if only one)",
+        "Records list: Bill button on each row — enabled when finalised or completed, greyed out until then",
         "Finalise, Finish matter, and Archive matter moved to a prominent button in the form bottom bar",
         "Improved text contrast on the Records list, QuickFile panel, and billing screens in light mode",
         "QuickFile: clearer connection status when credentials are synced from your Custody Note account"
@@ -461,7 +461,7 @@
       "date": "2026-06-08",
       "latest": false,
       "changes": [
-        "Fixed court name typeahead \u2014 magistrates court suggestions now appear when you type two or more letters"
+        "Fixed court name typeahead — magistrates court suggestions now appear when you type two or more letters"
       ]
     },
     {
@@ -469,7 +469,7 @@
       "date": "2026-06-08",
       "latest": false,
       "changes": [
-        "QuickFile: enter credentials once in Settings \u2014 saved to your Custody Note account and pulled automatically on every computer before billing",
+        "QuickFile: enter credentials once in Settings — saved to your Custody Note account and pulled automatically on every computer before billing",
         "QuickFile connection panel explains account sync (no longer treats missing credentials as this-computer-only)",
         "Deploy: preflight check script (check:deploy) and GitHub CLI install helper for one-command releases"
       ]
@@ -479,7 +479,7 @@
       "date": "2026-06-07",
       "latest": false,
       "changes": [
-        "Fixed missing Finalise / Finish matter / Archive button while editing \u2014 primary action is now in the visible top app bar",
+        "Fixed missing Finalise / Finish matter / Archive button while editing — primary action is now in the visible top app bar",
         "Court name typeahead: clearer hints when the field appears; explicit message if the magistrates court list fails to load",
         "Mac auto-update: stops infinite retry loops after repeated download or checksum failures and clears stale update cache"
       ]
@@ -489,7 +489,7 @@
       "date": "2026-06-07",
       "latest": false,
       "changes": [
-        "Billing and finalise UX: one header button for the whole matter (Finalise \u2192 Finish matter \u2192 Archive matter) \u2014 no duplicate Section 9 or bottom-bar buttons",
+        "Billing and finalise UX: one header button for the whole matter (Finalise → Finish matter → Archive matter) — no duplicate Section 9 or bottom-bar buttons",
         "Section 9 file-completion panel is informational only, with a 4-step lifecycle checklist and current-phase highlight",
         "Fixed header Archive matter opening billing instead of archiving on completed records"
       ]
@@ -510,7 +510,7 @@
       "changes": [
         "PDF Defence summary: court date/time, CN06 outcome code, interview position, and next venue filled correctly for charged outcomes",
         "PDF LAA Declaration: prints the LAA privacy notice text above the declaration (matching the form)",
-        "PDF row renamed to \"Privacy Notice acknowledged?\" \u2014 blank until set, not defaulting to No"
+        "PDF row renamed to \"Privacy Notice acknowledged?\" — blank until set, not defaulting to No"
       ]
     },
     {
@@ -519,7 +519,7 @@
       "latest": false,
       "changes": [
         "PDF LAA Declaration: prints the LAA privacy notice text above the declaration (matching the form)",
-        "PDF row renamed to \"Privacy Notice acknowledged?\" \u2014 blank until set, not defaulting to No"
+        "PDF row renamed to \"Privacy Notice acknowledged?\" — blank until set, not defaulting to No"
       ]
     },
     {
@@ -537,7 +537,7 @@
       "date": "2026-06-07",
       "latest": false,
       "changes": [
-        "QuickFile credentials are saved to your Custody Note account and pulled automatically when you bill \u2014 no more re-entering on each computer",
+        "QuickFile credentials are saved to your Custody Note account and pulled automatically when you bill — no more re-entering on each computer",
         "Fix billing falsely showing QuickFile as not configured when credentials were already saved",
         "Court name search: type 2+ letters for magistrates court suggestions; clearer messages when no match; fixes for court list loading"
       ]
@@ -547,7 +547,7 @@
       "date": "2026-06-07",
       "latest": false,
       "changes": [
-        "Full-screen client signature for Legal Aid Declaration \u2014 large white signing pad with Save and Cancel",
+        "Full-screen client signature for Legal Aid Declaration — large white signing pad with Save and Cancel",
         "Save stores the client signature on the form and as a separate PNG attachment on the record",
         "Cancel clears the signature and attachment; signature pads stay high-contrast in dark mode"
       ]
@@ -558,7 +558,7 @@
       "latest": false,
       "changes": [
         "Court name typeahead now searches the full England and Wales magistrates courts list (292 courts)",
-        "Fix court name suggestions showing only B\u2013C names on focus; type at least 2 letters to search",
+        "Fix court name suggestions showing only B–C names on focus; type at least 2 letters to search",
         "Cross-platform Mac/Windows functional parity rules added for development"
       ]
     },
@@ -568,7 +568,7 @@
       "latest": false,
       "changes": [
         "Fix QuickFile credentials always visible in Settings (invoicing no longer hidden behind the directory-import add-on lock)",
-        "Fix billing Step 2 reading QuickFile credentials from the database on this computer, not empty Settings form fields \u2014 stops false 'not configured' when credentials are already saved",
+        "Fix billing Step 2 reading QuickFile credentials from the database on this computer, not empty Settings form fields — stops false 'not configured' when credentials are already saved",
         "Fix CRM1 pre-submit validation on the billing Step 1 Generate button (the path most users actually use)",
         "Billing not-configured card now explains per-machine storage and offers Test connection / Open settings actions"
       ]
@@ -618,7 +618,7 @@
       "date": "2026-05-27",
       "latest": false,
       "changes": [
-        "Fix macOS auto-update silent failure: app.exit(0) after quitAndInstall was bypassing Squirrel.Mac's quit lifecycle so ShipIt never ran and the new version was never installed \u2014 every Mac auto-update silently dropped. Now only Windows hard-exits",
+        "Fix macOS auto-update silent failure: app.exit(0) after quitAndInstall was bypassing Squirrel.Mac's quit lifecycle so ShipIt never ran and the new version was never installed — every Mac auto-update silently dropped. Now only Windows hard-exits",
         "Mac lets the native quit flow complete."
       ]
     },
@@ -647,7 +647,7 @@
       "date": "2026-05-25",
       "latest": false,
       "changes": [
-        "First macOS edition \u2014 signed and notarised for Apple Silicon and Intel Macs",
+        "First macOS edition — signed and notarised for Apple Silicon and Intel Macs",
         "Download from custodynote.com/download (Mac and Windows)",
         "Automatic updates on Mac and Windows when a new version is published"
       ]
@@ -756,7 +756,7 @@
       "changes": [
         "Officer Emails rebuilt to match product spec: right-hand panel in the custody note (#form-context-panel), nine fixed templates, no forbidden fields (rank/DSCC/custody ref removed from this flow)",
         "New encrypted table officer_email_drafts with full draft lifecycle; main-process IPC officer-email-drafts-* (list/get/create/update/duplicate/cancel/delete/mark opened/mark sent/open Outlook/copy/preview)",
-        "Outlook Web compose only \u2014 URL built in main; renderer calls openOutlookDraft(id); user sends manually. Removed v1.8.0 auto-launch stack (lib/outlookLaunch.js, officer-emails:* IPC, email-launch helpers)",
+        "Outlook Web compose only — URL built in main; renderer calls openOutlookDraft(id); user sends manually. Removed v1.8.0 auto-launch stack (lib/outlookLaunch.js, officer-emails:* IPC, email-launch helpers)",
         "Deleted legacy modules and tests: renderer/officerEmails.js, officerEmailTemplates*, email-templates.js, email-modal.js, email-pending-globals.js, data/email-templates.json, docs/officer-email-improvements.md, smoke/send-officer scripts, and the old officer-email / quick-email / outlookLaunch test files",
         "Stripped list Email OIC + OIC badge, billing Officer Email Copy row, Add-Ons officer-templates settings card, home cards, ~800 lines of obsolete CSS (.email-oic-*, .quick-email-*, .qe-*, old .officer-email-page)",
         "Added lib/officerEmailDrafts.js (pure rules) + six node:test unit files under tests/officerEmailDrafts.*"
@@ -767,10 +767,10 @@
       "date": "2026-05-11",
       "latest": false,
       "changes": [
-        "Officer Emails relaunched with reliable Outlook launch: choose how the Send button opens \u2014 Outlook desktop (.eml draft), Outlook on the web (M365 deeplink), default mail app (mailto:), or copy-only",
+        "Officer Emails relaunched with reliable Outlook launch: choose how the Send button opens — Outlook desktop (.eml draft), Outlook on the web (M365 deeplink), default mail app (mailto:), or copy-only",
         "Settings > Email shows what auto-detect found on this machine (Outlook desktop install, default mailto handler) and includes a Re-detect button + diagnostics log",
-        "Always-on Copy Subject / Copy Body / Copy Email / Copy Full buttons on Quick Email and Officer Emails \u2014 the email content is never lost even if the launch fails",
-        "PII-safe email-launch.log records every send attempt (domains and lengths only \u2014 no addresses, subjects or bodies)",
+        "Always-on Copy Subject / Copy Body / Copy Email / Copy Full buttons on Quick Email and Officer Emails — the email content is never lost even if the launch fails",
+        "PII-safe email-launch.log records every send attempt (domains and lengths only — no addresses, subjects or bodies)",
         "Restored every pre-v1.6.23 surface: Officer Emails home card, Email OIC button on each record in the list, standalone Officer Emails view with Templates / Drafts / Compose tabs, Settings toggle for the Officer Email Templates add-on",
         "1205/1205 unit tests pass",
         "renderer smoke test (73 checks) passes"
@@ -816,7 +816,7 @@
         "Records list: removes the Email OIC button, OIC Sent badge, and the Quick email to officer toolbar entry-point.",
         "Home: removes the Officer Emails and Quick email to officer cards.",
         "Internal: drops preload's CustodyEmailCompose bridge, ~870 lines of officer-email CSS, send-officer-sample-email script, and the email-launch.log diagnostic.",
-        "Finish matter: Start billing process is disabled in markup until the Finish matter screen runs readiness logic \u2014 avoids an enabled orphan button before navigation and keeps the in-app smoke test green."
+        "Finish matter: Start billing process is disabled in markup until the Finish matter screen runs readiness logic — avoids an enabled orphan button before navigation and keeps the in-app smoke test green."
       ]
     },
     {
@@ -825,7 +825,7 @@
       "latest": false,
       "changes": [
         "Officer Emails: subject line can now be copied from a prominent hero button, plus inline Copy buttons next to the Subject input on Compose and the Subject value on Preview",
-        "Officer Emails: templates are fully user-editable via a Manage templates\u2026 modal \u2014 add, edit, duplicate, cancel edits, delete with confirm, and Restore defaults",
+        "Officer Emails: templates are fully user-editable via a Manage templates… modal — add, edit, duplicate, cancel edits, delete with confirm, and Restore defaults",
         "the four built-in templates are now seed data, every template can be modified or removed",
         "Tests: 31 passing officer-email unit and integration tests covering the store, manager, subject-copy, and existing copy-only flow"
       ]
@@ -835,7 +835,7 @@
       "date": "2026-05-01",
       "latest": false,
       "changes": [
-        "Removed bundled email-send-trace.txt, Help/Testing shortcuts, preload api.openEmailSendTrace and main IPC \u2014 stale documentation for removed Outlook launch paths",
+        "Removed bundled email-send-trace.txt, Help/Testing shortcuts, preload api.openEmailSendTrace and main IPC — stale documentation for removed Outlook launch paths",
         "Removed dead Outlook stack: open-outlook-email IPC, Main openOutlookWebEmail.js / openComposeEml.js, lib/outlookWebComposeUrl.js, renderer email-draft-open.js and outlook-email-invoke.js, detect-outlook-desktop IPC, preload emailAPI bridge",
         "Copy-only everywhere: Settings splash Contact Us, Share App email, LAA form email button and Documents workflow email now copy To/Subject/Body to clipboard instead of invoking Outlook Web",
         "Officer Emails: dropped Officer collar/reference field, Outlook handler/login-hint/detect-outlook dev wiring, mailto/OWA URL diagnostics, Email send trace button; simplified Testing tab and dev diagnostics",
@@ -938,7 +938,7 @@
       "changes": [
         "Quick Email: new Settings toggle 'Always use Outlook on the web (M365 work)' that hard-overrides Outlook desktop detection and pins the most reliable compose URL",
         "Quick Email: fixes the v1.6.11 case where .eml drafts were handed to Edge (PWA) instead of Outlook desktop and ended up showing a malformed OWA URL with no compose path",
-        "Quick Email: route-preview pill now clearly says 'Outlook on the web (M365 work \u2014 forced)' when the toggle is on so you can see exactly what will happen before clicking Send"
+        "Quick Email: route-preview pill now clearly says 'Outlook on the web (M365 work — forced)' when the toggle is on so you can see exactly what will happen before clicking Send"
       ]
     },
     {
@@ -988,8 +988,8 @@
       "date": "2026-04-29",
       "latest": false,
       "changes": [
-        "Windows Quick Email / Outlook Web: launch Edge by spawning msedge.exe with the compose URL as a single argument (resolved from standard install paths or PATH). The previous implementation invoked cmd.exe `start msedge <url>`, which broke URLs at the first `&` query separator \u2014 Outlook opened with a truncated link or not at all.",
-        "Renderer: when a second Send is triggered while the first email IPC is still in flight, the guard now returns `{ skipped: true }` instead of an empty resolve, so the UI does not show false \"Opening\u2026\" success toasts.",
+        "Windows Quick Email / Outlook Web: launch Edge by spawning msedge.exe with the compose URL as a single argument (resolved from standard install paths or PATH). The previous implementation invoked cmd.exe `start msedge <url>`, which broke URLs at the first `&` query separator — Outlook opened with a truncated link or not at all.",
+        "Renderer: when a second Send is triggered while the first email IPC is still in flight, the guard now returns `{ skipped: true }` instead of an empty resolve, so the UI does not show false \"Opening…\" success toasts.",
         "Regression tests: full Outlook + Quick Email suites pass."
       ]
     },
@@ -1036,9 +1036,9 @@
       "changes": [
         "Quick Email: pressing 'Send via Outlook Web' no longer auto-clears the form. Outlook can fail silently (pop-up blocker, mid sign-in, network glitch) and the previous behaviour wiped your typed content even when no email actually went out.",
         "New 'Clear' button in both the Quick Email modal and the per-record Officer Email modal. Clearing now requires a confirmation when there is content to lose, so the data is only ever cleared when you explicitly choose to.",
-        "New rotating-wheel ('counter style') date and time picker. Tap the calendar/clock icon next to any date or time field \u2014 including the attendance date and time, time of first contact, time set off / arrived / left, and station-visit times \u2014 to scroll Day / Month / Year / Hour / Minute on a thumb-friendly wheel.",
+        "New rotating-wheel ('counter style') date and time picker. Tap the calendar/clock icon next to any date or time field — including the attendance date and time, time of first contact, time set off / arrived / left, and station-visit times — to scroll Day / Month / Year / Hour / Minute on a thumb-friendly wheel.",
         "Wheel picker has Now / Cancel / Done, snaps to row boundaries, re-clamps the day when you change month/year (29 Feb 2024 vs 28 Feb 2025), and writes back the standard ISO value so existing auto-save and validation keep working. Native typing in the input still works as a fallback.",
-        "Picker auto-attaches to dynamically-added inputs too (e.g. additional station-visit cards), driven by a MutationObserver \u2014 no extra wiring needed in any view.",
+        "Picker auto-attaches to dynamically-added inputs too (e.g. additional station-visit cards), driven by a MutationObserver — no extra wiring needed in any view.",
         "16 new tests for the wheel picker (parse/format helpers, attach + open + commit, Cancel preserves value, Now writes the current time, day re-clamping). 4 new tests for the Quick Email Clear behaviour. Total: 1186/1186 unit tests pass."
       ]
     },
@@ -1047,8 +1047,8 @@
       "date": "2026-04-29",
       "latest": false,
       "changes": [
-        "Quick Email: choose where 'Send via Outlook' opens \u2014 Outlook.com (personal), Outlook on the web (M365 work / school), or your default email app (Outlook desktop / Mail). Settings -> Your Details -> 'Quick Email opens in'.",
-        "Fix: previously the button always tried Microsoft 365 (outlook.office.com), which silently fails for users on personal Outlook.com / Hotmail accounts \u2014 recipient/subject/body never reached Outlook.",
+        "Quick Email: choose where 'Send via Outlook' opens — Outlook.com (personal), Outlook on the web (M365 work / school), or your default email app (Outlook desktop / Mail). Settings -> Your Details -> 'Quick Email opens in'.",
+        "Fix: previously the button always tried Microsoft 365 (outlook.office.com), which silently fails for users on personal Outlook.com / Hotmail accounts — recipient/subject/body never reached Outlook.",
         "Personal Outlook.com URLs no longer force Edge on Windows (your default browser handles outlook.live.com directly).",
         "mailto: mode opens Outlook desktop / Apple Mail / Thunderbird directly with the recipient, subject and body prefilled.",
         "When the email body is too long for the URL, the FULL body is now copied to the clipboard automatically and a toast tells you to paste it.",
@@ -1121,7 +1121,7 @@
       "changes": [
         "Voluntary note: removed the redundant 'Legal advice requested?' field",
         "Persistent version banner: now visible on every page, shows installed version + update status (idle / downloading / ready)",
-        "Bottom nav: removed the '\u00a3 All open' button and renamed 'This matter' to 'Billing'",
+        "Bottom nav: removed the '£ All open' button and renamed 'This matter' to 'Billing'",
         "Open matters practice-wide list view removed"
       ]
     },
@@ -1172,7 +1172,7 @@
       "date": "2026-04-24",
       "latest": false,
       "changes": [
-        "About this build: the footer now shows the version together with a local date and time \u2014 the moment this build was first run on this computer (after install or auto-update), stored in app-version-state.json under userData. Tooltip on the version chip also lists the installer's build date from package.json (release).",
+        "About this build: the footer now shows the version together with a local date and time — the moment this build was first run on this computer (after install or auto-update), stored in app-version-state.json under userData. Tooltip on the version chip also lists the installer's build date from package.json (release).",
         "Check for updates: toasts and the settings update status line now include the app version and the current date and time when the check reports you are up to date, so you can see at a glance that the check was recent."
       ]
     },
@@ -1181,7 +1181,7 @@
       "date": "2026-04-24",
       "latest": false,
       "changes": [
-        "Section 9 / Finalise visibility: fixed three real bugs that left users with no Finalise button anywhere on a draft. (1) The bottom-bar Finalise pill (#bottom-bar-finish-pill) is a global element in index.html, but its update was gated behind in-section buttons that only exist after the user has navigated to Section 9 \u2014 so the pill stayed display:none on sections 1-8. Now the pill + readiness panel are updated unconditionally, before the in-section button block. (2) When the user navigates to Section 9 for the first time, populateSectionContent() lazily mounts #form-finalise-bar / #form-end-billing-btn / #form-post-finalise-bar with their initial inline display:none, but showSection() never re-ran updateFormBarVisibility() \u2014 so they stayed hidden. Now we re-run it after lazy section render on timeRecording.",
+        "Section 9 / Finalise visibility: fixed three real bugs that left users with no Finalise button anywhere on a draft. (1) The bottom-bar Finalise pill (#bottom-bar-finish-pill) is a global element in index.html, but its update was gated behind in-section buttons that only exist after the user has navigated to Section 9 — so the pill stayed display:none on sections 1-8. Now the pill + readiness panel are updated unconditionally, before the in-section button block. (2) When the user navigates to Section 9 for the first time, populateSectionContent() lazily mounts #form-finalise-bar / #form-end-billing-btn / #form-post-finalise-bar with their initial inline display:none, but showSection() never re-ran updateFormBarVisibility() — so they stayed hidden. Now we re-run it after lazy section render on timeRecording.",
         "Section 9 file-completion (billing-readiness) panel: the panel background used color-mix() with a literal `white`, so it rendered as a near-white surface even in dark mode. Combined with --text being near-white in dark mode, the title, summary copy and 4-step checklist were essentially invisible (rendered as ghosted/strikethrough-looking text). Added an html.dark override that gives the panel a true dark background, and explicit dark-mode text colours for the title, copy, summary, steps and warning callout.",
         "Tests: new e2e regression spec finalise-button-visibility.spec.ts seeds a draft (custody and voluntary), opens it from the Records list, and asserts the bottom-bar Finalise pill is visible on Section 1 and BOTH the in-section bar and the pill are visible on Section 9, in both light and dark themes."
       ]
@@ -1191,7 +1191,7 @@
       "date": "2026-04-23",
       "latest": false,
       "changes": [
-        "Voluntary: fixed cases where 'Custody record read?' still appeared on finalise. If attendanceMode was missing in saved JSON, the app used to default it to custody before choosing the form \u2014 voluntary matters then ran INVC (custody) validation. Now we infer voluntary from workType === 'Voluntary Police Station Attendance' or attendanceSubType starting with voluntary_ before defaulting to custody, and we align prefill when the open form is the voluntary form.",
+        "Voluntary: fixed cases where 'Custody record read?' still appeared on finalise. If attendanceMode was missing in saved JSON, the app used to default it to custody before choosing the form — voluntary matters then ran INVC (custody) validation. Now we infer voluntary from workType === 'Voluntary Police Station Attendance' or attendanceSubType starting with voluntary_ before defaulting to custody, and we align prefill when the open form is the voluntary form.",
         "validateBeforeFinalise: if the active form is voluntaryFormSections, we set attendanceMode to voluntary and always run validateVoluntaryForm (not validateAttendanceForm). validateAttendanceForm also treats activeFormSections === voluntaryFormSections as off the custody path for custody-record / grounds-for-arrest checks (defence in depth)."
       ]
     },
@@ -1200,8 +1200,8 @@
       "date": "2026-04-23",
       "latest": false,
       "changes": [
-        "Voluntary attendances no longer surface custody-record questions. When the custody form is being used in voluntary-interview mode (Voluntary Interview? = Yes), the leftover \u00a73 fields \u2014 Custody record issues, Arresting Officer Rank & Name, Arresting Officer Collar / Badge No. and the Arrest & Detention sub-heading \u2014 now hide alongside the rest of the custody-record block.",
-        "Section 6 (Consultation) note 'Client details ... from custody record are in Section 3' now switches to a neutral wording when the matter is a voluntary interview. The \u00a76 checklist labels 'Confirmed Personal Data on Custody Record' and 'Explained Reason for Arrest' have been re-labelled to 'Confirmed Personal Data' and 'Explained Reason for Arrest / Attendance' so they read correctly on both custody and voluntary interviews; the group label moves to 'Personal data & disclosure'.",
+        "Voluntary attendances no longer surface custody-record questions. When the custody form is being used in voluntary-interview mode (Voluntary Interview? = Yes), the leftover §3 fields — Custody record issues, Arresting Officer Rank & Name, Arresting Officer Collar / Badge No. and the Arrest & Detention sub-heading — now hide alongside the rest of the custody-record block.",
+        "Section 6 (Consultation) note 'Client details ... from custody record are in Section 3' now switches to a neutral wording when the matter is a voluntary interview. The §6 checklist labels 'Confirmed Personal Data on Custody Record' and 'Explained Reason for Arrest' have been re-labelled to 'Confirmed Personal Data' and 'Explained Reason for Arrest / Attendance' so they read correctly on both custody and voluntary interviews; the group label moves to 'Personal data & disclosure'.",
         "Finalise validation: the 'Custody record read?' missing-field warning no longer fires for voluntary attendances or voluntary interviews (previously the check triggered any time a stale custodyNumber was on the record). The 'At least one ground for arrest' warning is now also gated on attendanceMode != voluntary.",
         "Documents step: the Prepared Statement template substitutes 'Attendance type: Voluntary attendance' for the 'Custody No.' row when the record is a voluntary attendance / voluntary interview."
       ]
@@ -1212,7 +1212,7 @@
       "latest": false,
       "changes": [
         "Finish matter is now a dedicated full-page Billing screen (#view-matter-billing) instead of a modal overlay. Top of the screen shows a header card with client / firm / station / date / status and a single Start billing process button.",
-        "When the attendance note is finalised, the 3-step workflow (Documents & attachments \u2192 Billing review \u2192 Review & complete) is mounted inline on the page below the header \u2014 no more popup, full keyboard and screen-reader access, easier to navigate to/from while drafting.",
+        "When the attendance note is finalised, the 3-step workflow (Documents & attachments → Billing review → Review & complete) is mounted inline on the page below the header — no more popup, full keyboard and screen-reader access, easier to navigate to/from while drafting.",
         "All previous entry points route to the new screen: form Finish matter / Prepare finish matter buttons, the bottom-bar Finalise/Finish-matter pill, the billing-readiness panel Open finish matter button, and the per-row Open button on the Open matters list.",
         "Workflow stepper refactored to support both inline and overlay rendering. Overlay path retained as a defensive fallback for older callers and e2e tests; new mountWorkflowInline() is exposed for the dedicated screen."
       ]
@@ -1222,7 +1222,7 @@
       "date": "2026-04-23",
       "latest": false,
       "changes": [
-        "Finish-this-matter workflow: Step 1 (Documents & attachments) now shows an Archive button in the footer \u2014 matching steps 2 (Billing review) and 3 (Review & complete). Once the attendance note is finalised the matter can be archived from any of the three workflow screens without forcing the user through the remaining steps.",
+        "Finish-this-matter workflow: Step 1 (Documents & attachments) now shows an Archive button in the footer — matching steps 2 (Billing review) and 3 (Review & complete). Once the attendance note is finalised the matter can be archived from any of the three workflow screens without forcing the user through the remaining steps.",
         "Archive button on every step shares the same QuickFile guard (offer to send the bill first if QuickFile is configured but no invoice exists), automatically records billing and office completion timestamps, saves the record as completed, archives it, and switches the list view to the Archived filter."
       ]
     },
@@ -1231,8 +1231,8 @@
       "date": "2026-04-23",
       "latest": false,
       "changes": [
-        "CRM1 official PDF (v16, Feb 2025): UFN header combs (page 1) now populated from the record's UFN \u2014 DDMMYY/NNN distributed across the 9 boxes around the printed slash. Previously cleared and left blank even when the firm's UFN was on the matter.",
-        "CRM1 official PDF: removed incorrect dependants mapping. The dependants count was being written into FillText15, which sits on page 7 inside the \u201ccalculate the total allowable deductions\u201d block, not the page-8 dependants box. The page-8 dependants question has no AcroForm field on v16 (handwritten on the official form), so the page-7 deductions area is now correctly left blank when no deduction figures are captured."
+        "CRM1 official PDF (v16, Feb 2025): UFN header combs (page 1) now populated from the record's UFN — DDMMYY/NNN distributed across the 9 boxes around the printed slash. Previously cleared and left blank even when the firm's UFN was on the matter.",
+        "CRM1 official PDF: removed incorrect dependants mapping. The dependants count was being written into FillText15, which sits on page 7 inside the “calculate the total allowable deductions” block, not the page-8 dependants box. The page-8 dependants question has no AcroForm field on v16 (handwritten on the official form), so the page-7 deductions area is now correctly left blank when no deduction figures are captured."
       ]
     },
     {
@@ -1240,9 +1240,9 @@
       "date": "2026-04-23",
       "latest": false,
       "changes": [
-        "PDF (custody & voluntary): \u00a71 \u2014 client middle name row; cover and HTML title use full name including middle",
-        "PDF \u2014 \u00a72: single-visit journey shows visit label, multi-client on-site times, and visit notes (aligned with station visit card); voluntary multi-visit also exports visit notes and multi-client details",
-        "PDF \u2014 \u00a76: instruction confirmation (signature required, auto date/time) before the advice block; voluntary \u00a76 adds dependants, capital, gaps in evidence, email consent, advice-follow-up fields, and benefit \u201cOther\u201d text",
+        "PDF (custody & voluntary): §1 — client middle name row; cover and HTML title use full name including middle",
+        "PDF — §2: single-visit journey shows visit label, multi-client on-site times, and visit notes (aligned with station visit card); voluntary multi-visit also exports visit notes and multi-client details",
+        "PDF — §6: instruction confirmation (signature required, auto date/time) before the advice block; voluntary §6 adds dependants, capital, gaps in evidence, email consent, advice-follow-up fields, and benefit “Other” text",
         "PWA/telephone PDF cover: client name includes middle name for consistency"
       ]
     },
@@ -1268,18 +1268,18 @@
       "date": "2026-04-23",
       "latest": false,
       "changes": [
-        "Fix: \"Generate PDF\" on the police-station custody / voluntary attendance note now works for any record, regardless of size. Previously the renderer packed the entire HTML (including base64-encoded signature PNGs and long interview notes) into a `data:text/html;...` URL via `encodeURIComponent`, which silently exceeded Chromium's ~2 MB URL cap on records that contained signatures or substantial notes \u2014 the offscreen window would never fire `did-finish-load`, the 60 s timeout would eventually fire (long after the user gave up), and the toast displayed nothing useful. The renderer now writes the HTML to a temp file in `app.getPath('temp')` and uses `BrowserWindow.loadFile()`, which has no size limit",
-        "Fix: \"failed to generate police station attendance note \u2014 h is not a function\" is resolved. An IIFE inside `buildPdfHtml()` declared `var h = ''` to accumulate the multi-station-visit HTML, which shadowed the outer `const h = esc` HTML-escape helper and caused Chromium to throw `TypeError: h is not a function` whenever a record had more than one station visit. The accumulator is renamed to `visitHtml`, and a new regression test (`tests/policeStationAttendanceNotePdf.test.js`) locks the fix in by parsing app.js and asserting only one `h` declaration exists in `buildPdfHtml`",
+        "Fix: \"Generate PDF\" on the police-station custody / voluntary attendance note now works for any record, regardless of size. Previously the renderer packed the entire HTML (including base64-encoded signature PNGs and long interview notes) into a `data:text/html;...` URL via `encodeURIComponent`, which silently exceeded Chromium's ~2 MB URL cap on records that contained signatures or substantial notes — the offscreen window would never fire `did-finish-load`, the 60 s timeout would eventually fire (long after the user gave up), and the toast displayed nothing useful. The renderer now writes the HTML to a temp file in `app.getPath('temp')` and uses `BrowserWindow.loadFile()`, which has no size limit",
+        "Fix: \"failed to generate police station attendance note — h is not a function\" is resolved. An IIFE inside `buildPdfHtml()` declared `var h = ''` to accumulate the multi-station-visit HTML, which shadowed the outer `const h = esc` HTML-escape helper and caused Chromium to throw `TypeError: h is not a function` whenever a record had more than one station visit. The accumulator is renamed to `visitHtml`, and a new regression test (`tests/policeStationAttendanceNotePdf.test.js`) locks the fix in by parsing app.js and asserting only one `h` declaration exists in `buildPdfHtml`",
         "Fix: PDF generation now surfaces real error messages instead of silently appearing to do nothing. Three new failure listeners on the offscreen `webContents` (`did-fail-load`, `render-process-gone`, plus the existing 60 s timeout) capture and reject the IPC call with a descriptive Error, which the renderer's `.catch` then shows in the failure toast. A new \"Desktop folder does not exist\" pre-flight error is emitted with OneDrive Known-Folder-Move guidance when the resolved desktop path is missing",
         "Fix: documents-screen.js now picks the correct PDF builder for each record via `window.getPdfBuilderForData(data)` instead of `getActivePdfBuilder()` (which read the currently-loaded `formData` global). Generating a custody-note PDF while looking at a telephone matter (or vice versa) used to silently use the wrong template; it now always renders the template that matches the record being generated. `buildPdfHtml`, `buildVoluntaryPdfHtml`, `buildTelephonePdfHtml`, and `getPdfBuilderForData` are now exposed on `window` so the workflow screens can reach them",
         "Security/integrity: the database write path now refuses to encrypt with no master key (throws `CN_NO_MASTER_KEY`) instead of silently writing plaintext, and a generation counter (`_dbWriteGeneration`) prevents async + sync writes from corrupting each other. Backup writes (manual, scheduled, latest) now go through a Promise-based atomic-write helper. Audit-log snapshots are deduplicated on write and pruned past a 90-day retention window on startup",
         "Security/integrity: licence-store key now refuses to fall back to plaintext-on-disk when `safeStorage` is unavailable (throws `CN_NO_SAFE_STORAGE`); E2E test hooks (`__CUSTODYNOTE_E2E__`) are no longer exposed in packaged builds; sensitive admin IPC channels (`custody:adminLogin`, `custody:adminSetPassword`) are rate-limited to 5 attempts per minute and verify the calling frame is a trusted file:// URL",
-        "Security/integrity: sandboxed `import-record-from-path`, `local-backup-restore`, `open-path`, and `print-pdf-file` IPC handlers \u2014 each now resolves real paths via `fs.realpathSync`, restricts to user-reachable roots, validates extension and size caps, and rejects path-traversal / symlink attacks. `set-settings` now validates URL-shaped settings (`cloudBackupUrl`, `syncApiUrl`, `cloudApiUrl`) before persisting. `renderHtmlToPdfBuffer` and `preview-pdf-base64` enforce 25 MB / 50 MB DoS caps",
+        "Security/integrity: sandboxed `import-record-from-path`, `local-backup-restore`, `open-path`, and `print-pdf-file` IPC handlers — each now resolves real paths via `fs.realpathSync`, restricts to user-reachable roots, validates extension and size caps, and rejects path-traversal / symlink attacks. `set-settings` now validates URL-shaped settings (`cloudBackupUrl`, `syncApiUrl`, `cloudApiUrl`) before persisting. `renderHtmlToPdfBuffer` and `preview-pdf-base64` enforce 25 MB / 50 MB DoS caps",
         "Database integrity: `PRAGMA foreign_keys = ON` is now set on every DB open; all 30+ schema migrations go through a single `_safeAddColumn(table, def)` helper that only swallows \"duplicate column name\" and re-throws / logs every other ALTER failure (previously a malformed migration could be silently lost); multi-step writes wrap their UPDATE + audit-log INSERT in `BEGIN`/`COMMIT`/`ROLLBACK` via a new `dbTx()` helper",
         "Sync: enqueue() no longer deletes a queue row that's currently mid-push (which used to lose the new local change after the in-flight push completed). On any push error, the 60 s health-check skip cache is invalidated immediately so the next cycle actually re-checks `/api/health` instead of pretending the API is reachable",
         "LAA forms: `safeSet` / `safeCheck` now report (not silently swallow) every form field that couldn't be set during CRM1/CRM2/CRM3/Declaration generation, and the resulting PDFs are flattened (`form.flatten()`) so AcroForm fields can no longer be edited after export. CRM2's CheckBox2 and CRM3's `Name_of_court` mappings are corrected (CheckBox2 only ticks for genuine criminal/attendance/police-station work types; Name_of_court no longer falls back to the police-station name)",
         "Outlook Web compose: very long URLs (over the practical Edge/Chrome ~6 KB cap) now have their body trimmed with a clear notice rather than silently failing in OWA, and CR/LF in the subject line is stripped to prevent header injection in clients that parse the deeplink. The compose URL is no longer logged to the support bundle (it can contain client PII)",
-        "Renderer hardening: `Save & Exit` and `Save Draft` re-collect form data inside their button handlers so edits made between opening the dialog and clicking the button are no longer lost; finalisation now requires `firmId`, `oicName`, and `ourFileNumber`; the interview-vs-arrival time check uses numeric minute comparison instead of string sort; `Ctrl+Enter` follows the proper validate \u2192 finalise flow; the empty-draft check is stricter so finished records aren't mistakenly soft-deleted; `JSON.parse` of stored record data is wrapped in try/catch with a user-visible toast on corrupt rows",
+        "Renderer hardening: `Save & Exit` and `Save Draft` re-collect form data inside their button handlers so edits made between opening the dialog and clicking the button are no longer lost; finalisation now requires `firmId`, `oicName`, and `ourFileNumber`; the interview-vs-arrival time check uses numeric minute comparison instead of string sort; `Ctrl+Enter` follows the proper validate → finalise flow; the empty-draft check is stricter so finished records aren't mistakenly soft-deleted; `JSON.parse` of stored record data is wrapped in try/catch with a user-visible toast on corrupt rows",
         "Telemetry: the main-process log now records every successful PDF write with its byte size, source HTML length, and target path; failures log all three plus the underlying error message, so future regressions can be diagnosed from one log line",
         "Tests: full unit suite is now 1078 assertions, all green (added `policeStationAttendanceNotePdf.test.js` for the variable-shadowing regression and updated `billingWorkflow.test.js` to accept either literal `ALTER TABLE` or `_safeAddColumn(...)` patterns post-refactor)"
       ]
@@ -1289,10 +1289,10 @@
       "date": "2026-04-23",
       "latest": false,
       "changes": [
-        "Fix: app no longer fails to launch silently after install. The previously published v1.5.6 .exe shipped with a corrupted app.asar \u2014 the top-level package.json had been overwritten with a fragment of the Playwright HTML report, and main.js was truncated mid-file with main/adminAuth.js content appended (producing a duplicate `const crypto = require('crypto')` SyntaxError). Either defect on its own makes Electron exit with code 1 before any of the app's JavaScript runs, with no window, no log entries, and no Windows Error Reporting record. v1.5.7 is rebuilt cleanly from source and installs over the broken v1.5.6 with no data loss",
+        "Fix: app no longer fails to launch silently after install. The previously published v1.5.6 .exe shipped with a corrupted app.asar — the top-level package.json had been overwritten with a fragment of the Playwright HTML report, and main.js was truncated mid-file with main/adminAuth.js content appended (producing a duplicate `const crypto = require('crypto')` SyntaxError). Either defect on its own makes Electron exit with code 1 before any of the app's JavaScript runs, with no window, no log entries, and no Windows Error Reporting record. v1.5.7 is rebuilt cleanly from source and installs over the broken v1.5.6 with no data loss",
         "Fix: startup now sweeps any orphaned `attendances.db.<pid>.<ms>.<hex>.tmp` files older than 60 s from %APPDATA%/custody-note. These are temp files written by the atomic-save path that survive if the app is killed between write and rename. A single user had accumulated 80 of them at 490 MB each (35 GB of leaked disk space), and the resulting near-zero free space on C: is what corrupted the v1.5.6 build in the first place. The cleanup runs once per launch in `cleanStaleDbTempFiles()` at the top of `initDb()` and is idempotent / safe to run when no temp files exist",
         "Build: `electron-builder`'s file glob (`build.files` in package.json) now explicitly excludes `playwright-report`, `test-results`, `tests`, `docs`, `.git`, `.cursor`, `.vscode`, `.vercel`, `.env*`, scratch dirs (`extracted-installed`, `test-extract*`, `vfy`, `orig-extract`, `verify-pj`), all `*.log`/`*.bak`/`*.tmp` files, and release-only scripts (`release.mjs`, `sync-website.mjs`, `capture-screenshots.js`, `prepare-trial.js`). Smaller asar, fewer files in the same packing pass, fewer surfaces for cross-file corruption",
-        "Build: new `npm run verify:built-asar` step runs automatically AFTER `electron-builder`. It opens the freshly built dist/win-unpacked/resources/app.asar, extracts package.json + main.js + preload.js + updater.js + updateState.js, and verifies each one parses, starts with its expected first line, and meets a minimum size. Any failure aborts the build with exit 1 \u2014 corrupted .exe files can no longer be released",
+        "Build: new `npm run verify:built-asar` step runs automatically AFTER `electron-builder`. It opens the freshly built dist/win-unpacked/resources/app.asar, extracts package.json + main.js + preload.js + updater.js + updateState.js, and verifies each one parses, starts with its expected first line, and meets a minimum size. Any failure aborts the build with exit 1 — corrupted .exe files can no longer be released",
         "Tests: full unit suite (1071 assertions), Playwright e2e (26 specs, 33-step stress journey), and smoke test (83 checks) all green on the v1.5.7 source"
       ]
     },
@@ -1301,11 +1301,11 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "Fix: \u201cBilling invoice no.\u201d (the synthetic CN-prefixed reference) is no longer shown anywhere \u2014 removed from all 6 PDF templates (custody summary, custody admin, voluntary cover, voluntary call details, voluntary admin) and from the in-app billing panel. It only ever confused users vs. the real QuickFile invoice number; the real QuickFile reference (\u201cInvoiced: #123\u201d) is unaffected and still appears on the form once the bill is sent",
-        "Fix: QuickFile no longer attaches the attendance-note PDF twice. When the workflow billing screen sends user-selected documents (extraAttachments[]), the legacy auto-rendered attendance-note PDF (attachAttendanceHtml) is now skipped \u2014 only the documents you tick in the billing screen go to QuickFile. The standalone billing panel (which never sends extraAttachments) keeps its single auto attachment, so neither path regresses",
-        "Fix: Voluntary attendance \u00a73 (Client Details & Welfare) no longer duplicates the forename / middle / surname inputs already entered in \u00a71. \u00a73 now shows a clear read-only sectionNote \u2014 \u201cName: from \u00a71 \u2014 \u2026 entered in Section 1 (Case Reference & Arrival)\u201d \u2014 with the actual saved name appended in green. Removes a long-standing source of inconsistent data entry",
-        "Renderer: sectionNote handler now supports an opt-in dynamicNameRefSection1 flag that appends the live name from data.forename / data.middleName / data.surname \u2014 keeps the message accurate without inventing a new field type",
-        "Tests: new tests/v1_5_6_fixes.test.js (13 assertions across 3 suites: PDF/panel cleanup, QF gate, voluntary \u00a73). Existing billingWorkflow + billingOverhaul tests inverted to assert the new absence of \u201cBilling invoice no.\u201d. Full unit suite now 1071 assertions, all green"
+        "Fix: “Billing invoice no.” (the synthetic CN-prefixed reference) is no longer shown anywhere — removed from all 6 PDF templates (custody summary, custody admin, voluntary cover, voluntary call details, voluntary admin) and from the in-app billing panel. It only ever confused users vs. the real QuickFile invoice number; the real QuickFile reference (“Invoiced: #123”) is unaffected and still appears on the form once the bill is sent",
+        "Fix: QuickFile no longer attaches the attendance-note PDF twice. When the workflow billing screen sends user-selected documents (extraAttachments[]), the legacy auto-rendered attendance-note PDF (attachAttendanceHtml) is now skipped — only the documents you tick in the billing screen go to QuickFile. The standalone billing panel (which never sends extraAttachments) keeps its single auto attachment, so neither path regresses",
+        "Fix: Voluntary attendance §3 (Client Details & Welfare) no longer duplicates the forename / middle / surname inputs already entered in §1. §3 now shows a clear read-only sectionNote — “Name: from §1 — … entered in Section 1 (Case Reference & Arrival)” — with the actual saved name appended in green. Removes a long-standing source of inconsistent data entry",
+        "Renderer: sectionNote handler now supports an opt-in dynamicNameRefSection1 flag that appends the live name from data.forename / data.middleName / data.surname — keeps the message accurate without inventing a new field type",
+        "Tests: new tests/v1_5_6_fixes.test.js (13 assertions across 3 suites: PDF/panel cleanup, QF gate, voluntary §3). Existing billingWorkflow + billingOverhaul tests inverted to assert the new absence of “Billing invoice no.”. Full unit suite now 1071 assertions, all green"
       ]
     },
     {
@@ -1313,10 +1313,10 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "UX: \u201cAdd new firm\u201d inline form (\u00a71 instructing-firm picker) is much clearer \u2014 every field has an unambiguous label so you can always tell what goes where, even after typing has hidden the placeholder. Labels rewritten: \u201cFirm name\u201d \u2192 \u201cInstructing firm name\u201d, \u201cContact name (person instructed)\u201d \u2192 \u201cContact at firm (the person who instructed you)\u201d, \u201cContact phone\u201d \u2192 \u201cPhone number for that contact\u201d, \u201cContact email\u201d \u2192 \u201cEmail for that contact\u201d",
-        "Fix: \u201cSource of referral\u201d field has been REMOVED from the inline Add-new-firm form. Source of referral (Duty Rota / agency / own private etc.) is a property of the matter, not of the firm \u2014 a firm can be your own private firm on one matter and act as agency on another. The matter form\u2019s \u00a71 already has its own Source of Referral field, so nothing is lost; you just answer it once, in the right place",
-        "UX: A clear \u201c\u2190 Back\u201d button now sits at the TOP-LEFT of the inline Add-new-firm form (separate from the bottom Cancel) so a user who opened the form by mistake or made a typo and wants to start over has an obvious escape hatch without having to scroll past every field",
-        "UX: One-line intro at the top of the inline form (\u201cAdd the instructing solicitor\u2019s firm \u2014 i.e. the firm that instructed you to attend the station. Only the firm name is required; everything else is optional and can be edited later under Manage Firms.\u201d) makes it instantly obvious what the form is for",
+        "UX: “Add new firm” inline form (§1 instructing-firm picker) is much clearer — every field has an unambiguous label so you can always tell what goes where, even after typing has hidden the placeholder. Labels rewritten: “Firm name” → “Instructing firm name”, “Contact name (person instructed)” → “Contact at firm (the person who instructed you)”, “Contact phone” → “Phone number for that contact”, “Contact email” → “Email for that contact”",
+        "Fix: “Source of referral” field has been REMOVED from the inline Add-new-firm form. Source of referral (Duty Rota / agency / own private etc.) is a property of the matter, not of the firm — a firm can be your own private firm on one matter and act as agency on another. The matter form’s §1 already has its own Source of Referral field, so nothing is lost; you just answer it once, in the right place",
+        "UX: A clear “← Back” button now sits at the TOP-LEFT of the inline Add-new-firm form (separate from the bottom Cancel) so a user who opened the form by mistake or made a typo and wants to start over has an obvious escape hatch without having to scroll past every field",
+        "UX: One-line intro at the top of the inline form (“Add the instructing solicitor’s firm — i.e. the firm that instructed you to attend the station. Only the firm name is required; everything else is optional and can be edited later under Manage Firms.”) makes it instantly obvious what the form is for",
         "Tests: tests/timeBreakdownPanel.test.js extended with v1.5.5 assertions (Back button, intro, removal of Source-of-Referral, new label strings, new CSS classes including dark-mode rules); full unit suite is now 1058 assertions, all green"
       ]
     },
@@ -1325,8 +1325,8 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "Fix: VAT field on the Step 2 billing screen now defaults to 20 (i.e. 20%), not 2000. Settings stores VAT as a percentage string (\"20\") but the rest of the system expects a decimal fraction (0.20); without normalisation the value was being multiplied by 100 twice, so the VAT input rendered as \"2000\" and the live invoice preview showed an obviously wrong total. The fix normalises the value at the settings boundary and adds defence-in-depth guards in both billing renderers so any old cached value or legacy DB row can\u2019t resurrect the bug",
-        "New: shared _normaliseVatRate(raw, fallback) helper in app.js \u2014 always returns a decimal fraction in [0, 1], divides by 100 if raw > 1, and falls back gracefully on null/empty/NaN/negative input",
+        "Fix: VAT field on the Step 2 billing screen now defaults to 20 (i.e. 20%), not 2000. Settings stores VAT as a percentage string (\"20\") but the rest of the system expects a decimal fraction (0.20); without normalisation the value was being multiplied by 100 twice, so the VAT input rendered as \"2000\" and the live invoice preview showed an obviously wrong total. The fix normalises the value at the settings boundary and adds defence-in-depth guards in both billing renderers so any old cached value or legacy DB row can’t resurrect the bug",
+        "New: shared _normaliseVatRate(raw, fallback) helper in app.js — always returns a decimal fraction in [0, 1], divides by 100 if raw > 1, and falls back gracefully on null/empty/NaN/negative input",
         "Tests: new tests/vatRateNormalisation.test.js (18 assertions) covers settings parse, the helper itself across 11 input shapes, and both billing renderers; full unit suite is now 1050 assertions, all green"
       ]
     },
@@ -1335,8 +1335,8 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "Fix: workflow Step 2 \u2014 the QuickFile send button is now clearly labelled \u201cSend Bill to QuickFile\u201d (was \u201cGenerate Invoice\u201d, which users did not recognise as the QuickFile action). The locked, unlocked, in-flight, success and failure messages all use the same explicit wording so it is obvious which button uploads the bill to QuickFile",
-        "Fix: Archive guard \u2014 if QuickFile is configured and no invoice has been sent yet, clicking Archive (on Step 2 \u201cArchive & close\u201d or Step 3 \u201cArchive\u201d) now shows a 3-way choice: \u201cSend Bill to QuickFile first (recommended)\u201d, \u201cArchive without sending to QuickFile\u201d, or \u201cCancel\u201d. Stops a matter being silently archived without the bill ever reaching QuickFile",
+        "Fix: workflow Step 2 — the QuickFile send button is now clearly labelled “Send Bill to QuickFile” (was “Generate Invoice”, which users did not recognise as the QuickFile action). The locked, unlocked, in-flight, success and failure messages all use the same explicit wording so it is obvious which button uploads the bill to QuickFile",
+        "Fix: Archive guard — if QuickFile is configured and no invoice has been sent yet, clicking Archive (on Step 2 “Archive & close” or Step 3 “Archive”) now shows a 3-way choice: “Send Bill to QuickFile first (recommended)”, “Archive without sending to QuickFile”, or “Cancel”. Stops a matter being silently archived without the bill ever reaching QuickFile",
         "New: shared showChoice() helper in renderer/toast.js for stacked multi-option modals; exposed on window for any future workflow that needs more than yes/no",
         "Tests: new tests/quickfileSendButtonAndArchiveGuard.test.js (17 assertions) plus updated billing-workflow regression tests so the v1.5.3 wording and archive guard cannot silently regress"
       ]
@@ -1346,10 +1346,10 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "Fix: time-breakdown panel \u2014 \u201cAll visits \u2014 chargeable attendance & advice (totals)\u201d now reads from the recorded visit times via aggregateMinuteBuckets, not from the user-overrideable adviceSocial / adviceUnsocial fields in \u00a79. Stops the panel showing e.g. \u201cVisit 1 attendance = 78 mins, All visits totals = 36 mins\u201d when an old override flag is still in place",
-        "Fix: when a manual override on the \u00a79 attendance fields disagrees with the auto totals, the panel now shows an amber \u201cManual override active\u201d note explaining which figure will actually be billed and how to reset it",
-        "Fix: inline \u201cAdd new firm\u201d form on \u00a71 rebuilt as a labelled stacked layout (Firm name *, Contact name, Contact phone with grouped None / N/A / Not applicable quick-fills, Contact email, Source of referral). Each field is on its own row with a clear label that doesn\u2019t disappear when you start typing",
-        "Fix: \u201cAdd Firm\u201d button on the inline form is now solid primary (was outline-only and looked disabled in dark mode); \u201cCancel\u201d is plain secondary"
+        "Fix: time-breakdown panel — “All visits — chargeable attendance & advice (totals)” now reads from the recorded visit times via aggregateMinuteBuckets, not from the user-overrideable adviceSocial / adviceUnsocial fields in §9. Stops the panel showing e.g. “Visit 1 attendance = 78 mins, All visits totals = 36 mins” when an old override flag is still in place",
+        "Fix: when a manual override on the §9 attendance fields disagrees with the auto totals, the panel now shows an amber “Manual override active” note explaining which figure will actually be billed and how to reset it",
+        "Fix: inline “Add new firm” form on §1 rebuilt as a labelled stacked layout (Firm name *, Contact name, Contact phone with grouped None / N/A / Not applicable quick-fills, Contact email, Source of referral). Each field is on its own row with a clear label that doesn’t disappear when you start typing",
+        "Fix: “Add Firm” button on the inline form is now solid primary (was outline-only and looked disabled in dark mode); “Cancel” is plain secondary"
       ]
     },
     {
@@ -1367,13 +1367,13 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "UX audit batches 2 & 3 \u2014 strong improvements + small wins",
-        "Voluntary \u00a71 now leads with Voluntary Status & Rights (attendance, free-to-leave, caution, notice of rights, legal advice, sub-type, constable-present), so the most decisive context is captured first",
+        "UX audit batches 2 & 3 — strong improvements + small wins",
+        "Voluntary §1 now leads with Voluntary Status & Rights (attendance, free-to-leave, caution, notice of rights, legal advice, sub-type, constable-present), so the most decisive context is captured first",
         "Quick Capture: trimmed to the 8 essentials (attendance type, client name, station, offence, DSCC, instruction received, first-contact time, instructing firm, notes); referral / OIC / times / custody # collapsed under \"More fields\" to keep the screen one-glance",
-        "45-min reason converted to a structured select (already engaged, travelling, in court, awaiting interpreter / AA, awaiting booking, etc.) with an \"Other (specify)\" details box \u2014 validators updated for all three forms",
+        "45-min reason converted to a structured select (already engaged, travelling, in court, awaiting interpreter / AA, awaiting booking, etc.) with an \"Other (specify)\" details box — validators updated for all three forms",
         "Density default = compact for new installs (existing user choice respected); textareas capped at ~5 rows and grow on focus; global search hidden while a form is active to stop stray custody numbers triggering record searches",
         "PDFs: page-1 \"Defence summary\" panel (outcome, outcome code, next date, next venue, interview position, headline advice, outcome notes) added to custody, telephone and voluntary builders",
-        "PDFs: Appendix A/B renamed to \"Annex A \u2014 Video Capture\" and \"Annex B \u2014 Video Identification Parade\"",
+        "PDFs: Appendix A/B renamed to \"Annex A — Video Capture\" and \"Annex B — Video Identification Parade\"",
         "Inline DSCC private toggle on the full custody / voluntary / telephone forms (matches the Quick Capture pattern); checkbox sizing fixed throughout"
       ]
     },
@@ -1382,7 +1382,7 @@
       "date": "2026-04-22",
       "latest": false,
       "changes": [
-        "UX audit batch 1 \u2014 essentials",
+        "UX audit batch 1 — essentials",
         "Validation: voluntary form section indices remapped, broken adviceGiven requirement removed, date auto-populated from instructionDateTime when missing",
         "Bottom bar: dynamic Finish pill (Finalise / Finish matter / Archive) reachable from any section instead of only Section 9",
         "Bottom bar: removed duplicate progress-dot row",
@@ -1452,7 +1452,7 @@
       "date": "2026-04-18",
       "latest": false,
       "changes": [
-        "Quick Email to Officer: template-first redesign \u2014 pick the email you want to send and the form below adapts to show only the fields needed",
+        "Quick Email to Officer: template-first redesign — pick the email you want to send and the form below adapts to show only the fields needed",
         "5 built-in templates ship by default (bail details, representation, disclosure, follow-up, voluntary attendance)",
         "optional sections vanish cleanly when fields are blank",
         "Save as new template needs only a name",
@@ -1465,7 +1465,7 @@
       "latest": false,
       "changes": [
         "Open matters: new Uninvoiced revenue pill shows total projected revenue across all matters not yet invoiced (incl. VAT)",
-        "Reports: removed duplicate Billable Attendances sub-report \u2014 its data, filters, and revenue total now live on the Open matters view",
+        "Reports: removed duplicate Billable Attendances sub-report — its data, filters, and revenue total now live on the Open matters view",
         "Quality: cross-shell unit-test runner fixes Windows CI (PowerShell does not expand shell globs like bash does)"
       ]
     },
@@ -1474,8 +1474,8 @@
       "date": "2026-04-17",
       "latest": false,
       "changes": [
-        "Billing integrity (P1): archived matters no longer appear in billable list \u2014 prevents duplicate invoices for cases already billed outside QuickFile",
-        "Quality: full automated stress-test suite \u2014 33-check end-to-end lifecycle journey covering intake, draft, edit-after-save, finalise, lock, archive, billable-list, and search",
+        "Billing integrity (P1): archived matters no longer appear in billable list — prevents duplicate invoices for cases already billed outside QuickFile",
+        "Quality: full automated stress-test suite — 33-check end-to-end lifecycle journey covering intake, draft, edit-after-save, finalise, lock, archive, billable-list, and search",
         "Quality: SQL contract regression tests for billable-attendances handler",
         "Quality: new test:all orchestrator runs unit + e2e + smoke in one go"
       ]
@@ -1485,8 +1485,8 @@
       "date": "2026-04-15",
       "latest": false,
       "changes": [
-        "Billing workflow: instructing firm name now stays correct \u2014 meta is refreshed after invoice data loads, firms list backfills missing firmName, open workflow syncs form first",
-        "Finish matter: step 3 is Archive + Close only \u2014 archiving records billing and office completion automatically (no separate mark-complete buttons)"
+        "Billing workflow: instructing firm name now stays correct — meta is refreshed after invoice data loads, firms list backfills missing firmName, open workflow syncs form first",
+        "Finish matter: step 3 is Archive + Close only — archiving records billing and office completion automatically (no separate mark-complete buttons)"
       ]
     },
     {
@@ -1495,9 +1495,9 @@
       "latest": false,
       "changes": [
         "Fix: 'Mark billing complete' and 'Mark office work complete' buttons now work correctly inside workflow (confirm dialog z-index fix)",
-        "Invoicing: line item names standardised \u2014 'PS Attendance Fixed Fee', 'Mileage', 'Parking'",
+        "Invoicing: line item names standardised — 'PS Attendance Fixed Fee', 'Mileage', 'Parking'",
         "Invoicing: attachment filename now follows format 'Name - Station - Date - police station attendance note - Firm.pdf'",
-        "CRM1: fixed NI number going into UFN header boxes \u2014 UFN combs now left blank, NI mapped to correct comb fields",
+        "CRM1: fixed NI number going into UFN header boxes — UFN combs now left blank, NI mapped to correct comb fields",
         "CRM1: capital section now fills investments row and above-threshold field when savings data entered"
       ]
     },
@@ -1539,7 +1539,7 @@
         "Billing step 2: Generate Invoice button now explains why it is locked (tick all 3 checkboxes)",
         "Billing step 2: live lock/unlock status with progress count (1/3, 2/3, 3/3)",
         "Billing step 2: Review Confirmation card highlighted with amber border so it cannot be missed",
-        "Billing step 3: numbered buttons show exact order (1. Mark billing complete \u2192 2. Office work \u2192 Final: Archive)",
+        "Billing step 3: numbered buttons show exact order (1. Mark billing complete → 2. Office work → Final: Archive)",
         "Billing workflow: all steps now labelled Step 1 / Step 2 / Step 3 in headers",
         "Billing workflow: primary action buttons visually prominent, secondary actions smaller",
         "Tests: 184 automated tests covering full QuickFile billing workflow"
@@ -1663,8 +1663,8 @@
       "version": "1.4.199",
       "date": "2026-04-13",
       "changes": [
-        "CRITICAL: override NSIS customRemoveFiles to skip un.atomicRMDir that aborts on locked files \u2014 use Delete /REBOOTOK + RMDir /r instead",
-        "Root cause: Cursor IDE holds app.asar handle; un.atomicRMDir rename fails \u2192 'Failed to uninstall old application files' error 2 \u2192 abort"
+        "CRITICAL: override NSIS customRemoveFiles to skip un.atomicRMDir that aborts on locked files — use Delete /REBOOTOK + RMDir /r instead",
+        "Root cause: Cursor IDE holds app.asar handle; un.atomicRMDir rename fails → 'Failed to uninstall old application files' error 2 → abort"
       ],
       "latest": false
     },
@@ -1680,7 +1680,7 @@
       "version": "1.4.197",
       "date": "2026-04-13",
       "changes": [
-        "CRITICAL FIX: remove /T (tree-kill) from NSIS taskkill \u2014 it was killing the installer itself because Windows sees it as a child of Custody Note.exe",
+        "CRITICAL FIX: remove /T (tree-kill) from NSIS taskkill — it was killing the installer itself because Windows sees it as a child of Custody Note.exe",
         "Fix lock probe: bypass Electron ASAR intercept with process.noAsar for accurate file-lock detection"
       ],
       "latest": false
@@ -1803,7 +1803,7 @@
       "version": "1.4.184",
       "date": "2026-04-13",
       "changes": [
-        "Fix billing view showing empty \u2014 archived records that still need invoicing now appear in the billing list",
+        "Fix billing view showing empty — archived records that still need invoicing now appear in the billing list",
         "Include archived_at in billing view data for UI badges"
       ],
       "latest": false
@@ -1812,7 +1812,7 @@
       "version": "1.4.183",
       "date": "2026-04-13",
       "changes": [
-        "Fix billing failure \u2014 remove duplicate IPC handler registration that blocked all billing and QuickFile handlers from loading",
+        "Fix billing failure — remove duplicate IPC handler registration that blocked all billing and QuickFile handlers from loading",
         "Clean up duplicate previewPdfBase64 entry in preload bridge"
       ],
       "latest": false
@@ -1821,9 +1821,9 @@
       "version": "1.4.182",
       "date": "2026-04-13",
       "changes": [
-        "Fix blank document preview \u2014 PDFs now open in system viewer",
+        "Fix blank document preview — PDFs now open in system viewer",
         "Add Save to Desktop and Email buttons for each generated form",
-        "Remove redundant Section 9 billing card \u2014 use post-finalise bar or bottom nav instead"
+        "Remove redundant Section 9 billing card — use post-finalise bar or bottom nav instead"
       ],
       "latest": false
     },
@@ -1832,7 +1832,7 @@
       "date": "2026-04-13",
       "latest": false,
       "changes": [
-        "NSIS installer now kills running app before overwriting files \u2014 prevents 'Failed to uninstall old application files' error",
+        "NSIS installer now kills running app before overwriting files — prevents 'Failed to uninstall old application files' error",
         "Hardened auto-update shutdown: force-exits process after quitAndInstall to release file handles",
         "Enabled elevation for installer to handle locked files"
       ]
@@ -2380,7 +2380,7 @@
       "version": "1.4.128",
       "date": "2026-03-21",
       "changes": [
-        "Fix toast queue draining \u2014 toasts after the first now display reliably",
+        "Fix toast queue draining — toasts after the first now display reliably",
         "Add error handling to PDF and Word export when settings fail to load",
         "Fix competing database writes during first-launch wizard setup",
         "Add 5-minute timeout to magic-link session unlock polling",
@@ -2392,9 +2392,9 @@
       "version": "1.4.127",
       "date": "2026-03-21",
       "changes": [
-        "Word/DOCX export alongside PDF \u2014 export attendance notes as editable Word documents",
-        "Light theme fix \u2014 theme-light now uses genuinely light backgrounds",
-        "Home dashboard restored \u2014 shortcuts, LAA forms, and status strip visible by default",
+        "Word/DOCX export alongside PDF — export attendance notes as editable Word documents",
+        "Light theme fix — theme-light now uses genuinely light backgrounds",
+        "Home dashboard restored — shortcuts, LAA forms, and status strip visible by default",
         "Custody outcome codes CN09-CN11 added (released no bail, bail varied/extended)",
         "Expanded first-launch wizard with email, backup folder, and quick start guide",
         "Self-service session unlock via magic link email (forgot password recovery)",
@@ -2408,10 +2408,10 @@
       "version": "1.4.126",
       "date": "2026-03-21",
       "changes": [
-        "Magic link login: sign in with just your email address \u2014 no password needed",
+        "Magic link login: sign in with just your email address — no password needed",
         "Polling-based auth flow for reliable desktop login",
         "Licence key activation kept as fallback",
-        "Session persists across restarts \u2014 stay signed in until you log out"
+        "Session persists across restarts — stay signed in until you log out"
       ],
       "latest": false
     },
@@ -2441,7 +2441,7 @@
       "version": "1.4.123",
       "date": "2026-03-21",
       "changes": [
-        "Zero-friction redesign: paste licence key to activate \u2014 no email codes or passwords",
+        "Zero-friction redesign: paste licence key to activate — no email codes or passwords",
         "Welcome email sent on purchase with licence key and download link",
         "Postcode lookup works out of the box via server-side proxy",
         "Simplified first-launch: just name and DSCC PIN",
@@ -2479,7 +2479,7 @@
       "version": "1.4.119",
       "date": "2026-03-21",
       "changes": [
-        "Simpler sign-in: just enter your email and verify with a 6-digit code \u2014 no password or registration needed"
+        "Simpler sign-in: just enter your email and verify with a 6-digit code — no password or registration needed"
       ],
       "latest": false
     },
@@ -2559,8 +2559,8 @@
       "changes": [
         "Auto-migrate legacy saved templates: old templates with hardcoded names are automatically converted to {{placeholders}} on first use",
         "Saved templates now correctly fill in current officer name, client name, station and date instead of showing stale values from when they were saved",
-        "Billing: LAA forms checklist (attach official PDFs), Applicant Declaration in generated docs; previews without forced print; Desktop LAA PDF filename client \u2014 station \u2014 date \u2014 form \u2014 firm",
-        "Billing readiness: clearer finalise \u2192 invoice \u2192 archive steps; rebuild section progress dots when switching form type (e.g. telephone)",
+        "Billing: LAA forms checklist (attach official PDFs), Applicant Declaration in generated docs; previews without forced print; Desktop LAA PDF filename client — station — date — form — firm",
+        "Billing readiness: clearer finalise → invoice → archive steps; rebuild section progress dots when switching form type (e.g. telephone)",
         "Smoke test: dismiss attachments prompt before asserting billing overlay"
       ]
     },
@@ -2597,10 +2597,10 @@
       "date": "2026-03-18",
       "latest": false,
       "changes": [
-        "Fixed postcode 'Check credits' showing undefined \u2014 uses Ideal Postcodes /keys/.../details for balance when available, otherwise /keys/... availability (API key validity)",
+        "Fixed postcode 'Check credits' showing undefined — uses Ideal Postcodes /keys/.../details for balance when available, otherwise /keys/... availability (API key validity)",
         "Optional User Token field (from ideal-postcodes.co.uk/account) for exact remaining lookups when the API requires it",
         "Postcode API key and user token now included when you click Save settings (Integrations tab)",
-        "Cloud backup home banner: dismiss is permanent (stored in settings + localStorage) \u2014 no more re-prompt every 7 days after updates",
+        "Cloud backup home banner: dismiss is permanent (stored in settings + localStorage) — no more re-prompt every 7 days after updates",
         "Cloud restore prompt: snooze extended from 7 days to 180 days if you choose Continue without restoring"
       ]
     },
@@ -2609,16 +2609,16 @@
       "date": "2026-03-18",
       "latest": false,
       "changes": [
-        "Full UI overhaul \u2014 bigger buttons, cleaner layouts, easier to use on all screen sizes",
+        "Full UI overhaul — bigger buttons, cleaner layouts, easier to use on all screen sizes",
         "All buttons and form inputs now meet 48px minimum touch target (Material Design guidelines)",
-        "Home screen decluttered \u2014 only essential actions visible, shortcuts and stats hidden for a calmer experience",
-        "Form editing simplified \u2014 header shows only title + autosave indicator, page turner reduced to 3 large buttons",
+        "Home screen decluttered — only essential actions visible, shortcuts and stats hidden for a calmer experience",
+        "Form editing simplified — header shows only title + autosave indicator, page turner reduced to 3 large buttons",
         "Section picker now slides up from bottom with large 56px tap targets for each section",
-        "Gear menu reorganised \u2014 top 5 quick actions shown first, 'More...' toggle for everything else",
+        "Gear menu reorganised — top 5 quick actions shown first, 'More...' toggle for everything else",
         "Settings reorganised into 6 tabbed sections (Account, Appearance, Integrations, Backup, Advanced, Support)",
-        "Responsive font scaling with clamp() \u2014 text scales fluidly across all screen sizes",
+        "Responsive font scaling with clamp() — text scales fluidly across all screen sizes",
         "Form layout switches to single column under 900px width; max-width capped at 1100px on wide displays",
-        "Bottom navigation enlarged \u2014 bigger icons (1.8rem), larger labels, 'New' button stands out"
+        "Bottom navigation enlarged — bigger icons (1.8rem), larger labels, 'New' button stands out"
       ]
     },
     {
@@ -2626,11 +2626,11 @@
       "date": "2026-03-18",
       "latest": false,
       "changes": [
-        "Fixed scroll cut-off \u2014 Reports, Authorities, Help, Station Mileage and Quick Capture screens now scroll fully to the bottom",
+        "Fixed scroll cut-off — Reports, Authorities, Help, Station Mileage and Quick Capture screens now scroll fully to the bottom",
         "Fixed attendance form content being clipped in compact and comfortable density modes",
-        "Slimmed the right-side scrollbar from 44px to 10px \u2014 cleaner, more space for content",
+        "Slimmed the right-side scrollbar from 44px to 10px — cleaner, more space for content",
         "Native scrollbars across the app are now thin (8px default) and scale via Settings",
-        "App layout now adapts to viewport height \u2014 smaller windows reduce nav bar size and hide text labels to save space"
+        "App layout now adapts to viewport height — smaller windows reduce nav bar size and hide text labels to save space"
       ]
     },
     {
@@ -2638,7 +2638,7 @@
       "date": "2026-03-18",
       "latest": false,
       "changes": [
-        "Fixed postcode URL encoding \u2014 postcodes with spaces (e.g. SW1A 2AA) were being sent as SW1A%2B2AA instead of SW1A2AA, causing lookups to fail even with a valid API key"
+        "Fixed postcode URL encoding — postcodes with spaces (e.g. SW1A 2AA) were being sent as SW1A%2B2AA instead of SW1A2AA, causing lookups to fail even with a valid API key"
       ]
     },
     {
@@ -2646,7 +2646,7 @@
       "date": "2026-03-18",
       "latest": false,
       "changes": [
-        "Fixed postcode lookup \u2014 'Find Address' button now correctly reads the API key from settings and fills all address fields"
+        "Fixed postcode lookup — 'Find Address' button now correctly reads the API key from settings and fills all address fields"
       ]
     },
     {
@@ -2951,7 +2951,7 @@
         "Billing: new Billing & Generated Documents panel on each custody record with matter details, billing preview, document list, review confirmation checklist, and one-click QuickFile invoice creation",
         "Billing: invoice narrative auto-generated from client, station, date and offence with manual editing, live recalculation of attendance fee, mileage, parking, VAT and totals",
         "Billing: duplicate invoice protection with warning prompt, billing audit log tracking all invoice and document actions, and email pack preparation for sending invoice to instructing firm",
-        "Station Mileage: new admin view to set mileage from base for each police station, with search and bulk save \u2014 mileage auto-populates on billing panel",
+        "Station Mileage: new admin view to set mileage from base for each police station, with search and bulk save — mileage auto-populates on billing panel",
         "Reports: new Billable Attendances report showing all completed but uninvoiced records with search, date range and firm filters, summary totals, and direct invoice shortcuts",
         "QuickFile: full invoice creation service that matches or creates the firm as a QuickFile client, adds line items for attendance fee, mileage and parking with VAT, and stores the invoice ID, number and link back on the custody record"
       ]
@@ -3019,7 +3019,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Settings: backup restore lists now show readable labels \u2014 'Latest snapshot' or '12 Mar 2026, 10:00 \u2014 hourly archive' \u2014 instead of raw filenames, for both cloud and local restore panels."
+        "Settings: backup restore lists now show readable labels — 'Latest snapshot' or '12 Mar 2026, 10:00 — hourly archive' — instead of raw filenames, for both cloud and local restore panels."
       ]
     },
     {
@@ -3028,9 +3028,9 @@
       "latest": false,
       "changes": [
         "Settings: remove redundant App Status card (Backup/Network/Version). These values are shown in the footer and the main Backup card.",
-        "Records list: PDF button now opens a print/preview window instead of silently saving to Desktop \u2014 choose Print or Save as PDF from the dialog.",
-        "Backup: smarter retention \u2014 keeps last 24 hourly archives plus one per day for 7 days (max 31 files). Previously kept 48 hourly which only gave 2 days of history.",
-        "Backup restore: after restoring from cloud or local backup, the scheduler is suppressed for 60 seconds then takes a fresh backup of the restored state \u2014 prevents the restored database being immediately overwritten by a stale scheduled run."
+        "Records list: PDF button now opens a print/preview window instead of silently saving to Desktop — choose Print or Save as PDF from the dialog.",
+        "Backup: smarter retention — keeps last 24 hourly archives plus one per day for 7 days (max 31 files). Previously kept 48 hourly which only gave 2 days of history.",
+        "Backup restore: after restoring from cloud or local backup, the scheduler is suppressed for 60 seconds then takes a fresh backup of the restored state — prevents the restored database being immediately overwritten by a stale scheduled run."
       ]
     },
     {
@@ -3038,10 +3038,10 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Settings: fix permanent 'Checking\u2026' spinners in the Status card \u2014 network and backup values now update instantly when Settings opens.",
-        "Settings: fix 'Backup now' button \u2014 now calls backup directly without requiring a record to be open.",
-        "Settings: fix 'Check for update' button \u2014 now triggers the update check correctly from the Status card.",
-        "Settings: add 'Restore from Local Backup' panel \u2014 lists backups from your local and off-site folders, lets you select and restore any one. Safety copy saved first.",
+        "Settings: fix permanent 'Checking…' spinners in the Status card — network and backup values now update instantly when Settings opens.",
+        "Settings: fix 'Backup now' button — now calls backup directly without requiring a record to be open.",
+        "Settings: fix 'Check for update' button — now triggers the update check correctly from the Status card.",
+        "Settings: add 'Restore from Local Backup' panel — lists backups from your local and off-site folders, lets you select and restore any one. Safety copy saved first.",
         "Email OIC templates: outcome-aware body text. When outcome is known, Templates 2 and 3 pre-fill charges, court date/time, and bail details from the record. When charged without bail or remanded, bail conditions are never mentioned."
       ]
     },
@@ -3058,7 +3058,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Records list: add PDF button to each row \u2014 exports directly to Desktop without opening the record.",
+        "Records list: add PDF button to each row — exports directly to Desktop without opening the record.",
         "First-launch setup: add email address field; email is saved to Settings and pre-fills the From address. Test-email button appears as you type your address.",
         "First-launch setup: email is now saved when you click Save & Finish."
       ]
@@ -3068,7 +3068,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Outcome section: add Court Time field. When 'Charged without Bail', 'Charged with Bail', or 'Remanded in Custody' is selected, Court Date auto-fills to the next day and Court Time auto-fills to 10:00 \u2014 both remain fully editable. Court time also appears in the custody note print view."
+        "Outcome section: add Court Time field. When 'Charged without Bail', 'Charged with Bail', or 'Remanded in Custody' is selected, Court Date auto-fills to the next day and Court Time auto-fills to 10:00 — both remain fully editable. Court time also appears in the custody note print view."
       ]
     },
     {
@@ -3076,7 +3076,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Officer Email Templates: compose opens in Outlook Web (Microsoft 365). Copy Email, Mark Sent, and Cancel. Optional add-on in Settings \u2192 Add-Ons."
+        "Officer Email Templates: compose opens in Outlook Web (Microsoft 365). Copy Email, Mark Sent, and Cancel. Optional add-on in Settings → Add-Ons."
       ]
     },
     {
@@ -3100,7 +3100,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Add Officer Email Templates add-on module. When enabled in Settings \u2192 Add-Ons, an Email OIC button appears on each record in the Records list. Click it to open a modal with three pre-filled templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up. Templates auto-populate officer, client, station, firm, date and fee earner details from the record. Supports Open in Outlook Web, Copy Email, Mark Sent, and Cancel. A Sent badge appears on the list row after marking sent. Feature is fully optional and has no effect on the core app when disabled. Designed for future paid licensing."
+        "Add Officer Email Templates add-on module. When enabled in Settings → Add-Ons, an Email OIC button appears on each record in the Records list. Click it to open a modal with three pre-filled templates: First Attendance Disclosure Request, Follow-Up / Outcome Request, and No Reply Follow-Up. Templates auto-populate officer, client, station, firm, date and fee earner details from the record. Supports Open in Outlook Web, Copy Email, Mark Sent, and Cancel. A Sent badge appears on the list row after marking sent. Feature is fully optional and has no effect on the core app when disabled. Designed for future paid licensing."
       ]
     },
     {
@@ -3198,7 +3198,7 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Print PDF button added to records list \u2014 export and open PDF directly from the record list",
+        "Print PDF button added to records list — export and open PDF directly from the record list",
         "LAA Declaration with client signature now embedded in Consultation section (after client understanding checkboxes, before conflict check) for both custody and voluntary attendances",
         "Fixed voluntary form checklist groups not rendering ('Data & disclosure' group was missing from render order)"
       ]
@@ -3208,9 +3208,9 @@
       "date": "2026-03-12",
       "latest": false,
       "changes": [
-        "Check for Updates button added to hamburger menu \u2014 visible on every page",
-        "DB export cached \u2014 avoids re-serialising the entire database when data hasn't changed",
-        "saveDb() is now idle-aware \u2014 defers disk writes until user has been idle for 3 seconds",
+        "Check for Updates button added to hamburger menu — visible on every page",
+        "DB export cached — avoids re-serialising the entire database when data hasn't changed",
+        "saveDb() is now idle-aware — defers disk writes until user has been idle for 3 seconds",
         "All backup functions (quick, hourly, manual) now use async file writes instead of blocking synchronous ones",
         "Manual Backup Now button uses cached export for near-instant response"
       ]
@@ -3223,7 +3223,7 @@
         "Renamed 'First contact within 45 mins of instruction' to 'Within 45 mins of duty call' with Yes/No/N/A options (all form types)",
         "Fee Earner / Rep field added to custody form section 1, auto-fills from settings",
         "Firm contact details (name, phone, email) now saved back to firm database for auto-populate on future use",
-        "Major performance fix \u2014 DB flush interval increased from 500ms to 30s, disk writes made async to stop main-process blocking",
+        "Major performance fix — DB flush interval increased from 500ms to 30s, disk writes made async to stop main-process blocking",
         "Autosave debounce increased to 3s, autosave interval to 30s, backup scheduler much calmer (30min quick, 90s idle grace)",
         "Sync worker deferred from 1s to 15s after record change to reduce contention",
         "Added prominent green Backup Now button in form and app header for manual save+backup on demand",
@@ -3235,7 +3235,7 @@
       "date": "2026-03-11",
       "latest": false,
       "changes": [
-        "Voluntary outcome simplified \u2014 merged caseOutcomeStatus and outcomeDecision into single Outcome field",
+        "Voluntary outcome simplified — merged caseOutcomeStatus and outcomeDecision into single Outcome field",
         "Added new voluntary outcomes: Officer to Notify, Released Under Investigation, Youth caution, Referred to diversion programme, Further voluntary interview required",
         "Removed Charged options from voluntary form (use convert-to-custody instead)",
         "Removed Client Aftercare section from voluntary form",
@@ -3250,14 +3250,14 @@
       "date": "2026-03-11",
       "latest": false,
       "changes": [
-        "Voluntary form rebuild \u2014 now mirrors the custody form with custody-specific fields removed, instead of a separate rewritten form",
+        "Voluntary form rebuild — now mirrors the custody form with custody-specific fields removed, instead of a separate rewritten form",
         "Voluntary form gains full Offences section (4 offences with dates, mode of trial, statute)",
         "Voluntary form gains full Disclosure section (co-suspects, CCTV, witnesses, exhibits, PNC)",
         "Voluntary form gains full Consultation section (conflict check, eligibility, case assessment, advice checklist, signatures)",
         "Voluntary form gains multi-interview structure (same as custody)",
         "Voluntary form gains full Time Recording section (travel, waiting, time breakdown, case stage, invoice)",
         "Voluntary-specific fields preserved (voluntary status, free to leave, caution, convert-to-custody, outcome codes CN04-CN13)",
-        "Compact bottom bar \u2014 buttons further reduced to 24px min-height"
+        "Compact bottom bar — buttons further reduced to 24px min-height"
       ]
     },
     {
@@ -3265,9 +3265,9 @@
       "date": "2026-03-10",
       "latest": false,
       "changes": [
-        "Performance: typing is now smooth \u2014 single 200ms UI refresh instead of six cascading debounce timers per keystroke",
+        "Performance: typing is now smooth — single 200ms UI refresh instead of six cascading debounce timers per keystroke",
         "Autosave debounced to 1200ms; editor activity reported at most every 5s (no longer on every keystroke)",
-        "Form change/blur no longer run full collectCurrentData on every field change \u2014 only before save/navigation",
+        "Form change/blur no longer run full collectCurrentData on every field change — only before save/navigation",
         "Progress bar no longer rebuilds section index on every keystroke; list view caches parsed data per row",
         "Main process: audit diff skipped for draft saves (only computed on finalise); new index for list query",
         "Performance panel (Ctrl+Shift+P): shows autosave duration, sync queue, backup status",
@@ -3280,7 +3280,7 @@
       "date": "2026-03-11",
       "latest": false,
       "changes": [
-        "Critical finalise fix: replaced confusing validation modal with simple confirm dialog \u2014 user now sees 'X field(s) incomplete. Finalise anyway?' with OK/Cancel",
+        "Critical finalise fix: replaced confusing validation modal with simple confirm dialog — user now sees 'X field(s) incomplete. Finalise anyway?' with OK/Cancel",
         "Fixed sync pull crash: removed undeclared ctx variable reference that caused ReferenceError on every sync pull",
         "Immediate disk persistence: finalise writes are now flushed to disk immediately (not debounced) to prevent data loss",
         "Toast rendering fix: confirm dialog messages now display line breaks correctly",
@@ -3293,11 +3293,11 @@
       "date": "2026-03-11",
       "latest": false,
       "changes": [
-        "Finalise flow streamlined: removed extra confirmation dialog \u2014 clicking Finalise now saves immediately when all fields are complete",
-        "Clear progress feedback: toasts shown at every step ('Saving finalised record\u2026', 'Finalise error: \u2026')",
+        "Finalise flow streamlined: removed extra confirmation dialog — clicking Finalise now saves immediately when all fields are complete",
+        "Clear progress feedback: toasts shown at every step ('Saving finalised record…', 'Finalise error: …')",
         "Stuck finalise flag auto-clears after 10 seconds (was 30s) so retrying is faster",
-        "Entire finalise flow wrapped in try-catch \u2014 JS errors are now caught and shown to the user instead of silently failing",
-        "Validation modal now shows helpful toast: 'X field(s) incomplete \u2014 click Finalise Anyway to proceed'",
+        "Entire finalise flow wrapped in try-catch — JS errors are now caught and shown to the user instead of silently failing",
+        "Validation modal now shows helpful toast: 'X field(s) incomplete — click Finalise Anyway to proceed'",
         "Sync pull guard, retry with DB verification, and force-status fallback from v1.4.34"
       ]
     },
@@ -3317,9 +3317,9 @@
       "date": "2026-03-11",
       "latest": false,
       "changes": [
-        "Replaced 2-minute backup interval with idle-aware scheduler \u2014 backups now defer while typing and only run when there are real changes (minimum 10-minute gap)",
-        "Fixed finalise not persisting \u2014 autosave race condition eliminated by stopping autosave and setting record status before the save IPC",
-        "Calmer sync messages \u2014 'Saved locally' instead of alarming 'API unreachable' when offline at police stations",
+        "Replaced 2-minute backup interval with idle-aware scheduler — backups now defer while typing and only run when there are real changes (minimum 10-minute gap)",
+        "Fixed finalise not persisting — autosave race condition eliminated by stopping autosave and setting record status before the save IPC",
+        "Calmer sync messages — 'Saved locally' instead of alarming 'API unreachable' when offline at police stations",
         "Enhanced diagnostics panel (Ctrl+Shift+D) with backup state, timing, and renderer status",
         "65 automated tests covering backup scheduling, finalise flow, and stale-write protection"
       ]
@@ -3373,11 +3373,11 @@
       "date": "2026-03-10",
       "latest": false,
       "changes": [
-        "Billing: UFN no longer flagged as missing \u2014 not required in this workflow",
+        "Billing: UFN no longer flagged as missing — not required in this workflow",
         "Billing: Outcome code only required when matter is concluded (not Draft/Ongoing/Adjourned)",
         "Sync: fixed pending count calculation (JS truthiness bug showing stale sync_dirty count)",
-        "Sync: auto-recovery for failed/blocked queue items \u2014 retries after 5 min cooldown",
-        "Sync: queue cleanup \u2014 stale failed/blocked entries cleared on re-enqueue and startup migration",
+        "Sync: auto-recovery for failed/blocked queue items — retries after 5 min cooldown",
+        "Sync: queue cleanup — stale failed/blocked entries cleared on re-enqueue and startup migration",
         "Sync: UI now shows distinct failed/blocked status with error tooltip instead of generic pending"
       ]
     },
@@ -3394,13 +3394,13 @@
       "date": "2026-03-10",
       "latest": false,
       "changes": [
-        "Finalise mutex \u2014 prevents double-click finalise; shows 'Finalising in progress' if button clicked twice",
-        "Finalise race fix \u2014 waits for any in-flight auto-save to complete before sending the finalise request",
-        "Finalise bar visible immediately \u2014 'Attendance Finished \u2014 Finalise' button now shows on new forms without waiting for first auto-save",
-        "Scroll smoothness \u2014 form container uses GPU-accelerated scrolling; chrome-collapse scroll handler moved to requestAnimationFrame to eliminate jank",
-        "Section bar auto-scroll \u2014 active section button scrolls into view when navigating between sections",
-        "Debounced visibility checks \u2014 conditional field show/hide and billing readiness panel now debounced on change to reduce layout thrash",
-        "Section index popup \u2014 only rebuilt when open, not on every section navigation"
+        "Finalise mutex — prevents double-click finalise; shows 'Finalising in progress' if button clicked twice",
+        "Finalise race fix — waits for any in-flight auto-save to complete before sending the finalise request",
+        "Finalise bar visible immediately — 'Attendance Finished — Finalise' button now shows on new forms without waiting for first auto-save",
+        "Scroll smoothness — form container uses GPU-accelerated scrolling; chrome-collapse scroll handler moved to requestAnimationFrame to eliminate jank",
+        "Section bar auto-scroll — active section button scrolls into view when navigating between sections",
+        "Debounced visibility checks — conditional field show/hide and billing readiness panel now debounced on change to reduce layout thrash",
+        "Section index popup — only rebuilt when open, not on every section navigation"
       ]
     },
     {
@@ -3408,13 +3408,13 @@
       "date": "2026-03-10",
       "latest": false,
       "changes": [
-        "Offline-first sync \u2014 local SQLite is source of truth; saves never wait for internet; sync runs in background",
-        "Sync queue \u2014 per-record queue; one failed record never blocks others; retry with backoff (10s, 30s, 2m, 10m, 30m)",
-        "8-second request timeout \u2014 prevents hanging on restricted Wi-Fi; timeout/network errors classified as retryable",
-        "Connectivity check \u2014 optional GET /api/health; clearer states: Synced, Pending sync, Saved locally, Sync delayed/blocked",
-        "Finalise fix \u2014 stop autosave before finalise; quietSave skips finalised records; backend rejects draft overwriting finalised",
-        "Sync on reconnect \u2014 online event and visibilitychange trigger immediate sync attempt",
-        "Diagnostics panel \u2014 Ctrl+Shift+D shows queue length, connectivity, last error for support"
+        "Offline-first sync — local SQLite is source of truth; saves never wait for internet; sync runs in background",
+        "Sync queue — per-record queue; one failed record never blocks others; retry with backoff (10s, 30s, 2m, 10m, 30m)",
+        "8-second request timeout — prevents hanging on restricted Wi-Fi; timeout/network errors classified as retryable",
+        "Connectivity check — optional GET /api/health; clearer states: Synced, Pending sync, Saved locally, Sync delayed/blocked",
+        "Finalise fix — stop autosave before finalise; quietSave skips finalised records; backend rejects draft overwriting finalised",
+        "Sync on reconnect — online event and visibilitychange trigger immediate sync attempt",
+        "Diagnostics panel — Ctrl+Shift+D shows queue length, connectivity, last error for support"
       ]
     },
     {
@@ -3422,7 +3422,7 @@
       "date": "2026-03-10",
       "latest": false,
       "changes": [
-        "Voluntary Attendance mode \u2014 new first-class workflow for PACE voluntary interviews (client not in custody)",
+        "Voluntary Attendance mode — new first-class workflow for PACE voluntary interviews (client not in custody)",
         "Home screen: separate cards for Custody Attendance and Voluntary Attendance; Voluntary uses dedicated green card",
         "Voluntary form: 7 sections; conversion to custody when arrested; billing readiness; confidentiality reminder"
       ]
@@ -3432,9 +3432,9 @@
       "date": "2026-03-10",
       "latest": false,
       "changes": [
-        "Save/Exit now shows a menu with 'Finalise & exit' and 'Save as draft & exit' \u2014 matches the help text and makes finalising easier to find",
-        "Finalise flow \u2014 shows 'Finalising\u2026' toast immediately so you know it's working; improved error handling when save fails",
-        "Firms now save correctly \u2014 firms table schema fixed (contact_name was missing, causing saves to fail); error toasts when firm save fails; 'Add new firm' in form includes source of referral; selecting a firm auto-fills contact name, phone, email, LAA account, and source of referral"
+        "Save/Exit now shows a menu with 'Finalise & exit' and 'Save as draft & exit' — matches the help text and makes finalising easier to find",
+        "Finalise flow — shows 'Finalising…' toast immediately so you know it's working; improved error handling when save fails",
+        "Firms now save correctly — firms table schema fixed (contact_name was missing, causing saves to fail); error toasts when firm save fails; 'Add new firm' in form includes source of referral; selecting a firm auto-fills contact name, phone, email, LAA account, and source of referral"
       ]
     },
     {
@@ -3442,7 +3442,7 @@
       "date": "2026-03-10",
       "latest": false,
       "changes": [
-        "Fixed ENOENT crash when saving database \u2014 prevents concurrent saveDb calls from racing on rename; ensures userData directory exists; wraps save in try-catch so errors no longer crash the app"
+        "Fixed ENOENT crash when saving database — prevents concurrent saveDb calls from racing on rename; ensures userData directory exists; wraps save in try-catch so errors no longer crash the app"
       ]
     },
     {
@@ -3450,9 +3450,9 @@
       "date": "2026-03-10",
       "latest": false,
       "changes": [
-        "Attachments \u2014 now accepts any file type (PDF, Word, Excel, CSV, images); file icon shown for non-image attachments; size limit raised to 15MB",
-        "Finalise \u2014 fixed silent failure when finalising a record; any pending auto-save is now cancelled before the finalise call to prevent a draft-save from undoing it; errors are now surfaced with a toast",
-        "Performance \u2014 removed duplicate progress bar rebuild that ran on every field change; context bar update debounced to 250ms"
+        "Attachments — now accepts any file type (PDF, Word, Excel, CSV, images); file icon shown for non-image attachments; size limit raised to 15MB",
+        "Finalise — fixed silent failure when finalising a record; any pending auto-save is now cancelled before the finalise call to prevent a draft-save from undoing it; errors are now surfaced with a toast",
+        "Performance — removed duplicate progress bar rebuild that ran on every field change; context bar update debounced to 250ms"
       ]
     },
     {
@@ -3460,11 +3460,11 @@
       "date": "2026-03-09",
       "latest": false,
       "changes": [
-        "Sync fix \u2014 httpPost now follows HTTP redirects (301/302/307/308) and checks status codes",
-        "Sync fix \u2014 increased sync timeout from 10s to 30s to prevent timeouts with larger record sets",
-        "Sync fix \u2014 push no longer blindly clears sync_dirty; checks sync_version to avoid losing changes made during push",
-        "Sync fix \u2014 server-side push now writes to S3 in parallel batches of 10 (5x faster)",
-        "Sync fix \u2014 server-side pull now reads S3 in parallel batches of 10 with 200-record cap to prevent timeouts",
+        "Sync fix — httpPost now follows HTTP redirects (301/302/307/308) and checks status codes",
+        "Sync fix — increased sync timeout from 10s to 30s to prevent timeouts with larger record sets",
+        "Sync fix — push no longer blindly clears sync_dirty; checks sync_version to avoid losing changes made during push",
+        "Sync fix — server-side push now writes to S3 in parallel batches of 10 (5x faster)",
+        "Sync fix — server-side pull now reads S3 in parallel batches of 10 with 200-record cap to prevent timeouts",
         "Attachments moved to end of record near Invoices section with clearer description and guidance",
         "Legacy attachments from custody/disclosure/interview sections auto-migrated to new unified location"
       ]
@@ -3474,15 +3474,15 @@
       "date": "2026-03-09",
       "latest": false,
       "changes": [
-        "Sync fix \u2014 manual sync now reports correctly when not configured; pending count includes soft-deleted records",
-        "Backup clarity \u2014 settings screen shows a clear summary of where backups go (local, off-site, cloud)",
-        "Detect cloud folders button in Settings \u2014 finds OneDrive, Dropbox, Google Drive automatically",
-        "Case assessment \u2014 now a dropdown (Strong / Medium / Weak / N/A) with reasoning box",
-        "Client instructions \u2014 new larger text box for full client instructions above the summary",
-        "Clothing / shoes / phone seized \u2014 if Yes, prompts for what was seized and notes",
-        "Offence dates \u2014 clearer Start date / End date labels when Between is selected",
-        "Dropdown defaults \u2014 most disclosure and evidence fields default to No or N/A",
-        "Performance \u2014 form change handlers now update only the changed field inline; full DOM collection deferred"
+        "Sync fix — manual sync now reports correctly when not configured; pending count includes soft-deleted records",
+        "Backup clarity — settings screen shows a clear summary of where backups go (local, off-site, cloud)",
+        "Detect cloud folders button in Settings — finds OneDrive, Dropbox, Google Drive automatically",
+        "Case assessment — now a dropdown (Strong / Medium / Weak / N/A) with reasoning box",
+        "Client instructions — new larger text box for full client instructions above the summary",
+        "Clothing / shoes / phone seized — if Yes, prompts for what was seized and notes",
+        "Offence dates — clearer Start date / End date labels when Between is selected",
+        "Dropdown defaults — most disclosure and evidence fields default to No or N/A",
+        "Performance — form change handlers now update only the changed field inline; full DOM collection deferred"
       ]
     },
     {
@@ -3490,9 +3490,9 @@
       "date": "2026-03-09",
       "latest": false,
       "changes": [
-        "First-launch wizard \u2014 step 2 now asks where to back up (OneDrive, Dropbox, Google Drive auto-detected)",
-        "Cloud folder detection \u2014 scans for OneDrive, Dropbox, Google Drive, iCloud and offers them as backup destinations",
-        "Version check fix \u2014 v1.4.16 GitHub release was stuck in Draft; now published correctly"
+        "First-launch wizard — step 2 now asks where to back up (OneDrive, Dropbox, Google Drive auto-detected)",
+        "Cloud folder detection — scans for OneDrive, Dropbox, Google Drive, iCloud and offers them as backup destinations",
+        "Version check fix — v1.4.16 GitHub release was stuck in Draft; now published correctly"
       ]
     },
     {
@@ -3500,15 +3500,15 @@
       "date": "2026-03-09",
       "latest": false,
       "changes": [
-        "Performance \u2014 app reacts faster to input; debounced save, scoped DOM queries, reduced layout thrashing",
-        "Database writes batched \u2014 disk I/O no longer blocks on every keystroke",
-        "Smoother transitions \u2014 replaced expensive CSS effects with lightweight alternatives",
+        "Performance — app reacts faster to input; debounced save, scoped DOM queries, reduced layout thrashing",
+        "Database writes batched — disk I/O no longer blocks on every keystroke",
+        "Smoother transitions — replaced expensive CSS effects with lightweight alternatives",
         "Offence dropdowns now show full grouped list on focus with type-ahead search",
-        "Offence date qualifiers \u2014 On, Before, After, Between, On or about, Unknown",
-        "Benefit type \u2014 N/A option added",
-        "Confirmation of instructions \u2014 signatures optional via dropdown",
+        "Offence date qualifiers — On, Before, After, Between, On or about, Unknown",
+        "Benefit type — N/A option added",
+        "Confirmation of instructions — signatures optional via dropdown",
         "Next location hidden when bail without charge (police station to return to covers it)",
-        "Sync status fix \u2014 no longer shows conflicting messages",
+        "Sync status fix — no longer shows conflicting messages",
         "Sync now button restored on home screen",
         "Cloud backup works on restricted networks (cached entitlement)"
       ]
@@ -3518,9 +3518,9 @@
       "date": "2026-03-09",
       "latest": false,
       "changes": [
-        "Sync status fix \u2014 no longer shows conflicting 'all synced' then 'pending' messages; counts now reflect actual state",
+        "Sync status fix — no longer shows conflicting 'all synced' then 'pending' messages; counts now reflect actual state",
         "Sync now button restored on home screen for manual sync",
-        "Cloud backup works on restricted networks \u2014 cached entitlement used when licence server is unreachable (e.g. government WiFi)"
+        "Cloud backup works on restricted networks — cached entitlement used when licence server is unreachable (e.g. government WiFi)"
       ]
     },
     {
@@ -3528,8 +3528,8 @@
       "date": "2026-03-08",
       "latest": false,
       "changes": [
-        "Automatic record sync \u2014 changes sync within seconds across devices, Sync now button removed",
-        "Version and changelog drift fix \u2014 website and app versions stay in sync"
+        "Automatic record sync — changes sync within seconds across devices, Sync now button removed",
+        "Version and changelog drift fix — website and app versions stay in sync"
       ]
     },
     {
@@ -3537,8 +3537,8 @@
       "date": "2026-03-08",
       "latest": false,
       "changes": [
-        "Security hardening \u2014 licence keys no longer sent in URLs; rate limiting and session checks improved",
-        "Cloud key recovery \u2014 recover your encryption key from the cloud using your licence key if you forget your recovery password",
+        "Security hardening — licence keys no longer sent in URLs; rate limiting and session checks improved",
+        "Cloud key recovery — recover your encryption key from the cloud using your licence key if you forget your recovery password",
         "Recovery password must be at least 10 characters with uppercase, lowercase and a number",
         "Sync status and Check for updates moved to the footer with connection and backup status"
       ]
@@ -3567,8 +3567,8 @@
       "date": "2026-03-07",
       "latest": false,
       "changes": [
-        "Cross-device record sync \u2014 records now automatically sync between devices every 2 minutes",
-        "Licence validation fix \u2014 subscription status now correctly updates across devices",
+        "Cross-device record sync — records now automatically sync between devices every 2 minutes",
+        "Licence validation fix — subscription status now correctly updates across devices",
         "Sync now button on home screen for immediate sync"
       ]
     },
@@ -3577,14 +3577,14 @@
       "date": "2026-03-05",
       "latest": false,
       "changes": [
-        "LAA fee rates updated to Standard Crime Contract 2025 (SI 2025/1251) \u2014 fixed fee \u00a3320 and escape threshold \u00a3650 confirmed and harmonised across all police stations",
-        "Licence status badge now visible permanently in the footer on every screen \u2014 shows Trial / Licensed / Expiring with colour coding",
-        "System Status diagnostic panel added to Settings \u2014 shows live licence, cloud backup, and auto-update status with clear explanations",
-        "Trial users now see an inline licence key entry box directly in Settings \u203a Licence \u2014 no extra clicks needed",
+        "LAA fee rates updated to Standard Crime Contract 2025 (SI 2025/1251) — fixed fee £320 and escape threshold £650 confirmed and harmonised across all police stations",
+        "Licence status badge now visible permanently in the footer on every screen — shows Trial / Licensed / Expiring with colour coding",
+        "System Status diagnostic panel added to Settings — shows live licence, cloud backup, and auto-update status with clear explanations",
+        "Trial users now see an inline licence key entry box directly in Settings › Licence — no extra clicks needed",
         "Home screen shows a trial banner with direct link to licence key entry when on a free trial",
         "Fee earner name now saves and persists correctly across sessions",
         "Removed 'Prepare trial for email' developer tool from user-facing gear menu",
-        "Version number no longer auto-increments on every build \u2014 versions only change on an explicit release",
+        "Version number no longer auto-increments on every build — versions only change on an explicit release",
         "Removed debug instrumentation",
         "Forgot-key rate limit fix"
       ]
@@ -3626,9 +3626,9 @@
       "date": "2026-03-03",
       "latest": false,
       "changes": [
-        "Automatic updates \u2014 the app now silently downloads and installs updates from GitHub Releases so subscribers always have the latest version",
-        "Managed cloud backup \u2014 automatic encrypted backups to AWS London with no credentials stored in the app",
-        "Support forum integration \u2014 community forum linked across the website",
+        "Automatic updates — the app now silently downloads and installs updates from GitHub Releases so subscribers always have the latest version",
+        "Managed cloud backup — automatic encrypted backups to AWS London with no credentials stored in the app",
+        "Support forum integration — community forum linked across the website",
         "Removed manual AWS S3 settings from the app (now fully managed via subscription)"
       ]
     },
@@ -3637,8 +3637,8 @@
       "date": "2026-03-03",
       "latest": false,
       "changes": [
-        "Managed cloud backup \u2014 automatic encrypted backups to AWS London with no credentials stored in the app",
-        "Support forum integration \u2014 community forum linked across the website",
+        "Managed cloud backup — automatic encrypted backups to AWS London with no credentials stored in the app",
+        "Support forum integration — community forum linked across the website",
         "Removed manual AWS S3 settings from the app (now fully managed via subscription)"
       ]
     },
@@ -3667,7 +3667,7 @@
       "latest": false,
       "changes": [
         "Initial public release",
-        "Full attendance records with PACE review tracking (1st, 2nd, 3rd review \u2014 due and actual)",
+        "Full attendance records with PACE review tracking (1st, 2nd, 3rd review — due and actual)",
         "Telephone advice (INVB) recording",
         "Quick Capture for incoming calls",
         "Client details, offence picker with type-ahead search",
