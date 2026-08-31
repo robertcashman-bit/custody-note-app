@@ -84,4 +84,15 @@ describe('Cold start — deferred scripts', () => {
     assert.match(main, /stationsFileStamp/);
     assert.match(main, /function loadStationsFromFile/);
   });
+
+  it('QuickFile startup pull does not block createWindow', () => {
+    const main = fs.readFileSync(MAIN_JS, 'utf8');
+    const idx = main.indexOf('Pull QuickFile credentials');
+    assert.ok(idx > 0);
+    const window = main.slice(idx, idx + 1200);
+    assert.doesNotMatch(window, /await qfStartup/,
+      'startup must not await QuickFile pull before createWindow');
+    assert.match(window, /qfStartup\.then\(/);
+    assert.match(window, /createWindow\(\)/);
+  });
 });
