@@ -1450,9 +1450,19 @@ function uploadToCloudIfConfigured(buffer) {
   } catch (e) {}
 }
 
+/* Cold-start timing (ms since process start). Always-on, PII-free. */
+const _bootT0 = Date.now();
+function _bootMark(name) {
+  try {
+    console.log('[Boot] ' + name + ' ' + (Date.now() - _bootT0));
+  } catch (_) {}
+}
+
 async function initDb() {
+  _bootMark('initDb-start');
   cleanStaleDbTempFiles();
   const SQL = await initSqlJs();
+  _bootMark('initDb-sqlJs-ready');
   const dbPath = getDbPath();
   if (fs.existsSync(dbPath)) {
     const rawBuf = fs.readFileSync(dbPath);
@@ -1478,6 +1488,7 @@ async function initDb() {
   } else {
     db = new SQL.Database();
   }
+  _bootMark('initDb-db-open');
 
   // H17 â€” enable foreign-key enforcement on every open. sql.js opens with
   // FKs disabled by default (matching the SQLite C API). Without this any
@@ -1525,17 +1536,34 @@ async function initDb() {
   try { ensureBackupFolderExists(); } catch (_) {}
 
   loadStationsFromFile();
+  _bootMark('initDb-stations-loaded');
   try { migrateSchemeIdsToSchemeCodes(); } catch (e) { console.error('[migrateSchemeIdsToSchemeCodes] failed:', e && e.message); }
   // Bound audit_log row growth before any user activity (defaults to 90 days,
   // tunable via settings.auditLogRetentionDays).
   try { pruneOldAuditLog(); } catch (_) {}
   saveDb();
+  _bootMark('initDb-done');
   return db;
 }
 
 function loadStationsFromFile() {
   const stationsPath = path.join(__dirname, 'data', 'police-stations-laa.json');
   if (!fs.existsSync(stationsPath)) return;
+
+  /* Skip re-parse + 2k-row upsert when the bundled stations file has not
+     changed since the last successful load. On a warm DB this alone saved
+     ~300ms+ of sql.js work every cold start. */
+  let fileStamp = '';
+  try {
+    const st = fs.statSync(stationsPath);
+    fileStamp = String(st.mtimeMs) + ':' + String(st.size);
+  } catch (_) {}
+  const stampRow = dbGet("SELECT value FROM settings WHERE key = 'stationsFileStamp'");
+  const countRow = dbGet('SELECT COUNT(*) as c FROM police_stations');
+  if (fileStamp && stampRow && stampRow.value === fileStamp && countRow && countRow.c > 0) {
+    return;
+  }
+
   let stations;
   try {
     stations = JSON.parse(fs.readFileSync(stationsPath, 'utf8'));
@@ -1558,6 +1586,17 @@ function loadStationsFromFile() {
     } catch (_) {}
   }
   try { db.run('COMMIT'); } catch (_) {}
+  if (fileStamp) {
+    try {
+      if (stampRow) {
+        dbRun("UPDATE settings SET value = ? WHERE key = 'stationsFileStamp'", [fileStamp]);
+      } else {
+        dbRun("INSERT INTO settings (key, value) VALUES ('stationsFileStamp', ?)", [fileStamp]);
+      }
+    } catch (e) {
+      console.warn('[loadStationsFromFile] stamp save failed:', e && e.message);
+    }
+  }
 }
 
 // One-shot migration: legacy records had data.schemeId set to the station code
@@ -2631,9 +2670,13 @@ function createWindow() {
     );
   }
   mainWindow.once('ready-to-show', () => {
+    _bootMark('ready-to-show');
     if (!isCaptureMode) {
+      /* Maximize while still hidden, then show — avoids an OS-visible
+         restore→maximize jump that looks like a frozen launch. */
+      try { mainWindow.maximize(); } catch (_) {}
       mainWindow.show();
-      mainWindow.maximize();
+      _bootMark('window-shown');
     }
     setTimeout(() => {
       if (db) {
@@ -2656,10 +2699,24 @@ function createWindow() {
   const _startupIndexPath = path.join(__dirname, 'index.html');
   const _startupIndexFileUrl = require('url').pathToFileURL(_startupIndexPath).href;
   console.log('[Startup] Loading desktop entry:', _startupIndexFileUrl);
+  _bootMark('loadFile-start');
   mainWindow.loadFile('index.html');
   const ses = mainWindow.webContents.session;
-  ses.clearCache().catch(() => {});
-  ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
+  /* Do NOT clear Chromium HTTP cache / Cache Storage on every launch — that
+     forced a cold disk cache and made both Windows and Mac starts feel like
+     "ages". Stale service workers (legacy PWA leftovers) are unregistered in
+     the renderer (init-events.js) only when registrations actually exist.
+     CUSTODYNOTE_BOOT_CLEAR_CACHE=1 re-enables the old behaviour for A/B timing. */
+  if (process.env.CUSTODYNOTE_BOOT_CLEAR_CACHE === '1') {
+    const _cc0 = Date.now();
+    Promise.all([
+      ses.clearCache().catch(() => {}),
+      ses.clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {}),
+    ]).finally(() => {
+      _bootMark('clearCache-done');
+      console.log('[Boot] clearCache-ms ' + (Date.now() - _cc0));
+    });
+  }
 
   /* Surface preload bundling failures. Without this hook, a missing /
      mistyped `require()` inside preload.js silently disables every
@@ -4739,6 +4796,7 @@ app.on('second-instance', () => {
 });
 
 app.whenReady().then(async () => {
+  _bootMark('whenReady');
   console.log(`[Startup] Custody Note v${app.getVersion()} â€” packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}`);
   /* Extra startup diagnostics. Deliberately NOTHING client-sensitive: no
      custody data, no client identifiers, no licence key, no email body — only
@@ -4843,12 +4901,14 @@ app.whenReady().then(async () => {
   }
 
   /* â”€â”€â”€ Licence store (admin DB) init â”€â”€â”€ */
+  _bootMark('licenceStore-start');
   try {
     const licenceStoreKey = require('./main/licenceStoreKey').getLicenceStoreKey(app, safeStorage);
     await require('./main/licenceStore').initStore(app.getPath('userData'), licenceStoreKey);
   } catch (e) {
     console.warn('[LicenceStore] Init failed:', e.message);
   }
+  _bootMark('licenceStore-done');
   // Register licence IPC regardless of whether the admin encrypted store could init.
   // E2E and non-admin flows (forgot-key, admin password checks, etc.) must not
   // crash with "No handler registered" just because safeStorage is unavailable.
@@ -4863,7 +4923,10 @@ app.whenReady().then(async () => {
     return;
   }
 
-  /* Pull QuickFile credentials from Custody Note account when licence is present. */
+  /* Pull QuickFile credentials from Custody Note account when licence is present.
+     Never block first window paint on this network call — home/lock/first-launch
+     do not need QuickFile. Missing credentials used to await the pull and made
+     cold start feel hung on slow networks. */
   try {
     const qfStatus = getQuickFileSettingsStatus();
     const qfStartup = ensureQuickFileSettingsFromServer({
@@ -4874,19 +4937,16 @@ app.whenReady().then(async () => {
       const tag = r && r.skipped ? r.skipped : (r && r.usedLocal ? 'cached' : 'pulled');
       console.info('[QuickFile] startup pull: ' + tag);
     };
-    if (qfStatus.missing.length > 0) {
-      logQfStartup(await qfStartup);
-    } else {
-      qfStartup.then(logQfStartup).catch(function (e) {
-        console.warn('[QuickFile] startup pull failed:', e && e.message);
-      });
-    }
+    qfStartup.then(logQfStartup).catch(function (e) {
+      console.warn('[QuickFile] startup pull failed:', e && e.message);
+    });
   } catch (qfErr) {
     console.warn('[QuickFile] startup pull error:', qfErr && qfErr.message);
   }
 
   // Normal app mode: create the window only after persistent data is available.
   if (!cliImportPath && !cliListRecords && !cliDumpId) {
+    _bootMark('createWindow-call');
     createWindow();
     runLaaEnsureTemplates({}).catch(function (e) {
       console.warn('[LAA] startup template check failed:', e && e.message);
