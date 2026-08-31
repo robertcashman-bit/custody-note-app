@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.77",
+      "version": "1.9.78",
       "date": "2026-08-31",
       "latest": true,
+      "changes": [
+        "Magistrates court typeahead: suggestions appear from two letters and stay visible while typing (dropdown no longer clipped by form layout containment)",
+        "Town-name ranking improved — typing ma/wo/se shows Manchester/Woolwich/Sevenoaks etc., not a flood of Magistrates' matches",
+        "CRM14 Court name field now uses the same magistrates court typeahead; keyboard Arrow/Enter selection supported"
+      ]
+    },
+    {
+      "version": "1.9.77",
+      "date": "2026-08-31",
+      "latest": false,
       "changes": [
         "AI Law/Elements and Ask AI panels keep Copy / Insert / Clear / Close visible on large or scaled displays, and allow click-out / Escape to dismiss"
       ]
