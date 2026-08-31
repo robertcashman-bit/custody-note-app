@@ -2216,9 +2216,7 @@
   <script src="renderer/emailCopy.js"></script>
   <script src="renderer/licence.js"></script>
   <script src="renderer/freemiumFeatures.js"></script>
-  <script src="renderer/aiLawElements.js"></script>
-  <!-- Wheel-style ("rotating counter") date/time picker. Self-contained, attaches a 🕑/📅 button next to every native date/time/datetime-local input. Native typing still works. -->
-  <script src="renderer/widgets/wheelDateTimePicker.js"></script>
+  <!-- Wheel-style ("rotating counter") date/time picker + AI panel: deferred (boot-deferred.js) -->
   <script src="lib/magistratesCourtsSearch.js"></script>
   <script src="lib/courtAutocomplete.js"></script>
   <script src="lib/defenceSummary.js"></script>
@@ -2229,28 +2227,33 @@
   <script src="lib/officerEmailTemplateOptions.js"></script>
   <script src="lib/sessionBlankerPolicy.js"></script>
   <script src="app.js"></script>
-  <script src="renderer/views/officerEmailsPanel.js"></script>
-  <script src="renderer/views/officerEmailsStandalone.js"></script>
-  <script src="renderer/views/reports.js"></script>
-  <script src="renderer/views/authorities.js"></script>
-  <script src="renderer/views/settings.js"></script>
-  <script src="renderer/views/list.js"></script>
-  <script src="renderer/csv-exporter.js"></script>
-  <script src="renderer/laa-forms.js"></script>
-  <script src="renderer/filenameUtils.js"></script>
-  <script src="renderer/billingUtils.js"></script>
-  <script src="renderer/views/billing.js"></script>
-  <script src="renderer/views/workflow-stepper.js"></script>
-  <script src="renderer/views/documents-screen.js"></script>
-  <script src="renderer/views/billing-screen.js"></script>
-  <script src="renderer/views/completion-screen.js"></script>
-  <script src="renderer/views/station-mileage-admin.js"></script>
+  <!-- Cold-start: non-home scripts load after first paint (see renderer/boot-deferred.js).
+       Paths kept here (comments) so load-order tests still see the dependency chain. -->
+  <script src="renderer/boot-deferred.js"></script>
+  <!-- deferred: renderer/aiLawElements.js -->
+  <!-- deferred: renderer/widgets/wheelDateTimePicker.js -->
+  <!-- deferred: renderer/views/officerEmailsPanel.js -->
+  <!-- deferred: renderer/views/officerEmailsStandalone.js -->
+  <!-- deferred: renderer/views/reports.js -->
+  <!-- deferred: renderer/views/authorities.js -->
+  <!-- deferred: renderer/views/settings.js -->
+  <!-- deferred: renderer/views/list.js -->
+  <!-- deferred: renderer/csv-exporter.js -->
+  <!-- deferred: renderer/laa-forms.js -->
+  <!-- deferred: renderer/filenameUtils.js -->
+  <!-- deferred: renderer/billingUtils.js -->
+  <!-- deferred: renderer/views/billing.js -->
+  <!-- deferred: renderer/views/workflow-stepper.js -->
+  <!-- deferred: renderer/views/documents-screen.js -->
+  <!-- deferred: renderer/views/billing-screen.js -->
+  <!-- deferred: renderer/views/completion-screen.js -->
+  <!-- deferred: renderer/views/station-mileage-admin.js -->
   <!-- laa-forms.js: CRM14 HTML summary for billing previews; CRM1–3 & declaration use official PDFs via IPC -->
-  <script src="renderer/audit-log.js"></script>
-  <script src="renderer/templateSystem/placeholders.js"></script>
-  <script src="renderer/templateSystem/templateEngine.js"></script>
-  <script src="renderer/templateSystem/templateStore.js"></script>
-  <script src="renderer/templateSystem/templateManager.js"></script>
+  <!-- deferred: renderer/audit-log.js -->
+  <!-- deferred: renderer/templateSystem/placeholders.js -->
+  <!-- deferred: renderer/templateSystem/templateEngine.js -->
+  <!-- deferred: renderer/templateSystem/templateStore.js -->
+  <!-- deferred: renderer/templateSystem/templateManager.js -->
   <!-- Event wiring, service-worker cleanup, fallback splash timer, admin shortcut -->
   <script src="renderer/init-events.js"></script>
 
