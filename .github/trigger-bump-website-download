@@ -1,4 +1,2 @@
-# Touch/push this file on master to run "Bump website download version".
-# Requires GitHub release assets for package.json version already present.
-bump-requested-at: 2026-08-31T17:10:00Z
-reason: finish-ship-v1.9.78-after-duplicate-draft-consolidation
+bump-requested-at: 2026-08-31T17:59:55Z
+reason: ship-v1.9.79-after-release-published
