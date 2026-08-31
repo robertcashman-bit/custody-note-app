@@ -29,12 +29,17 @@ jobs:
   tag:
     runs-on: ubuntu-latest
     steps:
+      # Use GH_PAT so the tag push can trigger "Release and deploy".
+      # Default GITHUB_TOKEN pushes do not start other workflows.
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Create and push release tag when missing
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           set -e
           VERSION=$(node -p "require('./package.json').version")
