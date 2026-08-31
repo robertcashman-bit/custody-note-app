@@ -16,7 +16,7 @@ const {
   resetAskInFlightForTests,
   normaliseHistory,
 } = require('../main/openaiAsk');
-const { extractTextAndCitations } = require('../main/openaiClient');
+const { extractTextAndCitations, formatOpenAiNetworkError, requestGroundedLegalAnswer } = require('../main/openaiClient');
 
 function mockResponsesOk(text, citations) {
   return {
@@ -256,6 +256,48 @@ describe('openaiAsk', () => {
     });
     assert.equal(parsed.text, 'Hello');
     assert.equal(parsed.citations[0].url, 'https://example.com/a');
+  });
+
+  it('formats TypeError fetch failed with ENOTFOUND cause (not bare fetch failed)', async () => {
+    const err = new TypeError('fetch failed');
+    err.cause = { code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND api.openai.com' };
+    const formatted = formatOpenAiNetworkError(err);
+    assert.ok(!/^fetch failed$/i.test(formatted));
+    assert.match(formatted, /Could not reach OpenAI/i);
+    assert.match(formatted, /ENOTFOUND/);
+    assert.match(formatted, /api\.openai\.com/);
+
+    const res = await requestAskAnswer({
+      confirmed: true,
+      apiKey: 'sk-test',
+      question: 'Self-defence elements?',
+      history: [],
+      fetchImpl: async () => {
+        throw err;
+      },
+    });
+    assert.equal(res.ok, false);
+    assert.ok(!/^fetch failed$/i.test(res.error || ''));
+    assert.match(res.error, /Could not reach OpenAI/i);
+    assert.match(res.error, /ENOTFOUND/);
+  });
+
+  it('formats certificate cause as VPN/proxy/firewall hint', () => {
+    const err = new TypeError('fetch failed');
+    err.cause = { code: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', message: 'unable to verify the first certificate' };
+    const formatted = formatOpenAiNetworkError(err);
+    assert.ok(!/^fetch failed$/i.test(formatted));
+    assert.match(formatted, /certificate/i);
+    assert.match(formatted, /VPN\/proxy\/firewall/i);
+  });
+
+  it('requestGroundedLegalAnswer still accepts mock fetchImpl', async () => {
+    const res = await requestGroundedLegalAnswer({
+      apiKey: 'sk-test',
+      inputMessages: [{ role: 'user', content: 'test' }],
+      fetchImpl: async () => mockResponsesOk(GOOD_LAW_TEXT),
+    });
+    assert.equal(res.ok, true);
   });
 
   it('preload and main expose ask IPC', () => {

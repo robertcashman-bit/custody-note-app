@@ -18,6 +18,98 @@ const DEFAULT_MODEL = process.env.OPENAI_MODEL && String(process.env.OPENAI_MODE
   ? String(process.env.OPENAI_MODEL).trim()
   : 'gpt-4o';
 
+/**
+ * Prefer Electron net.fetch (Chromium network stack — OS proxy / corporate SSL)
+ * over Node/undici global fetch in the main process. Tests may pass fetchImpl.
+ */
+function getDefaultFetchImpl() {
+  try {
+    const electron = require('electron');
+    if (electron && electron.net && typeof electron.net.fetch === 'function') {
+      return electron.net.fetch.bind(electron.net);
+    }
+  } catch (_) {
+    /* Not running inside Electron, or net unavailable. */
+  }
+  if (typeof globalThis.fetch === 'function') {
+    return globalThis.fetch.bind(globalThis);
+  }
+  if (typeof fetch === 'function') {
+    return fetch;
+  }
+  return null;
+}
+
+/**
+ * Turn undici/Electron "fetch failed" (+ cause) into a user-facing string.
+ * Never include API keys, prompts, or response bodies.
+ */
+function formatOpenAiNetworkError(err) {
+  const e = err || {};
+  const topMsg = String(e.message || '').trim() || 'OpenAI request failed';
+  const cause = e.cause && typeof e.cause === 'object' ? e.cause : null;
+  const code = cause
+    ? String(cause.code || cause.errno || '').trim()
+    : '';
+  const causeMsg = cause ? String(cause.message || '').trim() : '';
+  const hostMatch =
+    causeMsg.match(/\b([a-z0-9.-]+\.[a-z]{2,})\b/i) ||
+    topMsg.match(/\b([a-z0-9.-]+\.[a-z]{2,})\b/i);
+  const host = hostMatch ? hostMatch[1] : '';
+
+  const isBareFetchFailed = /^fetch failed$/i.test(topMsg);
+  const looksCert =
+    /cert|SSL|TLS|UNABLE_TO_VERIFY|unable to verify|self.signed|CERTIFICATE/i.test(
+      code + ' ' + causeMsg + ' ' + topMsg
+    );
+  const looksTimeout =
+    /ETIMEDOUT|ESOCKETTIMEDOUT|UND_ERR_CONNECT_TIMEOUT|timeout/i.test(
+      code + ' ' + causeMsg + ' ' + topMsg
+    );
+  const looksReset =
+    /ECONNRESET|ECONNREFUSED|EPIPE|UND_ERR_SOCKET/i.test(code + ' ' + causeMsg);
+
+  if (looksCert) {
+    return 'Could not reach OpenAI (certificate). Check VPN/proxy/firewall.';
+  }
+  if (code === 'ENOTFOUND' || /ENOTFOUND/i.test(causeMsg)) {
+    return (
+      'Could not reach OpenAI (ENOTFOUND' +
+      (host ? ' ' + host : '') +
+      '). Check DNS, VPN, or offline network.'
+    );
+  }
+  if (looksTimeout) {
+    return (
+      'Could not reach OpenAI (' +
+      (code || 'timeout') +
+      '). Check VPN/proxy/firewall.'
+    );
+  }
+  if (looksReset) {
+    return (
+      'Could not reach OpenAI (' +
+      (code || 'connection reset') +
+      '). Check VPN/proxy/firewall.'
+    );
+  }
+  if (isBareFetchFailed && (code || causeMsg)) {
+    const detail = code || causeMsg;
+    return (
+      'Could not reach OpenAI (' +
+      detail +
+      '). Check VPN/proxy/firewall.'
+    );
+  }
+  if (isBareFetchFailed) {
+    return 'Could not reach OpenAI (network error). Check VPN/proxy/firewall.';
+  }
+  if (code && !topMsg.includes(code)) {
+    return topMsg + ' (' + code + ')';
+  }
+  return topMsg;
+}
+
 /** Log OpenAI metadata only — never prompts, offences, or client context. */
 function debugOpenAiMeta(label, meta) {
   if (process.env.CUSTODYNOTE_DEBUG === '1') {
@@ -95,7 +187,13 @@ async function requestGroundedLegalAnswer(opts) {
     return { ok: false, error: 'No prompt provided.' };
   }
   const model = String(options.model || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
-  const fetchFn = typeof options.fetchImpl === 'function' ? options.fetchImpl : fetch;
+  const fetchFn =
+    typeof options.fetchImpl === 'function'
+      ? options.fetchImpl
+      : getDefaultFetchImpl();
+  if (typeof fetchFn !== 'function') {
+    return { ok: false, error: 'No HTTP fetch available for OpenAI requests.' };
+  }
   const requireWebSearch = options.requireWebSearch !== false;
   const retryOnFail = options.retryOnValidationFail !== false;
 
@@ -256,7 +354,12 @@ async function requestGroundedLegalAnswer(opts) {
     }
     return result;
   } catch (e) {
-    return { ok: false, error: (e && e.message) || 'OpenAI request failed' };
+    const formatted = formatOpenAiNetworkError(e);
+    debugOpenAiMeta('network-error', {
+      message: formatted,
+      code: e && e.cause && (e.cause.code || e.cause.errno) ? String(e.cause.code || e.cause.errno) : '',
+    });
+    return { ok: false, error: formatted };
   }
 }
 
@@ -267,4 +370,6 @@ module.exports = {
   extractTextAndCitations,
   requestGroundedLegalAnswer,
   debugOpenAiMeta,
+  getDefaultFetchImpl,
+  formatOpenAiNetworkError,
 };
