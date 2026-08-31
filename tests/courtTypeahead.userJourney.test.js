@@ -251,6 +251,9 @@ describe('court typeahead user journey (jsdom + real court list)', () => {
     assert.strictEqual(env.input.value, SEVENOAKS);
     assert.strictEqual(formData.courtName, SEVENOAKS);
     assert.ok(!env.widget.isOpen(), 'dropdown should close after select');
+    // Input event from select must not re-open the list
+    await sleep(200);
+    assert.ok(!env.widget.isOpen(), 'dropdown must stay closed after select debounce');
   });
 
   it('keyboard ArrowDown + Enter selects the highlighted court', async () => {
