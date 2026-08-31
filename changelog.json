@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.9.79",
+      "version": "1.9.80",
       "date": "2026-08-31",
       "latest": true,
+      "changes": [
+        "Daily anonymous usage ping (hashed machine id, platform, version, licence tier only) so admin stats can show unique machines in the last 7/30 days — no case data"
+      ]
+    },
+    {
+      "version": "1.9.79",
+      "date": "2026-08-31",
+      "latest": false,
       "changes": [
         "Faster cold start on Windows and Mac — useful UI (Home / lock / first-launch) typically within about a second on a normal laptop",
         "Stopped wiping Chromium cache on every launch (was forcing a full cold disk cache)",
