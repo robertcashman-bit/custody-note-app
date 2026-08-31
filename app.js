@@ -3649,6 +3649,15 @@ var REQUIRED_FIELD_KEYS = [
   function showView(name) {
     var now = Date.now();
     if (name === _currentView && now - _showViewCooldown < 100) return;
+    /* Views / workflow helpers that live in deferred scripts — wait once if needed. */
+    var needsDeferred = (name === 'authorities' && typeof loadAuthorities !== 'function')
+      || (name === 'station-mileage' && typeof loadStationMileage !== 'function')
+      || (name === 'matter-billing' && typeof mountWorkflowInline !== 'function');
+    if (needsDeferred && typeof window.__cnEnsureDeferredScripts === 'function') {
+      _showViewCooldown = now;
+      window.__cnEnsureDeferredScripts().then(function () { showView(name); }).catch(function () { showView(name); });
+      return;
+    }
     _showViewCooldown = now;
     var prevView = _currentView;
     _currentView = name;
@@ -7798,15 +7807,22 @@ var REQUIRED_FIELD_KEYS = [
      * button mounts the 3-step workflow inline. We auto-start the
      * workflow when entering the screen if the note is already finalised
      * so the user lands directly in step 1. */
-    if (typeof showView === 'function') {
-      showView('matter-billing');
+    var go = function () {
+      if (typeof showView === 'function') {
+        showView('matter-billing');
+        return;
+      }
+      if (typeof openWorkflow === 'function') {
+        openWorkflow();
+      } else if (typeof openBillingPanel === 'function') {
+        openBillingPanel();
+      }
+    };
+    if (typeof window.__cnEnsureDeferredScripts === 'function' && typeof mountWorkflowInline !== 'function') {
+      window.__cnEnsureDeferredScripts().then(go).catch(go);
       return;
     }
-    if (typeof openWorkflow === 'function') {
-      openWorkflow();
-    } else if (typeof openBillingPanel === 'function') {
-      openBillingPanel();
-    }
+    go();
   }
   window.promptBeforeOpeningBilling = promptBeforeOpeningBilling;
 
@@ -16975,13 +16991,27 @@ pdfAuditFooterHtml(d, settings) +
       }).catch(function(e) { console.error('[bank-holidays]', e); });
     }
 
-    /* Splash: hide when data ready + min 1.5s elapsed, or immediately if first-launch */
+    /* Splash: hide when home-critical data is ready + min time elapsed.
+       Do not wait on magistrates courts or LAA reference JSON — home/lock/
+       first-launch do not need them; court typeahead ensure-loads on focus. */
     var splashDataReady = false;
     var splashMinReached = false;
     var splashMinMs = 600;
+    var _bootRendererT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    function _bootRendererMark(name) {
+      try {
+        var ms = Math.round(((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - _bootRendererT0);
+        console.log('[Boot] renderer-' + name + ' ' + ms);
+      } catch (_) {}
+    }
     function tryHideSplash() {
       if (!document.getElementById('splash')) return;
-      if (splashDataReady && splashMinReached) hideSplash();
+      if (splashDataReady && splashMinReached) {
+        _bootRendererMark('splash-hide');
+        hideSplash();
+        _bootRendererMark('first-interactive');
+        console.log('[Boot] BOOT_DONE');
+      }
     }
     setTimeout(function () {
       splashMinReached = true;
@@ -16991,20 +17021,34 @@ pdfAuditFooterHtml(d, settings) +
     Promise.all([
       window.api.stationsList(),
       window.api.firmsList(),
-      window.api.loadReferenceData(),
-      loadMagistratesCourts(),
-    ]).then(([s, f, rd]) => {
+    ]).then(function (pair) {
+      var s = pair[0];
+      var f = pair[1];
       stations = s;
       setFirmsList(f);
-      refData = rd || {};
       loadRecentStations();
       splashDataReady = true;
       tryHideSplash();
     }).catch(function(err) {
-      console.error('[init] Failed to load stations/firms/refData:', err);
+      console.error('[init] Failed to load stations/firms:', err);
       splashDataReady = true;
       tryHideSplash();
     });
+
+    /* Deferred — must not block splash hide / first interactive. */
+    if (window.api && window.api.loadReferenceData) {
+      window.api.loadReferenceData().then(function (rd) {
+        refData = rd || {};
+      }).catch(function (err) {
+        console.error('[init] loadReferenceData failed:', err);
+        refData = {};
+      });
+    }
+    try {
+      loadMagistratesCourts();
+    } catch (err) {
+      console.error('[init] loadMagistratesCourts schedule failed:', err);
+    }
 
     /* First-launch setup check: hide splash immediately so user can complete setup */
     window._billingDefaults = {};
