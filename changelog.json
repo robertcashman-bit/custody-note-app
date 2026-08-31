@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.9.77",
+      "date": "2026-08-31",
+      "latest": true,
+      "changes": [
+        "AI Law/Elements and Ask AI panels keep Copy / Insert / Clear / Close visible on large or scaled displays, and allow click-out / Escape to dismiss"
+      ]
+    },
+    {
       "version": "1.9.75",
       "date": "2026-08-30",
-      "latest": true,
+      "latest": false,
       "changes": [
         "LAA police stations: added missing MA100 (Great Broughton, Whitehaven / Workington scheme 6007)",
         "Station label cleanups: LN066 Tottenham Court Road; Llanelli scheme footnote stripped (WA005–WA008, WA902); BR904 Sedgemoor / Taunton Deane",
