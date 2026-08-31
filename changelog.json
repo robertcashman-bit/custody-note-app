@@ -5,11 +5,12 @@
       "date": "2026-08-31",
       "latest": true,
       "changes": [
-        "Faster cold start on Windows and Mac — the app reaches Home / lock / first-launch sooner",
+        "Faster cold start on Windows and Mac — useful UI (Home / lock / first-launch) typically within about a second on a normal laptop",
         "Stopped wiping Chromium cache on every launch (was forcing a full cold disk cache)",
-        "Home no longer waits for magistrates court list or LAA reference JSON before splash hide; those load in the background",
+        "No longer waits on QuickFile credential pull before showing the window",
+        "Home splash no longer waits for magistrates court list or LAA reference JSON; those load in the background",
         "Heavy screens (billing, LAA forms, reports, AI, templates) load after first paint instead of blocking startup",
-        "Police station catalogue re-seed skipped when the bundled file is unchanged (avoids ~300ms sql.js upsert every boot)"
+        "Police station catalogue re-seed skipped when the bundled file is unchanged"
       ]
     },
     {

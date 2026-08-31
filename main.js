@@ -4901,12 +4901,14 @@ app.whenReady().then(async () => {
   }
 
   /* â”€â”€â”€ Licence store (admin DB) init â”€â”€â”€ */
+  _bootMark('licenceStore-start');
   try {
     const licenceStoreKey = require('./main/licenceStoreKey').getLicenceStoreKey(app, safeStorage);
     await require('./main/licenceStore').initStore(app.getPath('userData'), licenceStoreKey);
   } catch (e) {
     console.warn('[LicenceStore] Init failed:', e.message);
   }
+  _bootMark('licenceStore-done');
   // Register licence IPC regardless of whether the admin encrypted store could init.
   // E2E and non-admin flows (forgot-key, admin password checks, etc.) must not
   // crash with "No handler registered" just because safeStorage is unavailable.
@@ -4921,7 +4923,10 @@ app.whenReady().then(async () => {
     return;
   }
 
-  /* Pull QuickFile credentials from Custody Note account when licence is present. */
+  /* Pull QuickFile credentials from Custody Note account when licence is present.
+     Never block first window paint on this network call — home/lock/first-launch
+     do not need QuickFile. Missing credentials used to await the pull and made
+     cold start feel hung on slow networks. */
   try {
     const qfStatus = getQuickFileSettingsStatus();
     const qfStartup = ensureQuickFileSettingsFromServer({
@@ -4932,19 +4937,16 @@ app.whenReady().then(async () => {
       const tag = r && r.skipped ? r.skipped : (r && r.usedLocal ? 'cached' : 'pulled');
       console.info('[QuickFile] startup pull: ' + tag);
     };
-    if (qfStatus.missing.length > 0) {
-      logQfStartup(await qfStartup);
-    } else {
-      qfStartup.then(logQfStartup).catch(function (e) {
-        console.warn('[QuickFile] startup pull failed:', e && e.message);
-      });
-    }
+    qfStartup.then(logQfStartup).catch(function (e) {
+      console.warn('[QuickFile] startup pull failed:', e && e.message);
+    });
   } catch (qfErr) {
     console.warn('[QuickFile] startup pull error:', qfErr && qfErr.message);
   }
 
   // Normal app mode: create the window only after persistent data is available.
   if (!cliImportPath && !cliListRecords && !cliDumpId) {
+    _bootMark('createWindow-call');
     createWindow();
     runLaaEnsureTemplates({}).catch(function (e) {
       console.warn('[LAA] startup template check failed:', e && e.message);
