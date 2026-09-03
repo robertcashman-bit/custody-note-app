@@ -111,16 +111,15 @@ loadEnvFile('.env.local');
 const token = resolveGitHubToken();
 const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const tag = `v${version}`;
-const repo = 'robertcashman-bit/custody-note-app';
-const headers = {
-  Accept: 'application/vnd.github+json',
-  Authorization: `Bearer ${token}`,
-  'X-GitHub-Api-Version': '2022-11-28',
-  'User-Agent': 'CustodyNote-UploadMacAssets',
-};
+const { fetchReleaseByTag, RELEASE_OWNER, RELEASE_REPO, releaseApiHeaders } =
+  await import('./github-release-api.mjs');
+const repo = `${RELEASE_OWNER}/${RELEASE_REPO}`;
+const headers = releaseApiHeaders(token);
 
-const releaseRes = await fetch(`https://api.github.com/repos/${repo}/releases/tags/${tag}`, { headers });
-const release = await releaseRes.json();
+/* Draft releases are invisible to /releases/tags/{tag} — use the helper that
+ * also scans the releases list so post-spctl uploads work while the release
+ * is still draft (CI publish path). */
+const release = await fetchReleaseByTag(tag, token);
 if (!release.id) throw new Error(release.message || 'Release not found');
 
 const dist = join(root, 'dist');

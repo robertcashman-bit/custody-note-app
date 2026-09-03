@@ -1,22 +1,23 @@
 # On push of a version tag (e.g. v1.4.24), build the Windows installer AND the
-# signed macOS .dmg/.zip (notarised when Apple credentials pass preflight),
-# publish both to GitHub Releases, then sync the marketing website to Vercel.
+# signed + notarised macOS .dmg/.zip, publish both to GitHub Releases, then sync
+# the marketing website to Vercel.
 #
 # Prerequisites (Settings > Secrets and variables > Actions):
 # Required for Windows build (provided automatically):
 # - GITHUB_TOKEN  — automatic, used to create the app release.
 #
-# Required for macOS Developer ID–signed build:
+# Required for macOS Developer ID–signed + notarised build (fail-closed):
 # - MAC_CERTIFICATE_P12_BASE64     — Base64-encoded Developer ID Application .p12 bundle.
 # - MAC_CERTIFICATE_P12_PASSWORD   — Passphrase used when the .p12 was exported.
 # - MAC_KEYCHAIN_PASSWORD          — Random passphrase for the temporary CI keychain.
 # - APPLE_TEAM_ID                  — 10-character Apple Team ID (identity selection).
-#
-# Required for notarisation (optional — stale credentials no longer skip signing):
 # - APPLE_ID                       — Apple Developer Program email.
 # - APPLE_APP_SPECIFIC_PASSWORD    — App-specific password (xxxx-xxxx-xxxx-xxxx).
-# When notarization preflight fails, release-mac still codesigns + uploads with
-# CN_SKIP_NOTARIZE=1 (Gatekeeper may need right-click → Open until ASP is refreshed).
+#
+# Notarization is mandatory for GitHub Release Mac assets. If notarytool preflight
+# fails (HTTP 401 / missing ASP), release-mac FAILS — it must NOT upload
+# Developer ID–signed-but-unnotarized dmgs/zips. Do not set CN_SKIP_NOTARIZE in
+# this workflow (that flag is a local/dev escape only).
 #
 # Optional (website deploy):
 # - VERCEL_TOKEN  — Vercel dashboard > Settings > Tokens.
@@ -122,33 +123,26 @@ jobs:
 
           rm -f "$CERT_PATH"
 
-      # Soft preflight: a stale APPLE_APP_SPECIFIC_PASSWORD must NOT skip signing.
-      # When this step fails, CN_SKIP_NOTARIZE=1 still produces Developer ID–signed
-      # arm64+x64 dmg/zip + latest-mac.yml (Gatekeeper may require right-click → Open
-      # until notarization credentials are refreshed).
+      # Fail-closed: stale/missing APPLE_APP_SPECIFIC_PASSWORD must fail this job.
+      # Never continue-on-error here — that previously enabled skip-notary publish and
+      # shipped Unnotarized Developer ID dmgs (e.g. 1.9.79).
       - name: Preflight Apple notarization credentials
         id: notary-preflight
-        continue-on-error: true
         env:
           APPLE_ID:                    ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID:               ${{ secrets.APPLE_TEAM_ID }}
         run: node scripts/preflight-apple-notary.mjs
 
-      - name: Build, sign (+ optional notarise) + upload macOS assets
+      - name: Build, sign, notarise, Gatekeeper-assess, then upload macOS assets
         env:
           GH_TOKEN:                    ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID:                    ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID:               ${{ secrets.APPLE_TEAM_ID }}
           CN_PUBLISH:                  always
-          CN_SKIP_NOTARIZE: ${{ steps.notary-preflight.outcome != 'success' && '1' || '0' }}
         run: |
-          if [ "${CN_SKIP_NOTARIZE}" = "1" ]; then
-            echo "::warning::Notarization preflight failed — building Developer ID–signed Mac assets without notarization."
-          else
-            echo "Notarization preflight OK — building signed + notarised Mac assets."
-          fi
+          echo "Notarization preflight OK — building signed + notarised Mac assets (upload only after spctl passes)."
           npm run build:mac:signed
 
       - name: Regenerate latest-mac.yml from uploaded Mac assets
