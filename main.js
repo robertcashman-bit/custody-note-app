@@ -114,6 +114,10 @@ const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-i
 const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
+const {
+  normalizeMileageForStorage,
+  mergeStationsPreservingMileage,
+} = require('./lib/stationMileage');
 const syncConflicts = require('./main/syncConflicts');
 const errorReporting = require('./main/errorReporting');
 const dbCrypto = require('./lib/dbCrypto');
@@ -6080,10 +6084,25 @@ ipcMain.handle('stations-replace', (_, stations) => {
   if (!Array.isArray(stations)) throw new Error('stations must be an array');
   try {
     db.run('BEGIN');
+    const existingRows = dbAll(
+      'SELECT name, code, mileage_from_base, postcode FROM police_stations'
+    );
+    const merged = mergeStationsPreservingMileage(existingRows, stations);
     db.run('DELETE FROM police_stations');
-    for (const s of stations) {
-      db.run('INSERT INTO police_stations (name, code, scheme, region, scheme_code, kind) VALUES (?, ?, ?, ?, ?, ?)',
-        [s.name || '', s.code || '', s.scheme || '', s.region || '', s.schemeCode || '', s.kind || 'station']);
+    for (const s of merged) {
+      db.run(
+        'INSERT INTO police_stations (name, code, scheme, region, scheme_code, kind, mileage_from_base, postcode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          s.name || '',
+          s.code || '',
+          s.scheme || '',
+          s.region || '',
+          s.schemeCode || '',
+          s.kind || 'station',
+          s.mileage_from_base != null ? s.mileage_from_base : null,
+          s.postcode || '',
+        ]
+      );
     }
     db.run('COMMIT');
   } catch (e) {
@@ -9163,19 +9182,28 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 ipcMain.handle('station-mileage-get', (_, stationId) => {
-  const row = dbGet('SELECT mileage_from_base, postcode FROM police_stations WHERE id = ?', [stationId]);
-  return row || { mileage_from_base: null, postcode: '' };
+  const row = dbGet('SELECT mileage_from_base, postcode, code FROM police_stations WHERE id = ?', [stationId]);
+  if (!row) return { mileage_from_base: null, postcode: '', code: '' };
+  return {
+    mileage_from_base: normalizeMileageForStorage(row.mileage_from_base),
+    postcode: row.postcode || '',
+    code: row.code || '',
+  };
 });
 
 ipcMain.handle('stations-mileage-list', () => {
-  return dbAll('SELECT id, name, code, scheme, region, mileage_from_base, postcode FROM police_stations ORDER BY name');
+  return dbAll('SELECT id, name, code, scheme, region, mileage_from_base, postcode FROM police_stations ORDER BY name').map((r) => ({
+    ...r,
+    mileage_from_base: normalizeMileageForStorage(r.mileage_from_base),
+  }));
 });
 
 ipcMain.handle('station-mileage-save', (_, params) => {
   const { id, mileage_from_base, postcode, userName } = params;
+  const miles = normalizeMileageForStorage(mileage_from_base);
   db.run(
     'UPDATE police_stations SET mileage_from_base = ?, postcode = ? WHERE id = ?',
-    [mileage_from_base != null ? mileage_from_base : null, postcode || '', id]
+    [miles, postcode || '', id]
   );
   saveDb();
   return { ok: true };
@@ -9183,9 +9211,10 @@ ipcMain.handle('station-mileage-save', (_, params) => {
 
 ipcMain.handle('station-mileage-bulk-save', (_, stations) => {
   stations.forEach(s => {
+    const miles = normalizeMileageForStorage(s.mileage_from_base);
     db.run(
       'UPDATE police_stations SET mileage_from_base = ?, postcode = ? WHERE id = ?',
-      [s.mileage_from_base != null ? s.mileage_from_base : null, s.postcode || '', s.id]
+      [miles, s.postcode || '', s.id]
     );
   });
   saveDb();

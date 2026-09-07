@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.81",
+      "date": "2026-09-07",
+      "latest": true,
+      "changes": [
+        "Station mileage: Tonbridge and Medway standard mileages stay exactly 46 — live/calculated road figures (e.g. 45.8 / 46.6) no longer silently replace known standards",
+        "Refreshing the LAA station catalogue preserves each station's mileage_from_base and postcode",
+        "Mileage save/apply paths normalise whole miles as exact integers (46 stays \"46\", not a drifted fraction)"
+      ]
+    },
+    {
       "version": "1.9.80",
       "date": "2026-08-31",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Daily anonymous usage ping (hashed machine id, platform, version, licence tier only) so admin stats can show unique machines in the last 7/30 days — no case data"
       ]
