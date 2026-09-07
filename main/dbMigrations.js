@@ -279,6 +279,20 @@ const MIGRATIONS = [
       );
     },
   },
+  {
+    version: 3,
+    name: 'standard-station-mileages-exact',
+    up(ctx) {
+      // Re-assert canonical base mileages (Tonbridge + Medway custody stations).
+      // Exact codes only — repairs live-road drift (45.8 / 46.6) back to 46.
+      const {
+        canonicalStandardMileageStatements,
+      } = require('../lib/stationMileage');
+      canonicalStandardMileageStatements().forEach(function (stmt) {
+        ctx.run(stmt.sql, stmt.params);
+      });
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS.length
