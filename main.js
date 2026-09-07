@@ -8922,6 +8922,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     attachPdfFileName,
   } = params;
 
+  const normalizedMileageMiles = normalizeMileageForStorage(mileageMiles);
+  const milesForInvoice = normalizedMileageMiles != null ? normalizedMileageMiles : (parseFloat(mileageMiles) || 0);
+
   if (!firmName || typeof firmName !== 'string' || !firmName.trim()) {
     return { ok: false, error: 'Firm name is required to create an invoice' };
   }
@@ -8959,9 +8962,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       ));
     }
 
-    const mileageCost = (mileageMiles || 0) * (mileageRate || 0.45);
+    const mileageCost = (milesForInvoice || 0) * (mileageRate || 0.45);
     if (mileageCost > 0) {
-      const milesVal = mileageMiles || 0;
+      const milesVal = milesForInvoice || 0;
       const rateVal = mileageRate || 0.45;
       lineItems.push(buildQuickFileItemLine(
         'Mileage',
@@ -9065,7 +9068,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
           userName || '',
           subtotal, vat, total,
           narrative || '',
-          mileageMiles || 0, mileageRate || 0.45,
+          milesForInvoice || 0, mileageRate || 0.45,
           parkingAmount || 0, attendanceFee || 0,
           vatRate || 0.20,
           attendanceId,

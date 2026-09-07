@@ -309,7 +309,13 @@ function _renderBillingPanel(data, recordId, opts) {
               '</div>' +
               '<div class="billing-edit-row">' +
                 '<label for="billing-mileage-miles">Mileage (miles)</label>' +
-                '<input type="number" id="billing-mileage-miles" class="form-input billing-calc-input" value="' + (opts.mileageMiles || 0) + '" step="0.1">' +
+                '<input type="number" id="billing-mileage-miles" class="form-input billing-calc-input" value="' + (function () {
+                  var SM = window.StationMileage;
+                  if (SM && typeof SM.formatExactMiles === 'function' && opts.mileageMiles != null && opts.mileageMiles !== '') {
+                    return SM.formatExactMiles(opts.mileageMiles) || '0';
+                  }
+                  return String(opts.mileageMiles || 0);
+                })() + '" step="any">' +
               '</div>' +
               '<div class="billing-edit-row">' +
                 '<label for="billing-mileage-rate">Mileage Rate (&pound;/mile)</label>' +

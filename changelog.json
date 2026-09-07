@@ -5,9 +5,9 @@
       "date": "2026-09-07",
       "latest": true,
       "changes": [
-        "Station mileage: Tonbridge and Medway standard mileages stay exactly 46 — live/calculated road figures (e.g. 45.8 / 46.6) no longer silently replace known standards",
-        "Refreshing the LAA station catalogue preserves each station's mileage_from_base and postcode",
-        "Mileage save/apply paths normalise whole miles as exact integers (46 stays \"46\", not a drifted fraction)"
+        "Station mileage (systemic): any stored standard mileage stays exact on apply, save, reload, and export — live/calculated road figures (e.g. 46→45.8/46.6) cannot silently replace a known standard",
+        "Tonbridge and Medway seeded standards remain exactly 46; catalogue refresh preserves every station's mileage_from_base and postcode",
+        "Miles inputs use step=any; visit/billing display and QuickFile invoice storage no longer force fractional drift on whole miles"
       ]
     },
     {
