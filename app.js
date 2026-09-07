@@ -3009,6 +3009,12 @@ var REQUIRED_FIELD_KEYS = [
       totPark += visitPk;
       totDisb += visitDisbsAmt;
       var label = 'Visit ' + (idx + 1) + (v.label ? ' (' + esc(v.label) + ')' : '');
+      var miCell = '\u2014';
+      if (visitMi > 0) {
+        miCell = (window.StationMileage && window.StationMileage.formatMilesForDisplay)
+          ? window.StationMileage.formatMilesForDisplay(visitMi)
+          : String(visitMi);
+      }
       tbl +=
         '<tr>' +
           '<td><button type="button" class="visit-breakdown-link" data-vbk-idx="' + idx + '">' + label + '</button></td>' +
@@ -3017,7 +3023,7 @@ var REQUIRED_FIELD_KEYS = [
           '<td>' + _fmtMins(travelMins) + '</td>' +
           '<td>' + _fmtMins(waitMins) + '</td>' +
           '<td>' + _fmtMins(adviceMins) + '</td>' +
-          '<td>' + (visitMi > 0 ? visitMi.toFixed(1) : '\u2014') + '</td>' +
+          '<td>' + miCell + '</td>' +
           '<td>' + (visitPk > 0 ? _fmtMoney(visitPk) : '\u2014') + '</td>' +
           '<td>' + (visitDisbsAmt > 0 ? _fmtMoney(visitDisbsAmt) + ' (' + visitDisbs.length + ')' : '\u2014') + '</td>' +
         '</tr>';
@@ -3032,12 +3038,18 @@ var REQUIRED_FIELD_KEYS = [
         '</tr>';
       totDisb += generalAmt;
     }
+    var totMiCell = '\u2014';
+    if (totMiles > 0) {
+      totMiCell = (window.StationMileage && window.StationMileage.formatMilesForDisplay)
+        ? window.StationMileage.formatMilesForDisplay(totMiles)
+        : String(totMiles);
+    }
     tbl +=
       '<tr class="totals">' +
         '<td colspan="2">All visits</td>' +
         '<td>\u2014</td>' +
         '<td colspan="3">' + _fmtMins(totMins) + ' total</td>' +
-        '<td>' + (totMiles > 0 ? totMiles.toFixed(1) : '\u2014') + '</td>' +
+        '<td>' + totMiCell + '</td>' +
         '<td>' + (totPark > 0 ? _fmtMoney(totPark) : '\u2014') + '</td>' +
         '<td>' + (totDisb > 0 ? _fmtMoney(totDisb) : '\u2014') + '</td>' +
       '</tr>';
@@ -10031,7 +10043,7 @@ var REQUIRED_FIELD_KEYS = [
               '</div>' +
               '<div class="form-group"><label>Waiting notes</label><textarea class="form-input" rows="2" data-sv-field="waitingTimeNotes" placeholder="Optional"></textarea></div>' +
               '<div class="form-row-2col">' +
-                '<div class="form-group"><label>Miles (this visit)</label><input type="number" class="form-input" step="0.1" data-sv-field="milesClaimable" placeholder="0"></div>' +
+                '<div class="form-group"><label>Miles (this visit)</label><input type="number" class="form-input" step="any" data-sv-field="milesClaimable" placeholder="0"></div>' +
                 '<div class="form-group"><label>Parking (\u00a3, this visit)</label><input type="number" class="form-input" step="0.01" data-sv-field="parkingCost" placeholder="0.00"></div>' +
               '</div>' +
               '<div class="form-group"><label>Notes for this visit</label><textarea class="form-input" rows="2" data-sv-field="notes" placeholder="What happened on this trip (e.g. DSCC accept, ID parade)"></textarea></div>' +
