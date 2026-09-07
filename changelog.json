@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.81",
+      "date": "2026-09-07",
+      "latest": true,
+      "changes": [
+        "Station mileage (systemic): any stored standard mileage stays exact on apply, save, reload, and export — live/calculated road figures (e.g. 46→45.8/46.6) cannot silently replace a known standard",
+        "Tonbridge and Medway seeded standards remain exactly 46; catalogue refresh preserves every station's mileage_from_base and postcode",
+        "Miles inputs use step=any; visit/billing display and QuickFile invoice storage no longer force fractional drift on whole miles"
+      ]
+    },
+    {
       "version": "1.9.80",
       "date": "2026-08-31",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Daily anonymous usage ping (hashed machine id, platform, version, licence tier only) so admin stats can show unique machines in the last 7/30 days — no case data"
       ]
