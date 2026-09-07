@@ -72,7 +72,17 @@ function openBillingPanel() {
     var hasExistingInvoice = !!(invoiceStatus.quickfile_invoice_id);
 
     if (stationMileage && stationMileage.mileage_from_base != null && !milesFromRecord) {
-      milesFromRecord = stationMileage.mileage_from_base;
+      var SM = window.StationMileage;
+      milesFromRecord = SM && typeof SM.resolveMilesForAutofill === 'function'
+        ? SM.resolveMilesForAutofill({
+            standardMiles: stationMileage.mileage_from_base,
+            existingMiles: milesFromRecord,
+            allowLiveOverride: false,
+          })
+        : stationMileage.mileage_from_base;
+      if (SM && typeof SM.normalizeMileageForStorage === 'function') {
+        milesFromRecord = SM.normalizeMileageForStorage(milesFromRecord);
+      }
     }
 
     if (hasExistingInvoice && invoiceStatus.invoice_attendance_fee != null) {

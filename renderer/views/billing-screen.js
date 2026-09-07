@@ -54,7 +54,17 @@ function _wfRenderBillingStep(body, footer) {
     var hasExisting = !!(invoiceStatus.quickfile_invoice_id);
 
     if (stationMileage && stationMileage.mileage_from_base != null && !miles) {
-      miles = stationMileage.mileage_from_base;
+      var SM = window.StationMileage;
+      miles = SM && typeof SM.resolveMilesForAutofill === 'function'
+        ? SM.resolveMilesForAutofill({
+            standardMiles: stationMileage.mileage_from_base,
+            existingMiles: miles,
+            allowLiveOverride: false,
+          })
+        : stationMileage.mileage_from_base;
+      if (SM && typeof SM.normalizeMileageForStorage === 'function') {
+        miles = SM.normalizeMileageForStorage(miles);
+      }
     }
     if (hasExisting && invoiceStatus.invoice_attendance_fee != null) fee = invoiceStatus.invoice_attendance_fee;
     if (hasExisting && invoiceStatus.invoice_mileage_miles != null) miles = invoiceStatus.invoice_mileage_miles;

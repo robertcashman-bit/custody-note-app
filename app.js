@@ -3073,26 +3073,41 @@ var REQUIRED_FIELD_KEYS = [
   /* ─── Auto-fill mileage from station table ─── */
   function autoFillMileageFromStation(stationId) {
     if (!stationId || !window.api || !window.api.stationMileageGet) return;
+    var existingMiles = '';
     if (window.StationVisits) {
       window.StationVisits.ensureStationVisits(formData);
       var v0 = formData.stationVisits[0];
-      if (parseFloat(v0.milesClaimable) > 0) return;
+      existingMiles = v0 && v0.milesClaimable != null ? v0.milesClaimable : '';
+      if (parseFloat(existingMiles) > 0) return;
     } else {
-      var existing = parseFloat(formData.milesClaimable);
-      if (existing > 0) return;
+      existingMiles = formData.milesClaimable;
+      if (parseFloat(existingMiles) > 0) return;
     }
     window.api.stationMileageGet(stationId).then(function (r) {
-      if (r && r.mileage_from_base != null && r.mileage_from_base > 0) {
-        if (window.StationVisits && formData.stationVisits && formData.stationVisits[0]) {
-          formData.stationVisits[0].milesClaimable = String(r.mileage_from_base);
-          window.StationVisits.syncLegacyMirror(formData);
-          setFieldValue('milesClaimable', formData.milesClaimable || r.mileage_from_base);
-        } else {
-          formData.milesClaimable = String(r.mileage_from_base);
-          setFieldValue('milesClaimable', r.mileage_from_base);
-        }
-        recalcTotal();
+      var SM = window.StationMileage;
+      var standard = r && r.mileage_from_base != null ? r.mileage_from_base : null;
+      var resolved = SM && typeof SM.resolveMilesForAutofill === 'function'
+        ? SM.resolveMilesForAutofill({
+            standardMiles: standard,
+            existingMiles: existingMiles,
+            stationCode: formData.policeStationCode || '',
+            // Live/calculated road distance must never silently replace a standard.
+            allowLiveOverride: false,
+          })
+        : (standard != null && standard > 0 ? standard : null);
+      if (resolved == null || !(resolved > 0)) return;
+      var exact = SM && typeof SM.formatExactMiles === 'function'
+        ? SM.formatExactMiles(resolved)
+        : String(resolved);
+      if (window.StationVisits && formData.stationVisits && formData.stationVisits[0]) {
+        formData.stationVisits[0].milesClaimable = exact;
+        window.StationVisits.syncLegacyMirror(formData);
+        setFieldValue('milesClaimable', formData.milesClaimable || exact);
+      } else {
+        formData.milesClaimable = exact;
+        setFieldValue('milesClaimable', exact);
       }
+      recalcTotal();
     }).catch(function () {});
   }
 
