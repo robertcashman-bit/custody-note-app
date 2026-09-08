@@ -1,9 +1,26 @@
 {
   "releases": [
     {
+      "version": "1.9.82",
+      "date": "2026-09-08",
+      "latest": true,
+      "changes": [
+        "Cross-device sync: do not clear local dirty flags unless push returns a confirmed written count matching the batch (blocks ok:true with written:0 / omitted written — the Mac→Windows empty-cloud failure class)",
+        "Settings: Re-upload all local records to cloud — marks dirty, rebuilds sync queue, pushes, then verifies with a fresh pull; if cloud still empty, keeps records dirty and reports CLOUD_EMPTY_AFTER_PUSH",
+        "Local/cloud restore now bumps sync_version when re-dirtying, stops/resets the sync worker to avoid mid-drain markSynced races, and returns marked/queued counts",
+        "Push attempts are logged to sync_attempts (same audit trail as pulls) so lastAttempts is no longer pull-only",
+        "429 rate-limit gate: pause push and pull for ~5 minutes after Too many requests instead of burning the 120/hour budget on the 10s poll",
+        "Home/footer/Settings: honest sync phases and recovery hints for empty-large-DB, local-full/cloud-empty (from-epoch pull only), and rate-limited; ensure Backups folder on data change",
+        "Full re-sync now runs an authoritative from-epoch pull (not a silent worker no-op) and reports received/merged/decrypt counts; push/pull licence keys are normalised trim+uppercase to match cloud hashing",
+        "Re-upload all drains the full sync queue across cycles before verify-pull; restore returns marked/queued counts; false ok:true push without written can no longer clear dirty (Mac CDP empty-cloud class)",
+        "Data & Sync settings: local-vs-cloud health, schema version, sync phase, emergency record-index export (metadata only), and Open sync diagnostics",
+        "Read-only storage inventory script (scripts/inventory-sync-storage.mjs) for preserve-first incident response"
+      ]
+    },
+    {
       "version": "1.9.81",
       "date": "2026-09-07",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Station mileage (systemic): any stored standard mileage stays exact on apply, save, reload, and export — live/calculated road figures (e.g. 46→45.8/46.6) cannot silently replace a known standard",
         "Tonbridge and Medway seeded standards remain exactly 46; catalogue refresh preserves every station's mileage_from_base and postcode",
