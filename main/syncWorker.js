@@ -69,11 +69,13 @@ function isRetryableError(err) {
 /**
  * Validate a /api/sync/push response before clearing sync_dirty.
  *
- * Incident class (2026-09): clients must NOT treat ok:true with written:0 (or
- * written < sent) as success — that leaves the cloud empty while local shows
- * pending=0/dirty=0, so other devices pull "No remote records".
+ * Incident class (2026-09): clients must NOT treat ok:true with written:0,
+ * written < sent, or missing written as success — that leaves the cloud empty
+ * while local shows pending=0/dirty=0 (Mac CDP: lastSuccessfulPushAt set,
+ * lastAttempts only pull recordCount:0, Windows Full re-sync still empty).
  *
- * Legacy servers that omit `written` keep working (ok:true alone is enough).
+ * Modern /api/sync/push returns numeric `written`. Missing written is treated
+ * as unconfirmed and retryable so dirty flags stay set.
  */
 function assertPushAccepted(resp, sentCount) {
   const sent = Number(sentCount) || 0;
@@ -84,7 +86,13 @@ function assertPushAccepted(resp, sentCount) {
     }
     throw err;
   }
-  if (resp.written == null) return resp;
+  if (sent === 0) return resp;
+  if (resp.written == null) {
+    const err = new Error('Push unconfirmed: server omitted written count');
+    err.code = 'PUSH_INCOMPLETE';
+    err.statusCode = 503;
+    throw err;
+  }
   const written = Array.isArray(resp.written)
     ? resp.written.length
     : Number(resp.written);
@@ -337,6 +345,9 @@ function createSyncWorker(ctx) {
         _lastSuccessfulPushAt = Date.now();
         _lastError = null;
         setConnectivity('api_available');
+        if (ctx.logSyncAttempt) {
+          ctx.logSyncAttempt(generateCorrelationId(), 'push', payloads.length, true, null);
+        }
       } catch (e) {
         const retryable = isRetryableError(e);
         for (const item of items) {
@@ -347,6 +358,9 @@ function createSyncWorker(ctx) {
         // the next cycle actually hits /api/health instead of blindly
         // claiming api_available for up to 60 seconds.
         _lastSuccessfulPushAt = 0;
+        if (ctx.logSyncAttempt) {
+          ctx.logSyncAttempt(generateCorrelationId(), 'push', items.length, false, _lastError);
+        }
         if (!retryable) setConnectivity('auth_required');
         else setConnectivity('internet_available_api_unreachable');
         notifyRenderer({ status: 'error', lastError: _lastError, retryable });
