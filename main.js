@@ -119,6 +119,7 @@ const {
   shouldSuppressSyncedFooter,
   deriveSyncPhase,
 } = require('./lib/syncRecoveryHints');
+const { normalizeLicenceKeyForSync } = require('./lib/licenceKeyNormalize');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
@@ -474,16 +475,17 @@ async function ensureCanonicalSyncKeyNow() {
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return { ok: false, action: 'no_api' };
   const data = readLicenceData();
+  const licenceKey = data && data.key ? normalizeLicenceKeyForSync(data.key) : null;
   const result = await ensureCanonicalSyncKey({
-    getLicenceKey: () => (data && data.key ? data.key : null),
+    getLicenceKey: () => licenceKey,
     getLocalKeyHex: () => getOrCreateMasterKey({ allowCreate: false }),
     fetchEscrow: () => httpPost(`${apiUrl}/api/recovery`, {
-      key: data.key,
+      key: licenceKey,
       machineId: getMachineId(),
     }, { headers: _getAuthHeaders() }),
     uploadEscrow: async (blob) => {
       const resp = await httpPost(`${apiUrl}/api/recovery`, {
-        key: data.key,
+        key: licenceKey,
         machineId: getMachineId(),
         blob,
       }, { headers: _getAuthHeaders() });
@@ -2463,6 +2465,8 @@ async function syncPull(opts) {
 
   const data = readLicenceData();
   if (!data || !data.key) return { pulled: 0 };
+  const licenceKey = normalizeLicenceKeyForSync(data.key);
+  if (!licenceKey) return { pulled: 0 };
 
   const localCountRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const localCount = localCountRow ? localCountRow.c : 0;
@@ -2490,7 +2494,7 @@ async function syncPull(opts) {
     iterations++;
     const since = getLastSyncTimestamp();
     const resp = await httpPost(`${apiUrl}/api/sync/pull`, {
-      key: data.key,
+      key: licenceKey,
       machineId: getMachineId(),
       since,
     }, syncOpts);
@@ -2667,13 +2671,44 @@ function resetSyncPullCursor() {
 async function runFullSyncFromCloud() {
   if (!db) throw new Error('Database not ready');
   migrateSyncDirtyToQueue();
+  const w = getSyncWorker();
+  // Wait out any in-flight poll cycle so we do not race the pull cursor, then
+  // clear the 429 gate so an explicit Full re-sync is not a silent no-op.
+  if (w && typeof w.waitUntilIdle === 'function') {
+    await w.waitUntilIdle(90000);
+  }
+  if (w && typeof w.forceRetryAll === 'function') {
+    w.forceRetryAll();
+  }
   resetSyncPullCursor();
   saveDb();
-  const w = getSyncWorker();
+  // Canonical key before from-epoch pull so envelopes can decrypt on secondary devices.
+  await ensureCanonicalSyncKeyNow().catch((e) => {
+    console.warn('[Sync] Canonical key before full re-sync:', e && e.message ? e.message : e);
+  });
+  // Authoritative path: call syncPull directly. Do NOT rely on worker.runCycle()
+  // alone — that can return immediately when _inProgress, or skip pull after a
+  // push 429, while IPC still returned { ok: true } (Windows empty UI class).
+  const pullResult = await syncPull({ correlationId: generateCorrelationId() });
   if (w) {
-    w.forceRetryAll();
-    await w.runCycle();
+    try { w.scheduleSoon(); } catch (_) {}
   }
+  if (pullResult && pullResult.pulled > 0 && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('records-updated-from-sync', { count: pullResult.pulled });
+    } catch (_) {}
+  }
+  if (pullResult && (pullResult.decryptFailed > 0 || pullResult.noMasterKeySkipped > 0) && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('sync-pull-warning', {
+        decryptFailed: pullResult.decryptFailed || 0,
+        noMasterKeySkipped: pullResult.noMasterKeySkipped || 0,
+        received: pullResult.received || 0,
+        merged: pullResult.pulled || 0,
+      });
+    } catch (_) {}
+  }
+  return pullResult || { pulled: 0, received: 0, decryptFailed: 0, noMasterKeySkipped: 0 };
 }
 
 /** Secondary devices with no local records: auto full re-sync once network is up.
@@ -4717,7 +4752,7 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
   if (result.valid === false) return { success: false, message: result.message || 'Licence key is not valid' };
   const now = new Date().toISOString();
   const data = {
-    key: key.trim(),
+    key: normalizeLicenceKeyForSync(key),
     email: result.email || email || '',
     activatedAt: now,
     lastValidated: now,
@@ -6650,10 +6685,19 @@ ipcMain.handle('sync-now', async () => {
 
 ipcMain.handle('sync-full-resync', async () => {
   try {
-    await runFullSyncFromCloud();
-    return { ok: true };
+    const result = await runFullSyncFromCloud();
+    return {
+      ok: true,
+      received: result && result.received != null ? result.received : 0,
+      merged: result && result.pulled != null ? result.pulled : 0,
+      decryptFailed: result && result.decryptFailed != null ? result.decryptFailed : 0,
+      noMasterKeySkipped: result && result.noMasterKeySkipped != null ? result.noMasterKeySkipped : 0,
+      conflicts: result && result.conflicts != null ? result.conflicts : 0,
+    };
   } catch (e) {
-    return { ok: false, error: e && e.message ? e.message : 'Full re-sync failed' };
+    const msg = e && e.message ? e.message : 'Full re-sync failed';
+    const rateLimited = /too many requests|rate limit/i.test(msg) || (e && e.statusCode === 429);
+    return { ok: false, error: msg, rateLimited };
   }
 });
 

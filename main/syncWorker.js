@@ -39,6 +39,7 @@ const {
   createRateLimitGate,
   RATE_LIMIT_COOLDOWN_MS,
 } = require('../lib/syncPushAck');
+const { normalizeLicenceKeyForSync } = require('../lib/licenceKeyNormalize');
 
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
@@ -272,12 +273,14 @@ function createSyncWorker(ctx) {
     if (!apiUrl) throw new Error('No API URL');
     const data = ctx.readLicenceData && ctx.readLicenceData();
     if (!data || !data.key) throw new Error('No licence');
+    const licenceKey = normalizeLicenceKeyForSync(data.key);
+    if (!licenceKey) throw new Error('No licence');
     const payloads = queueItems.map((item) => buildPushPayload(item));
     const correlationId = generateCorrelationId();
     const resp = await ctx.httpPost(
       `${apiUrl.replace(/\/$/, '')}/api/sync/push`,
       {
-        key: data.key,
+        key: licenceKey,
         machineId: ctx.getMachineId(),
         records: payloads.map((p) => p.record),
       },
@@ -614,6 +617,20 @@ function createSyncWorker(ctx) {
     console.info('[SyncWorker] Runtime state reset:', reason || 'manual');
   }
 
+  /** Wait for an in-flight runCycle to finish (Full re-sync must not race cursor). */
+  async function waitUntilIdle(timeoutMs = 60000) {
+    const limit = Math.max(0, Number(timeoutMs) || 0);
+    const start = Date.now();
+    while (_inProgress) {
+      if (Date.now() - start >= limit) {
+        console.warn('[SyncWorker] waitUntilIdle timed out after', limit, 'ms');
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return !_inProgress;
+  }
+
   return {
     start,
     stop,
@@ -623,6 +640,7 @@ function createSyncWorker(ctx) {
     getDiagnostics,
     forceRetryAll,
     resetRuntimeState,
+    waitUntilIdle,
     getConnectivity: () => _connectivityState,
   };
 }
