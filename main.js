@@ -113,6 +113,14 @@ const initSqlJs = require('sql.js');
 const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-import');
 const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
+const {
+  detectEmptyLargeDb,
+  detectLocalFullCloudEmpty,
+  shouldSuppressSyncedFooter,
+  deriveSyncPhase,
+} = require('./lib/syncRecoveryHints');
+const { normalizeLicenceKeyForSync } = require('./lib/licenceKeyNormalize');
+const { buildLocalCloudHealth, buildEmergencyRecordIndex } = require('./lib/syncHealth');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
@@ -468,16 +476,17 @@ async function ensureCanonicalSyncKeyNow() {
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return { ok: false, action: 'no_api' };
   const data = readLicenceData();
+  const licenceKey = data && data.key ? normalizeLicenceKeyForSync(data.key) : null;
   const result = await ensureCanonicalSyncKey({
-    getLicenceKey: () => (data && data.key ? data.key : null),
+    getLicenceKey: () => licenceKey,
     getLocalKeyHex: () => getOrCreateMasterKey({ allowCreate: false }),
     fetchEscrow: () => httpPost(`${apiUrl}/api/recovery`, {
-      key: data.key,
+      key: licenceKey,
       machineId: getMachineId(),
     }, { headers: _getAuthHeaders() }),
     uploadEscrow: async (blob) => {
       const resp = await httpPost(`${apiUrl}/api/recovery`, {
-        key: data.key,
+        key: licenceKey,
         machineId: getMachineId(),
         blob,
       }, { headers: _getAuthHeaders() });
@@ -1737,6 +1746,9 @@ function _runHourlyBackupAsync() {
 function markDbDirty() {
   dbDirtySinceQuickBackup = true;
   dbDirtySinceHourlyBackup = true;
+  // Ensure Backups exists before the scheduler tries a write — otherwise the
+  // footer can sit on "Backup queued" while skips leave no folder on disk.
+  try { ensureBackupFolderExists(); } catch (_) {}
   const bs = _backupScheduler;
   if (bs) bs.markDirty('db-change');
   scheduleSyncSoon();
@@ -2245,6 +2257,172 @@ function rebuildSyncQueueForDirtyRecords() {
   }
 }
 
+/**
+ * Force every local attendance back onto the upload queue.
+ * Needed after a raw attendances.db file-swap (which does NOT mark dirty) and
+ * when this machine has records but the cloud is empty so other devices pull 0.
+ * Bumps sync_version so remotes accept the re-push.
+ */
+function markAllLocalRecordsForCloudReupload() {
+  if (!db) return { ok: false, error: 'Database not ready', marked: 0, queued: 0 };
+  try {
+    const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+    const marked = countRow ? (countRow.c || 0) : 0;
+    if (marked === 0) {
+      return { ok: false, error: 'No local records to re-upload', marked: 0, queued: 0 };
+    }
+    dbRun(
+      'UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE deleted_at IS NULL'
+    );
+    const queued = rebuildSyncQueueForDirtyRecords();
+    saveDb();
+    if (queued !== marked) {
+      console.warn('[Sync] Re-upload queue mismatch: marked=' + marked + ' queued=' + queued);
+    }
+    console.info('[Sync] Re-upload all local records: marked=' + marked + ' queued=' + queued);
+    return { ok: true, marked, queued };
+  } catch (e) {
+    console.warn('[Sync] markAllLocalRecordsForCloudReupload failed:', e && e.message ? e.message : e);
+    return { ok: false, error: e && e.message ? e.message : 'Re-upload mark failed', marked: 0, queued: 0 };
+  }
+}
+
+/**
+ * Run sync worker cycles until dirty/pending are drained or we hit a stop
+ * condition. One runCycle only pushes MAX_RECORDS_PER_CYCLE (100); Mac restore
+ * of ~66 fits one cycle, but larger DBs and partial failures need a loop.
+ * Never treats a single cycle as "everything reached the cloud".
+ */
+async function drainPendingSyncUploads(options = {}) {
+  const maxCycles = options.maxCycles != null ? options.maxCycles : 40;
+  const w = getSyncWorker();
+  if (!w) return { cycles: 0, stoppedReason: 'no_worker', pending: 0, dirty: 0 };
+  let cycles = 0;
+  for (; cycles < maxCycles; cycles++) {
+    migrateSyncDirtyToQueue();
+    const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
+    const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+    const pending = pendingRow ? (pendingRow.c || 0) : 0;
+    const dirty = dirtyRow ? (dirtyRow.c || 0) : 0;
+    if (pending === 0 && dirty === 0) {
+      return { cycles, stoppedReason: 'drained', pending: 0, dirty: 0 };
+    }
+    w.forceRetryAll();
+    await w.runCycle();
+    const diag = w.getDiagnostics() || {};
+    if (diag.rateLimit && diag.rateLimit.blocked) {
+      return {
+        cycles: cycles + 1,
+        stoppedReason: 'rate_limited',
+        pending,
+        dirty,
+        lastError: diag.lastError || null,
+      };
+    }
+  }
+  const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
+  const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+  return {
+    cycles,
+    stoppedReason: 'max_cycles',
+    pending: pendingRow ? (pendingRow.c || 0) : 0,
+    dirty: dirtyRow ? (dirtyRow.c || 0) : 0,
+    lastError: w.getDiagnostics().lastError || null,
+  };
+}
+
+function getAttendanceDbFileBytes() {
+  try {
+    const dbPath = getDbPath();
+    if (!dbPath || !fs.existsSync(dbPath)) return 0;
+    return fs.statSync(dbPath).size || 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function buildSyncRecoveryHints(statusBase) {
+  const totalRecords = statusBase && statusBase.totalRecords != null ? statusBase.totalRecords : 0;
+  const pendingChanges = statusBase && statusBase.pendingChanges != null ? statusBase.pendingChanges : 0;
+  const dirtyPushCount = statusBase && statusBase.dirtyPushCount != null ? statusBase.dirtyPushCount : 0;
+  const lastPull = (statusBase && statusBase.lastPull) || {};
+  const dbFileBytes = getAttendanceDbFileBytes();
+  const emptyLargeDb = detectEmptyLargeDb({
+    dbFileBytes,
+    activeAttendanceCount: totalRecords,
+  });
+  const pullEverCompleted = !!(lastPull && lastPull.at);
+  const localFullCloudEmpty = detectLocalFullCloudEmpty({
+    totalRecords,
+    pendingChanges,
+    dirtyPushCount,
+    lastPullReceived: lastPull.received || 0,
+    pullEverCompleted,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+  });
+  const diag = statusBase && statusBase._diag ? statusBase._diag : {};
+  const lastVerifiedCloudPushAt = diag.lastVerifiedCloudPushAt || null;
+  const rateLimited = !!(diag.rateLimit && diag.rateLimit.blocked);
+  const suppressSyncedFooter = shouldSuppressSyncedFooter({
+    totalRecords,
+    pendingChanges,
+    dirtyPushCount,
+    lastPullReceived: lastPull.received || 0,
+    pullEverCompleted,
+    lastVerifiedCloudPushAt,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+  });
+  const syncPhase = deriveSyncPhase({
+    inProgress: !!(statusBase && statusBase.inProgress),
+    pendingChanges,
+    dirtyPushCount,
+    failedCount: statusBase && statusBase.failedCount,
+    rateLimited,
+    lastError: statusBase && statusBase.lastError,
+    totalRecords,
+    lastPullReceived: lastPull.received || 0,
+    pullEverCompleted,
+    lastVerifiedCloudPushAt,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+  });
+  const schemaVersion = getDbSchemaVersion();
+  const health = buildLocalCloudHealth({
+    localCount: totalRecords,
+    lastPullReceived: lastPull.received || 0,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    dirtyPushCount,
+    pendingChanges,
+    lastVerifiedCloudPushAt,
+    syncPhase,
+    schemaVersion,
+  });
+  return {
+    dbFileBytes,
+    emptyLargeDb,
+    localFullCloudEmpty,
+    suggestReuploadAll: localFullCloudEmpty,
+    suppressSyncedFooter,
+    syncPhase,
+    schemaVersion,
+    health,
+    lastVerifiedCloudPushAt,
+    lastPush: diag.lastPush || null,
+    rateLimit: diag.rateLimit || null,
+    rateLimited,
+    rateLimitRemainingMs: rateLimited && diag.rateLimit ? diag.rateLimit.remainingMs : 0,
+  };
+}
+
+function getDbSchemaVersion() {
+  if (!db) return 0;
+  try {
+    const row = dbGet('SELECT MAX(version) as v FROM schema_version');
+    return row && row.v != null ? Number(row.v) || 0 : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
 function clearOpenSyncConflicts(attendanceId, resolutionNote) {
   if (!db || !attendanceId) return;
   const existing = dbGet('SELECT COUNT(*) as c FROM sync_conflicts WHERE attendance_id=? AND resolved_at IS NULL', [attendanceId]);
@@ -2344,6 +2522,7 @@ let _lastPullStats = {
   decryptFailed: 0,
   noMasterKeySkipped: 0,
   cursorAdvanced: false,
+  pulledFromEpoch: false,
   at: null,
 };
 
@@ -2357,6 +2536,8 @@ async function syncPull(opts) {
 
   const data = readLicenceData();
   if (!data || !data.key) return { pulled: 0 };
+  const licenceKey = normalizeLicenceKeyForSync(data.key);
+  if (!licenceKey) return { pulled: 0 };
 
   const localCountRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const localCount = localCountRow ? localCountRow.c : 0;
@@ -2376,12 +2557,15 @@ async function syncPull(opts) {
   let cursorAdvanced = true;
   let iterations = 0;
   const MAX_PULL_ITERATIONS = 50;
+  // Capture before the loop: only a from-epoch pull can prove the cloud is empty.
+  // Incremental since-cursor pulls with received=0 are normal steady state.
+  const pullStartedFromEpoch = getLastSyncTimestamp() === '1970-01-01T00:00:00.000Z';
 
   while (iterations < MAX_PULL_ITERATIONS) {
     iterations++;
     const since = getLastSyncTimestamp();
     const resp = await httpPost(`${apiUrl}/api/sync/pull`, {
-      key: data.key,
+      key: licenceKey,
       machineId: getMachineId(),
       since,
     }, syncOpts);
@@ -2522,6 +2706,7 @@ async function syncPull(opts) {
     decryptFailed,
     noMasterKeySkipped,
     cursorAdvanced,
+    pulledFromEpoch: pullStartedFromEpoch,
     at: new Date().toISOString(),
   };
 
@@ -2557,24 +2742,61 @@ function resetSyncPullCursor() {
 async function runFullSyncFromCloud() {
   if (!db) throw new Error('Database not ready');
   migrateSyncDirtyToQueue();
+  const w = getSyncWorker();
+  // Wait out any in-flight poll cycle so we do not race the pull cursor, then
+  // clear the 429 gate so an explicit Full re-sync is not a silent no-op.
+  if (w && typeof w.waitUntilIdle === 'function') {
+    await w.waitUntilIdle(90000);
+  }
+  if (w && typeof w.forceRetryAll === 'function') {
+    w.forceRetryAll();
+  }
   resetSyncPullCursor();
   saveDb();
-  const w = getSyncWorker();
+  // Canonical key before from-epoch pull so envelopes can decrypt on secondary devices.
+  await ensureCanonicalSyncKeyNow().catch((e) => {
+    console.warn('[Sync] Canonical key before full re-sync:', e && e.message ? e.message : e);
+  });
+  // Authoritative path: call syncPull directly. Do NOT rely on worker.runCycle()
+  // alone — that can return immediately when _inProgress, or skip pull after a
+  // push 429, while IPC still returned { ok: true } (Windows empty UI class).
+  const pullResult = await syncPull({ correlationId: generateCorrelationId() });
   if (w) {
-    w.forceRetryAll();
-    await w.runCycle();
+    try { w.scheduleSoon(); } catch (_) {}
   }
+  if (pullResult && pullResult.pulled > 0 && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('records-updated-from-sync', { count: pullResult.pulled });
+    } catch (_) {}
+  }
+  if (pullResult && (pullResult.decryptFailed > 0 || pullResult.noMasterKeySkipped > 0) && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('sync-pull-warning', {
+        decryptFailed: pullResult.decryptFailed || 0,
+        noMasterKeySkipped: pullResult.noMasterKeySkipped || 0,
+        received: pullResult.received || 0,
+        merged: pullResult.pulled || 0,
+      });
+    } catch (_) {}
+  }
+  return pullResult || { pulled: 0, received: 0, decryptFailed: 0, noMasterKeySkipped: 0 };
 }
 
-/** Secondary devices with no local records: auto full re-sync once network is up. */
+/** Secondary devices with no local records: auto full re-sync once network is up.
+ *  Also runs when the DB file is large but COUNT(attendances)=0 (Windows empty-UI class).
+ */
 function scheduleAutoFullResyncIfEmpty() {
   if (!db || !getSyncApiUrl()) return;
   const data = readLicenceData();
   if (!data || !data.key) return;
   const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const total = countRow ? countRow.c : 0;
-  if (total > 0) return;
-  console.info('[Sync] No local records — scheduling automatic full re-sync from cloud');
+  const emptyLarge = detectEmptyLargeDb({
+    dbFileBytes: getAttendanceDbFileBytes(),
+    activeAttendanceCount: total,
+  });
+  if (total > 0 && !emptyLarge) return;
+  console.info('[Sync] No local records' + (emptyLarge ? ' (large empty DB)' : '') + ' — scheduling automatic full re-sync from cloud');
   setTimeout(() => {
     ensureCanonicalSyncKeyNow().then(() => {
       return runFullSyncFromCloud();
@@ -2602,12 +2824,34 @@ function getSyncWorker() {
       httpGetWithTimeout,
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
       ensureCanonicalKey: () => ensureCanonicalSyncKeyNow(),
+      logSyncAttempt,
       resolveSyncConflictsForRecord: (recordId, resolutionNote) => clearOpenSyncConflicts(Number(recordId), resolutionNote),
       onStatusChange: () => {},
       sendToRenderer: (channel, data) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data); },
     });
   }
   return _syncWorker;
+}
+
+/**
+ * After swapping the in-memory sql.js Database (local/cloud restore), tear down
+ * the sync worker so an in-flight markSynced from the pre-restore cycle cannot
+ * clear dirty flags on the new DB (Mac CDP dirty=11 mid-drain class).
+ */
+function resetSyncWorkerAfterDbSwap(reason) {
+  try {
+    if (_syncWorker) {
+      try { _syncWorker.stop(); } catch (_) {}
+      try { _syncWorker.resetRuntimeState(reason || 'db-swap'); } catch (_) {}
+    }
+  } catch (_) {}
+  _syncWorker = null;
+  try {
+    const w = getSyncWorker();
+    if (w) w.start();
+  } catch (e) {
+    console.warn('[Sync] Failed to restart worker after DB swap:', e && e.message ? e.message : e);
+  }
 }
 
 function enqueueSyncForRecord(recordId, operation = 'upsert') {
@@ -4579,7 +4823,7 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
   if (result.valid === false) return { success: false, message: result.message || 'Licence key is not valid' };
   const now = new Date().toISOString();
   const data = {
-    key: key.trim(),
+    key: normalizeLicenceKeyForSync(key),
     email: result.email || email || '',
     activatedAt: now,
     lastValidated: now,
@@ -6377,6 +6621,8 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     if (!decrypted) return { ok: false, error: 'Could not decrypt the backup. Check your recovery password.' };
 
     const SQL = await initSqlJs();
+    // Stop any in-flight sync against the old DB before swapping.
+    try { if (_syncWorker) _syncWorker.stop(); } catch (_) {}
     const newDb = new SQL.Database(decrypted);
     db = newDb;
     // Ensure sync columns exist in restored DB and mark all records for re-sync
@@ -6388,16 +6634,20 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
     db.run(`CREATE TABLE IF NOT EXISTS sync_conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, attendance_id INTEGER, sync_id TEXT, reason TEXT, local_version INTEGER DEFAULT 0, remote_version INTEGER DEFAULT 0, local_updated_at TEXT, remote_updated_at TEXT, remote_status TEXT, local_snapshot TEXT, remote_snapshot TEXT, created_at TEXT DEFAULT (datetime('now')), resolved_at TEXT DEFAULT NULL, resolution_note TEXT DEFAULT '')`);
     backfillSyncIds();
-    dbRun("UPDATE attendances SET sync_dirty=1");
-    rebuildSyncQueueForDirtyRecords();
+    dbRun('UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE deleted_at IS NULL');
+    const queued = rebuildSyncQueueForDirtyRecords();
+    const markedRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1 AND deleted_at IS NULL');
+    const marked = markedRow ? (markedRow.c || 0) : 0;
     resetSyncPullCursor();
     saveDb();
+    resetSyncWorkerAfterDbSwap('cloud-restore');
+    try { ensureBackupFolderExists(); } catch (_) {}
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
     setTimeout(() => { _runQuickBackupAsync().catch(() => {}); }, 3000);
-    console.log('[Restore] Database restored from cloud backup:', backupKey);
-    return { ok: true };
+    console.log('[Restore] Database restored from cloud backup:', backupKey, 'marked=' + marked + ' queued=' + queued);
+    return { ok: true, marked, queued };
   } catch (e) {
     console.error('[Restore] Cloud restore failed:', e && e.message ? e.message : e);
     return { ok: false, error: e && e.message ? e.message : 'Restore failed' };
@@ -6458,6 +6708,7 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     const decrypted = await decryptBufferWithRecovery(rawBuf);
     if (!decrypted) return { ok: false, error: 'Could not decrypt the backup. Check your recovery password.' };
     const SQL = await initSqlJs();
+    try { if (_syncWorker) _syncWorker.stop(); } catch (_) {}
     const newDb = new SQL.Database(decrypted);
     db = newDb;
     _safeAddColumn('attendances', "sync_id TEXT DEFAULT NULL");
@@ -6468,16 +6719,23 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
     db.run(`CREATE TABLE IF NOT EXISTS sync_conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, attendance_id INTEGER, sync_id TEXT, reason TEXT, local_version INTEGER DEFAULT 0, remote_version INTEGER DEFAULT 0, local_updated_at TEXT, remote_updated_at TEXT, remote_status TEXT, local_snapshot TEXT, remote_snapshot TEXT, created_at TEXT DEFAULT (datetime('now')), resolved_at TEXT DEFAULT NULL, resolution_note TEXT DEFAULT '')`);
     backfillSyncIds();
-    dbRun("UPDATE attendances SET sync_dirty=1");
-    rebuildSyncQueueForDirtyRecords();
+    dbRun('UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE deleted_at IS NULL');
+    const queued = rebuildSyncQueueForDirtyRecords();
+    const markedRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1 AND deleted_at IS NULL');
+    const marked = markedRow ? (markedRow.c || 0) : 0;
     resetSyncPullCursor();
     saveDb();
+    resetSyncWorkerAfterDbSwap('local-restore');
+    try { ensureBackupFolderExists(); } catch (_) {}
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
     setTimeout(() => { _runQuickBackupAsync().catch(() => {}); }, 3000);
-    console.log('[Restore] Database restored from local backup:', resolved);
-    return { ok: true };
+    console.log('[Restore] Database restored from local backup:', resolved, 'marked=' + marked + ' queued=' + queued);
+    if (marked !== queued) {
+      console.warn('[Restore] Mark/queue mismatch after local restore: marked=' + marked + ' queued=' + queued);
+    }
+    return { ok: true, marked, queued, totalRecords: marked };
   } catch (e) {
     console.error('[Restore] Local restore failed:', e && e.message ? e.message : e);
     return { ok: false, error: e && e.message ? e.message : 'Restore failed' };
@@ -6501,10 +6759,122 @@ ipcMain.handle('sync-now', async () => {
 
 ipcMain.handle('sync-full-resync', async () => {
   try {
-    await runFullSyncFromCloud();
-    return { ok: true };
+    const result = await runFullSyncFromCloud();
+    return {
+      ok: true,
+      received: result && result.received != null ? result.received : 0,
+      merged: result && result.pulled != null ? result.pulled : 0,
+      decryptFailed: result && result.decryptFailed != null ? result.decryptFailed : 0,
+      noMasterKeySkipped: result && result.noMasterKeySkipped != null ? result.noMasterKeySkipped : 0,
+      conflicts: result && result.conflicts != null ? result.conflicts : 0,
+    };
   } catch (e) {
-    return { ok: false, error: e && e.message ? e.message : 'Full re-sync failed' };
+    const msg = e && e.message ? e.message : 'Full re-sync failed';
+    const rateLimited = /too many requests|rate limit/i.test(msg) || (e && e.statusCode === 429);
+    return { ok: false, error: msg, rateLimited };
+  }
+});
+
+ipcMain.handle('sync-export-record-index', async () => {
+  try {
+    if (!db) return { ok: false, error: 'Database not ready', records: [] };
+    const rows = dbAll(
+      `SELECT id, sync_id, client_name, station_name, dscc_ref, attendance_date, status,
+              updated_at, deleted_at, sync_dirty, sync_version
+         FROM attendances
+        ORDER BY updated_at DESC`
+    ) || [];
+    const records = buildEmergencyRecordIndex(rows);
+    return {
+      ok: true,
+      exportedAt: new Date().toISOString(),
+      schemaVersion: getDbSchemaVersion(),
+      totalRecords: records.filter((r) => !r.deletedAt).length,
+      recordCountIncludingDeleted: records.length,
+      records,
+      note: 'Metadata only — note body / data JSON intentionally omitted for safe incident export.',
+    };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Export failed', records: [] };
+  }
+});
+
+ipcMain.handle('sync-reupload-all', async () => {
+  try {
+    const mark = markAllLocalRecordsForCloudReupload();
+    if (!mark.ok) return mark;
+    const drain = await drainPendingSyncUploads({ maxCycles: 40 });
+    const w = getSyncWorker();
+    if (drain.stoppedReason === 'rate_limited') {
+      markAllLocalRecordsForCloudReupload();
+      return {
+        ok: false,
+        code: 'RATE_LIMITED',
+        error: 'Re-upload paused after Too many requests. Local records kept dirty — retry in a few minutes.',
+        marked: mark.marked,
+        queued: mark.queued,
+        drain,
+        lastError: drain.lastError || null,
+      };
+    }
+    // Prove the cloud actually has records after a supposed successful push.
+    // Mac CDP (2026-09): dirty drained to 0 / lastSuccessfulPushAt set while
+    // pull received=0 — Windows Full re-sync then stays empty.
+    resetSyncPullCursor();
+    saveDb();
+    let verify = { received: 0, pulled: 0 };
+    try {
+      verify = await syncPull({ correlationId: generateCorrelationId() }) || verify;
+    } catch (pullErr) {
+      // Re-queue so a transient pull error does not look like a finished upload.
+      markAllLocalRecordsForCloudReupload();
+      return {
+        ok: false,
+        code: 'VERIFY_PULL_FAILED',
+        error: pullErr && pullErr.message ? pullErr.message : 'Verify pull failed after re-upload',
+        marked: mark.marked,
+        queued: mark.queued,
+        drain,
+      };
+    }
+    if ((verify.received || 0) === 0 && mark.marked > 0) {
+      markAllLocalRecordsForCloudReupload();
+      const diag = w ? w.getDiagnostics() : {};
+      return {
+        ok: false,
+        code: 'CLOUD_EMPTY_AFTER_PUSH',
+        error: 'Cloud still has no records after re-upload. Local records were kept dirty for retry. Check licence key and try again shortly if rate-limited.',
+        marked: mark.marked,
+        queued: mark.queued,
+        drain,
+        verifyReceived: 0,
+        lastError: diag.lastError || null,
+      };
+    }
+    const dirtyLeft = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+    if (dirtyLeft && dirtyLeft.c > 0) {
+      return {
+        ok: false,
+        code: 'UPLOAD_INCOMPLETE',
+        error: 'Re-upload finished verify but ' + dirtyLeft.c + ' local records are still dirty. Retry Re-upload all.',
+        marked: mark.marked,
+        queued: mark.queued,
+        drain,
+        verifyReceived: verify.received || 0,
+        dirtyRemaining: dirtyLeft.c,
+      };
+    }
+    return {
+      ok: true,
+      marked: mark.marked,
+      queued: mark.queued,
+      drain,
+      verifyReceived: verify.received || 0,
+      verifyMerged: verify.pulled || 0,
+      lastError: w ? (w.getDiagnostics().lastError || null) : null,
+    };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Re-upload failed' };
   }
 });
 
@@ -6537,7 +6907,7 @@ ipcMain.handle('sync-status', () => {
   const pending = pendingCount + failedCount + blockedCount;
   const dirtyPushCount = dirtyCount ? dirtyCount.c : 0;
   const lastPull = getLastPullStats();
-  return {
+  const statusBase = {
     enabled: !!apiUrl,
     inProgress: diag.inProgress || false,
     lastSync: lastSync !== '1970-01-01T00:00:00.000Z' ? lastSync : diag.lastSyncAt || null,
@@ -6551,7 +6921,12 @@ ipcMain.handle('sync-status', () => {
     lastAttempts,
     connectivity: diag.connectivity,
     lastError: diag.lastError,
+    lastSuccessfulPushAt: diag.lastSuccessfulPushAt || null,
+    _diag: diag,
   };
+  const recovery = buildSyncRecoveryHints(statusBase);
+  delete statusBase._diag;
+  return Object.assign(statusBase, recovery);
 });
 
 ipcMain.handle('sync-schedule-on-reconnect', () => {

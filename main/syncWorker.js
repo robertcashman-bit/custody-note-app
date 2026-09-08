@@ -34,6 +34,12 @@
  */
 const crypto = require('crypto');
 const { encryptSyncEnvelope } = require('../lib/syncRecordCrypto');
+const {
+  assertPushAccepted,
+  createRateLimitGate,
+  RATE_LIMIT_COOLDOWN_MS,
+} = require('../lib/syncPushAck');
+const { normalizeLicenceKeyForSync } = require('../lib/licenceKeyNormalize');
 
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
@@ -55,7 +61,10 @@ function isRetryableError(err) {
   const code = err.code || err.statusCode;
   if (code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ECONNRESET' ||
       code === 'ENETUNREACH' || code === 'EAI_AGAIN') return true;
+  if (code === 'PUSH_INCOMPLETE') return true;
   if (msg.includes('timeout') || msg.includes('network') || msg.includes('aborted')) return true;
+  // Rate-limit bodies often say "Too many requests" without embedding "429".
+  if (msg.includes('too many requests') || msg.includes('rate limit')) return true;
   const m = msg.match(/server error (\d+)/i);
   const status = code || (m && parseInt(m[1], 10));
   if (status >= 500 || status === 429) return true;
@@ -87,6 +96,7 @@ function generateCorrelationId() {
  *   onStatusChange (status) → called with connectivity/sync status
  *   sendToRenderer (channel, data) → IPC to renderer
  *   syncPull () → Promise
+ *   logSyncAttempt (optional)
  */
 function createSyncWorker(ctx) {
   let _timer = null;
@@ -94,7 +104,12 @@ function createSyncWorker(ctx) {
   let _connectivityState = 'unknown';
   let _lastSyncAt = null;
   let _lastSuccessfulPushAt = 0;
+  let _lastVerifiedCloudPushAt = null;
+  let _lastPushStats = { attempted: 0, written: 0, ok: false, at: null, error: null };
   let _lastError = null;
+  const rateLimitGate = createRateLimitGate({
+    cooldownMs: (ctx && ctx.rateLimitCooldownMs) || RATE_LIMIT_COOLDOWN_MS,
+  });
 
   function setConnectivity(state) {
     if (_connectivityState !== state) {
@@ -258,18 +273,20 @@ function createSyncWorker(ctx) {
     if (!apiUrl) throw new Error('No API URL');
     const data = ctx.readLicenceData && ctx.readLicenceData();
     if (!data || !data.key) throw new Error('No licence');
+    const licenceKey = normalizeLicenceKeyForSync(data.key);
+    if (!licenceKey) throw new Error('No licence');
     const payloads = queueItems.map((item) => buildPushPayload(item));
     const correlationId = generateCorrelationId();
     const resp = await ctx.httpPost(
       `${apiUrl.replace(/\/$/, '')}/api/sync/push`,
       {
-        key: data.key,
+        key: licenceKey,
         machineId: ctx.getMachineId(),
         records: payloads.map((p) => p.record),
       },
       { timeout: SYNC_REQUEST_TIMEOUT_MS, correlationId }
     );
-    if (!resp || !resp.ok) throw new Error(resp && resp.error ? resp.error : 'Push failed');
+    assertPushAccepted(resp, payloads.length);
     return payloads;
   }
 
@@ -297,18 +314,49 @@ function createSyncWorker(ctx) {
         }
         _lastSyncAt = new Date().toISOString();
         _lastSuccessfulPushAt = Date.now();
+        _lastVerifiedCloudPushAt = new Date().toISOString();
+        _lastPushStats = {
+          attempted: payloads.length,
+          written: payloads.length,
+          ok: true,
+          at: _lastVerifiedCloudPushAt,
+          error: null,
+        };
         _lastError = null;
+        rateLimitGate.clear();
         setConnectivity('api_available');
+        if (ctx.logSyncAttempt) {
+          ctx.logSyncAttempt(generateCorrelationId(), 'push', payloads.length, true, null);
+        }
       } catch (e) {
         const retryable = isRetryableError(e);
         for (const item of items) {
           markFailed(item.id, e, retryable);
         }
         _lastError = e && e.message ? e.message : String(e);
+        _lastPushStats = {
+          attempted: items.length,
+          written: 0,
+          ok: false,
+          at: new Date().toISOString(),
+          error: _lastError,
+        };
         // H32 — invalidate the "recent successful push" cache on any error so
         // the next cycle actually hits /api/health instead of blindly
         // claiming api_available for up to 60 seconds.
         _lastSuccessfulPushAt = 0;
+        if (rateLimitGate.noteError(e)) {
+          notifyRenderer({
+            status: 'error',
+            lastError: _lastError,
+            retryable: true,
+            rateLimited: true,
+            rateLimitRemainingMs: rateLimitGate.remainingMs(),
+          });
+        }
+        if (ctx.logSyncAttempt) {
+          ctx.logSyncAttempt(generateCorrelationId(), 'push', items.length, false, _lastError);
+        }
         if (!retryable) setConnectivity('auth_required');
         else setConnectivity('internet_available_api_unreachable');
         notifyRenderer({ status: 'error', lastError: _lastError, retryable });
@@ -396,6 +444,17 @@ function createSyncWorker(ctx) {
     if (_inProgress) return;
     _inProgress = true;
     try {
+      if (rateLimitGate.isBlocked()) {
+        _lastError = rateLimitGate.reason() || 'Too many requests. Please try again later.';
+        notifyRenderer({
+          status: 'error',
+          lastError: _lastError,
+          retryable: true,
+          rateLimited: true,
+          rateLimitRemainingMs: rateLimitGate.remainingMs(),
+        });
+        return;
+      }
       const conn = await checkConnectivity();
       setConnectivity(conn);
       if (conn === 'offline' || conn === 'auth_required') {
@@ -404,9 +463,14 @@ function createSyncWorker(ctx) {
       await ensureCanonicalKeyOnce();
       recoverStuckItems();
       await processBatch();
+      if (rateLimitGate.isBlocked()) {
+        // Do not spam /api/sync/pull into the same 120/hour budget after a 429.
+        return;
+      }
       if (ctx.syncPull) {
         const pullResult = await ctx.syncPull().catch((e) => {
           _lastError = e && e.message ? e.message : String(e);
+          rateLimitGate.noteError(e);
           notifyRenderer({ status: 'error', lastError: _lastError, retryable: isRetryableError(e) });
           return { pulled: 0, decryptFailed: 0, received: 0 };
         });
@@ -507,6 +571,9 @@ function createSyncWorker(ctx) {
       lastError: _lastError,
       inProgress: _inProgress,
       lastSuccessfulPushAt: _lastSuccessfulPushAt || null,
+      lastVerifiedCloudPushAt: _lastVerifiedCloudPushAt,
+      lastPush: { ..._lastPushStats },
+      rateLimit: rateLimitGate.snapshot(),
       queueItems,
       conflictItems,
     };
@@ -527,10 +594,41 @@ function createSyncWorker(ctx) {
         );
       }
       if (stuck.length > 0) ctx.flushDb && ctx.flushDb();
+      rateLimitGate.clear();
       return stuck.length;
     } catch (e) {
       return 0;
     }
+  }
+
+  /**
+   * After a DB restore / file swap, drop in-flight cycle state so markSynced
+   * from a pre-restore push cannot clear dirty flags on the new database.
+   * Caller should stop()+recreate the worker for a full reset; this clears
+   * soft state when the same instance must keep running.
+   */
+  function resetRuntimeState(reason) {
+    _inProgress = false;
+    _lastError = null;
+    _lastSuccessfulPushAt = 0;
+    _canonicalKeyDone = false;
+    _canonicalKeyLastTry = 0;
+    rateLimitGate.clear();
+    console.info('[SyncWorker] Runtime state reset:', reason || 'manual');
+  }
+
+  /** Wait for an in-flight runCycle to finish (Full re-sync must not race cursor). */
+  async function waitUntilIdle(timeoutMs = 60000) {
+    const limit = Math.max(0, Number(timeoutMs) || 0);
+    const start = Date.now();
+    while (_inProgress) {
+      if (Date.now() - start >= limit) {
+        console.warn('[SyncWorker] waitUntilIdle timed out after', limit, 'ms');
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return !_inProgress;
   }
 
   return {
@@ -541,6 +639,8 @@ function createSyncWorker(ctx) {
     runCycle,
     getDiagnostics,
     forceRetryAll,
+    resetRuntimeState,
+    waitUntilIdle,
     getConnectivity: () => _connectivityState,
   };
 }
@@ -549,6 +649,7 @@ module.exports = {
   createSyncWorker,
   generateQueueId,
   isRetryableError,
+  assertPushAccepted,
   getNextAttemptMs,
   SYNC_POLL_INTERVAL_MS,
   SCHEDULE_SOON_DEBOUNCE_MS,
@@ -561,4 +662,5 @@ module.exports = {
   MAX_RECORDS_PER_CYCLE,
   BLOCKED_RECOVERY_COOLDOWN_MS,
   MAX_BLOCKED_AUTO_RECOVERIES,
+  RATE_LIMIT_COOLDOWN_MS,
 };
