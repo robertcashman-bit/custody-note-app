@@ -409,6 +409,7 @@ contextBridge.exposeInMainWorld('api', {
   syncNow: () => ipcRenderer.invoke('sync-now'),
   syncFullResync: () => ipcRenderer.invoke('sync-full-resync'),
   syncReuploadAll: () => ipcRenderer.invoke('sync-reupload-all'),
+  syncExportRecordIndex: () => ipcRenderer.invoke('sync-export-record-index'),
   syncStatus: () => ipcRenderer.invoke('sync-status'),
   syncScheduleOnReconnect: () => ipcRenderer.invoke('sync-schedule-on-reconnect'),
   syncGetDiagnostics: () => ipcRenderer.invoke('sync-get-diagnostics'),

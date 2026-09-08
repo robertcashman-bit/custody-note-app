@@ -120,6 +120,7 @@ const {
   deriveSyncPhase,
 } = require('./lib/syncRecoveryHints');
 const { normalizeLicenceKeyForSync } = require('./lib/licenceKeyNormalize');
+const { buildLocalCloudHealth, buildEmergencyRecordIndex } = require('./lib/syncHealth');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
@@ -2384,6 +2385,17 @@ function buildSyncRecoveryHints(statusBase) {
     lastVerifiedCloudPushAt,
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
   });
+  const schemaVersion = getDbSchemaVersion();
+  const health = buildLocalCloudHealth({
+    localCount: totalRecords,
+    lastPullReceived: lastPull.received || 0,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    dirtyPushCount,
+    pendingChanges,
+    lastVerifiedCloudPushAt,
+    syncPhase,
+    schemaVersion,
+  });
   return {
     dbFileBytes,
     emptyLargeDb,
@@ -2391,12 +2403,24 @@ function buildSyncRecoveryHints(statusBase) {
     suggestReuploadAll: localFullCloudEmpty,
     suppressSyncedFooter,
     syncPhase,
+    schemaVersion,
+    health,
     lastVerifiedCloudPushAt,
     lastPush: diag.lastPush || null,
     rateLimit: diag.rateLimit || null,
     rateLimited,
     rateLimitRemainingMs: rateLimited && diag.rateLimit ? diag.rateLimit.remainingMs : 0,
   };
+}
+
+function getDbSchemaVersion() {
+  if (!db) return 0;
+  try {
+    const row = dbGet('SELECT MAX(version) as v FROM schema_version');
+    return row && row.v != null ? Number(row.v) || 0 : 0;
+  } catch (_) {
+    return 0;
+  }
 }
 
 function clearOpenSyncConflicts(attendanceId, resolutionNote) {
@@ -6748,6 +6772,30 @@ ipcMain.handle('sync-full-resync', async () => {
     const msg = e && e.message ? e.message : 'Full re-sync failed';
     const rateLimited = /too many requests|rate limit/i.test(msg) || (e && e.statusCode === 429);
     return { ok: false, error: msg, rateLimited };
+  }
+});
+
+ipcMain.handle('sync-export-record-index', async () => {
+  try {
+    if (!db) return { ok: false, error: 'Database not ready', records: [] };
+    const rows = dbAll(
+      `SELECT id, sync_id, client_name, station_name, dscc_ref, attendance_date, status,
+              updated_at, deleted_at, sync_dirty, sync_version
+         FROM attendances
+        ORDER BY updated_at DESC`
+    ) || [];
+    const records = buildEmergencyRecordIndex(rows);
+    return {
+      ok: true,
+      exportedAt: new Date().toISOString(),
+      schemaVersion: getDbSchemaVersion(),
+      totalRecords: records.filter((r) => !r.deletedAt).length,
+      recordCountIncludingDeleted: records.length,
+      records,
+      note: 'Metadata only — note body / data JSON intentionally omitted for safe incident export.',
+    };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Export failed', records: [] };
   }
 });
 

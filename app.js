@@ -3427,6 +3427,7 @@ var REQUIRED_FIELD_KEYS = [
     var statusEl = document.getElementById('cross-device-sync-status');
     var section = document.getElementById('cross-device-sync-section');
     var hintEl = document.getElementById('cross-device-sync-recovery-hint');
+    var healthEl = document.getElementById('cross-device-sync-health');
     if (!statusEl || !section) return;
     if (!st || !st.enabled) {
       section.style.display = 'none';
@@ -3435,6 +3436,7 @@ var REQUIRED_FIELD_KEYS = [
     section.style.display = '';
     var lines = [];
     lines.push('Local records: ' + (st.totalRecords != null ? st.totalRecords : '\u2014'));
+    if (st.syncPhase) lines.push('Phase: ' + st.syncPhase);
     if (st.lastSync) lines.push('Last pull: ' + formatSyncTime(st.lastSync));
     var pending = st.pendingChanges || 0;
     var dirty = st.dirtyPushCount || 0;
@@ -3457,12 +3459,21 @@ var REQUIRED_FIELD_KEYS = [
       lines.push('Last push: ' + (st.lastPush.ok ? ('ok wrote ' + (st.lastPush.written || 0)) : ('failed — ' + (st.lastPush.error || 'error'))));
     }
     statusEl.textContent = lines.join(' \u00b7 ');
-    statusEl.style.color = (lp.decryptFailed > 0 || st.failedCount > 0 || st.localFullCloudEmpty || st.emptyLargeDb || (st.rateLimit && st.rateLimit.blocked)) ? '#b45309' : '';
+    statusEl.style.color = (lp.decryptFailed > 0 || st.failedCount > 0 || st.localFullCloudEmpty || st.emptyLargeDb || (st.rateLimit && st.rateLimit.blocked) || (st.health && st.health.cloudLikelyEmpty)) ? '#b45309' : '';
+    if (healthEl) {
+      var h = st.health || {};
+      healthEl.textContent =
+        'Health: local=' + (h.localCount != null ? h.localCount : (st.totalRecords || 0)) +
+        ' · last cloud pull received=' + (h.lastCloudPullReceived != null ? h.lastCloudPullReceived : (lp.received || 0)) +
+        ' · pending uploads=' + (h.pendingUploads != null ? h.pendingUploads : (pending + dirty)) +
+        ' · schema v' + (st.schemaVersion != null ? st.schemaVersion : (h.schemaVersion != null ? h.schemaVersion : '?')) +
+        (h.cloudLikelyEmpty ? ' · cloud likely empty for this licence' : '');
+    }
     if (hintEl) {
       if (st.emptyLargeDb) {
         hintEl.style.display = '';
         hintEl.textContent = 'Recovery: database file is about ' + Math.round((st.dbFileBytes || 0) / 1024) + ' KB but lists 0 records. Restore a local/cloud backup, or on the computer with your data use Re-upload all local records to cloud, then Full re-sync here.';
-      } else if (st.localFullCloudEmpty || st.suggestReuploadAll) {
+      } else if (st.localFullCloudEmpty || st.suggestReuploadAll || (st.health && st.health.cloudLikelyEmpty)) {
         hintEl.style.display = '';
         hintEl.textContent = 'Recovery: this computer has local records but the cloud pull received none. Click Re-upload all local records to cloud so Windows/Mac secondary devices can sync.';
       } else {
@@ -15760,6 +15771,14 @@ pdfAuditFooterHtml(d, settings) +
         lines.push('Last error:    ' + (diag.lastError || status.lastError || 'none'));
         lines.push('In progress:   ' + (diag.inProgress ? 'yes' : 'no'));
         lines.push('Last push ok:  ' + (diag.lastSuccessfulPushAt ? new Date(diag.lastSuccessfulPushAt).toISOString() : 'never'));
+        lines.push('Sync phase:    ' + (status.syncPhase || (status.health && status.health.syncPhase) || '—'));
+        lines.push('Schema ver:    ' + (status.schemaVersion != null ? status.schemaVersion : '—'));
+        if (status.health) {
+          lines.push('Health local:  ' + status.health.localCount);
+          lines.push('Health pull:   ' + status.health.lastCloudPullReceived + (status.health.pulledFromEpoch ? ' (from-epoch)' : ''));
+          lines.push('Health pending:' + status.health.pendingUploads);
+          lines.push('Cloud empty?:  ' + (status.health.cloudLikelyEmpty ? 'LIKELY' : 'no'));
+        }
         lines.push('');
         lines.push('=== BACKUP ===');
         lines.push('State:         ' + (backup.state || 'unknown'));
@@ -17765,6 +17784,51 @@ pdfAuditFooterHtml(d, settings) +
         refreshSyncCounts();
       }).catch(function(err) {
         showToast('Re-upload failed: ' + (err && err.message || err), 'error');
+        if (statusEl) { statusEl.textContent = ''; }
+      }).finally(function() { btn.disabled = false; });
+    });
+
+    document.getElementById('btn-sync-open-diagnostics')?.addEventListener('click', function() {
+      try {
+        var ov = document.getElementById('sync-diagnostics-overlay');
+        if (!ov) {
+          showToast('Sync diagnostics panel not available', 'error');
+          return;
+        }
+        if (typeof populateDiagnosticsPanel === 'function') populateDiagnosticsPanel();
+        ov.style.display = 'flex';
+      } catch (e) {
+        showToast('Could not open sync diagnostics', 'error');
+      }
+    });
+
+    document.getElementById('btn-sync-export-index')?.addEventListener('click', function() {
+      if (!window.api || !window.api.syncExportRecordIndex) return;
+      var btn = this;
+      var statusEl = document.getElementById('cross-device-sync-action-status');
+      btn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Exporting record index\u2026'; statusEl.style.color = '#d97706'; }
+      window.api.syncExportRecordIndex().then(function(res) {
+        if (!res || !res.ok) {
+          showToast('Export failed: ' + ((res && res.error) || 'Unknown error'), 'error');
+          if (statusEl) { statusEl.textContent = (res && res.error) || 'Export failed'; statusEl.style.color = '#dc2626'; }
+          return;
+        }
+        var blob = new Blob([JSON.stringify(res, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'custody-note-record-index-' + new Date().toISOString().slice(0, 10) + '.json';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function() { try { URL.revokeObjectURL(url); a.remove(); } catch (_) {} }, 500);
+        showToast('Exported ' + (res.totalRecords || 0) + ' record index entries (no note text)', 'success');
+        if (statusEl) {
+          statusEl.textContent = 'Exported index: ' + (res.totalRecords || 0) + ' active / ' + (res.recordCountIncludingDeleted || 0) + ' including deleted';
+          statusEl.style.color = 'green';
+        }
+      }).catch(function(err) {
+        showToast('Export failed: ' + (err && err.message || err), 'error');
         if (statusEl) { statusEl.textContent = ''; }
       }).finally(function() { btn.disabled = false; });
     });

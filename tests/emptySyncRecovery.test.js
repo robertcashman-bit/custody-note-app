@@ -51,6 +51,79 @@ describe('PRESERVE — inventory tooling is read-only', () => {
     assert.match(rcaDoc, /written/);
     assert.match(rcaDoc, /120\/hour/);
   });
+
+  it('RCA covers both deep-dive and data-integrity mandates', () => {
+    assert.match(rcaDoc, /Dual-mandate coverage checklist/);
+    assert.match(rcaDoc, /Record lifecycle map/);
+    assert.match(rcaDoc, /Cassidy Note = Custody Note|CUSTODY NOTE DATA INTEGRITY/);
+    assert.match(rcaDoc, /PRESERVE/);
+    assert.match(rcaDoc, /schemaVersion/);
+    assert.match(rcaDoc, /Yesterday/);
+  });
+});
+
+describe('Data & Sync health + emergency index', () => {
+  const { buildLocalCloudHealth, buildEmergencyRecordIndex } = require('../lib/syncHealth');
+
+  it('flags cloudLikelyEmpty only for from-epoch empty pull with local data', () => {
+    assert.strictEqual(
+      buildLocalCloudHealth({
+        localCount: 66,
+        lastPullReceived: 0,
+        pulledFromEpoch: true,
+        dirtyPushCount: 0,
+        pendingChanges: 0,
+        syncPhase: 'local_saved',
+        schemaVersion: 2,
+      }).cloudLikelyEmpty,
+      true
+    );
+    assert.strictEqual(
+      buildLocalCloudHealth({
+        localCount: 66,
+        lastPullReceived: 0,
+        pulledFromEpoch: false,
+        dirtyPushCount: 0,
+        pendingChanges: 0,
+      }).cloudLikelyEmpty,
+      false
+    );
+  });
+
+  it('emergency index omits note body fields', () => {
+    const idx = buildEmergencyRecordIndex([
+      {
+        id: 1,
+        sync_id: 'abc',
+        client_name: 'Smith',
+        station_name: 'Tonbridge',
+        dscc_ref: 'D1',
+        attendance_date: '2026-09-07',
+        status: 'completed',
+        updated_at: '2026-09-07T12:00:00.000Z',
+        deleted_at: null,
+        sync_dirty: 0,
+        sync_version: 3,
+        data: '{"secret":"MUST_NOT_APPEAR"}',
+      },
+    ]);
+    assert.strictEqual(idx.length, 1);
+    assert.strictEqual(idx[0].clientName, 'Smith');
+    assert.strictEqual(idx[0].syncId, 'abc');
+    assert.ok(!('data' in idx[0]));
+    assert.ok(!JSON.stringify(idx).includes('MUST_NOT_APPEAR'));
+  });
+
+  it('product wiring exposes Data & Sync health and export index', () => {
+    assert.match(indexHtml, /Data &amp; Sync|Data & Sync/);
+    assert.match(indexHtml, /btn-sync-export-index/);
+    assert.match(indexHtml, /btn-sync-open-diagnostics/);
+    assert.match(preloadJs, /syncExportRecordIndex/);
+    assert.match(mainJs, /sync-export-record-index/);
+    assert.match(mainJs, /buildLocalCloudHealth/);
+    assert.match(mainJs, /getDbSchemaVersion/);
+    assert.match(appJs, /cross-device-sync-health/);
+  });
 });
 
 describe('Push ack — durable write required before dirty clear', () => {

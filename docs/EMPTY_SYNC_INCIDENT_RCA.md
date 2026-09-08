@@ -57,6 +57,51 @@ Multiple verified client defects combined into one production failure class (not
 
 ---
 
+## Record lifecycle map (create → UI)
+
+1. **Create/edit** (renderer) → SQLite `attendances` row with `sync_id` UUID, `sync_dirty=1`, `sync_version++`
+2. **Queue** → `sync_queue` pending upsert (`migrateSyncDirtyToQueue` / restore rebuild)
+3. **Push** → worker batch → `/api/sync/push` with normalised licence key → require `written >= sent` → only then clear dirty + log push attempt
+4. **Licence association** → server stores under licence hash (not machine id); machine id is metadata
+5. **Pull** → `/api/sync/pull` since cursor (Full re-sync resets to epoch) → decrypt envelope → merge/conflict
+6. **UI** → Home/list refresh; footer phase; Settings **Data & Sync** health (local vs last cloud pull)
+
+---
+
+## Dual-mandate coverage checklist
+
+### (1) Deep-dive / empty-cloud / Windows empty-UI
+
+| Requirement | Status |
+|-------------|--------|
+| False push ack / empty cloud | Fixed + CDP tests |
+| Push vs pull empty / Mac CDP | Fixed + logged pushes + verify |
+| 429 rate limit | Gate + UI |
+| Re-upload path | Drain + verify |
+| Backups folder UX | Ensure on dirty + inventory warning |
+| Diagnostics | Ctrl+Shift+D + Settings Open diagnostics |
+| Canonical key | Match path retained; keys normalised |
+| Full re-sync no-op | Authoritative syncPull |
+| Licence casing | `normalizeLicenceKeyForSync` |
+
+### (2) Production data-integrity brief
+
+| Requirement | Status |
+|-------------|--------|
+| PRESERVE | Inventory script; no wipes; safety copies |
+| MAP lifecycle | This section |
+| LOCATE yesterday’s record | Mac primary; metadata export; cannot invent text |
+| AUTH/ownership | Licence-hash scoped; key normalise |
+| Sync states / queue / retry / UI honesty | `deriveSyncPhase`, drain, 429, footer |
+| Data & Sync diagnostics | Settings panel + health + schemaVersion |
+| schemaVersion | Exposed on sync-status |
+| Export / emergency backup | Record-index export (no note bodies) |
+| Autotests | emptySyncRecovery + existing sync suites |
+| Incident report | This document + PR |
+| Cassidy Note = Custody Note | Explicit |
+
+---
+
 ## Changes made (v1.9.82)
 
 - `lib/syncPushAck.js` — shared `assertPushAccepted` + `createRateLimitGate` (5 min cooldown after 429)
@@ -91,7 +136,9 @@ Multiple verified client defects combined into one production failure class (not
 | Sync now + pending counts | Existing + lastPush / rateLimit |
 | Diagnostics | Ctrl+Shift+D + Settings cross-device panel |
 | Conflict handling | Existing `sync_conflicts` path |
-| Health: local vs cloud | Re-upload verify pull; localFullCloudEmpty heuristic |
+| Health: local vs cloud | `health` on sync-status + Settings Data & Sync line |
+| schemaVersion | `getDbSchemaVersion()` on sync-status |
+| Emergency metadata export | `sync-export-record-index` (no note bodies) |
 
 ---
 
