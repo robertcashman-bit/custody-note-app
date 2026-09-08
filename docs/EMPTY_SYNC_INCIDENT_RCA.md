@@ -142,8 +142,17 @@ Do not claim production fixed until Mac verify pull and Windows Full re-sync bot
 | In-app restore marks dirty; raw swap does not | Restore updates `sync_dirty` / queue; file copy leaves prior dirty=0 |
 | After restore+sync: dirty briefly 11 then 0; pull received=0 | Mid-batch sample (20/round) + false ack cleared dirty while cloud empty |
 | `lastAttempts` pull-only | Push not logged (fixed) |
-| Windows Full re-sync → No remote records; DB ~7.5MB | Cloud empty for licence; large file with 0 active UI rows |
+| Windows Full re-sync → No remote records; DB ~7.5MB | Cloud empty for licence and/or Full re-sync worker no-op; large file with 0 active UI rows |
 | `Too many requests` | 120/hour push+pull rate limit |
+
+## Windows Full re-sync still empty while Mac “pushed”
+
+Even when treating cloud as should-contain Mac records, Windows can still show **No remote records** if:
+
+1. Full re-sync only called `worker.runCycle()`, which returns immediately when `_inProgress` or skips pull after a push 429, while IPC returned `{ ok: true }` (fixed: authoritative `syncPull` after cursor reset).
+2. Licence key casing differed between devices while server/mock hashes with `trim().toUpperCase()` (fixed: client normalises push/pull/activate keys).
+3. Cloud actually still empty for the licence (Mac false ack pre-1.9.82) — use **Re-upload all** with verify on Mac.
+4. Decrypt / missing master key — footer now distinguishes these from “No remote records”.
 
 ## Why dirty=11 is not “only 11 marked”
 
