@@ -35,6 +35,11 @@ jobs:
           echo "== Deploy and IndexNow runs (any branch/event, limit 15) =="
           gh run list --repo "$REPO" --workflow "Deploy and IndexNow" --limit 15 --json databaseId,name,status,conclusion,url,headSha,createdAt,event,displayTitle
           echo
+          echo "== Latest Deploy and IndexNow job steps =="
+          LATEST_DEPLOY=$(gh run list --repo "$REPO" --workflow "Deploy and IndexNow" --limit 1 --json databaseId -q '.[0].databaseId')
+          echo "LATEST_DEPLOY=$LATEST_DEPLOY"
+          gh run view "$LATEST_DEPLOY" --repo "$REPO" --json status,conclusion,url,jobs --jq '{status,conclusion,url,jobs:[.jobs[]|{name,status,conclusion,startedAt,completedAt,steps:[.steps[]|{name,status,conclusion}]}]}'
+          echo
           echo "== Workflows =="
           gh api "repos/$REPO/actions/workflows" --jq '.workflows[]|{name,path,state}'
           echo
