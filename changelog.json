@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.82",
+      "version": "1.9.83",
       "date": "2026-09-08",
       "latest": true,
+      "changes": [
+        "Fix Mac→Windows data copy unlock: when encryption.key cannot be decrypted by local safeStorage, quarantine the unreadable key and prompt for the recovery password instead of inventing a new master key that bricks attendances.db",
+        "Opening an existing CNDB never mints a fresh random key on key-file decrypt failure; clear errors mention the recovery password when unlock is cancelled or fails",
+        "Preserve-first: unreadable encryption.key is renamed aside (not deleted); attendances.db is never wiped"
+      ]
+    },
+    {
+      "version": "1.9.82",
+      "date": "2026-09-08",
+      "latest": false,
       "changes": [
         "Cross-device sync: do not clear local dirty flags unless push returns a confirmed written count matching the batch (blocks ok:true with written:0 / omitted written — the Mac→Windows empty-cloud failure class)",
         "Settings: Re-upload all local records to cloud — marks dirty, rebuilds sync queue, pushes, then verifies with a fresh pull; if cloud still empty, keeps records dirty and reports CLOUD_EMPTY_AFTER_PUSH",
