@@ -267,6 +267,11 @@ function getOrCreateMasterKey(options = {}) {
         || result.reason === 'fallback_no_safeStorage') {
       _needsFallbackMigration = true;
     }
+    // Legacy plaintext master.fallback must be rewritten obfuscated at rest
+    // (same behaviour as pre-extract getOrCreateMasterKey).
+    if (result.legacyPlaintextFallback) {
+      _writeFallbackKeyEncrypted(getFallbackKeyPath(), result.key);
+    }
   }
   return result.key || null;
 }
