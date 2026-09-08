@@ -64,8 +64,57 @@ describe('PRESERVE — inventory tooling is read-only', () => {
 
 describe('Data & Sync health + emergency index', () => {
   const { buildLocalCloudHealth, buildEmergencyRecordIndex } = require('../lib/syncHealth');
+  const { buildEmptyCloudAlarmMessage } = require('../lib/syncRecoveryHints');
 
-  it('flags cloudLikelyEmpty only for from-epoch empty pull with local data', () => {
+  it('flags cloudLikelyEmpty / emptyCloudAlarm for localCount>0 + cloud inventory 0', () => {
+    const h = buildLocalCloudHealth({
+      localCount: 66,
+      lastPullReceived: 0,
+      pulledFromEpoch: true,
+      dirtyPushCount: 40,
+      pendingChanges: 40,
+      lastVerifiedCloudInventory: 0,
+      syncPhase: 'empty_cloud',
+      schemaVersion: 2,
+    });
+    assert.strictEqual(h.cloudLikelyEmpty, true);
+    assert.strictEqual(h.emptyCloudAlarm, true);
+    assert.strictEqual(h.healthy, false);
+    assert.match(h.emptyCloudAlarmMessage, /Re-upload all/);
+    assert.match(h.emptyCloudAlarmMessage, /still on this device/i);
+    assert.ok(h.emptyCloudAlarmMessage.includes('Full re-sync'));
+  });
+
+  it('clears empty-cloud alarm when cloud inventory > 0', () => {
+    const h = buildLocalCloudHealth({
+      localCount: 66,
+      lastPullReceived: 0,
+      pulledFromEpoch: false,
+      dirtyPushCount: 0,
+      pendingChanges: 0,
+      lastVerifiedCloudInventory: 66,
+      lastVerifiedCloudPushAt: '2026-09-08T00:00:00.000Z',
+    });
+    assert.strictEqual(h.cloudLikelyEmpty, false);
+    assert.strictEqual(h.emptyCloudAlarm, false);
+    assert.strictEqual(h.healthy, true);
+  });
+
+  it('does not false-alarm on incremental received=0 when cloud already known non-empty', () => {
+    const h = buildLocalCloudHealth({
+      localCount: 66,
+      lastPullReceived: 0,
+      pulledFromEpoch: false,
+      dirtyPushCount: 0,
+      pendingChanges: 0,
+      lastVerifiedCloudInventory: 12,
+      lastVerifiedCloudPushAt: '2026-09-08T00:00:00.000Z',
+    });
+    assert.strictEqual(h.cloudLikelyEmpty, false);
+    assert.strictEqual(h.emptyCloudAlarm, false);
+  });
+
+  it('flags cloudLikelyEmpty for from-epoch empty pull even without persisted inventory', () => {
     assert.strictEqual(
       buildLocalCloudHealth({
         localCount: 66,
@@ -73,7 +122,7 @@ describe('Data & Sync health + emergency index', () => {
         pulledFromEpoch: true,
         dirtyPushCount: 0,
         pendingChanges: 0,
-        syncPhase: 'local_saved',
+        syncPhase: 'empty_cloud',
         schemaVersion: 2,
       }).cloudLikelyEmpty,
       true
@@ -88,6 +137,11 @@ describe('Data & Sync health + emergency index', () => {
       }).cloudLikelyEmpty,
       false
     );
+  });
+
+  it('empty-cloud alarm message recommends Re-upload all', () => {
+    assert.match(buildEmptyCloudAlarmMessage(), /Re-upload all/);
+    assert.match(buildEmptyCloudAlarmMessage(), /still on this device/i);
   });
 
   it('emergency index omits note body fields', () => {
@@ -118,11 +172,15 @@ describe('Data & Sync health + emergency index', () => {
     assert.match(indexHtml, /Data &amp; Sync|Data & Sync/);
     assert.match(indexHtml, /btn-sync-export-index/);
     assert.match(indexHtml, /btn-sync-open-diagnostics/);
+    assert.match(indexHtml, /home-empty-cloud-alarm/);
     assert.match(preloadJs, /syncExportRecordIndex/);
     assert.match(mainJs, /sync-export-record-index/);
     assert.match(mainJs, /buildLocalCloudHealth/);
     assert.match(mainJs, /getDbSchemaVersion/);
+    assert.match(mainJs, /lastVerifiedCloudInventory/);
+    assert.match(mainJs, /persistCloudInventoryAfterPull/);
     assert.match(appJs, /cross-device-sync-health/);
+    assert.match(appJs, /Cloud empty — re-upload|emptyCloudAlarm/);
   });
 });
 
@@ -165,17 +223,21 @@ describe('429 rate-limit gate — do not spam push/pull', () => {
 });
 
 describe('Recovery heuristics', () => {
+  const {
+    nextCloudInventoryCount,
+    isSyncStatusHealthy,
+    buildEmptyCloudAlarmMessage,
+  } = require('../lib/syncRecoveryHints');
+
   it('detects Windows-sized empty DB', () => {
     assert.strictEqual(detectEmptyLargeDb({ dbFileBytes: 7573 * 1024, activeAttendanceCount: 0 }), true);
     assert.strictEqual(detectEmptyLargeDb({ dbFileBytes: EMPTY_LARGE_DB_BYTES - 1, activeAttendanceCount: 0 }), false);
   });
 
-  it('flags local-full cloud-empty only after a from-epoch pull with received=0', () => {
+  it('flags local-full cloud-empty after from-epoch pull with received=0 (even when dirty)', () => {
     assert.strictEqual(
       detectLocalFullCloudEmpty({
         totalRecords: 66,
-        pendingChanges: 0,
-        dirtyPushCount: 0,
         lastPullReceived: 0,
         pullEverCompleted: true,
         pulledFromEpoch: true,
@@ -185,8 +247,16 @@ describe('Recovery heuristics', () => {
     assert.strictEqual(
       detectLocalFullCloudEmpty({
         totalRecords: 66,
-        pendingChanges: 0,
-        dirtyPushCount: 0,
+        lastPullReceived: 0,
+        pullEverCompleted: true,
+        pulledFromEpoch: true,
+        lastVerifiedCloudInventory: 0,
+      }),
+      true
+    );
+    assert.strictEqual(
+      detectLocalFullCloudEmpty({
+        totalRecords: 66,
         lastPullReceived: 0,
         pullEverCompleted: true,
         pulledFromEpoch: false,
@@ -197,24 +267,56 @@ describe('Recovery heuristics', () => {
     assert.strictEqual(
       detectLocalFullCloudEmpty({
         totalRecords: 66,
-        pendingChanges: 0,
-        dirtyPushCount: 0,
         lastPullReceived: 0,
         pullEverCompleted: false,
         pulledFromEpoch: true,
       }),
       false
     );
+  });
+
+  it('persisted inventory 0 keeps alarm; inventory >0 clears it; incremental 0 does not false-alarm', () => {
     assert.strictEqual(
       detectLocalFullCloudEmpty({
         totalRecords: 66,
-        pendingChanges: 3,
-        dirtyPushCount: 0,
         lastPullReceived: 0,
         pullEverCompleted: true,
-        pulledFromEpoch: true,
+        pulledFromEpoch: false,
+        lastVerifiedCloudInventory: 0,
+      }),
+      true
+    );
+    assert.strictEqual(
+      detectLocalFullCloudEmpty({
+        totalRecords: 66,
+        lastPullReceived: 0,
+        pullEverCompleted: true,
+        pulledFromEpoch: false,
+        lastVerifiedCloudInventory: 66,
       }),
       false
+    );
+    assert.strictEqual(
+      nextCloudInventoryCount({ previousInventory: 66, pulledFromEpoch: false, receivedCount: 0 }),
+      66,
+      'incremental received=0 must preserve known non-empty inventory'
+    );
+    assert.strictEqual(
+      nextCloudInventoryCount({ previousInventory: 0, pulledFromEpoch: false, receivedCount: 0 }),
+      0
+    );
+    assert.strictEqual(
+      nextCloudInventoryCount({ previousInventory: 0, pulledFromEpoch: true, receivedCount: 12 }),
+      12
+    );
+    assert.strictEqual(
+      nextCloudInventoryCount({ previousInventory: null, pulledFromEpoch: true, receivedCount: 0 }),
+      0
+    );
+    assert.strictEqual(
+      nextCloudInventoryCount({ previousInventory: 0, pulledFromEpoch: false, receivedCount: 3 }),
+      3,
+      'any received>0 proves cloud non-empty'
     );
   });
 
@@ -226,11 +328,41 @@ describe('Recovery heuristics', () => {
       lastPullReceived: 0,
       pullEverCompleted: true,
       pulledFromEpoch: true,
+      lastVerifiedCloudInventory: 0,
       lastVerifiedCloudPushAt: null,
     };
     assert.strictEqual(detectLocalFullCloudEmpty(args), true);
     assert.strictEqual(shouldSuppressSyncedFooter(args), true);
-    assert.strictEqual(deriveSyncPhase(args), 'local_saved');
+    assert.strictEqual(deriveSyncPhase(args), 'empty_cloud');
+    assert.strictEqual(isSyncStatusHealthy(args), false);
+    assert.match(buildEmptyCloudAlarmMessage(), /Re-upload all/);
+  });
+
+  it('empty-cloud phase wins over pending dirty queue', () => {
+    assert.strictEqual(
+      deriveSyncPhase({
+        totalRecords: 66,
+        pendingChanges: 40,
+        dirtyPushCount: 40,
+        lastPullReceived: 0,
+        pullEverCompleted: true,
+        pulledFromEpoch: true,
+        lastVerifiedCloudInventory: 0,
+      }),
+      'empty_cloud'
+    );
+    assert.strictEqual(
+      isSyncStatusHealthy({
+        totalRecords: 66,
+        pendingChanges: 40,
+        dirtyPushCount: 40,
+        lastPullReceived: 0,
+        pullEverCompleted: true,
+        pulledFromEpoch: true,
+        lastVerifiedCloudInventory: 0,
+      }),
+      false
+    );
   });
 
   it('deriveSyncPhase maps pending / rate-limited / synced honestly', () => {
@@ -239,14 +371,37 @@ describe('Recovery heuristics', () => {
     assert.strictEqual(deriveSyncPhase({ rateLimited: true, totalRecords: 66 }), 'failed');
     assert.strictEqual(
       deriveSyncPhase({
+        rateLimited: true,
+        pendingChanges: 11,
+        dirtyPushCount: 11,
+        totalRecords: 66,
+        lastVerifiedCloudInventory: 5,
+        pullEverCompleted: true,
+      }),
+      'failed'
+    );
+    assert.strictEqual(
+      deriveSyncPhase({
         totalRecords: 66,
         pendingChanges: 0,
         dirtyPushCount: 0,
         lastPullReceived: 5,
         pullEverCompleted: true,
         lastVerifiedCloudPushAt: '2026-09-08T00:00:00.000Z',
+        lastVerifiedCloudInventory: 5,
       }),
       'synced'
+    );
+    assert.strictEqual(
+      deriveSyncPhase({
+        totalRecords: 66,
+        pendingChanges: 5,
+        dirtyPushCount: 5,
+        lastPushOk: false,
+        lastVerifiedCloudInventory: 5,
+        pullEverCompleted: true,
+      }),
+      'failed'
     );
   });
 });
@@ -683,7 +838,8 @@ describe('Re-upload / restore product wiring', () => {
     assert.match(indexHtml, /btn-sync-reupload-all/);
     assert.match(indexHtml, /home-empty-db-recovery/);
     assert.match(appJs, /Rate limited/);
-    assert.match(appJs, /Cloud may be empty|DB empty/);
+    assert.match(appJs, /Cloud empty — re-upload|Cloud may be empty|DB empty/);
+    assert.match(appJs, /still on this device.*cloud has none|Re-upload all — do not use Full re-sync/i);
     assert.match(appJs, /Backup folder missing/);
     assert.match(appJs, /no remote records for this licence/i);
     assert.match(appJs, /Waiting for sync key|noMasterKeySkipped/);

@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.9.83",
+      "version": "1.9.84",
       "date": "2026-09-08",
       "latest": true,
+      "changes": [
+        "Sync honesty: persistent empty-cloud ERROR when local notes exist but a from-epoch/inventory pull proves cloud has 0 for this licence — never looks Synced/all-clear",
+        "Empty-cloud alarm no longer suppressed by dirty sync_queue (fixes gap after 1.9.82 push-ack honesty kept dirty set)",
+        "Persist lastVerifiedCloudInventory so incremental received:0 cannot clear a proven empty cloud or false-alarm a known non-empty cloud",
+        "Footer/Settings/Home: Cloud empty — re-upload message recommends Re-upload all (not Full re-sync while empty); rate-limit and unconfirmed push shown with pending dirty counts",
+        "Unit tests cover local>0+inventory0 alarm, inventory>0 clear, incremental received=0 non-empty regression, and Re-upload all copy"
+      ]
+    },
+    {
+      "version": "1.9.83",
+      "date": "2026-09-08",
+      "latest": false,
       "changes": [
         "Fix Mac→Windows data copy unlock: when encryption.key cannot be decrypted by local safeStorage, quarantine the unreadable key and prompt for the recovery password instead of inventing a new master key that bricks attendances.db",
         "Opening an existing CNDB never mints a fresh random key on key-file decrypt failure; clear errors mention the recovery password when unlock is cancelled or fails",
