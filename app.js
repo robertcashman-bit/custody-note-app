@@ -3338,14 +3338,21 @@ var REQUIRED_FIELD_KEYS = [
       var received = lp.received || 0;
       var merged = lp.merged || 0;
       var total = st.totalRecords || 0;
-      if (decryptFailed > 0) {
+      } else if (st.rateLimited || (st.rateLimit && st.rateLimit.blocked)) {
+        var minsRl = Math.max(1, Math.ceil((st.rateLimitRemainingMs || (st.rateLimit && st.rateLimit.remainingMs) || 60000) / 60000));
+        setFooterIndicator(el, 'Rate limited — retry in ~' + minsRl + 'm', 'offline', st.lastError || 'Too many requests. Full re-sync will retry after the cooldown.');
+        el.style.cursor = 'pointer';
+      } else if (decryptFailed > 0) {
         setFooterIndicator(el, decryptFailed + ' decrypt failed', 'offline', 'Remote records could not be decrypted. Use Settings \u2192 Backup \u2192 Recover from Cloud (Security tab) or Full re-sync from cloud.');
+        el.style.cursor = 'pointer';
+      } else if ((lp.noMasterKeySkipped || 0) > 0) {
+        setFooterIndicator(el, 'Waiting for sync key', 'offline', 'Cloud records arrived but this computer has no master key yet. Keep the app online so canonical key escrow can complete, then Full re-sync.');
         el.style.cursor = 'pointer';
       } else if (st.emptyLargeDb) {
         setFooterIndicator(el, 'DB empty — recover', 'offline', 'Local database file is large but lists no records. Open Settings \u2192 Backup to restore, or Full re-sync from cloud. On the computer with your data, use Re-upload all local records to cloud.');
         el.style.cursor = 'pointer';
       } else if (total === 0 && received === 0) {
-        setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Re-upload all local records to cloud (or Push all pending now) and wait for 0 pending.');
+        setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Re-upload all local records to cloud (or Push all pending now) and wait for 0 pending. Then Full re-sync here.');
         el.style.cursor = '';
       } else if (st.localFullCloudEmpty || st.suggestReuploadAll) {
         setFooterIndicator(el, 'Cloud may be empty', 'offline', 'This computer has local records but the last cloud pull received none. Use Settings \u2192 Re-upload all local records to cloud so other devices can sync.');
@@ -17668,10 +17675,37 @@ pdfAuditFooterHtml(d, settings) +
       if (statusEl) { statusEl.textContent = 'Full re-sync running\u2026'; statusEl.style.color = '#d97706'; }
       window.api.syncFullResync().then(function(res) {
         if (res && res.ok) {
-          showToast('Full re-sync complete', 'success');
-          if (statusEl) { statusEl.textContent = 'Full re-sync finished'; statusEl.style.color = 'green'; }
+          var received = res.received || 0;
+          var merged = res.merged || 0;
+          var decryptFailed = res.decryptFailed || 0;
+          var noKey = res.noMasterKeySkipped || 0;
+          if (decryptFailed > 0 || noKey > 0) {
+            showToast(
+              'Full re-sync received ' + received + ' but could not apply ' + (decryptFailed + noKey) + ' (decrypt/key). Check Security \u2192 Recover from Cloud.',
+              'error'
+            );
+            if (statusEl) {
+              statusEl.textContent = 'Received ' + received + ', merged ' + merged + ', decrypt/key issues ' + (decryptFailed + noKey);
+              statusEl.style.color = '#b45309';
+            }
+          } else if (received === 0) {
+            showToast('Full re-sync: no remote records for this licence. On the Mac with your notes use Re-upload all local records to cloud, then retry here.', 'info');
+            if (statusEl) {
+              statusEl.textContent = 'No remote records (received 0). Use Re-upload all on the device with data.';
+              statusEl.style.color = '#b45309';
+            }
+          } else {
+            showToast('Full re-sync complete — received ' + received + ', merged ' + merged, 'success');
+            if (statusEl) {
+              statusEl.textContent = 'Full re-sync: received ' + received + ', merged ' + merged;
+              statusEl.style.color = 'green';
+            }
+          }
           try { loadHomeRecent(); } catch (_) {}
           try { refreshList(); } catch (_) {}
+        } else if (res && res.rateLimited) {
+          showToast('Full re-sync rate-limited — wait a few minutes and try again', 'error');
+          if (statusEl) { statusEl.textContent = res.error || 'Rate limited'; statusEl.style.color = '#dc2626'; }
         } else {
           showToast('Full re-sync failed: ' + (res && res.error || 'Unknown error'), 'error');
           if (statusEl) { statusEl.textContent = res && res.error ? res.error : 'Failed'; statusEl.style.color = '#dc2626'; }

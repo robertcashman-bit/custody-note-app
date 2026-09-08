@@ -363,6 +363,43 @@ describe('Sync worker — dirty retention + push logging + 429 pause', () => {
     assert.strictEqual(worker.getDiagnostics().inProgress, false);
     assert.strictEqual(worker.getDiagnostics().lastError, null);
   });
+
+  it('waitUntilIdle resolves after in-progress clears', async () => {
+    const db = await initDb();
+    const api = dbApi(db);
+    let release;
+    const blocked = new Promise((resolve) => { release = resolve; });
+    const worker = createSyncWorker({
+      ...api,
+      db,
+      getSyncApiUrl: () => 'http://127.0.0.1:9',
+      readLicenceData: () => ({ key: 'cn-a-test-0532' }),
+      getMachineId: () => 'machine-a',
+      getMasterKeyHex: () => 'a'.repeat(64),
+      httpPost: async () => {
+        await blocked;
+        return { ok: true, written: 0 };
+      },
+      httpGetWithTimeout: async () => ({ statusCode: 200 }),
+      syncPull: async () => ({ pulled: 0, received: 0 }),
+      ensureCanonicalKey: async () => ({ ok: true }),
+      sendToRenderer: () => {},
+    });
+    api.dbRun(
+      `INSERT INTO attendances (sync_id, data, status, created_at, updated_at, client_name, sync_dirty, sync_version)
+       VALUES (?,?,?,?,?,?,1,1)`,
+      ['sid-idle', '{}', 'draft', new Date().toISOString(), new Date().toISOString(), 'Client']
+    );
+    const row = api.dbGet('SELECT id FROM attendances');
+    worker.enqueue(String(row.id), 'upsert');
+    const cycle = worker.runCycle();
+    const idlePromise = worker.waitUntilIdle(5000);
+    setTimeout(() => release(), 30);
+    await cycle;
+    const idle = await idlePromise;
+    assert.strictEqual(idle, true);
+    assert.strictEqual(worker.getDiagnostics().inProgress, false);
+  });
 });
 
 describe('Re-upload / restore product wiring', () => {
@@ -382,6 +419,28 @@ describe('Re-upload / restore product wiring', () => {
     assert.match(mainJs, /emptyLarge/);
   });
 
+  it('Full re-sync calls syncPull directly and returns received/merged counts', () => {
+    const idx = mainJs.indexOf('async function runFullSyncFromCloud');
+    assert.ok(idx >= 0);
+    const body = mainJs.slice(idx, idx + 2500);
+    assert.match(body, /waitUntilIdle/);
+    assert.match(body, /resetSyncPullCursor/);
+    assert.match(body, /await syncPull\(/);
+    assert.doesNotMatch(body, /await w\.runCycle\(\)/);
+    const ipcIdx = mainJs.indexOf("ipcMain.handle('sync-full-resync'");
+    const ipcBody = mainJs.slice(ipcIdx, ipcIdx + 900);
+    assert.match(ipcBody, /received:/);
+    assert.match(ipcBody, /merged:/);
+    assert.match(ipcBody, /rateLimited/);
+  });
+
+  it('push and pull send normalised licence keys', () => {
+    assert.match(mainJs, /normalizeLicenceKeyForSync/);
+    assert.match(fs.readFileSync(path.join(root, 'main/syncWorker.js'), 'utf8'), /normalizeLicenceKeyForSync/);
+    const { normalizeLicenceKeyForSync } = require('../lib/licenceKeyNormalize');
+    assert.strictEqual(normalizeLicenceKeyForSync('  cn-a-test-0532  '), 'CN-A-TEST-0532');
+  });
+
   it('UI + preload expose re-upload and recovery surfaces', () => {
     assert.match(preloadJs, /syncReuploadAll/);
     assert.match(indexHtml, /btn-sync-reupload-all/);
@@ -389,6 +448,8 @@ describe('Re-upload / restore product wiring', () => {
     assert.match(appJs, /Rate limited/);
     assert.match(appJs, /Cloud may be empty|DB empty/);
     assert.match(appJs, /Backup folder missing/);
+    assert.match(appJs, /no remote records for this licence/i);
+    assert.match(appJs, /Waiting for sync key|noMasterKeySkipped/);
   });
 
   it('restore bumps sync_version for all non-deleted rows', () => {
