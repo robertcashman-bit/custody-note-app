@@ -12,6 +12,7 @@
         "429 rate-limit gate: pause push and pull for ~5 minutes after Too many requests instead of burning the 120/hour budget on the 10s poll",
         "Home/footer/Settings: honest sync phases and recovery hints for empty-large-DB, local-full/cloud-empty (from-epoch pull only), and rate-limited; ensure Backups folder on data change",
         "Full re-sync now runs an authoritative from-epoch pull (not a silent worker no-op) and reports received/merged/decrypt counts; push/pull licence keys are normalised trim+uppercase to match cloud hashing",
+        "Re-upload all drains the full sync queue across cycles before verify-pull; restore returns marked/queued counts; false ok:true push without written can no longer clear dirty (Mac CDP empty-cloud class)",
         "Read-only storage inventory script (scripts/inventory-sync-storage.mjs) for preserve-first incident response"
       ]
     },

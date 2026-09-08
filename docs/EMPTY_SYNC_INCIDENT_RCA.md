@@ -156,4 +156,4 @@ Even when treating cloud as should-contain Mac records, Windows can still show *
 
 ## Why dirty=11 is not “only 11 marked”
 
-Restore marks **all** non-deleted rows dirty and rebuilds the full queue. CDP sampling mid-batch during a cycle that incorrectly cleared dirty explains transient pending=11 with `totalRecords=66`. Fix: stop worker before restore, return `marked`/`queued`, require confirmed writes.
+Restore marks **all** non-deleted rows dirty and rebuilds the full queue (`marked`/`queued` returned on restore). CDP sampling mid-batch during a cycle that incorrectly cleared dirty (pre-`assertPushAccepted`) explains a transient pending=11 with `totalRecords=66`. After this fix, incomplete `ok:true` pushes keep dirty=66, push attempts are logged, and **Re-upload all** drains the full queue then verify-pulls — `CLOUD_EMPTY_AFTER_PUSH` if the cloud is still empty.
