@@ -118,6 +118,9 @@ const {
   detectLocalFullCloudEmpty,
   shouldSuppressSyncedFooter,
   deriveSyncPhase,
+  nextCloudInventoryCount,
+  buildEmptyCloudAlarmMessage,
+  isSyncStatusHealthy,
 } = require('./lib/syncRecoveryHints');
 const { normalizeLicenceKeyForSync } = require('./lib/licenceKeyNormalize');
 const { buildLocalCloudHealth, buildEmergencyRecordIndex } = require('./lib/syncHealth');
@@ -2333,6 +2336,51 @@ function getAttendanceDbFileBytes() {
   }
 }
 
+function getLastVerifiedCloudInventory() {
+  if (!db) return null;
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key='lastVerifiedCloudInventory'");
+    if (!row || row.value == null || row.value === '') return null;
+    const n = Number(row.value);
+    return Number.isFinite(n) ? n : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function setLastVerifiedCloudInventory(count) {
+  if (!db) return;
+  const n = count == null ? null : Number(count);
+  if (n == null || !Number.isFinite(n)) {
+    try { dbRun("DELETE FROM settings WHERE key='lastVerifiedCloudInventory'"); } catch (_) {}
+    try { dbRun("DELETE FROM settings WHERE key='lastVerifiedCloudInventoryAt'"); } catch (_) {}
+    return;
+  }
+  dbRun(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastVerifiedCloudInventory', ?)",
+    [String(n)]
+  );
+  dbRun(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastVerifiedCloudInventoryAt', ?)",
+    [new Date().toISOString()]
+  );
+}
+
+function persistCloudInventoryAfterPull({ pulledFromEpoch, receivedCount }) {
+  const previous = getLastVerifiedCloudInventory();
+  const next = nextCloudInventoryCount({
+    previousInventory: previous,
+    pulledFromEpoch: !!pulledFromEpoch,
+    receivedCount: receivedCount || 0,
+  });
+  if (next === previous) return next;
+  // Only write when from-epoch (authoritative, including 0) or when proving non-empty.
+  if (pulledFromEpoch || (receivedCount || 0) > 0) {
+    setLastVerifiedCloudInventory(next);
+  }
+  return next;
+}
+
 function buildSyncRecoveryHints(statusBase) {
   const totalRecords = statusBase && statusBase.totalRecords != null ? statusBase.totalRecords : 0;
   const pendingChanges = statusBase && statusBase.pendingChanges != null ? statusBase.pendingChanges : 0;
@@ -2344,17 +2392,19 @@ function buildSyncRecoveryHints(statusBase) {
     activeAttendanceCount: totalRecords,
   });
   const pullEverCompleted = !!(lastPull && lastPull.at);
+  const lastVerifiedCloudInventory = getLastVerifiedCloudInventory();
   const localFullCloudEmpty = detectLocalFullCloudEmpty({
     totalRecords,
-    pendingChanges,
-    dirtyPushCount,
     lastPullReceived: lastPull.received || 0,
     pullEverCompleted,
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    lastVerifiedCloudInventory,
   });
   const diag = statusBase && statusBase._diag ? statusBase._diag : {};
   const lastVerifiedCloudPushAt = diag.lastVerifiedCloudPushAt || null;
   const rateLimited = !!(diag.rateLimit && diag.rateLimit.blocked);
+  const lastPush = diag.lastPush || null;
+  const lastPushOk = lastPush && typeof lastPush.ok === 'boolean' ? lastPush.ok : null;
   const suppressSyncedFooter = shouldSuppressSyncedFooter({
     totalRecords,
     pendingChanges,
@@ -2363,6 +2413,9 @@ function buildSyncRecoveryHints(statusBase) {
     pullEverCompleted,
     lastVerifiedCloudPushAt,
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    lastVerifiedCloudInventory,
+    rateLimited,
+    lastPushOk,
   });
   const syncPhase = deriveSyncPhase({
     inProgress: !!(statusBase && statusBase.inProgress),
@@ -2376,6 +2429,8 @@ function buildSyncRecoveryHints(statusBase) {
     pullEverCompleted,
     lastVerifiedCloudPushAt,
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    lastVerifiedCloudInventory,
+    lastPushOk,
   });
   const schemaVersion = getDbSchemaVersion();
   const health = buildLocalCloudHealth({
@@ -2385,20 +2440,43 @@ function buildSyncRecoveryHints(statusBase) {
     dirtyPushCount,
     pendingChanges,
     lastVerifiedCloudPushAt,
+    lastVerifiedCloudInventory,
     syncPhase,
     schemaVersion,
+    rateLimited,
+    lastPushOk,
+    pullEverCompleted,
+  });
+  const syncHealthy = isSyncStatusHealthy({
+    totalRecords,
+    pendingChanges,
+    dirtyPushCount,
+    lastPullReceived: lastPull.received || 0,
+    pullEverCompleted,
+    lastVerifiedCloudPushAt,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    lastVerifiedCloudInventory,
+    rateLimited,
+    lastPushOk,
+    failedCount: statusBase && statusBase.failedCount,
+    lastError: statusBase && statusBase.lastError,
+    inProgress: !!(statusBase && statusBase.inProgress),
   });
   return {
     dbFileBytes,
     emptyLargeDb,
     localFullCloudEmpty,
+    emptyCloudAlarm: localFullCloudEmpty,
+    emptyCloudAlarmMessage: localFullCloudEmpty ? buildEmptyCloudAlarmMessage() : null,
     suggestReuploadAll: localFullCloudEmpty,
     suppressSyncedFooter,
     syncPhase,
+    syncHealthy,
     schemaVersion,
     health,
     lastVerifiedCloudPushAt,
-    lastPush: diag.lastPush || null,
+    lastVerifiedCloudInventory,
+    lastPush,
     rateLimit: diag.rateLimit || null,
     rateLimited,
     rateLimitRemainingMs: rateLimited && diag.rateLimit ? diag.rateLimit.remainingMs : 0,
@@ -2701,6 +2779,14 @@ async function syncPull(opts) {
     pulledFromEpoch: pullStartedFromEpoch,
     at: new Date().toISOString(),
   };
+
+  // Persist proven cloud inventory so incremental received=0 cannot hide an
+  // empty-cloud alarm, and received>0 can clear a prior empty proof.
+  const cloudInventory = persistCloudInventoryAfterPull({
+    pulledFromEpoch: pullStartedFromEpoch,
+    receivedCount,
+  });
+  _lastPullStats.cloudInventory = cloudInventory;
 
   const correlationId = opts && opts.correlationId;
   logSyncAttempt(
