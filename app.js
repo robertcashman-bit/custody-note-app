@@ -17704,16 +17704,20 @@ pdfAuditFooterHtml(d, settings) +
       if (statusEl) { statusEl.textContent = 'Re-uploading all local records\u2026'; statusEl.style.color = '#d97706'; }
       window.api.syncReuploadAll().then(function(res) {
         if (res && res.ok) {
-          showToast('Re-upload queued: ' + (res.marked || 0) + ' record(s)', 'success');
+          showToast('Re-upload verified: cloud received ' + (res.verifyReceived || 0), 'success');
           if (statusEl) {
-            statusEl.textContent = 'Marked ' + (res.marked || 0) + ' for upload' +
-              (res.lastError ? ' — last error: ' + res.lastError : ' — sync cycle finished');
+            statusEl.textContent = 'Marked ' + (res.marked || 0) + ' — cloud verify received ' + (res.verifyReceived || 0) +
+              (res.lastError ? ' — last error: ' + res.lastError : '');
             statusEl.style.color = res.lastError ? '#b45309' : 'green';
           }
           try { loadHomeRecent(); } catch (_) {}
         } else {
-          showToast('Re-upload failed: ' + (res && res.error || 'Unknown error'), 'error');
-          if (statusEl) { statusEl.textContent = res && res.error ? res.error : 'Failed'; statusEl.style.color = '#dc2626'; }
+          var errMsg = (res && res.error) || 'Unknown error';
+          showToast('Re-upload failed: ' + errMsg, 'error');
+          if (statusEl) {
+            statusEl.textContent = (res && res.code ? res.code + ': ' : '') + errMsg;
+            statusEl.style.color = '#dc2626';
+          }
         }
         refreshSyncCounts();
       }).catch(function(err) {

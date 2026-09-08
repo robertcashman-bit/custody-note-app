@@ -2672,6 +2672,7 @@ function getSyncWorker() {
       httpGetWithTimeout,
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
       ensureCanonicalKey: () => ensureCanonicalSyncKeyNow(),
+      logSyncAttempt,
       resolveSyncConflictsForRecord: (recordId, resolutionNote) => clearOpenSyncConflicts(Number(recordId), resolutionNote),
       onStatusChange: () => {},
       sendToRenderer: (channel, data) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data); },
@@ -6458,16 +6459,18 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
     db.run(`CREATE TABLE IF NOT EXISTS sync_conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, attendance_id INTEGER, sync_id TEXT, reason TEXT, local_version INTEGER DEFAULT 0, remote_version INTEGER DEFAULT 0, local_updated_at TEXT, remote_updated_at TEXT, remote_status TEXT, local_snapshot TEXT, remote_snapshot TEXT, created_at TEXT DEFAULT (datetime('now')), resolved_at TEXT DEFAULT NULL, resolution_note TEXT DEFAULT '')`);
     backfillSyncIds();
-    dbRun("UPDATE attendances SET sync_dirty=1");
-    rebuildSyncQueueForDirtyRecords();
+    dbRun('UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE deleted_at IS NULL');
+    const queued = rebuildSyncQueueForDirtyRecords();
+    const markedRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1 AND deleted_at IS NULL');
+    const marked = markedRow ? (markedRow.c || 0) : 0;
     resetSyncPullCursor();
     saveDb();
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
     setTimeout(() => { _runQuickBackupAsync().catch(() => {}); }, 3000);
-    console.log('[Restore] Database restored from cloud backup:', backupKey);
-    return { ok: true };
+    console.log('[Restore] Database restored from cloud backup:', backupKey, 'marked=' + marked + ' queued=' + queued);
+    return { ok: true, marked, queued };
   } catch (e) {
     console.error('[Restore] Cloud restore failed:', e && e.message ? e.message : e);
     return { ok: false, error: e && e.message ? e.message : 'Restore failed' };
@@ -6538,16 +6541,18 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     db.run(`CREATE TABLE IF NOT EXISTS sync_queue (id TEXT PRIMARY KEY, record_id TEXT, operation TEXT, payload TEXT, created_at INTEGER, retry_count INTEGER, last_attempt INTEGER, status TEXT, error TEXT)`);
     db.run(`CREATE TABLE IF NOT EXISTS sync_conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, attendance_id INTEGER, sync_id TEXT, reason TEXT, local_version INTEGER DEFAULT 0, remote_version INTEGER DEFAULT 0, local_updated_at TEXT, remote_updated_at TEXT, remote_status TEXT, local_snapshot TEXT, remote_snapshot TEXT, created_at TEXT DEFAULT (datetime('now')), resolved_at TEXT DEFAULT NULL, resolution_note TEXT DEFAULT '')`);
     backfillSyncIds();
-    dbRun("UPDATE attendances SET sync_dirty=1");
-    rebuildSyncQueueForDirtyRecords();
+    dbRun('UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE deleted_at IS NULL');
+    const queued = rebuildSyncQueueForDirtyRecords();
+    const markedRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1 AND deleted_at IS NULL');
+    const marked = markedRow ? (markedRow.c || 0) : 0;
     resetSyncPullCursor();
     saveDb();
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
     setTimeout(() => { _runQuickBackupAsync().catch(() => {}); }, 3000);
-    console.log('[Restore] Database restored from local backup:', resolved);
-    return { ok: true };
+    console.log('[Restore] Database restored from local backup:', resolved, 'marked=' + marked + ' queued=' + queued);
+    return { ok: true, marked, queued };
   } catch (e) {
     console.error('[Restore] Local restore failed:', e && e.message ? e.message : e);
     return { ok: false, error: e && e.message ? e.message : 'Restore failed' };
@@ -6587,10 +6592,44 @@ ipcMain.handle('sync-reupload-all', async () => {
       w.forceRetryAll();
       await w.runCycle();
     }
+    // Prove the cloud actually has records after a supposed successful push.
+    // Mac CDP (2026-09): dirty drained to 0 / lastSuccessfulPushAt set while
+    // pull received=0 — Windows Full re-sync then stays empty.
+    resetSyncPullCursor();
+    saveDb();
+    let verify = { received: 0, pulled: 0 };
+    try {
+      verify = await syncPull({ correlationId: generateCorrelationId() }) || verify;
+    } catch (pullErr) {
+      // Re-queue so a transient pull error does not look like a finished upload.
+      markAllLocalRecordsForCloudReupload();
+      return {
+        ok: false,
+        code: 'VERIFY_PULL_FAILED',
+        error: pullErr && pullErr.message ? pullErr.message : 'Verify pull failed after re-upload',
+        marked: mark.marked,
+        queued: mark.queued,
+      };
+    }
+    if ((verify.received || 0) === 0 && mark.marked > 0) {
+      markAllLocalRecordsForCloudReupload();
+      const diag = w ? w.getDiagnostics() : {};
+      return {
+        ok: false,
+        code: 'CLOUD_EMPTY_AFTER_PUSH',
+        error: 'Cloud still has no records after re-upload. Local records were kept dirty for retry. Check licence key and try again shortly if rate-limited.',
+        marked: mark.marked,
+        queued: mark.queued,
+        verifyReceived: 0,
+        lastError: diag.lastError || null,
+      };
+    }
     return {
       ok: true,
       marked: mark.marked,
       queued: mark.queued,
+      verifyReceived: verify.received || 0,
+      verifyMerged: verify.pulled || 0,
       lastError: w ? (w.getDiagnostics().lastError || null) : null,
     };
   } catch (e) {

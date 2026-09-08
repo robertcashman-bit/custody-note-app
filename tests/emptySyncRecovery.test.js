@@ -33,8 +33,11 @@ const preloadJs = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
 const indexHtml = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 
 describe('assertPushAccepted — incomplete cloud write', () => {
-  it('accepts ok:true when written is omitted (legacy servers)', () => {
-    assert.doesNotThrow(() => assertPushAccepted({ ok: true }, 3));
+  it('rejects ok:true when written is omitted (unconfirmed write)', () => {
+    assert.throws(
+      () => assertPushAccepted({ ok: true }, 3),
+      (err) => err && err.code === 'PUSH_INCOMPLETE' && /omitted written/i.test(err.message)
+    );
   });
 
   it('accepts ok:true when written matches sent count', () => {
@@ -177,6 +180,39 @@ describe('sync worker — written:0 must not clear dirty', () => {
     };
   }
 
+  it('keeps sync_dirty=1 when server returns ok:true without written', async () => {
+    const db = await initDb();
+    const api = dbApi(db);
+    const now = new Date().toISOString();
+    api.dbRun(
+      `INSERT INTO attendances (sync_id, data, status, created_at, updated_at, client_name, sync_dirty, sync_version)
+       VALUES (?,?,?,?,?,?,1,1)`,
+      ['sid-omit', '{}', 'draft', now, now, 'Omit Client']
+    );
+    const row = api.dbGet('SELECT id FROM attendances');
+    const attempts = [];
+    const worker = createSyncWorker({
+      ...api,
+      db,
+      getSyncApiUrl: () => 'http://127.0.0.1:9',
+      readLicenceData: () => ({ key: 'SYNC-TEST-0001-KEY1' }),
+      getMachineId: () => 'machine-a',
+      getMasterKeyHex: () => 'a'.repeat(64),
+      httpPost: async () => ({ ok: true }),
+      httpGetWithTimeout: async () => ({ statusCode: 200 }),
+      syncPull: async () => ({ pulled: 0, received: 0, decryptFailed: 0 }),
+      ensureCanonicalKey: async () => ({ ok: true }),
+      logSyncAttempt: (id, dir, count, ok, err) => attempts.push({ id, dir, count, ok, err }),
+      onStatusChange: () => {},
+      sendToRenderer: () => {},
+    });
+    worker.enqueue(String(row.id), 'upsert', {});
+    await worker.runCycle();
+    const after = api.dbGet('SELECT sync_dirty FROM attendances WHERE id=?', [row.id]);
+    assert.strictEqual(after.sync_dirty, 1);
+    assert.ok(attempts.some((a) => a.dir === 'push' && a.ok === false));
+  });
+
   it('keeps sync_dirty=1 when server returns ok:true written:0', async () => {
     const db = await initDb();
     const api = dbApi(db);
@@ -216,10 +252,20 @@ describe('re-upload-all product wiring', () => {
   it('main.js defines markAllLocalRecordsForCloudReupload and sync-reupload-all IPC', () => {
     assert.match(mainJs, /function markAllLocalRecordsForCloudReupload/);
     assert.match(mainJs, /ipcMain\.handle\('sync-reupload-all'/);
+    assert.match(mainJs, /CLOUD_EMPTY_AFTER_PUSH/);
     assert.match(mainJs, /sync_version=COALESCE\(sync_version,1\)\+1 WHERE deleted_at IS NULL/);
     assert.match(mainJs, /function buildSyncRecoveryHints/);
     assert.match(mainJs, /ensureBackupFolderExists\(\)/);
     assert.match(mainJs, /markDbDirty[\s\S]{0,400}ensureBackupFolderExists/);
+    assert.match(mainJs, /logSyncAttempt,/);
+  });
+
+  it('local restore bumps sync_version and returns marked/queued counts', () => {
+    const idx = mainJs.indexOf("ipcMain.handle('local-backup-restore'");
+    assert.ok(idx > 0);
+    const body = mainJs.slice(idx, idx + 3500);
+    assert.match(body, /sync_version=COALESCE\(sync_version,1\)\+1 WHERE deleted_at IS NULL/);
+    assert.match(body, /marked,\s*queued/);
   });
 
   it('preload exposes syncReuploadAll', () => {
