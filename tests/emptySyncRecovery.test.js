@@ -19,6 +19,10 @@ const {
   createRateLimitGate,
 } = require('../lib/syncPushAck');
 const {
+  explainRestoreDirtySample,
+  detectFalsePushAckEmptyCloud,
+} = require('../lib/syncCdpIncident');
+const {
   detectEmptyLargeDb,
   detectLocalFullCloudEmpty,
   shouldSuppressSyncedFooter,
@@ -402,6 +406,156 @@ describe('Sync worker — dirty retention + push logging + 429 pause', () => {
   });
 });
 
+describe('Mac CDP incident class (restore → false push ack → empty pull)', () => {
+  it('explains dirty=11 of totalRecords=66 as a partial mid-drain sample', () => {
+    const sample = explainRestoreDirtySample({
+      totalRecords: 66,
+      dirtyCount: 11,
+      pendingCount: 11,
+    });
+    assert.strictEqual(sample.code, 'PARTIAL_DIRTY_SAMPLE');
+    assert.strictEqual(
+      explainRestoreDirtySample({ totalRecords: 66, dirtyCount: 66, pendingCount: 66 }).code,
+      'FULLY_MARKED'
+    );
+    assert.strictEqual(
+      explainRestoreDirtySample({ totalRecords: 66, dirtyCount: 0, pendingCount: 0 }).code,
+      'DIRTY_CLEARED'
+    );
+  });
+
+  it('detects false push-ack empty-cloud signature from CDP fields', () => {
+    assert.strictEqual(
+      detectFalsePushAckEmptyCloud({
+        totalRecords: 66,
+        dirtyPushCount: 0,
+        pendingChanges: 0,
+        lastSuccessfulPushAt: '2026-09-08T10:00:00.000Z',
+        lastPullReceived: 0,
+        pushAttemptsLogged: false,
+        pullEverCompleted: true,
+      }),
+      true
+    );
+    assert.strictEqual(
+      detectFalsePushAckEmptyCloud({
+        totalRecords: 66,
+        dirtyPushCount: 0,
+        pendingChanges: 0,
+        lastSuccessfulPushAt: '2026-09-08T10:00:00.000Z',
+        lastPullReceived: 0,
+        pushAttemptsLogged: true,
+        pullEverCompleted: true,
+      }),
+      false
+    );
+  });
+
+  it('CDP sequence: ok:true written omitted clears nothing; push is logged; dirty stays 66', async () => {
+    const db = await initDb();
+    const api = dbApi(db);
+    const now = new Date().toISOString();
+    for (let i = 0; i < 66; i++) {
+      api.dbRun(
+        `INSERT INTO attendances (sync_id, data, status, created_at, updated_at, client_name, sync_dirty, sync_version)
+         VALUES (?,?,?,?,?,?,1,1)`,
+        ['sid-' + i, '{}', 'draft', now, now, 'Client' + i]
+      );
+    }
+    // Simulate restore mark-all + full queue rebuild.
+    api.dbRun('UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE deleted_at IS NULL');
+    const dirtyAfterMark = api.dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1').c;
+    assert.strictEqual(dirtyAfterMark, 66);
+    const rows = api.dbAll('SELECT id FROM attendances WHERE sync_dirty=1');
+    const t = Date.now();
+    for (const row of rows) {
+      api.dbRun(
+        'INSERT INTO sync_queue (id, record_id, operation, payload, created_at, retry_count, last_attempt, status) VALUES (?,?,?,?,?,0,?,?)',
+        ['sq-' + row.id, String(row.id), 'upsert', '{}', t, t, 'pending']
+      );
+    }
+    assert.strictEqual(api.dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status='pending'").c, 66);
+
+    const attempts = [];
+    let cloud = [];
+    const worker = createSyncWorker({
+      ...api,
+      db,
+      getSyncApiUrl: () => 'http://127.0.0.1:9',
+      readLicenceData: () => ({ key: 'CN-A-TEST-0532' }),
+      getMachineId: () => 'mac-air',
+      getMasterKeyHex: () => 'a'.repeat(64),
+      // Pre-fix / lying server: ok without durable written count.
+      httpPost: async (_url, body) => {
+        if (body && body.records) {
+          // Intentionally do NOT store — simulates empty cloud after "success".
+          return { ok: true };
+        }
+        return { ok: true, records: cloud, serverTime: new Date().toISOString() };
+      },
+      httpGetWithTimeout: async () => ({ statusCode: 200 }),
+      syncPull: async () => ({ pulled: 0, received: cloud.length }),
+      ensureCanonicalKey: async () => ({ ok: true, action: 'match' }),
+      logSyncAttempt: (_id, dir, count, ok, err) => attempts.push({ dir, count, ok, err }),
+      sendToRenderer: () => {},
+    });
+
+    await worker.runCycle();
+    assert.strictEqual(api.dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1').c, 66);
+    assert.ok(attempts.some((a) => a.dir === 'push' && a.ok === false));
+    assert.strictEqual(worker.getDiagnostics().lastSuccessfulPushAt, null);
+    assert.strictEqual(cloud.length, 0);
+
+    // After fix path: confirmed written + store, then pull sees records.
+    const attempts2 = [];
+    const worker2 = createSyncWorker({
+      ...api,
+      db,
+      getSyncApiUrl: () => 'http://127.0.0.1:9',
+      readLicenceData: () => ({ key: 'CN-A-TEST-0532' }),
+      getMachineId: () => 'mac-air',
+      getMasterKeyHex: () => 'a'.repeat(64),
+      httpPost: async (_url, body) => {
+        if (body && body.records) {
+          cloud = cloud.concat(body.records);
+          return { ok: true, written: body.records.length };
+        }
+        return { ok: true, records: cloud, serverTime: new Date().toISOString() };
+      },
+      httpGetWithTimeout: async () => ({ statusCode: 200 }),
+      syncPull: async () => ({ pulled: cloud.length, received: cloud.length }),
+      ensureCanonicalKey: async () => ({ ok: true, action: 'match' }),
+      logSyncAttempt: (_id, dir, count, ok) => attempts2.push({ dir, count, ok }),
+      sendToRenderer: () => {},
+    });
+    // Re-queue after failed push left items failed/pending.
+    api.dbRun("UPDATE sync_queue SET status='pending', retry_count=0, error=NULL");
+    api.dbRun('UPDATE attendances SET sync_dirty=1');
+    let guard = 0;
+    while (guard++ < 10 && api.dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1').c > 0) {
+      await worker2.runCycle();
+    }
+    assert.strictEqual(api.dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1').c, 0);
+    assert.ok(cloud.length >= 66);
+    assert.ok(attempts2.some((a) => a.dir === 'push' && a.ok === true));
+    const pull = await worker2.getDiagnostics && { received: cloud.length };
+    assert.ok(cloud.length > 0);
+    assert.strictEqual(
+      detectFalsePushAckEmptyCloud({
+        totalRecords: 66,
+        dirtyPushCount: 0,
+        pendingChanges: 0,
+        lastSuccessfulPushAt: worker2.getDiagnostics().lastSuccessfulPushAt,
+        lastPullReceived: cloud.length,
+        pushAttemptsLogged: true,
+        pullEverCompleted: true,
+      }),
+      false
+    );
+    void pull;
+  });
+});
+
 describe('Re-upload / restore product wiring', () => {
   it('main exposes reupload, worker reset, CLOUD_EMPTY_AFTER_PUSH, backup ensure', () => {
     assert.match(mainJs, /function markAllLocalRecordsForCloudReupload/);
@@ -432,6 +586,16 @@ describe('Re-upload / restore product wiring', () => {
     assert.match(ipcBody, /received:/);
     assert.match(ipcBody, /merged:/);
     assert.match(ipcBody, /rateLimited/);
+  });
+
+  it('re-upload drains pending uploads before verify pull', () => {
+    assert.match(mainJs, /async function drainPendingSyncUploads/);
+    const idx = mainJs.indexOf("ipcMain.handle('sync-reupload-all'");
+    const body = mainJs.slice(idx, idx + 3500);
+    assert.match(body, /drainPendingSyncUploads/);
+    assert.match(body, /CLOUD_EMPTY_AFTER_PUSH/);
+    assert.match(body, /UPLOAD_INCOMPLETE/);
+    assert.match(body, /RATE_LIMITED/);
   });
 
   it('push and pull send normalised licence keys', () => {

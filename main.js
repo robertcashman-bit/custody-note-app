@@ -2275,12 +2275,59 @@ function markAllLocalRecordsForCloudReupload() {
     );
     const queued = rebuildSyncQueueForDirtyRecords();
     saveDb();
+    if (queued !== marked) {
+      console.warn('[Sync] Re-upload queue mismatch: marked=' + marked + ' queued=' + queued);
+    }
     console.info('[Sync] Re-upload all local records: marked=' + marked + ' queued=' + queued);
     return { ok: true, marked, queued };
   } catch (e) {
     console.warn('[Sync] markAllLocalRecordsForCloudReupload failed:', e && e.message ? e.message : e);
     return { ok: false, error: e && e.message ? e.message : 'Re-upload mark failed', marked: 0, queued: 0 };
   }
+}
+
+/**
+ * Run sync worker cycles until dirty/pending are drained or we hit a stop
+ * condition. One runCycle only pushes MAX_RECORDS_PER_CYCLE (100); Mac restore
+ * of ~66 fits one cycle, but larger DBs and partial failures need a loop.
+ * Never treats a single cycle as "everything reached the cloud".
+ */
+async function drainPendingSyncUploads(options = {}) {
+  const maxCycles = options.maxCycles != null ? options.maxCycles : 40;
+  const w = getSyncWorker();
+  if (!w) return { cycles: 0, stoppedReason: 'no_worker', pending: 0, dirty: 0 };
+  let cycles = 0;
+  for (; cycles < maxCycles; cycles++) {
+    migrateSyncDirtyToQueue();
+    const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
+    const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+    const pending = pendingRow ? (pendingRow.c || 0) : 0;
+    const dirty = dirtyRow ? (dirtyRow.c || 0) : 0;
+    if (pending === 0 && dirty === 0) {
+      return { cycles, stoppedReason: 'drained', pending: 0, dirty: 0 };
+    }
+    w.forceRetryAll();
+    await w.runCycle();
+    const diag = w.getDiagnostics() || {};
+    if (diag.rateLimit && diag.rateLimit.blocked) {
+      return {
+        cycles: cycles + 1,
+        stoppedReason: 'rate_limited',
+        pending,
+        dirty,
+        lastError: diag.lastError || null,
+      };
+    }
+  }
+  const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
+  const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+  return {
+    cycles,
+    stoppedReason: 'max_cycles',
+    pending: pendingRow ? (pendingRow.c || 0) : 0,
+    dirty: dirtyRow ? (dirtyRow.c || 0) : 0,
+    lastError: w.getDiagnostics().lastError || null,
+  };
 }
 
 function getAttendanceDbFileBytes() {
@@ -6661,7 +6708,10 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
     setTimeout(() => { _runQuickBackupAsync().catch(() => {}); }, 3000);
     console.log('[Restore] Database restored from local backup:', resolved, 'marked=' + marked + ' queued=' + queued);
-    return { ok: true, marked, queued };
+    if (marked !== queued) {
+      console.warn('[Restore] Mark/queue mismatch after local restore: marked=' + marked + ' queued=' + queued);
+    }
+    return { ok: true, marked, queued, totalRecords: marked };
   } catch (e) {
     console.error('[Restore] Local restore failed:', e && e.message ? e.message : e);
     return { ok: false, error: e && e.message ? e.message : 'Restore failed' };
@@ -6705,10 +6755,19 @@ ipcMain.handle('sync-reupload-all', async () => {
   try {
     const mark = markAllLocalRecordsForCloudReupload();
     if (!mark.ok) return mark;
+    const drain = await drainPendingSyncUploads({ maxCycles: 40 });
     const w = getSyncWorker();
-    if (w) {
-      w.forceRetryAll();
-      await w.runCycle();
+    if (drain.stoppedReason === 'rate_limited') {
+      markAllLocalRecordsForCloudReupload();
+      return {
+        ok: false,
+        code: 'RATE_LIMITED',
+        error: 'Re-upload paused after Too many requests. Local records kept dirty — retry in a few minutes.',
+        marked: mark.marked,
+        queued: mark.queued,
+        drain,
+        lastError: drain.lastError || null,
+      };
     }
     // Prove the cloud actually has records after a supposed successful push.
     // Mac CDP (2026-09): dirty drained to 0 / lastSuccessfulPushAt set while
@@ -6727,6 +6786,7 @@ ipcMain.handle('sync-reupload-all', async () => {
         error: pullErr && pullErr.message ? pullErr.message : 'Verify pull failed after re-upload',
         marked: mark.marked,
         queued: mark.queued,
+        drain,
       };
     }
     if ((verify.received || 0) === 0 && mark.marked > 0) {
@@ -6738,14 +6798,29 @@ ipcMain.handle('sync-reupload-all', async () => {
         error: 'Cloud still has no records after re-upload. Local records were kept dirty for retry. Check licence key and try again shortly if rate-limited.',
         marked: mark.marked,
         queued: mark.queued,
+        drain,
         verifyReceived: 0,
         lastError: diag.lastError || null,
+      };
+    }
+    const dirtyLeft = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+    if (dirtyLeft && dirtyLeft.c > 0) {
+      return {
+        ok: false,
+        code: 'UPLOAD_INCOMPLETE',
+        error: 'Re-upload finished verify but ' + dirtyLeft.c + ' local records are still dirty. Retry Re-upload all.',
+        marked: mark.marked,
+        queued: mark.queued,
+        drain,
+        verifyReceived: verify.received || 0,
+        dirtyRemaining: dirtyLeft.c,
       };
     }
     return {
       ok: true,
       marked: mark.marked,
       queued: mark.queued,
+      drain,
       verifyReceived: verify.received || 0,
       verifyMerged: verify.pulled || 0,
       lastError: w ? (w.getDiagnostics().lastError || null) : null,

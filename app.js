@@ -18144,7 +18144,11 @@ pdfAuditFooterHtml(d, settings) +
         if (status) status.textContent = 'Restoring…';
         window.api.localBackupRestore({ filePath: filePath }).then(function(result) {
           if (result.ok) {
-            if (status) status.textContent = '✓ Restored successfully — reloading…';
+            var marked = result.marked != null ? result.marked : '?';
+            var queued = result.queued != null ? result.queued : '?';
+            if (status) {
+              status.textContent = '✓ Restored — marked ' + marked + ' dirty / queued ' + queued + ' for cloud upload — reloading…';
+            }
             setTimeout(function() { location.reload(); }, 1500);
           } else {
             if (status) status.textContent = 'Error: ' + (result.error || 'Restore failed');
