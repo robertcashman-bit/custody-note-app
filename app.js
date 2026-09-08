@@ -3338,7 +3338,7 @@ var REQUIRED_FIELD_KEYS = [
       var received = lp.received || 0;
       var merged = lp.merged || 0;
       var total = st.totalRecords || 0;
-      } else if (st.rateLimited || (st.rateLimit && st.rateLimit.blocked)) {
+      if (st.rateLimited || (st.rateLimit && st.rateLimit.blocked)) {
         var minsRl = Math.max(1, Math.ceil((st.rateLimitRemainingMs || (st.rateLimit && st.rateLimit.remainingMs) || 60000) / 60000));
         setFooterIndicator(el, 'Rate limited — retry in ~' + minsRl + 'm', 'offline', st.lastError || 'Too many requests. Full re-sync will retry after the cooldown.');
         el.style.cursor = 'pointer';
