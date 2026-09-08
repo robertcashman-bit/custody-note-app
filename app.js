@@ -3372,7 +3372,7 @@ var REQUIRED_FIELD_KEYS = [
           'Local records stay dirty until the cloud confirms a durable write. Use Push all pending now or Re-upload all.'
       );
       el.style.cursor = 'pointer';
-    } else if (total === 0 && received === 0 && st.lastSync) {
+    } else if (pendingOrDirty === 0 && total === 0 && received === 0 && st.lastSync) {
       setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Re-upload all local records to cloud (or Push all pending now) and wait for 0 pending. Then Full re-sync here.');
       el.style.cursor = '';
     } else if (blocked > 0) {
@@ -3396,7 +3396,15 @@ var REQUIRED_FIELD_KEYS = [
         el.style.cursor = '';
       }
     } else if (st.suppressSyncedFooter || st.syncHealthy === false) {
-      setFooterIndicator(el, 'Local only — check sync', 'offline', emptyCloudMsg);
+      // Not empty-cloud (handled above). inProgress / lastError / unverified push must not
+      // reuse empty-cloud copy that forbids Full re-sync.
+      setFooterIndicator(
+        el,
+        'Local only — check sync',
+        'offline',
+        st.lastError ||
+          'Sync needs attention. Open Settings \u2192 Backup to retry push, or Full re-sync if records are missing on this device.'
+      );
       el.style.cursor = 'pointer';
     } else {
       setFooterIndicator(el, 'Waiting to sync', 'backup-ok');
