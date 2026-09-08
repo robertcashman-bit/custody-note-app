@@ -10,7 +10,7 @@
         "Local/cloud restore now bumps sync_version when re-dirtying, stops/resets the sync worker to avoid mid-drain markSynced races, and returns marked/queued counts",
         "Push attempts are logged to sync_attempts (same audit trail as pulls) so lastAttempts is no longer pull-only",
         "429 rate-limit gate: pause push and pull for ~5 minutes after Too many requests instead of burning the 120/hour budget on the 10s poll",
-        "Home/footer/Settings: honest sync phases and recovery hints for empty-large-DB, local-full/cloud-empty, and rate-limited; ensure Backups folder on data change",
+        "Home/footer/Settings: honest sync phases and recovery hints for empty-large-DB, local-full/cloud-empty (from-epoch pull only), and rate-limited; ensure Backups folder on data change",
         "Read-only storage inventory script (scripts/inventory-sync-storage.mjs) for preserve-first incident response"
       ]
     },
