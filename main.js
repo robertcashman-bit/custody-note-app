@@ -116,6 +116,8 @@ const { createSyncWorker } = require('./main/syncWorker');
 const {
   detectEmptyLargeDb,
   detectLocalFullCloudEmpty,
+  shouldSuppressSyncedFooter,
+  deriveSyncPhase,
 } = require('./lib/syncRecoveryHints');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
@@ -2308,11 +2310,41 @@ function buildSyncRecoveryHints(statusBase) {
     pullEverCompleted,
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
   });
+  const diag = statusBase && statusBase._diag ? statusBase._diag : {};
+  const lastVerifiedCloudPushAt = diag.lastVerifiedCloudPushAt || null;
+  const rateLimited = !!(diag.rateLimit && diag.rateLimit.blocked);
+  const suppressSyncedFooter = shouldSuppressSyncedFooter({
+    totalRecords,
+    pendingChanges,
+    dirtyPushCount,
+    lastPullReceived: lastPull.received || 0,
+    pullEverCompleted,
+    lastVerifiedCloudPushAt,
+  });
+  const syncPhase = deriveSyncPhase({
+    inProgress: !!(statusBase && statusBase.inProgress),
+    pendingChanges,
+    dirtyPushCount,
+    failedCount: statusBase && statusBase.failedCount,
+    rateLimited,
+    lastError: statusBase && statusBase.lastError,
+    totalRecords,
+    lastPullReceived: lastPull.received || 0,
+    pullEverCompleted,
+    lastVerifiedCloudPushAt,
+  });
   return {
     dbFileBytes,
     emptyLargeDb,
     localFullCloudEmpty,
     suggestReuploadAll: localFullCloudEmpty,
+    suppressSyncedFooter,
+    syncPhase,
+    lastVerifiedCloudPushAt,
+    lastPush: diag.lastPush || null,
+    rateLimit: diag.rateLimit || null,
+    rateLimited,
+    rateLimitRemainingMs: rateLimited && diag.rateLimit ? diag.rateLimit.remainingMs : 0,
   };
 }
 
@@ -2642,15 +2674,21 @@ async function runFullSyncFromCloud() {
   }
 }
 
-/** Secondary devices with no local records: auto full re-sync once network is up. */
+/** Secondary devices with no local records: auto full re-sync once network is up.
+ *  Also runs when the DB file is large but COUNT(attendances)=0 (Windows empty-UI class).
+ */
 function scheduleAutoFullResyncIfEmpty() {
   if (!db || !getSyncApiUrl()) return;
   const data = readLicenceData();
   if (!data || !data.key) return;
   const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const total = countRow ? countRow.c : 0;
-  if (total > 0) return;
-  console.info('[Sync] No local records — scheduling automatic full re-sync from cloud');
+  const emptyLarge = detectEmptyLargeDb({
+    dbFileBytes: getAttendanceDbFileBytes(),
+    activeAttendanceCount: total,
+  });
+  if (total > 0 && !emptyLarge) return;
+  console.info('[Sync] No local records' + (emptyLarge ? ' (large empty DB)' : '') + ' — scheduling automatic full re-sync from cloud');
   setTimeout(() => {
     ensureCanonicalSyncKeyNow().then(() => {
       return runFullSyncFromCloud();
@@ -2685,6 +2723,27 @@ function getSyncWorker() {
     });
   }
   return _syncWorker;
+}
+
+/**
+ * After swapping the in-memory sql.js Database (local/cloud restore), tear down
+ * the sync worker so an in-flight markSynced from the pre-restore cycle cannot
+ * clear dirty flags on the new DB (Mac CDP dirty=11 mid-drain class).
+ */
+function resetSyncWorkerAfterDbSwap(reason) {
+  try {
+    if (_syncWorker) {
+      try { _syncWorker.stop(); } catch (_) {}
+      try { _syncWorker.resetRuntimeState(reason || 'db-swap'); } catch (_) {}
+    }
+  } catch (_) {}
+  _syncWorker = null;
+  try {
+    const w = getSyncWorker();
+    if (w) w.start();
+  } catch (e) {
+    console.warn('[Sync] Failed to restart worker after DB swap:', e && e.message ? e.message : e);
+  }
 }
 
 function enqueueSyncForRecord(recordId, operation = 'upsert') {
@@ -6454,6 +6513,8 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     if (!decrypted) return { ok: false, error: 'Could not decrypt the backup. Check your recovery password.' };
 
     const SQL = await initSqlJs();
+    // Stop any in-flight sync against the old DB before swapping.
+    try { if (_syncWorker) _syncWorker.stop(); } catch (_) {}
     const newDb = new SQL.Database(decrypted);
     db = newDb;
     // Ensure sync columns exist in restored DB and mark all records for re-sync
@@ -6471,6 +6532,8 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     const marked = markedRow ? (markedRow.c || 0) : 0;
     resetSyncPullCursor();
     saveDb();
+    resetSyncWorkerAfterDbSwap('cloud-restore');
+    try { ensureBackupFolderExists(); } catch (_) {}
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
@@ -6537,6 +6600,7 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     const decrypted = await decryptBufferWithRecovery(rawBuf);
     if (!decrypted) return { ok: false, error: 'Could not decrypt the backup. Check your recovery password.' };
     const SQL = await initSqlJs();
+    try { if (_syncWorker) _syncWorker.stop(); } catch (_) {}
     const newDb = new SQL.Database(decrypted);
     db = newDb;
     _safeAddColumn('attendances', "sync_id TEXT DEFAULT NULL");
@@ -6553,6 +6617,8 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     const marked = markedRow ? (markedRow.c || 0) : 0;
     resetSyncPullCursor();
     saveDb();
+    resetSyncWorkerAfterDbSwap('local-restore');
+    try { ensureBackupFolderExists(); } catch (_) {}
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
@@ -6686,8 +6752,11 @@ ipcMain.handle('sync-status', () => {
     lastAttempts,
     connectivity: diag.connectivity,
     lastError: diag.lastError,
+    lastSuccessfulPushAt: diag.lastSuccessfulPushAt || null,
+    _diag: diag,
   };
   const recovery = buildSyncRecoveryHints(statusBase);
+  delete statusBase._diag;
   return Object.assign(statusBase, recovery);
 });
 
