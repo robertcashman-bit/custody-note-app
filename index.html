@@ -283,6 +283,15 @@
                 <h3 class="home-widget-title">Recent Cases</h3>
                 <button type="button" id="home-view-all" class="home-view-all">View all &rarr;</button>
               </div>
+              <div id="home-empty-db-recovery" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#fff7ed,#fffbeb);border:1px solid #f59e0b;">
+                <div style="display:flex;align-items:flex-start;gap:0.65rem;">
+                  <div style="flex:1;">
+                    <p style="margin:0;font-weight:600;font-size:0.9rem;color:#92400e;">Database file is large but no records are listed</p>
+                    <p id="home-empty-db-recovery-body" style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#78350f;line-height:1.4;">Your local database may need a restore from another computer or a cloud re-sync. Open Settings → Backup to restore a local backup, run Full re-sync from cloud, or on the computer that still has your records use Re-upload all local records to cloud.</p>
+                  </div>
+                  <button type="button" id="home-empty-db-recovery-settings" class="btn btn-secondary btn-small">Open Settings</button>
+                </div>
+              </div>
               <ul id="home-recent-list" class="home-recent-list">
                 <li class="home-recent-empty">No records yet. Create your first attendance above.</li>
               </ul>
@@ -1282,9 +1291,11 @@
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.25rem;">
               <button type="button" id="btn-sync-full-resync" class="btn btn-secondary">Full re-sync from cloud</button>
               <button type="button" id="btn-sync-push-now" class="btn btn-secondary">Push all pending now</button>
+              <button type="button" id="btn-sync-reupload-all" class="btn btn-secondary">Re-upload all local records to cloud</button>
             </div>
-            <p class="settings-hint" style="margin:0.5rem 0 0;">Use <strong>Full re-sync from cloud</strong> if this computer shows Synced but records from another device are missing. Use <strong>Push all pending now</strong> on the computer that has your records.</p>
+            <p class="settings-hint" style="margin:0.5rem 0 0;">Use <strong>Full re-sync from cloud</strong> if this computer shows Synced but records from another device are missing. Use <strong>Push all pending now</strong> on the computer that has your records. Use <strong>Re-upload all local records to cloud</strong> after a manual database file copy, or when other devices still show &ldquo;No remote records&rdquo; while this computer has data.</p>
             <p id="cross-device-sync-action-status" class="settings-hint" style="margin:0.35rem 0 0;"></p>
+            <p id="cross-device-sync-recovery-hint" class="settings-hint" style="margin:0.35rem 0 0;display:none;color:#b45309;"></p>
           </div>
           <div id="anywhere-bridge-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border,#ccc);">
             <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Custody Note Anywhere &rarr; Desktop</h3>

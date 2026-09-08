@@ -3341,9 +3341,15 @@ var REQUIRED_FIELD_KEYS = [
       if (decryptFailed > 0) {
         setFooterIndicator(el, decryptFailed + ' decrypt failed', 'offline', 'Remote records could not be decrypted. Use Settings \u2192 Backup \u2192 Recover from Cloud (Security tab) or Full re-sync from cloud.');
         el.style.cursor = 'pointer';
+      } else if (st.emptyLargeDb) {
+        setFooterIndicator(el, 'DB empty — recover', 'offline', 'Local database file is large but lists no records. Open Settings \u2192 Backup to restore, or Full re-sync from cloud. On the computer with your data, use Re-upload all local records to cloud.');
+        el.style.cursor = 'pointer';
       } else if (total === 0 && received === 0) {
-        setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Push all pending now and wait for 0 pending.');
+        setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Re-upload all local records to cloud (or Push all pending now) and wait for 0 pending.');
         el.style.cursor = '';
+      } else if (st.localFullCloudEmpty || st.suggestReuploadAll) {
+        setFooterIndicator(el, 'Cloud may be empty', 'offline', 'This computer has local records but the last cloud pull received none. Use Settings \u2192 Re-upload all local records to cloud so other devices can sync.');
+        el.style.cursor = 'pointer';
       } else if (merged > 0) {
         setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync) + ' (' + merged + ' new)', 'synced');
         el.style.cursor = '';
@@ -3410,6 +3416,7 @@ var REQUIRED_FIELD_KEYS = [
   function refreshCrossDeviceSyncPanel(st) {
     var statusEl = document.getElementById('cross-device-sync-status');
     var section = document.getElementById('cross-device-sync-section');
+    var hintEl = document.getElementById('cross-device-sync-recovery-hint');
     if (!statusEl || !section) return;
     if (!st || !st.enabled) {
       section.style.display = 'none';
@@ -3434,7 +3441,19 @@ var REQUIRED_FIELD_KEYS = [
     if (st.conflictCount > 0) lines.push('Open conflicts: ' + st.conflictCount);
     if (st.lastError) lines.push('Last error: ' + st.lastError);
     statusEl.textContent = lines.join(' \u00b7 ');
-    statusEl.style.color = (lp.decryptFailed > 0 || st.failedCount > 0) ? '#b45309' : '';
+    statusEl.style.color = (lp.decryptFailed > 0 || st.failedCount > 0 || st.localFullCloudEmpty || st.emptyLargeDb) ? '#b45309' : '';
+    if (hintEl) {
+      if (st.emptyLargeDb) {
+        hintEl.style.display = '';
+        hintEl.textContent = 'Recovery: database file is about ' + Math.round((st.dbFileBytes || 0) / 1024) + ' KB but lists 0 records. Restore a local/cloud backup, or on the computer with your data use Re-upload all local records to cloud, then Full re-sync here.';
+      } else if (st.localFullCloudEmpty || st.suggestReuploadAll) {
+        hintEl.style.display = '';
+        hintEl.textContent = 'Recovery: this computer has local records but the cloud pull received none. Click Re-upload all local records to cloud so Windows/Mac secondary devices can sync.';
+      } else {
+        hintEl.style.display = 'none';
+        hintEl.textContent = '';
+      }
+    }
   }
 
   function formatSyncTime(iso) {
@@ -4180,14 +4199,30 @@ var REQUIRED_FIELD_KEYS = [
     apiFn().then(function(rows) {
       var list = document.getElementById('home-recent-list');
       var statsEl = document.getElementById('home-stats');
+      var recoveryEl = document.getElementById('home-empty-db-recovery');
       if (!list) return;
       if (!rows || !rows.length) {
         list.innerHTML = '<li class="home-recent-empty">No records yet. Create your first attendance above.</li>';
         if (statsEl) statsEl.textContent = '';
         loadHomeActiveMatters([]);
         loadHomeFocus([]);
+        if (recoveryEl && window.api && window.api.syncStatus) {
+          window.api.syncStatus().then(function(st) {
+            if (st && st.emptyLargeDb) {
+              recoveryEl.style.display = '';
+              var body = document.getElementById('home-empty-db-recovery-body');
+              if (body) {
+                body.textContent = 'Local database is about ' + Math.round((st.dbFileBytes || 0) / 1024) +
+                  ' KB but Home lists no attendances. Restore from another computer\'s backup, Full re-sync from cloud, or on the machine that still has your notes use Re-upload all local records to cloud.';
+              }
+            } else {
+              recoveryEl.style.display = 'none';
+            }
+          }).catch(function() { recoveryEl.style.display = 'none'; });
+        }
         return;
       }
+      if (recoveryEl) recoveryEl.style.display = 'none';
       var sorted = rows.slice().sort(function(a, b) { return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''); });
       var HOME_RECENT_LIMIT = 10;
       var showRows = sorted.slice(0, HOME_RECENT_LIMIT);
@@ -16916,7 +16951,14 @@ pdfAuditFooterHtml(d, settings) +
       } else if (bs.quickDirty || bs.hourlyDirty) {
         var noFolder = bs.lastSkipReason === 'backup-folder-missing' || bs.lastSkipReason === 'db-missing' || bs.lastSkipReason === 'export-failed';
         if (noFolder) {
-          setFooterIndicator(backupStatusEl, 'Backup off', 'offline');
+          setFooterIndicator(
+            backupStatusEl,
+            bs.lastSkipReason === 'backup-folder-missing' ? 'Backup folder missing' : 'Backup off',
+            'offline',
+            bs.lastSkipReason === 'backup-folder-missing'
+              ? 'Could not create or write the local Backups folder. Open Settings \u2192 Backup and choose a writable folder.'
+              : (bs.lastSkipReason || '')
+          );
         } else {
           setFooterIndicator(backupStatusEl, 'Backup queued', 'backup-active');
         }
@@ -17653,6 +17695,40 @@ pdfAuditFooterHtml(d, settings) +
       }).finally(function() { btn.disabled = false; });
     });
 
+    document.getElementById('btn-sync-reupload-all')?.addEventListener('click', function() {
+      if (!window.api || !window.api.syncReuploadAll) return;
+      var btn = this;
+      var statusEl = document.getElementById('cross-device-sync-action-status');
+      if (!confirm('Mark ALL local records dirty and re-upload them to the cloud? Use this after a manual database file copy, or when other devices still show No remote records while this computer has your notes.')) return;
+      btn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Re-uploading all local records\u2026'; statusEl.style.color = '#d97706'; }
+      window.api.syncReuploadAll().then(function(res) {
+        if (res && res.ok) {
+          showToast('Re-upload queued: ' + (res.marked || 0) + ' record(s)', 'success');
+          if (statusEl) {
+            statusEl.textContent = 'Marked ' + (res.marked || 0) + ' for upload' +
+              (res.lastError ? ' — last error: ' + res.lastError : ' — sync cycle finished');
+            statusEl.style.color = res.lastError ? '#b45309' : 'green';
+          }
+          try { loadHomeRecent(); } catch (_) {}
+        } else {
+          showToast('Re-upload failed: ' + (res && res.error || 'Unknown error'), 'error');
+          if (statusEl) { statusEl.textContent = res && res.error ? res.error : 'Failed'; statusEl.style.color = '#dc2626'; }
+        }
+        refreshSyncCounts();
+      }).catch(function(err) {
+        showToast('Re-upload failed: ' + (err && err.message || err), 'error');
+        if (statusEl) { statusEl.textContent = ''; }
+      }).finally(function() { btn.disabled = false; });
+    });
+
+    document.getElementById('home-empty-db-recovery-settings')?.addEventListener('click', function() {
+      try {
+        if (typeof showView === 'function') showView('settings');
+        var tab = document.querySelector('.settings-tab[data-stab="backup"]');
+        if (tab) tab.click();
+      } catch (_) {}
+    });
     document.getElementById('settings-save-btn')?.addEventListener('click', function() {
       if (typeof saveSettings === 'function') saveSettings();
     });
