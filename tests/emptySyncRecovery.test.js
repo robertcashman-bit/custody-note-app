@@ -98,7 +98,7 @@ describe('sync recovery heuristics', () => {
     );
   });
 
-  it('flags local-full cloud-empty when pull completed with received=0', () => {
+  it('flags local-full cloud-empty only after a from-epoch pull with received=0', () => {
     assert.strictEqual(
       detectLocalFullCloudEmpty({
         totalRecords: 66,
@@ -106,6 +106,7 @@ describe('sync recovery heuristics', () => {
         dirtyPushCount: 0,
         lastPullReceived: 0,
         pullEverCompleted: true,
+        pulledFromEpoch: true,
       }),
       true
     );
@@ -115,7 +116,20 @@ describe('sync recovery heuristics', () => {
         pendingChanges: 0,
         dirtyPushCount: 0,
         lastPullReceived: 0,
+        pullEverCompleted: true,
+        pulledFromEpoch: false,
+      }),
+      false,
+      'incremental pull with no deltas must not look like an empty cloud'
+    );
+    assert.strictEqual(
+      detectLocalFullCloudEmpty({
+        totalRecords: 66,
+        pendingChanges: 0,
+        dirtyPushCount: 0,
+        lastPullReceived: 0,
         pullEverCompleted: false,
+        pulledFromEpoch: true,
       }),
       false
     );
@@ -126,6 +140,7 @@ describe('sync recovery heuristics', () => {
         dirtyPushCount: 0,
         lastPullReceived: 0,
         pullEverCompleted: true,
+        pulledFromEpoch: true,
       }),
       false
     );
@@ -255,6 +270,7 @@ describe('re-upload-all product wiring', () => {
     assert.match(mainJs, /CLOUD_EMPTY_AFTER_PUSH/);
     assert.match(mainJs, /sync_version=COALESCE\(sync_version,1\)\+1 WHERE deleted_at IS NULL/);
     assert.match(mainJs, /function buildSyncRecoveryHints/);
+    assert.match(mainJs, /pulledFromEpoch/);
     assert.match(mainJs, /ensureBackupFolderExists\(\)/);
     assert.match(mainJs, /markDbDirty[\s\S]{0,400}ensureBackupFolderExists/);
     assert.match(mainJs, /logSyncAttempt,/);

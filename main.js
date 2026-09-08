@@ -2306,6 +2306,7 @@ function buildSyncRecoveryHints(statusBase) {
     dirtyPushCount,
     lastPullReceived: lastPull.received || 0,
     pullEverCompleted,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
   });
   return {
     dbFileBytes,
@@ -2414,6 +2415,7 @@ let _lastPullStats = {
   decryptFailed: 0,
   noMasterKeySkipped: 0,
   cursorAdvanced: false,
+  pulledFromEpoch: false,
   at: null,
 };
 
@@ -2446,6 +2448,9 @@ async function syncPull(opts) {
   let cursorAdvanced = true;
   let iterations = 0;
   const MAX_PULL_ITERATIONS = 50;
+  // Capture before the loop: only a from-epoch pull can prove the cloud is empty.
+  // Incremental since-cursor pulls with received=0 are normal steady state.
+  const pullStartedFromEpoch = getLastSyncTimestamp() === '1970-01-01T00:00:00.000Z';
 
   while (iterations < MAX_PULL_ITERATIONS) {
     iterations++;
@@ -2592,6 +2597,7 @@ async function syncPull(opts) {
     decryptFailed,
     noMasterKeySkipped,
     cursorAdvanced,
+    pulledFromEpoch: pullStartedFromEpoch,
     at: new Date().toISOString(),
   };
 
