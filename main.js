@@ -234,59 +234,46 @@ function buildDbPersistenceDetails(extra = {}) {
   }, extra);
 }
 
+const masterKeyLib = require('./lib/masterKey');
+
 function getOrCreateMasterKey(options = {}) {
   const allowCreate = options.allowCreate !== false;
   if (_masterKey) return _masterKey;
-  const keyPath = getKeyFilePath();
-  const fallbackPath = getFallbackKeyPath();
 
-  if (safeStorage.isEncryptionAvailable()) {
-    // Primary path: OS-protected safeStorage
-    if (fs.existsSync(keyPath)) {
-      try {
-        _masterKey = safeStorage.decryptString(fs.readFileSync(keyPath));
-        return _masterKey;
-      } catch (err) {
-        console.warn('[Encryption] Cannot decrypt safeStorage key (new machine?):', err.message);
-        if (!allowCreate && !fs.existsSync(fallbackPath)) return null;
-        // Fall through to fallback below
-      }
-    }
-    if (!allowCreate && !fs.existsSync(fallbackPath)) return null;
-    _masterKey = crypto.randomBytes(32).toString('hex');
-    saveMasterKeyToSafeStorage(_masterKey);
-    return _masterKey;
-  }
-
-  // safeStorage not available â€” use obfuscated fallback file so the key persists across restarts.
-  // The key is encrypted with a machine-derived key (not truly secure against a determined local
-  // attacker, but prevents casual exposure). Users should set a recovery password ASAP.
-  console.warn('[Encryption] safeStorage unavailable; using obfuscated fallback. Set a recovery password in Settings.');
-  if (fs.existsSync(fallbackPath)) {
-    try {
-      const raw = fs.readFileSync(fallbackPath);
+  const result = masterKeyLib.resolveMasterKey({
+    allowCreate,
+    keyPath: getKeyFilePath(),
+    fallbackPath: getFallbackKeyPath(),
+    safeStorage,
+    fs,
+    decryptFallbackKey: (raw) => {
       const k = _decryptFallbackKey(raw);
-      if (k && k.length === 64) {
-        _masterKey = k;
+      if (masterKeyLib.isValidMasterKeyHex(k)) {
         _needsFallbackMigration = true;
-        return _masterKey;
+        return k;
       }
-      // Legacy plaintext fallback (pre-obfuscation upgrade)
-      const plaintext = raw.toString('utf8').trim();
-      if (plaintext && plaintext.length === 64 && /^[0-9a-f]+$/.test(plaintext)) {
-        _masterKey = plaintext;
-        _needsFallbackMigration = true;
-        _writeFallbackKeyEncrypted(fallbackPath, _masterKey);
-        return _masterKey;
-      }
-    } catch (err) {
-      console.warn('[Encryption] Cannot read fallback key:', err.message);
+      return null;
+    },
+    createRandomKey: () => crypto.randomBytes(32).toString('hex'),
+    persistNewKey: (hexKey) => {
+      saveMasterKeyToSafeStorage(hexKey);
+    },
+    logger: console,
+  });
+
+  if (result.key) {
+    _masterKey = result.key;
+    if (result.reason === 'fallback' || result.reason === 'fallback_after_unreadable_key'
+        || result.reason === 'fallback_no_safeStorage') {
+      _needsFallbackMigration = true;
+    }
+    // Legacy plaintext master.fallback must be rewritten obfuscated at rest
+    // (same behaviour as pre-extract getOrCreateMasterKey).
+    if (result.legacyPlaintextFallback) {
+      _writeFallbackKeyEncrypted(getFallbackKeyPath(), result.key);
     }
   }
-  if (!allowCreate) return null;
-  _masterKey = crypto.randomBytes(32).toString('hex');
-  _writeFallbackKeyEncrypted(fallbackPath, _masterKey);
-  return _masterKey;
+  return result.key || null;
 }
 
 function _getMachineObfuscationKey() {
@@ -549,20 +536,18 @@ function decryptBuffer(buf) {
 }
 
 async function decryptBufferWithRecovery(buf) {
-  if (!buf || buf.length < 4) return buf;
-  if (buf.slice(0, 4).toString() !== MAGIC) return buf;
-  let masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
-  if (!masterKeyHex && hasRecoveryPassword()) {
-    masterKeyHex = await promptForRecoveryPassword();
-    if (masterKeyHex) {
-      _masterKey = masterKeyHex;
-      saveMasterKeyToSafeStorage(masterKeyHex);
-    }
-  }
-  if (!masterKeyHex) {
-    throw new Error('Cannot decrypt database: no key available. If you have a recovery password, ensure the recovery.dat file is present.');
-  }
-  return dbCrypto.decryptBuffer(buf, masterKeyHex);
+  return masterKeyLib.decryptBufferWithRecoveryFlow({
+    buf,
+    magic: MAGIC,
+    getMasterKey: () => getOrCreateMasterKey({ allowCreate: false }),
+    hasRecoveryPassword,
+    promptForRecoveryPassword,
+    persistRecoveredKey: (hexKey) => {
+      _masterKey = hexKey;
+      saveMasterKeyToSafeStorage(hexKey);
+    },
+    decryptBuffer: (encrypted, keyHex) => dbCrypto.decryptBuffer(encrypted, keyHex),
+  });
 }
 
 async function promptForRecoveryPassword() {
@@ -1490,11 +1475,18 @@ async function initDb() {
       if (!buf) throw new Error('No database bytes were returned during decryption');
       db = new SQL.Database(buf);
     } catch (err) {
+      const causeMsg = err && err.message ? err.message : String(err);
+      const needsRecoveryHint = /recovery password/i.test(causeMsg)
+        || err.code === 'CN_RECOVERY_REQUIRED'
+        || err.code === 'CN_RECOVERY_CANCELLED'
+        || err.code === 'CN_DECRYPT_FAILED';
       throw new PersistenceStartupError(
-        'Custody Note could not load the existing attendance database. To protect your records, the app has stopped instead of opening a blank database.',
+        needsRecoveryHint
+          ? 'Custody Note could not unlock the existing attendance database. Your records have not been deleted. Enter your recovery password on the next launch (ensure recovery.dat is present), or restore from a backup in Settings.'
+          : 'Custody Note could not load the existing attendance database. To protect your records, the app has stopped instead of opening a blank database.',
         buildDbPersistenceDetails({
           dbSizeBytes: rawBuf.length,
-          cause: err && err.message ? err.message : String(err),
+          cause: causeMsg,
         })
       );
     }
