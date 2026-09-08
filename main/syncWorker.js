@@ -55,12 +55,50 @@ function isRetryableError(err) {
   const code = err.code || err.statusCode;
   if (code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ENOTFOUND' || code === 'ECONNRESET' ||
       code === 'ENETUNREACH' || code === 'EAI_AGAIN') return true;
+  if (code === 'PUSH_INCOMPLETE') return true;
   if (msg.includes('timeout') || msg.includes('network') || msg.includes('aborted')) return true;
+  // Rate-limit bodies often say "Too many requests" without embedding "429".
+  if (msg.includes('too many requests') || msg.includes('rate limit')) return true;
   const m = msg.match(/server error (\d+)/i);
   const status = code || (m && parseInt(m[1], 10));
   if (status >= 500 || status === 429) return true;
   if ([400, 401, 403, 404, 422].includes(status)) return false;
   return true;
+}
+
+/**
+ * Validate a /api/sync/push response before clearing sync_dirty.
+ *
+ * Incident class (2026-09): clients must NOT treat ok:true with written:0 (or
+ * written < sent) as success — that leaves the cloud empty while local shows
+ * pending=0/dirty=0, so other devices pull "No remote records".
+ *
+ * Legacy servers that omit `written` keep working (ok:true alone is enough).
+ */
+function assertPushAccepted(resp, sentCount) {
+  const sent = Number(sentCount) || 0;
+  if (!resp || resp.ok !== true) {
+    const err = new Error(resp && resp.error ? String(resp.error) : 'Push failed');
+    if (resp && /too many requests|rate limit/i.test(String(resp.error || ''))) {
+      err.statusCode = 429;
+    }
+    throw err;
+  }
+  if (resp.written == null) return resp;
+  const written = Array.isArray(resp.written)
+    ? resp.written.length
+    : Number(resp.written);
+  if (!Number.isFinite(written) || written < sent) {
+    const err = new Error(
+      written === 0
+        ? 'Push accepted 0 records (cloud write empty)'
+        : `Push incomplete: wrote ${written} of ${sent}`
+    );
+    err.code = 'PUSH_INCOMPLETE';
+    err.statusCode = 503;
+    throw err;
+  }
+  return resp;
 }
 
 /** Exponential backoff: next attempt after RETRY_DELAYS_MS[retry_count] */
@@ -269,7 +307,7 @@ function createSyncWorker(ctx) {
       },
       { timeout: SYNC_REQUEST_TIMEOUT_MS, correlationId }
     );
-    if (!resp || !resp.ok) throw new Error(resp && resp.error ? resp.error : 'Push failed');
+    assertPushAccepted(resp, payloads.length);
     return payloads;
   }
 
@@ -549,6 +587,7 @@ module.exports = {
   createSyncWorker,
   generateQueueId,
   isRetryableError,
+  assertPushAccepted,
   getNextAttemptMs,
   SYNC_POLL_INTERVAL_MS,
   SCHEDULE_SOON_DEBOUNCE_MS,

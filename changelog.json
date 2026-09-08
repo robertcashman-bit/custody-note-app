@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.82",
+      "date": "2026-09-08",
+      "latest": true,
+      "changes": [
+        "Cross-device sync: do not clear local dirty flags when cloud push returns ok with written:0 / incomplete write (prevents Windows empty UI while Mac looks synced)",
+        "Settings: Re-upload all local records to cloud — marks dirty, rebuilds sync queue, and pushes (needed after raw DB file-swap or when cloud is empty)",
+        "Home/footer: surface empty-large-DB and local-full/cloud-empty recovery hints instead of a silent No records yet / misleading Synced state",
+        "Rate-limit body (Too many requests) stays explicitly retryable; local Backups folder is ensured when data changes so backup is not stuck queued"
+      ]
+    },
+    {
       "version": "1.9.81",
       "date": "2026-09-07",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Station mileage (systemic): any stored standard mileage stays exact on apply, save, reload, and export — live/calculated road figures (e.g. 46→45.8/46.6) cannot silently replace a known standard",
         "Tonbridge and Medway seeded standards remain exactly 46; catalogue refresh preserves every station's mileage_from_base and postcode",

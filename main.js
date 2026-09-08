@@ -113,6 +113,10 @@ const initSqlJs = require('sql.js');
 const { parseCasenotePdfTextToRecordData } = require('./importers/casenote-pdf-import');
 const adminAuth = require('./main/adminAuth');
 const { createSyncWorker } = require('./main/syncWorker');
+const {
+  detectEmptyLargeDb,
+  detectLocalFullCloudEmpty,
+} = require('./lib/syncRecoveryHints');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
@@ -1737,6 +1741,9 @@ function _runHourlyBackupAsync() {
 function markDbDirty() {
   dbDirtySinceQuickBackup = true;
   dbDirtySinceHourlyBackup = true;
+  // Ensure Backups exists before the scheduler tries a write — otherwise the
+  // footer can sit on "Backup queued" while skips leave no folder on disk.
+  try { ensureBackupFolderExists(); } catch (_) {}
   const bs = _backupScheduler;
   if (bs) bs.markDirty('db-change');
   scheduleSyncSoon();
@@ -2243,6 +2250,69 @@ function rebuildSyncQueueForDirtyRecords() {
     console.warn('[Sync] rebuildSyncQueueForDirtyRecords failed:', e && e.message ? e.message : e);
     return 0;
   }
+}
+
+/**
+ * Force every local attendance back onto the upload queue.
+ * Needed after a raw attendances.db file-swap (which does NOT mark dirty) and
+ * when this machine has records but the cloud is empty so other devices pull 0.
+ * Bumps sync_version so remotes accept the re-push.
+ */
+function markAllLocalRecordsForCloudReupload() {
+  if (!db) return { ok: false, error: 'Database not ready', marked: 0, queued: 0 };
+  try {
+    const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+    const marked = countRow ? (countRow.c || 0) : 0;
+    if (marked === 0) {
+      return { ok: false, error: 'No local records to re-upload', marked: 0, queued: 0 };
+    }
+    dbRun(
+      'UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE deleted_at IS NULL'
+    );
+    const queued = rebuildSyncQueueForDirtyRecords();
+    saveDb();
+    console.info('[Sync] Re-upload all local records: marked=' + marked + ' queued=' + queued);
+    return { ok: true, marked, queued };
+  } catch (e) {
+    console.warn('[Sync] markAllLocalRecordsForCloudReupload failed:', e && e.message ? e.message : e);
+    return { ok: false, error: e && e.message ? e.message : 'Re-upload mark failed', marked: 0, queued: 0 };
+  }
+}
+
+function getAttendanceDbFileBytes() {
+  try {
+    const dbPath = getDbPath();
+    if (!dbPath || !fs.existsSync(dbPath)) return 0;
+    return fs.statSync(dbPath).size || 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function buildSyncRecoveryHints(statusBase) {
+  const totalRecords = statusBase && statusBase.totalRecords != null ? statusBase.totalRecords : 0;
+  const pendingChanges = statusBase && statusBase.pendingChanges != null ? statusBase.pendingChanges : 0;
+  const dirtyPushCount = statusBase && statusBase.dirtyPushCount != null ? statusBase.dirtyPushCount : 0;
+  const lastPull = (statusBase && statusBase.lastPull) || {};
+  const dbFileBytes = getAttendanceDbFileBytes();
+  const emptyLargeDb = detectEmptyLargeDb({
+    dbFileBytes,
+    activeAttendanceCount: totalRecords,
+  });
+  const pullEverCompleted = !!(lastPull && lastPull.at);
+  const localFullCloudEmpty = detectLocalFullCloudEmpty({
+    totalRecords,
+    pendingChanges,
+    dirtyPushCount,
+    lastPullReceived: lastPull.received || 0,
+    pullEverCompleted,
+  });
+  return {
+    dbFileBytes,
+    emptyLargeDb,
+    localFullCloudEmpty,
+    suggestReuploadAll: localFullCloudEmpty,
+  };
 }
 
 function clearOpenSyncConflicts(attendanceId, resolutionNote) {
@@ -6508,6 +6578,26 @@ ipcMain.handle('sync-full-resync', async () => {
   }
 });
 
+ipcMain.handle('sync-reupload-all', async () => {
+  try {
+    const mark = markAllLocalRecordsForCloudReupload();
+    if (!mark.ok) return mark;
+    const w = getSyncWorker();
+    if (w) {
+      w.forceRetryAll();
+      await w.runCycle();
+    }
+    return {
+      ok: true,
+      marked: mark.marked,
+      queued: mark.queued,
+      lastError: w ? (w.getDiagnostics().lastError || null) : null,
+    };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Re-upload failed' };
+  }
+});
+
 ipcMain.handle('sync-status', () => {
   const lastSync = getLastSyncTimestamp();
   const dirtyCount = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
@@ -6537,7 +6627,7 @@ ipcMain.handle('sync-status', () => {
   const pending = pendingCount + failedCount + blockedCount;
   const dirtyPushCount = dirtyCount ? dirtyCount.c : 0;
   const lastPull = getLastPullStats();
-  return {
+  const statusBase = {
     enabled: !!apiUrl,
     inProgress: diag.inProgress || false,
     lastSync: lastSync !== '1970-01-01T00:00:00.000Z' ? lastSync : diag.lastSyncAt || null,
@@ -6552,6 +6642,8 @@ ipcMain.handle('sync-status', () => {
     connectivity: diag.connectivity,
     lastError: diag.lastError,
   };
+  const recovery = buildSyncRecoveryHints(statusBase);
+  return Object.assign(statusBase, recovery);
 });
 
 ipcMain.handle('sync-schedule-on-reconnect', () => {
