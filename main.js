@@ -2320,6 +2320,7 @@ function buildSyncRecoveryHints(statusBase) {
     lastPullReceived: lastPull.received || 0,
     pullEverCompleted,
     lastVerifiedCloudPushAt,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
   });
   const syncPhase = deriveSyncPhase({
     inProgress: !!(statusBase && statusBase.inProgress),
@@ -2332,6 +2333,7 @@ function buildSyncRecoveryHints(statusBase) {
     lastPullReceived: lastPull.received || 0,
     pullEverCompleted,
     lastVerifiedCloudPushAt,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
   });
   return {
     dbFileBytes,
