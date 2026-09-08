@@ -3390,7 +3390,10 @@ var REQUIRED_FIELD_KEYS = [
     } else if (data.status === 'syncing') {
       setFooterIndicator(el, 'Syncing\u2026', 'syncing');
     } else if (data.status === 'error') {
-      if (!data.retryable) {
+      if (data.rateLimited) {
+        var mins = Math.max(1, Math.ceil((data.rateLimitRemainingMs || 60000) / 60000));
+        setFooterIndicator(el, 'Rate limited — retry in ~' + mins + 'm', 'offline', data.lastError || 'Too many requests');
+      } else if (!data.retryable) {
         setFooterIndicator(el, 'Sync auto-retrying', 'offline', data.lastError || '');
       } else {
         _syncRetryableErrorCount++;
@@ -3440,8 +3443,14 @@ var REQUIRED_FIELD_KEYS = [
     }
     if (st.conflictCount > 0) lines.push('Open conflicts: ' + st.conflictCount);
     if (st.lastError) lines.push('Last error: ' + st.lastError);
+    if (st.rateLimit && st.rateLimit.blocked) {
+      lines.push('Rate limited (~' + Math.ceil((st.rateLimit.remainingMs || 0) / 60000) + 'm remaining)');
+    }
+    if (st.lastPush && st.lastPush.at) {
+      lines.push('Last push: ' + (st.lastPush.ok ? ('ok wrote ' + (st.lastPush.written || 0)) : ('failed — ' + (st.lastPush.error || 'error'))));
+    }
     statusEl.textContent = lines.join(' \u00b7 ');
-    statusEl.style.color = (lp.decryptFailed > 0 || st.failedCount > 0 || st.localFullCloudEmpty || st.emptyLargeDb) ? '#b45309' : '';
+    statusEl.style.color = (lp.decryptFailed > 0 || st.failedCount > 0 || st.localFullCloudEmpty || st.emptyLargeDb || (st.rateLimit && st.rateLimit.blocked)) ? '#b45309' : '';
     if (hintEl) {
       if (st.emptyLargeDb) {
         hintEl.style.display = '';

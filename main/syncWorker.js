@@ -34,6 +34,11 @@
  */
 const crypto = require('crypto');
 const { encryptSyncEnvelope } = require('../lib/syncRecordCrypto');
+const {
+  assertPushAccepted,
+  createRateLimitGate,
+  RATE_LIMIT_COOLDOWN_MS,
+} = require('../lib/syncPushAck');
 
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
@@ -66,49 +71,6 @@ function isRetryableError(err) {
   return true;
 }
 
-/**
- * Validate a /api/sync/push response before clearing sync_dirty.
- *
- * Incident class (2026-09): clients must NOT treat ok:true with written:0,
- * written < sent, or missing written as success — that leaves the cloud empty
- * while local shows pending=0/dirty=0 (Mac CDP: lastSuccessfulPushAt set,
- * lastAttempts only pull recordCount:0, Windows Full re-sync still empty).
- *
- * Modern /api/sync/push returns numeric `written`. Missing written is treated
- * as unconfirmed and retryable so dirty flags stay set.
- */
-function assertPushAccepted(resp, sentCount) {
-  const sent = Number(sentCount) || 0;
-  if (!resp || resp.ok !== true) {
-    const err = new Error(resp && resp.error ? String(resp.error) : 'Push failed');
-    if (resp && /too many requests|rate limit/i.test(String(resp.error || ''))) {
-      err.statusCode = 429;
-    }
-    throw err;
-  }
-  if (sent === 0) return resp;
-  if (resp.written == null) {
-    const err = new Error('Push unconfirmed: server omitted written count');
-    err.code = 'PUSH_INCOMPLETE';
-    err.statusCode = 503;
-    throw err;
-  }
-  const written = Array.isArray(resp.written)
-    ? resp.written.length
-    : Number(resp.written);
-  if (!Number.isFinite(written) || written < sent) {
-    const err = new Error(
-      written === 0
-        ? 'Push accepted 0 records (cloud write empty)'
-        : `Push incomplete: wrote ${written} of ${sent}`
-    );
-    err.code = 'PUSH_INCOMPLETE';
-    err.statusCode = 503;
-    throw err;
-  }
-  return resp;
-}
-
 /** Exponential backoff: next attempt after RETRY_DELAYS_MS[retry_count] */
 function getNextAttemptMs(retryCount) {
   const idx = Math.min(retryCount, RETRY_DELAYS_MS.length - 1);
@@ -133,6 +95,7 @@ function generateCorrelationId() {
  *   onStatusChange (status) → called with connectivity/sync status
  *   sendToRenderer (channel, data) → IPC to renderer
  *   syncPull () → Promise
+ *   logSyncAttempt (optional)
  */
 function createSyncWorker(ctx) {
   let _timer = null;
@@ -140,7 +103,12 @@ function createSyncWorker(ctx) {
   let _connectivityState = 'unknown';
   let _lastSyncAt = null;
   let _lastSuccessfulPushAt = 0;
+  let _lastVerifiedCloudPushAt = null;
+  let _lastPushStats = { attempted: 0, written: 0, ok: false, at: null, error: null };
   let _lastError = null;
+  const rateLimitGate = createRateLimitGate({
+    cooldownMs: (ctx && ctx.rateLimitCooldownMs) || RATE_LIMIT_COOLDOWN_MS,
+  });
 
   function setConnectivity(state) {
     if (_connectivityState !== state) {
@@ -343,7 +311,16 @@ function createSyncWorker(ctx) {
         }
         _lastSyncAt = new Date().toISOString();
         _lastSuccessfulPushAt = Date.now();
+        _lastVerifiedCloudPushAt = new Date().toISOString();
+        _lastPushStats = {
+          attempted: payloads.length,
+          written: payloads.length,
+          ok: true,
+          at: _lastVerifiedCloudPushAt,
+          error: null,
+        };
         _lastError = null;
+        rateLimitGate.clear();
         setConnectivity('api_available');
         if (ctx.logSyncAttempt) {
           ctx.logSyncAttempt(generateCorrelationId(), 'push', payloads.length, true, null);
@@ -354,10 +331,26 @@ function createSyncWorker(ctx) {
           markFailed(item.id, e, retryable);
         }
         _lastError = e && e.message ? e.message : String(e);
+        _lastPushStats = {
+          attempted: items.length,
+          written: 0,
+          ok: false,
+          at: new Date().toISOString(),
+          error: _lastError,
+        };
         // H32 — invalidate the "recent successful push" cache on any error so
         // the next cycle actually hits /api/health instead of blindly
         // claiming api_available for up to 60 seconds.
         _lastSuccessfulPushAt = 0;
+        if (rateLimitGate.noteError(e)) {
+          notifyRenderer({
+            status: 'error',
+            lastError: _lastError,
+            retryable: true,
+            rateLimited: true,
+            rateLimitRemainingMs: rateLimitGate.remainingMs(),
+          });
+        }
         if (ctx.logSyncAttempt) {
           ctx.logSyncAttempt(generateCorrelationId(), 'push', items.length, false, _lastError);
         }
@@ -448,6 +441,17 @@ function createSyncWorker(ctx) {
     if (_inProgress) return;
     _inProgress = true;
     try {
+      if (rateLimitGate.isBlocked()) {
+        _lastError = rateLimitGate.reason() || 'Too many requests. Please try again later.';
+        notifyRenderer({
+          status: 'error',
+          lastError: _lastError,
+          retryable: true,
+          rateLimited: true,
+          rateLimitRemainingMs: rateLimitGate.remainingMs(),
+        });
+        return;
+      }
       const conn = await checkConnectivity();
       setConnectivity(conn);
       if (conn === 'offline' || conn === 'auth_required') {
@@ -456,9 +460,14 @@ function createSyncWorker(ctx) {
       await ensureCanonicalKeyOnce();
       recoverStuckItems();
       await processBatch();
+      if (rateLimitGate.isBlocked()) {
+        // Do not spam /api/sync/pull into the same 120/hour budget after a 429.
+        return;
+      }
       if (ctx.syncPull) {
         const pullResult = await ctx.syncPull().catch((e) => {
           _lastError = e && e.message ? e.message : String(e);
+          rateLimitGate.noteError(e);
           notifyRenderer({ status: 'error', lastError: _lastError, retryable: isRetryableError(e) });
           return { pulled: 0, decryptFailed: 0, received: 0 };
         });
@@ -559,6 +568,9 @@ function createSyncWorker(ctx) {
       lastError: _lastError,
       inProgress: _inProgress,
       lastSuccessfulPushAt: _lastSuccessfulPushAt || null,
+      lastVerifiedCloudPushAt: _lastVerifiedCloudPushAt,
+      lastPush: { ..._lastPushStats },
+      rateLimit: rateLimitGate.snapshot(),
       queueItems,
       conflictItems,
     };
@@ -579,10 +591,27 @@ function createSyncWorker(ctx) {
         );
       }
       if (stuck.length > 0) ctx.flushDb && ctx.flushDb();
+      rateLimitGate.clear();
       return stuck.length;
     } catch (e) {
       return 0;
     }
+  }
+
+  /**
+   * After a DB restore / file swap, drop in-flight cycle state so markSynced
+   * from a pre-restore push cannot clear dirty flags on the new database.
+   * Caller should stop()+recreate the worker for a full reset; this clears
+   * soft state when the same instance must keep running.
+   */
+  function resetRuntimeState(reason) {
+    _inProgress = false;
+    _lastError = null;
+    _lastSuccessfulPushAt = 0;
+    _canonicalKeyDone = false;
+    _canonicalKeyLastTry = 0;
+    rateLimitGate.clear();
+    console.info('[SyncWorker] Runtime state reset:', reason || 'manual');
   }
 
   return {
@@ -593,6 +622,7 @@ function createSyncWorker(ctx) {
     runCycle,
     getDiagnostics,
     forceRetryAll,
+    resetRuntimeState,
     getConnectivity: () => _connectivityState,
   };
 }
@@ -614,4 +644,5 @@ module.exports = {
   MAX_RECORDS_PER_CYCLE,
   BLOCKED_RECOVERY_COOLDOWN_MS,
   MAX_BLOCKED_AUTO_RECOVERIES,
+  RATE_LIMIT_COOLDOWN_MS,
 };
