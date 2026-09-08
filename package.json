@@ -36,6 +36,7 @@
     "test:e2e": "playwright test",
     "test:laa": "node --test tests/laaFormsManifest.test.js tests/laaFormsSync.test.js tests/attendancePicker.source.test.js && playwright test tests/e2e/laa-home-forms.spec.ts",
     "test:unit": "node scripts/run-unit-tests.js",
+    "inventory:sync-storage": "node scripts/inventory-sync-storage.mjs",
     "test:deep": "node --test tests/deepAudit.test.js",
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
     "prepare-trial": "node scripts/prepare-trial.js",
