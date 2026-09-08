@@ -18,7 +18,7 @@ Multiple verified client defects combined into one production failure class (not
 3. **Restore / worker race** — swapping the in-memory DB while a cycle was in flight could mid-drain dirty counts (e.g. pending=11 of 66) and `markSynced` against the new DB.
 4. **No forced re-upload + verify** after raw DB+key file-swap (which does **not** mark dirty) or after “already clean” local state — “Push all pending” is a no-op when dirty=0.
 5. **429 spam** — 10s poll kept hitting `checkRateLimit("sync-push"|"sync-pull", ip, 120/hour)` after “Too many requests”.
-6. **UX honesty gaps** — large encrypted `attendances.db` (~7.5MB) with 0 UI rows looked like a blank install; Backup queued while Backups folder missing; calm “Synced” while cloud empty.
+6. **UX honesty gaps** — large encrypted `attendances.db` (~7.5MB) with 0 UI rows looked like a blank install; Backup queued while Backups folder missing; calm “Synced” while cloud empty. Companion fix: do **not** treat incremental pulls with `received:0` as empty-cloud (require `pulledFromEpoch`).
 
 **Server contract (custodynote.com):** push/pull gated by licence key → records scoped by **licence hash** (not machine id) → S3. Live probes without secrets: missing key → `Missing licence key`; invalid → `Invalid licence key`. Website repo is private (not cloneable from this agent). Managed AWS *backup* is Pro-gated; **record sync** uses the licence key (Free CN-A still syncs when valid).
 
