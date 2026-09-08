@@ -29,8 +29,11 @@ jobs:
           echo "== PR #3 =="
           gh pr view 3 --repo "$REPO" --json state,mergedAt,mergeCommit,url
           echo
-          echo "== Actions runs =="
+          echo "== Actions runs (master branch) =="
           gh run list --repo "$REPO" --branch master --limit 8 --json databaseId,name,status,conclusion,url,headSha,createdAt,event
+          echo
+          echo "== Deploy and IndexNow runs (any branch/event, limit 15) =="
+          gh run list --repo "$REPO" --workflow "Deploy and IndexNow" --limit 15 --json databaseId,name,status,conclusion,url,headSha,createdAt,event,displayTitle
           echo
           echo "== Workflows =="
           gh api "repos/$REPO/actions/workflows" --jq '.workflows[]|{name,path,state}'
