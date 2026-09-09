@@ -36,8 +36,9 @@ User edits (renderer app.js)
 | `userData/encryption.key` | OS safeStorage-wrapped master key |
 | `userData/recovery.dat` | Recovery-password wrap of master key |
 | `userData/master.fallback` | Fallback when safeStorage unavailable |
-| `userData/Backups/attendance-latest.db` | Quick rolling backup (includes dirty rows) |
-| `userData/Backups/attendance-backup-*.db` | Multi-generation hourly (+ daily reps; prune keeps 24 hourly / 7 daily) |
+| `userData/Backups/attendance-latest.db` | Latest quick pointer (includes dirty rows) |
+| `userData/Backups/attendance-quick-*.db` | Generational quick snapshots (1.9.85+; retain 48) |
+| `userData/Backups/attendance-backup-*.db` | Hourly multi-generation archives |
 | `sync_queue` / `sync_dirty` / `sync_id` / `sync_version` | Offline-first queue + conflict helpers |
 | `deleted_at` / `archived_at` | Soft-delete / archive (preferred over hard DELETE) |
 | `https://custodynote.com/api/sync/push\|pull` | Licence-hash scoped record sync (S3 behind API) |
@@ -137,22 +138,42 @@ On a machine with the live licence activated:
 
 ## Backup scheduler reality (Framework12 follow-up)
 
-| Setting (pre-1.9.85) | Value | User expectation gap |
-|----------------------|-------|----------------------|
-| Quick min interval | **15 minutes** | Robert expected ~every couple of minutes |
-| Quick file | **Single overwrite** `attendance-latest.db` | No point-in-time recovery within the hour |
-| Hourly | timestamped `attendance-backup-*.db` (24 + 7 daily) | OK when folder exists |
-| Skip if folder missing | `{ skipped: true, reason: 'backup-folder-missing' }` | Could look calm while **Backups/** never created |
+### (1) Confirmed in source — intervals & overwrite (pre-1.9.85)
 
-**Why Backups can be empty while the app runs**
+| Layer | Value | Notes |
+|-------|-------|-------|
+| `main/backupScheduler.js` default (older) | quick **15 min**, idle grace 45s, periodic 3 min | Module defaults only |
+| **`main.js` `getBackupScheduler()` wiring** | quick **`30 * 60 * 1000` (30 min)**, idle 90s, periodic 10 min | **This is what the app actually ran** — overrode module defaults |
+| Quick file | **Single overwrite** `Backups/attendance-latest.db` | No point-in-time within the hour |
+| Hourly | `attendance-backup-<ISO>.db` | Keep 24 hourly + 7 daily reps |
+| On missing folder | `isBackupFolderReady()` → `{ skipped: true, reason: 'backup-folder-missing' }` | Could look calm; no durable Home ERROR historically |
+| Contents | Live in-memory export via `getEncryptedDbExport()` | **Includes dirty / unsynced rows** when folder is writable |
 
-1. `settings.backupFolder` after Mac→Windows restore still held a Mac path (`/Users/…/Backups`) — not creatable on Windows; skips accumulate.  
-2. Fresh installs historically stored the path without `mkdir` (fixed earlier with `ensureBackupFolderExists`, but foreign paths still broke readiness).  
-3. Off-site OneDrive folder could still receive copies while primary local Backups never wrote — UI did not make that split obvious.
+Robert expected backups every couple of minutes; production quick cadence was **30 minutes**, not 2.
 
-**1.9.85 hardenings:** quick every **~2 minutes** + generational `attendance-quick-*.db`; path sanitize/reset; degraded Home/Settings banners; effective path + Open folder.
+### (2) Why `Backups/` can be empty while the app runs
 
-**Do not claim** Costache exists in any Framework12 backup without reading those files on the live machine (off-site OneDrive Sep 7–8 copies are the best next preserve-first search).
+1. After Mac→Windows restore, `settings.backupFolder` still held `/Users/…/Backups` — not creatable on Windows; every scheduled run skipped.  
+2. Fresh installs historically stored the path without `mkdir` (later mitigated by `ensureBackupFolderExists`, but foreign OS paths still broke readiness).  
+3. Off-site OneDrive (`offsiteBackupFolder`) could still receive copies while primary local Backups never wrote — UI did not make the split obvious.  
+4. **Do not invent** that Costache is in any Framework12 backup without reading those files (prefer preserve-first search of OneDrive Sep 7–8 offsite copies).
+
+### (3) 1.9.85 hardenings
+
+| Change | Behaviour |
+|--------|-----------|
+| Quick interval | **`2 * 60 * 1000`** in both scheduler default **and** `getBackupScheduler()` wiring |
+| Generational quick | Writes `attendance-latest.db` **and** `attendance-quick-<ISO>.db`; prune keeps **48** quick gens |
+| Verify | Post-write CNDB magic + size (`verifyEncryptedBackupFile`) |
+| Dirty rows | Unchanged — export is full live DB including `sync_dirty=1` |
+| No silent skip | `_notifyBackupDegraded` → Home banner + Settings + footer |
+| Path sanitize | Foreign OS `backupFolder` auto-resets to `userData/Backups` |
+
+### (4) Tests
+
+- `tests/backupPathAndGenerational.test.js` — path reset, generational naming, degraded UI, main.js 2‑min wiring  
+- `tests/backupScheduler.test.js` — N‑minute cadence / retention around dirty saves that never reach cloud  
+- `tests/attendanceDurability.test.js` — verify + integrity without auto-delete
 
 ---
 

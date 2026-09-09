@@ -63,10 +63,14 @@ describe('generational quick backups + visible degradation', () => {
     assert.match(mainJs, /generationalQuick:\s*true/);
   });
 
-  it('quick min interval is ~2 minutes (not 15)', () => {
+  it('main.js wires ~2 minute quick interval (not 30 min override)', () => {
+    const idx = mainJs.indexOf('function getBackupScheduler');
+    assert.ok(idx > 0);
+    const chunk = mainJs.slice(idx, idx + 900);
+    assert.match(chunk, /quickMinIntervalMs:\s*2 \* 60 \* 1000/);
+    assert.doesNotMatch(chunk, /quickMinIntervalMs:\s*30 \* 60 \* 1000/);
     const sched = fs.readFileSync(path.join(__dirname, '..', 'main', 'backupScheduler.js'), 'utf8');
     assert.match(sched, /2 \* 60 \* 1000/);
-    assert.doesNotMatch(sched, /quickMinIntervalMs \|\| 15 \* 60 \* 1000/);
   });
 
   it('skipped/failed backup notifies renderer (no silent skip)', () => {
@@ -91,5 +95,79 @@ describe('generational quick backups + visible degradation', () => {
     const initIdx = mainJs.indexOf('async function initDb');
     const chunk = mainJs.slice(initIdx, initIdx + 6000);
     assert.match(chunk, /ensureBackupPathsSane/);
+  });
+});
+
+describe('backup every N minutes — retention around local-only dirty save', () => {
+  it('scheduler keeps firing quick backups for dirty local state that never synced', async () => {
+    // Simulate: attendance saved locally (sync_dirty) but cloud never ack'd.
+    // Backup scheduler must still take generational snapshots on the N-minute cadence.
+    const { createBackupScheduler } = require('../main/backupScheduler');
+    const calls = [];
+    let nowMs = 0;
+    let nextId = 1;
+    const timers = new Map();
+    const setTimer = (fn, delay) => {
+      const id = nextId++;
+      timers.set(id, { id, fn, runAt: nowMs + Math.max(0, delay || 0) });
+      return id;
+    };
+    const clearTimer = (id) => { timers.delete(id); };
+    const tick = async (ms) => {
+      nowMs += ms;
+      let progressed = true;
+      while (progressed) {
+        progressed = false;
+        const due = [...timers.values()].filter((t) => t.runAt <= nowMs).sort((a, b) => a.runAt - b.runAt);
+        for (const timer of due) {
+          timers.delete(timer.id);
+          progressed = true;
+          await timer.fn();
+        }
+      }
+    };
+
+    const generations = [];
+    const MAX_KEEP = 3;
+    const scheduler = createBackupScheduler({
+      now: () => nowMs,
+      setTimer,
+      clearTimer,
+      quickMinIntervalMs: 2 * 60 * 1000,
+      userIdleGraceMs: 0,
+      periodicCheckMs: 30 * 1000,
+      runBackup: async (kind) => {
+        calls.push({ kind, at: nowMs, syncDirty: true, cloudAcked: false });
+        // Emulate generational retention: keep last MAX_KEEP quick snapshots.
+        if (kind === 'quick') {
+          generations.push(`attendance-quick-${nowMs}.db`);
+          while (generations.length > MAX_KEEP) generations.shift();
+        }
+        return {
+          bytes: 4096,
+          durationMs: 5,
+          verified: true,
+          verifiedAt: new Date(nowMs).toISOString(),
+          generationalPath: generations[generations.length - 1],
+        };
+      },
+    });
+
+    scheduler.markDirty('local-save-never-cloud');
+    await tick(0);
+    assert.strictEqual(calls.length, 1);
+    assert.strictEqual(calls[0].kind, 'quick');
+    assert.strictEqual(calls[0].cloudAcked, false);
+
+    // Three more quick cycles at 2-minute cadence.
+    for (let i = 0; i < 3; i++) {
+      scheduler.markDirty('still-dirty-local-only');
+      await tick(2 * 60 * 1000);
+    }
+    assert.ok(calls.length >= 4, 'expected repeated quick backups while dirty and unsynced');
+    assert.ok(calls.every((c) => c.syncDirty && c.cloudAcked === false));
+    assert.strictEqual(generations.length, MAX_KEEP, 'retention must prune older quick gens');
+    assert.ok(generations.every((n) => n.startsWith('attendance-quick-')));
+    scheduler.dispose();
   });
 });

@@ -1767,9 +1767,12 @@ let _backupScheduler = null;
 function getBackupScheduler() {
   if (_backupScheduler) return _backupScheduler;
   _backupScheduler = createBackupScheduler({
-    quickMinIntervalMs: 30 * 60 * 1000,
-    userIdleGraceMs: 90 * 1000,
-    periodicCheckMs: 10 * 60 * 1000,
+    // Framework12 incident: 30-minute quick interval + single overwrite left a large
+    // crash window and empty local Backups when the folder path was wrong.
+    // Target ~every couple of minutes; idle grace still avoids mid-keystroke IO.
+    quickMinIntervalMs: 2 * 60 * 1000,
+    userIdleGraceMs: 45 * 1000,
+    periodicCheckMs: 60 * 1000,
     runBackup: (kind, reason) => {
       console.log('[Backup] Scheduler triggered:', kind, reason);
       if (kind === 'hourly') {
