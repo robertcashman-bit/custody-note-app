@@ -115,9 +115,13 @@ describe('saveForm — finalise path', () => {
 
   it('stops autosave and sets currentRecordStatus before IPC when finalising', () => {
     assert.ok(saveFormBody, 'saveForm function must exist');
+    const detailedIdx = saveFormBody.indexOf('attendanceSaveDetailed');
+    const legacyIdx = saveFormBody.indexOf('window.api.attendanceSave');
+    const saveCallIdx = detailedIdx !== -1 ? detailedIdx : legacyIdx;
+    assert.ok(saveCallIdx > 0, 'must call attendanceSaveDetailed or attendanceSave');
     const finaliseBlock = saveFormBody.substring(
       saveFormBody.indexOf("if (status === 'finalised')"),
-      saveFormBody.indexOf('window.api.attendanceSave')
+      saveCallIdx
     );
     assert.ok(finaliseBlock.includes('stopAutoSave()'), 'must stop autosave');
     assert.ok(finaliseBlock.includes("currentRecordStatus = 'finalised'"), 'must set status');

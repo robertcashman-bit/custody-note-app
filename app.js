@@ -5474,7 +5474,7 @@ var REQUIRED_FIELD_KEYS = [
     _draftSaveInFlight = true;
     _lastQuietSaveStart = Date.now();
     showSavingIndicator();
-    window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
+    attendanceSaveDetailed({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
       /* Invalidate cache on save */
       if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
         _recordCache.delete(currentAttendanceId);
@@ -5590,7 +5590,8 @@ var REQUIRED_FIELD_KEYS = [
     }
     if (result == null) return { id: null, durable: false, pendingSync: false, error: null };
     if (typeof result === 'number' || typeof result === 'string') {
-      return { id: result, durable: false, pendingSync: true, error: null };
+      // Preload attendanceSave unwraps to bare id; main still flushed via finishAttendanceSaveResult.
+      return { id: result, durable: true, pendingSync: true, error: null };
     }
     if (typeof result === 'object') {
       return {
@@ -5602,6 +5603,14 @@ var REQUIRED_FIELD_KEYS = [
       };
     }
     return { id: null, durable: false, pendingSync: false, error: 'invalid_result' };
+  }
+
+  /** Prefer detailed save (durable meta); fall back to numeric unwrap API. */
+  function attendanceSaveDetailed(payload) {
+    if (window.api && typeof window.api.attendanceSaveDetailed === 'function') {
+      return window.api.attendanceSaveDetailed(payload);
+    }
+    return window.api.attendanceSave(payload);
   }
 
   function showSettingsSavedToast() {
@@ -13170,7 +13179,7 @@ var REQUIRED_FIELD_KEYS = [
       if (status === 'finalised') {
         console.log('[FINALISE] IPC attempt #' + attemptNum + ': id=' + currentAttendanceId);
       }
-      window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
+      attendanceSaveDetailed({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
         /* Invalidate cache on save */
         if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
           _recordCache.delete(currentAttendanceId);
@@ -17734,7 +17743,7 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
 
-      window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(function(result) {
+      attendanceSaveDetailed({ id: currentAttendanceId, data: data, status: 'draft' }).then(function(result) {
         if (result && typeof result === 'object' && result.error === 'locked') {
           showToast('This record is finalised and cannot be modified', 'error', 6000);
           finishBtn(origText, 500);

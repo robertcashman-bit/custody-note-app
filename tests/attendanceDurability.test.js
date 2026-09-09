@@ -102,7 +102,29 @@ describe('Durable pendingSync / honest Saved to disk vs Synced', () => {
 
     const legacy = normalizeAttendanceSaveResult(99);
     assert.strictEqual(legacy.id, 99);
-    assert.strictEqual(legacy.durable, false);
+    // Preload unwrap returns bare id; flush already ran in main — treat as durable.
+    assert.strictEqual(legacy.durable, true);
+  });
+
+  it('preload attendanceSave unwraps to numeric id; detailed keeps durable meta', () => {
+    const {
+      coerceAttendanceId,
+      unwrapAttendanceSaveForApi,
+    } = require('../lib/attendanceSaveResult');
+    assert.strictEqual(coerceAttendanceId({ id: 12, durable: true }), 12);
+    assert.strictEqual(coerceAttendanceId(12), 12);
+    assert.strictEqual(unwrapAttendanceSaveForApi({ id: 5, durable: true, pendingSync: true }), 5);
+    assert.deepStrictEqual(
+      unwrapAttendanceSaveForApi({ error: 'locked', message: 'finalised' }),
+      { error: 'locked', message: 'finalised' }
+    );
+    const preload = fs.readFileSync(path.join(__dirname, '..', 'preload.js'), 'utf8');
+    assert.match(preload, /attendanceSaveDetailed/);
+    assert.match(preload, /if \(result\.error\) return result/);
+    assert.match(preload, /if \(result\.id != null\) return result\.id/);
+    assert.match(mainJs, /function coerceAttendanceIdArg/);
+    assert.match(appJs, /function attendanceSaveDetailed/);
+    assert.match(appJs, /attendanceSaveDetailed\(\{/);
   });
 
   it('renderer shows Saved to disk with pending sync, not false Synced', () => {
