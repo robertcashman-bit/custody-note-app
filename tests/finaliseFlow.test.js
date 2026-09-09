@@ -233,8 +233,8 @@ describe('Main process — attendance-save handler', () => {
   });
 
   it('flushes DB to disk after finalise or office-complete', () => {
-    assert.ok(saveHandler.includes("if (st === 'finalised' || st === 'completed') flushDbSync()"),
-      'must call flushDbSync after finalise or completed write');
+    assert.ok(saveHandler.includes('finishAttendanceSaveResult') || saveHandler.includes('flushDbSync()'),
+      'must call flushDbSync (via finishAttendanceSaveResult) after save write');
   });
 });
 

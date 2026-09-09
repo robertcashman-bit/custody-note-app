@@ -124,6 +124,14 @@ const {
 } = require('./lib/syncRecoveryHints');
 const { normalizeLicenceKeyForSync } = require('./lib/licenceKeyNormalize');
 const { buildLocalCloudHealth, buildEmergencyRecordIndex } = require('./lib/syncHealth');
+const { buildAttendanceSaveLog } = require('./lib/attendanceSaveResult');
+const {
+  emptyCloudPullPolicy,
+  assertPullBatchNonDestructive,
+  fullResyncMayDestroyLocalOnly,
+} = require('./lib/syncLocalPreserve');
+const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
+const { buildLocalCloudIntegrityReport } = require('./lib/localCloudIntegrity');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
@@ -1683,6 +1691,19 @@ function getBackupScheduler() {
   return _backupScheduler;
 }
 
+function _verifyBackupOrThrow(dest, expectedBytes, kind) {
+  const verified = verifyEncryptedBackupFile(dest, { expectedBytes });
+  if (!verified.ok) {
+    const msg = 'Backup verify failed (' + (kind || 'backup') + '): ' + (verified.reason || 'unknown');
+    console.error('[Backup]', msg);
+    const err = new Error(msg);
+    err.code = 'BACKUP_VERIFY_FAILED';
+    err.verify = verified;
+    throw err;
+  }
+  return verified;
+}
+
 function _runQuickBackupAsync() {
   if (!db) return Promise.resolve({ skipped: true, reason: 'db-missing' });
   if (!isBackupFolderReady()) return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
@@ -1694,12 +1715,24 @@ function _runQuickBackupAsync() {
     return new Promise((resolve, reject) => {
       writeFileAtomic(dest, encrypted, (err) => {
         if (err) { console.error('[Backup] Quick backup write failed:', err.message); return reject(err); }
-        console.log('[Backup] Quick backup saved (encrypted), took', Date.now() - start, 'ms,', encrypted.length, 'bytes');
+        let verified;
+        try {
+          verified = _verifyBackupOrThrow(dest, encrypted.length, 'quick');
+        } catch (verifyErr) {
+          return reject(verifyErr);
+        }
+        console.log('[Backup] Quick backup saved+verified (encrypted), took', Date.now() - start, 'ms,', encrypted.length, 'bytes');
         copyToOffsiteBackup(dest);
         uploadToCloudIfConfigured(encrypted);
         uploadToS3IfConfigured(encrypted, 'attendance-latest.db');
         uploadToManagedCloudIfEnabled(encrypted, 'attendance-latest.db');
-        resolve({ durationMs: Date.now() - start, bytes: encrypted.length });
+        resolve({
+          durationMs: Date.now() - start,
+          bytes: encrypted.length,
+          verified: true,
+          verifiedAt: verified.verifiedAt || new Date().toISOString(),
+          path: dest,
+        });
       });
     });
   } catch (err) {
@@ -1721,7 +1754,13 @@ function _runHourlyBackupAsync() {
     return new Promise((resolve, reject) => {
       writeFileAtomic(dest, encrypted, (err) => {
         if (err) { console.error('[Backup] Hourly write failed:', err.message); return reject(err); }
-        console.log('[Backup] Hourly archive saved (encrypted):', name, 'took', Date.now() - start, 'ms');
+        let verified;
+        try {
+          verified = _verifyBackupOrThrow(dest, encrypted.length, 'hourly');
+        } catch (verifyErr) {
+          return reject(verifyErr);
+        }
+        console.log('[Backup] Hourly archive saved+verified (encrypted):', name, 'took', Date.now() - start, 'ms');
         pruneOldBackups(backupDir);
         copyToOffsiteBackup(dest);
         uploadToCloudIfConfigured(encrypted);
@@ -1729,7 +1768,14 @@ function _runHourlyBackupAsync() {
         uploadToManagedCloudIfEnabled(encrypted, name);
         const offsiteDir = getOffsiteBackupFolder();
         if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
-        resolve({ durationMs: Date.now() - start, bytes: encrypted.length });
+        resolve({
+          durationMs: Date.now() - start,
+          bytes: encrypted.length,
+          verified: true,
+          verifiedAt: verified.verifiedAt || new Date().toISOString(),
+          path: dest,
+          name,
+        });
       });
     });
   } catch (err) {
@@ -2646,6 +2692,25 @@ async function syncPull(opts) {
 
     const masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
     const remoteRecords = resp.records || [];
+    // Local-first: empty cloud / empty batch must never wipe local-only rows.
+    const preservePolicy = emptyCloudPullPolicy({
+      remoteRecords,
+      localActiveCount: localCount,
+    });
+    if (preservePolicy.reason === 'empty_cloud_keeps_local') {
+      console.info('[SYNC-PULL] Empty cloud batch with local records — preserving local (no wipe)', {
+        localCount,
+        received: remoteRecords.length,
+        mayWipeLocal: preservePolicy.mayWipeLocal,
+      });
+    }
+    // Explicit guard — pull path must remain merge-only (insert/update/soft-tombstone by sync_id).
+    assertPullBatchNonDestructive(
+      remoteRecords.map((r) => ({
+        operation: 'upsert',
+        hasMatchingSyncId: !!(r && (r.syncId || r.sync_id)),
+      }))
+    );
     let batchMerged = 0;
     let batchConflicts = 0;
     let batchDecryptFailed = 0;
@@ -2819,6 +2884,11 @@ function resetSyncPullCursor() {
 
 async function runFullSyncFromCloud() {
   if (!db) throw new Error('Database not ready');
+  // Full re-sync resets the pull cursor and merges remotes. It must never
+  // destroy local-only rows (empty cloud is an alarm + re-upload path).
+  if (fullResyncMayDestroyLocalOnly()) {
+    throw new Error('REFUSING_DESTRUCTIVE_FULL_RESYNC');
+  }
   migrateSyncDirtyToQueue();
   const w = getSyncWorker();
   // Wait out any in-flight poll cycle so we do not race the pull cursor, then
@@ -6051,6 +6121,44 @@ ipcMain.handle('attendance-get', (_, id) => {
   return dbGet('SELECT id, data, status, supervisor_approved_at, supervisor_note, archived_at FROM attendances WHERE id = ?', [id]) || null;
 });
 
+/**
+ * Persist attendance DB to disk before the UI claims "Saved locally".
+ * Returns a structured result so the renderer can distinguish durable local
+ * save vs pending cloud sync without treating IPC success as synced.
+ */
+function finishAttendanceSaveResult(id, status, op) {
+  let durable = false;
+  if (id != null) {
+    try {
+      flushDbSync();
+      durable = !_dbDirty;
+    } catch (err) {
+      console.error('[SAVE] flushDbSync failed:', err && err.message ? err.message : err);
+      durable = false;
+      _dbDirty = true;
+    }
+  }
+  const pendingSync = true;
+  const syncDirty = true;
+  try {
+    console.info('[SAVE]', JSON.stringify(buildAttendanceSaveLog({
+      id,
+      status: status || 'draft',
+      durable,
+      syncDirty,
+      pendingSync,
+      op: op || 'attendance-save',
+    })));
+  } catch (_) {}
+  return {
+    id,
+    durable,
+    pendingSync,
+    syncDirty,
+    status: status || 'draft',
+  };
+}
+
 ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   const now = new Date().toISOString();
   const st = status || 'draft';
@@ -6064,8 +6172,9 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'unlocked_for_amendment', now]);
       markDbDirty();
       enqueueSyncForRecord(id);
+      return finishAttendanceSaveResult(id, 'draft', 'unlock');
     }
-    return id;
+    return { id: null, durable: false, pendingSync: false, syncDirty: false, error: 'not_found' };
   }
 
   const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
@@ -6152,11 +6261,11 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       }
     }
     markDbDirty();
-    // Durability: finalise/complete must hit disk before the UI reports saved.
-    // flushDb() only kicks an async save; flushDbSync writes immediately.
-    if (st === 'finalised' || st === 'completed') flushDbSync();
+    // Durability: every attendance-save must hit disk before the UI reports
+    // "Saved locally". Finalise/complete previously flushed; drafts also need
+    // this (crash between in-memory write and 30s debounce was a loss window).
     enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert');
-    return id;
+    return finishAttendanceSaveResult(id, st, st === 'finalised' ? 'finalise' : 'update');
   }
 
   // One copy per case: if a draft already exists for this case (same DSCC or client+date+station), update it instead of creating a new row.
@@ -6175,7 +6284,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       );
       markDbDirty();
       enqueueSyncForRecord(existingId);
-      return existingId;
+      return finishAttendanceSaveResult(existingId, st, 'draft-case-key-update');
     }
     // Guard against burst duplicate inserts (double-click / repeated handler firing):
     // if we just created the same draft payload in the last 30s, reuse it.
@@ -6202,7 +6311,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
           );
           markDbDirty();
           enqueueSyncForRecord(row.id);
-          return row.id;
+          return finishAttendanceSaveResult(row.id, st, 'draft-burst-dedupe');
         }
       }
     } catch (e) {
@@ -6241,7 +6350,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     );
     enqueueSyncForRecord(newId);
   }
-  return newId;
+  return finishAttendanceSaveResult(newId, st, 'create');
 });
 
 ipcMain.handle('attendance-force-status', (_, { id, status }) => {
@@ -6256,9 +6365,10 @@ ipcMain.handle('attendance-force-status', (_, { id, status }) => {
     [id, status === 'finalised' ? 'force_finalised' : 'force_status_change', now, 'Forced status update to ' + status]);
   markDbDirty();
   enqueueSyncForRecord(id, status === 'finalised' ? 'finalise' : 'upsert');
+  const saveResult = finishAttendanceSaveResult(id, status, 'force-status');
   const verify = dbGet('SELECT status FROM attendances WHERE id = ?', [id]);
-  console.log('[FORCE-STATUS] id=' + id + ' set to ' + status + ', verified=' + (verify ? verify.status : 'MISSING'));
-  return { ok: true, status: verify ? verify.status : status };
+  console.log('[FORCE-STATUS] id=' + id + ' set to ' + status + ', verified=' + (verify ? verify.status : 'MISSING') + ', durable=' + !!saveResult.durable);
+  return { ok: true, status: verify ? verify.status : status, durable: !!saveResult.durable };
 });
 
 ipcMain.handle('attendance-archive', (_, id) => {
@@ -6270,6 +6380,7 @@ ipcMain.handle('attendance-archive', (_, id) => {
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'archived', now]);
   markDbDirty();
   enqueueSyncForRecord(id);
+  flushDbSync();
   return true;
 });
 
@@ -6298,7 +6409,8 @@ ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
     );
     markDbDirty();
     enqueueSyncForRecord(id);
-    return { soft: true };
+    flushDbSync();
+    return { soft: true, durable: true };
   }
   return false;
 });
@@ -6312,6 +6424,7 @@ ipcMain.handle('attendance-undelete', (_, id) => {
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)', [id, 'restored', now, 'Restored from deleted']);
   markDbDirty();
   enqueueSyncForRecord(id);
+  flushDbSync();
   return true;
 });
 
@@ -6525,6 +6638,8 @@ ipcMain.handle('backup-now', async () => {
     await writeFileAtomicAsync(dest, encData);
     const latestDest = path.join(backupDir, 'attendance-latest.db');
     await writeFileAtomicAsync(latestDest, encData);
+    const verifiedDest = _verifyBackupOrThrow(dest, encData.length, 'manual');
+    _verifyBackupOrThrow(latestDest, encData.length, 'manual-latest');
     dbDirtySinceQuickBackup = false;
     dbDirtySinceHourlyBackup = false;
     pruneOldBackups(backupDir);
@@ -6538,7 +6653,13 @@ ipcMain.handle('backup-now', async () => {
     const offsiteDir = getOffsiteBackupFolder();
     if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
     const bs = _backupScheduler;
-    if (bs) bs.recordCompleted('quick', 'manual', { bytes: encData.length }, true);
+    if (bs) {
+      bs.recordCompleted('quick', 'manual', {
+        bytes: encData.length,
+        verified: true,
+        verifiedAt: verifiedDest.verifiedAt || new Date().toISOString(),
+      }, true);
+    }
     return dest;
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
@@ -6556,7 +6677,58 @@ ipcMain.handle('flush-and-backup', async () => {
 ipcMain.handle('backup-status', () => {
   const bs = _backupScheduler;
   if (!bs) return { state: 'not-initialised' };
-  return bs.getStatus();
+  const status = bs.getStatus();
+  const folder = getBackupFolder();
+  let latestVerify = null;
+  try {
+    const latestPath = path.join(folder, 'attendance-latest.db');
+    if (fs.existsSync(latestPath)) {
+      latestVerify = verifyEncryptedBackupFile(latestPath);
+    }
+  } catch (_) {}
+  return {
+    ...status,
+    backupFolder: folder,
+    lastSuccessAt: status.lastBackupAt || null,
+    lastFailure: status.lastError || null,
+    latestFileVerified: latestVerify ? !!latestVerify.ok : null,
+    latestFileVerifyReason: latestVerify && !latestVerify.ok ? latestVerify.reason : null,
+    multiGeneration: true,
+    includesDirtyRecords: true,
+  };
+});
+
+ipcMain.handle('sync-integrity-check', () => {
+  if (!db) return { ok: false, error: 'Database not ready', autoDelete: false };
+  const rows = dbAll(
+    `SELECT id, sync_id, status, sync_dirty, deleted_at, updated_at, client_name, station_name, attendance_date
+     FROM attendances`
+  ) || [];
+  const index = buildEmergencyRecordIndex(rows);
+  const inventory = getLastVerifiedCloudInventory();
+  const pull = getLastPullStats();
+  const report = buildLocalCloudIntegrityReport({
+    localRows: index.map((r) => ({
+      syncId: r.syncId,
+      syncDirty: r.syncDirty,
+      status: r.status,
+      deletedAt: r.deletedAt,
+    })),
+    cloudInventoryCount: inventory,
+    cloudSyncIds: null,
+    pulledFromEpoch: !!(pull && pull.pulledFromEpoch),
+  });
+  try {
+    console.info('[INTEGRITY]', JSON.stringify({
+      localActive: report.localActive,
+      localDirty: report.localDirty,
+      cloudInventoryCount: report.cloudInventoryCount,
+      cloudEmptyProven: report.cloudEmptyProven,
+      discrepancyCount: (report.discrepancies || []).length,
+      autoDelete: false,
+    }));
+  } catch (_) {}
+  return { ok: true, ...report };
 });
 
 ipcMain.on('editor-activity', () => {
