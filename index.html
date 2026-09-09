@@ -301,6 +301,15 @@
                   <button type="button" id="home-empty-cloud-alarm-settings" class="btn btn-secondary btn-small">Open Settings</button>
                 </div>
               </div>
+              <div id="home-backup-degraded" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#fff7ed,#fffbeb);border:1px solid #f59e0b;">
+                <div style="display:flex;align-items:flex-start;gap:0.65rem;">
+                  <div style="flex:1;">
+                    <p style="margin:0;font-weight:600;font-size:0.9rem;color:#92400e;">Local backup protection degraded</p>
+                    <p id="home-backup-degraded-body" style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#78350f;line-height:1.4;">Backups could not write to the local Backups folder. Open Settings → Backup and confirm the path (especially after restoring a Mac database onto Windows).</p>
+                  </div>
+                  <button type="button" id="home-backup-degraded-settings" class="btn btn-secondary btn-small">Open Settings</button>
+                </div>
+              </div>
               <ul id="home-recent-list" class="home-recent-list">
                 <li class="home-recent-empty">No records yet. Create your first attendance above.</li>
               </ul>
@@ -1359,19 +1368,24 @@
               <span id="local-restore-status" class="settings-hint" style="margin:0;"></span>
             </div>
           </div>
-          <p class="settings-hint" style="margin-top:0;">Your attendance data is backed up automatically as encrypted files. Syncing to a cloud folder keeps an off-site copy safe.</p>
-          <label>Local backup folder</label>
+          <p class="settings-hint" style="margin-top:0;">Your attendance data is backed up automatically as encrypted files. Quick snapshots every ~2 minutes (generational) plus hourly archives. Syncing to a cloud folder keeps an off-site copy safe.</p>
+          <label>Local backup folder (effective path on this computer)</label>
           <div class="setting-row">
-            <input type="text" id="setting-backup-folder" class="settings-input" readonly placeholder="Desktop">
+            <input type="text" id="setting-backup-folder" class="settings-input" readonly placeholder="userData/Backups">
             <button type="button" id="setting-backup-browse" class="btn btn-secondary">Browse</button>
+            <button type="button" id="setting-backup-open-folder" class="btn btn-secondary">Open folder</button>
           </div>
+          <p id="settings-backup-effective-meta" class="settings-hint" style="margin:0.35rem 0 0;"></p>
+          <p id="settings-backup-degraded-banner" class="settings-warning-banner" style="display:none;margin-top:0.5rem;"></p>
           <label style="margin-top:0.75rem;">Sync backups to the cloud <span style="color:#059669;font-weight:600;">(recommended)</span></label>
           <p class="settings-hint" style="margin:0 0 0.5rem;">Choose a folder that syncs to OneDrive, Dropbox, or Google Drive. Encrypted backups are copied there automatically.</p>
           <div id="offsite-backup-chooser" class="offsite-backup-chooser">
             <div class="offsite-scanning">Scanning for cloud folders&hellip;</div>
           </div>
           <button type="button" id="setting-detect-cloud-folders" class="btn btn-secondary" style="margin-top:0.5rem;">Detect cloud folders</button>
+          <button type="button" id="setting-offsite-open-folder" class="btn btn-secondary" style="margin-top:0.5rem;">Open off-site folder</button>
           <input type="text" id="setting-offsite-backup-folder" readonly style="display:none;" aria-hidden="true">
+          <p id="settings-offsite-effective-path" class="settings-hint" style="margin:0.35rem 0 0;"></p>
           <div class="settings-advanced-section" style="display:none;">
             <label>Custom cloud backup URL (optional)</label>
             <input type="url" id="setting-cloud-backup-url" class="settings-input" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;" autocomplete="off">

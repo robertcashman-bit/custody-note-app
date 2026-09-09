@@ -132,6 +132,10 @@ const {
 } = require('./lib/syncLocalPreserve');
 const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
 const { buildLocalCloudIntegrityReport } = require('./lib/localCloudIntegrity');
+const {
+  assessBackupPathUsability,
+  planBackupFolderReset,
+} = require('./lib/backupPathSanitize');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
@@ -1413,6 +1417,92 @@ function _defaultBackupFolder() {
     return app.getPath('desktop');
   }
 }
+
+function _tryEnsureWritableDir(dir) {
+  if (!dir) return false;
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const probe = path.join(dir, '.cn-backup-write-probe');
+    fs.writeFileSync(probe, 'ok');
+    try { fs.unlinkSync(probe); } catch (_) {}
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Last time we auto-corrected a foreign-OS / unusable backupFolder. */
+let _backupPathCorrectionNotice = null;
+
+/**
+ * After Mac↔Windows restore, settings.backupFolder may hold a path that cannot
+ * work on this OS. Reset to userData/Backups and remember a one-time notice.
+ * Offsite paths that are foreign are cleared (not deleted on disk).
+ */
+function ensureBackupPathsSane(opts = {}) {
+  const notices = [];
+  if (!db) return notices;
+  const defaultPath = _defaultBackupFolder();
+  const storedRow = dbGet("SELECT value FROM settings WHERE key = 'backupFolder'");
+  const stored = storedRow && storedRow.value ? String(storedRow.value) : '';
+  const plan = planBackupFolderReset({
+    storedPath: stored || null,
+    defaultPath,
+    platform: process.platform,
+    canCreate: (p) => _tryEnsureWritableDir(p),
+  });
+  if (plan.reset && plan.next) {
+    dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('backupFolder', ?)", [plan.next]);
+    _tryEnsureWritableDir(plan.next);
+    const notice = {
+      at: new Date().toISOString(),
+      kind: 'backupFolder',
+      reason: plan.reason,
+      previous: plan.previous,
+      next: plan.next,
+      message: 'Local backup folder was reset to this computer’s default because the saved path was not usable here (often after restoring a Mac database onto Windows, or the reverse).',
+    };
+    notices.push(notice);
+    _backupPathCorrectionNotice = notice;
+    console.warn('[Backup] Reset unusable backupFolder:', plan.reason, plan.previous, '→', plan.next);
+    markDbDirty();
+  } else if (stored) {
+    _tryEnsureWritableDir(stored);
+  } else {
+    dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('backupFolder', ?)", [defaultPath]);
+    _tryEnsureWritableDir(defaultPath);
+  }
+
+  const offsiteRow = dbGet("SELECT value FROM settings WHERE key = 'offsiteBackupFolder'");
+  const offsite = offsiteRow && offsiteRow.value ? String(offsiteRow.value).trim() : '';
+  if (offsite) {
+    const offAssess = assessBackupPathUsability(offsite, { platform: process.platform });
+    if (!offAssess.usable) {
+      // Preserve-first: do not delete offsite files; only clear the unusable setting.
+      dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('offsiteBackupFolder', ?)", ['']);
+      const notice = {
+        at: new Date().toISOString(),
+        kind: 'offsiteBackupFolder',
+        reason: offAssess.reason,
+        previous: offsite,
+        next: null,
+        message: 'Off-site backup folder path was cleared because it is not usable on this computer. Choose a local cloud-sync folder in Settings. Existing files were not deleted.',
+      };
+      notices.push(notice);
+      if (!_backupPathCorrectionNotice) _backupPathCorrectionNotice = notice;
+      console.warn('[Backup] Cleared unusable offsiteBackupFolder:', offAssess.reason, offsite);
+      markDbDirty();
+    }
+  }
+
+  if (opts.emit !== false && notices.length && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('backup-path-corrected', notices[0]);
+    } catch (_) {}
+  }
+  return notices;
+}
+
 function getBackupFolder() {
   try {
     const row = dbGet("SELECT value FROM settings WHERE key = 'backupFolder'");
@@ -1547,6 +1637,10 @@ async function initDb() {
     // H20 — default to userData\Backups instead of Desktop (often OneDrive).
     db.run("INSERT INTO settings (key, value) VALUES (?, ?)", ['backupFolder', _defaultBackupFolder()]);
   }
+  // After Mac↔Windows restore, foreign OS paths silently disable local backups.
+  try { ensureBackupPathsSane({ emit: false }); } catch (e) {
+    console.warn('[Backup] ensureBackupPathsSane failed:', e && e.message ? e.message : e);
+  }
   // Fresh installs previously only stored the path and never mkdir'd it, so
   // scheduled backups silently skipped via isBackupFolderReady(). Create now.
   try { ensureBackupFolderExists(); } catch (_) {}
@@ -1666,6 +1760,7 @@ let dbDirtySinceQuickBackup = false;
 let dbDirtySinceHourlyBackup = false;
 const MAX_HOURLY_BACKUPS = 24; /* last 24 hourly archives (~1 working day) */
 const MAX_DAILY_BACKUPS  = 7;  /* one representative per day for 7 days */
+const MAX_QUICK_BACKUPS  = 48; /* generational quick snapshots (~1.5h at 2‑min cadence) */
 
 let _backupScheduler = null;
 
@@ -1706,23 +1801,48 @@ function _verifyBackupOrThrow(dest, expectedBytes, kind) {
 
 function _runQuickBackupAsync() {
   if (!db) return Promise.resolve({ skipped: true, reason: 'db-missing' });
-  if (!isBackupFolderReady()) return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
-  const dest = path.join(getBackupFolder(), 'attendance-latest.db');
+  if (!isBackupFolderReady()) {
+    _notifyBackupDegraded('backup-folder-missing');
+    return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
+  }
+  const backupDir = getBackupFolder();
+  const latestDest = path.join(backupDir, 'attendance-latest.db');
+  const quickName = `attendance-quick-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+  const quickDest = path.join(backupDir, quickName);
   const start = Date.now();
   try {
     const encrypted = getEncryptedDbExport();
-    if (!encrypted) return Promise.resolve({ skipped: true, reason: 'export-failed' });
+    if (!encrypted) {
+      _notifyBackupDegraded('export-failed');
+      return Promise.resolve({ skipped: true, reason: 'export-failed' });
+    }
     return new Promise((resolve, reject) => {
-      writeFileAtomic(dest, encrypted, (err) => {
-        if (err) { console.error('[Backup] Quick backup write failed:', err.message); return reject(err); }
+      writeFileAtomic(latestDest, encrypted, (err) => {
+        if (err) {
+          console.error('[Backup] Quick backup write failed:', err.message);
+          _notifyBackupDegraded('write-failed', err.message);
+          return reject(err);
+        }
         let verified;
         try {
-          verified = _verifyBackupOrThrow(dest, encrypted.length, 'quick');
+          verified = _verifyBackupOrThrow(latestDest, encrypted.length, 'quick');
         } catch (verifyErr) {
+          _notifyBackupDegraded('verify-failed', verifyErr && verifyErr.message);
           return reject(verifyErr);
         }
-        console.log('[Backup] Quick backup saved+verified (encrypted), took', Date.now() - start, 'ms,', encrypted.length, 'bytes');
-        copyToOffsiteBackup(dest);
+        // Generational copy — do not rely on a single overwriteable latest file.
+        try {
+          fs.copyFileSync(latestDest, quickDest);
+          _verifyBackupOrThrow(quickDest, encrypted.length, 'quick-gen');
+        } catch (copyErr) {
+          console.error('[Backup] Generational quick copy failed:', copyErr && copyErr.message);
+          _notifyBackupDegraded('generational-copy-failed', copyErr && copyErr.message);
+          return reject(copyErr);
+        }
+        try { pruneOldQuickBackups(backupDir); } catch (_) {}
+        console.log('[Backup] Quick backup saved+verified (encrypted), took', Date.now() - start, 'ms,', encrypted.length, 'bytes', 'gen=', quickName);
+        copyToOffsiteBackup(latestDest);
+        copyToOffsiteBackup(quickDest);
         uploadToCloudIfConfigured(encrypted);
         uploadToS3IfConfigured(encrypted, 'attendance-latest.db');
         uploadToManagedCloudIfEnabled(encrypted, 'attendance-latest.db');
@@ -1731,19 +1851,24 @@ function _runQuickBackupAsync() {
           bytes: encrypted.length,
           verified: true,
           verifiedAt: verified.verifiedAt || new Date().toISOString(),
-          path: dest,
+          path: latestDest,
+          generationalPath: quickDest,
         });
       });
     });
   } catch (err) {
     console.error('[Backup] Quick backup failed:', err.message);
+    _notifyBackupDegraded('quick-failed', err.message);
     return Promise.reject(err);
   }
 }
 
 function _runHourlyBackupAsync() {
   if (!db) return Promise.resolve({ skipped: true, reason: 'db-missing' });
-  if (!isBackupFolderReady()) return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
+  if (!isBackupFolderReady()) {
+    _notifyBackupDegraded('backup-folder-missing');
+    return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
+  }
   const backupDir = getBackupFolder();
   const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
   const dest = path.join(backupDir, name);
@@ -1860,6 +1985,44 @@ function pruneOldBackups(backupDir) {
     });
     if (pruned > 0) console.log('[Backup] Pruned', pruned, 'old archives; keeping', keep.size);
   } catch (_) {}
+}
+
+function pruneOldQuickBackups(backupDir) {
+  try {
+    const files = fs.readdirSync(backupDir)
+      .filter(f => f.startsWith('attendance-quick-') && f.endsWith('.db'))
+      .map(f => ({ name: f, path: path.join(backupDir, f), time: fs.statSync(path.join(backupDir, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time);
+    let pruned = 0;
+    files.slice(MAX_QUICK_BACKUPS).forEach(f => {
+      try { fs.unlinkSync(f.path); pruned++; } catch (_) {}
+    });
+    if (pruned > 0) console.log('[Backup] Pruned', pruned, 'old quick snapshots; keeping', Math.min(files.length, MAX_QUICK_BACKUPS));
+  } catch (_) {}
+}
+
+let _lastBackupDegradedAt = 0;
+let _lastBackupDegradedReason = null;
+
+function _notifyBackupDegraded(reason, detail) {
+  _lastBackupDegradedAt = Date.now();
+  _lastBackupDegradedReason = reason || 'unknown';
+  const payload = {
+    at: new Date().toISOString(),
+    reason: _lastBackupDegradedReason,
+    detail: detail || null,
+    message: 'Local backup protection is degraded. Open Settings → Backup and confirm the Backups folder path.',
+  };
+  console.error('[Backup] DEGRADED:', payload.reason, detail || '');
+  try {
+    const bs = _backupScheduler;
+    if (bs && typeof bs.getStatus === 'function') {
+      // Status already carries lastSkipReason via scheduler when skipped.
+    }
+  } catch (_) {}
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send('backup-degraded', payload); } catch (_) {}
+  }
 }
 
 /** POST encrypted backup buffer to a cloud URL. Returns Promise<void> or rejects with error message. */
@@ -5551,6 +5714,14 @@ app.whenReady().then(async () => {
   cleanupAccidentalDuplicateDrafts();
   dedupeDraftsByCaseKeys();
   getBackupScheduler();
+  try {
+    const notices = ensureBackupPathsSane({ emit: true });
+    if (notices && notices.length) {
+      console.warn('[Backup] Path correction on ready:', notices[0].reason, notices[0].previous, '→', notices[0].next);
+    }
+  } catch (e) {
+    console.warn('[Backup] ensureBackupPathsSane on ready failed:', e && e.message ? e.message : e);
+  }
   // Check cloud backup on startup; retry a few times in case network isn't ready
   checkCloudBackupEntitlement().catch(() => {});
   setTimeout(() => checkCloudBackupEntitlement().catch(() => {}), 5000);
@@ -5629,7 +5800,17 @@ app.on('before-quit', (e) => {
 
 ipcMain.handle('get-settings', () => {
   const rows = dbAll('SELECT key, value FROM settings');
-  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  settings.effectiveBackupFolder = getBackupFolder();
+  settings.effectiveOffsiteBackupFolder = getOffsiteBackupFolder();
+  settings.defaultBackupFolder = _defaultBackupFolder();
+  settings.backupPathCorrection = _backupPathCorrectionNotice;
+  settings.backupDegraded = _lastBackupDegradedReason
+    ? { reason: _lastBackupDegradedReason, at: _lastBackupDegradedAt }
+    : null;
+  settings.backupQuickMinIntervalMs = 2 * 60 * 1000;
+  settings.backupHourlyIntervalMs = 60 * 60 * 1000;
+  return settings;
 });
 
 /* ── Freemium: firm workspace, Anywhere bridge; opt-in OpenAI law fill ── */
@@ -6680,22 +6861,55 @@ ipcMain.handle('backup-status', () => {
   const status = bs.getStatus();
   const folder = getBackupFolder();
   let latestVerify = null;
+  let quickCount = 0;
   try {
     const latestPath = path.join(folder, 'attendance-latest.db');
     if (fs.existsSync(latestPath)) {
       latestVerify = verifyEncryptedBackupFile(latestPath);
     }
+    if (fs.existsSync(folder)) {
+      quickCount = fs.readdirSync(folder).filter((f) => f.startsWith('attendance-quick-') && f.endsWith('.db')).length;
+    }
   } catch (_) {}
   return {
     ...status,
     backupFolder: folder,
+    offsiteBackupFolder: getOffsiteBackupFolder(),
+    defaultBackupFolder: _defaultBackupFolder(),
     lastSuccessAt: status.lastBackupAt || null,
-    lastFailure: status.lastError || null,
+    lastFailure: status.lastError || _lastBackupDegradedReason || null,
+    lastDegradedReason: _lastBackupDegradedReason,
+    lastDegradedAt: _lastBackupDegradedAt || null,
     latestFileVerified: latestVerify ? !!latestVerify.ok : null,
     latestFileVerifyReason: latestVerify && !latestVerify.ok ? latestVerify.reason : null,
     multiGeneration: true,
+    generationalQuick: true,
+    quickGenerationCount: quickCount,
     includesDirtyRecords: true,
+    pathCorrection: _backupPathCorrectionNotice,
+    quickMinIntervalMs: status.quickMinIntervalMs || (2 * 60 * 1000),
   };
+});
+
+ipcMain.handle('backup-open-folder', async (_, which) => {
+  const target = which === 'offsite' ? getOffsiteBackupFolder() : getBackupFolder();
+  if (!target) return { ok: false, error: 'No folder configured' };
+  try {
+    ensureBackupFolderExists();
+    if (!fs.existsSync(target)) {
+      return { ok: false, error: 'Folder does not exist: ' + target };
+    }
+    const err = await shell.openPath(target);
+    if (err) return { ok: false, error: err };
+    return { ok: true, path: target };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+});
+
+ipcMain.handle('backup-acknowledge-path-correction', () => {
+  _backupPathCorrectionNotice = null;
+  return { ok: true };
 });
 
 ipcMain.handle('sync-integrity-check', () => {

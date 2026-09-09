@@ -17114,6 +17114,19 @@ pdfAuditFooterHtml(d, settings) +
     function applyBackupStatus(bs) {
       _footerBackupSnapshot = bs || null;
       if (!backupStatusEl) return;
+      try {
+        var degBanner = document.getElementById('home-backup-degraded');
+        var degBody = document.getElementById('home-backup-degraded-body');
+        var degraded = !!(bs && (bs.lastDegradedReason || bs.lastSkipReason === 'backup-folder-missing' || bs.lastSkipReason === 'export-failed' || bs.state === 'error'));
+        if (degBanner) {
+          degBanner.style.display = degraded ? '' : 'none';
+          if (degraded && degBody) {
+            degBody.textContent = 'Backup issue: ' + (bs.lastDegradedReason || bs.lastSkipReason || bs.lastError || 'unknown') +
+              '. Effective folder: ' + (bs.backupFolder || 'unknown') +
+              '. Last success: ' + (bs.lastSuccessAt ? new Date(bs.lastSuccessAt).toLocaleString() : 'never') + '.';
+          }
+        }
+      } catch (_) {}
       if (!bs || bs.state === 'not-initialised') {
         setFooterIndicator(backupStatusEl, 'Backup starting\u2026', '');
         return true;
@@ -17122,8 +17135,8 @@ pdfAuditFooterHtml(d, settings) +
         setFooterIndicator(backupStatusEl, 'Backup running', 'backup-active');
       } else if (bs.state === 'deferred') {
         setFooterIndicator(backupStatusEl, 'Backup idle', 'backup-ok');
-      } else if (bs.state === 'error') {
-        setFooterIndicator(backupStatusEl, 'Backup retrying', 'offline', bs.lastError || '');
+      } else if (bs.state === 'error' || bs.lastDegradedReason) {
+        setFooterIndicator(backupStatusEl, 'Backup degraded', 'offline', bs.lastError || bs.lastDegradedReason || '');
       } else if (bs.quickDirty || bs.hourlyDirty) {
         var noFolder = bs.lastSkipReason === 'backup-folder-missing' || bs.lastSkipReason === 'db-missing' || bs.lastSkipReason === 'export-failed';
         if (noFolder) {
@@ -17176,6 +17189,97 @@ pdfAuditFooterHtml(d, settings) +
     if (window.api && window.api.onBackupStatusChanged) {
       window.api.onBackupStatusChanged(function(data) { updateBackupStatus(data); });
     }
+    if (window.api && window.api.onBackupDegraded) {
+      window.api.onBackupDegraded(function(payload) {
+        try {
+          showToast((payload && payload.message) || 'Local backup protection is degraded', 'warning', 8000);
+          updateBackupStatus();
+          refreshBackupEffectivePaths();
+        } catch (_) {}
+      });
+    }
+    if (window.api && window.api.onBackupPathCorrected) {
+      window.api.onBackupPathCorrected(function(notice) {
+        try {
+          var msg = (notice && notice.message) || 'Backup folder path was corrected for this computer.';
+          if (notice && notice.previous) msg += ' Previous: ' + notice.previous;
+          if (notice && notice.next) msg += ' Now: ' + notice.next;
+          showToast(msg, 'warning', 10000);
+          refreshBackupEffectivePaths();
+          if (window.api.backupAcknowledgePathCorrection) window.api.backupAcknowledgePathCorrection().catch(function() {});
+        } catch (_) {}
+      });
+    }
+
+    function refreshBackupEffectivePaths() {
+      if (!window.api || !window.api.getSettings) return;
+      window.api.getSettings().then(function(s) {
+        var bf = document.getElementById('setting-backup-folder');
+        var effective = (s && (s.effectiveBackupFolder || s.backupFolder)) || '';
+        if (bf) bf.value = effective;
+        var meta = document.getElementById('settings-backup-effective-meta');
+        if (meta) {
+          var intervalMin = s && s.backupQuickMinIntervalMs ? Math.round(s.backupQuickMinIntervalMs / 60000) : 2;
+          meta.textContent = 'Effective local path: ' + (effective || '(none)') +
+            ' · Quick every ~' + intervalMin + ' min (generational) · Hourly archives retained' +
+            (s && s.defaultBackupFolder ? ' · Default: ' + s.defaultBackupFolder : '');
+        }
+        var off = document.getElementById('settings-offsite-effective-path');
+        if (off) {
+          var ofp = (s && (s.effectiveOffsiteBackupFolder || s.offsiteBackupFolder)) || '';
+          off.textContent = ofp ? ('Off-site effective path: ' + ofp) : 'Off-site backup: none configured';
+        }
+        var deg = document.getElementById('settings-backup-degraded-banner');
+        if (deg) {
+          if (s && s.backupDegraded && s.backupDegraded.reason) {
+            deg.style.display = '';
+            deg.textContent = 'Backup degraded: ' + s.backupDegraded.reason + '. Confirm the folder above and run Backup now.';
+          } else if (s && s.backupPathCorrection) {
+            deg.style.display = '';
+            deg.textContent = (s.backupPathCorrection.message || 'Backup path was auto-corrected.') +
+              (s.backupPathCorrection.previous ? ' Previous: ' + s.backupPathCorrection.previous : '') +
+              (s.backupPathCorrection.next ? ' → ' + s.backupPathCorrection.next : '');
+          } else {
+            deg.style.display = 'none';
+            deg.textContent = '';
+          }
+        }
+      }).catch(function() {});
+      if (window.api.backupStatus) {
+        window.api.backupStatus().then(function(bs) {
+          var meta = document.getElementById('settings-backup-effective-meta');
+          if (meta && bs) {
+            var base = meta.textContent || '';
+            var extra = ' · Last success: ' + (bs.lastSuccessAt ? new Date(bs.lastSuccessAt).toLocaleString() : 'never') +
+              (bs.lastFailure ? (' · Last failure: ' + bs.lastFailure) : '') +
+              (bs.quickGenerationCount != null ? (' · Quick snapshots: ' + bs.quickGenerationCount) : '') +
+              (bs.latestFileVerified === false ? ' · Latest file verify FAILED' : (bs.latestFileVerified ? ' · Latest verified' : ''));
+            if (base.indexOf('Last success:') === -1) meta.textContent = base + extra;
+          }
+        }).catch(function() {});
+      }
+    }
+    window.refreshBackupEffectivePaths = refreshBackupEffectivePaths;
+    document.addEventListener('view-settings-shown', function() { refreshBackupEffectivePaths(); });
+    document.getElementById('setting-backup-open-folder')?.addEventListener('click', function() {
+      if (!window.api || !window.api.backupOpenFolder) return;
+      window.api.backupOpenFolder('local').then(function(r) {
+        if (!r || !r.ok) showToast((r && r.error) || 'Could not open backup folder', 'error');
+      }).catch(function(e) { showToast(e && e.message || 'Could not open backup folder', 'error'); });
+    });
+    document.getElementById('setting-offsite-open-folder')?.addEventListener('click', function() {
+      if (!window.api || !window.api.backupOpenFolder) return;
+      window.api.backupOpenFolder('offsite').then(function(r) {
+        if (!r || !r.ok) showToast((r && r.error) || 'No off-site folder configured', 'error');
+      }).catch(function(e) { showToast(e && e.message || 'Could not open off-site folder', 'error'); });
+    });
+    document.getElementById('home-backup-degraded-settings')?.addEventListener('click', function() {
+      try {
+        if (typeof showView === 'function') showView('settings');
+        var tab = document.querySelector('.settings-tab[data-stab="backup"]');
+        if (tab) tab.click();
+      } catch (_) {}
+    });
     /* App version, build date (from package) and when this build first ran on this computer */
     if (window.api.getAppVersion) {
       window.api.getAppVersion().then(function(info) {
