@@ -64,7 +64,7 @@ describe('Empty cloud must not wipe local-only', () => {
   });
 });
 
-describe('Durable pendingSync / honest Saved locally vs Synced', () => {
+describe('Durable pendingSync / honest Saved to disk vs Synced', () => {
   it('attendance-save finishes with flushDbSync via finishAttendanceSaveResult', () => {
     assert.match(mainJs, /function finishAttendanceSaveResult/);
     const idx = mainJs.indexOf("ipcMain.handle('attendance-save'");

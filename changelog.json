@@ -5,8 +5,8 @@
       "date": "2026-09-09",
       "latest": true,
       "changes": [
-        "Local-first durability: every attendance save (including drafts) flushDbSyncs to disk before UI reports Saved locally — closes the pre-1.9.85 crash window where autosave could claim saved while the 30s debounce had not written yet",
-        "Honest save UI: Saved locally · pending sync (not Synced) until cloud push confirms written; structured save IPC { id, durable, pendingSync }",
+        "Local-first durability: every attendance save (including drafts) flushDbSyncs to disk before UI reports Saved to disk — closes the pre-1.9.85 crash window where autosave could claim saved while the 30s debounce had not written yet",
+        "Honest save UI: Saved to disk · pending sync (not Synced) until cloud push confirms written; structured save IPC { id, durable, pendingSync }",
         "Empty-cloud / Full re-sync preserve guards: never wipe local-only without an explicit matching tombstone; integrity check reports local vs cloud discrepancies with autoDelete:false",
         "Backups: quick snapshots every ~2 minutes as generational attendance-quick-*.db (plus attendance-latest.db), post-write CNDB verify, soft-delete flush; never silently skip — Home/Settings show degraded protection (fixes main.js 30-minute override that defeated module defaults)",
         "Save now (Windows + Mac): form/header control + Ctrl+S flushes the note synchronously to attendances.db, then writes a verified local backup (and off-site copy if configured); success names the backup path; note-saved vs backup-failed are never conflated",
