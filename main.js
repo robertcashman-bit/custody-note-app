@@ -6343,8 +6343,21 @@ ipcMain.handle('attendance-check-duplicate', (_, { dsccRef, clientName, attendan
   return results;
 });
 
+function coerceAttendanceIdArg(id) {
+  if (id == null || id === '') return null;
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  if (typeof id === 'string' && String(id).trim() !== '') {
+    const n = Number(id);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (typeof id === 'object' && id.id != null) return coerceAttendanceIdArg(id.id);
+  return null;
+}
+
 ipcMain.handle('attendance-get', (_, id) => {
-  return dbGet('SELECT id, data, status, supervisor_approved_at, supervisor_note, archived_at FROM attendances WHERE id = ?', [id]) || null;
+  const coerced = coerceAttendanceIdArg(id);
+  if (coerced == null) return null;
+  return dbGet('SELECT id, data, status, supervisor_approved_at, supervisor_note, archived_at FROM attendances WHERE id = ?', [coerced]) || null;
 });
 
 /**
@@ -6388,6 +6401,9 @@ function finishAttendanceSaveResult(id, status, op) {
 ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   const now = new Date().toISOString();
   const st = status || 'draft';
+  // Callers/tests sometimes pass a prior save-result object as id — coerce first
+  // so sql.js never binds [object Object].
+  id = coerceAttendanceIdArg(id);
 
   /* Unlock: change status back to draft without overwriting data */
   if (id && unlock && !data) {
