@@ -25,6 +25,8 @@ function createBackupScheduler(options = {}) {
   let lastError = null;
   let lastRequestedAt = null;
   let lastSkipReason = null;
+  let lastVerified = null;
+  let lastVerifiedAt = null;
   let deferredReason = null;
   let currentState = 'idle';
   let nextRunAt = 0;
@@ -46,6 +48,8 @@ function createBackupScheduler(options = {}) {
       lastError,
       lastRequestedAt,
       lastSkipReason,
+      lastVerified,
+      lastVerifiedAt,
       nextRunAt: nextRunAt || null,
       deferredReason,
       userIdleGraceMs: USER_IDLE_GRACE_MS,
@@ -151,6 +155,13 @@ function createBackupScheduler(options = {}) {
         lastBackupReason = reason;
         lastError = null;
         lastSkipReason = null;
+        if (result && result.verified) {
+          lastVerified = true;
+          lastVerifiedAt = result.verifiedAt || lastBackupAt;
+        } else if (result && result.verified === false) {
+          lastVerified = false;
+          lastVerifiedAt = result.verifiedAt || lastBackupAt;
+        }
         if (kind === 'hourly') {
           hourlyDirty = false;
           quickDirty = false;
@@ -224,6 +235,10 @@ function createBackupScheduler(options = {}) {
       lastBackupReason = reason;
       lastError = null;
       lastSkipReason = null;
+      if (metrics && metrics.verified) {
+        lastVerified = true;
+        lastVerifiedAt = metrics.verifiedAt || ts;
+      }
       if (kind === 'hourly' || clearsAll) {
         hourlyDirty = false;
         quickDirty = false;

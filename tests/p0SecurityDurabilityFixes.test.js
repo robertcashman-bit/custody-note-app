@@ -34,10 +34,12 @@ describe('P0 durability — flush on suspend/lock/finalise', () => {
   });
 
   it('attendance finalise/complete uses flushDbSync not async flushDb', () => {
-    assert.match(
-      mainJs,
-      /if \(st === 'finalised' \|\| st === 'completed'\) flushDbSync\(\)/
-    );
+    // All attendance-save paths now flush via finishAttendanceSaveResult → flushDbSync
+    assert.match(mainJs, /function finishAttendanceSaveResult/);
+    assert.match(mainJs, /flushDbSync\(\)/);
+    const saveIdx = mainJs.indexOf("ipcMain.handle('attendance-save'");
+    const saveChunk = mainJs.slice(saveIdx, saveIdx + 9000);
+    assert.match(saveChunk, /finishAttendanceSaveResult/);
     assert.doesNotMatch(
       mainJs,
       /if \(st === 'finalised' \|\| st === 'completed'\) flushDb\(\)/

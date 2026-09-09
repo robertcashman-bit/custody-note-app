@@ -5172,7 +5172,12 @@ var REQUIRED_FIELD_KEYS = [
       persistFirmContactPromise.then(function() {
         return window.api.attendanceSave({ id: null, data: formData, status: 'draft' });
       }).then(id => {
-        currentAttendanceId = id;
+        var norm = normalizeAttendanceSaveResult(id);
+        if (norm.error) {
+          showToast(norm.message || norm.error || 'Failed to save quick capture', 'error', 5000);
+          return;
+        }
+        currentAttendanceId = norm.id;
         if (firmId) rememberQuickCaptureFirmId(firmId);
         saveQuickCaptureRecentContact({
           firmId: firmId,
@@ -5479,15 +5484,23 @@ var REQUIRED_FIELD_KEYS = [
         currentRecordStatus = 'finalised';
         return;
       }
-      if (typeof result === 'number' || typeof result === 'string') {
-        currentAttendanceId = result;
+      var normalized = normalizeAttendanceSaveResult(result);
+      if (normalized.id != null) {
+        currentAttendanceId = normalized.id;
         if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.attachToCustodyNote === 'function') {
           try { window.OfficerEmailsPanel.attachToCustodyNote(currentAttendanceId); } catch (_) {}
         }
       }
-      showAutoSaveIndicator();
+      showAutoSaveIndicator({ durable: normalized.durable, pendingSync: normalized.pendingSync });
       var savedEl = document.getElementById('form-last-saved');
-      if (savedEl) savedEl.textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (savedEl) {
+        savedEl.textContent = (normalized.durable ? 'Saved locally ' : 'Save pending ') +
+          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+          (normalized.pendingSync && normalized.durable ? ' · pending sync' : '');
+      }
+      if (normalized.durable === false) {
+        showToast('Saved in memory but disk write may not have finished — keep this record open', 'warning', 5000);
+      }
     }).catch(function(e) {
       console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000);
       ['autosave-indicator', 'header-autosave'].forEach(function(id) {
@@ -5525,17 +5538,29 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  function showAutoSaveIndicator() {
+  function showAutoSaveIndicator(opts) {
     var now = new Date();
     _lastQuietSaveDurationMs = _lastQuietSaveStart ? (now.getTime() - _lastQuietSaveStart) : null;
     _lastDbWrite = now.toISOString();
-    var txt = '\u2713 Saved on this computer ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    var durable = !(opts && opts.durable === false);
+    var pendingSync = !!(opts && opts.pendingSync);
+    var txt = durable
+      ? ('\u2713 Saved locally ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()))
+      : ('Saving to disk\u2026 ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()));
+    if (durable && pendingSync) {
+      txt += ' \u00b7 pending sync';
+    }
+    var title = durable
+      ? (pendingSync
+        ? 'Written to this device. Not yet confirmed in cloud — pending sync.'
+        : 'Written to this device.')
+      : 'Save reached memory but disk flush did not complete — keep the record open and try Save again.';
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.textContent = txt;
       el.removeAttribute('data-autosave-error');
-      el.title = 'Last draft save written to this device. Finalised records do not autosave.';
+      el.title = title;
       el.classList.add('visible');
     });
     var footerWrap = document.getElementById('footer-autosave-wrap');
@@ -5544,6 +5569,26 @@ var REQUIRED_FIELD_KEYS = [
       footerWrap.style.display = '';
       footerEl.textContent = txt;
     }
+  }
+
+  function normalizeAttendanceSaveResult(result) {
+    if (window.CustodyNoteAttendanceSave && typeof window.CustodyNoteAttendanceSave.normalize === 'function') {
+      return window.CustodyNoteAttendanceSave.normalize(result);
+    }
+    if (result == null) return { id: null, durable: false, pendingSync: false, error: null };
+    if (typeof result === 'number' || typeof result === 'string') {
+      return { id: result, durable: false, pendingSync: true, error: null };
+    }
+    if (typeof result === 'object') {
+      return {
+        id: result.id != null ? result.id : null,
+        durable: result.durable === true,
+        pendingSync: result.pendingSync !== false && !result.error,
+        error: result.error || null,
+        message: result.message || null,
+      };
+    }
+    return { id: null, durable: false, pendingSync: false, error: 'invalid_result' };
   }
 
   function showSettingsSavedToast() {
@@ -7455,7 +7500,9 @@ var REQUIRED_FIELD_KEYS = [
       src._convertedToCustodyAt = new Date().toISOString();
       formData = src;
       var voluntaryId = currentAttendanceId;
-      window.api.attendanceSave({ id: voluntaryId, data: src, status: (src.status || 'draft') }).then(function(savedId) {
+      window.api.attendanceSave({ id: voluntaryId, data: src, status: (src.status || 'draft') }).then(function(savedResult) {
+        var savedNorm = normalizeAttendanceSaveResult(savedResult);
+        var savedId = savedNorm.id;
         var arrestDt = (src.arrestTimeIfConverted || '').trim();
         var arrestDate = arrestDt.length >= 10 ? arrestDt.slice(0, 10) : src.date;
         var arrestTime = arrestDt.length >= 16 ? arrestDt.slice(11, 16) : '';
@@ -13151,11 +13198,18 @@ var REQUIRED_FIELD_KEYS = [
             return;
           }
         }
-        if (typeof result === 'number' || typeof result === 'string') {
-          currentAttendanceId = result;
+        var normalizedSave = normalizeAttendanceSaveResult(result);
+        if (normalizedSave.id != null) {
+          currentAttendanceId = normalizedSave.id;
           if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.attachToCustodyNote === 'function') {
             try { window.OfficerEmailsPanel.attachToCustodyNote(currentAttendanceId); } catch (_) {}
           }
+        }
+        if (status !== 'finalised' && status !== 'completed') {
+          showAutoSaveIndicator({
+            durable: normalizedSave.durable,
+            pendingSync: normalizedSave.pendingSync,
+          });
         }
         if (status === 'finalised') {
           /* Verify the DB actually persisted the finalised status */
@@ -17920,6 +17974,44 @@ pdfAuditFooterHtml(d, settings) +
       }).finally(function() { btn.disabled = false; });
     });
 
+    document.getElementById('btn-sync-integrity-check')?.addEventListener('click', function() {
+      if (!window.api || !window.api.syncIntegrityCheck) {
+        showToast('Integrity check not available', 'error');
+        return;
+      }
+      var btn = this;
+      var statusEl = document.getElementById('cross-device-sync-action-status');
+      btn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Running integrity check\u2026'; statusEl.style.color = '#d97706'; }
+      window.api.syncIntegrityCheck().then(function(res) {
+        if (!res || res.ok === false) {
+          showToast('Integrity check failed: ' + ((res && res.error) || 'Unknown error'), 'error');
+          if (statusEl) { statusEl.textContent = (res && res.error) || 'Integrity check failed'; statusEl.style.color = '#dc2626'; }
+          return;
+        }
+        var disc = (res.discrepancies && res.discrepancies.length) || 0;
+        var msg = 'Local active=' + (res.localActive || 0) +
+          ', dirty=' + (res.localDirty || 0) +
+          ', cloud inventory=' + (res.cloudInventoryCount == null ? 'unknown' : res.cloudInventoryCount) +
+          ', discrepancies=' + disc +
+          ' (no auto-delete)';
+        if (res.cloudEmptyProven) {
+          showToast('Integrity: cloud empty vs local notes — use Re-upload all. Nothing deleted.', 'warning', 8000);
+        } else if (disc > 0) {
+          showToast('Integrity: ' + disc + ' discrepancy(ies) reported. Nothing deleted.', 'warning', 7000);
+        } else {
+          showToast('Integrity check complete — no discrepancies flagged', 'success');
+        }
+        if (statusEl) {
+          statusEl.textContent = msg;
+          statusEl.style.color = disc > 0 || res.cloudEmptyProven ? '#b45309' : 'green';
+        }
+      }).catch(function(err) {
+        showToast('Integrity check failed: ' + (err && err.message || err), 'error');
+        if (statusEl) { statusEl.textContent = ''; }
+      }).finally(function() { btn.disabled = false; });
+    });
+
     document.getElementById('home-empty-db-recovery-settings')?.addEventListener('click', function() {
       try {
         if (typeof showView === 'function') showView('settings');
@@ -19026,10 +19118,12 @@ pdfAuditFooterHtml(d, settings) +
         delete data.created_at;
         delete data.updated_at;
         window.api.attendanceSave({ data: data, status: 'draft' }).then(function(id) {
-          if (id && id.error) { showToast(id.message || id.error || 'Save failed', 'error'); return; }
+          var norm = normalizeAttendanceSaveResult(id);
+          if (norm.error) { showToast(norm.message || norm.error || 'Save failed', 'error'); return; }
+          if (norm.id == null) { showToast('Save failed: no id returned', 'error'); return; }
           navigateTo('home');
-          openAttendance(id);
-          showToast('Record imported and opened', 'success');
+          openAttendance(norm.id);
+          showToast(norm.durable ? 'Record imported and saved locally' : 'Record imported (disk flush pending)', 'success');
         }).catch(function(e) { showToast('Save failed: ' + (e && e.message), 'error'); });
       }).catch(function(e) { showToast('Import failed: ' + (e && e.message), 'error'); });
     });
@@ -19046,10 +19140,12 @@ pdfAuditFooterHtml(d, settings) +
       delete data.created_at;
       delete data.updated_at;
       window.api.attendanceSave({ data: data, status: 'draft' }).then(function(id) {
-        if (id && id.error) { showToast(id.message || id.error || 'Save failed', 'error'); return; }
+        var norm = normalizeAttendanceSaveResult(id);
+        if (norm.error) { showToast(norm.message || norm.error || 'Save failed', 'error'); return; }
+        if (norm.id == null) { showToast('Save failed: no id returned', 'error'); return; }
         navigateTo('home');
-        openAttendance(id);
-        showToast('Record imported and opened', 'success');
+        openAttendance(norm.id);
+        showToast(norm.durable ? 'Record imported and saved locally' : 'Record imported (disk flush pending)', 'success');
       }).catch(function(e) { showToast('Save failed: ' + (e && e.message), 'error'); });
     }
 
