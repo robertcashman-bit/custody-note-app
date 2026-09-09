@@ -301,6 +301,7 @@ contextBridge.exposeInMainWorld('api', {
     buildPreview: (fields) => ipcRenderer.invoke('officer-email-drafts-preview', fields),
   },
   flushAndBackup: () => ipcRenderer.invoke('flush-and-backup'),
+  persistAndBackup: () => ipcRenderer.invoke('persist-and-backup'),
   backupStatus: () => ipcRenderer.invoke('backup-status'),
   backupOpenFolder: (which) => ipcRenderer.invoke('backup-open-folder', which),
   backupAcknowledgePathCorrection: () => ipcRenderer.invoke('backup-acknowledge-path-correction'),

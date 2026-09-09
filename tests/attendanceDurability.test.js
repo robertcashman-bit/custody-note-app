@@ -105,11 +105,12 @@ describe('Durable pendingSync / honest Saved locally vs Synced', () => {
     assert.strictEqual(legacy.durable, false);
   });
 
-  it('renderer shows Saved locally with pending sync, not false Synced', () => {
-    assert.match(appJs, /Saved locally/);
+  it('renderer shows Saved to disk with pending sync, not false Synced', () => {
+    assert.match(appJs, /Saved to disk/);
     assert.match(appJs, /pending sync/);
     assert.match(appJs, /normalizeAttendanceSaveResult/);
     assert.match(appJs, /showAutoSaveIndicator\(\{ durable:/);
+    assert.match(appJs, /Unsaved changes/);
   });
 });
 
