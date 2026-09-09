@@ -5448,6 +5448,7 @@ var REQUIRED_FIELD_KEYS = [
   var EDITOR_ACTIVITY_DEBOUNCE_MS = 10000;
 
   function scheduleQuietSave() {
+    markFormDirtyForDiskIndicator();
     clearTimeout(_quietSaveDebounceTimer);
     _quietSaveDebounceTimer = setTimeout(quietSave, QUIET_SAVE_DEBOUNCE_MS);
     if (window.api && window.api.reportEditorActivity) {
@@ -5492,14 +5493,8 @@ var REQUIRED_FIELD_KEYS = [
         }
       }
       showAutoSaveIndicator({ durable: normalized.durable, pendingSync: normalized.pendingSync });
-      var savedEl = document.getElementById('form-last-saved');
-      if (savedEl) {
-        savedEl.textContent = (normalized.durable ? 'Saved locally ' : 'Save pending ') +
-          new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-          (normalized.pendingSync && normalized.durable ? ' · pending sync' : '');
-      }
       if (normalized.durable === false) {
-        showToast('Saved in memory but disk write may not have finished — keep this record open', 'warning', 5000);
+        showToast('Saved in memory but disk write may not have finished — press Save now', 'warning', 5000);
       }
     }).catch(function(e) {
       console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000);
@@ -5541,25 +5536,32 @@ var REQUIRED_FIELD_KEYS = [
   function showAutoSaveIndicator(opts) {
     var now = new Date();
     _lastQuietSaveDurationMs = _lastQuietSaveStart ? (now.getTime() - _lastQuietSaveStart) : null;
-    _lastDbWrite = now.toISOString();
     var durable = !(opts && opts.durable === false);
+    if (durable) _lastDbWrite = now.toISOString();
     var pendingSync = !!(opts && opts.pendingSync);
-    var txt = durable
-      ? ('\u2713 Saved locally ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()))
-      : ('Saving to disk\u2026 ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()));
-    if (durable && pendingSync) {
-      txt += ' \u00b7 pending sync';
+    var dirty = !!(opts && opts.dirty);
+    var txt;
+    if (dirty) {
+      txt = 'Unsaved changes…';
+    } else if (durable) {
+      txt = '\u2713 Saved to disk ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+      if (pendingSync) txt += ' \u00b7 pending sync';
+    } else {
+      txt = 'Not on disk yet — use Save now';
     }
-    var title = durable
-      ? (pendingSync
-        ? 'Written to this device. Not yet confirmed in cloud — pending sync.'
-        : 'Written to this device.')
-      : 'Save reached memory but disk flush did not complete — keep the record open and try Save again.';
+    var title = dirty
+      ? 'Edits are on screen only until the next successful disk write.'
+      : (durable
+        ? (pendingSync
+          ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Cloud sync still pending.'
+          : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.')
+        : 'Save reached memory but disk flush did not complete — press Save now.');
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.textContent = txt;
-      el.removeAttribute('data-autosave-error');
+      if (durable && !dirty) el.removeAttribute('data-autosave-error');
+      else if (!durable || dirty) el.setAttribute('data-autosave-error', '1');
       el.title = title;
       el.classList.add('visible');
     });
@@ -5569,6 +5571,17 @@ var REQUIRED_FIELD_KEYS = [
       footerWrap.style.display = '';
       footerEl.textContent = txt;
     }
+    var savedEl = document.getElementById('form-last-saved');
+    if (savedEl && durable && !dirty) {
+      savedEl.textContent = 'Last disk save ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+        (pendingSync ? ' · pending sync' : '');
+    } else if (savedEl && dirty) {
+      savedEl.textContent = 'Unsaved changes';
+    }
+  }
+
+  function markFormDirtyForDiskIndicator() {
+    showAutoSaveIndicator({ dirty: true, durable: false, pendingSync: false });
   }
 
   function normalizeAttendanceSaveResult(result) {
@@ -16164,10 +16177,27 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
 
-      /* Cmd/Ctrl+S = quiet save (does not exit — matches custody-desk safety) */
+      /* Cmd/Ctrl+S = Save now (disk flush + verified backup) */
       if (modPressed(e) && e.key === 's') {
         e.preventDefault();
-        quietSave();
+        var saveBtn = document.getElementById('form-backup-now-btn') || document.getElementById('header-backup-now-btn');
+        if (typeof window.handleSaveNowClick === 'function' && saveBtn) window.handleSaveNowClick(saveBtn);
+        else if (window.api && window.api.persistAndBackup) {
+          quietSave();
+          window.api.persistAndBackup().then(function(res) {
+            if (res && res.noteDurable && res.backupOk) {
+              showToast((res.userMessage && res.userMessage.message) || 'Saved to this computer and backed up', 'success', 7000);
+            } else if (res && res.noteDurable) {
+              showToast((res.userMessage && res.userMessage.message) || 'Note saved; backup failed', 'warning', 9000);
+            } else {
+              showToast((res && res.userMessage && res.userMessage.message) || 'Save now failed', 'error', 9000);
+            }
+          }).catch(function(err) {
+            showToast('Save now failed: ' + (err && err.message), 'error');
+          });
+        } else {
+          quietSave();
+        }
       }
       if (modPressed(e) && e.key === 'ArrowRight') {
         e.preventDefault();
@@ -17618,29 +17648,124 @@ pdfAuditFooterHtml(d, settings) +
       });
     });
 
-    function handleBackupNowClick(btn) {
-      if (!btn || btn.classList.contains('backing-up')) return;
+    function handleSaveNowClick(btn) {
+      if (!btn || btn.classList.contains('backing-up') || btn.classList.contains('saving-now')) return;
+      var formView = document.getElementById('view-form');
+      var onForm = formView && formView.classList.contains('active');
+      btn.classList.add('saving-now');
       btn.classList.add('backing-up');
       var origText = btn.innerHTML;
-      btn.innerHTML = '&#128190; Saving…';
-      quietSave();
-      var backupFn = window.api.flushAndBackup || window.api.backupNow;
-      backupFn().then(function() {
-        return window.api.backupNow();
-      }).then(function() {
-        btn.innerHTML = '&#10003; Backed up';
-        showToast('Backup completed', 'success');
-        setTimeout(function() { btn.innerHTML = origText; btn.classList.remove('backing-up'); }, 2000);
-      }).catch(function(err) {
-        btn.innerHTML = origText;
-        btn.classList.remove('backing-up');
-        showToast('Backup failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
+      btn.innerHTML = 'Saving\u2026';
+      btn.disabled = true;
+
+      function finishBtn(label, keepMs) {
+        btn.innerHTML = label || origText;
+        setTimeout(function() {
+          btn.innerHTML = origText;
+          btn.classList.remove('backing-up');
+          btn.classList.remove('saving-now');
+          btn.disabled = false;
+        }, keepMs || 2200);
+      }
+
+      function runPersistBackup(afterNoteOk) {
+        var apiFn = (window.api && (window.api.persistAndBackup || window.api.flushAndBackup));
+        if (!apiFn) {
+          showToast(afterNoteOk
+            ? 'Note saved to this computer, but backup API is unavailable'
+            : 'Save now unavailable', 'warning', 7000);
+          finishBtn(afterNoteOk ? 'Note saved' : origText, 2500);
+          return;
+        }
+        Promise.resolve(apiFn()).then(function(res) {
+          if (!res || typeof res === 'string') {
+            // Legacy flush-and-backup may still return a string path on older builds.
+            showToast('Saved to this computer. Backup written.', 'success', 6000);
+            showAutoSaveIndicator({ durable: true, pendingSync: true });
+            finishBtn('\u2713 Saved', 2500);
+            return;
+          }
+          var um = res.userMessage || null;
+          if (res.noteDurable && res.backupOk) {
+            var okMsg = (um && um.message) || (
+              'Saved to this computer. Backup written to ' + (res.backupPath || res.effectiveBackupFolder || 'Backups')
+            );
+            showToast(okMsg, 'success', 8000);
+            showAutoSaveIndicator({ durable: true, pendingSync: true });
+            finishBtn('\u2713 Saved', 2500);
+            try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
+            return;
+          }
+          if (res.noteDurable && !res.backupOk) {
+            var warnMsg = (um && um.message) || (
+              'Note saved to this computer, but backup failed' + (res.error ? ': ' + res.error : '')
+            );
+            showToast(warnMsg, 'warning', 10000);
+            showAutoSaveIndicator({ durable: true, pendingSync: true });
+            finishBtn('Backup failed', 3500);
+            try { updateBackupStatus(); } catch (_) {}
+            return;
+          }
+          var errMsg = (um && um.message) || (res.error || 'Could not save note to disk');
+          showToast(errMsg, 'error', 10000);
+          showAutoSaveIndicator({ durable: false, pendingSync: false });
+          finishBtn('Save failed', 3500);
+        }).catch(function(err) {
+          showToast('Save now failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 8000);
+          finishBtn(origText, 500);
+        });
+      }
+
+      if (!onForm || isNoteLockedForEditing()) {
+        // Global / settings Backup: still force disk flush + verified backup.
+        runPersistBackup(false);
+        return;
+      }
+
+      var data = getFormData();
+      if (!hasMeaningfulData(data)) {
+        showToast('Nothing to save — enter some details first, or use Backup from Settings for a DB snapshot', 'warning', 5000);
+        finishBtn(origText, 500);
+        return;
+      }
+      if (_finalising) {
+        showToast('Finalise in progress — wait, then try Save now', 'info', 4000);
+        finishBtn(origText, 500);
+        return;
+      }
+
+      window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(function(result) {
+        if (result && typeof result === 'object' && result.error === 'locked') {
+          showToast('This record is finalised and cannot be modified', 'error', 6000);
+          finishBtn(origText, 500);
+          return;
+        }
+        var normalized = normalizeAttendanceSaveResult(result);
+        if (normalized.error) {
+          showToast('Failed to save note: ' + (normalized.message || normalized.error), 'error', 7000);
+          finishBtn(origText, 500);
+          return;
+        }
+        if (normalized.id != null) currentAttendanceId = normalized.id;
+        if (!normalized.durable) {
+          showToast('Note did not finish writing to disk — backup not attempted. Try Save now again.', 'error', 9000);
+          showAutoSaveIndicator({ durable: false, pendingSync: true });
+          finishBtn('Disk failed', 3500);
+          return;
+        }
+        showAutoSaveIndicator({ durable: true, pendingSync: true });
+        runPersistBackup(true);
+      }).catch(function(e) {
+        showToast('Failed to save note: ' + (e && e.message ? e.message : e), 'error', 7000);
+        finishBtn(origText, 500);
       });
     }
-    document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
-    document.getElementById('form-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
-    document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
-    document.getElementById('settings-quick-backup')?.addEventListener('click', function() { handleBackupNowClick(this); });
+
+    document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
+    document.getElementById('form-backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
+    document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
+    document.getElementById('settings-quick-backup')?.addEventListener('click', function() { handleSaveNowClick(this); });
+    window.handleSaveNowClick = handleSaveNowClick;
     document.getElementById('settings-quick-cloud')?.addEventListener('click', function() {
       var btn = this;
       if (!window.api || !window.api.cloudBackupCheckEntitlement) return;

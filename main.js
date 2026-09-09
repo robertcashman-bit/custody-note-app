@@ -6850,54 +6850,211 @@ ipcMain.handle('load-magistrates-courts', () => {
   }
 });
 
+async function runManualVerifiedBackup() {
+  ensureBackupPathsSane({ emit: true });
+  const backupDir = getBackupFolder();
+  if (!backupDir) {
+    const err = new Error('No backup folder configured');
+    err.code = 'backup-folder-missing';
+    throw err;
+  }
+  if (!_tryEnsureWritableDir(backupDir)) {
+    const err = new Error('Backup folder is not writable: ' + backupDir);
+    err.code = 'backup-folder-unwritable';
+    _notifyBackupDegraded('backup-folder-unwritable', backupDir);
+    throw err;
+  }
+  const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+  const dest = path.join(backupDir, name);
+  _cachedDbExportDirty = true;
+  const encData = getEncryptedDbExport();
+  if (!encData) throw new Error('Database export failed');
+  await writeFileAtomicAsync(dest, encData);
+  const latestDest = path.join(backupDir, 'attendance-latest.db');
+  await writeFileAtomicAsync(latestDest, encData);
+  const quickName = `attendance-quick-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+  const quickDest = path.join(backupDir, quickName);
+  await writeFileAtomicAsync(quickDest, encData);
+  const verifiedDest = _verifyBackupOrThrow(dest, encData.length, 'manual');
+  _verifyBackupOrThrow(latestDest, encData.length, 'manual-latest');
+  _verifyBackupOrThrow(quickDest, encData.length, 'manual-quick');
+  dbDirtySinceQuickBackup = false;
+  dbDirtySinceHourlyBackup = false;
+  pruneOldBackups(backupDir);
+  try { pruneOldQuickBackups(backupDir); } catch (_) {}
+  copyToOffsiteBackup(dest);
+  copyToOffsiteBackup(latestDest);
+  copyToOffsiteBackup(quickDest);
+  uploadToCloudIfConfigured(encData);
+  uploadToS3IfConfigured(encData, 'attendance-latest.db');
+  uploadToS3IfConfigured(encData, path.basename(dest));
+  uploadToManagedCloudIfEnabled(encData, 'attendance-latest.db');
+  uploadToManagedCloudIfEnabled(encData, path.basename(dest));
+  const offsiteDir = getOffsiteBackupFolder();
+  if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
+  const bs = _backupScheduler;
+  if (bs) {
+    bs.recordCompleted('quick', 'manual', {
+      bytes: encData.length,
+      verified: true,
+      verifiedAt: verifiedDest.verifiedAt || new Date().toISOString(),
+    }, true);
+  }
+  _lastBackupDegradedReason = null;
+  _lastBackupDegradedAt = 0;
+  return {
+    path: dest,
+    latestPath: latestDest,
+    quickPath: quickDest,
+    folder: backupDir,
+    offsiteFolder: offsiteDir || null,
+    bytes: encData.length,
+    verified: true,
+    verifiedAt: verifiedDest.verifiedAt || new Date().toISOString(),
+  };
+}
+
 ipcMain.handle('backup-now', async () => {
   try {
-    const backupDir = getBackupFolder();
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-    const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
-    const dest = path.join(backupDir, name);
-    _cachedDbExportDirty = true;
-    const encData = getEncryptedDbExport();
-    if (!encData) throw new Error('Database export failed');
-    await writeFileAtomicAsync(dest, encData);
-    const latestDest = path.join(backupDir, 'attendance-latest.db');
-    await writeFileAtomicAsync(latestDest, encData);
-    const verifiedDest = _verifyBackupOrThrow(dest, encData.length, 'manual');
-    _verifyBackupOrThrow(latestDest, encData.length, 'manual-latest');
-    dbDirtySinceQuickBackup = false;
-    dbDirtySinceHourlyBackup = false;
-    pruneOldBackups(backupDir);
-    copyToOffsiteBackup(dest);
-    copyToOffsiteBackup(latestDest);
-    uploadToCloudIfConfigured(encData);
-    uploadToS3IfConfigured(encData, 'attendance-latest.db');
-    uploadToS3IfConfigured(encData, path.basename(dest));
-    uploadToManagedCloudIfEnabled(encData, 'attendance-latest.db');
-    uploadToManagedCloudIfEnabled(encData, path.basename(dest));
-    const offsiteDir = getOffsiteBackupFolder();
-    if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
-    const bs = _backupScheduler;
-    if (bs) {
-      bs.recordCompleted('quick', 'manual', {
-        bytes: encData.length,
-        verified: true,
-        verifiedAt: verifiedDest.verifiedAt || new Date().toISOString(),
-      }, true);
-    }
-    return dest;
+    const result = await runManualVerifiedBackup();
+    return result.path;
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
     console.error('[backup-now] Backup failed:', msg);
+    _notifyBackupDegraded(e && e.code ? e.code : 'backup-failed', msg);
     throw new Error('Backup failed: ' + msg);
   }
 });
 
+/**
+ * Durable Save now checkpoint: sync flush attendances.db, then verified backup.
+ * Never claims backup success on silent skip.
+ */
+ipcMain.handle('persist-and-backup', async () => {
+  const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
+  try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
+  const folder = getBackupFolder();
+  let noteDurable = false;
+  let durableError = null;
+  try {
+    flushDbSync();
+    const dbPath = getDbPath();
+    noteDurable = !_dbDirty && !!dbPath && fs.existsSync(dbPath);
+    if (!noteDurable) durableError = 'Database file missing or still dirty after flush';
+  } catch (err) {
+    durableError = err && err.message ? err.message : String(err);
+    noteDurable = false;
+  }
+  if (!noteDurable) {
+    _notifyBackupDegraded('flush-failed', durableError);
+    const payload = {
+      ok: false,
+      noteDurable: false,
+      backupOk: false,
+      error: durableError || 'Disk flush failed',
+      effectiveBackupFolder: folder,
+      offsiteBackupFolder: getOffsiteBackupFolder(),
+      dbPath: getDbPath(),
+    };
+    payload.userMessage = buildSaveNowUserMessage(payload);
+    return payload;
+  }
+
+  try {
+    const backup = await runManualVerifiedBackup();
+    const payload = {
+      ok: true,
+      noteDurable: true,
+      backupOk: true,
+      backupPath: backup.path,
+      effectiveBackupFolder: backup.folder,
+      offsiteBackupFolder: backup.offsiteFolder,
+      verified: true,
+      bytes: backup.bytes,
+      dbPath: getDbPath(),
+    };
+    payload.userMessage = buildSaveNowUserMessage(payload);
+    console.info('[SAVE-NOW]', JSON.stringify({
+      noteDurable: true,
+      backupOk: true,
+      folder: backup.folder,
+      bytes: backup.bytes,
+      at: new Date().toISOString(),
+    }));
+    return payload;
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    _notifyBackupDegraded(err && err.code ? err.code : 'backup-failed', msg);
+    const payload = {
+      ok: false,
+      noteDurable: true,
+      backupOk: false,
+      error: msg,
+      effectiveBackupFolder: folder,
+      offsiteBackupFolder: getOffsiteBackupFolder(),
+      dbPath: getDbPath(),
+      message: 'Note is on disk but backup failed',
+    };
+    payload.userMessage = buildSaveNowUserMessage(payload);
+    console.error('[SAVE-NOW] note durable but backup failed:', msg);
+    return payload;
+  }
+});
+
 ipcMain.handle('flush-and-backup', async () => {
-  flushDb();
-  await new Promise(r => setTimeout(r, 200));
-  return 'flushed';
+  // Legacy alias used by older UI — same durable checkpoint as Save now.
+  const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
+  try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
+  const folder = getBackupFolder();
+  let noteDurable = false;
+  let durableError = null;
+  try {
+    flushDbSync();
+    const dbPath = getDbPath();
+    noteDurable = !_dbDirty && !!dbPath && fs.existsSync(dbPath);
+    if (!noteDurable) durableError = 'Database file missing or still dirty after flush';
+  } catch (err) {
+    durableError = err && err.message ? err.message : String(err);
+    noteDurable = false;
+  }
+  if (!noteDurable) {
+    _notifyBackupDegraded('flush-failed', durableError);
+    return {
+      ok: false,
+      noteDurable: false,
+      backupOk: false,
+      error: durableError || 'Disk flush failed',
+      effectiveBackupFolder: folder,
+    };
+  }
+  try {
+    const backup = await runManualVerifiedBackup();
+    return {
+      ok: true,
+      noteDurable: true,
+      backupOk: true,
+      backupPath: backup.path,
+      effectiveBackupFolder: backup.folder,
+      path: backup.path,
+    };
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    _notifyBackupDegraded(err && err.code ? err.code : 'backup-failed', msg);
+    return {
+      ok: false,
+      noteDurable: true,
+      backupOk: false,
+      error: msg,
+      effectiveBackupFolder: folder,
+      message: 'Note is on disk but backup failed',
+      userMessage: buildSaveNowUserMessage({
+        noteDurable: true,
+        backupOk: false,
+        error: msg,
+        effectiveBackupFolder: folder,
+      }),
+    };
+  }
 });
 
 ipcMain.handle('backup-status', () => {

@@ -9,6 +9,8 @@
         "Honest save UI: Saved locally · pending sync (not Synced) until cloud push confirms written; structured save IPC { id, durable, pendingSync }",
         "Empty-cloud / Full re-sync preserve guards: never wipe local-only without an explicit matching tombstone; integrity check reports local vs cloud discrepancies with autoDelete:false",
         "Backups: quick snapshots every ~2 minutes as generational attendance-quick-*.db (plus attendance-latest.db), post-write CNDB verify, soft-delete flush; never silently skip — Home/Settings show degraded protection (fixes main.js 30-minute override that defeated module defaults)",
+        "Save now (Windows + Mac): form/header control + Ctrl+S flushes the note synchronously to attendances.db, then writes a verified local backup (and off-site copy if configured); success names the backup path; note-saved vs backup-failed are never conflated",
+        "Autosave shows Unsaved changes until disk flush succeeds, then Saved to disk with last write time; dirty indicator clears only after durable write",
         "Cross-platform backup paths (Windows + Mac): after Mac↔Windows restore, unusable backupFolder (e.g. /Users/… on Windows) auto-resets to userData/Backups on startup, unlock, Settings load, and restore; clears unusable offsite setting without deleting offsite files; durable notice until dismissed",
         "Settings always shows effective local + off-site paths, Open folder, last success/failure; Home Backup degraded banner — cross-platform paths cannot silently disable local backups",
         "Forensics: docs/forensics/MEDWAY_2026-09-07_ATTENDANCE_INVESTIGATION.md (storage map, suspect commits, live inventory how-to); unit tests in attendanceDurability + backupPathAndGenerational",
