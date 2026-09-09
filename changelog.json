@@ -8,8 +8,9 @@
         "Local-first durability: every attendance save (including drafts) flushDbSyncs to disk before UI reports Saved locally — closes the pre-1.9.85 crash window where autosave could claim saved while the 30s debounce had not written yet",
         "Honest save UI: Saved locally · pending sync (not Synced) until cloud push confirms written; structured save IPC { id, durable, pendingSync }",
         "Empty-cloud / Full re-sync preserve guards: never wipe local-only without an explicit matching tombstone; integrity check reports local vs cloud discrepancies with autoDelete:false",
-        "Backups: post-write CNDB magic+size verify on quick/hourly/manual; Settings backup status surfaces last success/failure and verify; soft-delete/undelete flush to disk",
-        "Forensics: docs/forensics/MEDWAY_2026-09-07_ATTENDANCE_INVESTIGATION.md (storage map, suspect commits, live inventory how-to); unit tests in attendanceDurability.test.js",
+        "Backups: quick snapshots every ~2 minutes as generational attendance-quick-*.db (plus attendance-latest.db), post-write CNDB verify, soft-delete flush; never silently skip — Home/Settings show degraded protection",
+        "Cross-platform backup paths: after Mac↔Windows restore, unusable backupFolder (e.g. /Users/… on Windows) auto-resets to userData/Backups with a clear notice; Settings always shows effective local + off-site paths, Open folder, last success/failure",
+        "Forensics: docs/forensics/MEDWAY_2026-09-07_ATTENDANCE_INVESTIGATION.md (storage map, suspect commits, live inventory how-to); unit tests in attendanceDurability + backupPathAndGenerational",
         "Extends empty-cloud alarm work from 1.9.84 (PR #33 lineage)"
       ]
     },

@@ -135,7 +135,28 @@ On a machine with the live licence activated:
 
 ---
 
+## Backup scheduler reality (Framework12 follow-up)
+
+| Setting (pre-1.9.85) | Value | User expectation gap |
+|----------------------|-------|----------------------|
+| Quick min interval | **15 minutes** | Robert expected ~every couple of minutes |
+| Quick file | **Single overwrite** `attendance-latest.db` | No point-in-time recovery within the hour |
+| Hourly | timestamped `attendance-backup-*.db` (24 + 7 daily) | OK when folder exists |
+| Skip if folder missing | `{ skipped: true, reason: 'backup-folder-missing' }` | Could look calm while **Backups/** never created |
+
+**Why Backups can be empty while the app runs**
+
+1. `settings.backupFolder` after Mac→Windows restore still held a Mac path (`/Users/…/Backups`) — not creatable on Windows; skips accumulate.  
+2. Fresh installs historically stored the path without `mkdir` (fixed earlier with `ensureBackupFolderExists`, but foreign paths still broke readiness).  
+3. Off-site OneDrive folder could still receive copies while primary local Backups never wrote — UI did not make that split obvious.
+
+**1.9.85 hardenings:** quick every **~2 minutes** + generational `attendance-quick-*.db`; path sanitize/reset; degraded Home/Settings banners; effective path + Open folder.
+
+**Do not claim** Costache exists in any Framework12 backup without reading those files on the live machine (off-site OneDrive Sep 7–8 copies are the best next preserve-first search).
+
+---
+
 ## Platform impact
 
-- **Mac:** same durability flush, UI honesty, backup verify, integrity check  
-- **Windows:** identical (no new platform branches)
+- **Mac:** same durability flush, UI honesty, backup verify, integrity check, generational quick backups, path sanitize  
+- **Windows:** identical product behaviour; path sanitise specifically fixes Mac→Windows restore leaving `/Users/…` in `backupFolder` (OS integration allowlist)
