@@ -17204,9 +17204,10 @@ pdfAuditFooterHtml(d, settings) +
           var msg = (notice && notice.message) || 'Backup folder path was corrected for this computer.';
           if (notice && notice.previous) msg += ' Previous: ' + notice.previous;
           if (notice && notice.next) msg += ' Now: ' + notice.next;
-          showToast(msg, 'warning', 10000);
+          showToast(msg, 'warning', 12000);
+          // Keep notice durable in Settings until the user dismisses it.
           refreshBackupEffectivePaths();
-          if (window.api.backupAcknowledgePathCorrection) window.api.backupAcknowledgePathCorrection().catch(function() {});
+          updateBackupStatus();
         } catch (_) {}
       });
     }
@@ -17230,6 +17231,7 @@ pdfAuditFooterHtml(d, settings) +
           off.textContent = ofp ? ('Off-site effective path: ' + ofp) : 'Off-site backup: none configured';
         }
         var deg = document.getElementById('settings-backup-degraded-banner');
+        var ackBtn = document.getElementById('settings-backup-path-ack');
         if (deg) {
           if (s && s.backupDegraded && s.backupDegraded.reason) {
             deg.style.display = '';
@@ -17244,23 +17246,37 @@ pdfAuditFooterHtml(d, settings) +
             deg.textContent = '';
           }
         }
+        if (ackBtn) {
+          ackBtn.style.display = (s && s.backupPathCorrection) ? '' : 'none';
+        }
       }).catch(function() {});
       if (window.api.backupStatus) {
         window.api.backupStatus().then(function(bs) {
+          var statusEl = document.getElementById('settings-backup-last-status');
+          if (statusEl && bs) {
+            statusEl.textContent =
+              'Last success: ' + (bs.lastSuccessAt ? new Date(bs.lastSuccessAt).toLocaleString() : 'never') +
+              ' · Last failure: ' + (bs.lastFailure || bs.lastDegradedReason || 'none') +
+              (bs.quickGenerationCount != null ? (' · Quick snapshots on disk: ' + bs.quickGenerationCount) : '') +
+              (bs.latestFileVerified === false ? ' · Latest verify FAILED' : (bs.latestFileVerified ? ' · Latest verified OK' : ''));
+          }
           var meta = document.getElementById('settings-backup-effective-meta');
-          if (meta && bs) {
-            var base = meta.textContent || '';
-            var extra = ' · Last success: ' + (bs.lastSuccessAt ? new Date(bs.lastSuccessAt).toLocaleString() : 'never') +
-              (bs.lastFailure ? (' · Last failure: ' + bs.lastFailure) : '') +
-              (bs.quickGenerationCount != null ? (' · Quick snapshots: ' + bs.quickGenerationCount) : '') +
-              (bs.latestFileVerified === false ? ' · Latest file verify FAILED' : (bs.latestFileVerified ? ' · Latest verified' : ''));
-            if (base.indexOf('Last success:') === -1) meta.textContent = base + extra;
+          if (meta && bs && meta.textContent.indexOf('Last success:') === -1) {
+            meta.textContent = (meta.textContent || '') +
+              ' · Last success: ' + (bs.lastSuccessAt ? new Date(bs.lastSuccessAt).toLocaleString() : 'never');
           }
         }).catch(function() {});
       }
     }
     window.refreshBackupEffectivePaths = refreshBackupEffectivePaths;
     document.addEventListener('view-settings-shown', function() { refreshBackupEffectivePaths(); });
+    document.getElementById('settings-backup-path-ack')?.addEventListener('click', function() {
+      if (!window.api || !window.api.backupAcknowledgePathCorrection) return;
+      window.api.backupAcknowledgePathCorrection().then(function() {
+        refreshBackupEffectivePaths();
+        showToast('Backup path notice dismissed', 'info', 2500);
+      }).catch(function() {});
+    });
     document.getElementById('setting-backup-open-folder')?.addEventListener('click', function() {
       if (!window.api || !window.api.backupOpenFolder) return;
       window.api.backupOpenFolder('local').then(function(r) {

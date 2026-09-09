@@ -1434,6 +1434,32 @@ function _tryEnsureWritableDir(dir) {
 /** Last time we auto-corrected a foreign-OS / unusable backupFolder. */
 let _backupPathCorrectionNotice = null;
 
+function _loadBackupPathCorrectionNotice() {
+  try {
+    if (!db) return null;
+    const row = dbGet("SELECT value FROM settings WHERE key='backupPathCorrectionNotice'");
+    if (!row || !row.value) return null;
+    const parsed = JSON.parse(String(row.value));
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch (_) {}
+  return null;
+}
+
+function _persistBackupPathCorrectionNotice(notice) {
+  _backupPathCorrectionNotice = notice || null;
+  if (!db) return;
+  try {
+    if (notice) {
+      dbRun(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('backupPathCorrectionNotice', ?)",
+        [JSON.stringify(notice)]
+      );
+    } else {
+      dbRun("DELETE FROM settings WHERE key='backupPathCorrectionNotice'");
+    }
+  } catch (_) {}
+}
+
 /**
  * After Mac↔Windows restore, settings.backupFolder may hold a path that cannot
  * work on this OS. Reset to userData/Backups and remember a one-time notice.
@@ -1442,6 +1468,9 @@ let _backupPathCorrectionNotice = null;
 function ensureBackupPathsSane(opts = {}) {
   const notices = [];
   if (!db) return notices;
+  if (!_backupPathCorrectionNotice) {
+    _backupPathCorrectionNotice = _loadBackupPathCorrectionNotice();
+  }
   const defaultPath = _defaultBackupFolder();
   const storedRow = dbGet("SELECT value FROM settings WHERE key = 'backupFolder'");
   const stored = storedRow && storedRow.value ? String(storedRow.value) : '';
@@ -1463,7 +1492,7 @@ function ensureBackupPathsSane(opts = {}) {
       message: 'Local backup folder was reset to this computer’s default because the saved path was not usable here (often after restoring a Mac database onto Windows, or the reverse).',
     };
     notices.push(notice);
-    _backupPathCorrectionNotice = notice;
+    _persistBackupPathCorrectionNotice(notice);
     console.warn('[Backup] Reset unusable backupFolder:', plan.reason, plan.previous, '→', plan.next);
     markDbDirty();
   } else if (stored) {
@@ -1489,7 +1518,9 @@ function ensureBackupPathsSane(opts = {}) {
         message: 'Off-site backup folder path was cleared because it is not usable on this computer. Choose a local cloud-sync folder in Settings. Existing files were not deleted.',
       };
       notices.push(notice);
-      if (!_backupPathCorrectionNotice) _backupPathCorrectionNotice = notice;
+      if (!_backupPathCorrectionNotice || _backupPathCorrectionNotice.kind !== 'backupFolder') {
+        _persistBackupPathCorrectionNotice(notice);
+      }
       console.warn('[Backup] Cleared unusable offsiteBackupFolder:', offAssess.reason, offsite);
       markDbDirty();
     }
@@ -5810,11 +5841,14 @@ app.on('before-quit', (e) => {
 });
 
 ipcMain.handle('get-settings', () => {
+  // Settings load is a sanitize checkpoint (covers Mac↔Windows restore leftovers).
+  try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const rows = dbAll('SELECT key, value FROM settings');
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   settings.effectiveBackupFolder = getBackupFolder();
   settings.effectiveOffsiteBackupFolder = getOffsiteBackupFolder();
   settings.defaultBackupFolder = _defaultBackupFolder();
+  if (!_backupPathCorrectionNotice) _backupPathCorrectionNotice = _loadBackupPathCorrectionNotice();
   settings.backupPathCorrection = _backupPathCorrectionNotice;
   settings.backupDegraded = _lastBackupDegradedReason
     ? { reason: _lastBackupDegradedReason, at: _lastBackupDegradedAt }
@@ -6919,8 +6953,23 @@ ipcMain.handle('backup-open-folder', async (_, which) => {
 });
 
 ipcMain.handle('backup-acknowledge-path-correction', () => {
-  _backupPathCorrectionNotice = null;
+  _persistBackupPathCorrectionNotice(null);
   return { ok: true };
+});
+
+ipcMain.handle('session-unlock', (_, password) => {
+  if (!_ipcChannelAllow('session-unlock', 5, 60 * 1000)) {
+    return { ok: false, code: 'rate_limited', error: 'Too many unlock attempts. Please wait a minute.' };
+  }
+  const result = verifySensitiveActionCredential(password, 'session-unlock');
+  if (result && result.ok) {
+    try {
+      ensureBackupPathsSane({ emit: true });
+    } catch (e) {
+      console.warn('[Backup] ensureBackupPathsSane after unlock failed:', e && e.message ? e.message : e);
+    }
+  }
+  return result;
 });
 
 ipcMain.handle('sync-integrity-check', () => {
@@ -7117,6 +7166,7 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     saveDb();
     resetSyncWorkerAfterDbSwap('cloud-restore');
     try { ensureBackupFolderExists(); } catch (_) {}
+    try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
@@ -7202,6 +7252,7 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     saveDb();
     resetSyncWorkerAfterDbSwap('local-restore');
     try { ensureBackupFolderExists(); } catch (_) {}
+    try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
@@ -7686,13 +7737,6 @@ function _ipcChannelAllow(channel, max, windowMs) {
   bucket.push(now);
   return true;
 }
-
-ipcMain.handle('session-unlock', (_, password) => {
-  if (!_ipcChannelAllow('session-unlock', 5, 60 * 1000)) {
-    return { ok: false, code: 'rate_limited', error: 'Too many unlock attempts. Please wait a minute.' };
-  }
-  return verifySensitiveActionCredential(password, 'session-unlock');
-});
 
 ipcMain.handle('recover-key-from-cloud', async () => {
   const result = await ensureCanonicalSyncKeyNow();

@@ -175,6 +175,8 @@ Robert expected backups every couple of minutes; production quick cadence was **
 - `tests/backupScheduler.test.js` — N‑minute cadence / retention around dirty saves that never reach cloud  
 - `tests/attendanceDurability.test.js` — verify + integrity without auto-delete
 
+**Platform (Windows + Mac):** backup location is always visible in Settings; foreign-OS paths cannot silently disable local backups after restore.
+
 ---
 
 ## Platform impact
