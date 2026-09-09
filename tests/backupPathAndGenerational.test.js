@@ -90,11 +90,38 @@ describe('generational quick backups + visible degradation', () => {
     assert.match(appJs, /refreshBackupEffectivePaths/);
   });
 
-  it('ensureBackupPathsSane runs on initDb', () => {
+  it('ensureBackupPathsSane runs on initDb, get-settings, unlock, and restore', () => {
     assert.match(mainJs, /function ensureBackupPathsSane/);
     const initIdx = mainJs.indexOf('async function initDb');
     const chunk = mainJs.slice(initIdx, initIdx + 6000);
     assert.match(chunk, /ensureBackupPathsSane/);
+    const getSettingsIdx = mainJs.indexOf("ipcMain.handle('get-settings'");
+    assert.match(mainJs.slice(getSettingsIdx, getSettingsIdx + 800), /ensureBackupPathsSane/);
+    const unlockIdx = mainJs.indexOf("ipcMain.handle('session-unlock'");
+    assert.match(mainJs.slice(unlockIdx, unlockIdx + 700), /ensureBackupPathsSane/);
+    const localRestoreIdx = mainJs.indexOf("ipcMain.handle('local-backup-restore'");
+    assert.ok(localRestoreIdx > 0);
+    assert.match(mainJs.slice(localRestoreIdx, localRestoreIdx + 4500), /ensureBackupPathsSane/);
+    const cloudRestoreIdx = mainJs.indexOf("ipcMain.handle('cloud-backup-restore'");
+    assert.ok(cloudRestoreIdx > 0);
+    assert.match(mainJs.slice(cloudRestoreIdx, cloudRestoreIdx + 4500), /ensureBackupPathsSane/);
+  });
+
+  it('path correction notice persists until acknowledged', () => {
+    assert.match(mainJs, /backupPathCorrectionNotice/);
+    assert.match(mainJs, /_persistBackupPathCorrectionNotice/);
+    assert.match(indexHtml, /settings-backup-path-ack/);
+    assert.match(appJs, /settings-backup-path-ack/);
+    assert.doesNotMatch(
+      appJs.slice(appJs.indexOf('onBackupPathCorrected'), appJs.indexOf('onBackupPathCorrected') + 500),
+      /backupAcknowledgePathCorrection\(\)\.catch/
+    );
+  });
+
+  it('Settings always shows last success and last failure', () => {
+    assert.match(indexHtml, /settings-backup-last-status/);
+    assert.match(appJs, /Last success:/);
+    assert.match(appJs, /Last failure:/);
   });
 });
 
