@@ -265,8 +265,38 @@ contextBridge.exposeInMainWorld('api', {
   attendanceList: () => ipcRenderer.invoke('attendance-list'),
   attendanceListFull: () => ipcRenderer.invoke('attendance-list-full'),
   attendanceSearch: (params) => ipcRenderer.invoke('attendance-search', params),
-  attendanceGet: (id) => ipcRenderer.invoke('attendance-get', id),
-  attendanceSave: (payload) => ipcRenderer.invoke('attendance-save', payload),
+  attendanceGet: (id) => {
+    // Coerce prior save-result objects so sql.js never sees [object Object].
+    if (id != null && typeof id === 'object' && id.id != null) id = id.id;
+    return ipcRenderer.invoke('attendance-get', id);
+  },
+  /**
+   * Backward-compatible save: resolves to numeric id on success (e2e + legacy
+   * callers). Error shapes ({ error, message }) are returned as objects.
+   * For durable/pendingSync metadata use attendanceSaveDetailed.
+   */
+  attendanceSave: async (payload) => {
+    var p = payload || {};
+    if (p.id != null && typeof p.id === 'object' && p.id.id != null) {
+      p = Object.assign({}, p, { id: p.id.id });
+    }
+    var result = await ipcRenderer.invoke('attendance-save', p);
+    if (result == null) return result;
+    if (typeof result === 'number' || typeof result === 'string') return result;
+    if (typeof result === 'object') {
+      if (result.error) return result;
+      if (result.id != null) return result.id;
+    }
+    return result;
+  },
+  /** Full { id, durable, pendingSync, syncDirty } — used by autosave / Save now UI. */
+  attendanceSaveDetailed: async (payload) => {
+    var p = payload || {};
+    if (p.id != null && typeof p.id === 'object' && p.id.id != null) {
+      p = Object.assign({}, p, { id: p.id.id });
+    }
+    return ipcRenderer.invoke('attendance-save', p);
+  },
   attendanceForceStatus: (params) => ipcRenderer.invoke('attendance-force-status', params),
   attendanceDelete: (params) => ipcRenderer.invoke('attendance-delete', params),
   attendanceArchive: (id) => ipcRenderer.invoke('attendance-archive', id),
@@ -301,8 +331,13 @@ contextBridge.exposeInMainWorld('api', {
     buildPreview: (fields) => ipcRenderer.invoke('officer-email-drafts-preview', fields),
   },
   flushAndBackup: () => ipcRenderer.invoke('flush-and-backup'),
+  persistAndBackup: () => ipcRenderer.invoke('persist-and-backup'),
   backupStatus: () => ipcRenderer.invoke('backup-status'),
+  backupOpenFolder: (which) => ipcRenderer.invoke('backup-open-folder', which),
+  backupAcknowledgePathCorrection: () => ipcRenderer.invoke('backup-acknowledge-path-correction'),
   onBackupStatusChanged: (cb) => ipcRenderer.on('backup-status-changed', (_, data) => cb(data)),
+  onBackupPathCorrected: (cb) => ipcRenderer.on('backup-path-corrected', (_, data) => cb(data)),
+  onBackupDegraded: (cb) => ipcRenderer.on('backup-degraded', (_, data) => cb(data)),
   reportEditorActivity: () => ipcRenderer.send('editor-activity'),
   confirmClose: () => ipcRenderer.send('close-confirmed'),
   onCheckUnsavedChanges: (cb) => ipcRenderer.on('check-unsaved-changes', () => cb()),
@@ -410,6 +445,7 @@ contextBridge.exposeInMainWorld('api', {
   syncFullResync: () => ipcRenderer.invoke('sync-full-resync'),
   syncReuploadAll: () => ipcRenderer.invoke('sync-reupload-all'),
   syncExportRecordIndex: () => ipcRenderer.invoke('sync-export-record-index'),
+  syncIntegrityCheck: () => ipcRenderer.invoke('sync-integrity-check'),
   syncStatus: () => ipcRenderer.invoke('sync-status'),
   syncScheduleOnReconnect: () => ipcRenderer.invoke('sync-schedule-on-reconnect'),
   syncGetDiagnostics: () => ipcRenderer.invoke('sync-get-diagnostics'),

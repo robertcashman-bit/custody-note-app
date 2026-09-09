@@ -3326,38 +3326,66 @@ var REQUIRED_FIELD_KEYS = [
     }
     el.style.display = '';
     var pending = st.pendingChanges || 0;
+    var dirty = st.dirtyPushCount || 0;
+    var pendingOrDirty = pending + dirty;
     var failed = st.failedCount || 0;
     var blocked = st.blockedCount || 0;
     var conflicts = st.conflictCount || 0;
+    var emptyCloud = !!(st.emptyCloudAlarm || st.localFullCloudEmpty || st.suggestReuploadAll || (st.health && st.health.cloudLikelyEmpty));
+    var emptyCloudMsg = st.emptyCloudAlarmMessage ||
+      'Records are still on this device, but the cloud has none for this licence. Use Re-upload all — do not use Full re-sync while the cloud is empty.';
+    var rateLimited = !!(st.rateLimited || (st.rateLimit && st.rateLimit.blocked));
+    var lastPushFailed = st.lastPush && st.lastPush.ok === false;
+    var lp = st.lastPull || {};
+    var decryptFailed = lp.decryptFailed || 0;
+    var received = lp.received || 0;
+    var merged = lp.merged || 0;
+    var total = st.totalRecords || 0;
+
     if (conflicts > 0) {
       setFooterIndicator(el, conflicts + ' conflict' + (conflicts === 1 ? '' : 's'), 'offline', 'Sync found newer remote changes but kept your local edits safe. Click to review and resolve.');
       el.style.cursor = 'pointer';
-    } else if (pending === 0 && st.lastSync) {
-      var lp = st.lastPull || {};
-      var decryptFailed = lp.decryptFailed || 0;
-      var received = lp.received || 0;
-      var merged = lp.merged || 0;
-      var total = st.totalRecords || 0;
-      if (st.rateLimited || (st.rateLimit && st.rateLimit.blocked)) {
-        var minsRl = Math.max(1, Math.ceil((st.rateLimitRemainingMs || (st.rateLimit && st.rateLimit.remainingMs) || 60000) / 60000));
-        setFooterIndicator(el, 'Rate limited — retry in ~' + minsRl + 'm', 'offline', st.lastError || 'Too many requests. Full re-sync will retry after the cooldown.');
-        el.style.cursor = 'pointer';
-      } else if (decryptFailed > 0) {
-        setFooterIndicator(el, decryptFailed + ' decrypt failed', 'offline', 'Remote records could not be decrypted. Use Settings \u2192 Backup \u2192 Recover from Cloud (Security tab) or Full re-sync from cloud.');
-        el.style.cursor = 'pointer';
-      } else if ((lp.noMasterKeySkipped || 0) > 0) {
-        setFooterIndicator(el, 'Waiting for sync key', 'offline', 'Cloud records arrived but this computer has no master key yet. Keep the app online so canonical key escrow can complete, then Full re-sync.');
-        el.style.cursor = 'pointer';
-      } else if (st.emptyLargeDb) {
-        setFooterIndicator(el, 'DB empty — recover', 'offline', 'Local database file is large but lists no records. Open Settings \u2192 Backup to restore, or Full re-sync from cloud. On the computer with your data, use Re-upload all local records to cloud.');
-        el.style.cursor = 'pointer';
-      } else if (total === 0 && received === 0) {
-        setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Re-upload all local records to cloud (or Push all pending now) and wait for 0 pending. Then Full re-sync here.');
-        el.style.cursor = '';
-      } else if (st.localFullCloudEmpty || st.suggestReuploadAll) {
-        setFooterIndicator(el, 'Cloud may be empty', 'offline', 'This computer has local records but the last cloud pull received none. Use Settings \u2192 Re-upload all local records to cloud so other devices can sync.');
-        el.style.cursor = 'pointer';
-      } else if (merged > 0) {
+    } else if (emptyCloud) {
+      setFooterIndicator(el, 'Cloud empty — re-upload', 'offline', emptyCloudMsg);
+      el.style.cursor = 'pointer';
+    } else if (rateLimited) {
+      var minsRl = Math.max(1, Math.ceil((st.rateLimitRemainingMs || (st.rateLimit && st.rateLimit.remainingMs) || 60000) / 60000));
+      var rlTitle = (st.lastError || 'Too many requests.') +
+        (pendingOrDirty > 0 ? ' ' + pendingOrDirty + ' record(s) still waiting to upload — retry after cooldown.' : ' Full re-sync will retry after the cooldown.');
+      setFooterIndicator(el, 'Rate limited — retry in ~' + minsRl + 'm', 'offline', rlTitle);
+      el.style.cursor = 'pointer';
+    } else if (decryptFailed > 0) {
+      setFooterIndicator(el, decryptFailed + ' decrypt failed', 'offline', 'Remote records could not be decrypted. Use Settings \u2192 Backup \u2192 Recover from Cloud (Security tab) or Full re-sync from cloud.');
+      el.style.cursor = 'pointer';
+    } else if ((lp.noMasterKeySkipped || 0) > 0) {
+      setFooterIndicator(el, 'Waiting for sync key', 'offline', 'Cloud records arrived but this computer has no master key yet. Keep the app online so canonical key escrow can complete, then Full re-sync.');
+      el.style.cursor = 'pointer';
+    } else if (st.emptyLargeDb) {
+      setFooterIndicator(el, 'DB empty — recover', 'offline', 'Local database file is large but lists no records. Open Settings \u2192 Backup to restore, or Full re-sync from cloud. On the computer with your data, use Re-upload all local records to cloud.');
+      el.style.cursor = 'pointer';
+    } else if (lastPushFailed && pendingOrDirty > 0) {
+      setFooterIndicator(
+        el,
+        pendingOrDirty + ' not confirmed in cloud',
+        'offline',
+        (st.lastPush && st.lastPush.error ? st.lastPush.error + ' — ' : '') +
+          'Local records stay dirty until the cloud confirms a durable write. Use Push all pending now or Re-upload all.'
+      );
+      el.style.cursor = 'pointer';
+    } else if (pendingOrDirty === 0 && total === 0 && received === 0 && st.lastSync) {
+      setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Re-upload all local records to cloud (or Push all pending now) and wait for 0 pending. Then Full re-sync here.');
+      el.style.cursor = '';
+    } else if (blocked > 0) {
+      setFooterIndicator(el, blocked + ' auto-retrying', 'offline', (st.lastError || '') + ' — will auto-retry. Click to retry now.');
+      el.style.cursor = 'pointer';
+    } else if (failed > 0) {
+      setFooterIndicator(el, failed + ' retrying', 'offline', (st.lastError || '') + ' — click to retry sync.');
+      el.style.cursor = 'pointer';
+    } else if (pendingOrDirty > 0) {
+      setFooterIndicator(el, pendingOrDirty + ' pending', 'syncing');
+      el.style.cursor = '';
+    } else if (st.lastSync && !(st.suppressSyncedFooter) && st.syncHealthy !== false) {
+      if (merged > 0) {
         setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync) + ' (' + merged + ' new)', 'synced');
         el.style.cursor = '';
       } else if (received > 0 && merged === 0) {
@@ -3367,15 +3395,17 @@ var REQUIRED_FIELD_KEYS = [
         setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync), 'synced');
         el.style.cursor = '';
       }
-    } else if (blocked > 0) {
-      setFooterIndicator(el, blocked + ' auto-retrying', 'offline', (st.lastError || '') + ' — will auto-retry. Click to retry now.');
+    } else if (st.suppressSyncedFooter || st.syncHealthy === false) {
+      // Not empty-cloud (handled above). inProgress / lastError / unverified push must not
+      // reuse empty-cloud copy that forbids Full re-sync.
+      setFooterIndicator(
+        el,
+        'Local only — check sync',
+        'offline',
+        st.lastError ||
+          'Sync needs attention. Open Settings \u2192 Backup to retry push, or Full re-sync if records are missing on this device.'
+      );
       el.style.cursor = 'pointer';
-    } else if (failed > 0) {
-      setFooterIndicator(el, failed + ' retrying', 'offline', (st.lastError || '') + ' — click to retry sync.');
-      el.style.cursor = 'pointer';
-    } else if (pending > 0) {
-      setFooterIndicator(el, pending + ' pending', 'syncing');
-      el.style.cursor = '';
     } else {
       setFooterIndicator(el, 'Waiting to sync', 'backup-ok');
       el.style.cursor = '';
@@ -3420,6 +3450,7 @@ var REQUIRED_FIELD_KEYS = [
     window.api.syncStatus().then(function(st) {
       applySyncSnapshot(st || {});
       try { refreshCrossDeviceSyncPanel(st || {}); } catch (_) {}
+      try { refreshHomeEmptyCloudAlarm(st || {}); } catch (_) {}
     }).catch(function(e) { console.error('[sync-status]', e); });
   }
 
@@ -3447,37 +3478,65 @@ var REQUIRED_FIELD_KEYS = [
     if (lp.received > 0) {
       lines.push('Last pull received ' + lp.received + ', merged ' + (lp.merged || 0));
     }
+    if (st.lastVerifiedCloudInventory != null) {
+      lines.push('Cloud inventory: ' + st.lastVerifiedCloudInventory);
+    }
     if (lp.decryptFailed > 0) {
       lines.push('Warning: ' + lp.decryptFailed + ' record(s) could not be decrypted');
     }
     if (st.conflictCount > 0) lines.push('Open conflicts: ' + st.conflictCount);
     if (st.lastError) lines.push('Last error: ' + st.lastError);
     if (st.rateLimit && st.rateLimit.blocked) {
-      lines.push('Rate limited (~' + Math.ceil((st.rateLimit.remainingMs || 0) / 60000) + 'm remaining)');
+      lines.push('Rate limited (~' + Math.ceil((st.rateLimit.remainingMs || 0) / 60000) + 'm remaining)' +
+        ((pending + dirty) > 0 ? ' — ' + (pending + dirty) + ' still waiting to upload' : ''));
     }
     if (st.lastPush && st.lastPush.at) {
       lines.push('Last push: ' + (st.lastPush.ok ? ('ok wrote ' + (st.lastPush.written || 0)) : ('failed — ' + (st.lastPush.error || 'error'))));
     }
+    var emptyCloud = !!(st.emptyCloudAlarm || st.localFullCloudEmpty || st.suggestReuploadAll || (st.health && st.health.cloudLikelyEmpty));
+    var alarmMsg = st.emptyCloudAlarmMessage ||
+      (st.health && st.health.emptyCloudAlarmMessage) ||
+      'Records are still on this device, but the cloud has none for this licence. Use Re-upload all — do not use Full re-sync while the cloud is empty.';
     statusEl.textContent = lines.join(' \u00b7 ');
-    statusEl.style.color = (lp.decryptFailed > 0 || st.failedCount > 0 || st.localFullCloudEmpty || st.emptyLargeDb || (st.rateLimit && st.rateLimit.blocked) || (st.health && st.health.cloudLikelyEmpty)) ? '#b45309' : '';
+    var warnColor = emptyCloud || lp.decryptFailed > 0 || st.failedCount > 0 || st.emptyLargeDb ||
+      (st.rateLimit && st.rateLimit.blocked) || (st.lastPush && st.lastPush.ok === false && (pending + dirty) > 0) ||
+      st.syncHealthy === false;
+    statusEl.style.color = warnColor ? (emptyCloud ? '#b91c1c' : '#b45309') : '';
     if (healthEl) {
       var h = st.health || {};
       healthEl.textContent =
         'Health: local=' + (h.localCount != null ? h.localCount : (st.totalRecords || 0)) +
         ' · last cloud pull received=' + (h.lastCloudPullReceived != null ? h.lastCloudPullReceived : (lp.received || 0)) +
+        ' · inventory=' + (h.lastVerifiedCloudInventory != null ? h.lastVerifiedCloudInventory : (st.lastVerifiedCloudInventory != null ? st.lastVerifiedCloudInventory : '?')) +
         ' · pending uploads=' + (h.pendingUploads != null ? h.pendingUploads : (pending + dirty)) +
         ' · schema v' + (st.schemaVersion != null ? st.schemaVersion : (h.schemaVersion != null ? h.schemaVersion : '?')) +
-        (h.cloudLikelyEmpty ? ' · cloud likely empty for this licence' : '');
+        (h.cloudLikelyEmpty || emptyCloud ? ' · ERROR: cloud empty for this licence' : '') +
+        (h.healthy === false || st.syncHealthy === false ? ' · not healthy' : '');
+      healthEl.style.color = (h.cloudLikelyEmpty || emptyCloud) ? '#b91c1c' : '';
     }
     if (hintEl) {
-      if (st.emptyLargeDb) {
+      if (emptyCloud) {
         hintEl.style.display = '';
+        hintEl.style.color = '#b91c1c';
+        hintEl.textContent = 'ERROR: ' + alarmMsg;
+      } else if (st.emptyLargeDb) {
+        hintEl.style.display = '';
+        hintEl.style.color = '#b45309';
         hintEl.textContent = 'Recovery: database file is about ' + Math.round((st.dbFileBytes || 0) / 1024) + ' KB but lists 0 records. Restore a local/cloud backup, or on the computer with your data use Re-upload all local records to cloud, then Full re-sync here.';
-      } else if (st.localFullCloudEmpty || st.suggestReuploadAll || (st.health && st.health.cloudLikelyEmpty)) {
+      } else if (st.rateLimit && st.rateLimit.blocked && (pending + dirty) > 0) {
         hintEl.style.display = '';
-        hintEl.textContent = 'Recovery: this computer has local records but the cloud pull received none. Click Re-upload all local records to cloud so Windows/Mac secondary devices can sync.';
+        hintEl.style.color = '#b45309';
+        hintEl.textContent = 'Upload paused (rate limited). ' + (pending + dirty) +
+          ' local record(s) are still waiting for a confirmed cloud write. Retry Push all pending / Re-upload all after the cooldown — do not assume they left this device.';
+      } else if (st.lastPush && st.lastPush.ok === false && (pending + dirty) > 0) {
+        hintEl.style.display = '';
+        hintEl.style.color = '#b45309';
+        hintEl.textContent = 'Last push did not confirm a durable cloud write (' +
+          (st.lastPush.error || 'unconfirmed') + '). ' + (pending + dirty) +
+          ' record(s) remain dirty on this device. Use Push all pending now or Re-upload all.';
       } else {
         hintEl.style.display = 'none';
+        hintEl.style.color = '#b45309';
         hintEl.textContent = '';
       }
     }
@@ -4220,6 +4279,23 @@ var REQUIRED_FIELD_KEYS = [
     openBtn.dataset.action = 'open-record';
   }
 
+  function refreshHomeEmptyCloudAlarm(st) {
+    var alarmEl = document.getElementById('home-empty-cloud-alarm');
+    if (!alarmEl) return;
+    var emptyCloud = !!(st && (st.emptyCloudAlarm || st.localFullCloudEmpty || st.suggestReuploadAll || (st.health && st.health.cloudLikelyEmpty)));
+    if (emptyCloud && (st.totalRecords || 0) > 0) {
+      alarmEl.style.display = '';
+      var body = document.getElementById('home-empty-cloud-alarm-body');
+      if (body) {
+        body.textContent = st.emptyCloudAlarmMessage ||
+          (st.health && st.health.emptyCloudAlarmMessage) ||
+          'Records are still on this device, but the cloud has none for this licence. Use Re-upload all — do not use Full re-sync while the cloud is empty.';
+      }
+    } else {
+      alarmEl.style.display = 'none';
+    }
+  }
+
   function loadHomeRecent() {
     var apiFn = (window.api && window.api.attendanceHomeStats) || (window.api && window.api.attendanceList);
     if (!apiFn) return;
@@ -4233,23 +4309,32 @@ var REQUIRED_FIELD_KEYS = [
         if (statsEl) statsEl.textContent = '';
         loadHomeActiveMatters([]);
         loadHomeFocus([]);
-        if (recoveryEl && window.api && window.api.syncStatus) {
+        if (window.api && window.api.syncStatus) {
           window.api.syncStatus().then(function(st) {
-            if (st && st.emptyLargeDb) {
-              recoveryEl.style.display = '';
-              var body = document.getElementById('home-empty-db-recovery-body');
-              if (body) {
-                body.textContent = 'Local database is about ' + Math.round((st.dbFileBytes || 0) / 1024) +
-                  ' KB but Home lists no attendances. Restore from another computer\'s backup, Full re-sync from cloud, or on the machine that still has your notes use Re-upload all local records to cloud.';
+            if (recoveryEl) {
+              if (st && st.emptyLargeDb) {
+                recoveryEl.style.display = '';
+                var body = document.getElementById('home-empty-db-recovery-body');
+                if (body) {
+                  body.textContent = 'Local database is about ' + Math.round((st.dbFileBytes || 0) / 1024) +
+                    ' KB but Home lists no attendances. Restore from another computer\'s backup, Full re-sync from cloud, or on the machine that still has your notes use Re-upload all local records to cloud.';
+                }
+              } else {
+                recoveryEl.style.display = 'none';
               }
-            } else {
-              recoveryEl.style.display = 'none';
             }
-          }).catch(function() { recoveryEl.style.display = 'none'; });
+            refreshHomeEmptyCloudAlarm(st);
+          }).catch(function() {
+            if (recoveryEl) recoveryEl.style.display = 'none';
+            refreshHomeEmptyCloudAlarm(null);
+          });
         }
         return;
       }
       if (recoveryEl) recoveryEl.style.display = 'none';
+      if (window.api && window.api.syncStatus) {
+        window.api.syncStatus().then(refreshHomeEmptyCloudAlarm).catch(function() { refreshHomeEmptyCloudAlarm(null); });
+      }
       var sorted = rows.slice().sort(function(a, b) { return (b.updated_at || b.created_at || '').localeCompare(a.updated_at || a.created_at || ''); });
       var HOME_RECENT_LIMIT = 10;
       var showRows = sorted.slice(0, HOME_RECENT_LIMIT);
@@ -5087,7 +5172,12 @@ var REQUIRED_FIELD_KEYS = [
       persistFirmContactPromise.then(function() {
         return window.api.attendanceSave({ id: null, data: formData, status: 'draft' });
       }).then(id => {
-        currentAttendanceId = id;
+        var norm = normalizeAttendanceSaveResult(id);
+        if (norm.error) {
+          showToast(norm.message || norm.error || 'Failed to save quick capture', 'error', 5000);
+          return;
+        }
+        currentAttendanceId = norm.id;
         if (firmId) rememberQuickCaptureFirmId(firmId);
         saveQuickCaptureRecentContact({
           firmId: firmId,
@@ -5358,6 +5448,7 @@ var REQUIRED_FIELD_KEYS = [
   var EDITOR_ACTIVITY_DEBOUNCE_MS = 10000;
 
   function scheduleQuietSave() {
+    markFormDirtyForDiskIndicator();
     clearTimeout(_quietSaveDebounceTimer);
     _quietSaveDebounceTimer = setTimeout(quietSave, QUIET_SAVE_DEBOUNCE_MS);
     if (window.api && window.api.reportEditorActivity) {
@@ -5383,7 +5474,7 @@ var REQUIRED_FIELD_KEYS = [
     _draftSaveInFlight = true;
     _lastQuietSaveStart = Date.now();
     showSavingIndicator();
-    window.api.attendanceSave({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
+    attendanceSaveDetailed({ id: currentAttendanceId, data: data, status: 'draft' }).then(result => {
       /* Invalidate cache on save */
       if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
         _recordCache.delete(currentAttendanceId);
@@ -5394,15 +5485,17 @@ var REQUIRED_FIELD_KEYS = [
         currentRecordStatus = 'finalised';
         return;
       }
-      if (typeof result === 'number' || typeof result === 'string') {
-        currentAttendanceId = result;
+      var normalized = normalizeAttendanceSaveResult(result);
+      if (normalized.id != null) {
+        currentAttendanceId = normalized.id;
         if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.attachToCustodyNote === 'function') {
           try { window.OfficerEmailsPanel.attachToCustodyNote(currentAttendanceId); } catch (_) {}
         }
       }
-      showAutoSaveIndicator();
-      var savedEl = document.getElementById('form-last-saved');
-      if (savedEl) savedEl.textContent = 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      showAutoSaveIndicator({ durable: normalized.durable, pendingSync: normalized.pendingSync });
+      if (normalized.durable === false) {
+        showToast('Saved in memory but disk write may not have finished — press Save now', 'warning', 5000);
+      }
     }).catch(function(e) {
       console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000);
       ['autosave-indicator', 'header-autosave'].forEach(function(id) {
@@ -5440,17 +5533,36 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
-  function showAutoSaveIndicator() {
+  function showAutoSaveIndicator(opts) {
     var now = new Date();
     _lastQuietSaveDurationMs = _lastQuietSaveStart ? (now.getTime() - _lastQuietSaveStart) : null;
-    _lastDbWrite = now.toISOString();
-    var txt = '\u2713 Saved on this computer ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    var durable = !(opts && opts.durable === false);
+    if (durable) _lastDbWrite = now.toISOString();
+    var pendingSync = !!(opts && opts.pendingSync);
+    var dirty = !!(opts && opts.dirty);
+    var txt;
+    if (dirty) {
+      txt = 'Unsaved changes…';
+    } else if (durable) {
+      txt = '\u2713 Saved to disk ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+      if (pendingSync) txt += ' \u00b7 pending sync';
+    } else {
+      txt = 'Not on disk yet — use Save now';
+    }
+    var title = dirty
+      ? 'Edits are on screen only until the next successful disk write.'
+      : (durable
+        ? (pendingSync
+          ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Cloud sync still pending.'
+          : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.')
+        : 'Save reached memory but disk flush did not complete — press Save now.');
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.textContent = txt;
-      el.removeAttribute('data-autosave-error');
-      el.title = 'Last draft save written to this device. Finalised records do not autosave.';
+      if (durable && !dirty) el.removeAttribute('data-autosave-error');
+      else if (!durable || dirty) el.setAttribute('data-autosave-error', '1');
+      el.title = title;
       el.classList.add('visible');
     });
     var footerWrap = document.getElementById('footer-autosave-wrap');
@@ -5459,6 +5571,46 @@ var REQUIRED_FIELD_KEYS = [
       footerWrap.style.display = '';
       footerEl.textContent = txt;
     }
+    var savedEl = document.getElementById('form-last-saved');
+    if (savedEl && durable && !dirty) {
+      savedEl.textContent = 'Last disk save ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+        (pendingSync ? ' · pending sync' : '');
+    } else if (savedEl && dirty) {
+      savedEl.textContent = 'Unsaved changes';
+    }
+  }
+
+  function markFormDirtyForDiskIndicator() {
+    showAutoSaveIndicator({ dirty: true, durable: false, pendingSync: false });
+  }
+
+  function normalizeAttendanceSaveResult(result) {
+    if (window.CustodyNoteAttendanceSave && typeof window.CustodyNoteAttendanceSave.normalize === 'function') {
+      return window.CustodyNoteAttendanceSave.normalize(result);
+    }
+    if (result == null) return { id: null, durable: false, pendingSync: false, error: null };
+    if (typeof result === 'number' || typeof result === 'string') {
+      // Preload attendanceSave unwraps to bare id; main still flushed via finishAttendanceSaveResult.
+      return { id: result, durable: true, pendingSync: true, error: null };
+    }
+    if (typeof result === 'object') {
+      return {
+        id: result.id != null ? result.id : null,
+        durable: result.durable === true,
+        pendingSync: result.pendingSync !== false && !result.error,
+        error: result.error || null,
+        message: result.message || null,
+      };
+    }
+    return { id: null, durable: false, pendingSync: false, error: 'invalid_result' };
+  }
+
+  /** Prefer detailed save (durable meta); fall back to numeric unwrap API. */
+  function attendanceSaveDetailed(payload) {
+    if (window.api && typeof window.api.attendanceSaveDetailed === 'function') {
+      return window.api.attendanceSaveDetailed(payload);
+    }
+    return window.api.attendanceSave(payload);
   }
 
   function showSettingsSavedToast() {
@@ -7370,7 +7522,9 @@ var REQUIRED_FIELD_KEYS = [
       src._convertedToCustodyAt = new Date().toISOString();
       formData = src;
       var voluntaryId = currentAttendanceId;
-      window.api.attendanceSave({ id: voluntaryId, data: src, status: (src.status || 'draft') }).then(function(savedId) {
+      window.api.attendanceSave({ id: voluntaryId, data: src, status: (src.status || 'draft') }).then(function(savedResult) {
+        var savedNorm = normalizeAttendanceSaveResult(savedResult);
+        var savedId = savedNorm.id;
         var arrestDt = (src.arrestTimeIfConverted || '').trim();
         var arrestDate = arrestDt.length >= 10 ? arrestDt.slice(0, 10) : src.date;
         var arrestTime = arrestDt.length >= 16 ? arrestDt.slice(11, 16) : '';
@@ -13025,7 +13179,7 @@ var REQUIRED_FIELD_KEYS = [
       if (status === 'finalised') {
         console.log('[FINALISE] IPC attempt #' + attemptNum + ': id=' + currentAttendanceId);
       }
-      window.api.attendanceSave({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
+      attendanceSaveDetailed({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
         /* Invalidate cache on save */
         if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
           _recordCache.delete(currentAttendanceId);
@@ -13066,11 +13220,18 @@ var REQUIRED_FIELD_KEYS = [
             return;
           }
         }
-        if (typeof result === 'number' || typeof result === 'string') {
-          currentAttendanceId = result;
+        var normalizedSave = normalizeAttendanceSaveResult(result);
+        if (normalizedSave.id != null) {
+          currentAttendanceId = normalizedSave.id;
           if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.attachToCustodyNote === 'function') {
             try { window.OfficerEmailsPanel.attachToCustodyNote(currentAttendanceId); } catch (_) {}
           }
+        }
+        if (status !== 'finalised' && status !== 'completed') {
+          showAutoSaveIndicator({
+            durable: normalizedSave.durable,
+            pendingSync: normalizedSave.pendingSync,
+          });
         }
         if (status === 'finalised') {
           /* Verify the DB actually persisted the finalised status */
@@ -15776,8 +15937,10 @@ pdfAuditFooterHtml(d, settings) +
         if (status.health) {
           lines.push('Health local:  ' + status.health.localCount);
           lines.push('Health pull:   ' + status.health.lastCloudPullReceived + (status.health.pulledFromEpoch ? ' (from-epoch)' : ''));
+          lines.push('Cloud invent.: ' + (status.health.lastVerifiedCloudInventory != null ? status.health.lastVerifiedCloudInventory : (status.lastVerifiedCloudInventory != null ? status.lastVerifiedCloudInventory : 'unknown')));
           lines.push('Health pending:' + status.health.pendingUploads);
-          lines.push('Cloud empty?:  ' + (status.health.cloudLikelyEmpty ? 'LIKELY' : 'no'));
+          lines.push('Cloud empty?:  ' + (status.health.cloudLikelyEmpty || status.emptyCloudAlarm ? 'ERROR — re-upload all' : 'no'));
+          lines.push('Sync healthy?: ' + (status.health.healthy === false || status.syncHealthy === false ? 'NO' : 'yes'));
         }
         lines.push('');
         lines.push('=== BACKUP ===');
@@ -16023,10 +16186,27 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
 
-      /* Cmd/Ctrl+S = quiet save (does not exit — matches custody-desk safety) */
+      /* Cmd/Ctrl+S = Save now (disk flush + verified backup) */
       if (modPressed(e) && e.key === 's') {
         e.preventDefault();
-        quietSave();
+        var saveBtn = document.getElementById('form-backup-now-btn') || document.getElementById('header-backup-now-btn');
+        if (typeof window.handleSaveNowClick === 'function' && saveBtn) window.handleSaveNowClick(saveBtn);
+        else if (window.api && window.api.persistAndBackup) {
+          quietSave();
+          window.api.persistAndBackup().then(function(res) {
+            if (res && res.noteDurable && res.backupOk) {
+              showToast((res.userMessage && res.userMessage.message) || 'Saved to this computer and backed up', 'success', 7000);
+            } else if (res && res.noteDurable) {
+              showToast((res.userMessage && res.userMessage.message) || 'Note saved; backup failed', 'warning', 9000);
+            } else {
+              showToast((res && res.userMessage && res.userMessage.message) || 'Save now failed', 'error', 9000);
+            }
+          }).catch(function(err) {
+            showToast('Save now failed: ' + (err && err.message), 'error');
+          });
+        } else {
+          quietSave();
+        }
       }
       if (modPressed(e) && e.key === 'ArrowRight') {
         e.preventDefault();
@@ -16973,6 +17153,19 @@ pdfAuditFooterHtml(d, settings) +
     function applyBackupStatus(bs) {
       _footerBackupSnapshot = bs || null;
       if (!backupStatusEl) return;
+      try {
+        var degBanner = document.getElementById('home-backup-degraded');
+        var degBody = document.getElementById('home-backup-degraded-body');
+        var degraded = !!(bs && (bs.lastDegradedReason || bs.lastSkipReason === 'backup-folder-missing' || bs.lastSkipReason === 'export-failed' || bs.state === 'error'));
+        if (degBanner) {
+          degBanner.style.display = degraded ? '' : 'none';
+          if (degraded && degBody) {
+            degBody.textContent = 'Backup issue: ' + (bs.lastDegradedReason || bs.lastSkipReason || bs.lastError || 'unknown') +
+              '. Effective folder: ' + (bs.backupFolder || 'unknown') +
+              '. Last success: ' + (bs.lastSuccessAt ? new Date(bs.lastSuccessAt).toLocaleString() : 'never') + '.';
+          }
+        }
+      } catch (_) {}
       if (!bs || bs.state === 'not-initialised') {
         setFooterIndicator(backupStatusEl, 'Backup starting\u2026', '');
         return true;
@@ -16981,8 +17174,8 @@ pdfAuditFooterHtml(d, settings) +
         setFooterIndicator(backupStatusEl, 'Backup running', 'backup-active');
       } else if (bs.state === 'deferred') {
         setFooterIndicator(backupStatusEl, 'Backup idle', 'backup-ok');
-      } else if (bs.state === 'error') {
-        setFooterIndicator(backupStatusEl, 'Backup retrying', 'offline', bs.lastError || '');
+      } else if (bs.state === 'error' || bs.lastDegradedReason) {
+        setFooterIndicator(backupStatusEl, 'Backup degraded', 'offline', bs.lastError || bs.lastDegradedReason || '');
       } else if (bs.quickDirty || bs.hourlyDirty) {
         var noFolder = bs.lastSkipReason === 'backup-folder-missing' || bs.lastSkipReason === 'db-missing' || bs.lastSkipReason === 'export-failed';
         if (noFolder) {
@@ -17035,6 +17228,113 @@ pdfAuditFooterHtml(d, settings) +
     if (window.api && window.api.onBackupStatusChanged) {
       window.api.onBackupStatusChanged(function(data) { updateBackupStatus(data); });
     }
+    if (window.api && window.api.onBackupDegraded) {
+      window.api.onBackupDegraded(function(payload) {
+        try {
+          showToast((payload && payload.message) || 'Local backup protection is degraded', 'warning', 8000);
+          updateBackupStatus();
+          refreshBackupEffectivePaths();
+        } catch (_) {}
+      });
+    }
+    if (window.api && window.api.onBackupPathCorrected) {
+      window.api.onBackupPathCorrected(function(notice) {
+        try {
+          var msg = (notice && notice.message) || 'Backup folder path was corrected for this computer.';
+          if (notice && notice.previous) msg += ' Previous: ' + notice.previous;
+          if (notice && notice.next) msg += ' Now: ' + notice.next;
+          showToast(msg, 'warning', 12000);
+          // Keep notice durable in Settings until the user dismisses it.
+          refreshBackupEffectivePaths();
+          updateBackupStatus();
+        } catch (_) {}
+      });
+    }
+
+    function refreshBackupEffectivePaths() {
+      if (!window.api || !window.api.getSettings) return;
+      window.api.getSettings().then(function(s) {
+        var bf = document.getElementById('setting-backup-folder');
+        var effective = (s && (s.effectiveBackupFolder || s.backupFolder)) || '';
+        if (bf) bf.value = effective;
+        var meta = document.getElementById('settings-backup-effective-meta');
+        if (meta) {
+          var intervalMin = s && s.backupQuickMinIntervalMs ? Math.round(s.backupQuickMinIntervalMs / 60000) : 2;
+          meta.textContent = 'Effective local path: ' + (effective || '(none)') +
+            ' · Quick every ~' + intervalMin + ' min (generational) · Hourly archives retained' +
+            (s && s.defaultBackupFolder ? ' · Default: ' + s.defaultBackupFolder : '');
+        }
+        var off = document.getElementById('settings-offsite-effective-path');
+        if (off) {
+          var ofp = (s && (s.effectiveOffsiteBackupFolder || s.offsiteBackupFolder)) || '';
+          off.textContent = ofp ? ('Off-site effective path: ' + ofp) : 'Off-site backup: none configured';
+        }
+        var deg = document.getElementById('settings-backup-degraded-banner');
+        var ackBtn = document.getElementById('settings-backup-path-ack');
+        if (deg) {
+          if (s && s.backupDegraded && s.backupDegraded.reason) {
+            deg.style.display = '';
+            deg.textContent = 'Backup degraded: ' + s.backupDegraded.reason + '. Confirm the folder above and run Backup now.';
+          } else if (s && s.backupPathCorrection) {
+            deg.style.display = '';
+            deg.textContent = (s.backupPathCorrection.message || 'Backup path was auto-corrected.') +
+              (s.backupPathCorrection.previous ? ' Previous: ' + s.backupPathCorrection.previous : '') +
+              (s.backupPathCorrection.next ? ' → ' + s.backupPathCorrection.next : '');
+          } else {
+            deg.style.display = 'none';
+            deg.textContent = '';
+          }
+        }
+        if (ackBtn) {
+          ackBtn.style.display = (s && s.backupPathCorrection) ? '' : 'none';
+        }
+      }).catch(function() {});
+      if (window.api.backupStatus) {
+        window.api.backupStatus().then(function(bs) {
+          var statusEl = document.getElementById('settings-backup-last-status');
+          if (statusEl && bs) {
+            statusEl.textContent =
+              'Last success: ' + (bs.lastSuccessAt ? new Date(bs.lastSuccessAt).toLocaleString() : 'never') +
+              ' · Last failure: ' + (bs.lastFailure || bs.lastDegradedReason || 'none') +
+              (bs.quickGenerationCount != null ? (' · Quick snapshots on disk: ' + bs.quickGenerationCount) : '') +
+              (bs.latestFileVerified === false ? ' · Latest verify FAILED' : (bs.latestFileVerified ? ' · Latest verified OK' : ''));
+          }
+          var meta = document.getElementById('settings-backup-effective-meta');
+          if (meta && bs && meta.textContent.indexOf('Last success:') === -1) {
+            meta.textContent = (meta.textContent || '') +
+              ' · Last success: ' + (bs.lastSuccessAt ? new Date(bs.lastSuccessAt).toLocaleString() : 'never');
+          }
+        }).catch(function() {});
+      }
+    }
+    window.refreshBackupEffectivePaths = refreshBackupEffectivePaths;
+    document.addEventListener('view-settings-shown', function() { refreshBackupEffectivePaths(); });
+    document.getElementById('settings-backup-path-ack')?.addEventListener('click', function() {
+      if (!window.api || !window.api.backupAcknowledgePathCorrection) return;
+      window.api.backupAcknowledgePathCorrection().then(function() {
+        refreshBackupEffectivePaths();
+        showToast('Backup path notice dismissed', 'info', 2500);
+      }).catch(function() {});
+    });
+    document.getElementById('setting-backup-open-folder')?.addEventListener('click', function() {
+      if (!window.api || !window.api.backupOpenFolder) return;
+      window.api.backupOpenFolder('local').then(function(r) {
+        if (!r || !r.ok) showToast((r && r.error) || 'Could not open backup folder', 'error');
+      }).catch(function(e) { showToast(e && e.message || 'Could not open backup folder', 'error'); });
+    });
+    document.getElementById('setting-offsite-open-folder')?.addEventListener('click', function() {
+      if (!window.api || !window.api.backupOpenFolder) return;
+      window.api.backupOpenFolder('offsite').then(function(r) {
+        if (!r || !r.ok) showToast((r && r.error) || 'No off-site folder configured', 'error');
+      }).catch(function(e) { showToast(e && e.message || 'Could not open off-site folder', 'error'); });
+    });
+    document.getElementById('home-backup-degraded-settings')?.addEventListener('click', function() {
+      try {
+        if (typeof showView === 'function') showView('settings');
+        var tab = document.querySelector('.settings-tab[data-stab="backup"]');
+        if (tab) tab.click();
+      } catch (_) {}
+    });
     /* App version, build date (from package) and when this build first ran on this computer */
     if (window.api.getAppVersion) {
       window.api.getAppVersion().then(function(info) {
@@ -17357,29 +17657,124 @@ pdfAuditFooterHtml(d, settings) +
       });
     });
 
-    function handleBackupNowClick(btn) {
-      if (!btn || btn.classList.contains('backing-up')) return;
+    function handleSaveNowClick(btn) {
+      if (!btn || btn.classList.contains('backing-up') || btn.classList.contains('saving-now')) return;
+      var formView = document.getElementById('view-form');
+      var onForm = formView && formView.classList.contains('active');
+      btn.classList.add('saving-now');
       btn.classList.add('backing-up');
       var origText = btn.innerHTML;
-      btn.innerHTML = '&#128190; Saving…';
-      quietSave();
-      var backupFn = window.api.flushAndBackup || window.api.backupNow;
-      backupFn().then(function() {
-        return window.api.backupNow();
-      }).then(function() {
-        btn.innerHTML = '&#10003; Backed up';
-        showToast('Backup completed', 'success');
-        setTimeout(function() { btn.innerHTML = origText; btn.classList.remove('backing-up'); }, 2000);
-      }).catch(function(err) {
-        btn.innerHTML = origText;
-        btn.classList.remove('backing-up');
-        showToast('Backup failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
+      btn.innerHTML = 'Saving\u2026';
+      btn.disabled = true;
+
+      function finishBtn(label, keepMs) {
+        btn.innerHTML = label || origText;
+        setTimeout(function() {
+          btn.innerHTML = origText;
+          btn.classList.remove('backing-up');
+          btn.classList.remove('saving-now');
+          btn.disabled = false;
+        }, keepMs || 2200);
+      }
+
+      function runPersistBackup(afterNoteOk) {
+        var apiFn = (window.api && (window.api.persistAndBackup || window.api.flushAndBackup));
+        if (!apiFn) {
+          showToast(afterNoteOk
+            ? 'Note saved to this computer, but backup API is unavailable'
+            : 'Save now unavailable', 'warning', 7000);
+          finishBtn(afterNoteOk ? 'Note saved' : origText, 2500);
+          return;
+        }
+        Promise.resolve(apiFn()).then(function(res) {
+          if (!res || typeof res === 'string') {
+            // Legacy flush-and-backup may still return a string path on older builds.
+            showToast('Saved to this computer. Backup written.', 'success', 6000);
+            showAutoSaveIndicator({ durable: true, pendingSync: true });
+            finishBtn('\u2713 Saved', 2500);
+            return;
+          }
+          var um = res.userMessage || null;
+          if (res.noteDurable && res.backupOk) {
+            var okMsg = (um && um.message) || (
+              'Saved to this computer. Backup written to ' + (res.backupPath || res.effectiveBackupFolder || 'Backups')
+            );
+            showToast(okMsg, 'success', 8000);
+            showAutoSaveIndicator({ durable: true, pendingSync: true });
+            finishBtn('\u2713 Saved', 2500);
+            try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
+            return;
+          }
+          if (res.noteDurable && !res.backupOk) {
+            var warnMsg = (um && um.message) || (
+              'Note saved to this computer, but backup failed' + (res.error ? ': ' + res.error : '')
+            );
+            showToast(warnMsg, 'warning', 10000);
+            showAutoSaveIndicator({ durable: true, pendingSync: true });
+            finishBtn('Backup failed', 3500);
+            try { updateBackupStatus(); } catch (_) {}
+            return;
+          }
+          var errMsg = (um && um.message) || (res.error || 'Could not save note to disk');
+          showToast(errMsg, 'error', 10000);
+          showAutoSaveIndicator({ durable: false, pendingSync: false });
+          finishBtn('Save failed', 3500);
+        }).catch(function(err) {
+          showToast('Save now failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 8000);
+          finishBtn(origText, 500);
+        });
+      }
+
+      if (!onForm || isNoteLockedForEditing()) {
+        // Global / settings Backup: still force disk flush + verified backup.
+        runPersistBackup(false);
+        return;
+      }
+
+      var data = getFormData();
+      if (!hasMeaningfulData(data)) {
+        showToast('Nothing to save — enter some details first, or use Backup from Settings for a DB snapshot', 'warning', 5000);
+        finishBtn(origText, 500);
+        return;
+      }
+      if (_finalising) {
+        showToast('Finalise in progress — wait, then try Save now', 'info', 4000);
+        finishBtn(origText, 500);
+        return;
+      }
+
+      attendanceSaveDetailed({ id: currentAttendanceId, data: data, status: 'draft' }).then(function(result) {
+        if (result && typeof result === 'object' && result.error === 'locked') {
+          showToast('This record is finalised and cannot be modified', 'error', 6000);
+          finishBtn(origText, 500);
+          return;
+        }
+        var normalized = normalizeAttendanceSaveResult(result);
+        if (normalized.error) {
+          showToast('Failed to save note: ' + (normalized.message || normalized.error), 'error', 7000);
+          finishBtn(origText, 500);
+          return;
+        }
+        if (normalized.id != null) currentAttendanceId = normalized.id;
+        if (!normalized.durable) {
+          showToast('Note did not finish writing to disk — backup not attempted. Try Save now again.', 'error', 9000);
+          showAutoSaveIndicator({ durable: false, pendingSync: true });
+          finishBtn('Disk failed', 3500);
+          return;
+        }
+        showAutoSaveIndicator({ durable: true, pendingSync: true });
+        runPersistBackup(true);
+      }).catch(function(e) {
+        showToast('Failed to save note: ' + (e && e.message ? e.message : e), 'error', 7000);
+        finishBtn(origText, 500);
       });
     }
-    document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
-    document.getElementById('form-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
-    document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleBackupNowClick(this); });
-    document.getElementById('settings-quick-backup')?.addEventListener('click', function() { handleBackupNowClick(this); });
+
+    document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
+    document.getElementById('form-backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
+    document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
+    document.getElementById('settings-quick-backup')?.addEventListener('click', function() { handleSaveNowClick(this); });
+    window.handleSaveNowClick = handleSaveNowClick;
     document.getElementById('settings-quick-cloud')?.addEventListener('click', function() {
       var btn = this;
       if (!window.api || !window.api.cloudBackupCheckEntitlement) return;
@@ -17833,7 +18228,52 @@ pdfAuditFooterHtml(d, settings) +
       }).finally(function() { btn.disabled = false; });
     });
 
+    document.getElementById('btn-sync-integrity-check')?.addEventListener('click', function() {
+      if (!window.api || !window.api.syncIntegrityCheck) {
+        showToast('Integrity check not available', 'error');
+        return;
+      }
+      var btn = this;
+      var statusEl = document.getElementById('cross-device-sync-action-status');
+      btn.disabled = true;
+      if (statusEl) { statusEl.textContent = 'Running integrity check\u2026'; statusEl.style.color = '#d97706'; }
+      window.api.syncIntegrityCheck().then(function(res) {
+        if (!res || res.ok === false) {
+          showToast('Integrity check failed: ' + ((res && res.error) || 'Unknown error'), 'error');
+          if (statusEl) { statusEl.textContent = (res && res.error) || 'Integrity check failed'; statusEl.style.color = '#dc2626'; }
+          return;
+        }
+        var disc = (res.discrepancies && res.discrepancies.length) || 0;
+        var msg = 'Local active=' + (res.localActive || 0) +
+          ', dirty=' + (res.localDirty || 0) +
+          ', cloud inventory=' + (res.cloudInventoryCount == null ? 'unknown' : res.cloudInventoryCount) +
+          ', discrepancies=' + disc +
+          ' (no auto-delete)';
+        if (res.cloudEmptyProven) {
+          showToast('Integrity: cloud empty vs local notes — use Re-upload all. Nothing deleted.', 'warning', 8000);
+        } else if (disc > 0) {
+          showToast('Integrity: ' + disc + ' discrepancy(ies) reported. Nothing deleted.', 'warning', 7000);
+        } else {
+          showToast('Integrity check complete — no discrepancies flagged', 'success');
+        }
+        if (statusEl) {
+          statusEl.textContent = msg;
+          statusEl.style.color = disc > 0 || res.cloudEmptyProven ? '#b45309' : 'green';
+        }
+      }).catch(function(err) {
+        showToast('Integrity check failed: ' + (err && err.message || err), 'error');
+        if (statusEl) { statusEl.textContent = ''; }
+      }).finally(function() { btn.disabled = false; });
+    });
+
     document.getElementById('home-empty-db-recovery-settings')?.addEventListener('click', function() {
+      try {
+        if (typeof showView === 'function') showView('settings');
+        var tab = document.querySelector('.settings-tab[data-stab="backup"]');
+        if (tab) tab.click();
+      } catch (_) {}
+    });
+    document.getElementById('home-empty-cloud-alarm-settings')?.addEventListener('click', function() {
       try {
         if (typeof showView === 'function') showView('settings');
         var tab = document.querySelector('.settings-tab[data-stab="backup"]');
@@ -18932,10 +19372,12 @@ pdfAuditFooterHtml(d, settings) +
         delete data.created_at;
         delete data.updated_at;
         window.api.attendanceSave({ data: data, status: 'draft' }).then(function(id) {
-          if (id && id.error) { showToast(id.message || id.error || 'Save failed', 'error'); return; }
+          var norm = normalizeAttendanceSaveResult(id);
+          if (norm.error) { showToast(norm.message || norm.error || 'Save failed', 'error'); return; }
+          if (norm.id == null) { showToast('Save failed: no id returned', 'error'); return; }
           navigateTo('home');
-          openAttendance(id);
-          showToast('Record imported and opened', 'success');
+          openAttendance(norm.id);
+          showToast(norm.durable ? 'Record imported and saved locally' : 'Record imported (disk flush pending)', 'success');
         }).catch(function(e) { showToast('Save failed: ' + (e && e.message), 'error'); });
       }).catch(function(e) { showToast('Import failed: ' + (e && e.message), 'error'); });
     });
@@ -18952,10 +19394,12 @@ pdfAuditFooterHtml(d, settings) +
       delete data.created_at;
       delete data.updated_at;
       window.api.attendanceSave({ data: data, status: 'draft' }).then(function(id) {
-        if (id && id.error) { showToast(id.message || id.error || 'Save failed', 'error'); return; }
+        var norm = normalizeAttendanceSaveResult(id);
+        if (norm.error) { showToast(norm.message || norm.error || 'Save failed', 'error'); return; }
+        if (norm.id == null) { showToast('Save failed: no id returned', 'error'); return; }
         navigateTo('home');
-        openAttendance(id);
-        showToast('Record imported and opened', 'success');
+        openAttendance(norm.id);
+        showToast(norm.durable ? 'Record imported and saved locally' : 'Record imported (disk flush pending)', 'success');
       }).catch(function(e) { showToast('Save failed: ' + (e && e.message), 'error'); });
     }
 

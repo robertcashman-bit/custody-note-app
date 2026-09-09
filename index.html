@@ -96,7 +96,7 @@
         <span id="header-form-actions" class="header-form-actions">
           <span id="header-autosave" class="autosave-indicator" title="Drafts save automatically to this computer while you edit. After finalise, autosave stops because the note is locked."></span>
           <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent btn-header-primary-action" title="Primary action for the current record (Finalise / Finish matter / Archive)" style="display:none;">Finalise</button>
-          <button type="button" class="btn btn-small btn-backup-now" id="header-backup-now-btn" title="Save &amp; backup now">&#128190; Backup</button>
+          <button type="button" class="btn btn-small btn-backup-now" id="header-backup-now-btn" title="Save now — write to disk and create a verified local backup (Ctrl+S)">Save now</button>
           <button type="button" class="btn-small" id="header-kb-help" title="Keyboard shortcuts">?</button>
           <button type="button" class="btn btn-small" id="header-laa-forms" title="Generate LAA forms">LAA Forms</button>
           <button type="button" class="btn btn-sections" id="header-sections-idx">Sections</button>
@@ -290,6 +290,24 @@
                     <p id="home-empty-db-recovery-body" style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#78350f;line-height:1.4;">Your local database may need a restore from another computer or a cloud re-sync. Open Settings → Backup to restore a local backup, run Full re-sync from cloud, or on the computer that still has your records use Re-upload all local records to cloud.</p>
                   </div>
                   <button type="button" id="home-empty-db-recovery-settings" class="btn btn-secondary btn-small">Open Settings</button>
+                </div>
+              </div>
+              <div id="home-empty-cloud-alarm" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#fef2f2,#fff1f2);border:1px solid #ef4444;">
+                <div style="display:flex;align-items:flex-start;gap:0.65rem;">
+                  <div style="flex:1;">
+                    <p style="margin:0;font-weight:600;font-size:0.9rem;color:#991b1b;">Cloud empty for this licence</p>
+                    <p id="home-empty-cloud-alarm-body" style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#7f1d1d;line-height:1.4;">Records are still on this device, but the cloud has none for this licence. Use Re-upload all — do not use Full re-sync while the cloud is empty.</p>
+                  </div>
+                  <button type="button" id="home-empty-cloud-alarm-settings" class="btn btn-secondary btn-small">Open Settings</button>
+                </div>
+              </div>
+              <div id="home-backup-degraded" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#fff7ed,#fffbeb);border:1px solid #f59e0b;">
+                <div style="display:flex;align-items:flex-start;gap:0.65rem;">
+                  <div style="flex:1;">
+                    <p style="margin:0;font-weight:600;font-size:0.9rem;color:#92400e;">Local backup protection degraded</p>
+                    <p id="home-backup-degraded-body" style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#78350f;line-height:1.4;">Backups could not write to the local Backups folder. Open Settings → Backup and confirm the path (especially after restoring a Mac database onto Windows).</p>
+                  </div>
+                  <button type="button" id="home-backup-degraded-settings" class="btn btn-secondary btn-small">Open Settings</button>
                 </div>
               </div>
               <ul id="home-recent-list" class="home-recent-list">
@@ -611,7 +629,7 @@
             <span id="autosave-indicator" class="autosave-indicator"></span>
             <button type="button" id="form-duplicate-btn" class="btn btn-small" title="Duplicate for another client in the same session" style="display:none;">Duplicate</button>
             <button type="button" id="form-header-history-btn" class="btn btn-small" title="View change history for this record">&#128203; History</button>
-            <button type="button" id="form-backup-now-btn" class="btn btn-small btn-backup-now" title="Save &amp; backup now">&#128190; Backup</button>
+            <button type="button" id="form-backup-now-btn" class="btn btn-small btn-backup-now" title="Save now — write this note to disk and create a verified local backup (Ctrl+S)">Save now</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
             <button type="button" id="form-context-panel-toggle" class="btn btn-small" title="Show or hide matter summary panel" aria-expanded="false" aria-controls="form-context-panel">Summary</button>
@@ -636,7 +654,7 @@
               <tr><td><kbd>Enter</kbd></td><td>Open selected record (in list)</td></tr>
               <tr><td><kbd data-shortcut-mod>Ctrl</kbd>+<kbd>→</kbd></td><td>Next section</td></tr>
               <tr><td><kbd data-shortcut-mod>Ctrl</kbd>+<kbd>←</kbd></td><td>Previous section</td></tr>
-              <tr><td><kbd data-shortcut-mod>Ctrl</kbd>+<kbd>S</kbd></td><td>Save</td></tr>
+              <tr><td><kbd data-shortcut-mod>Ctrl</kbd>+<kbd>S</kbd></td><td>Save now (disk + backup)</td></tr>
               <tr><td><kbd>Esc</kbd></td><td>Clear search / close popup</td></tr>
             </table>
             <button type="button" id="kb-help-close" class="btn btn-secondary" style="margin-top:0.75rem;width:100%;">Close</button>
@@ -1294,9 +1312,10 @@
               <button type="button" id="btn-sync-push-now" class="btn btn-secondary">Push all pending now</button>
               <button type="button" id="btn-sync-reupload-all" class="btn btn-secondary">Re-upload all local records to cloud</button>
               <button type="button" id="btn-sync-export-index" class="btn btn-secondary">Export record index (no note text)</button>
+              <button type="button" id="btn-sync-integrity-check" class="btn btn-secondary">Integrity check (local vs cloud)</button>
               <button type="button" id="btn-sync-open-diagnostics" class="btn btn-secondary">Open sync diagnostics</button>
             </div>
-            <p class="settings-hint" style="margin:0.5rem 0 0;">Use <strong>Full re-sync from cloud</strong> if this computer shows Synced but records from another device are missing. Use <strong>Push all pending now</strong> on the computer that has your records. Use <strong>Re-upload all local records to cloud</strong> after a manual database file copy, or when other devices still show &ldquo;No remote records&rdquo; while this computer has data. <strong>Export record index</strong> lists client/station/date metadata only (no note bodies) for incident recovery.</p>
+            <p class="settings-hint" style="margin:0.5rem 0 0;">Use <strong>Full re-sync from cloud</strong> if this computer shows Synced but records from another device are missing. Use <strong>Push all pending now</strong> on the computer that has your records. Use <strong>Re-upload all local records to cloud</strong> after a manual database file copy, or when other devices still show &ldquo;No remote records&rdquo; while this computer has data. <strong>Export record index</strong> lists client/station/date metadata only (no note bodies) for incident recovery. <strong>Integrity check</strong> reports local vs cloud discrepancies without deleting anything.</p>
             <p id="cross-device-sync-action-status" class="settings-hint" style="margin:0.35rem 0 0;"></p>
             <p id="cross-device-sync-recovery-hint" class="settings-hint" style="margin:0.35rem 0 0;display:none;color:#b45309;"></p>
           </div>
@@ -1349,19 +1368,26 @@
               <span id="local-restore-status" class="settings-hint" style="margin:0;"></span>
             </div>
           </div>
-          <p class="settings-hint" style="margin-top:0;">Your attendance data is backed up automatically as encrypted files. Syncing to a cloud folder keeps an off-site copy safe.</p>
-          <label>Local backup folder</label>
+          <p class="settings-hint" style="margin-top:0;">Your attendance data is backed up automatically as encrypted files. Quick snapshots every ~2 minutes (generational) plus hourly archives. Syncing to a cloud folder keeps an off-site copy safe.</p>
+          <label>Local backup folder (effective path on this computer)</label>
           <div class="setting-row">
-            <input type="text" id="setting-backup-folder" class="settings-input" readonly placeholder="Desktop">
+            <input type="text" id="setting-backup-folder" class="settings-input" readonly placeholder="userData/Backups">
             <button type="button" id="setting-backup-browse" class="btn btn-secondary">Browse</button>
+            <button type="button" id="setting-backup-open-folder" class="btn btn-secondary">Open folder</button>
           </div>
+          <p id="settings-backup-effective-meta" class="settings-hint" style="margin:0.35rem 0 0;"></p>
+          <p id="settings-backup-last-status" class="settings-hint" style="margin:0.25rem 0 0;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.8rem;"></p>
+          <p id="settings-backup-degraded-banner" class="settings-warning-banner" style="display:none;margin-top:0.5rem;"></p>
+          <button type="button" id="settings-backup-path-ack" class="btn btn-secondary btn-small" style="display:none;margin-top:0.35rem;">Dismiss path notice</button>
           <label style="margin-top:0.75rem;">Sync backups to the cloud <span style="color:#059669;font-weight:600;">(recommended)</span></label>
           <p class="settings-hint" style="margin:0 0 0.5rem;">Choose a folder that syncs to OneDrive, Dropbox, or Google Drive. Encrypted backups are copied there automatically.</p>
           <div id="offsite-backup-chooser" class="offsite-backup-chooser">
             <div class="offsite-scanning">Scanning for cloud folders&hellip;</div>
           </div>
           <button type="button" id="setting-detect-cloud-folders" class="btn btn-secondary" style="margin-top:0.5rem;">Detect cloud folders</button>
+          <button type="button" id="setting-offsite-open-folder" class="btn btn-secondary" style="margin-top:0.5rem;">Open off-site folder</button>
           <input type="text" id="setting-offsite-backup-folder" readonly style="display:none;" aria-hidden="true">
+          <p id="settings-offsite-effective-path" class="settings-hint" style="margin:0.35rem 0 0;"></p>
           <div class="settings-advanced-section" style="display:none;">
             <label>Custom cloud backup URL (optional)</label>
             <input type="url" id="setting-cloud-backup-url" class="settings-input" placeholder="https://your-backup-api.example.com/api/backup" style="width:100%;max-width:400px;" autocomplete="off">
@@ -1831,7 +1857,7 @@
               <table class="help-kb-table">
                 <tr><td><kbd data-shortcut-mod>Ctrl</kbd> + <kbd>&rarr;</kbd></td><td>Next section</td></tr>
                 <tr><td><kbd data-shortcut-mod>Ctrl</kbd> + <kbd>&larr;</kbd></td><td>Previous section</td></tr>
-                <tr><td><kbd data-shortcut-mod>Ctrl</kbd> + <kbd>S</kbd></td><td>Save (does not exit)</td></tr>
+                <tr><td><kbd data-shortcut-mod>Ctrl</kbd> + <kbd>S</kbd></td><td>Save now (disk + backup)</td></tr>
                 <tr><td><kbd>Esc</kbd></td><td>Close popup / go back</td></tr>
               </table>
             </div>
