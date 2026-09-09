@@ -3010,11 +3010,15 @@ async function syncPull(opts) {
 
   // Persist proven cloud inventory so incremental received=0 cannot hide an
   // empty-cloud alarm, and received>0 can clear a prior empty proof.
+  const inventoryBefore = getLastVerifiedCloudInventory();
   const cloudInventory = persistCloudInventoryAfterPull({
     pulledFromEpoch: pullStartedFromEpoch,
     receivedCount,
   });
   _lastPullStats.cloudInventory = cloudInventory;
+  const inventoryWritten =
+    (pullStartedFromEpoch || receivedCount > 0) &&
+    cloudInventory !== inventoryBefore;
 
   const correlationId = opts && opts.correlationId;
   logSyncAttempt(
@@ -3029,6 +3033,10 @@ async function syncPull(opts) {
 
   if (merged > 0 || conflicts > 0) {
     saveDb();
+  } else if (inventoryWritten) {
+    // Empty from-epoch (or inventory-clearing) pulls merge nothing — flush now
+    // so lastVerifiedCloudInventory survives a crash before the 30s debounce.
+    flushDbSync();
   }
   return {
     pulled: merged,
