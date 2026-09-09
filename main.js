@@ -118,9 +118,24 @@ const {
   detectLocalFullCloudEmpty,
   shouldSuppressSyncedFooter,
   deriveSyncPhase,
+  nextCloudInventoryCount,
+  buildEmptyCloudAlarmMessage,
+  isSyncStatusHealthy,
 } = require('./lib/syncRecoveryHints');
 const { normalizeLicenceKeyForSync } = require('./lib/licenceKeyNormalize');
 const { buildLocalCloudHealth, buildEmergencyRecordIndex } = require('./lib/syncHealth');
+const { buildAttendanceSaveLog } = require('./lib/attendanceSaveResult');
+const {
+  emptyCloudPullPolicy,
+  assertPullBatchNonDestructive,
+  fullResyncMayDestroyLocalOnly,
+} = require('./lib/syncLocalPreserve');
+const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
+const { buildLocalCloudIntegrityReport } = require('./lib/localCloudIntegrity');
+const {
+  assessBackupPathUsability,
+  planBackupFolderReset,
+} = require('./lib/backupPathSanitize');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
@@ -1402,6 +1417,123 @@ function _defaultBackupFolder() {
     return app.getPath('desktop');
   }
 }
+
+function _tryEnsureWritableDir(dir) {
+  if (!dir) return false;
+  try {
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const probe = path.join(dir, '.cn-backup-write-probe');
+    fs.writeFileSync(probe, 'ok');
+    try { fs.unlinkSync(probe); } catch (_) {}
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** Last time we auto-corrected a foreign-OS / unusable backupFolder. */
+let _backupPathCorrectionNotice = null;
+
+function _loadBackupPathCorrectionNotice() {
+  try {
+    if (!db) return null;
+    const row = dbGet("SELECT value FROM settings WHERE key='backupPathCorrectionNotice'");
+    if (!row || !row.value) return null;
+    const parsed = JSON.parse(String(row.value));
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch (_) {}
+  return null;
+}
+
+function _persistBackupPathCorrectionNotice(notice) {
+  _backupPathCorrectionNotice = notice || null;
+  if (!db) return;
+  try {
+    if (notice) {
+      dbRun(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('backupPathCorrectionNotice', ?)",
+        [JSON.stringify(notice)]
+      );
+    } else {
+      dbRun("DELETE FROM settings WHERE key='backupPathCorrectionNotice'");
+    }
+  } catch (_) {}
+}
+
+/**
+ * After Mac↔Windows restore, settings.backupFolder may hold a path that cannot
+ * work on this OS. Reset to userData/Backups and remember a one-time notice.
+ * Offsite paths that are foreign are cleared (not deleted on disk).
+ */
+function ensureBackupPathsSane(opts = {}) {
+  const notices = [];
+  if (!db) return notices;
+  if (!_backupPathCorrectionNotice) {
+    _backupPathCorrectionNotice = _loadBackupPathCorrectionNotice();
+  }
+  const defaultPath = _defaultBackupFolder();
+  const storedRow = dbGet("SELECT value FROM settings WHERE key = 'backupFolder'");
+  const stored = storedRow && storedRow.value ? String(storedRow.value) : '';
+  const plan = planBackupFolderReset({
+    storedPath: stored || null,
+    defaultPath,
+    platform: process.platform,
+    canCreate: (p) => _tryEnsureWritableDir(p),
+  });
+  if (plan.reset && plan.next) {
+    dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('backupFolder', ?)", [plan.next]);
+    _tryEnsureWritableDir(plan.next);
+    const notice = {
+      at: new Date().toISOString(),
+      kind: 'backupFolder',
+      reason: plan.reason,
+      previous: plan.previous,
+      next: plan.next,
+      message: 'Local backup folder was reset to this computer’s default because the saved path was not usable here (often after restoring a Mac database onto Windows, or the reverse).',
+    };
+    notices.push(notice);
+    _persistBackupPathCorrectionNotice(notice);
+    console.warn('[Backup] Reset unusable backupFolder:', plan.reason, plan.previous, '→', plan.next);
+    markDbDirty();
+  } else if (stored) {
+    _tryEnsureWritableDir(stored);
+  } else {
+    dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('backupFolder', ?)", [defaultPath]);
+    _tryEnsureWritableDir(defaultPath);
+  }
+
+  const offsiteRow = dbGet("SELECT value FROM settings WHERE key = 'offsiteBackupFolder'");
+  const offsite = offsiteRow && offsiteRow.value ? String(offsiteRow.value).trim() : '';
+  if (offsite) {
+    const offAssess = assessBackupPathUsability(offsite, { platform: process.platform });
+    if (!offAssess.usable) {
+      // Preserve-first: do not delete offsite files; only clear the unusable setting.
+      dbRun("INSERT OR REPLACE INTO settings (key, value) VALUES ('offsiteBackupFolder', ?)", ['']);
+      const notice = {
+        at: new Date().toISOString(),
+        kind: 'offsiteBackupFolder',
+        reason: offAssess.reason,
+        previous: offsite,
+        next: null,
+        message: 'Off-site backup folder path was cleared because it is not usable on this computer. Choose a local cloud-sync folder in Settings. Existing files were not deleted.',
+      };
+      notices.push(notice);
+      if (!_backupPathCorrectionNotice || _backupPathCorrectionNotice.kind !== 'backupFolder') {
+        _persistBackupPathCorrectionNotice(notice);
+      }
+      console.warn('[Backup] Cleared unusable offsiteBackupFolder:', offAssess.reason, offsite);
+      markDbDirty();
+    }
+  }
+
+  if (opts.emit !== false && notices.length && mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('backup-path-corrected', notices[0]);
+    } catch (_) {}
+  }
+  return notices;
+}
+
 function getBackupFolder() {
   try {
     const row = dbGet("SELECT value FROM settings WHERE key = 'backupFolder'");
@@ -1536,6 +1668,10 @@ async function initDb() {
     // H20 — default to userData\Backups instead of Desktop (often OneDrive).
     db.run("INSERT INTO settings (key, value) VALUES (?, ?)", ['backupFolder', _defaultBackupFolder()]);
   }
+  // After Mac↔Windows restore, foreign OS paths silently disable local backups.
+  try { ensureBackupPathsSane({ emit: false }); } catch (e) {
+    console.warn('[Backup] ensureBackupPathsSane failed:', e && e.message ? e.message : e);
+  }
   // Fresh installs previously only stored the path and never mkdir'd it, so
   // scheduled backups silently skipped via isBackupFolderReady(). Create now.
   try { ensureBackupFolderExists(); } catch (_) {}
@@ -1655,15 +1791,19 @@ let dbDirtySinceQuickBackup = false;
 let dbDirtySinceHourlyBackup = false;
 const MAX_HOURLY_BACKUPS = 24; /* last 24 hourly archives (~1 working day) */
 const MAX_DAILY_BACKUPS  = 7;  /* one representative per day for 7 days */
+const MAX_QUICK_BACKUPS  = 48; /* generational quick snapshots (~1.5h at 2‑min cadence) */
 
 let _backupScheduler = null;
 
 function getBackupScheduler() {
   if (_backupScheduler) return _backupScheduler;
   _backupScheduler = createBackupScheduler({
-    quickMinIntervalMs: 30 * 60 * 1000,
-    userIdleGraceMs: 90 * 1000,
-    periodicCheckMs: 10 * 60 * 1000,
+    // Framework12 incident: 30-minute quick interval + single overwrite left a large
+    // crash window and empty local Backups when the folder path was wrong.
+    // Target ~every couple of minutes; idle grace still avoids mid-keystroke IO.
+    quickMinIntervalMs: 2 * 60 * 1000,
+    userIdleGraceMs: 45 * 1000,
+    periodicCheckMs: 60 * 1000,
     runBackup: (kind, reason) => {
       console.log('[Backup] Scheduler triggered:', kind, reason);
       if (kind === 'hourly') {
@@ -1680,34 +1820,89 @@ function getBackupScheduler() {
   return _backupScheduler;
 }
 
+function _verifyBackupOrThrow(dest, expectedBytes, kind) {
+  const verified = verifyEncryptedBackupFile(dest, { expectedBytes });
+  if (!verified.ok) {
+    const msg = 'Backup verify failed (' + (kind || 'backup') + '): ' + (verified.reason || 'unknown');
+    console.error('[Backup]', msg);
+    const err = new Error(msg);
+    err.code = 'BACKUP_VERIFY_FAILED';
+    err.verify = verified;
+    throw err;
+  }
+  return verified;
+}
+
 function _runQuickBackupAsync() {
   if (!db) return Promise.resolve({ skipped: true, reason: 'db-missing' });
-  if (!isBackupFolderReady()) return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
-  const dest = path.join(getBackupFolder(), 'attendance-latest.db');
+  if (!isBackupFolderReady()) {
+    _notifyBackupDegraded('backup-folder-missing');
+    return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
+  }
+  const backupDir = getBackupFolder();
+  const latestDest = path.join(backupDir, 'attendance-latest.db');
+  const quickName = `attendance-quick-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+  const quickDest = path.join(backupDir, quickName);
   const start = Date.now();
   try {
     const encrypted = getEncryptedDbExport();
-    if (!encrypted) return Promise.resolve({ skipped: true, reason: 'export-failed' });
+    if (!encrypted) {
+      _notifyBackupDegraded('export-failed');
+      return Promise.resolve({ skipped: true, reason: 'export-failed' });
+    }
     return new Promise((resolve, reject) => {
-      writeFileAtomic(dest, encrypted, (err) => {
-        if (err) { console.error('[Backup] Quick backup write failed:', err.message); return reject(err); }
-        console.log('[Backup] Quick backup saved (encrypted), took', Date.now() - start, 'ms,', encrypted.length, 'bytes');
-        copyToOffsiteBackup(dest);
+      writeFileAtomic(latestDest, encrypted, (err) => {
+        if (err) {
+          console.error('[Backup] Quick backup write failed:', err.message);
+          _notifyBackupDegraded('write-failed', err.message);
+          return reject(err);
+        }
+        let verified;
+        try {
+          verified = _verifyBackupOrThrow(latestDest, encrypted.length, 'quick');
+        } catch (verifyErr) {
+          _notifyBackupDegraded('verify-failed', verifyErr && verifyErr.message);
+          return reject(verifyErr);
+        }
+        // Generational copy — do not rely on a single overwriteable latest file.
+        try {
+          fs.copyFileSync(latestDest, quickDest);
+          _verifyBackupOrThrow(quickDest, encrypted.length, 'quick-gen');
+        } catch (copyErr) {
+          console.error('[Backup] Generational quick copy failed:', copyErr && copyErr.message);
+          _notifyBackupDegraded('generational-copy-failed', copyErr && copyErr.message);
+          return reject(copyErr);
+        }
+        try { pruneOldQuickBackups(backupDir); } catch (_) {}
+        console.log('[Backup] Quick backup saved+verified (encrypted), took', Date.now() - start, 'ms,', encrypted.length, 'bytes', 'gen=', quickName);
+        copyToOffsiteBackup(latestDest);
+        copyToOffsiteBackup(quickDest);
         uploadToCloudIfConfigured(encrypted);
         uploadToS3IfConfigured(encrypted, 'attendance-latest.db');
         uploadToManagedCloudIfEnabled(encrypted, 'attendance-latest.db');
-        resolve({ durationMs: Date.now() - start, bytes: encrypted.length });
+        resolve({
+          durationMs: Date.now() - start,
+          bytes: encrypted.length,
+          verified: true,
+          verifiedAt: verified.verifiedAt || new Date().toISOString(),
+          path: latestDest,
+          generationalPath: quickDest,
+        });
       });
     });
   } catch (err) {
     console.error('[Backup] Quick backup failed:', err.message);
+    _notifyBackupDegraded('quick-failed', err.message);
     return Promise.reject(err);
   }
 }
 
 function _runHourlyBackupAsync() {
   if (!db) return Promise.resolve({ skipped: true, reason: 'db-missing' });
-  if (!isBackupFolderReady()) return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
+  if (!isBackupFolderReady()) {
+    _notifyBackupDegraded('backup-folder-missing');
+    return Promise.resolve({ skipped: true, reason: 'backup-folder-missing' });
+  }
   const backupDir = getBackupFolder();
   const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
   const dest = path.join(backupDir, name);
@@ -1718,7 +1913,13 @@ function _runHourlyBackupAsync() {
     return new Promise((resolve, reject) => {
       writeFileAtomic(dest, encrypted, (err) => {
         if (err) { console.error('[Backup] Hourly write failed:', err.message); return reject(err); }
-        console.log('[Backup] Hourly archive saved (encrypted):', name, 'took', Date.now() - start, 'ms');
+        let verified;
+        try {
+          verified = _verifyBackupOrThrow(dest, encrypted.length, 'hourly');
+        } catch (verifyErr) {
+          return reject(verifyErr);
+        }
+        console.log('[Backup] Hourly archive saved+verified (encrypted):', name, 'took', Date.now() - start, 'ms');
         pruneOldBackups(backupDir);
         copyToOffsiteBackup(dest);
         uploadToCloudIfConfigured(encrypted);
@@ -1726,7 +1927,14 @@ function _runHourlyBackupAsync() {
         uploadToManagedCloudIfEnabled(encrypted, name);
         const offsiteDir = getOffsiteBackupFolder();
         if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
-        resolve({ durationMs: Date.now() - start, bytes: encrypted.length });
+        resolve({
+          durationMs: Date.now() - start,
+          bytes: encrypted.length,
+          verified: true,
+          verifiedAt: verified.verifiedAt || new Date().toISOString(),
+          path: dest,
+          name,
+        });
       });
     });
   } catch (err) {
@@ -1811,6 +2019,44 @@ function pruneOldBackups(backupDir) {
     });
     if (pruned > 0) console.log('[Backup] Pruned', pruned, 'old archives; keeping', keep.size);
   } catch (_) {}
+}
+
+function pruneOldQuickBackups(backupDir) {
+  try {
+    const files = fs.readdirSync(backupDir)
+      .filter(f => f.startsWith('attendance-quick-') && f.endsWith('.db'))
+      .map(f => ({ name: f, path: path.join(backupDir, f), time: fs.statSync(path.join(backupDir, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time);
+    let pruned = 0;
+    files.slice(MAX_QUICK_BACKUPS).forEach(f => {
+      try { fs.unlinkSync(f.path); pruned++; } catch (_) {}
+    });
+    if (pruned > 0) console.log('[Backup] Pruned', pruned, 'old quick snapshots; keeping', Math.min(files.length, MAX_QUICK_BACKUPS));
+  } catch (_) {}
+}
+
+let _lastBackupDegradedAt = 0;
+let _lastBackupDegradedReason = null;
+
+function _notifyBackupDegraded(reason, detail) {
+  _lastBackupDegradedAt = Date.now();
+  _lastBackupDegradedReason = reason || 'unknown';
+  const payload = {
+    at: new Date().toISOString(),
+    reason: _lastBackupDegradedReason,
+    detail: detail || null,
+    message: 'Local backup protection is degraded. Open Settings → Backup and confirm the Backups folder path.',
+  };
+  console.error('[Backup] DEGRADED:', payload.reason, detail || '');
+  try {
+    const bs = _backupScheduler;
+    if (bs && typeof bs.getStatus === 'function') {
+      // Status already carries lastSkipReason via scheduler when skipped.
+    }
+  } catch (_) {}
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send('backup-degraded', payload); } catch (_) {}
+  }
 }
 
 /** POST encrypted backup buffer to a cloud URL. Returns Promise<void> or rejects with error message. */
@@ -2333,6 +2579,51 @@ function getAttendanceDbFileBytes() {
   }
 }
 
+function getLastVerifiedCloudInventory() {
+  if (!db) return null;
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key='lastVerifiedCloudInventory'");
+    if (!row || row.value == null || row.value === '') return null;
+    const n = Number(row.value);
+    return Number.isFinite(n) ? n : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function setLastVerifiedCloudInventory(count) {
+  if (!db) return;
+  const n = count == null ? null : Number(count);
+  if (n == null || !Number.isFinite(n)) {
+    try { dbRun("DELETE FROM settings WHERE key='lastVerifiedCloudInventory'"); } catch (_) {}
+    try { dbRun("DELETE FROM settings WHERE key='lastVerifiedCloudInventoryAt'"); } catch (_) {}
+    return;
+  }
+  dbRun(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastVerifiedCloudInventory', ?)",
+    [String(n)]
+  );
+  dbRun(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastVerifiedCloudInventoryAt', ?)",
+    [new Date().toISOString()]
+  );
+}
+
+function persistCloudInventoryAfterPull({ pulledFromEpoch, receivedCount }) {
+  const previous = getLastVerifiedCloudInventory();
+  const next = nextCloudInventoryCount({
+    previousInventory: previous,
+    pulledFromEpoch: !!pulledFromEpoch,
+    receivedCount: receivedCount || 0,
+  });
+  if (next === previous) return next;
+  // Only write when from-epoch (authoritative, including 0) or when proving non-empty.
+  if (pulledFromEpoch || (receivedCount || 0) > 0) {
+    setLastVerifiedCloudInventory(next);
+  }
+  return next;
+}
+
 function buildSyncRecoveryHints(statusBase) {
   const totalRecords = statusBase && statusBase.totalRecords != null ? statusBase.totalRecords : 0;
   const pendingChanges = statusBase && statusBase.pendingChanges != null ? statusBase.pendingChanges : 0;
@@ -2344,17 +2635,19 @@ function buildSyncRecoveryHints(statusBase) {
     activeAttendanceCount: totalRecords,
   });
   const pullEverCompleted = !!(lastPull && lastPull.at);
+  const lastVerifiedCloudInventory = getLastVerifiedCloudInventory();
   const localFullCloudEmpty = detectLocalFullCloudEmpty({
     totalRecords,
-    pendingChanges,
-    dirtyPushCount,
     lastPullReceived: lastPull.received || 0,
     pullEverCompleted,
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    lastVerifiedCloudInventory,
   });
   const diag = statusBase && statusBase._diag ? statusBase._diag : {};
   const lastVerifiedCloudPushAt = diag.lastVerifiedCloudPushAt || null;
   const rateLimited = !!(diag.rateLimit && diag.rateLimit.blocked);
+  const lastPush = diag.lastPush || null;
+  const lastPushOk = lastPush && typeof lastPush.ok === 'boolean' ? lastPush.ok : null;
   const suppressSyncedFooter = shouldSuppressSyncedFooter({
     totalRecords,
     pendingChanges,
@@ -2363,6 +2656,9 @@ function buildSyncRecoveryHints(statusBase) {
     pullEverCompleted,
     lastVerifiedCloudPushAt,
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    lastVerifiedCloudInventory,
+    rateLimited,
+    lastPushOk,
   });
   const syncPhase = deriveSyncPhase({
     inProgress: !!(statusBase && statusBase.inProgress),
@@ -2376,6 +2672,8 @@ function buildSyncRecoveryHints(statusBase) {
     pullEverCompleted,
     lastVerifiedCloudPushAt,
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    lastVerifiedCloudInventory,
+    lastPushOk,
   });
   const schemaVersion = getDbSchemaVersion();
   const health = buildLocalCloudHealth({
@@ -2385,20 +2683,43 @@ function buildSyncRecoveryHints(statusBase) {
     dirtyPushCount,
     pendingChanges,
     lastVerifiedCloudPushAt,
+    lastVerifiedCloudInventory,
     syncPhase,
     schemaVersion,
+    rateLimited,
+    lastPushOk,
+    pullEverCompleted,
+  });
+  const syncHealthy = isSyncStatusHealthy({
+    totalRecords,
+    pendingChanges,
+    dirtyPushCount,
+    lastPullReceived: lastPull.received || 0,
+    pullEverCompleted,
+    lastVerifiedCloudPushAt,
+    pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
+    lastVerifiedCloudInventory,
+    rateLimited,
+    lastPushOk,
+    failedCount: statusBase && statusBase.failedCount,
+    lastError: statusBase && statusBase.lastError,
+    inProgress: !!(statusBase && statusBase.inProgress),
   });
   return {
     dbFileBytes,
     emptyLargeDb,
     localFullCloudEmpty,
+    emptyCloudAlarm: localFullCloudEmpty,
+    emptyCloudAlarmMessage: localFullCloudEmpty ? buildEmptyCloudAlarmMessage() : null,
     suggestReuploadAll: localFullCloudEmpty,
     suppressSyncedFooter,
     syncPhase,
+    syncHealthy,
     schemaVersion,
     health,
     lastVerifiedCloudPushAt,
-    lastPush: diag.lastPush || null,
+    lastVerifiedCloudInventory,
+    lastPush,
     rateLimit: diag.rateLimit || null,
     rateLimited,
     rateLimitRemainingMs: rateLimited && diag.rateLimit ? diag.rateLimit.remainingMs : 0,
@@ -2568,6 +2889,25 @@ async function syncPull(opts) {
 
     const masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
     const remoteRecords = resp.records || [];
+    // Local-first: empty cloud / empty batch must never wipe local-only rows.
+    const preservePolicy = emptyCloudPullPolicy({
+      remoteRecords,
+      localActiveCount: localCount,
+    });
+    if (preservePolicy.reason === 'empty_cloud_keeps_local') {
+      console.info('[SYNC-PULL] Empty cloud batch with local records — preserving local (no wipe)', {
+        localCount,
+        received: remoteRecords.length,
+        mayWipeLocal: preservePolicy.mayWipeLocal,
+      });
+    }
+    // Explicit guard — pull path must remain merge-only (insert/update/soft-tombstone by sync_id).
+    assertPullBatchNonDestructive(
+      remoteRecords.map((r) => ({
+        operation: 'upsert',
+        hasMatchingSyncId: !!(r && (r.syncId || r.sync_id)),
+      }))
+    );
     let batchMerged = 0;
     let batchConflicts = 0;
     let batchDecryptFailed = 0;
@@ -2702,6 +3042,18 @@ async function syncPull(opts) {
     at: new Date().toISOString(),
   };
 
+  // Persist proven cloud inventory so incremental received=0 cannot hide an
+  // empty-cloud alarm, and received>0 can clear a prior empty proof.
+  const inventoryBefore = getLastVerifiedCloudInventory();
+  const cloudInventory = persistCloudInventoryAfterPull({
+    pulledFromEpoch: pullStartedFromEpoch,
+    receivedCount,
+  });
+  _lastPullStats.cloudInventory = cloudInventory;
+  const inventoryWritten =
+    (pullStartedFromEpoch || receivedCount > 0) &&
+    cloudInventory !== inventoryBefore;
+
   const correlationId = opts && opts.correlationId;
   logSyncAttempt(
     correlationId,
@@ -2715,6 +3067,10 @@ async function syncPull(opts) {
 
   if (merged > 0 || conflicts > 0) {
     saveDb();
+  } else if (inventoryWritten) {
+    // Empty from-epoch (or inventory-clearing) pulls merge nothing — flush now
+    // so lastVerifiedCloudInventory survives a crash before the 30s debounce.
+    flushDbSync();
   }
   return {
     pulled: merged,
@@ -2733,6 +3089,11 @@ function resetSyncPullCursor() {
 
 async function runFullSyncFromCloud() {
   if (!db) throw new Error('Database not ready');
+  // Full re-sync resets the pull cursor and merges remotes. It must never
+  // destroy local-only rows (empty cloud is an alarm + re-upload path).
+  if (fullResyncMayDestroyLocalOnly()) {
+    throw new Error('REFUSING_DESTRUCTIVE_FULL_RESYNC');
+  }
   migrateSyncDirtyToQueue();
   const w = getSyncWorker();
   // Wait out any in-flight poll cycle so we do not race the pull cursor, then
@@ -5395,6 +5756,14 @@ app.whenReady().then(async () => {
   cleanupAccidentalDuplicateDrafts();
   dedupeDraftsByCaseKeys();
   getBackupScheduler();
+  try {
+    const notices = ensureBackupPathsSane({ emit: true });
+    if (notices && notices.length) {
+      console.warn('[Backup] Path correction on ready:', notices[0].reason, notices[0].previous, '→', notices[0].next);
+    }
+  } catch (e) {
+    console.warn('[Backup] ensureBackupPathsSane on ready failed:', e && e.message ? e.message : e);
+  }
   // Check cloud backup on startup; retry a few times in case network isn't ready
   checkCloudBackupEntitlement().catch(() => {});
   setTimeout(() => checkCloudBackupEntitlement().catch(() => {}), 5000);
@@ -5472,8 +5841,21 @@ app.on('before-quit', (e) => {
 });
 
 ipcMain.handle('get-settings', () => {
+  // Settings load is a sanitize checkpoint (covers Mac↔Windows restore leftovers).
+  try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const rows = dbAll('SELECT key, value FROM settings');
-  return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  settings.effectiveBackupFolder = getBackupFolder();
+  settings.effectiveOffsiteBackupFolder = getOffsiteBackupFolder();
+  settings.defaultBackupFolder = _defaultBackupFolder();
+  if (!_backupPathCorrectionNotice) _backupPathCorrectionNotice = _loadBackupPathCorrectionNotice();
+  settings.backupPathCorrection = _backupPathCorrectionNotice;
+  settings.backupDegraded = _lastBackupDegradedReason
+    ? { reason: _lastBackupDegradedReason, at: _lastBackupDegradedAt }
+    : null;
+  settings.backupQuickMinIntervalMs = 2 * 60 * 1000;
+  settings.backupHourlyIntervalMs = 60 * 60 * 1000;
+  return settings;
 });
 
 /* ── Freemium: firm workspace, Anywhere bridge; opt-in OpenAI law fill ── */
@@ -5961,13 +6343,67 @@ ipcMain.handle('attendance-check-duplicate', (_, { dsccRef, clientName, attendan
   return results;
 });
 
+function coerceAttendanceIdArg(id) {
+  if (id == null || id === '') return null;
+  if (typeof id === 'number' && Number.isFinite(id)) return id;
+  if (typeof id === 'string' && String(id).trim() !== '') {
+    const n = Number(id);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (typeof id === 'object' && id.id != null) return coerceAttendanceIdArg(id.id);
+  return null;
+}
+
 ipcMain.handle('attendance-get', (_, id) => {
-  return dbGet('SELECT id, data, status, supervisor_approved_at, supervisor_note, archived_at FROM attendances WHERE id = ?', [id]) || null;
+  const coerced = coerceAttendanceIdArg(id);
+  if (coerced == null) return null;
+  return dbGet('SELECT id, data, status, supervisor_approved_at, supervisor_note, archived_at FROM attendances WHERE id = ?', [coerced]) || null;
 });
+
+/**
+ * Persist attendance DB to disk before the UI claims "Saved locally".
+ * Returns a structured result so the renderer can distinguish durable local
+ * save vs pending cloud sync without treating IPC success as synced.
+ */
+function finishAttendanceSaveResult(id, status, op) {
+  let durable = false;
+  if (id != null) {
+    try {
+      flushDbSync();
+      durable = !_dbDirty;
+    } catch (err) {
+      console.error('[SAVE] flushDbSync failed:', err && err.message ? err.message : err);
+      durable = false;
+      _dbDirty = true;
+    }
+  }
+  const pendingSync = true;
+  const syncDirty = true;
+  try {
+    console.info('[SAVE]', JSON.stringify(buildAttendanceSaveLog({
+      id,
+      status: status || 'draft',
+      durable,
+      syncDirty,
+      pendingSync,
+      op: op || 'attendance-save',
+    })));
+  } catch (_) {}
+  return {
+    id,
+    durable,
+    pendingSync,
+    syncDirty,
+    status: status || 'draft',
+  };
+}
 
 ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   const now = new Date().toISOString();
   const st = status || 'draft';
+  // Callers/tests sometimes pass a prior save-result object as id — coerce first
+  // so sql.js never binds [object Object].
+  id = coerceAttendanceIdArg(id);
 
   /* Unlock: change status back to draft without overwriting data */
   if (id && unlock && !data) {
@@ -5978,8 +6414,9 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'unlocked_for_amendment', now]);
       markDbDirty();
       enqueueSyncForRecord(id);
+      return finishAttendanceSaveResult(id, 'draft', 'unlock');
     }
-    return id;
+    return { id: null, durable: false, pendingSync: false, syncDirty: false, error: 'not_found' };
   }
 
   const dataStr = typeof data === 'string' ? data : JSON.stringify(data);
@@ -6066,11 +6503,11 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       }
     }
     markDbDirty();
-    // Durability: finalise/complete must hit disk before the UI reports saved.
-    // flushDb() only kicks an async save; flushDbSync writes immediately.
-    if (st === 'finalised' || st === 'completed') flushDbSync();
+    // Durability: every attendance-save must hit disk before the UI reports
+    // "Saved locally". Finalise/complete previously flushed; drafts also need
+    // this (crash between in-memory write and 30s debounce was a loss window).
     enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert');
-    return id;
+    return finishAttendanceSaveResult(id, st, st === 'finalised' ? 'finalise' : 'update');
   }
 
   // One copy per case: if a draft already exists for this case (same DSCC or client+date+station), update it instead of creating a new row.
@@ -6089,7 +6526,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       );
       markDbDirty();
       enqueueSyncForRecord(existingId);
-      return existingId;
+      return finishAttendanceSaveResult(existingId, st, 'draft-case-key-update');
     }
     // Guard against burst duplicate inserts (double-click / repeated handler firing):
     // if we just created the same draft payload in the last 30s, reuse it.
@@ -6116,7 +6553,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
           );
           markDbDirty();
           enqueueSyncForRecord(row.id);
-          return row.id;
+          return finishAttendanceSaveResult(row.id, st, 'draft-burst-dedupe');
         }
       }
     } catch (e) {
@@ -6155,7 +6592,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     );
     enqueueSyncForRecord(newId);
   }
-  return newId;
+  return finishAttendanceSaveResult(newId, st, 'create');
 });
 
 ipcMain.handle('attendance-force-status', (_, { id, status }) => {
@@ -6170,9 +6607,10 @@ ipcMain.handle('attendance-force-status', (_, { id, status }) => {
     [id, status === 'finalised' ? 'force_finalised' : 'force_status_change', now, 'Forced status update to ' + status]);
   markDbDirty();
   enqueueSyncForRecord(id, status === 'finalised' ? 'finalise' : 'upsert');
+  const saveResult = finishAttendanceSaveResult(id, status, 'force-status');
   const verify = dbGet('SELECT status FROM attendances WHERE id = ?', [id]);
-  console.log('[FORCE-STATUS] id=' + id + ' set to ' + status + ', verified=' + (verify ? verify.status : 'MISSING'));
-  return { ok: true, status: verify ? verify.status : status };
+  console.log('[FORCE-STATUS] id=' + id + ' set to ' + status + ', verified=' + (verify ? verify.status : 'MISSING') + ', durable=' + !!saveResult.durable);
+  return { ok: true, status: verify ? verify.status : status, durable: !!saveResult.durable };
 });
 
 ipcMain.handle('attendance-archive', (_, id) => {
@@ -6184,6 +6622,7 @@ ipcMain.handle('attendance-archive', (_, id) => {
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'archived', now]);
   markDbDirty();
   enqueueSyncForRecord(id);
+  flushDbSync();
   return true;
 });
 
@@ -6212,7 +6651,8 @@ ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
     );
     markDbDirty();
     enqueueSyncForRecord(id);
-    return { soft: true };
+    flushDbSync();
+    return { soft: true, durable: true };
   }
   return false;
 });
@@ -6226,6 +6666,7 @@ ipcMain.handle('attendance-undelete', (_, id) => {
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)', [id, 'restored', now, 'Restored from deleted']);
   markDbDirty();
   enqueueSyncForRecord(id);
+  flushDbSync();
   return true;
 });
 
@@ -6425,52 +6866,316 @@ ipcMain.handle('load-magistrates-courts', () => {
   }
 });
 
+async function runManualVerifiedBackup() {
+  ensureBackupPathsSane({ emit: true });
+  const backupDir = getBackupFolder();
+  if (!backupDir) {
+    const err = new Error('No backup folder configured');
+    err.code = 'backup-folder-missing';
+    throw err;
+  }
+  if (!_tryEnsureWritableDir(backupDir)) {
+    const err = new Error('Backup folder is not writable: ' + backupDir);
+    err.code = 'backup-folder-unwritable';
+    _notifyBackupDegraded('backup-folder-unwritable', backupDir);
+    throw err;
+  }
+  const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+  const dest = path.join(backupDir, name);
+  _cachedDbExportDirty = true;
+  const encData = getEncryptedDbExport();
+  if (!encData) throw new Error('Database export failed');
+  await writeFileAtomicAsync(dest, encData);
+  const latestDest = path.join(backupDir, 'attendance-latest.db');
+  await writeFileAtomicAsync(latestDest, encData);
+  const quickName = `attendance-quick-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
+  const quickDest = path.join(backupDir, quickName);
+  await writeFileAtomicAsync(quickDest, encData);
+  const verifiedDest = _verifyBackupOrThrow(dest, encData.length, 'manual');
+  _verifyBackupOrThrow(latestDest, encData.length, 'manual-latest');
+  _verifyBackupOrThrow(quickDest, encData.length, 'manual-quick');
+  dbDirtySinceQuickBackup = false;
+  dbDirtySinceHourlyBackup = false;
+  pruneOldBackups(backupDir);
+  try { pruneOldQuickBackups(backupDir); } catch (_) {}
+  copyToOffsiteBackup(dest);
+  copyToOffsiteBackup(latestDest);
+  copyToOffsiteBackup(quickDest);
+  uploadToCloudIfConfigured(encData);
+  uploadToS3IfConfigured(encData, 'attendance-latest.db');
+  uploadToS3IfConfigured(encData, path.basename(dest));
+  uploadToManagedCloudIfEnabled(encData, 'attendance-latest.db');
+  uploadToManagedCloudIfEnabled(encData, path.basename(dest));
+  const offsiteDir = getOffsiteBackupFolder();
+  if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
+  const bs = _backupScheduler;
+  if (bs) {
+    bs.recordCompleted('quick', 'manual', {
+      bytes: encData.length,
+      verified: true,
+      verifiedAt: verifiedDest.verifiedAt || new Date().toISOString(),
+    }, true);
+  }
+  _lastBackupDegradedReason = null;
+  _lastBackupDegradedAt = 0;
+  return {
+    path: dest,
+    latestPath: latestDest,
+    quickPath: quickDest,
+    folder: backupDir,
+    offsiteFolder: offsiteDir || null,
+    bytes: encData.length,
+    verified: true,
+    verifiedAt: verifiedDest.verifiedAt || new Date().toISOString(),
+  };
+}
+
 ipcMain.handle('backup-now', async () => {
   try {
-    const backupDir = getBackupFolder();
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true });
-    }
-    const name = `attendance-backup-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.db`;
-    const dest = path.join(backupDir, name);
-    _cachedDbExportDirty = true;
-    const encData = getEncryptedDbExport();
-    if (!encData) throw new Error('Database export failed');
-    await writeFileAtomicAsync(dest, encData);
-    const latestDest = path.join(backupDir, 'attendance-latest.db');
-    await writeFileAtomicAsync(latestDest, encData);
-    dbDirtySinceQuickBackup = false;
-    dbDirtySinceHourlyBackup = false;
-    pruneOldBackups(backupDir);
-    copyToOffsiteBackup(dest);
-    copyToOffsiteBackup(latestDest);
-    uploadToCloudIfConfigured(encData);
-    uploadToS3IfConfigured(encData, 'attendance-latest.db');
-    uploadToS3IfConfigured(encData, path.basename(dest));
-    uploadToManagedCloudIfEnabled(encData, 'attendance-latest.db');
-    uploadToManagedCloudIfEnabled(encData, path.basename(dest));
-    const offsiteDir = getOffsiteBackupFolder();
-    if (offsiteDir && fs.existsSync(offsiteDir)) pruneOldBackups(offsiteDir);
-    const bs = _backupScheduler;
-    if (bs) bs.recordCompleted('quick', 'manual', { bytes: encData.length }, true);
-    return dest;
+    const result = await runManualVerifiedBackup();
+    return result.path;
   } catch (e) {
     const msg = e && e.message ? e.message : String(e);
     console.error('[backup-now] Backup failed:', msg);
+    _notifyBackupDegraded(e && e.code ? e.code : 'backup-failed', msg);
     throw new Error('Backup failed: ' + msg);
   }
 });
 
+/**
+ * Durable Save now checkpoint: sync flush attendances.db, then verified backup.
+ * Never claims backup success on silent skip.
+ */
+ipcMain.handle('persist-and-backup', async () => {
+  const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
+  try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
+  const folder = getBackupFolder();
+  let noteDurable = false;
+  let durableError = null;
+  try {
+    flushDbSync();
+    const dbPath = getDbPath();
+    noteDurable = !_dbDirty && !!dbPath && fs.existsSync(dbPath);
+    if (!noteDurable) durableError = 'Database file missing or still dirty after flush';
+  } catch (err) {
+    durableError = err && err.message ? err.message : String(err);
+    noteDurable = false;
+  }
+  if (!noteDurable) {
+    _notifyBackupDegraded('flush-failed', durableError);
+    const payload = {
+      ok: false,
+      noteDurable: false,
+      backupOk: false,
+      error: durableError || 'Disk flush failed',
+      effectiveBackupFolder: folder,
+      offsiteBackupFolder: getOffsiteBackupFolder(),
+      dbPath: getDbPath(),
+    };
+    payload.userMessage = buildSaveNowUserMessage(payload);
+    return payload;
+  }
+
+  try {
+    const backup = await runManualVerifiedBackup();
+    const payload = {
+      ok: true,
+      noteDurable: true,
+      backupOk: true,
+      backupPath: backup.path,
+      effectiveBackupFolder: backup.folder,
+      offsiteBackupFolder: backup.offsiteFolder,
+      verified: true,
+      bytes: backup.bytes,
+      dbPath: getDbPath(),
+    };
+    payload.userMessage = buildSaveNowUserMessage(payload);
+    console.info('[SAVE-NOW]', JSON.stringify({
+      noteDurable: true,
+      backupOk: true,
+      folder: backup.folder,
+      bytes: backup.bytes,
+      at: new Date().toISOString(),
+    }));
+    return payload;
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    _notifyBackupDegraded(err && err.code ? err.code : 'backup-failed', msg);
+    const payload = {
+      ok: false,
+      noteDurable: true,
+      backupOk: false,
+      error: msg,
+      effectiveBackupFolder: folder,
+      offsiteBackupFolder: getOffsiteBackupFolder(),
+      dbPath: getDbPath(),
+      message: 'Note is on disk but backup failed',
+    };
+    payload.userMessage = buildSaveNowUserMessage(payload);
+    console.error('[SAVE-NOW] note durable but backup failed:', msg);
+    return payload;
+  }
+});
+
 ipcMain.handle('flush-and-backup', async () => {
-  flushDb();
-  await new Promise(r => setTimeout(r, 200));
-  return 'flushed';
+  // Legacy alias used by older UI — same durable checkpoint as Save now.
+  const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
+  try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
+  const folder = getBackupFolder();
+  let noteDurable = false;
+  let durableError = null;
+  try {
+    flushDbSync();
+    const dbPath = getDbPath();
+    noteDurable = !_dbDirty && !!dbPath && fs.existsSync(dbPath);
+    if (!noteDurable) durableError = 'Database file missing or still dirty after flush';
+  } catch (err) {
+    durableError = err && err.message ? err.message : String(err);
+    noteDurable = false;
+  }
+  if (!noteDurable) {
+    _notifyBackupDegraded('flush-failed', durableError);
+    return {
+      ok: false,
+      noteDurable: false,
+      backupOk: false,
+      error: durableError || 'Disk flush failed',
+      effectiveBackupFolder: folder,
+    };
+  }
+  try {
+    const backup = await runManualVerifiedBackup();
+    return {
+      ok: true,
+      noteDurable: true,
+      backupOk: true,
+      backupPath: backup.path,
+      effectiveBackupFolder: backup.folder,
+      path: backup.path,
+    };
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    _notifyBackupDegraded(err && err.code ? err.code : 'backup-failed', msg);
+    return {
+      ok: false,
+      noteDurable: true,
+      backupOk: false,
+      error: msg,
+      effectiveBackupFolder: folder,
+      message: 'Note is on disk but backup failed',
+      userMessage: buildSaveNowUserMessage({
+        noteDurable: true,
+        backupOk: false,
+        error: msg,
+        effectiveBackupFolder: folder,
+      }),
+    };
+  }
 });
 
 ipcMain.handle('backup-status', () => {
   const bs = _backupScheduler;
   if (!bs) return { state: 'not-initialised' };
-  return bs.getStatus();
+  const status = bs.getStatus();
+  const folder = getBackupFolder();
+  let latestVerify = null;
+  let quickCount = 0;
+  try {
+    const latestPath = path.join(folder, 'attendance-latest.db');
+    if (fs.existsSync(latestPath)) {
+      latestVerify = verifyEncryptedBackupFile(latestPath);
+    }
+    if (fs.existsSync(folder)) {
+      quickCount = fs.readdirSync(folder).filter((f) => f.startsWith('attendance-quick-') && f.endsWith('.db')).length;
+    }
+  } catch (_) {}
+  return {
+    ...status,
+    backupFolder: folder,
+    offsiteBackupFolder: getOffsiteBackupFolder(),
+    defaultBackupFolder: _defaultBackupFolder(),
+    lastSuccessAt: status.lastBackupAt || null,
+    lastFailure: status.lastError || _lastBackupDegradedReason || null,
+    lastDegradedReason: _lastBackupDegradedReason,
+    lastDegradedAt: _lastBackupDegradedAt || null,
+    latestFileVerified: latestVerify ? !!latestVerify.ok : null,
+    latestFileVerifyReason: latestVerify && !latestVerify.ok ? latestVerify.reason : null,
+    multiGeneration: true,
+    generationalQuick: true,
+    quickGenerationCount: quickCount,
+    includesDirtyRecords: true,
+    pathCorrection: _backupPathCorrectionNotice,
+    quickMinIntervalMs: status.quickMinIntervalMs || (2 * 60 * 1000),
+  };
+});
+
+ipcMain.handle('backup-open-folder', async (_, which) => {
+  const target = which === 'offsite' ? getOffsiteBackupFolder() : getBackupFolder();
+  if (!target) return { ok: false, error: 'No folder configured' };
+  try {
+    ensureBackupFolderExists();
+    if (!fs.existsSync(target)) {
+      return { ok: false, error: 'Folder does not exist: ' + target };
+    }
+    const err = await shell.openPath(target);
+    if (err) return { ok: false, error: err };
+    return { ok: true, path: target };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+});
+
+ipcMain.handle('backup-acknowledge-path-correction', () => {
+  _persistBackupPathCorrectionNotice(null);
+  return { ok: true };
+});
+
+ipcMain.handle('session-unlock', (_, password) => {
+  if (!_ipcChannelAllow('session-unlock', 5, 60 * 1000)) {
+    return { ok: false, code: 'rate_limited', error: 'Too many unlock attempts. Please wait a minute.' };
+  }
+  const result = verifySensitiveActionCredential(password, 'session-unlock');
+  if (result && result.ok) {
+    try {
+      ensureBackupPathsSane({ emit: true });
+    } catch (e) {
+      console.warn('[Backup] ensureBackupPathsSane after unlock failed:', e && e.message ? e.message : e);
+    }
+  }
+  return result;
+});
+
+ipcMain.handle('sync-integrity-check', () => {
+  if (!db) return { ok: false, error: 'Database not ready', autoDelete: false };
+  const rows = dbAll(
+    `SELECT id, sync_id, status, sync_dirty, deleted_at, updated_at, client_name, station_name, attendance_date
+     FROM attendances`
+  ) || [];
+  const index = buildEmergencyRecordIndex(rows);
+  const inventory = getLastVerifiedCloudInventory();
+  const pull = getLastPullStats();
+  const report = buildLocalCloudIntegrityReport({
+    localRows: index.map((r) => ({
+      syncId: r.syncId,
+      syncDirty: r.syncDirty,
+      status: r.status,
+      deletedAt: r.deletedAt,
+    })),
+    cloudInventoryCount: inventory,
+    cloudSyncIds: null,
+    pulledFromEpoch: !!(pull && pull.pulledFromEpoch),
+  });
+  try {
+    console.info('[INTEGRITY]', JSON.stringify({
+      localActive: report.localActive,
+      localDirty: report.localDirty,
+      cloudInventoryCount: report.cloudInventoryCount,
+      cloudEmptyProven: report.cloudEmptyProven,
+      discrepancyCount: (report.discrepancies || []).length,
+      autoDelete: false,
+    }));
+  } catch (_) {}
+  return { ok: true, ...report };
 });
 
 ipcMain.on('editor-activity', () => {
@@ -6634,6 +7339,7 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     saveDb();
     resetSyncWorkerAfterDbSwap('cloud-restore');
     try { ensureBackupFolderExists(); } catch (_) {}
+    try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
@@ -6719,6 +7425,7 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     saveDb();
     resetSyncWorkerAfterDbSwap('local-restore');
     try { ensureBackupFolderExists(); } catch (_) {}
+    try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
     /* Suppress scheduler for 60s so the restored DB is not immediately overwritten,
        then trigger one quick backup of the restored state as the new baseline. */
     if (_backupScheduler) _backupScheduler.suppressNext(60000);
@@ -7203,13 +7910,6 @@ function _ipcChannelAllow(channel, max, windowMs) {
   bucket.push(now);
   return true;
 }
-
-ipcMain.handle('session-unlock', (_, password) => {
-  if (!_ipcChannelAllow('session-unlock', 5, 60 * 1000)) {
-    return { ok: false, code: 'rate_limited', error: 'Too many unlock attempts. Please wait a minute.' };
-  }
-  return verifySensitiveActionCredential(password, 'session-unlock');
-});
 
 ipcMain.handle('recover-key-from-cloud', async () => {
   const result = await ensureCanonicalSyncKeyNow();

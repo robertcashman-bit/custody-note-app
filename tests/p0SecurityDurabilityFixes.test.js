@@ -34,10 +34,12 @@ describe('P0 durability — flush on suspend/lock/finalise', () => {
   });
 
   it('attendance finalise/complete uses flushDbSync not async flushDb', () => {
-    assert.match(
-      mainJs,
-      /if \(st === 'finalised' \|\| st === 'completed'\) flushDbSync\(\)/
-    );
+    // All attendance-save paths now flush via finishAttendanceSaveResult → flushDbSync
+    assert.match(mainJs, /function finishAttendanceSaveResult/);
+    assert.match(mainJs, /flushDbSync\(\)/);
+    const saveIdx = mainJs.indexOf("ipcMain.handle('attendance-save'");
+    const saveChunk = mainJs.slice(saveIdx, saveIdx + 9000);
+    assert.match(saveChunk, /finishAttendanceSaveResult/);
     assert.doesNotMatch(
       mainJs,
       /if \(st === 'finalised' \|\| st === 'completed'\) flushDb\(\)/
@@ -77,9 +79,9 @@ describe('P0 keyboard shortcuts — Ctrl or Meta', () => {
     assert.match(appJs, /modPressed\(e\) && e\.key === 'n'/);
   });
 
-  it('shortcut labels use data-shortcut-mod and Save (not Save & exit) for Cmd/Ctrl+S', () => {
+  it('shortcut labels use data-shortcut-mod and Save now (not Save & exit) for Cmd/Ctrl+S', () => {
     assert.match(indexHtml, /data-shortcut-mod/);
-    assert.match(indexHtml, /<kbd data-shortcut-mod>Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Save<\/td>/);
+    assert.match(indexHtml, /<kbd data-shortcut-mod>Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Save now/);
     assert.doesNotMatch(indexHtml, /Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Save &amp; exit<\/td>/);
   });
 
