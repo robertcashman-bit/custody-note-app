@@ -10001,17 +10001,11 @@ function sanitizeQuickFileInvoiceNumber(raw) {
   return s;
 }
 
-function getNextSequentialInvoiceNumber() {
-  const row = dbAll("SELECT value FROM settings WHERE key = 'nextInvoiceNumber'");
-  let next = row.length ? parseInt(row[0].value, 10) : NaN;
-  if (!Number.isFinite(next) || next < 1) next = 6066;
-  const formatted = String(next).padStart(6, '0');
-  db.run("INSERT OR REPLACE INTO settings (key, value) VALUES ('nextInvoiceNumber', ?)", [String(next + 1)]);
-  saveDb();
-  return formatted;
-}
-
-/** Next invoice number that would be issued (does not advance the counter). */
+/**
+ * Next CN→QuickFile invoice number that would be issued (peek-only).
+ * Does NOT advance the counter — advancement happens only via
+ * bumpNextInvoiceNumberPast after a confirmed occupied number or successful issue.
+ */
 function peekNextSequentialInvoiceNumber() {
   const row = dbAll("SELECT value FROM settings WHERE key = 'nextInvoiceNumber'");
   let next = row.length ? parseInt(row[0].value, 10) : NaN;
@@ -10024,8 +10018,9 @@ const quickFileExtractInvoiceSearchRecords = quickfileInvoiceNumber.quickFileExt
 const isQuickFileInvoiceNumberDuplicateError = quickfileInvoiceNumber.isQuickFileInvoiceNumberDuplicateError;
 
 /**
- * Ensure nextInvoiceNumber is strictly above a known occupied number
- * (e.g. from a duplicate-error message or a search hit).
+ * Ensure nextInvoiceNumber is strictly above a known occupied/issued number
+ * (ledger sync max, duplicate conflict on the attempted number, or successful create).
+ * Never jumps past numbers we have not observed as occupied.
  */
 function bumpNextInvoiceNumberPast(rawOccupied) {
   const n = parseInvoiceNumberNumericPart(rawOccupied);
@@ -10337,10 +10332,12 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       attendanceId
     );
 
+    /* Peek-only allocate + bumpPast on conflict/success → strict N, N+1, N+2.
+       Do not use a pre-advance allocator (that burned numbers on failed creates). */
     const createResult = await quickfileInvoiceNumber.createInvoiceWithDuplicateRecovery({
       attendanceId,
       maxAttempts: quickfileInvoiceNumber.MAX_INVOICE_NUMBER_ATTEMPTS,
-      allocateNextNumber: getNextSequentialInvoiceNumber,
+      allocateNextNumber: peekNextSequentialInvoiceNumber,
       bumpPastNumber: bumpNextInvoiceNumberPast,
       findByAttendanceRef: attendanceId
         ? () => quickFileFindInvoiceByAttendanceRef(attendanceId)
