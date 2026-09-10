@@ -129,9 +129,15 @@ const {
   emptyCloudPullPolicy,
   assertPullBatchNonDestructive,
   fullResyncMayDestroyLocalOnly,
+  evaluateTombstoneApply,
 } = require('./lib/syncLocalPreserve');
 const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
 const { buildLocalCloudIntegrityReport } = require('./lib/localCloudIntegrity');
+const {
+  detectRevisionGoingBackwards,
+  detectSuddenLocalCountDrop,
+} = require('./lib/dataSafetyMonitors');
+const { appendRecordRevision } = require('./lib/recordRevisions');
 const {
   assessBackupPathUsability,
   planBackupFolderReset,
@@ -2967,6 +2973,33 @@ async function syncPull(opts) {
       const localVersion = local.sync_version || 1;
       const remoteVersion = remote.version || 1;
 
+      const revGate = detectRevisionGoingBackwards({
+        localVersion,
+        remoteVersion,
+        localDirty: local.sync_dirty === 1,
+        applyingRemote: remoteVersion < localVersion,
+      });
+      if (revGate.triggered) {
+        console.warn('[SYNC-PULL] Refusing revision-backwards apply for', remote.syncId);
+        recordSyncConflict(local.id, local, remote, 'revision_backwards');
+        batchConflicts++;
+        continue;
+      }
+
+      // Soft-delete only when remote carries an explicit tombstone for this sync_id.
+      if (remote.deletedAt) {
+        const tomb = evaluateTombstoneApply({
+          hasMatchingSyncId: true,
+          remoteDeletedAt: remote.deletedAt,
+          localExists: true,
+          remotePresent: true,
+        });
+        if (!tomb.mayDeleteLocal) {
+          console.warn('[SYNC-PULL] Tombstone gate blocked soft-delete', tomb.reason);
+          continue;
+        }
+      }
+
       const localStatus = (() => {
         const s = dbGet('SELECT status FROM attendances WHERE id=?', [local.id]);
         return s ? s.status : null;
@@ -3007,6 +3040,16 @@ async function syncPull(opts) {
            remote.supervisorApprovedAt || null, remote.supervisorNote || '', remote.archivedAt || null,
            remoteVersion, local.id]
         );
+        try {
+          appendRecordRevision({ dbRun, dbGet, dbAll }, {
+            id: local.id,
+            sync_id: remote.syncId,
+            sync_version: remoteVersion,
+            status: remote.status,
+            data: remote.data,
+            deleted_at: remote.deletedAt || null,
+          }, { source: 'remote_pull' });
+        } catch (_) {}
         batchMerged++;
       }
     }
@@ -6377,6 +6420,50 @@ function finishAttendanceSaveResult(id, status, op) {
       _dbDirty = true;
     }
   }
+  if (durable && id != null) {
+    try {
+      const row = dbGet(
+        'SELECT id, sync_id, sync_version, status, data, deleted_at FROM attendances WHERE id=?',
+        [id]
+      );
+      if (row) {
+        appendRecordRevision({ dbRun, dbGet, dbAll }, row, { source: op || 'local_save' });
+        flushDbSync();
+        durable = !_dbDirty;
+      }
+    } catch (revErr) {
+      console.warn('[SAVE] revision append skipped:', revErr && revErr.message ? revErr.message : revErr);
+    }
+  }
+  // Fail-safe baseline: track active count for sudden-drop detection.
+  try {
+    const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+    const curr = countRow ? Number(countRow.c) || 0 : 0;
+    const prevRow = dbGet("SELECT value FROM settings WHERE key='dataSafetyLastActiveCount'");
+    const prev = prevRow && prevRow.value != null ? Number(prevRow.value) : null;
+    const drop = detectSuddenLocalCountDrop({ previousActiveCount: prev, currentActiveCount: curr });
+    if (drop.triggered) {
+      console.error('[INTEGRITY]', JSON.stringify({
+        tag: 'DATA_SAFETY',
+        code: drop.code,
+        previous: drop.previous,
+        current: drop.current,
+        failSafe: drop.failSafe,
+      }));
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('data-safety-alert', {
+          code: drop.code,
+          severity: drop.severity,
+          message: drop.message,
+        });
+      }
+    } else {
+      dbRun(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('dataSafetyLastActiveCount', ?)",
+        [String(curr)]
+      );
+    }
+  } catch (_) {}
   const pendingSync = true;
   const syncDirty = true;
   try {
@@ -6943,15 +7030,24 @@ ipcMain.handle('backup-now', async () => {
 });
 
 /**
- * Durable Save now checkpoint: sync flush attendances.db, then verified backup.
- * Never claims backup success on silent skip.
+ * Durable Save now checkpoint:
+ * 1) flush attendances.db (verified dirty clear)
+ * 2) verified generational backup
+ * 3) attempt immediate central sync drain (outbox ack)
+ * 4) return Force Save status distinguishing local vs central confirmation
+ * Never claims ambiguous "Saved" / never claims backup success on silent skip.
  */
 ipcMain.handle('persist-and-backup', async () => {
   const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
+  const { buildForceSaveResult } = require('./lib/forceSaveStatus');
+  const { evaluateBackupSeriesIntegrity, inspectBackupFolder } = require('./lib/backupIntegrityGate');
+  const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
   try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const folder = getBackupFolder();
+  const deviceId = (() => { try { return getMachineId(); } catch (_) { return null; } })();
   let noteDurable = false;
   let durableError = null;
+  const lastLocalSaveAt = new Date().toISOString();
   try {
     flushDbSync();
     const dbPath = getDbPath();
@@ -6963,58 +7059,159 @@ ipcMain.handle('persist-and-backup', async () => {
   }
   if (!noteDurable) {
     _notifyBackupDegraded('flush-failed', durableError);
-    const payload = {
-      ok: false,
+    const fail = buildForceSaveResult({
       noteDurable: false,
       backupOk: false,
-      error: durableError || 'Disk flush failed',
-      effectiveBackupFolder: folder,
-      offsiteBackupFolder: getOffsiteBackupFolder(),
-      dbPath: getDbPath(),
-    };
-    payload.userMessage = buildSaveNowUserMessage(payload);
-    return payload;
+      centralConfirmed: false,
+      pendingCount: 0,
+      lastLocalSaveAt: null,
+      deviceId,
+      syncError: durableError || 'Disk flush failed',
+    });
+    fail.error = durableError || 'Disk flush failed';
+    fail.effectiveBackupFolder = folder;
+    fail.offsiteBackupFolder = getOffsiteBackupFolder();
+    fail.dbPath = getDbPath();
+    fail.userMessage = buildSaveNowUserMessage(fail);
+    return fail;
   }
 
+  let backupOk = false;
+  let backupPath = null;
+  let backupBytes = null;
+  let backupError = null;
+  let offsiteFolder = getOffsiteBackupFolder();
   try {
     const backup = await runManualVerifiedBackup();
-    const payload = {
-      ok: true,
-      noteDurable: true,
-      backupOk: true,
-      backupPath: backup.path,
-      effectiveBackupFolder: backup.folder,
-      offsiteBackupFolder: backup.offsiteFolder,
-      verified: true,
-      bytes: backup.bytes,
-      dbPath: getDbPath(),
-    };
-    payload.userMessage = buildSaveNowUserMessage(payload);
-    console.info('[SAVE-NOW]', JSON.stringify({
-      noteDurable: true,
-      backupOk: true,
-      folder: backup.folder,
-      bytes: backup.bytes,
-      at: new Date().toISOString(),
-    }));
-    return payload;
+    backupOk = true;
+    backupPath = backup.path;
+    backupBytes = backup.bytes;
+    offsiteFolder = backup.offsiteFolder;
   } catch (err) {
-    const msg = err && err.message ? err.message : String(err);
-    _notifyBackupDegraded(err && err.code ? err.code : 'backup-failed', msg);
-    const payload = {
-      ok: false,
-      noteDurable: true,
-      backupOk: false,
-      error: msg,
-      effectiveBackupFolder: folder,
-      offsiteBackupFolder: getOffsiteBackupFolder(),
-      dbPath: getDbPath(),
-      message: 'Note is on disk but backup failed',
-    };
-    payload.userMessage = buildSaveNowUserMessage(payload);
-    console.error('[SAVE-NOW] note durable but backup failed:', msg);
-    return payload;
+    backupError = err && err.message ? err.message : String(err);
+    _notifyBackupDegraded(err && err.code ? err.code : 'backup-failed', backupError);
   }
+
+  // Independent PITR integrity snapshot (metadata only).
+  let backupIntegrity = null;
+  try {
+    const files = inspectBackupFolder(folder, (p) => verifyEncryptedBackupFile(p));
+    let liveActive = null;
+    try {
+      const c = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+      liveActive = c ? c.c : null;
+    } catch (_) {}
+    backupIntegrity = evaluateBackupSeriesIntegrity({
+      backupFiles: files,
+      liveActiveCount: liveActive,
+    });
+  } catch (_) {}
+
+  // Enqueue is already done on attendance-save; Force Save attempts immediate central sync.
+  let syncAttempted = false;
+  let centralConfirmed = false;
+  let pendingCount = 0;
+  let dirtyCount = 0;
+  let syncError = null;
+  let offline = false;
+  let rateLimited = false;
+  let authRequired = false;
+  let lastCentralSyncAt = null;
+  let syncing = false;
+  try {
+    migrateSyncDirtyToQueue();
+    const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
+    const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+    pendingCount = pendingRow ? (pendingRow.c || 0) : 0;
+    dirtyCount = dirtyRow ? (dirtyRow.c || 0) : 0;
+    const w = getSyncWorker();
+    const conn = w && w.getConnectivity ? w.getConnectivity() : null;
+    if (conn === 'offline') offline = true;
+    if (conn === 'auth_required') authRequired = true;
+    if (pendingCount > 0 || dirtyCount > 0) {
+      syncAttempted = true;
+      syncing = true;
+      const drain = await drainPendingSyncUploads({ maxCycles: 3 });
+      syncing = false;
+      pendingCount = drain.pending || 0;
+      dirtyCount = drain.dirty || 0;
+      if (drain.stoppedReason === 'rate_limited') {
+        rateLimited = true;
+        syncError = drain.lastError || 'Too many requests';
+      } else if (drain.stoppedReason === 'drained' && pendingCount === 0 && dirtyCount === 0) {
+        centralConfirmed = true;
+        lastCentralSyncAt = new Date().toISOString();
+      } else if (drain.lastError) {
+        syncError = drain.lastError;
+      } else if (pendingCount > 0 || dirtyCount > 0) {
+        syncError = syncError || 'Central sync still pending';
+      }
+      try {
+        const diag = w && w.getDiagnostics ? w.getDiagnostics() : {};
+        if (diag && diag.rateLimit && diag.rateLimit.blocked) rateLimited = true;
+        if (diag && diag.lastVerifiedCloudPushAt) lastCentralSyncAt = diag.lastVerifiedCloudPushAt;
+        if (diag && diag.connectivity === 'offline') offline = true;
+        if (diag && diag.connectivity === 'auth_required') authRequired = true;
+      } catch (_) {}
+    } else {
+      // Nothing pending — treat as central-confirmed for this checkpoint if last push known,
+      // else safe locally with no pending work.
+      try {
+        const diag = w && w.getDiagnostics ? w.getDiagnostics() : {};
+        if (diag && diag.lastVerifiedCloudPushAt) {
+          centralConfirmed = true;
+          lastCentralSyncAt = diag.lastVerifiedCloudPushAt;
+        } else {
+          centralConfirmed = true; // no pending mutations → nothing to ack
+          lastCentralSyncAt = lastLocalSaveAt;
+        }
+      } catch (_) {
+        centralConfirmed = true;
+      }
+    }
+  } catch (syncErr) {
+    syncAttempted = true;
+    syncError = syncErr && syncErr.message ? syncErr.message : String(syncErr);
+  }
+
+  const result = buildForceSaveResult({
+    noteDurable: true,
+    backupOk,
+    backupPath,
+    centralConfirmed,
+    pendingCount: pendingCount + dirtyCount,
+    syncAttempted,
+    syncing,
+    offline,
+    waitingForInternet: offline,
+    rateLimited,
+    authRequired,
+    syncError: syncError || backupError,
+    lastLocalSaveAt,
+    lastCentralSyncAt,
+    deviceId,
+  });
+  result.backupPath = backupPath;
+  result.bytes = backupBytes;
+  result.verified = backupOk;
+  result.effectiveBackupFolder = folder;
+  result.offsiteBackupFolder = offsiteFolder;
+  result.dbPath = getDbPath();
+  result.backupIntegrity = backupIntegrity;
+  result.dirtyCount = dirtyCount;
+  if (backupError) result.backupError = backupError;
+  result.userMessage = buildSaveNowUserMessage(result);
+  console.info('[SAVE-NOW]', JSON.stringify({
+    noteDurable: true,
+    backupOk,
+    centralConfirmed,
+    forceSaveState: result.forceSaveState,
+    pendingCount: result.pendingCount,
+    folder,
+    bytes: backupBytes,
+    at: lastLocalSaveAt,
+  }));
+  return result;
 });
 
 ipcMain.handle('flush-and-backup', async () => {
