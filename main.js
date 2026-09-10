@@ -131,6 +131,18 @@ const {
   fullResyncMayDestroyLocalOnly,
   evaluateTombstoneApply,
 } = require('./lib/syncLocalPreserve');
+const {
+  SYNC_SKIP_REASONS,
+  describeSkipReason,
+} = require('./lib/syncCycleAudit');
+const {
+  shouldProbeCloudFromEpoch,
+  shouldAutoHealEmptyCloud,
+  buildHealState,
+  markHealAttemptStarted,
+  markHealSuccess,
+  markHealFailure,
+} = require('./lib/emptyCloudAutoHeal');
 const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
 const { buildLocalCloudIntegrityReport } = require('./lib/localCloudIntegrity');
 const {
@@ -2552,7 +2564,7 @@ async function drainPendingSyncUploads(options = {}) {
       return { cycles, stoppedReason: 'drained', pending: 0, dirty: 0 };
     }
     w.forceRetryAll();
-    await w.runCycle();
+    await w.runCycle({ skipHeal: true });
     const diag = w.getDiagnostics() || {};
     if (diag.rateLimit && diag.rateLimit.blocked) {
       return {
@@ -2630,6 +2642,312 @@ function persistCloudInventoryAfterPull({ pulledFromEpoch, receivedCount }) {
   return next;
 }
 
+/** Persist every sync cycle outcome (including skips) so diagnostics never go silent. */
+function persistSyncCycle(heartbeat) {
+  if (!db || !heartbeat) return;
+  try {
+    if (heartbeat.lastSyncCycleAt) {
+      dbRun(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastSyncCycleAt', ?)",
+        [String(heartbeat.lastSyncCycleAt)]
+      );
+    }
+    if (heartbeat.lastSyncSkipReason != null) {
+      dbRun(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastSyncSkipReason', ?)",
+        [String(heartbeat.lastSyncSkipReason)]
+      );
+    }
+    if (heartbeat.lastSyncSkipDetail != null) {
+      dbRun(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastSyncSkipDetail', ?)",
+        [String(heartbeat.lastSyncSkipDetail).slice(0, 500)]
+      );
+    } else {
+      try { dbRun("DELETE FROM settings WHERE key='lastSyncSkipDetail'"); } catch (_) {}
+    }
+    // Flush skip heartbeats promptly — these are the only evidence when push/pull never run.
+    flushDbSync();
+  } catch (e) {
+    console.warn('[Sync] persistSyncCycle failed:', e && e.message ? e.message : e);
+  }
+}
+
+function getPersistedSyncCycle() {
+  if (!db) return { lastSyncCycleAt: null, lastSyncSkipReason: null, lastSyncSkipDetail: null };
+  try {
+    const at = dbGet("SELECT value FROM settings WHERE key='lastSyncCycleAt'");
+    const reason = dbGet("SELECT value FROM settings WHERE key='lastSyncSkipReason'");
+    const detail = dbGet("SELECT value FROM settings WHERE key='lastSyncSkipDetail'");
+    return {
+      lastSyncCycleAt: at && at.value ? at.value : null,
+      lastSyncSkipReason: reason && reason.value ? reason.value : null,
+      lastSyncSkipDetail: detail && detail.value ? detail.value : null,
+    };
+  } catch (_) {
+    return { lastSyncCycleAt: null, lastSyncSkipReason: null, lastSyncSkipDetail: null };
+  }
+}
+
+const EMPTY_CLOUD_HEAL_SETTINGS_KEY = 'emptyCloudHealState';
+
+function getEmptyCloudHealState() {
+  if (!db) return buildHealState();
+  try {
+    const row = dbGet("SELECT value FROM settings WHERE key=?", [EMPTY_CLOUD_HEAL_SETTINGS_KEY]);
+    if (!row || !row.value) return buildHealState();
+    const parsed = JSON.parse(row.value);
+    return buildHealState(parsed);
+  } catch (_) {
+    return buildHealState();
+  }
+}
+
+function setEmptyCloudHealState(state) {
+  if (!db) return;
+  try {
+    dbRun(
+      "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+      [EMPTY_CLOUD_HEAL_SETTINGS_KEY, JSON.stringify(buildHealState(state))]
+    );
+    flushDbSync();
+  } catch (e) {
+    console.warn('[Sync] setEmptyCloudHealState failed:', e && e.message ? e.message : e);
+  }
+}
+
+/**
+ * Auto empty-cloud heal: probe from epoch when local looks synced but cloud
+ * inventory is unknown/empty; if verified empty, re-upload all with written ack
+ * + verify pull. Never deletes local notes. Backoff-capped.
+ */
+async function maybeEmptyCloudAutoHeal(_opts = {}) {
+  if (!db || !getSyncApiUrl()) {
+    return { ran: false, skipped: true, reason: 'no_db_or_api' };
+  }
+  const data = readLicenceData();
+  if (!data || !data.key) {
+    return { ran: false, skipped: true, reason: 'auth_required' };
+  }
+
+  const totalRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+  const localCount = totalRow ? (totalRow.c || 0) : 0;
+  const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+  const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')");
+  const dirtyCount = dirtyRow ? (dirtyRow.c || 0) : 0;
+  const pendingCount = pendingRow ? (pendingRow.c || 0) : 0;
+  const inventory = getLastVerifiedCloudInventory();
+  const healState = getEmptyCloudHealState();
+  const diag = getSyncWorker() ? getSyncWorker().getDiagnostics() : {};
+  const now = Date.now();
+
+  const probeDecision = shouldProbeCloudFromEpoch({
+    localCount,
+    dirtyCount,
+    pendingCount,
+    lastVerifiedCloudInventory: inventory,
+    lastVerifiedCloudPushAt: diag.lastVerifiedCloudPushAt || null,
+    lastProbeAt: healState.lastProbeAt,
+    healInProgress: healState.status === 'running',
+    healBackoffUntil: healState.backoffUntil,
+    now,
+  });
+
+  if (!probeDecision.probe) {
+    return { ran: false, skipped: true, reason: probeDecision.reason };
+  }
+
+  console.info('[Sync] Empty-cloud probe from epoch:', probeDecision.reason, {
+    localCount,
+    inventory,
+    dirtyCount,
+    pendingCount,
+  });
+
+  // From-epoch probe — merge only; empty cloud never wipes local (emptyCloudPullPolicy).
+  resetSyncPullCursor();
+  saveDb();
+  let probePull;
+  try {
+    probePull = await syncPull({ correlationId: generateCorrelationId() });
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    setEmptyCloudHealState(markHealFailure(healState, {
+      nowIso: new Date().toISOString(),
+      error: msg,
+      code: 'PROBE_FAILED',
+      nowMs: now,
+    }));
+    return { ran: true, ok: false, code: 'PROBE_FAILED', error: msg, reason: 'probe_failed' };
+  }
+
+  setEmptyCloudHealState(buildHealState(healState, {
+    lastProbeAt: new Date().toISOString(),
+    lastResult: 'probed',
+  }));
+
+  const received = probePull && probePull.received != null ? probePull.received : 0;
+  const healDecision = shouldAutoHealEmptyCloud({
+    localCount,
+    cloudReceivedFromEpoch: received,
+    pulledFromEpoch: true,
+    healAttemptCount: healState.attemptCount,
+    healInProgress: false,
+    healBackoffUntil: healState.backoffUntil,
+    now: Date.now(),
+  });
+
+  if (!healDecision.heal) {
+    if (healDecision.reason === 'cloud_nonempty') {
+      // Cloud has records — clear any prior empty-heal failure status.
+      setEmptyCloudHealState(buildHealState(healState, {
+        status: 'idle',
+        lastResult: 'cloud_nonempty',
+        lastError: null,
+        backoffUntil: null,
+        lastProbeAt: new Date().toISOString(),
+        verifyReceived: received,
+      }));
+    }
+    return { ran: true, ok: true, skipped: true, reason: healDecision.reason, received };
+  }
+
+  console.info('[Sync] Empty-cloud auto-heal starting — re-upload all local records', {
+    localCount,
+    received,
+    attempt: (healState.attemptCount || 0) + 1,
+  });
+
+  let running = markHealAttemptStarted(healState, {
+    nowIso: new Date().toISOString(),
+    localCount,
+  });
+  setEmptyCloudHealState(running);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.send('sync-status-changed', {
+        status: 'syncing',
+        emptyCloudHeal: true,
+        lastSyncSkipReason: SYNC_SKIP_REASONS.HEAL_RUNNING,
+      });
+    } catch (_) {}
+  }
+
+  const mark = markAllLocalRecordsForCloudReupload();
+  if (!mark.ok) {
+    running = markHealFailure(running, {
+      nowIso: new Date().toISOString(),
+      error: mark.error || 'Mark failed',
+      code: 'MARK_FAILED',
+      nowMs: Date.now(),
+    });
+    setEmptyCloudHealState(running);
+    return { ran: true, ok: false, code: 'MARK_FAILED', error: mark.error, reason: 'mark_failed' };
+  }
+
+  const drain = await drainPendingSyncUploads({ maxCycles: 40 });
+  if (drain.stoppedReason === 'rate_limited') {
+    // Keep dirty so we retry after cooldown; do not clear local.
+    markAllLocalRecordsForCloudReupload();
+    running = markHealFailure(running, {
+      nowIso: new Date().toISOString(),
+      error: drain.lastError || 'Rate limited during heal',
+      code: 'RATE_LIMITED',
+      nowMs: Date.now(),
+    });
+    setEmptyCloudHealState(running);
+    return {
+      ran: true,
+      ok: false,
+      code: 'RATE_LIMITED',
+      error: drain.lastError || 'Rate limited',
+      reason: 'rate_limited',
+      drain,
+    };
+  }
+
+  resetSyncPullCursor();
+  saveDb();
+  let verify;
+  try {
+    verify = await syncPull({ correlationId: generateCorrelationId() }) || { received: 0 };
+  } catch (pullErr) {
+    markAllLocalRecordsForCloudReupload();
+    running = markHealFailure(running, {
+      nowIso: new Date().toISOString(),
+      error: pullErr && pullErr.message ? pullErr.message : 'Verify pull failed',
+      code: 'VERIFY_PULL_FAILED',
+      nowMs: Date.now(),
+    });
+    setEmptyCloudHealState(running);
+    return {
+      ran: true,
+      ok: false,
+      code: 'VERIFY_PULL_FAILED',
+      error: pullErr && pullErr.message ? pullErr.message : 'Verify failed',
+      reason: 'verify_failed',
+    };
+  }
+
+  if ((verify.received || 0) === 0 && mark.marked > 0) {
+    markAllLocalRecordsForCloudReupload();
+    running = markHealFailure(running, {
+      nowIso: new Date().toISOString(),
+      error: 'Cloud still empty after re-upload',
+      code: 'CLOUD_EMPTY_AFTER_PUSH',
+      nowMs: Date.now(),
+    });
+    setEmptyCloudHealState(running);
+    return {
+      ran: true,
+      ok: false,
+      code: 'CLOUD_EMPTY_AFTER_PUSH',
+      error: 'Cloud still empty after auto-heal re-upload',
+      reason: 'still_empty',
+      verifyReceived: 0,
+    };
+  }
+
+  const dirtyLeft = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+  if (dirtyLeft && dirtyLeft.c > 0) {
+    running = markHealFailure(running, {
+      nowIso: new Date().toISOString(),
+      error: dirtyLeft.c + ' still dirty after heal',
+      code: 'UPLOAD_INCOMPLETE',
+      nowMs: Date.now(),
+    });
+    setEmptyCloudHealState(running);
+    return {
+      ran: true,
+      ok: false,
+      code: 'UPLOAD_INCOMPLETE',
+      error: 'Heal incomplete — dirty remaining',
+      reason: 'incomplete',
+      dirtyRemaining: dirtyLeft.c,
+      verifyReceived: verify.received || 0,
+    };
+  }
+
+  running = markHealSuccess(running, {
+    nowIso: new Date().toISOString(),
+    verifyReceived: verify.received || 0,
+  });
+  setEmptyCloudHealState(running);
+  console.info('[Sync] Empty-cloud auto-heal verified', {
+    localCount,
+    verifyReceived: verify.received || 0,
+  });
+  return {
+    ran: true,
+    ok: true,
+    reason: 'healed',
+    marked: mark.marked,
+    verifyReceived: verify.received || 0,
+    drain,
+  };
+}
+
 function buildSyncRecoveryHints(statusBase) {
   const totalRecords = statusBase && statusBase.totalRecords != null ? statusBase.totalRecords : 0;
   const pendingChanges = statusBase && statusBase.pendingChanges != null ? statusBase.pendingChanges : 0;
@@ -2654,6 +2972,16 @@ function buildSyncRecoveryHints(statusBase) {
   const rateLimited = !!(diag.rateLimit && diag.rateLimit.blocked);
   const lastPush = diag.lastPush || null;
   const lastPushOk = lastPush && typeof lastPush.ok === 'boolean' ? lastPush.ok : null;
+  const authRequired = (statusBase && statusBase.connectivity === 'auth_required') ||
+    (diag.connectivity === 'auth_required') ||
+    (diag.lastSyncSkipReason === 'auth_required');
+  const healState = statusBase && statusBase._healState ? statusBase._healState : getEmptyCloudHealState();
+  const emptyCloudHealPending = !!(
+    healState &&
+    (healState.status === 'running' ||
+      healState.status === 'failed' ||
+      (localFullCloudEmpty && healState.status !== 'verified'))
+  );
   const suppressSyncedFooter = shouldSuppressSyncedFooter({
     totalRecords,
     pendingChanges,
@@ -2665,6 +2993,8 @@ function buildSyncRecoveryHints(statusBase) {
     lastVerifiedCloudInventory,
     rateLimited,
     lastPushOk,
+    authRequired,
+    emptyCloudHealPending,
   });
   const syncPhase = deriveSyncPhase({
     inProgress: !!(statusBase && statusBase.inProgress),
@@ -2680,6 +3010,9 @@ function buildSyncRecoveryHints(statusBase) {
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
     lastVerifiedCloudInventory,
     lastPushOk,
+    authRequired,
+    emptyCloudHealPending,
+    healStatus: healState && healState.status,
   });
   const schemaVersion = getDbSchemaVersion();
   const health = buildLocalCloudHealth({
@@ -2695,6 +3028,8 @@ function buildSyncRecoveryHints(statusBase) {
     rateLimited,
     lastPushOk,
     pullEverCompleted,
+    authRequired,
+    emptyCloudHealPending,
   });
   const syncHealthy = isSyncStatusHealthy({
     totalRecords,
@@ -2710,7 +3045,13 @@ function buildSyncRecoveryHints(statusBase) {
     failedCount: statusBase && statusBase.failedCount,
     lastError: statusBase && statusBase.lastError,
     inProgress: !!(statusBase && statusBase.inProgress),
+    authRequired,
+    emptyCloudHealPending,
   });
+  const persistedCycle = getPersistedSyncCycle();
+  const lastSyncCycleAt = diag.lastSyncCycleAt || persistedCycle.lastSyncCycleAt || null;
+  const lastSyncSkipReason = diag.lastSyncSkipReason || persistedCycle.lastSyncSkipReason || null;
+  const lastSyncSkipDetail = diag.lastSyncSkipDetail || persistedCycle.lastSyncSkipDetail || null;
   return {
     dbFileBytes,
     emptyLargeDb,
@@ -2729,6 +3070,16 @@ function buildSyncRecoveryHints(statusBase) {
     rateLimit: diag.rateLimit || null,
     rateLimited,
     rateLimitRemainingMs: rateLimited && diag.rateLimit ? diag.rateLimit.remainingMs : 0,
+    authRequired: !!authRequired,
+    emptyCloudHeal: healState,
+    emptyCloudHealPending,
+    lastSyncCycleAt,
+    lastSyncSkipReason,
+    lastSyncSkipDetail,
+    lastSyncSkipLabel: describeSkipReason(lastSyncSkipReason, {
+      rateLimitRemainingMs: rateLimited && diag.rateLimit ? diag.rateLimit.remainingMs : 0,
+      detail: lastSyncSkipDetail,
+    }),
   };
 }
 
@@ -2851,12 +3202,21 @@ function getLastPullStats() {
 
 async function syncPull(opts) {
   const apiUrl = getSyncApiUrl();
-  if (!apiUrl) return { pulled: 0 };
+  if (!apiUrl) {
+    logSyncAttempt(opts && opts.correlationId, 'pull', 0, false, 'offline:no_api_url');
+    return { pulled: 0 };
+  }
 
   const data = readLicenceData();
-  if (!data || !data.key) return { pulled: 0 };
+  if (!data || !data.key) {
+    logSyncAttempt(opts && opts.correlationId, 'pull', 0, false, 'auth_required');
+    return { pulled: 0 };
+  }
   const licenceKey = normalizeLicenceKeyForSync(data.key);
-  if (!licenceKey) return { pulled: 0 };
+  if (!licenceKey) {
+    logSyncAttempt(opts && opts.correlationId, 'pull', 0, false, 'auth_required');
+    return { pulled: 0 };
+  }
 
   const localCountRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const localCount = localCountRow ? localCountRow.c : 0;
@@ -3221,6 +3581,8 @@ function getSyncWorker() {
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
       ensureCanonicalKey: () => ensureCanonicalSyncKeyNow(),
       logSyncAttempt,
+      persistSyncCycle,
+      maybeEmptyCloudAutoHeal,
       resolveSyncConflictsForRecord: (recordId, resolutionNote) => clearOpenSyncConflicts(Number(recordId), resolutionNote),
       onStatusChange: () => {},
       sendToRenderer: (channel, data) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data); },
@@ -3280,8 +3642,11 @@ function retrySyncQueueAfterLicenceSuccess() {
     if (!apiUrl) return;
     const w = getSyncWorker();
     if (!w) return;
+    if (typeof w.notifyAuthRecovered === 'function') {
+      w.notifyAuthRecovered();
+    }
     const n = w.forceRetryAll();
-    if (n > 0) w.scheduleSoon();
+    if (n > 0 || typeof w.scheduleSoon === 'function') w.scheduleSoon();
   } catch (_) {}
 }
 
@@ -7841,6 +8206,7 @@ ipcMain.handle('sync-status', () => {
   const pending = pendingCount + failedCount + blockedCount;
   const dirtyPushCount = dirtyCount ? dirtyCount.c : 0;
   const lastPull = getLastPullStats();
+  const healState = getEmptyCloudHealState();
   const statusBase = {
     enabled: !!apiUrl,
     inProgress: diag.inProgress || false,
@@ -7857,9 +8223,11 @@ ipcMain.handle('sync-status', () => {
     lastError: diag.lastError,
     lastSuccessfulPushAt: diag.lastSuccessfulPushAt || null,
     _diag: diag,
+    _healState: healState,
   };
   const recovery = buildSyncRecoveryHints(statusBase);
   delete statusBase._diag;
+  delete statusBase._healState;
   return Object.assign(statusBase, recovery);
 });
 
@@ -7933,6 +8301,8 @@ ipcMain.handle('sync-get-diagnostics', () => {
     const k = String(data.key);
     licenceKeyMasked = k.length > 8 ? k.slice(0, 4) + '-****-****-' + k.slice(-4) : '****';
   }
+  const persistedCycle = getPersistedSyncCycle();
+  const healState = getEmptyCloudHealState();
   return {
     ...diag,
     apiUrl: apiUrl || null,
@@ -7945,6 +8315,11 @@ ipcMain.handle('sync-get-diagnostics', () => {
     dataSource: 'sqlite-backend-sync',
     canonicalKeyAction: _lastCanonicalKeyAction,
     canonicalKeyCheckedAt: _lastCanonicalKeyAt,
+    lastSyncCycleAt: diag.lastSyncCycleAt || persistedCycle.lastSyncCycleAt || null,
+    lastSyncSkipReason: diag.lastSyncSkipReason || persistedCycle.lastSyncSkipReason || null,
+    lastSyncSkipDetail: diag.lastSyncSkipDetail || persistedCycle.lastSyncSkipDetail || null,
+    lastVerifiedCloudInventory: getLastVerifiedCloudInventory(),
+    emptyCloudHeal: healState,
   };
 });
 

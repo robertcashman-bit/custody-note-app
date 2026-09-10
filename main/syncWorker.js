@@ -45,6 +45,11 @@ const {
   mayClearOutboxEntry,
   isAmbiguousPushAck,
 } = require('../lib/syncMutationId');
+const {
+  SYNC_SKIP_REASONS,
+  buildCycleHeartbeat,
+  isHardSkipReason,
+} = require('../lib/syncCycleAudit');
 
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
@@ -113,6 +118,12 @@ function createSyncWorker(ctx) {
   // ok:null = never attempted this session (NOT a failed push). ok:false only after a real failure.
   let _lastPushStats = { attempted: 0, written: 0, ok: null, at: null, error: null };
   let _lastError = null;
+  let _lastCycleAt = null;
+  let _lastSkipReason = null;
+  let _lastSkipDetail = null;
+  let _lastSkipLogAt = 0;
+  let _lastSkipLogReason = null;
+  const SKIP_ATTEMPT_LOG_COOLDOWN_MS = 60_000;
   const rateLimitGate = createRateLimitGate({
     cooldownMs: (ctx && ctx.rateLimitCooldownMs) || RATE_LIMIT_COOLDOWN_MS,
   });
@@ -126,6 +137,64 @@ function createSyncWorker(ctx) {
 
   function notifyRenderer(payload) {
     if (ctx.sendToRenderer) ctx.sendToRenderer('sync-status-changed', payload);
+  }
+
+  /**
+   * Every cycle — including hard skips — must leave an auditable heartbeat so
+   * Settings / diagnostics never go silent for days (Mac Air-2 2026-09 class).
+   */
+  function recordCycleOutcome(reason, detail) {
+    const heartbeat = buildCycleHeartbeat({
+      at: new Date().toISOString(),
+      reason,
+      detail,
+      rateLimitRemainingMs: rateLimitGate.remainingMs(),
+      connectivity: _connectivityState,
+    });
+    _lastCycleAt = heartbeat.lastSyncCycleAt;
+    _lastSkipReason = heartbeat.lastSyncSkipReason;
+    _lastSkipDetail = heartbeat.lastSyncSkipDetail;
+    if (isHardSkipReason(reason) || reason === SYNC_SKIP_REASONS.ERROR) {
+      _lastError = detail || heartbeat.lastSyncSkipDetail || _lastError;
+    }
+    if (ctx.persistSyncCycle) {
+      try {
+        ctx.persistSyncCycle(heartbeat);
+      } catch (e) {
+        console.warn('[SyncWorker] persistSyncCycle failed:', e && e.message ? e.message : e);
+      }
+    }
+    // Persist heartbeat every skip; log sync_attempts at most once/minute per reason
+    // so a 5-minute 429 gate does not fill the 100-row attempts table.
+    if (ctx.logSyncAttempt && isHardSkipReason(reason)) {
+      const now = Date.now();
+      const sameReason = _lastSkipLogReason === reason;
+      if (!sameReason || now - _lastSkipLogAt >= SKIP_ATTEMPT_LOG_COOLDOWN_MS) {
+        _lastSkipLogAt = now;
+        _lastSkipLogReason = reason;
+        try {
+          ctx.logSyncAttempt(
+            generateCorrelationId(),
+            'cycle',
+            0,
+            false,
+            heartbeat.lastSyncSkipReason + (detail ? ': ' + String(detail).slice(0, 200) : '')
+          );
+        } catch (_) {}
+      }
+    }
+    notifyRenderer({
+      status: isHardSkipReason(reason) ? 'error' : 'synced',
+      lastError: _lastError,
+      retryable: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.API_UNREACHABLE,
+      rateLimited: reason === SYNC_SKIP_REASONS.RATE_LIMITED,
+      rateLimitRemainingMs: rateLimitGate.remainingMs(),
+      authRequired: reason === SYNC_SKIP_REASONS.AUTH_REQUIRED,
+      lastSyncCycleAt: _lastCycleAt,
+      lastSyncSkipReason: _lastSkipReason,
+      connectivity: _connectivityState,
+    });
+    return heartbeat;
   }
 
   /**
@@ -497,37 +566,58 @@ function createSyncWorker(ctx) {
    * Health check no longer blocks processing — only 'offline' and 'auth_required'
    * are hard stops. 'internet_available_api_unreachable' still attempts push
    * (the per-item error handling will decide if it's truly unreachable).
+   *
+   * CRITICAL: every exit path records a durable cycle heartbeat (including skips).
+   * Empty-cloud auto-heal runs AFTER the in-progress lock is released so drain
+   * cycles can push (nested runCycle would no-op on _inProgress).
    */
   async function runCycle() {
-    if (_inProgress) return;
+    if (_inProgress) {
+      // Do not overwrite a live cycle's heartbeat with in_progress spam every 10s.
+      return { skipped: true, reason: SYNC_SKIP_REASONS.IN_PROGRESS };
+    }
     _inProgress = true;
+    let outcomeReason = SYNC_SKIP_REASONS.OK;
+    let outcomeDetail = null;
+    let pushed = 0;
+    let pullResult = null;
+    let considerHeal = false;
     try {
       if (rateLimitGate.isBlocked()) {
-        _lastError = rateLimitGate.reason() || 'Too many requests. Please try again later.';
-        notifyRenderer({
-          status: 'error',
-          lastError: _lastError,
-          retryable: true,
-          rateLimited: true,
-          rateLimitRemainingMs: rateLimitGate.remainingMs(),
-        });
-        return;
+        outcomeReason = SYNC_SKIP_REASONS.RATE_LIMITED;
+        outcomeDetail = rateLimitGate.reason() || 'Too many requests. Please try again later.';
+        _lastError = outcomeDetail;
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason };
       }
       const conn = await checkConnectivity();
       setConnectivity(conn);
-      if (conn === 'offline' || conn === 'auth_required') {
-        return;
+      if (conn === 'offline') {
+        outcomeReason = SYNC_SKIP_REASONS.OFFLINE;
+        outcomeDetail = 'No sync API URL / offline';
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason };
+      }
+      if (conn === 'auth_required') {
+        outcomeReason = SYNC_SKIP_REASONS.AUTH_REQUIRED;
+        outcomeDetail = 'Activate licence / sign in to sync';
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason };
       }
       await ensureCanonicalKeyOnce();
       recoverStuckItems();
-      await processBatch();
+      const batch = await processBatch();
+      pushed = (batch && batch.processed) || 0;
       if (rateLimitGate.isBlocked()) {
         // Do not spam /api/sync/pull into the same 120/hour budget after a 429.
-        return;
+        outcomeReason = SYNC_SKIP_REASONS.RATE_LIMITED;
+        outcomeDetail = rateLimitGate.reason() || _lastError || 'Too many requests';
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason, pushed };
       }
       if (ctx.syncPull) {
         let pullFailed = false;
-        const pullResult = await ctx.syncPull().catch((e) => {
+        pullResult = await ctx.syncPull().catch((e) => {
           pullFailed = true;
           _lastError = e && e.message ? e.message : String(e);
           rateLimitGate.noteError(e);
@@ -563,17 +653,121 @@ function createSyncWorker(ctx) {
             }
           } catch (_) {}
         }
+        if (pullFailed) {
+          outcomeReason = rateLimitGate.isBlocked()
+            ? SYNC_SKIP_REASONS.RATE_LIMITED
+            : SYNC_SKIP_REASONS.ERROR;
+          outcomeDetail = _lastError;
+        } else if (pushed > 0) {
+          outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
+          considerHeal = true;
+        } else if (pullResult && (pullResult.pulled > 0 || pullResult.received > 0)) {
+          outcomeReason = SYNC_SKIP_REASONS.OK_PULLED;
+          considerHeal = true;
+        } else {
+          outcomeReason = SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
+          considerHeal = true;
+        }
+      } else if (pushed > 0) {
+        outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
+        considerHeal = true;
+      } else {
+        outcomeReason = SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
+        considerHeal = true;
       }
+
+      // Record pre-heal heartbeat so skips/success are visible even if heal is slow.
+      if (!considerHeal || !ctx.maybeEmptyCloudAutoHeal) {
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+      }
+      return {
+        skipped: false,
+        reason: outcomeReason,
+        pushed,
+        pullResult,
+        _considerHeal: considerHeal,
+        _outcomeReason: outcomeReason,
+        _outcomeDetail: outcomeDetail,
+      };
+    } catch (e) {
+      outcomeReason = SYNC_SKIP_REASONS.ERROR;
+      outcomeDetail = e && e.message ? e.message : String(e);
+      _lastError = outcomeDetail;
+      recordCycleOutcome(outcomeReason, outcomeDetail);
+      return { skipped: false, reason: outcomeReason, error: outcomeDetail };
     } finally {
       _inProgress = false;
     }
   }
 
+  /**
+   * Wrapper: core cycle then empty-cloud auto-heal with the lock released.
+   * Pass { skipHeal: true } from drainPendingSyncUploads to avoid recursion.
+   */
+  async function runCyclePublic(opts) {
+    const skipHeal = !!(opts && opts.skipHeal);
+    const result = await runCycle();
+    if (!result || !result._considerHeal) {
+      return result;
+    }
+    if (skipHeal || !ctx.maybeEmptyCloudAutoHeal) {
+      recordCycleOutcome(result._outcomeReason, result._outcomeDetail);
+      return {
+        skipped: false,
+        reason: result._outcomeReason,
+        pushed: result.pushed,
+        pullResult: result.pullResult,
+      };
+    }
+    let outcomeReason = result._outcomeReason || SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
+    let outcomeDetail = result._outcomeDetail || null;
+    try {
+      const heal = await ctx.maybeEmptyCloudAutoHeal({
+        pullResult: result.pullResult,
+        pushed: result.pushed,
+        connectivity: _connectivityState,
+      });
+      if (heal && heal.ran) {
+        if (heal.ok && !heal.skipped) {
+          outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
+          outcomeDetail = 'empty_cloud_heal_verified';
+          _lastError = null;
+        } else if (heal.reason === 'heal_backoff') {
+          outcomeReason = SYNC_SKIP_REASONS.HEAL_BACKOFF;
+          outcomeDetail = heal.error || 'Empty-cloud heal backoff';
+        } else if (heal.skipped) {
+          // keep prior ok reason
+        } else if (heal.ok === false) {
+          outcomeReason = SYNC_SKIP_REASONS.HEAL_PENDING;
+          outcomeDetail = heal.error || heal.code || 'Empty-cloud heal pending';
+          _lastError = outcomeDetail;
+        }
+      }
+    } catch (healErr) {
+      console.warn('[SyncWorker] empty-cloud auto-heal failed:', healErr && healErr.message ? healErr.message : healErr);
+    }
+    recordCycleOutcome(outcomeReason, outcomeDetail);
+    return {
+      skipped: false,
+      reason: outcomeReason,
+      pushed: result.pushed,
+      pullResult: result.pullResult,
+    };
+  }
+
+  /**
+   * Wrapper that runs the core cycle then empty-cloud auto-heal with the lock released.
+   * @deprecated internal name kept briefly — use runCyclePublic via export.
+   */
+  async function runCycleWithHeal() {
+    return runCyclePublic();
+  }
+
   function start() {
     if (_timer) return;
     _recoverBlockedOnStartup();
-    runCycle().catch(() => {});
-    _timer = setInterval(() => runCycle().catch(() => {}), SYNC_POLL_INTERVAL_MS);
+    runCyclePublic().catch(() => {});
+    _timer = setInterval(() => runCyclePublic().catch(() => {}), SYNC_POLL_INTERVAL_MS);
   }
 
   /** On app start, reset all blocked items to pending once. A new app version
@@ -605,7 +799,7 @@ function createSyncWorker(ctx) {
     if (_scheduleSoonTimer) return;
     _scheduleSoonTimer = setTimeout(() => {
       _scheduleSoonTimer = null;
-      runCycle().catch(() => {});
+      runCyclePublic().catch(() => {});
     }, SCHEDULE_SOON_DEBOUNCE_MS);
   }
 
@@ -647,6 +841,9 @@ function createSyncWorker(ctx) {
       lastVerifiedCloudPushAt: _lastVerifiedCloudPushAt,
       lastPush: { ..._lastPushStats },
       rateLimit: rateLimitGate.snapshot(),
+      lastSyncCycleAt: _lastCycleAt,
+      lastSyncSkipReason: _lastSkipReason,
+      lastSyncSkipDetail: _lastSkipDetail,
       queueItems,
       conflictItems,
     };
@@ -690,6 +887,18 @@ function createSyncWorker(ctx) {
     console.info('[SyncWorker] Runtime state reset:', reason || 'manual');
   }
 
+  /** After licence activation: clear auth sticky state and resume immediately. */
+  function notifyAuthRecovered() {
+    if (_connectivityState === 'auth_required') {
+      setConnectivity('unknown');
+    }
+    rateLimitGate.clear();
+    _lastError = null;
+    _lastSkipReason = null;
+    _lastSkipDetail = null;
+    scheduleSoon();
+  }
+
   /** Wait for an in-flight runCycle to finish (Full re-sync must not race cursor). */
   async function waitUntilIdle(timeoutMs = 60000) {
     const limit = Math.max(0, Number(timeoutMs) || 0);
@@ -709,10 +918,11 @@ function createSyncWorker(ctx) {
     stop,
     enqueue,
     scheduleSoon,
-    runCycle,
+    runCycle: runCyclePublic,
     getDiagnostics,
     forceRetryAll,
     resetRuntimeState,
+    notifyAuthRecovered,
     waitUntilIdle,
     getConnectivity: () => _connectivityState,
   };
@@ -739,4 +949,5 @@ module.exports = {
   mayClearOutboxEntry,
   isAmbiguousPushAck,
   buildMutationId,
+  SYNC_SKIP_REASONS,
 };
