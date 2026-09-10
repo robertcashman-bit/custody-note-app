@@ -180,7 +180,7 @@ describe('Data & Sync health + emergency index', () => {
     assert.match(mainJs, /lastVerifiedCloudInventory/);
     assert.match(mainJs, /persistCloudInventoryAfterPull/);
     assert.match(appJs, /cross-device-sync-health/);
-    assert.match(appJs, /Cloud empty — re-upload|emptyCloudAlarm/);
+    assert.match(appJs + fs.readFileSync(path.join(root, 'lib/footerStatusChips.js'), 'utf8'), /Cloud empty — re-upload|emptyCloudAlarm/);
   });
 });
 
@@ -402,6 +402,39 @@ describe('Recovery heuristics', () => {
         pullEverCompleted: true,
       }),
       'failed'
+    );
+  });
+
+  it('healthy pull-only with sticky lastPushOk=false remains synced phase', () => {
+    assert.strictEqual(
+      deriveSyncPhase({
+        totalRecords: 67,
+        pendingChanges: 0,
+        dirtyPushCount: 0,
+        lastPullReceived: 0,
+        pullEverCompleted: true,
+        pulledFromEpoch: false,
+        lastVerifiedCloudInventory: 67,
+        lastVerifiedCloudPushAt: '2026-09-10T12:00:00.000Z',
+        lastPushOk: false,
+        lastError: 'stale',
+      }),
+      'synced'
+    );
+    assert.strictEqual(
+      isSyncStatusHealthy({
+        totalRecords: 67,
+        pendingChanges: 0,
+        dirtyPushCount: 0,
+        lastPullReceived: 0,
+        pullEverCompleted: true,
+        pulledFromEpoch: false,
+        lastVerifiedCloudInventory: 67,
+        lastVerifiedCloudPushAt: '2026-09-10T12:00:00.000Z',
+        lastPushOk: false,
+        lastError: 'stale',
+      }),
+      true
     );
   });
 });
@@ -834,15 +867,16 @@ describe('Re-upload / restore product wiring', () => {
   });
 
   it('UI + preload expose re-upload and recovery surfaces', () => {
+    const footerChipsJs = fs.readFileSync(path.join(root, 'lib/footerStatusChips.js'), 'utf8');
     assert.match(preloadJs, /syncReuploadAll/);
     assert.match(indexHtml, /btn-sync-reupload-all/);
     assert.match(indexHtml, /home-empty-db-recovery/);
     assert.match(appJs, /Rate limited/);
-    assert.match(appJs, /Cloud empty — re-upload|Cloud may be empty|DB empty/);
+    assert.match(footerChipsJs, /Cloud empty — re-upload|Cloud may be empty|DB empty/);
     assert.match(appJs, /still on this device.*cloud has none|Re-upload all — do not use Full re-sync/i);
-    assert.match(appJs, /Backup folder missing/);
+    assert.match(footerChipsJs, /Backup folder missing/);
     assert.match(appJs, /no remote records for this licence/i);
-    assert.match(appJs, /Waiting for sync key|noMasterKeySkipped/);
+    assert.match(footerChipsJs, /Waiting for sync key|noMasterKeySkipped/);
   });
 
   it('restore bumps sync_version for all non-deleted rows', () => {
