@@ -122,11 +122,21 @@ describe('Force Save status model — local vs central', () => {
   it('persist-and-backup attempts central drain and returns forceSaveState', () => {
     const idx = mainJs.indexOf("ipcMain.handle('persist-and-backup'");
     assert.ok(idx > 0);
-    const chunk = mainJs.slice(idx, idx + 8000);
+    const chunk = mainJs.slice(idx, idx + 9000);
     assert.match(chunk, /buildForceSaveResult/);
     assert.match(chunk, /drainPendingSyncUploads/);
     assert.match(chunk, /centralConfirmed/);
     assert.match(chunk, /forceSaveState/);
+    assert.match(chunk, /evaluatePostFlushDurability/);
+    assert.match(chunk, /verifyEncryptedBackupFile/);
+  });
+
+  it('flushDbAsyncBounded restores dirty on timeout via flushDirtyPolicy', () => {
+    assert.match(mainJs, /shouldRestoreDirtyAfterFlush/);
+    assert.match(mainJs, /flushDbAsyncBounded/);
+    const flushPolicy = fs.readFileSync(path.join(__dirname, '..', 'lib', 'flushDirtyPolicy.js'), 'utf8');
+    assert.match(flushPolicy, /flush_timed_out/);
+    assert.match(flushPolicy, /evaluatePostFlushDurability/);
   });
 
   it('UI avoids ✓ Saved button label after Force Save', () => {
