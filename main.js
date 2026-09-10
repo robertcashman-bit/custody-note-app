@@ -142,6 +142,8 @@ const {
   markHealAttemptStarted,
   markHealSuccess,
   markHealFailure,
+  isHealRunningStale,
+  isHealInProgress,
 } = require('./lib/emptyCloudAutoHeal');
 const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
 const { buildLocalCloudIntegrityReport } = require('./lib/localCloudIntegrity');
@@ -2697,7 +2699,20 @@ function getEmptyCloudHealState() {
     const row = dbGet("SELECT value FROM settings WHERE key=?", [EMPTY_CLOUD_HEAL_SETTINGS_KEY]);
     if (!row || !row.value) return buildHealState();
     const parsed = JSON.parse(row.value);
-    return buildHealState(parsed);
+    const state = buildHealState(parsed);
+    // Crash/quit mid-heal leaves status=running forever — expire so probe/heal
+    // and the footer are not stuck, and auto-heal can run again after backoff.
+    if (isHealRunningStale(state, Date.now())) {
+      const expired = markHealFailure(state, {
+        nowIso: new Date().toISOString(),
+        error: 'Heal interrupted (stale running state)',
+        code: 'STALE_RUNNING',
+        nowMs: Date.now(),
+      });
+      setEmptyCloudHealState(expired);
+      return expired;
+    }
+    return state;
   } catch (_) {
     return buildHealState();
   }
@@ -2748,7 +2763,8 @@ async function maybeEmptyCloudAutoHeal(_opts = {}) {
     lastVerifiedCloudInventory: inventory,
     lastVerifiedCloudPushAt: diag.lastVerifiedCloudPushAt || null,
     lastProbeAt: healState.lastProbeAt,
-    healInProgress: healState.status === 'running',
+    healState,
+    healInProgress: isHealInProgress(healState, now),
     healBackoffUntil: healState.backoffUntil,
     now,
   });
@@ -2787,11 +2803,14 @@ async function maybeEmptyCloudAutoHeal(_opts = {}) {
   }));
 
   const received = probePull && probePull.received != null ? probePull.received : 0;
+  // Must use the actual pull flag — a raced incremental received=0 is not proof of empty cloud.
+  const probeFromEpoch = !!(probePull && probePull.pulledFromEpoch);
   const healDecision = shouldAutoHealEmptyCloud({
     localCount,
     cloudReceivedFromEpoch: received,
-    pulledFromEpoch: true,
+    pulledFromEpoch: probeFromEpoch,
     healAttemptCount: healState.attemptCount,
+    healState,
     healInProgress: false,
     healBackoffUntil: healState.backoffUntil,
     now: Date.now(),
@@ -2887,6 +2906,26 @@ async function maybeEmptyCloudAutoHeal(_opts = {}) {
       code: 'VERIFY_PULL_FAILED',
       error: pullErr && pullErr.message ? pullErr.message : 'Verify failed',
       reason: 'verify_failed',
+    };
+  }
+
+  // Raced incremental pull (cursor advanced by concurrent cycle) must not count as empty cloud.
+  if (!verify.pulledFromEpoch) {
+    markAllLocalRecordsForCloudReupload();
+    running = markHealFailure(running, {
+      nowIso: new Date().toISOString(),
+      error: 'Verify pull was not from epoch (possible concurrent sync race)',
+      code: 'VERIFY_NOT_FROM_EPOCH',
+      nowMs: Date.now(),
+    });
+    setEmptyCloudHealState(running);
+    return {
+      ran: true,
+      ok: false,
+      code: 'VERIFY_NOT_FROM_EPOCH',
+      error: 'Verify pull was not from epoch',
+      reason: 'verify_not_from_epoch',
+      verifyReceived: verify.received || 0,
     };
   }
 
