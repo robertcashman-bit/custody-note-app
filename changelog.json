@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.91",
+      "version": "1.9.92",
       "date": "2026-09-10",
       "latest": true,
+      "changes": [
+        "Data-safety verification: expanded CI gate with seeded chaos, never-event invariant, 1000+ canary scale, Mac/Windows account-level SoT proof, Force Save local-vs-central matrix, startup circuit breakers",
+        "Durability: flush timeout / write failure restores dirty flag so quit cannot claim a durable save after an unconfirmed disk write; Force Save verifies on-disk CNDB magic before Safe locally",
+        "Push ack: reject padded/wrong written syncId arrays; only clear outbox rows whose syncIds were acknowledged",
+        "Docs: VERIFICATION-REPORT with A–N evidence; architecture map confirms licence-scoped central SoT (not per-device cloud DBs)"
+      ]
+    },
+    {
+      "version": "1.9.91",
+      "date": "2026-09-10",
+      "latest": false,
       "changes": [
         "Cloud sync: end silent death — every sync cycle (including auth_required / rate_limited / offline skips) now persists lastSyncCycleAt + skip reason and logs cycle attempts so Settings / diagnostics never go quiet for days",
         "Empty-cloud auto-heal: when this device has local notes but a from-epoch probe proves the cloud is empty (or inventory was never verified after a false ack), automatically re-upload all local records with written ack + verify pull — no hidden button required; backoff-capped; never wipes local data",

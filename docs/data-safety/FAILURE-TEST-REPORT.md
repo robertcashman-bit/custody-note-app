@@ -5,6 +5,9 @@ Negative / failure-path cases the suite and code must continue to reject.
 | Failure injected | Expected behaviour | Test / guard |
 |------------------|--------------------|--------------|
 | Disk flush fails | Attention required; no “Safe locally” | `resolveForceSaveState({ noteDurable:false })` |
+| Flush timeout / ENOSPC | Restore `_dbDirty`; never claim durable | `shouldRestoreDirtyAfterFlush` + `flushDbAsyncBounded` |
+| Post-flush file missing magic | Not durable | `evaluatePostFlushDurability` / `verifyEncryptedBackupFile` |
+| Written ID array padded/wrong | Refuse push ack; outbox retained | `normalizeWrittenAck` + `assertPushAccepted` |
 | Backup folder missing/unwritable | Safe locally + backup warning; never silent success | saveNowResult + backup path tests |
 | Push `ok:true` `written:0` | Dirty retained; outbox not cleared | assertPushAccepted / mayClearOutboxEntry |
 | Push omits `written` | Ambiguous → safe retry | isAmbiguousPushAck |
