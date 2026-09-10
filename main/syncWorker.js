@@ -111,6 +111,8 @@ function generateCorrelationId() {
 function createSyncWorker(ctx) {
   let _timer = null;
   let _inProgress = false;
+  /** Set while empty-cloud auto-heal runs with _inProgress released for nested drain. */
+  let _healInProgress = false;
   let _connectivityState = 'unknown';
   let _lastSyncAt = null;
   let _lastSuccessfulPushAt = 0;
@@ -562,19 +564,19 @@ function createSyncWorker(ctx) {
   }
 
   /**
-   * Main loop: advisory health check, recover stuck items, process batch, pull.
-   * Health check no longer blocks processing — only 'offline' and 'auth_required'
-   * are hard stops. 'internet_available_api_unreachable' still attempts push
-   * (the per-item error handling will decide if it's truly unreachable).
-   *
    * CRITICAL: every exit path records a durable cycle heartbeat (including skips).
    * Empty-cloud auto-heal runs AFTER the in-progress lock is released so drain
-   * cycles can push (nested runCycle would no-op on _inProgress).
+   * cycles can push (nested runCycle would no-op on _inProgress). Concurrent
+   * timer/sync-now/Full re-sync cycles are blocked via _healInProgress instead.
    */
-  async function runCycle() {
+  async function runCycle(opts) {
+    const allowDuringHeal = !!(opts && opts.allowDuringHeal);
     if (_inProgress) {
       // Do not overwrite a live cycle's heartbeat with in_progress spam every 10s.
       return { skipped: true, reason: SYNC_SKIP_REASONS.IN_PROGRESS };
+    }
+    if (_healInProgress && !allowDuringHeal) {
+      return { skipped: true, reason: SYNC_SKIP_REASONS.HEAL_RUNNING };
     }
     _inProgress = true;
     let outcomeReason = SYNC_SKIP_REASONS.OK;
@@ -702,11 +704,14 @@ function createSyncWorker(ctx) {
 
   /**
    * Wrapper: core cycle then empty-cloud auto-heal with the lock released.
-   * Pass { skipHeal: true } from drainPendingSyncUploads to avoid recursion.
+   * Pass { skipHeal: true } from drainPendingSyncUploads to avoid recursion
+   * and to allow nested push cycles while _healInProgress is set.
    */
   async function runCyclePublic(opts) {
     const skipHeal = !!(opts && opts.skipHeal);
-    const result = await runCycle();
+    const result = await runCycle({
+      allowDuringHeal: skipHeal,
+    });
     if (!result || !result._considerHeal) {
       return result;
     }
@@ -721,6 +726,7 @@ function createSyncWorker(ctx) {
     }
     let outcomeReason = result._outcomeReason || SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
     let outcomeDetail = result._outcomeDetail || null;
+    _healInProgress = true;
     try {
       const heal = await ctx.maybeEmptyCloudAutoHeal({
         pullResult: result.pullResult,
@@ -745,6 +751,8 @@ function createSyncWorker(ctx) {
       }
     } catch (healErr) {
       console.warn('[SyncWorker] empty-cloud auto-heal failed:', healErr && healErr.message ? healErr.message : healErr);
+    } finally {
+      _healInProgress = false;
     }
     recordCycleOutcome(outcomeReason, outcomeDetail);
     return {
@@ -836,7 +844,8 @@ function createSyncWorker(ctx) {
       lastSyncAt: lastSync && lastSync.value !== '1970-01-01T00:00:00.000Z' ? lastSync.value : _lastSyncAt,
       connectivity: _connectivityState,
       lastError: _lastError,
-      inProgress: _inProgress,
+      inProgress: _inProgress || _healInProgress,
+      healInProgress: _healInProgress,
       lastSuccessfulPushAt: _lastSuccessfulPushAt || null,
       lastVerifiedCloudPushAt: _lastVerifiedCloudPushAt,
       lastPush: { ..._lastPushStats },
@@ -879,6 +888,7 @@ function createSyncWorker(ctx) {
    */
   function resetRuntimeState(reason) {
     _inProgress = false;
+    _healInProgress = false;
     _lastError = null;
     _lastSuccessfulPushAt = 0;
     _canonicalKeyDone = false;
@@ -899,18 +909,18 @@ function createSyncWorker(ctx) {
     scheduleSoon();
   }
 
-  /** Wait for an in-flight runCycle to finish (Full re-sync must not race cursor). */
+  /** Wait for an in-flight runCycle / empty-cloud heal to finish (Full re-sync must not race cursor). */
   async function waitUntilIdle(timeoutMs = 60000) {
     const limit = Math.max(0, Number(timeoutMs) || 0);
     const start = Date.now();
-    while (_inProgress) {
+    while (_inProgress || _healInProgress) {
       if (Date.now() - start >= limit) {
         console.warn('[SyncWorker] waitUntilIdle timed out after', limit, 'ms');
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    return !_inProgress;
+    return !_inProgress && !_healInProgress;
   }
 
   return {

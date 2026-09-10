@@ -24,7 +24,11 @@ const {
   markHealAttemptStarted,
   markHealSuccess,
   markHealFailure,
+  isHealRunningStale,
+  isHealInProgress,
   MAX_HEAL_ATTEMPTS,
+  STALE_HEAL_RUNNING_MS,
+  STALE_CYCLE_PROBE_MS,
 } = require('../lib/emptyCloudAutoHeal');
 const {
   deriveSyncPhase,
@@ -257,6 +261,69 @@ describe('Empty-cloud auto-heal decisions', () => {
     );
   });
 
+  it('applies probe cooldown when inventory is already 0', () => {
+    const now = Date.now();
+    assert.strictEqual(
+      shouldProbeCloudFromEpoch({
+        localCount: 65,
+        dirtyCount: 0,
+        pendingCount: 0,
+        lastVerifiedCloudInventory: 0,
+        lastProbeAt: new Date(now - 60_000).toISOString(),
+        now,
+      }).reason,
+      'probe_cooldown'
+    );
+    assert.strictEqual(
+      shouldProbeCloudFromEpoch({
+        localCount: 65,
+        dirtyCount: 0,
+        pendingCount: 0,
+        lastVerifiedCloudInventory: 0,
+        lastProbeAt: new Date(now - STALE_CYCLE_PROBE_MS - 1000).toISOString(),
+        now,
+      }).probe,
+      true
+    );
+  });
+
+  it('expires stuck running heal so probe/heal are not blocked forever', () => {
+    const now = Date.now();
+    const fresh = markHealAttemptStarted({ attemptCount: 0 }, {
+      nowIso: new Date(now).toISOString(),
+      localCount: 65,
+    });
+    assert.strictEqual(isHealInProgress(fresh, now), true);
+    assert.strictEqual(isHealRunningStale(fresh, now), false);
+    assert.strictEqual(
+      shouldProbeCloudFromEpoch({
+        localCount: 65,
+        dirtyCount: 0,
+        pendingCount: 0,
+        lastVerifiedCloudInventory: 0,
+        healState: fresh,
+        now,
+      }).reason,
+      'heal_in_progress'
+    );
+
+    const staleNow = now + STALE_HEAL_RUNNING_MS + 1000;
+    assert.strictEqual(isHealRunningStale(fresh, staleNow), true);
+    assert.strictEqual(isHealInProgress(fresh, staleNow), false);
+    assert.strictEqual(
+      shouldProbeCloudFromEpoch({
+        localCount: 65,
+        dirtyCount: 0,
+        pendingCount: 0,
+        lastVerifiedCloudInventory: 0,
+        healState: fresh,
+        lastProbeAt: null,
+        now: staleNow,
+      }).probe,
+      true
+    );
+  });
+
   it('heals only after from-epoch received=0 with local>0', () => {
     assert.strictEqual(
       shouldAutoHealEmptyCloud({
@@ -346,6 +413,55 @@ describe('Empty-cloud auto-heal decisions', () => {
     await worker.runCycle();
     assert.strictEqual(healCalls, 1);
     assert.ok(worker.getDiagnostics().lastSyncCycleAt);
+  });
+
+  it('blocks concurrent cycles during heal but allows skipHeal drain; waitUntilIdle waits for heal', async () => {
+    const db = await initDb();
+    const api = dbApi(db);
+    const now = new Date().toISOString();
+    api.dbRun(
+      `INSERT INTO attendances (sync_id, data, status, created_at, updated_at, client_name, sync_dirty, sync_version)
+       VALUES (?,?,?,?,?,?,0,1)`,
+      ['sid-heal-lock', '{}', 'draft', now, now, 'C']
+    );
+    let releaseHeal;
+    const healGate = new Promise((resolve) => { releaseHeal = resolve; });
+    let concurrentSkip = null;
+    let drainAllowed = false;
+    const worker = createSyncWorker({
+      ...api,
+      db,
+      getSyncApiUrl: () => 'http://127.0.0.1:9',
+      readLicenceData: () => ({ key: 'CN-A-TEST-0532' }),
+      getMachineId: () => 'mac',
+      getMasterKeyHex: () => 'a'.repeat(64),
+      httpPost: async () => ({ ok: true, written: 1 }),
+      httpGetWithTimeout: async () => ({ statusCode: 200 }),
+      syncPull: async () => ({ pulled: 0, received: 0 }),
+      ensureCanonicalKey: async () => ({ ok: true }),
+      persistSyncCycle: () => {},
+      maybeEmptyCloudAutoHeal: async () => {
+        concurrentSkip = await worker.runCycle();
+        const drain = await worker.runCycle({ skipHeal: true });
+        drainAllowed = !drain.skipped;
+        await healGate;
+        return { ran: true, ok: true, reason: 'healed', verifyReceived: 1 };
+      },
+      sendToRenderer: () => {},
+    });
+    const cycle = worker.runCycle();
+    const idlePromise = worker.waitUntilIdle(5000);
+    await new Promise((r) => setTimeout(r, 30));
+    assert.strictEqual(worker.getDiagnostics().healInProgress, true);
+    assert.strictEqual(worker.getDiagnostics().inProgress, true);
+    releaseHeal();
+    await cycle;
+    const idle = await idlePromise;
+    assert.strictEqual(idle, true);
+    assert.strictEqual(concurrentSkip && concurrentSkip.skipped, true);
+    assert.strictEqual(concurrentSkip.reason, SYNC_SKIP_REASONS.HEAL_RUNNING);
+    assert.strictEqual(drainAllowed, true);
+    assert.strictEqual(worker.getDiagnostics().healInProgress, false);
   });
 });
 
