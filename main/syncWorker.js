@@ -40,6 +40,11 @@ const {
   RATE_LIMIT_COOLDOWN_MS,
 } = require('../lib/syncPushAck');
 const { normalizeLicenceKeyForSync } = require('../lib/licenceKeyNormalize');
+const {
+  buildMutationId,
+  mayClearOutboxEntry,
+  isAmbiguousPushAck,
+} = require('../lib/syncMutationId');
 
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
@@ -156,22 +161,53 @@ function createSyncWorker(ctx) {
    *  would succeed, markSynced would fail to find the id, and the newer local
    *  change would never be queued). We now skip entries in 'syncing' so the
    *  in-flight push can complete, then enqueue the new version fresh.
+   *
+   *  Mutation IDs are idempotent per sync_id+sync_version+operation. Ambiguous
+   *  acks must retry with the same mutationId; never dequeue before confirmed ack.
    */
   function enqueue(recordId, operation, payload) {
     if (!ctx.db) return null;
     const id = generateQueueId();
     const now = Date.now();
-    const payloadStr = typeof payload === 'string' ? payload : JSON.stringify(payload || {});
+    const op = operation || 'upsert';
+    let mutationId = null;
+    let rowMeta = null;
+    try {
+      rowMeta = ctx.dbGet(
+        'SELECT sync_id, sync_version FROM attendances WHERE id=?',
+        [recordId]
+      );
+    } catch (_) {}
+    mutationId = buildMutationId({
+      syncId: rowMeta && rowMeta.sync_id,
+      syncVersion: rowMeta && rowMeta.sync_version,
+      operation: op,
+      recordId,
+    });
+    const basePayload = typeof payload === 'string'
+      ? (() => { try { return JSON.parse(payload); } catch (_) { return { raw: payload }; } })()
+      : (payload && typeof payload === 'object' ? { ...payload } : {});
+    basePayload.mutationId = basePayload.mutationId || mutationId;
+    const payloadStr = JSON.stringify(basePayload);
     try {
       // Leave syncing rows alone; delete every other prior entry for this record.
+      // Never delete 'syncing' before ack — that would drop an in-flight mutation.
       ctx.dbRun(
         "DELETE FROM sync_queue WHERE record_id=? AND status IN ('pending','failed','blocked','synced')",
         [String(recordId)]
       );
-      ctx.dbRun(
-        'INSERT INTO sync_queue (id, record_id, operation, payload, created_at, retry_count, last_attempt, status, error) VALUES (?,?,?,?,?,0,?,?,?)',
-        [id, String(recordId), operation || 'upsert', payloadStr, now, now, 'pending', null]
-      );
+      try {
+        ctx.dbRun(
+          'INSERT INTO sync_queue (id, record_id, operation, payload, created_at, retry_count, last_attempt, status, error, mutation_id) VALUES (?,?,?,?,?,0,?,?,?,?)',
+          [id, String(recordId), op, payloadStr, now, now, 'pending', null, mutationId]
+        );
+      } catch (colErr) {
+        // Pre-migration DBs: mutation_id column may be absent — payload still carries it.
+        ctx.dbRun(
+          'INSERT INTO sync_queue (id, record_id, operation, payload, created_at, retry_count, last_attempt, status, error) VALUES (?,?,?,?,?,0,?,?,?)',
+          [id, String(recordId), op, payloadStr, now, now, 'pending', null]
+        );
+      }
       ctx.flushDb && ctx.flushDb();
       return id;
     } catch (e) {
@@ -203,8 +239,14 @@ function createSyncWorker(ctx) {
     ctx.dbRun('UPDATE sync_queue SET status=?, last_attempt=? WHERE id=?', ['syncing', Date.now(), id]);
   }
 
-  /** Mark item synced. Only clears sync_dirty if the version hasn't changed during push. */
-  function markSynced(id, recordId, pushedVersion) {
+  /** Mark item synced. Only clears sync_dirty if the version hasn't changed during push.
+   *  Requires confirmed ack (caller must use assertPushAccepted / mayClearOutboxEntry).
+   */
+  function markSynced(id, recordId, pushedVersion, ackMeta) {
+    if (ackMeta && mayClearOutboxEntry(ackMeta) === false) {
+      console.warn('[SyncWorker] Refusing markSynced without confirmed ack for', id);
+      return false;
+    }
     ctx.dbRun('UPDATE sync_queue SET status=?, error=NULL WHERE id=?', ['synced', id]);
     if (recordId && pushedVersion != null) {
       ctx.dbRun('UPDATE attendances SET sync_dirty=0 WHERE id=? AND sync_version=?', [recordId, pushedVersion]);
@@ -215,6 +257,7 @@ function createSyncWorker(ctx) {
       ctx.resolveSyncConflictsForRecord(recordId, 'local_push_succeeded');
     }
     ctx.flushDb && ctx.flushDb();
+    return true;
   }
 
   /** Mark item failed or blocked. Always increments retry_count to track attempts. */
@@ -286,8 +329,14 @@ function createSyncWorker(ctx) {
       },
       { timeout: SYNC_REQUEST_TIMEOUT_MS, correlationId }
     );
+    if (isAmbiguousPushAck(resp, payloads.length)) {
+      const err = new Error('Push unconfirmed: ambiguous acknowledgement — safe retry');
+      err.code = 'PUSH_INCOMPLETE';
+      err.statusCode = 503;
+      throw err;
+    }
     assertPushAccepted(resp, payloads.length);
-    return payloads;
+    return { payloads, resp };
   }
 
   /**
@@ -307,17 +356,25 @@ function createSyncWorker(ctx) {
       if (items.length === 0) break;
       if (totalProcessed === 0) notifyRenderer({ status: 'syncing' });
       try {
-        const payloads = await pushRecordBatch(items);
+        const batchResult = await pushRecordBatch(items);
+        const payloads = batchResult.payloads || batchResult;
+        const resp = batchResult.resp || { ok: true, written: payloads.length };
+        const writtenCount = Array.isArray(resp.written) ? resp.written.length : Number(resp.written);
         for (const payload of payloads) {
-          markSynced(payload.queueId, payload.recordId, payload.capturedVersion);
-          totalProcessed++;
+          const cleared = markSynced(payload.queueId, payload.recordId, payload.capturedVersion, {
+            confirmed: true,
+            ambiguous: false,
+            written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
+            sentCount: payloads.length,
+          });
+          if (cleared !== false) totalProcessed++;
         }
         _lastSyncAt = new Date().toISOString();
         _lastSuccessfulPushAt = Date.now();
         _lastVerifiedCloudPushAt = new Date().toISOString();
         _lastPushStats = {
           attempted: payloads.length,
-          written: payloads.length,
+          written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
           ok: true,
           at: _lastVerifiedCloudPushAt,
           error: null,
@@ -663,4 +720,7 @@ module.exports = {
   BLOCKED_RECOVERY_COOLDOWN_MS,
   MAX_BLOCKED_AUTO_RECOVERIES,
   RATE_LIMIT_COOLDOWN_MS,
+  mayClearOutboxEntry,
+  isAmbiguousPushAck,
+  buildMutationId,
 };
