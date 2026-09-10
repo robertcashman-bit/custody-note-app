@@ -5,10 +5,12 @@
       "date": "2026-09-10",
       "latest": true,
       "changes": [
-        "Data-safety verification: expanded CI gate with seeded chaos, never-event invariant, 1000+ canary scale, Mac/Windows account-level SoT proof, Force Save local-vs-central matrix, startup circuit breakers",
-        "Durability: flush timeout / write failure restores dirty flag so quit cannot claim a durable save after an unconfirmed disk write; Force Save verifies on-disk CNDB magic before Safe locally",
+        "Data-safety verification GREEN: Force Save drain sized from outbox (no unsafe maxCycles:3), background continuation flag, never false Synced on partial drain",
+        "Force-quit / SIGKILL flush durability harness; monitor fail-closed gate wired into sync pull; server PITR client contracts (empty/failed ≠ wipe; restore scoring)",
+        "Expanded CI gate with seeded chaos, never-event invariant, 1000+ canaries, Mac/Windows account-level SoT proof, Force Save local-vs-central matrix, startup circuit breakers",
+        "Durability: flush timeout / write failure restores dirty flag; Force Save verifies on-disk CNDB magic before Safe locally",
         "Push ack: reject padded/wrong written syncId arrays; only clear outbox rows whose syncIds were acknowledged",
-        "Docs: VERIFICATION-REPORT with A–N evidence; architecture map confirms licence-scoped central SoT (not per-device cloud DBs)"
+        "Docs: VERIFICATION-REPORT Overall GREEN with NON-BLOCKING residuals (historical Costachi; website live suite access)"
       ]
     },
     {

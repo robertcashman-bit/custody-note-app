@@ -1,7 +1,5 @@
 # CHANGES — Data safety (1.9.92)
 
-- Expanded `test:data-safety` CI gate: silent-death, stress, cross-device SoT, fault-injection, chaos (seed 20260910), 1000 canaries, flush policy.
-- Fixed flush timeout dirty-flag restore (`flushDbAsyncBounded`).
-- Force Save post-flush CNDB magic verification before “Safe locally”.
-- Push ack rejects wrong/padded written syncId arrays; clear only matching outbox rows.
-- Documentation: `VERIFICATION-REPORT.md` (A–N), architecture map, commercial readiness AMBER.
+- GREEN closeout: Force Save drain policy (sized cycles + background continue); SIGKILL flush durability; monitor fail-closed; server PITR client contracts.
+- Earlier: flush timeout dirty restore; CNDB magic on Force Save; written-ID ack; chaos/canary CI gate.
+- Docs: VERIFICATION-REPORT Overall **GREEN**; NON-BLOCKING = historical Costachi + website live suite access.

@@ -2,9 +2,8 @@
 
 | Command | Result |
 |---------|--------|
-| `npm run test:data-safety` (run 1–3) | 180 pass / 0 fail |
-| `npm run test:data-safety` (final + wiring) | 181 pass / 0 fail |
+| `npm run test:data-safety` (GREEN closeout) | **193 pass / 0 fail** |
 
-Harness additions: `tests/dataSafety.faultInjection.test.js`, `tests/dataSafety.flushPolicy.test.js`, `lib/dataSafetyHarness.js`, `lib/flushDirtyPolicy.js`.
+Harness: architecture, fault-injection, flush policy, green closeout (drain / force-quit / monitors / PITR contracts), silent-death, stress, cross-device, durability.
 
-Full narrative: `docs/data-safety/VERIFICATION-REPORT.md`.
+Narrative: `docs/data-safety/VERIFICATION-REPORT.md`.
