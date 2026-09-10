@@ -174,10 +174,12 @@ Do not claim production fixed until Mac verify pull and Windows Full re-sync bot
 
 ## Remaining risks
 
-- Server returning a lying `written: N` equal to sent without S3 persistence — mitigated by verify pull on re-upload (`CLOUD_EMPTY_AFTER_PUSH`).
-- Website API / RLS changes require private `custody-note-website` access (out of scope when inaccessible).
+- Server returning a lying `written: N` equal to sent without S3 persistence — mitigated by verify pull on re-upload (`CLOUD_EMPTY_AFTER_PUSH`) and by **empty-cloud auto-heal** (v1.9.91) which probes from epoch when local is full and inventory is unknown/0, then re-uploads with verify.
+- Silent skip / days-without-attempts class — closed in v1.9.91 via durable `lastSyncCycleAt` + skip reason on every cycle (including `auth_required` / `rate_limited` / `offline`).
+- Website API / RLS changes require private `custody-note-website` access (out of scope when inaccessible). Client does not require an API contract change for this fix.
 - Yesterday’s note absent from Mac, Windows, and cloud cannot be fabricated.
 - Pre-1.9.82 clients can still clear dirty on incomplete push until updated.
+- Pre-1.9.91 clients can still go silent on early skip without heartbeat until updated.
 
 ---
 
