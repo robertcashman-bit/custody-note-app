@@ -5539,22 +5539,27 @@ var REQUIRED_FIELD_KEYS = [
     var durable = !(opts && opts.durable === false);
     if (durable) _lastDbWrite = now.toISOString();
     var pendingSync = !!(opts && opts.pendingSync);
+    var centralConfirmed = !!(opts && opts.centralConfirmed);
     var dirty = !!(opts && opts.dirty);
     var txt;
     if (dirty) {
       txt = 'Unsaved changes…';
+    } else if (durable && centralConfirmed) {
+      txt = '\u2713 Safe locally + central ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
     } else if (durable) {
-      txt = '\u2713 Saved to disk ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
-      if (pendingSync) txt += ' \u00b7 pending sync';
+      txt = '\u2713 Safe locally ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+      if (pendingSync) txt += ' \u00b7 pending central sync';
     } else {
       txt = 'Not on disk yet — use Save now';
     }
     var title = dirty
       ? 'Edits are on screen only until the next successful disk write.'
       : (durable
-        ? (pendingSync
-          ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Cloud sync still pending.'
-          : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.')
+        ? (centralConfirmed
+          ? 'Durable on this computer and acknowledged by the central account store at ' + (_lastDbWrite || 'unknown') + '.'
+          : (pendingSync
+            ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Central account sync still pending.'
+            : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.'))
         : 'Save reached memory but disk flush did not complete — press Save now.');
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
@@ -5573,8 +5578,10 @@ var REQUIRED_FIELD_KEYS = [
     }
     var savedEl = document.getElementById('form-last-saved');
     if (savedEl && durable && !dirty) {
-      savedEl.textContent = 'Last disk save ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-        (pendingSync ? ' · pending sync' : '');
+      savedEl.textContent = centralConfirmed
+        ? ('Safe locally + central ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+        : ('Safe locally ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+          (pendingSync ? ' · pending central sync' : ''));
     } else if (savedEl && dirty) {
       savedEl.textContent = 'Unsaved changes';
     }
@@ -16194,10 +16201,15 @@ pdfAuditFooterHtml(d, settings) +
         else if (window.api && window.api.persistAndBackup) {
           quietSave();
           window.api.persistAndBackup().then(function(res) {
-            if (res && res.noteDurable && res.backupOk) {
-              showToast((res.userMessage && res.userMessage.message) || 'Saved to this computer and backed up', 'success', 7000);
+            if (res && res.userMessage && res.userMessage.message) {
+              var lvl = res.userMessage.level || (res.noteDurable ? 'success' : 'error');
+              showToast(res.userMessage.message, lvl, 8000);
+            } else if (res && res.noteDurable && res.centralConfirmed) {
+              showToast('Safe locally + central copy confirmed', 'success', 7000);
+            } else if (res && res.noteDurable && res.backupOk) {
+              showToast('Safe locally. Backup written. Central confirmation pending.', 'success', 7000);
             } else if (res && res.noteDurable) {
-              showToast((res.userMessage && res.userMessage.message) || 'Note saved; backup failed', 'warning', 9000);
+              showToast('Safe locally; backup or sync not fully confirmed', 'warning', 9000);
             } else {
               showToast((res && res.userMessage && res.userMessage.message) || 'Save now failed', 'error', 9000);
             }
@@ -17689,25 +17701,43 @@ pdfAuditFooterHtml(d, settings) +
         Promise.resolve(apiFn()).then(function(res) {
           if (!res || typeof res === 'string') {
             // Legacy flush-and-backup may still return a string path on older builds.
-            showToast('Saved to this computer. Backup written.', 'success', 6000);
+            showToast('Safe locally. Backup written. Central confirmation pending.', 'success', 6000);
             showAutoSaveIndicator({ durable: true, pendingSync: true });
-            finishBtn('\u2713 Saved', 2500);
+            finishBtn('Safe locally', 2500);
             return;
           }
           var um = res.userMessage || null;
+          var headline = (um && um.headline) || null;
+          var state = (res.forceSaveState || (um && um.state) || '');
+          if (res.noteDurable && res.centralConfirmed && res.backupOk !== false) {
+            var okCentral = (um && um.message) || 'Safe locally + central copy confirmed';
+            showToast(okCentral, 'success', 8000);
+            showAutoSaveIndicator({ durable: true, pendingSync: false, centralConfirmed: true });
+            finishBtn(headline || 'Central OK', 2800);
+            try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
+            return;
+          }
           if (res.noteDurable && res.backupOk) {
             var okMsg = (um && um.message) || (
-              'Saved to this computer. Backup written to ' + (res.backupPath || res.effectiveBackupFolder || 'Backups')
+              'Safe locally. Backup written to ' + (res.backupPath || res.effectiveBackupFolder || 'Backups')
             );
-            showToast(okMsg, 'success', 8000);
-            showAutoSaveIndicator({ durable: true, pendingSync: true });
-            finishBtn('\u2713 Saved', 2500);
+            var toastLevel = (um && um.level) || 'success';
+            if (state === 'waiting_for_internet' || state === 'syncing' || state === 'sync_problem_local_safe') {
+              toastLevel = state === 'sync_problem_local_safe' ? 'warning' : 'info';
+            }
+            showToast(okMsg, toastLevel, 8000);
+            showAutoSaveIndicator({
+              durable: true,
+              pendingSync: !res.centralConfirmed,
+              centralConfirmed: !!res.centralConfirmed,
+            });
+            finishBtn(headline || 'Safe locally', 2800);
             try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
             return;
           }
           if (res.noteDurable && !res.backupOk) {
             var warnMsg = (um && um.message) || (
-              'Note saved to this computer, but backup failed' + (res.error ? ': ' + res.error : '')
+              'Safe locally, but backup failed' + (res.error || res.backupError ? ': ' + (res.error || res.backupError) : '')
             );
             showToast(warnMsg, 'warning', 10000);
             showAutoSaveIndicator({ durable: true, pendingSync: true });
@@ -17718,7 +17748,7 @@ pdfAuditFooterHtml(d, settings) +
           var errMsg = (um && um.message) || (res.error || 'Could not save note to disk');
           showToast(errMsg, 'error', 10000);
           showAutoSaveIndicator({ durable: false, pendingSync: false });
-          finishBtn('Save failed', 3500);
+          finishBtn('Attention', 3500);
         }).catch(function(err) {
           showToast('Save now failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 8000);
           finishBtn(origText, 500);

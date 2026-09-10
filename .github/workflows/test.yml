@@ -27,6 +27,9 @@ jobs:
       - name: Unit tests
         run: npm run test:unit
 
+      - name: Data-safety gate
+        run: npm run test:data-safety
+
       - name: Playwright e2e
         run: npm run test:e2e
 

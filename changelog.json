@@ -1,9 +1,24 @@
 {
   "releases": [
     {
+      "version": "1.9.86",
+      "date": "2026-09-10",
+      "latest": true,
+      "changes": [
+        "Data-safety architecture: central account sync is Source of Truth; generational backups remain independent PITR (not the same thing)",
+        "Force Save / Save now: flush disk → verified backup → outbox → attempt central sync drain → status distinguishes Safe locally vs Safe locally + central copy confirmed vs Waiting/Syncing/Sync problem — never ambiguous Saved",
+        "Persistent outbox mutation_id (sync_id+version+op); never clear before confirmed written ack; ambiguous ack safe-retries",
+        "Tombstones: absence on another device is not deletion; soft-delete only with matching sync_id deleted_at; whole-dataset LWW prohibited",
+        "Fail-safe monitors: sudden count drop, remote disappear without tombstone, revision backwards, empty cloud with local, migration shrink, 429/auth/key",
+        "Local record_revisions (metadata + content hash) for overwrite/conflict recovery hints; backup integrity gate refuses empty restore over live data",
+        "CI: npm run test:data-safety gate in Test workflow; docs/data-safety incident + architecture + readiness (AMBER)",
+        "Builds on 1.9.85 durability / empty-cloud / backup-path work (PR #34 lineage)"
+      ]
+    },
+    {
       "version": "1.9.85",
       "date": "2026-09-09",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Local-first durability: every attendance save (including drafts) flushDbSyncs to disk before UI reports Saved to disk — closes the pre-1.9.85 crash window where autosave could claim saved while the 30s debounce had not written yet",
         "Honest save UI: Saved to disk · pending sync (not Synced) until cloud push confirms written; structured save IPC { id, durable, pendingSync }",
