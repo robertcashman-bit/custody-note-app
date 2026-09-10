@@ -4,7 +4,7 @@
 
 ## Justification (short)
 
-Client **1.9.92** closes the prior AMBER residuals that were closable in-app: Force Save drain is sized from outbox depth with background continuation (never false Synced), force-quit/SIGKILL flush durability is harness-proved, monitors fail-closed against wipe/overwrite (wired into syncPull), and client PITR + server-PITR contracts are CI-gated (**193** `test:data-safety` tests). Website live `sot-pitr` suite remains a NON-BLOCKING access limitation (private repo). Historical Costachi never-flushed bytes remain NON-BLOCKING (not recoverable).
+Client **1.9.92** + website SoT/PITR ([PR #13](https://github.com/robertcashman-bit/custody-note-website/pull/13)) close the prior AMBER residuals with evidence: Force Save drain sized from outbox (never false Synced), force-quit/SIGKILL flush durability, monitors fail-closed, app `test:data-safety` **193/193**, website full suite **192/192**, SoT/PITR pack **35/35**, `docs/data-safety/SERVER-PITR-VERIFICATION.md`. Website fixes include 503 `INCOMPLETE_SOT_READ` (no ok+empty on null timeline), snapshot create refuse incomplete live reads, and `classifySyncInventoryResponse` failure≠empty. Historical Costachi never-flushed bytes remain **NON-BLOCKING** (not recoverable).
 
 ## Basis
 
@@ -14,12 +14,12 @@ Client **1.9.92** closes the prior AMBER residuals that were closable in-app: Fo
 | Honest local vs central status | GREEN | Force Save state machine; no bare “Saved” |
 | Persistent outbox + ack gating | GREEN | mutation_id + written ack / ID match |
 | Absence ≠ delete / tombstones | GREEN | Explicit rules + pull guards |
-| Empty / failed cloud non-destructive | GREEN | Preserve + response policy + auto-heal |
+| Empty / failed cloud non-destructive | GREEN | App preserve + website `classifySyncInventoryResponse` / 503 |
 | Force Save large outbox | GREEN | `computeForceSaveMaxCycles` + interpretDrain + drainPending flag |
 | Force-quit / kill durability | GREEN | SIGKILL + crash-before-rename + dirty restore tests |
 | Independent PITR (client) | GREEN | Generational verified backups + integrity gate |
-| Server-side SoT PITR contracts | GREEN | `serverPitrContract` + restore scoring; live website suite NON-BLOCKING |
-| CI gate | GREEN | `npm run test:data-safety` (193) in Test workflow |
+| Server-side SoT PITR | GREEN | Website PR #13: 192/192 + 35/35; `SERVER-PITR-VERIFICATION.md` |
+| CI gate | GREEN | App `npm run test:data-safety` (193) in Test workflow |
 | Fail-safe monitors | GREEN | `enforceMonitorFailClosed` + syncPull wiring + tests |
 | Costachi historical bytes | NON-BLOCKING | Future routes closed; originals not recoverable |
 

@@ -10,7 +10,7 @@
         "Expanded CI gate with seeded chaos, never-event invariant, 1000+ canaries, Mac/Windows account-level SoT proof, Force Save local-vs-central matrix, startup circuit breakers",
         "Durability: flush timeout / write failure restores dirty flag; Force Save verifies on-disk CNDB magic before Safe locally",
         "Push ack: reject padded/wrong written syncId arrays; only clear outbox rows whose syncIds were acknowledged",
-        "Docs: VERIFICATION-REPORT Overall GREEN with NON-BLOCKING residuals (historical Costachi; website live suite access)"
+        "Docs: VERIFICATION-REPORT Overall GREEN citing website PR #13 (192/192 + 35/35 SoT/PITR) with NON-BLOCKING historical Costachi only"
       ]
     },
     {

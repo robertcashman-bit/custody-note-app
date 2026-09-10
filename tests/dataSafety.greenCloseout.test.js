@@ -238,6 +238,17 @@ describe('Server SoT PITR client contracts (website companion)', () => {
       emptyOrFailedResponsePolicy({ ok: true, records: null }).mayZeroInventory,
       false
     );
+    // Website PR #13: null timeline → 503 INCOMPLETE_SOT_READ (not ok+empty)
+    const incomplete = emptyOrFailedResponsePolicy({
+      ok: false,
+      statusCode: 503,
+      code: 'INCOMPLETE_SOT_READ',
+      error: 'INCOMPLETE_SOT_READ',
+      records: [],
+    });
+    assert.strictEqual(incomplete.treatAsAuthoritativeEmpty, false);
+    assert.strictEqual(incomplete.mayWipeLocal, false);
+    assert.strictEqual(incomplete.reason, 'incomplete_sot_read');
     const emptyOk = emptyOrFailedResponsePolicy({
       ok: true,
       records: [],

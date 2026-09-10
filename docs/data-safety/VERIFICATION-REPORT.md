@@ -9,13 +9,17 @@
 
 ## Executive verdict
 
-Critical silent-loss routes are closed or fail-closed with measurable harness evidence. Force Save no longer uses an unsafe fixed 3-cycle drain; large outboxes drain to verified ack or stay explicitly syncing/waiting with background continuation (never false Synced). Force-quit / kill-around-flush durability is proved in-process. Monitors fail-closed against wipe/overwrite. Account-level licence-scoped SoT is proved. Client PITR + server-PITR contracts are proved in-repo; live website `sot-pitr` suite was unreachable from this agent (repo 404) and is listed as **NON-BLOCKING**.
+Critical silent-loss routes are closed or fail-closed with measurable harness evidence on **both** the desktop app and the website server SoT/PITR lane.
+
+- App: Force Save drain sized from outbox (never false Synced); force-quit/SIGKILL flush durability; monitors fail-closed; licence-scoped account SoT; **193 pass / 0 fail** (`npm run test:data-safety`).
+- Website: [custody-note-website PR #13](https://github.com/robertcashman-bit/custody-note-website/pull/13) — full suite **192 pass / 0 fail**; SoT/PITR pack **35 pass / 0 fail**; doc `docs/data-safety/SERVER-PITR-VERIFICATION.md`. Fixes: pull no longer returns ok+empty on null timeline GETs (**503 `INCOMPLETE_SOT_READ`**); snapshot create refuses incomplete live reads; `classifySyncInventoryResponse` failure≠empty.
 
 | Gate | Result |
 |------|--------|
-| `npm run test:data-safety` | **193 pass / 0 fail** |
-| CI workflow includes gate | `.github/workflows/test.yml` → Data-safety gate |
-| Bugs autofixed this pass | Flush timeout dirty restore; CNDB magic gate; written-ID ack; Force Save drain policy; monitor fail-closed wiring |
+| App `npm run test:data-safety` | **193 pass / 0 fail** |
+| Website full suite (PR #13) | **192 pass / 0 fail** |
+| Website SoT/PITR pack (PR #13) | **35 pass / 0 fail** |
+| CI workflow (app) | `.github/workflows/test.yml` → Data-safety gate |
 | Never-event / canaries | Pass (chaos seed `20260910`; **1000** canaries) |
 | Force-quit / SIGKILL mid-flush | Pass (`dataSafety.greenCloseout`) |
 
@@ -55,14 +59,14 @@ Renderer (app.js) ──IPC──► Main (main.js)
 
 ---
 
-## AMBER → GREEN closeout (this revision)
+## Residual closeout
 
 | Residual | Disposition | Evidence |
 |----------|-------------|----------|
-| Force Save `maxCycles: 3` | **CLOSED** | `computeForceSaveMaxCycles` sizes from outbox; `interpretForceSaveDrain` never centralConfirmed on max_cycles; persists `forceSaveDrainPending` for background continue |
-| Packaged / force-quit | **CLOSED** (in-process equivalent) | SIGKILL child after durable write; crash-before-rename keeps prior CNDB; timeout restores dirty |
-| Operator / monitors | **CLOSED** | `enforceMonitorFailClosed` blocks wipe/overwrite; wired into syncPull; suite asserts |
-| Server sot-pitr live suite | **NON-BLOCKING** | Website repo 404 to agent token; client contracts in `lib/serverPitrContract.js` + `WEBSITE-PITR-CONTRACT.md` commands |
+| Force Save `maxCycles: 3` | **CLOSED** | `computeForceSaveMaxCycles` + `interpretForceSaveDrain` + `forceSaveDrainPending` |
+| Packaged / force-quit | **CLOSED** (in-process equivalent) | SIGKILL + crash-before-rename + dirty restore |
+| Operator / monitors | **CLOSED** | `enforceMonitorFailClosed` + syncPull wiring |
+| Server sot-pitr / central SoT | **CLOSED** | Website PR #13: 192/192 + 35/35 SoT/PITR; `SERVER-PITR-VERIFICATION.md`; 503 `INCOMPLETE_SOT_READ`; `classifySyncInventoryResponse` |
 | Costachi historical bytes | **NON-BLOCKING** | Never-flushed originals not recoverable; GREEN = **future** silent-loss routes closed |
 
 ---
@@ -78,31 +82,31 @@ Renderer (app.js) ──IPC──► Main (main.js)
 | **E** | Lost/ambiguous ack does not clear outbox? | **YES** | mayClearOutboxEntry / assertPushAccepted |
 | **F** | Mutation idempotency? | **YES** | buildMutationId |
 | **G** | Stale device absence cannot delete newer? | **YES** | tombstone / preserve guards |
-| **H** | Empty/failed ≠ empty authoritative dataset? | **YES** | emptyOrFailedResponsePolicy + emptyCloudPullPolicy |
+| **H** | Empty/failed ≠ empty authoritative dataset? | **YES** | App `emptyOrFailedResponsePolicy` + website `classifySyncInventoryResponse` / 503 `INCOMPLETE_SOT_READ` |
 | **I** | Tombstones require matching sync_id? | **YES** | tombstoneRules |
-| **J** | Restore refuses empty-over-live? | **YES** | mayRestoreBackupOverLive + PITR score |
-| **K** | PITR independent of live SoT? | **YES** | client gate + serverPitrIndependenceContract |
+| **J** | Restore refuses empty-over-live? | **YES** | mayRestoreBackupOverLive + PITR score + website snapshot refuse incomplete |
+| **K** | PITR independent of live SoT? | **YES** | client gate + website `SERVER-PITR-VERIFICATION.md` |
 | **L** | Disk-full / write-fail must not show Saved? | **YES** | attention_required |
 | **M** | No silent DB reset / Mac↔Win same SoT? | **YES** | licence-scoped SoT test |
 | **N** | Auth expiry / 429 never drop mutations? | **YES** | rate-limit gate + outbox retain |
 
 ---
 
-## NON-BLOCKING residuals
+## NON-BLOCKING residuals only
 
 1. **Historical Costachi never-flushed bytes** — not resurrectable; class prevented going forward.  
-2. **Website live `npm test` / sot-pitr suite** — not executable here (private repo 404); client contracts proved; companion commands in `docs/data-safety/WEBSITE-PITR-CONTRACT.md`.  
-3. **Dual physical Mac+Windows kill-9** — equivalent in-process SIGKILL + durability tests cover the durability claim; physical dual-OS remains optional ops validation.
+2. **Dual physical Mac+Windows kill-9 on metal** — in-process SIGKILL + durability harness covers the durability claim; optional ops validation.
 
 ---
 
 ## Test evidence
 
 ```text
-Command: npm run test:data-safety
-Result: tests 193 / pass 193 / fail 0
-Chaos seed: 20260910
-Canary scale: 1000
+App:     npm run test:data-safety  → 193 pass / 0 fail
+Website: full suite (PR #13)       → 192 pass / 0 fail
+Website: SoT/PITR pack (PR #13)    → 35 pass / 0 fail
+Doc:     custody-note-website docs/data-safety/SERVER-PITR-VERIFICATION.md
+Chaos seed: 20260910 | Canary scale: 1000
 ```
 
 ---

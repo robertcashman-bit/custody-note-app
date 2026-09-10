@@ -1,41 +1,37 @@
-# Website SoT PITR — companion contract (app → website)
+# Website SoT PITR — companion contract (app ↔ website)
 
-The desktop app cannot clone `robertcashman-bit/custody-note-website` from this
-agent token (GitHub 404). Server `sot-pitr/{userId}/` remains website-owned.
+Server `sot-pitr/{userId}/` is owned by `robertcashman-bit/custody-note-website`.
 
-## Client contracts proved in this repo
+## Website evidence (PR #13 — cite for GREEN)
 
-Run:
+| Suite | Result | Source |
+|-------|--------|--------|
+| Full website suite | **192 pass / 0 fail** | [PR #13](https://github.com/robertcashman-bit/custody-note-website/pull/13) |
+| SoT/PITR pack | **35 pass / 0 fail** | same |
+| Doc | `docs/data-safety/SERVER-PITR-VERIFICATION.md` | website repo |
+
+### Website fixes included in that evidence
+
+- Pull no longer returns `ok` + empty on null timeline GETs → **503 `INCOMPLETE_SOT_READ`**
+- Snapshot create refuses incomplete live reads
+- `classifySyncInventoryResponse` — failure ≠ empty dataset
+
+## Client contracts proved in this app repo
 
 ```bash
-npm run test:data-safety
+npm run test:data-safety   # 193 pass / 0 fail
 ```
-
-Relevant assertions live in:
 
 - `lib/serverPitrContract.js` — empty/failed response ≠ wipe; prefix independence; restore scoring
 - `lib/backupIntegrityGate.js` — refuse empty-over-live
-- `tests/dataSafety.greenCloseout.test.js` — PITR contract suite
-- `tests/dataSafety.faultInjection.test.js` — account-level SoT Mac↔Win
+- `lib/monitorFailClosed.js` — wipe/overwrite blocked when monitors fire
+- `tests/dataSafety.greenCloseout.test.js` — PITR + drain + force-quit + monitors
 
-## Exact website commands (run when repo is available)
+## Commands (website checkout)
 
 ```bash
-git clone git@github.com:robertcashman-bit/custody-note-website.git
 cd custody-note-website
 npm ci
 npm test
-# Prefer data-safety / PITR filters when present:
-npm run test:data-safety || true
-npx --yes node --test $(find tests -name '*pitr*' -o -name '*sot*' -o -name '*data-safety*' | tr '\n' ' ')
+# SoT/PITR pack as documented in SERVER-PITR-VERIFICATION.md
 ```
-
-Expected website invariants (must stay true):
-
-1. Live KV SoT key prefix ≠ `sot-pitr/` snapshot prefix  
-2. Empty/failed pull must not zero inventory for wipe purposes without from-epoch proof  
-3. Restore of empty/corrupt snapshot over live>0 refused  
-4. Snapshots are push-debounced + hourly; retention independent of live deletes  
-
-Document pass counts from the website run into
-`docs/data-safety/VERIFICATION-REPORT.md` when available.

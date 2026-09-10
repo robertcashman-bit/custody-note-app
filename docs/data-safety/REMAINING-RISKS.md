@@ -11,10 +11,18 @@ Honest residual risks after v1.9.86 data-safety hardening (client) + website ser
 ## True residuals (NON-BLOCKING)
 
 1. **Original Costachi bytes** — Not recoverable if never flushed; GREEN means future silent-loss routes closed, not resurrection.  
-2. **Website live sot-pitr suite** — Private website repo not cloneable from verification agent; client contracts proved (`lib/serverPitrContract.js`); run commands in `WEBSITE-PITR-CONTRACT.md` when access exists.  
-3. **Dual physical Mac+Windows kill-9** — In-process SIGKILL + durability harness covers the claim; optional ops validation on metal.  
-4. **429 budget** — Shared push/pull rate limit can still delay central confirmation; local + outbox remain authoritative until ack.  
-5. **Key/escrow** — Cross-platform safeStorage issues can stall decrypt; fail-safe keeps local.  
-6. **Client revision history** — Metadata/hash only; recovery via generational CNDB and/or server `sot-pitr`.  
-7. **Operator error** — Explicit restore of a chosen non-empty snapshot can still replace live after confirmation; empty-over-live refused.  
-8. **Website/API drift** — If production weakens `written` semantics, client fails closed (dirty retained).
+2. **Dual physical Mac+Windows kill-9** — In-process SIGKILL + durability harness covers the claim; optional ops validation on metal.  
+3. **429 budget** — Shared push/pull rate limit can still delay central confirmation; local + outbox remain authoritative until ack.  
+4. **Key/escrow** — Cross-platform safeStorage issues can stall decrypt; fail-safe keeps local.  
+5. **Client revision history** — Metadata/hash only; recovery via generational CNDB and/or server `sot-pitr`.  
+6. **Operator error** — Explicit restore of a chosen non-empty snapshot can still replace live after confirmation; empty-over-live refused.  
+7. **Website/API drift** — If production weakens `written` / inventory semantics, client fails closed (dirty retained).  
+
+## Closed (was AMBER)
+
+| Risk | Status |
+|------|--------|
+| Server SoT PITR / empty-as-wipe | **Closed** — website PR #13 (192/192 + 35/35 SoT/PITR); 503 `INCOMPLETE_SOT_READ`; `classifySyncInventoryResponse` |
+| Force Save fixed 3-cycle drain | **Closed** — sized drain + background continue |
+| Force-quit durability unproven | **Closed** — SIGKILL harness |
+| Monitors not fail-closed | **Closed** — `enforceMonitorFailClosed` |
