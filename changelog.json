@@ -11,7 +11,7 @@
         "Tombstones: absence on another device is not deletion; soft-delete only with matching sync_id deleted_at; whole-dataset LWW prohibited",
         "Fail-safe monitors: sudden count drop, remote disappear without tombstone, revision backwards, empty cloud with local, migration shrink, 429/auth/key",
         "Local record_revisions (metadata + content hash) for overwrite/conflict recovery hints; backup integrity gate refuses empty restore over live data",
-        "CI: npm run test:data-safety gate in Test workflow; docs/data-safety incident + architecture + readiness (AMBER)",
+        "CI: npm run test:data-safety gate in Test workflow; docs/data-safety incident + architecture + readiness (GREEN — website server SoT PITR / SERVER-PITR.md)",
         "Builds on 1.9.85 durability / empty-cloud / backup-path work (PR #34 lineage)"
       ]
     },

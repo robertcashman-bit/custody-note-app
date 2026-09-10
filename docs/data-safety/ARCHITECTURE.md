@@ -22,20 +22,29 @@
                             │ push per sync_id (not whole DB)
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ CENTRAL ACCOUNT SoT — custodynote.com /api/sync/*           │
+│ CENTRAL ACCOUNT SoT — custodynote.com /api/sync/* (live KV) │
 │ Licence-key scoped (NOT device-scoped “Mac vs Windows”)     │
-└───────────────────────────┬─────────────────────────────────┘
-                            │ independent of live SoT
-                            ▼
+└───────────────┬─────────────────────────────┬───────────────┘
+                │                             │ independent of live SoT
+                │                             ▼
+                │              ┌──────────────────────────────────────────┐
+                │              │ Server SoT PITR — S3 sot-pitr/{userId}/  │
+                │              │ (website: list/create/restore; cron)      │
+                │              │ ≠ live KV SoT; ≠ managed AWS backup       │
+                │              │ docs: website SERVER-PITR.md / PR #10     │
+                │              └──────────────────────────────────────────┘
+                │ independent of live SoT
+                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ Independent PITR / historical recovery                      │
+│ Client independent PITR / historical recovery               │
 │  - Generational local Backups (quick/hourly CNDB verify)    │
 │  - Optional offsite folder copy                             │
 │  - Managed AWS cloud backup (entitlement) ≠ sync SoT        │
+│    and ≠ server sot-pitr                                    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Critical separation:** Central sync SoT ≠ folder offsite backups ≠ managed AWS backup entitlement. Folder backups must **not** instantly mirror accidental central damage; they are point-in-time encrypted snapshots.
+**Critical separation:** Live central sync SoT ≠ server `sot-pitr/` snapshots ≠ folder offsite backups ≠ managed AWS backup entitlement. Historical lanes must **not** instantly mirror accidental live SoT damage; they are point-in-time recovery copies.
 
 ---
 
@@ -48,11 +57,12 @@
 | `userData/attendances.db` (CNDB) | Local durable working copy | Required before “Safe locally” |
 | `sync_queue` + `sync_dirty` | Persistent outbox | Survives restart; clear only after ack |
 | `record_revisions` | Local overwrite/conflict hints | Metadata + content hash |
-| Central `/api/sync` (S3 per syncId) | **Account-level Source of Truth** | Licence hash scoped |
-| `userData/Backups/attendance-quick-*.db` | Independent PITR | Generational; verified magic |
-| `attendance-backup-*.db` hourly | Independent PITR | Retention window |
+| Central `/api/sync` (live KV / S3 per syncId) | **Account-level Source of Truth** | Licence hash scoped |
+| Server `sot-pitr/{userId}/` snapshots | **Independent SoT PITR** (website) | Not live SoT; not managed AWS backup |
+| `userData/Backups/attendance-quick-*.db` | Independent client PITR | Generational; verified magic |
+| `attendance-backup-*.db` hourly | Independent client PITR | Retention window |
 | Offsite backup folder | Independent PITR copy | User-configured |
-| Managed AWS cloud backup | Disaster recovery product | **Not** sync SoT |
+| Managed AWS cloud backup | Disaster recovery product | **Not** sync SoT; **not** `sot-pitr` |
 | `sync_conflicts` | Parked remote when local dirty/protected | User resolves |
 
 ---
@@ -105,16 +115,19 @@ Detect and **retain local / do not overwrite known-good** on:
 
 ---
 
-## Server gaps (honest)
+## Server SoT PITR (website — independent lane)
 
-This **app repo** owns the client contract. Server-side PITR snapshots on custodynote.com (if any) are outside this tree unless wired via API. Client implements the strongest local+API contract available:
+Live account SoT remains `/api/sync/*` (per-record). **Independent** historical recovery on the server is the website `sot-pitr/{userId}/` snapshot lane (list/create/restore APIs, push-debounced + hourly cron, retention 48h hourly + 30d daily, fail-safe restore). Documented in the website repo as `docs/data-safety/SERVER-PITR.md` ([custody-note-website PR #10](https://github.com/robertcashman-bit/custody-note-website/pull/10)).
+
+This **app repo** owns the client contract:
 
 - Confirmed push ack  
 - Empty-cloud alarms  
-- Generational verified backups  
+- Generational verified backups + integrity gate  
 - Integrity report IPC (`autoDelete: false`)  
+- Force Save local vs central status  
 
-If server snapshot/PITR APIs are added later, they must remain **independent** of live SoT mutation paths.
+Server `sot-pitr` must stay **independent** of live SoT mutation paths and must not be conflated with managed AWS cloud-backup entitlement.
 
 ---
 
