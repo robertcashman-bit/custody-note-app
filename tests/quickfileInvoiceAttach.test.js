@@ -132,7 +132,7 @@ describe('QuickFile error parsing for attachment failures', () => {
   });
 });
 
-describe('QuickFile invoice number — ledger sync and duplicate retry', () => {
+describe('QuickFile invoice number — ledger sync and sequential allocate', () => {
   it('calls invoice/search ordered by InvoiceNumber DESC before create', () => {
     assert.ok(mainJs.includes('/1_2/invoice/search'));
     assert.ok(mainJs.includes('syncNextInvoiceNumberFromQuickFileLedger'));
@@ -145,6 +145,12 @@ describe('QuickFile invoice number — ledger sync and duplicate retry', () => {
     assert.ok(mainJs.includes('isQuickFileInvoiceNumberDuplicateError'));
     assert.ok(mainJs.includes('Invoice number conflict'));
     assert.ok(mainJs.includes('MAX_INVOICE_NUMBER_ATTEMPTS'));
+  });
+
+  it('uses peek-only allocation (does not pre-advance the counter)', () => {
+    assert.ok(mainJs.includes('allocateNextNumber: peekNextSequentialInvoiceNumber'));
+    assert.ok(!mainJs.includes('function getNextSequentialInvoiceNumber'));
+    assert.ok(mainJs.includes('bumpPastNumber: bumpNextInvoiceNumberPast'));
   });
 
   it('includes deleted invoices when syncing max ledger number', () => {

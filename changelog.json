@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.87",
+      "version": "1.9.88",
       "date": "2026-09-10",
       "latest": true,
+      "changes": [
+        "QuickFile invoices: enforce strict sequential numbering going forward — peek-only allocate, persist last issued on every success, conflict retries use smallest free (attempted+1) with no large jumps from error-text parsing",
+        "Same-attendance invoice reuse still does not burn a new number; failed non-duplicate creates no longer skip the peeked number",
+        "Unit tests: successive N/N+1/N+2, conflict→N+1 not N+10, reuse without consume, persist after success"
+      ]
+    },
+    {
+      "version": "1.9.87",
+      "date": "2026-09-10",
+      "latest": false,
       "changes": [
         "QuickFile billing: recover when invoice number is already used/exists/there — match more error variants, reuse the existing invoice when it belongs to this attendance, otherwise allocate the next free number with bounded retries",
         "QuickFile: sync next invoice number including deleted invoices (QuickFile still reserves those numbers), tag creates with attendance PurchaseReference, persist invoice id/number even when the API omits InvoiceNumber in the response",
