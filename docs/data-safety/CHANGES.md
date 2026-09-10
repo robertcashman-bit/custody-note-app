@@ -37,3 +37,7 @@ Commercially defensible data protection after the Costachi never-event: separate
 ## Smallest robust fix rationale
 
 Builds on 1.9.85 durability work without rewriting the sync engine. Adds explicit status, mutation IDs, monitors, revision metadata, backup gate, and a blocking CI suite proving the invariants.
+
+## Follow-up — commercial readiness GREEN (docs)
+
+Server-side SoT PITR landed (or is landing) in the **website** repo ([PR #10](https://github.com/robertcashman-bit/custody-note-website/pull/10), `docs/data-safety/SERVER-PITR.md`: `sot-pitr/{userId}/`, list/create/restore, cron, retention, fail-safe restore). App docs updated so overall **COMMERCIAL-READINESS is GREEN**, with SoT ≠ `sot-pitr` ≠ managed AWS backup kept explicit. No test weakening.
