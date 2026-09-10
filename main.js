@@ -7040,7 +7040,7 @@ ipcMain.handle('backup-now', async () => {
 ipcMain.handle('persist-and-backup', async () => {
   const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
   const { buildForceSaveResult } = require('./lib/forceSaveStatus');
-  const { evaluateBackupSeriesIntegrity, inspectBackupFolder } = require('./lib/backupIntegrityGate');
+  const { evaluateBackupSeriesIntegrity, inspectBackupFolder, countActiveAttendancesInPlainDb } = require('./lib/backupIntegrityGate');
   const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
   try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const folder = getBackupFolder();
@@ -7092,10 +7092,20 @@ ipcMain.handle('persist-and-backup', async () => {
     _notifyBackupDegraded(err && err.code ? err.code : 'backup-failed', backupError);
   }
 
-  // Independent PITR integrity snapshot (metadata only).
+  // Independent PITR integrity snapshot (metadata + newest-file active count).
   let backupIntegrity = null;
   try {
-    const files = inspectBackupFolder(folder, (p) => verifyEncryptedBackupFile(p));
+    const SQL = await initSqlJs();
+    const files = inspectBackupFolder(
+      folder,
+      (p) => verifyEncryptedBackupFile(p),
+      (p) => {
+        const raw = fs.readFileSync(p);
+        const plain = decryptBuffer(raw);
+        if (!plain) return null;
+        return countActiveAttendancesInPlainDb(SQL, plain);
+      }
+    );
     let liveActive = null;
     try {
       const c = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
@@ -7154,20 +7164,15 @@ ipcMain.handle('persist-and-backup', async () => {
         if (diag && diag.connectivity === 'auth_required') authRequired = true;
       } catch (_) {}
     } else {
-      // Nothing pending — treat as central-confirmed for this checkpoint if last push known,
-      // else safe locally with no pending work.
+      // Empty outbox is NOT a server written ack. Only claim central confirmed when
+      // this process has a verified cloud push timestamp (real ack), otherwise stay safe-locally.
       try {
         const diag = w && w.getDiagnostics ? w.getDiagnostics() : {};
         if (diag && diag.lastVerifiedCloudPushAt) {
           centralConfirmed = true;
           lastCentralSyncAt = diag.lastVerifiedCloudPushAt;
-        } else {
-          centralConfirmed = true; // no pending mutations → nothing to ack
-          lastCentralSyncAt = lastLocalSaveAt;
         }
-      } catch (_) {
-        centralConfirmed = true;
-      }
+      } catch (_) {}
     }
   } catch (syncErr) {
     syncAttempted = true;
@@ -7186,7 +7191,7 @@ ipcMain.handle('persist-and-backup', async () => {
     waitingForInternet: offline,
     rateLimited,
     authRequired,
-    syncError: syncError || backupError,
+    syncError,
     lastLocalSaveAt,
     lastCentralSyncAt,
     deviceId,
@@ -7483,6 +7488,31 @@ ipcMain.handle('cloud-backup-list', async () => {
   }
 });
 
+/**
+ * Refuse empty/corrupt candidate restore over a live DB with records (PITR gate).
+ * @returns {{ allowed: boolean, reason: string, error?: string }}
+ */
+function gateRestoreBackupOverLive(SQL, decryptedPlain) {
+  const { mayRestoreBackupOverLive, countActiveAttendancesInPlainDb } = require('./lib/backupIntegrityGate');
+  const candActive = countActiveAttendancesInPlainDb(SQL, decryptedPlain);
+  let liveActive = 0;
+  try {
+    const c = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+    liveActive = c ? Number(c.c) || 0 : 0;
+  } catch (_) {}
+  const gate = mayRestoreBackupOverLive(
+    { readable: true, magicOk: true, verified: true, activeCount: candActive },
+    { activeCount: liveActive }
+  );
+  if (gate.allowed) return gate;
+  return {
+    ...gate,
+    error: gate.reason === 'refuse_empty_over_live'
+      ? 'Refusing to restore an empty backup over a database that has records.'
+      : 'Backup restore refused: ' + gate.reason,
+  };
+}
+
 ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
   const data = readLicenceData();
   if (!data || (!data.key && !data.authToken)) return { ok: false, error: 'No licence key' };
@@ -7515,6 +7545,10 @@ ipcMain.handle('cloud-backup-restore', async (_, { backupKey }) => {
     if (!decrypted) return { ok: false, error: 'Could not decrypt the backup. Check your recovery password.' };
 
     const SQL = await initSqlJs();
+    const gate = gateRestoreBackupOverLive(SQL, decrypted);
+    if (!gate.allowed) {
+      return { ok: false, error: gate.error, gateReason: gate.reason };
+    }
     // Stop any in-flight sync against the old DB before swapping.
     try { if (_syncWorker) _syncWorker.stop(); } catch (_) {}
     const newDb = new SQL.Database(decrypted);
@@ -7603,6 +7637,10 @@ ipcMain.handle('local-backup-restore', async (_, { filePath }) => {
     const decrypted = await decryptBufferWithRecovery(rawBuf);
     if (!decrypted) return { ok: false, error: 'Could not decrypt the backup. Check your recovery password.' };
     const SQL = await initSqlJs();
+    const gate = gateRestoreBackupOverLive(SQL, decrypted);
+    if (!gate.allowed) {
+      return { ok: false, error: gate.error, gateReason: gate.reason };
+    }
     try { if (_syncWorker) _syncWorker.stop(); } catch (_) {}
     const newDb = new SQL.Database(decrypted);
     db = newDb;
