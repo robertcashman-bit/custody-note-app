@@ -832,6 +832,9 @@ describe('Re-upload / restore product wiring', () => {
     assert.match(mainJs, /logSyncAttempt,/);
     assert.match(mainJs, /scheduleAutoFullResyncIfEmpty/);
     assert.match(mainJs, /emptyLarge/);
+    assert.match(mainJs, /maybeEmptyCloudAutoHeal/);
+    assert.match(mainJs, /persistSyncCycle/);
+    assert.match(mainJs, /lastSyncCycleAt/);
   });
 
   it('Full re-sync calls syncPull directly and returns received/merged counts', () => {
@@ -873,10 +876,12 @@ describe('Re-upload / restore product wiring', () => {
     assert.match(indexHtml, /home-empty-db-recovery/);
     assert.match(appJs, /Rate limited/);
     assert.match(footerChipsJs, /Cloud empty — re-upload|Cloud may be empty|DB empty/);
-    assert.match(appJs, /still on this device.*cloud has none|Re-upload all — do not use Full re-sync/i);
+    assert.match(appJs, /still on this device.*cloud has none|Re-upload all/i);
     assert.match(footerChipsJs, /Backup folder missing/);
     assert.match(appJs, /no remote records for this licence/i);
     assert.match(footerChipsJs, /Waiting for sync key|noMasterKeySkipped/);
+    assert.match(footerChipsJs, /Activate licence to sync/);
+    assert.match(footerChipsJs, /Healing empty cloud/);
   });
 
   it('restore bumps sync_version for all non-deleted rows', () => {
