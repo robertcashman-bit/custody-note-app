@@ -3325,91 +3325,17 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     el.style.display = '';
-    var pending = st.pendingChanges || 0;
-    var dirty = st.dirtyPushCount || 0;
-    var pendingOrDirty = pending + dirty;
-    var failed = st.failedCount || 0;
-    var blocked = st.blockedCount || 0;
-    var conflicts = st.conflictCount || 0;
-    var emptyCloud = !!(st.emptyCloudAlarm || st.localFullCloudEmpty || st.suggestReuploadAll || (st.health && st.health.cloudLikelyEmpty));
-    var emptyCloudMsg = st.emptyCloudAlarmMessage ||
-      'Records are still on this device, but the cloud has none for this licence. Use Re-upload all — do not use Full re-sync while the cloud is empty.';
-    var rateLimited = !!(st.rateLimited || (st.rateLimit && st.rateLimit.blocked));
-    var lastPushFailed = st.lastPush && st.lastPush.ok === false;
-    var lp = st.lastPull || {};
-    var decryptFailed = lp.decryptFailed || 0;
-    var received = lp.received || 0;
-    var merged = lp.merged || 0;
-    var total = st.totalRecords || 0;
-
-    if (conflicts > 0) {
-      setFooterIndicator(el, conflicts + ' conflict' + (conflicts === 1 ? '' : 's'), 'offline', 'Sync found newer remote changes but kept your local edits safe. Click to review and resolve.');
-      el.style.cursor = 'pointer';
-    } else if (emptyCloud) {
-      setFooterIndicator(el, 'Cloud empty — re-upload', 'offline', emptyCloudMsg);
-      el.style.cursor = 'pointer';
-    } else if (rateLimited) {
-      var minsRl = Math.max(1, Math.ceil((st.rateLimitRemainingMs || (st.rateLimit && st.rateLimit.remainingMs) || 60000) / 60000));
-      var rlTitle = (st.lastError || 'Too many requests.') +
-        (pendingOrDirty > 0 ? ' ' + pendingOrDirty + ' record(s) still waiting to upload — retry after cooldown.' : ' Full re-sync will retry after the cooldown.');
-      setFooterIndicator(el, 'Rate limited — retry in ~' + minsRl + 'm', 'offline', rlTitle);
-      el.style.cursor = 'pointer';
-    } else if (decryptFailed > 0) {
-      setFooterIndicator(el, decryptFailed + ' decrypt failed', 'offline', 'Remote records could not be decrypted. Use Settings \u2192 Backup \u2192 Recover from Cloud (Security tab) or Full re-sync from cloud.');
-      el.style.cursor = 'pointer';
-    } else if ((lp.noMasterKeySkipped || 0) > 0) {
-      setFooterIndicator(el, 'Waiting for sync key', 'offline', 'Cloud records arrived but this computer has no master key yet. Keep the app online so canonical key escrow can complete, then Full re-sync.');
-      el.style.cursor = 'pointer';
-    } else if (st.emptyLargeDb) {
-      setFooterIndicator(el, 'DB empty — recover', 'offline', 'Local database file is large but lists no records. Open Settings \u2192 Backup to restore, or Full re-sync from cloud. On the computer with your data, use Re-upload all local records to cloud.');
-      el.style.cursor = 'pointer';
-    } else if (lastPushFailed && pendingOrDirty > 0) {
-      setFooterIndicator(
-        el,
-        pendingOrDirty + ' not confirmed in cloud',
-        'offline',
-        (st.lastPush && st.lastPush.error ? st.lastPush.error + ' — ' : '') +
-          'Local records stay dirty until the cloud confirms a durable write. Use Push all pending now or Re-upload all.'
-      );
-      el.style.cursor = 'pointer';
-    } else if (pendingOrDirty === 0 && total === 0 && received === 0 && st.lastSync) {
-      setFooterIndicator(el, 'No remote records', 'backup-ok', 'Pull succeeded but no records from other devices yet. On the computer with your data, use Re-upload all local records to cloud (or Push all pending now) and wait for 0 pending. Then Full re-sync here.');
-      el.style.cursor = '';
-    } else if (blocked > 0) {
-      setFooterIndicator(el, blocked + ' auto-retrying', 'offline', (st.lastError || '') + ' — will auto-retry. Click to retry now.');
-      el.style.cursor = 'pointer';
-    } else if (failed > 0) {
-      setFooterIndicator(el, failed + ' retrying', 'offline', (st.lastError || '') + ' — click to retry sync.');
-      el.style.cursor = 'pointer';
-    } else if (pendingOrDirty > 0) {
-      setFooterIndicator(el, pendingOrDirty + ' pending', 'syncing');
-      el.style.cursor = '';
-    } else if (st.lastSync && !(st.suppressSyncedFooter) && st.syncHealthy !== false) {
-      if (merged > 0) {
-        setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync) + ' (' + merged + ' new)', 'synced');
-        el.style.cursor = '';
-      } else if (received > 0 && merged === 0) {
-        setFooterIndicator(el, 'Up to date', 'synced', 'Checked cloud \u2014 local records are current.');
-        el.style.cursor = '';
-      } else {
-        setFooterIndicator(el, 'Synced ' + formatSyncTime(st.lastSync), 'synced');
-        el.style.cursor = '';
-      }
-    } else if (st.suppressSyncedFooter || st.syncHealthy === false) {
-      // Not empty-cloud (handled above). inProgress / lastError / unverified push must not
-      // reuse empty-cloud copy that forbids Full re-sync.
-      setFooterIndicator(
-        el,
-        'Local only — check sync',
-        'offline',
-        st.lastError ||
-          'Sync needs attention. Open Settings \u2192 Backup to retry push, or Full re-sync if records are missing on this device.'
-      );
-      el.style.cursor = 'pointer';
-    } else {
-      setFooterIndicator(el, 'Waiting to sync', 'backup-ok');
-      el.style.cursor = '';
+    var chips = (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.deriveSyncFooterChip)
+      ? FooterStatusChips.deriveSyncFooterChip(st)
+      : null;
+    if (chips) {
+      setFooterIndicator(el, chips.text, chips.variant, chips.title || '');
+      el.style.cursor = chips.cursor != null ? chips.cursor : '';
+      return;
     }
+    // Fallback if script failed to load (should not happen in packaged app).
+    setFooterIndicator(el, 'Waiting to sync', 'backup-ok');
+    el.style.cursor = '';
   }
 
   function updateSyncStatusIndicator(data) {
@@ -17178,34 +17104,14 @@ pdfAuditFooterHtml(d, settings) +
           }
         }
       } catch (_) {}
-      if (!bs || bs.state === 'not-initialised') {
-        setFooterIndicator(backupStatusEl, 'Backup starting\u2026', '');
+      var chip = (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.deriveBackupFooterChip)
+        ? FooterStatusChips.deriveBackupFooterChip(bs)
+        : null;
+      if (chip && chip.handled) {
+        setFooterIndicator(backupStatusEl, chip.text, chip.variant, chip.title || '');
         return true;
       }
-      if (bs.state === 'running') {
-        setFooterIndicator(backupStatusEl, 'Backup running', 'backup-active');
-      } else if (bs.state === 'deferred') {
-        setFooterIndicator(backupStatusEl, 'Backup idle', 'backup-ok');
-      } else if (bs.state === 'error' || bs.lastDegradedReason) {
-        setFooterIndicator(backupStatusEl, 'Backup degraded', 'offline', bs.lastError || bs.lastDegradedReason || '');
-      } else if (bs.quickDirty || bs.hourlyDirty) {
-        var noFolder = bs.lastSkipReason === 'backup-folder-missing' || bs.lastSkipReason === 'db-missing' || bs.lastSkipReason === 'export-failed';
-        if (noFolder) {
-          setFooterIndicator(
-            backupStatusEl,
-            bs.lastSkipReason === 'backup-folder-missing' ? 'Backup folder missing' : 'Backup off',
-            'offline',
-            bs.lastSkipReason === 'backup-folder-missing'
-              ? 'Could not create or write the local Backups folder. Open Settings \u2192 Backup and choose a writable folder.'
-              : (bs.lastSkipReason || '')
-          );
-        } else {
-          setFooterIndicator(backupStatusEl, 'Backup queued', 'backup-active');
-        }
-      } else {
-        return false;
-      }
-      return true;
+      return false;
     }
 
     function updateBackupStatus(snapshot) {
@@ -19033,8 +18939,15 @@ pdfAuditFooterHtml(d, settings) +
       window.api.onCloudBackupStatusChanged(function(data) {
         var footerEl = document.getElementById('cloud-backup-footer-status');
         var homeWarning = document.getElementById('home-cloud-backup-warning');
+        var managedChip = (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.deriveManagedCloudBackupFooterChip)
+          ? FooterStatusChips.deriveManagedCloudBackupFooterChip(data)
+          : null;
         if (data && data.enabled) {
-          if (footerEl) { setFooterIndicator(footerEl, 'AWS backup on', 'backup-ok'); footerEl.style.cursor = ''; }
+          if (footerEl) {
+            if (managedChip) setFooterIndicator(footerEl, managedChip.text, managedChip.variant, managedChip.title || '');
+            else setFooterIndicator(footerEl, 'AWS backup on', 'backup-ok');
+            footerEl.style.cursor = managedChip && managedChip.cursor != null ? managedChip.cursor : '';
+          }
           if (homeWarning) homeWarning.style.display = 'none';
           var checking = document.getElementById('cloud-backup-checking');
           var notSub = document.getElementById('cloud-backup-not-subscribed');
@@ -19051,7 +18964,11 @@ pdfAuditFooterHtml(d, settings) +
           var cloudSt = document.getElementById('backup-dest-cloud-status');
           if (cloudSt) { cloudSt.textContent = 'Active — backing up automatically'; cloudSt.style.color = '#059669'; }
         } else {
-          if (footerEl) { setFooterIndicator(footerEl, 'Local only', 'warning'); footerEl.style.cursor = 'pointer'; }
+          if (footerEl) {
+            if (managedChip) setFooterIndicator(footerEl, managedChip.text, managedChip.variant, managedChip.title || '');
+            else setFooterIndicator(footerEl, 'Local backups', 'backup-ok');
+            footerEl.style.cursor = managedChip && managedChip.cursor != null ? managedChip.cursor : 'pointer';
+          }
           if (homeWarning) {
             (function() {
               try {
@@ -19089,12 +19006,23 @@ pdfAuditFooterHtml(d, settings) +
       window.api.cloudBackupStatus().then(function(status) {
         var footerEl = document.getElementById('cloud-backup-footer-status');
         var homeWarning = document.getElementById('home-cloud-backup-warning');
+        var managedChip = (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.deriveManagedCloudBackupFooterChip)
+          ? FooterStatusChips.deriveManagedCloudBackupFooterChip(status)
+          : null;
         if (status && status.enabled) {
-          if (footerEl) { setFooterIndicator(footerEl, 'AWS backup on', 'backup-ok'); footerEl.style.cursor = ''; }
+          if (footerEl) {
+            if (managedChip) setFooterIndicator(footerEl, managedChip.text, managedChip.variant, managedChip.title || '');
+            else setFooterIndicator(footerEl, 'AWS backup on', 'backup-ok');
+            footerEl.style.cursor = managedChip && managedChip.cursor != null ? managedChip.cursor : '';
+          }
           if (homeWarning) homeWarning.style.display = 'none';
           if (typeof checkCloudBackupAndPromptRestore === 'function') checkCloudBackupAndPromptRestore();
         } else {
-          if (footerEl) { setFooterIndicator(footerEl, 'Local only', 'warning'); footerEl.style.cursor = 'pointer'; }
+          if (footerEl) {
+            if (managedChip) setFooterIndicator(footerEl, managedChip.text, managedChip.variant, managedChip.title || '');
+            else setFooterIndicator(footerEl, 'Local backups', 'backup-ok');
+            footerEl.style.cursor = managedChip && managedChip.cursor != null ? managedChip.cursor : 'pointer';
+          }
           /* Show warning only if user has not permanently dismissed it (DB + legacy localStorage). */
           function applyHomeCloudBannerVisibility(s) {
             try {
