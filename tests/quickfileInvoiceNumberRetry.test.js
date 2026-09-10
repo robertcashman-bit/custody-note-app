@@ -1,6 +1,6 @@
 /**
- * QuickFile invoice-number duplicate recovery — unit tests with MOCK create/search.
- * Never hits the live QuickFile API.
+ * QuickFile invoice-number sequential allocation + duplicate recovery.
+ * Unit tests with MOCK create/search — never hits the live QuickFile API.
  */
 'use strict';
 
@@ -10,6 +10,8 @@ const {
   isQuickFileInvoiceNumberDuplicateError,
   extractConflictingInvoiceNumber,
   parseInvoiceNumberNumericPart,
+  formatInvoiceNumber,
+  createSequentialInvoiceCounter,
   attendancePurchaseReference,
   attendanceNotesMarker,
   appendAttendanceNotesMarker,
@@ -62,6 +64,37 @@ describe('extractConflictingInvoiceNumber / parseInvoiceNumberNumericPart', () =
   });
 });
 
+describe('createSequentialInvoiceCounter', () => {
+  it('successive issues get N, N+1, N+2 with no skips', () => {
+    const counter = createSequentialInvoiceCounter({ initialNext: 7000 });
+    const issued = [];
+    for (let i = 0; i < 3; i++) {
+      const n = counter.peekFormatted();
+      issued.push(n);
+      counter.markIssued(n);
+    }
+    assert.deepStrictEqual(issued, ['007000', '007001', '007002']);
+    assert.strictEqual(counter.peekFormatted(), '007003');
+  });
+
+  it('conflict on N advances only to N+1 (smallest free), not a large jump', () => {
+    const counter = createSequentialInvoiceCounter({ initialNext: 6066 });
+    assert.strictEqual(counter.peekFormatted(), '006066');
+    counter.markOccupied('006066');
+    assert.strictEqual(counter.peekFormatted(), '006067');
+    /* Marking a lower/equal occupied again is a no-op for further jumps */
+    counter.markOccupied('006066');
+    assert.strictEqual(counter.peekFormatted(), '006067');
+  });
+
+  it('markIssued persists so the following peek is previous+1', () => {
+    const counter = createSequentialInvoiceCounter({ initialNext: 6100 });
+    counter.markIssued('006100');
+    assert.strictEqual(counter.getNext(), 6101);
+    assert.strictEqual(formatInvoiceNumber(counter.peek()), '006101');
+  });
+});
+
 describe('attendance markers and belonging', () => {
   it('builds a PurchaseReference within QuickFile length limit', () => {
     const ref = attendancePurchaseReference(12345);
@@ -111,18 +144,43 @@ describe('quickFileExtractInvoiceSearchRecords', () => {
   });
 });
 
-describe('createInvoiceWithDuplicateRecovery', () => {
-  it('retries with next number when QuickFile reports already-used, then succeeds', async () => {
-    const allocated = [];
+/**
+ * Wire recovery to a peek-only counter — mirrors main.js (peek + bumpPast).
+ */
+function wireSequentialAllocator(initialNext) {
+  const counter = createSequentialInvoiceCounter({ initialNext });
+  return {
+    counter,
+    allocateNextNumber: () => counter.peekFormatted(),
+    bumpPastNumber: (raw) => { counter.markOccupied(raw); },
+  };
+}
+
+describe('createInvoiceWithDuplicateRecovery — sequential discipline', () => {
+  it('successive creates get N, N+1, N+2', async () => {
+    const wire = wireSequentialAllocator(8000);
+    const issued = [];
+    for (let i = 0; i < 3; i++) {
+      const result = await createInvoiceWithDuplicateRecovery({
+        allocateNextNumber: wire.allocateNextNumber,
+        bumpPastNumber: wire.bumpPastNumber,
+        createWithNumber: async (invNum) => ({ InvoiceID: 100 + i, InvoiceNumber: invNum }),
+      });
+      issued.push(result.invoiceNumber);
+    }
+    assert.deepStrictEqual(issued, ['008000', '008001', '008002']);
+    assert.strictEqual(wire.counter.peekFormatted(), '008003');
+  });
+
+  it('conflict on N → next attempt uses N+1 (smallest free), not N+10', async () => {
+    const wire = wireSequentialAllocator(6066);
+    const attempted = [];
     const result = await createInvoiceWithDuplicateRecovery({
-      attendanceId: 10,
       maxAttempts: 5,
-      allocateNextNumber: () => {
-        const n = String(6066 + allocated.length).padStart(6, '0');
-        allocated.push(n);
-        return n;
-      },
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
       createWithNumber: async (invNum) => {
+        attempted.push(invNum);
         if (invNum === '006066') throw new Error('Invoice number is already there');
         if (invNum === '006067') throw new Error('The invoice number is already used');
         return { InvoiceID: 9001, InvoiceNumber: invNum };
@@ -132,39 +190,40 @@ describe('createInvoiceWithDuplicateRecovery', () => {
     });
     assert.strictEqual(result.reused, false);
     assert.strictEqual(result.invoiceNumber, '006068');
-    assert.strictEqual(result.invoiceId, '9001');
-    assert.deepStrictEqual(allocated, ['006066', '006067', '006068']);
+    assert.deepStrictEqual(attempted, ['006066', '006067', '006068']);
+    assert.strictEqual(wire.counter.peekFormatted(), '006069');
   });
 
-  it('attaches existing invoice when conflict is for the same attendance', async () => {
-    const attendanceId = 42;
+  it('does not skip ahead when error text mentions a larger unrelated number', async () => {
+    const wire = wireSequentialAllocator(6066);
+    const attempted = [];
     const result = await createInvoiceWithDuplicateRecovery({
-      attendanceId,
-      maxAttempts: 5,
-      allocateNextNumber: () => '006200',
-      createWithNumber: async () => {
-        throw new Error('Invoice number already exists');
+      maxAttempts: 4,
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
+      createWithNumber: async (invNum) => {
+        attempted.push(invNum);
+        /* Error mentions 006079 — recovery must still only bump past attempted 006066 */
+        if (invNum === '006066') {
+          throw new Error('Invoice number 006079 already exists');
+        }
+        return { InvoiceID: 1, InvoiceNumber: invNum };
       },
-      findByInvoiceNumber: async (invNum) => ({
-        InvoiceID: 777,
-        InvoiceNumber: invNum,
-        PurchaseReference: attendancePurchaseReference(attendanceId),
-      }),
-      findByAttendanceRef: async () => null,
+      findByInvoiceNumber: async () => null,
     });
-    assert.strictEqual(result.reused, true);
-    assert.strictEqual(result.invoiceId, '777');
-    assert.strictEqual(result.invoiceNumber, '006200');
+    assert.strictEqual(result.invoiceNumber, '006067');
+    assert.deepStrictEqual(attempted, ['006066', '006067']);
+    assert.strictEqual(wire.counter.peekFormatted(), '006068');
   });
 
-  it('reuses by attendance PurchaseReference before create when prior partial success left QF invoice', async () => {
+  it('same-attendance reuse before create does not consume the next sequence number', async () => {
     const attendanceId = 55;
+    const wire = wireSequentialAllocator(6300);
     let created = 0;
     const result = await createInvoiceWithDuplicateRecovery({
       attendanceId,
-      allocateNextNumber: () => {
-        throw new Error('should not allocate when reuse found');
-      },
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
       createWithNumber: async () => {
         created += 1;
         throw new Error('should not create');
@@ -179,6 +238,68 @@ describe('createInvoiceWithDuplicateRecovery', () => {
     assert.strictEqual(result.invoiceId, '888');
     assert.strictEqual(result.invoiceNumber, '006300');
     assert.strictEqual(created, 0);
+    /* Counter unchanged — reuse must not burn a number */
+    assert.strictEqual(wire.counter.peekFormatted(), '006300');
+  });
+
+  it('success persists last number so the following create is previous+1', async () => {
+    const wire = wireSequentialAllocator(6500);
+    const first = await createInvoiceWithDuplicateRecovery({
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
+      createWithNumber: async (invNum) => ({ InvoiceID: 42, InvoiceNumber: invNum }),
+    });
+    assert.strictEqual(first.invoiceNumber, '006500');
+    assert.strictEqual(wire.counter.peekFormatted(), '006501');
+
+    const second = await createInvoiceWithDuplicateRecovery({
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
+      createWithNumber: async (invNum) => ({ InvoiceID: 43, InvoiceNumber: invNum }),
+    });
+    assert.strictEqual(second.invoiceNumber, '006501');
+    assert.strictEqual(wire.counter.peekFormatted(), '006502');
+  });
+
+  it('failed non-duplicate create does not burn the peeked number', async () => {
+    const wire = wireSequentialAllocator(6400);
+    await assert.rejects(
+      () => createInvoiceWithDuplicateRecovery({
+        allocateNextNumber: wire.allocateNextNumber,
+        bumpPastNumber: wire.bumpPastNumber,
+        createWithNumber: async () => {
+          throw new Error('Invalid MD5 signature');
+        },
+      }),
+      /Invalid MD5 signature/
+    );
+    /* Peek-only allocate: counter still at 6400 for the next attempt */
+    assert.strictEqual(wire.counter.peekFormatted(), '006400');
+  });
+
+  it('attaches existing invoice when conflict is for the same attendance', async () => {
+    const attendanceId = 42;
+    const wire = wireSequentialAllocator(6200);
+    const result = await createInvoiceWithDuplicateRecovery({
+      attendanceId,
+      maxAttempts: 5,
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
+      createWithNumber: async () => {
+        throw new Error('Invoice number already exists');
+      },
+      findByInvoiceNumber: async (invNum) => ({
+        InvoiceID: 777,
+        InvoiceNumber: invNum,
+        PurchaseReference: attendancePurchaseReference(attendanceId),
+      }),
+      findByAttendanceRef: async () => null,
+    });
+    assert.strictEqual(result.reused, true);
+    assert.strictEqual(result.invoiceId, '777');
+    assert.strictEqual(result.invoiceNumber, '006200');
+    /* Occupied number marked so following create uses 6201 */
+    assert.strictEqual(wire.counter.peekFormatted(), '006201');
   });
 
   it('non-duplicate QuickFile errors still fail clearly without retrying', async () => {
@@ -199,23 +320,28 @@ describe('createInvoiceWithDuplicateRecovery', () => {
   });
 
   it('persists submitted invoice number when create body omits InvoiceNumber', async () => {
+    const wire = wireSequentialAllocator(6500);
     const result = await createInvoiceWithDuplicateRecovery({
-      allocateNextNumber: () => '006500',
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
       createWithNumber: async () => ({ InvoiceID: 42 }),
     });
     assert.strictEqual(result.invoiceId, '42');
     assert.strictEqual(result.invoiceNumber, '006500');
+    assert.strictEqual(wire.counter.peekFormatted(), '006501');
   });
 
   it('stops after maxAttempts on persistent duplicates', async () => {
+    const wire = wireSequentialAllocator(7000);
     let attempts = 0;
     await assert.rejects(
       () => createInvoiceWithDuplicateRecovery({
         maxAttempts: 3,
         allocateNextNumber: () => {
           attempts += 1;
-          return String(7000 + attempts);
+          return wire.allocateNextNumber();
         },
+        bumpPastNumber: wire.bumpPastNumber,
         createWithNumber: async () => {
           throw new Error('invoice number already exists');
         },
@@ -225,20 +351,7 @@ describe('createInvoiceWithDuplicateRecovery', () => {
     );
     assert.strictEqual(attempts, 3);
     assert.ok(MAX_INVOICE_NUMBER_ATTEMPTS >= 3);
-  });
-
-  it('bumps past conflicting number extracted from the error', async () => {
-    const bumped = [];
-    await createInvoiceWithDuplicateRecovery({
-      maxAttempts: 4,
-      allocateNextNumber: () => (bumped.length ? '006080' : '006066'),
-      bumpPastNumber: (raw) => bumped.push(raw),
-      createWithNumber: async (invNum) => {
-        if (invNum === '006066') throw new Error('Invoice number 006079 already exists');
-        return { InvoiceID: 1, InvoiceNumber: invNum };
-      },
-      findByInvoiceNumber: async () => null,
-    });
-    assert.deepStrictEqual(bumped, ['006079']);
+    /* After 3 conflicts on 7000,7001,7002 — next peek is 7003 */
+    assert.strictEqual(wire.counter.peekFormatted(), '007003');
   });
 });
