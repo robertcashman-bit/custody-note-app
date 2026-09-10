@@ -1036,6 +1036,7 @@ function flushDbAsyncBounded(timeoutMs, label) {
   const ms = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : FLUSH_BOUND_DEFAULT_MS;
   const tag = label ? String(label) : 'flush';
   if (!db) return Promise.resolve({ ok: true, skipped: true });
+  const { shouldRestoreDirtyAfterFlush } = require('./lib/flushDirtyPolicy');
 
   return new Promise((resolve) => {
     let settled = false;
@@ -1043,6 +1044,17 @@ function flushDbAsyncBounded(timeoutMs, label) {
       if (settled) return;
       settled = true;
       try { clearTimeout(timer); } catch (_) {}
+      // Timeout / failure must restore dirty — never claim durable after an unconfirmed write.
+      try {
+        const policy = shouldRestoreDirtyAfterFlush(result || {});
+        if (policy.restoreDirty) {
+          _dbDirty = true;
+          _cachedDbExportDirty = true;
+        }
+      } catch (_) {
+        _dbDirty = true;
+        _cachedDbExportDirty = true;
+      }
       resolve(result);
     };
     const timer = setTimeout(() => {
@@ -1073,12 +1085,12 @@ function flushDbAsyncBounded(timeoutMs, label) {
       }
       if (!encrypted) {
         _saveDbInProgress = false;
-        finish({ ok: true, skipped: true });
+        finish({ ok: true, skipped: true, wroteBytes: 0 });
         return;
       }
       writeFileAtomicAsync(getDbPath(), encrypted).then(() => {
         _saveDbInProgress = false;
-        finish({ ok: true });
+        finish({ ok: true, wroteBytes: encrypted.length });
       }).catch((err) => {
         console.error('[flushDbAsyncBounded] Write failed (' + tag + '):', err && err.message ? err.message : err);
         _dbDirty = true;
@@ -1088,6 +1100,8 @@ function flushDbAsyncBounded(timeoutMs, label) {
       });
     } catch (err) {
       console.error('[flushDbAsyncBounded] Failed (' + tag + '):', err && err.message ? err.message : err);
+      _dbDirty = true;
+      _cachedDbExportDirty = true;
       finish({ ok: false, error: err && err.message ? err.message : String(err) });
     }
   });
@@ -7407,6 +7421,7 @@ ipcMain.handle('persist-and-backup', async () => {
   const { buildForceSaveResult } = require('./lib/forceSaveStatus');
   const { evaluateBackupSeriesIntegrity, inspectBackupFolder, countActiveAttendancesInPlainDb } = require('./lib/backupIntegrityGate');
   const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
+  const { evaluatePostFlushDurability } = require('./lib/flushDirtyPolicy');
   try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const folder = getBackupFolder();
   const deviceId = (() => { try { return getMachineId(); } catch (_) { return null; } })();
@@ -7416,8 +7431,26 @@ ipcMain.handle('persist-and-backup', async () => {
   try {
     flushDbSync();
     const dbPath = getDbPath();
-    noteDurable = !_dbDirty && !!dbPath && fs.existsSync(dbPath);
-    if (!noteDurable) durableError = 'Database file missing or still dirty after flush';
+    const pathExists = !!dbPath && fs.existsSync(dbPath);
+    let magicOk = false;
+    let bytes = null;
+    if (pathExists) {
+      const verified = verifyEncryptedBackupFile(dbPath, { minBytes: 4 });
+      magicOk = !!(verified && verified.ok && verified.magicOk);
+      bytes = verified && verified.bytes != null ? verified.bytes : null;
+      if (!verified.ok) durableError = 'Post-flush DB verify failed: ' + (verified.reason || 'unknown');
+    }
+    const durability = evaluatePostFlushDurability({
+      dirty: !!_dbDirty,
+      pathExists,
+      magicOk,
+      bytes,
+      minBytes: 4,
+    });
+    noteDurable = durability.durable === true;
+    if (!noteDurable && !durableError) {
+      durableError = 'Database not durable after flush (' + durability.reason + ')';
+    }
   } catch (err) {
     durableError = err && err.message ? err.message : String(err);
     noteDurable = false;
@@ -7587,6 +7620,8 @@ ipcMain.handle('persist-and-backup', async () => {
 ipcMain.handle('flush-and-backup', async () => {
   // Legacy alias used by older UI — same durable checkpoint as Save now.
   const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
+  const { evaluatePostFlushDurability } = require('./lib/flushDirtyPolicy');
+  const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
   try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const folder = getBackupFolder();
   let noteDurable = false;
@@ -7594,8 +7629,26 @@ ipcMain.handle('flush-and-backup', async () => {
   try {
     flushDbSync();
     const dbPath = getDbPath();
-    noteDurable = !_dbDirty && !!dbPath && fs.existsSync(dbPath);
-    if (!noteDurable) durableError = 'Database file missing or still dirty after flush';
+    const pathExists = !!dbPath && fs.existsSync(dbPath);
+    let magicOk = false;
+    let bytes = null;
+    if (pathExists) {
+      const verified = verifyEncryptedBackupFile(dbPath, { minBytes: 4 });
+      magicOk = !!(verified && verified.ok && verified.magicOk);
+      bytes = verified && verified.bytes != null ? verified.bytes : null;
+      if (!verified.ok) durableError = 'Post-flush DB verify failed: ' + (verified.reason || 'unknown');
+    }
+    const durability = evaluatePostFlushDurability({
+      dirty: !!_dbDirty,
+      pathExists,
+      magicOk,
+      bytes,
+      minBytes: 4,
+    });
+    noteDurable = durability.durable === true;
+    if (!noteDurable && !durableError) {
+      durableError = 'Database not durable after flush (' + durability.reason + ')';
+    }
   } catch (err) {
     durableError = err && err.message ? err.message : String(err);
     noteDurable = false;
