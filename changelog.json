@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.86",
+      "version": "1.9.87",
       "date": "2026-09-10",
       "latest": true,
+      "changes": [
+        "QuickFile billing: recover when invoice number is already used/exists/there — match more error variants, reuse the existing invoice when it belongs to this attendance, otherwise allocate the next free number with bounded retries",
+        "QuickFile: sync next invoice number including deleted invoices (QuickFile still reserves those numbers), tag creates with attendance PurchaseReference, persist invoice id/number even when the API omits InvoiceNumber in the response",
+        "Unit tests for duplicate-number retry, same-attendance attach, non-duplicate failure, and persistence"
+      ]
+    },
+    {
+      "version": "1.9.86",
+      "date": "2026-09-10",
+      "latest": false,
       "changes": [
         "Data-safety architecture: central account sync is Source of Truth; generational backups remain independent PITR (not the same thing)",
         "Force Save / Save now: flush disk → verified backup → outbox → attempt central sync drain → status distinguishes Safe locally vs Safe locally + central copy confirmed vs Waiting/Syncing/Sync problem — never ambiguous Saved",

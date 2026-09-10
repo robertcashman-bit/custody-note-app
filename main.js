@@ -9001,6 +9001,7 @@ const laaFormsSync = require('./lib/laaFormsSync');
 const laaFormsManifest = require('./lib/laaFormsManifest');
 const quickfileClient = require('./lib/quickfileClient');
 const quickfileSettingsSync = require('./lib/quickfileSettingsSync');
+const quickfileInvoiceNumber = require('./lib/quickfileInvoiceNumber');
 
 const QUICKFILE_CREDENTIAL_KEYS = new Set(['quickfileAccountNumber', 'quickfileApiKey', 'quickfileAppId']);
 
@@ -10018,43 +10019,50 @@ function peekNextSequentialInvoiceNumber() {
   return String(next).padStart(6, '0');
 }
 
-/** Largest numeric segment from an invoice reference (handles "006069", "INV-6069", etc.). */
-function parseInvoiceNumberNumericPart(raw) {
-  const digits = String(raw || '').replace(/\D/g, '');
-  if (!digits) return NaN;
-  const n = parseInt(digits, 10);
-  return Number.isFinite(n) ? n : NaN;
-}
+const parseInvoiceNumberNumericPart = quickfileInvoiceNumber.parseInvoiceNumberNumericPart;
+const quickFileExtractInvoiceSearchRecords = quickfileInvoiceNumber.quickFileExtractInvoiceSearchRecords;
+const isQuickFileInvoiceNumberDuplicateError = quickfileInvoiceNumber.isQuickFileInvoiceNumberDuplicateError;
 
-function quickFileExtractInvoiceSearchRecords(body) {
-  if (!body || typeof body !== 'object') return [];
-  const list =
-    body.Record ||
-    body.Records ||
-    body.InvoiceDetails ||
-    body.Invoices ||
-    body.InvoiceList ||
-    [];
-  const arr = Array.isArray(list) ? list : [list];
-  return arr.filter(Boolean);
+/**
+ * Ensure nextInvoiceNumber is strictly above a known occupied number
+ * (e.g. from a duplicate-error message or a search hit).
+ */
+function bumpNextInvoiceNumberPast(rawOccupied) {
+  const n = parseInvoiceNumberNumericPart(rawOccupied);
+  if (!Number.isFinite(n) || n < 1) return;
+  const requiredNext = n + 1;
+  const row = dbAll("SELECT value FROM settings WHERE key = 'nextInvoiceNumber'");
+  let storedNext = row.length ? parseInt(row[0].value, 10) : NaN;
+  if (!Number.isFinite(storedNext) || storedNext < 1) storedNext = 6066;
+  if (storedNext < requiredNext) {
+    db.run("INSERT OR REPLACE INTO settings (key, value) VALUES ('nextInvoiceNumber', ?)", [String(requiredNext)]);
+    saveDb();
+    console.warn('[QuickFile] Bumped nextInvoiceNumber to ' + requiredNext + ' (past occupied #' + n + ')');
+  }
 }
 
 async function quickFileGetMaxInvoiceNumberNumeric() {
+  /* Include deleted invoices: QuickFile still reserves their numbers (community-confirmed). */
   const body = await quickFileRequest('/1_2/invoice/search', {
     SearchParameters: {
-      ReturnCount: 1,
+      ReturnCount: 50,
       Offset: 0,
       OrderResultsBy: 'InvoiceNumber',
       OrderDirection: 'DESC',
       InvoiceType: 'INVOICE',
+      ShowDeleted: true,
     },
   });
   const records = quickFileExtractInvoiceSearchRecords(body);
   if (!records.length) return null;
-  const inv = records[0];
-  const invNum = inv.InvoiceNumber || inv.Invoice_No || inv.InvoiceNo || inv.InvoiceNum || '';
-  const n = parseInvoiceNumberNumericPart(invNum);
-  return Number.isFinite(n) ? n : null;
+  let max = null;
+  for (let i = 0; i < records.length; i++) {
+    const inv = records[i];
+    const invNum = inv.InvoiceNumber || inv.Invoice_No || inv.InvoiceNo || inv.InvoiceNum || '';
+    const n = parseInvoiceNumberNumericPart(invNum);
+    if (Number.isFinite(n) && (max === null || n > max)) max = n;
+  }
+  return max;
 }
 
 /** Align local nextInvoiceNumber so the next issued number is above QuickFile's highest (handles invoices created outside the app). */
@@ -10062,28 +10070,58 @@ async function syncNextInvoiceNumberFromQuickFileLedger() {
   try {
     const max = await quickFileGetMaxInvoiceNumberNumeric();
     if (max === null || !Number.isFinite(max)) return;
-    const row = dbAll("SELECT value FROM settings WHERE key = 'nextInvoiceNumber'");
-    let storedNext = row.length ? parseInt(row[0].value, 10) : NaN;
-    if (!Number.isFinite(storedNext) || storedNext < 1) storedNext = 6066;
-    const requiredNext = max + 1;
-    if (storedNext < requiredNext) {
-      db.run("INSERT OR REPLACE INTO settings (key, value) VALUES ('nextInvoiceNumber', ?)", [String(requiredNext)]);
-      saveDb();
-      console.warn('[QuickFile] Bumped nextInvoiceNumber to ' + requiredNext + ' (QuickFile max invoice # was ' + max + ')');
-    }
+    bumpNextInvoiceNumberPast(String(max));
   } catch (e) {
     console.warn('[QuickFile] syncNextInvoiceNumberFromQuickFileLedger:', e && e.message ? e.message : e);
   }
 }
 
-function isQuickFileInvoiceNumberDuplicateError(err) {
-  const msg = String((err && err.message) || err || '').toLowerCase();
-  if (!msg) return false;
-  if (msg.includes('already exists')) return true;
-  if (/invoice\s*#?\s*[\d\w-]+\s*already/.test(msg)) return true;
-  if (msg.includes('duplicate') && msg.includes('invoice')) return true;
-  if (msg.includes('invoice number') && (msg.includes('taken') || msg.includes('use'))) return true;
-  return false;
+async function quickFileFindInvoiceByNumber(invoiceNumber) {
+  const num = String(invoiceNumber || '').trim();
+  if (!num) return null;
+  const body = await quickFileRequest('/1_2/invoice/search', {
+    SearchParameters: {
+      ReturnCount: 5,
+      Offset: 0,
+      OrderResultsBy: 'InvoiceNumber',
+      OrderDirection: 'DESC',
+      InvoiceType: 'INVOICE',
+      InvoiceNumber: num,
+      ShowDeleted: false,
+      AdditionalParameters: { ShowPurchaseRef: true },
+    },
+  });
+  const records = quickFileExtractInvoiceSearchRecords(body);
+  const want = num.toLowerCase();
+  const exact = records.find((r) => {
+    const n = String(r.InvoiceNumber || r.Invoice_No || r.InvoiceNo || '').trim().toLowerCase();
+    return n === want;
+  });
+  return exact || records[0] || null;
+}
+
+async function quickFileFindInvoiceByAttendanceRef(attendanceId) {
+  const ref = quickfileInvoiceNumber.attendancePurchaseReference(attendanceId);
+  if (!ref) return null;
+  const body = await quickFileRequest('/1_2/invoice/search', {
+    SearchParameters: {
+      ReturnCount: 5,
+      Offset: 0,
+      OrderResultsBy: 'IssueDate',
+      OrderDirection: 'DESC',
+      InvoiceType: 'INVOICE',
+      PurchaseReference: ref,
+      ShowDeleted: false,
+      AdditionalParameters: { ShowPurchaseRef: true },
+    },
+  });
+  const records = quickFileExtractInvoiceSearchRecords(body);
+  for (let i = 0; i < records.length; i++) {
+    if (quickfileInvoiceNumber.invoiceBelongsToAttendance(records[i], attendanceId)) {
+      return records[i];
+    }
+  }
+  return null;
 }
 
 ipcMain.handle('quickfile-suggest-next-invoice-number', async () => {
@@ -10293,47 +10331,76 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
 
     await syncNextInvoiceNumberFromQuickFileLedger();
 
-    const MAX_INVOICE_NUMBER_ATTEMPTS = 35;
-    let invoiceBody;
-    let lastCreateErr;
-    for (let attempt = 0; attempt < MAX_INVOICE_NUMBER_ATTEMPTS; attempt++) {
-      const invNum = getNextSequentialInvoiceNumber();
-      const singleInvoiceData = { IssueDate: invDate, InvoiceNumber: invNum };
+    const purchaseRef = quickfileInvoiceNumber.attendancePurchaseReference(attendanceId);
+    const notesWithMarker = quickfileInvoiceNumber.appendAttendanceNotesMarker(
+      (narrative || '').slice(0, 4000),
+      attendanceId
+    );
 
-      const invoicePayload = {
-        InvoiceData: {
-          InvoiceType: 'INVOICE',
-          ClientID: clientIdNum,
-          Currency: 'GBP',
-          TermDays: 30,
-          Language: 'en',
-          Notes: (narrative || '').slice(0, 4000),
-          InvoiceLines: {
-            ItemLines: {
-              ItemLine: lineItems,
+    const createResult = await quickfileInvoiceNumber.createInvoiceWithDuplicateRecovery({
+      attendanceId,
+      maxAttempts: quickfileInvoiceNumber.MAX_INVOICE_NUMBER_ATTEMPTS,
+      allocateNextNumber: getNextSequentialInvoiceNumber,
+      bumpPastNumber: bumpNextInvoiceNumberPast,
+      findByAttendanceRef: attendanceId
+        ? () => quickFileFindInvoiceByAttendanceRef(attendanceId)
+        : undefined,
+      findByInvoiceNumber: (invNum) => quickFileFindInvoiceByNumber(invNum),
+      onConflictWarn: (e, invNum) => {
+        console.warn(
+          '[QuickFile] Invoice number conflict on ' + invNum + ', trying next:',
+          e && e.message ? e.message : e
+        );
+      },
+      createWithNumber: async (invNum) => {
+        const singleInvoiceData = {
+          IssueDate: invDate,
+          InvoiceNumber: invNum,
+        };
+        if (purchaseRef) singleInvoiceData.PurchaseReference = purchaseRef;
+
+        const invoicePayload = {
+          InvoiceData: {
+            InvoiceType: 'INVOICE',
+            ClientID: clientIdNum,
+            Currency: 'GBP',
+            TermDays: 30,
+            Language: 'en',
+            Notes: notesWithMarker,
+            InvoiceLines: {
+              ItemLines: {
+                ItemLine: lineItems,
+              },
+            },
+            Scheduling: {
+              SingleInvoiceData: singleInvoiceData,
             },
           },
-          Scheduling: {
-            SingleInvoiceData: singleInvoiceData,
-          },
-        },
-      };
-      validateQuickFileInvoicePayload(invoicePayload);
-      try {
-        invoiceBody = await quickFileRequest('/1_2/invoice/create', invoicePayload);
-        break;
-      } catch (e) {
-        lastCreateErr = e;
-        if (!isQuickFileInvoiceNumberDuplicateError(e) || attempt === MAX_INVOICE_NUMBER_ATTEMPTS - 1) {
-          throw e;
-        }
-        console.warn('[QuickFile] Invoice number conflict, trying next:', e && e.message ? e.message : e);
-      }
-    }
-    if (!invoiceBody) throw lastCreateErr || new Error('QuickFile invoice/create failed');
+        };
+        validateQuickFileInvoicePayload(invoicePayload);
+        return quickFileRequest('/1_2/invoice/create', invoicePayload);
+      },
+    });
 
-    const invoiceId = invoiceBody.InvoiceID || invoiceBody.InvoiceId || invoiceBody.RecordID || '';
-    const invoiceNumber = invoiceBody.InvoiceNumber || '';
+    const invoiceBody = createResult.invoiceBody || {};
+    const invoiceId = createResult.invoiceId
+      || String(invoiceBody.InvoiceID || invoiceBody.InvoiceId || invoiceBody.RecordID || '');
+    const invoiceNumber = createResult.invoiceNumber
+      || String(invoiceBody.InvoiceNumber || '');
+
+    if (!invoiceId) {
+      throw new Error(
+        'QuickFile invoice/create returned no InvoiceID'
+        + (invoiceNumber ? ' (number ' + invoiceNumber + ')' : '')
+      );
+    }
+
+    if (createResult.reused) {
+      console.warn(
+        '[QuickFile] Reusing existing invoice #' + invoiceNumber
+        + ' (id ' + invoiceId + ') for attendance ' + attendanceId
+      );
+    }
 
     const subtotal = (attendanceFee || 0) + mileageCost + (parkingAmount || 0);
     const vat = subtotal * vr;
@@ -10378,7 +10445,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       );
       db.run(
         `INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)`,
-        [attendanceId, 'invoice_created', JSON.stringify({ invoiceId, invoiceNumber, total }), userName || '']
+        [attendanceId, createResult.reused ? 'invoice_linked' : 'invoice_created', JSON.stringify({ invoiceId, invoiceNumber, total, reused: !!createResult.reused }), userName || '']
       );
       saveDb();
     }

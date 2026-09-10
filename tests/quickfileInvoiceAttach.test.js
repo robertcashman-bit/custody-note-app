@@ -141,9 +141,26 @@ describe('QuickFile invoice number — ledger sync and duplicate retry', () => {
   });
 
   it('retries invoice/create when QuickFile reports an existing invoice number', () => {
+    assert.ok(mainJs.includes('createInvoiceWithDuplicateRecovery'));
     assert.ok(mainJs.includes('isQuickFileInvoiceNumberDuplicateError'));
-    assert.ok(mainJs.includes('Invoice number conflict, trying next'));
+    assert.ok(mainJs.includes('Invoice number conflict'));
     assert.ok(mainJs.includes('MAX_INVOICE_NUMBER_ATTEMPTS'));
+  });
+
+  it('includes deleted invoices when syncing max ledger number', () => {
+    assert.ok(mainJs.includes('ShowDeleted: true'));
+  });
+
+  it('tags creates with attendance PurchaseReference and Notes marker', () => {
+    assert.ok(mainJs.includes('attendancePurchaseReference'));
+    assert.ok(mainJs.includes('appendAttendanceNotesMarker'));
+    assert.ok(mainJs.includes('PurchaseReference'));
+  });
+
+  it('reuses existing QuickFile invoice for the same attendance when found', () => {
+    assert.ok(mainJs.includes('quickFileFindInvoiceByAttendanceRef'));
+    assert.ok(mainJs.includes('quickFileFindInvoiceByNumber'));
+    assert.ok(mainJs.includes("invoice_linked"));
   });
 
   it('extracts invoice rows and numeric parts for max-number sync', () => {
