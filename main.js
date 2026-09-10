@@ -1036,6 +1036,7 @@ function flushDbAsyncBounded(timeoutMs, label) {
   const ms = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : FLUSH_BOUND_DEFAULT_MS;
   const tag = label ? String(label) : 'flush';
   if (!db) return Promise.resolve({ ok: true, skipped: true });
+  const { shouldRestoreDirtyAfterFlush } = require('./lib/flushDirtyPolicy');
 
   return new Promise((resolve) => {
     let settled = false;
@@ -1043,6 +1044,17 @@ function flushDbAsyncBounded(timeoutMs, label) {
       if (settled) return;
       settled = true;
       try { clearTimeout(timer); } catch (_) {}
+      // Timeout / failure must restore dirty — never claim durable after an unconfirmed write.
+      try {
+        const policy = shouldRestoreDirtyAfterFlush(result || {});
+        if (policy.restoreDirty) {
+          _dbDirty = true;
+          _cachedDbExportDirty = true;
+        }
+      } catch (_) {
+        _dbDirty = true;
+        _cachedDbExportDirty = true;
+      }
       resolve(result);
     };
     const timer = setTimeout(() => {
@@ -1073,12 +1085,12 @@ function flushDbAsyncBounded(timeoutMs, label) {
       }
       if (!encrypted) {
         _saveDbInProgress = false;
-        finish({ ok: true, skipped: true });
+        finish({ ok: true, skipped: true, wroteBytes: 0 });
         return;
       }
       writeFileAtomicAsync(getDbPath(), encrypted).then(() => {
         _saveDbInProgress = false;
-        finish({ ok: true });
+        finish({ ok: true, wroteBytes: encrypted.length });
       }).catch((err) => {
         console.error('[flushDbAsyncBounded] Write failed (' + tag + '):', err && err.message ? err.message : err);
         _dbDirty = true;
@@ -1088,6 +1100,8 @@ function flushDbAsyncBounded(timeoutMs, label) {
       });
     } catch (err) {
       console.error('[flushDbAsyncBounded] Failed (' + tag + '):', err && err.message ? err.message : err);
+      _dbDirty = true;
+      _cachedDbExportDirty = true;
       finish({ ok: false, error: err && err.message ? err.message : String(err) });
     }
   });
@@ -3266,6 +3280,42 @@ async function syncPull(opts) {
         received: remoteRecords.length,
         mayWipeLocal: preservePolicy.mayWipeLocal,
       });
+    }
+    try {
+      const { emptyOrFailedResponsePolicy } = require('./lib/serverPitrContract');
+      const { enforceMonitorFailClosed } = require('./lib/monitorFailClosed');
+      const respPolicy = emptyOrFailedResponsePolicy({
+        ok: true,
+        statusCode: 200,
+        records: remoteRecords,
+        pulledFromEpoch: pullStartedFromEpoch,
+      });
+      if (respPolicy.mayWipeLocal) {
+        throw new Error('REFUSING_DESTRUCTIVE_PULL: response policy forbids wipe');
+      }
+      const gate = enforceMonitorFailClosed(
+        {
+          localActiveCount: localCount,
+          lastPullReceived: remoteRecords.length,
+          pulledFromEpoch: pullStartedFromEpoch,
+          lastVerifiedCloudInventory: getLastVerifiedCloudInventory(),
+          pullEverCompleted: true,
+        },
+        {
+          intendedAction:
+            remoteRecords.length === 0 && localCount > 0
+              ? 'accept_empty_cloud_as_wipe'
+              : 'merge',
+        }
+      );
+      if (!gate.allowed) {
+        console.warn('[SYNC-PULL] Monitor fail-closed refused destructive empty-cloud wipe; preserving local');
+      }
+    } catch (gateErr) {
+      if (gateErr && /REFUSING_DESTRUCTIVE_PULL/.test(String(gateErr.message || ''))) {
+        throw gateErr;
+      }
+      console.warn('[SYNC-PULL] Monitor gate error (non-fatal, preserve local):', gateErr && gateErr.message);
     }
     // Explicit guard — pull path must remain merge-only (insert/update/soft-tombstone by sync_id).
     assertPullBatchNonDestructive(
@@ -7407,6 +7457,7 @@ ipcMain.handle('persist-and-backup', async () => {
   const { buildForceSaveResult } = require('./lib/forceSaveStatus');
   const { evaluateBackupSeriesIntegrity, inspectBackupFolder, countActiveAttendancesInPlainDb } = require('./lib/backupIntegrityGate');
   const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
+  const { evaluatePostFlushDurability } = require('./lib/flushDirtyPolicy');
   try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const folder = getBackupFolder();
   const deviceId = (() => { try { return getMachineId(); } catch (_) { return null; } })();
@@ -7416,8 +7467,26 @@ ipcMain.handle('persist-and-backup', async () => {
   try {
     flushDbSync();
     const dbPath = getDbPath();
-    noteDurable = !_dbDirty && !!dbPath && fs.existsSync(dbPath);
-    if (!noteDurable) durableError = 'Database file missing or still dirty after flush';
+    const pathExists = !!dbPath && fs.existsSync(dbPath);
+    let magicOk = false;
+    let bytes = null;
+    if (pathExists) {
+      const verified = verifyEncryptedBackupFile(dbPath, { minBytes: 4 });
+      magicOk = !!(verified && verified.ok && verified.magicOk);
+      bytes = verified && verified.bytes != null ? verified.bytes : null;
+      if (!verified.ok) durableError = 'Post-flush DB verify failed: ' + (verified.reason || 'unknown');
+    }
+    const durability = evaluatePostFlushDurability({
+      dirty: !!_dbDirty,
+      pathExists,
+      magicOk,
+      bytes,
+      minBytes: 4,
+    });
+    noteDurable = durability.durable === true;
+    if (!noteDurable && !durableError) {
+      durableError = 'Database not durable after flush (' + durability.reason + ')';
+    }
   } catch (err) {
     durableError = err && err.message ? err.message : String(err);
     noteDurable = false;
@@ -7506,25 +7575,50 @@ ipcMain.handle('persist-and-backup', async () => {
     if (pendingCount > 0 || dirtyCount > 0) {
       syncAttempted = true;
       syncing = true;
-      const drain = await drainPendingSyncUploads({ maxCycles: 3 });
+      const { computeForceSaveMaxCycles, interpretForceSaveDrain, shouldPersistDrainContinuation } =
+        require('./lib/forceSaveDrainPolicy');
+      const maxCycles = computeForceSaveMaxCycles({
+        pendingCount,
+        dirtyCount,
+      });
+      const drain = await drainPendingSyncUploads({ maxCycles });
       syncing = false;
-      pendingCount = drain.pending || 0;
-      dirtyCount = drain.dirty || 0;
-      if (drain.stoppedReason === 'rate_limited') {
-        rateLimited = true;
-        syncError = drain.lastError || 'Too many requests';
-      } else if (drain.stoppedReason === 'drained' && pendingCount === 0 && dirtyCount === 0) {
-        centralConfirmed = true;
+      const interpreted = interpretForceSaveDrain(drain, {
+        offline,
+        authRequired,
+      });
+      pendingCount = interpreted.pendingCount || 0;
+      dirtyCount = 0;
+      centralConfirmed = !!interpreted.centralConfirmed;
+      rateLimited = !!interpreted.rateLimited;
+      authRequired = !!interpreted.authRequired || authRequired;
+      offline = !!interpreted.offline || offline;
+      syncing = !!interpreted.syncing;
+      syncError = interpreted.syncError || null;
+      if (centralConfirmed) {
         lastCentralSyncAt = new Date().toISOString();
-      } else if (drain.lastError) {
-        syncError = drain.lastError;
-      } else if (pendingCount > 0 || dirtyCount > 0) {
-        syncError = syncError || 'Central sync still pending';
       }
+      try {
+        if (shouldPersistDrainContinuation(interpreted)) {
+          dbRun(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('forceSaveDrainPending', ?)",
+            ['1']
+          );
+          dbRun(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('forceSaveDrainPendingAt', ?)",
+            [new Date().toISOString()]
+          );
+        } else {
+          dbRun("DELETE FROM settings WHERE key='forceSaveDrainPending'");
+          dbRun("DELETE FROM settings WHERE key='forceSaveDrainPendingAt'");
+        }
+      } catch (_) {}
       try {
         const diag = w && w.getDiagnostics ? w.getDiagnostics() : {};
         if (diag && diag.rateLimit && diag.rateLimit.blocked) rateLimited = true;
-        if (diag && diag.lastVerifiedCloudPushAt) lastCentralSyncAt = diag.lastVerifiedCloudPushAt;
+        if (diag && diag.lastVerifiedCloudPushAt && centralConfirmed) {
+          lastCentralSyncAt = diag.lastVerifiedCloudPushAt;
+        }
         if (diag && diag.connectivity === 'offline') offline = true;
         if (diag && diag.connectivity === 'auth_required') authRequired = true;
       } catch (_) {}
@@ -7587,6 +7681,8 @@ ipcMain.handle('persist-and-backup', async () => {
 ipcMain.handle('flush-and-backup', async () => {
   // Legacy alias used by older UI — same durable checkpoint as Save now.
   const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
+  const { evaluatePostFlushDurability } = require('./lib/flushDirtyPolicy');
+  const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
   try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const folder = getBackupFolder();
   let noteDurable = false;
@@ -7594,8 +7690,26 @@ ipcMain.handle('flush-and-backup', async () => {
   try {
     flushDbSync();
     const dbPath = getDbPath();
-    noteDurable = !_dbDirty && !!dbPath && fs.existsSync(dbPath);
-    if (!noteDurable) durableError = 'Database file missing or still dirty after flush';
+    const pathExists = !!dbPath && fs.existsSync(dbPath);
+    let magicOk = false;
+    let bytes = null;
+    if (pathExists) {
+      const verified = verifyEncryptedBackupFile(dbPath, { minBytes: 4 });
+      magicOk = !!(verified && verified.ok && verified.magicOk);
+      bytes = verified && verified.bytes != null ? verified.bytes : null;
+      if (!verified.ok) durableError = 'Post-flush DB verify failed: ' + (verified.reason || 'unknown');
+    }
+    const durability = evaluatePostFlushDurability({
+      dirty: !!_dbDirty,
+      pathExists,
+      magicOk,
+      bytes,
+      minBytes: 4,
+    });
+    noteDurable = durability.durable === true;
+    if (!noteDurable && !durableError) {
+      durableError = 'Database not durable after flush (' + durability.reason + ')';
+    }
   } catch (err) {
     durableError = err && err.message ? err.message : String(err);
     noteDurable = false;

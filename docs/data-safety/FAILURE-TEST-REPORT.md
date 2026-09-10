@@ -5,6 +5,9 @@ Negative / failure-path cases the suite and code must continue to reject.
 | Failure injected | Expected behaviour | Test / guard |
 |------------------|--------------------|--------------|
 | Disk flush fails | Attention required; no “Safe locally” | `resolveForceSaveState({ noteDurable:false })` |
+| Flush timeout / ENOSPC | Restore `_dbDirty`; never claim durable | `shouldRestoreDirtyAfterFlush` + `flushDbAsyncBounded` |
+| Post-flush file missing magic | Not durable | `evaluatePostFlushDurability` / `verifyEncryptedBackupFile` |
+| Written ID array padded/wrong | Refuse push ack; outbox retained | `normalizeWrittenAck` + `assertPushAccepted` |
 | Backup folder missing/unwritable | Safe locally + backup warning; never silent success | saveNowResult + backup path tests |
 | Push `ok:true` `written:0` | Dirty retained; outbox not cleared | assertPushAccepted / mayClearOutboxEntry |
 | Push omits `written` | Ambiguous → safe retry | isAmbiguousPushAck |
@@ -20,6 +23,6 @@ Negative / failure-path cases the suite and code must continue to reject.
 
 ## Known residual failure modes (see REMAINING-RISKS.md)
 
-- Force Save central drain limited to a few cycles (large backlogs may still show “Syncing” / pending)  
+- Force Save drain is sized from outbox depth with absolute ceiling; if still pending → honest Syncing + `forceSaveDrainPending` background continue (never false Synced)  
 - Revision table stores hashes not full encrypted bodies (full body recovery: generational CNDB and/or website `sot-pitr`)  
-- Server SoT PITR is owned by the website repo (`SERVER-PITR.md` / PR #10) — independent of live KV SoT  
+- Server SoT PITR live suite: website-owned; client contracts proved in-app (`serverPitrContract`)  

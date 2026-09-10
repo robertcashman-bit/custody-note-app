@@ -405,7 +405,10 @@ function createSyncWorker(ctx) {
       err.statusCode = 503;
       throw err;
     }
-    assertPushAccepted(resp, payloads.length);
+    const expectedSyncIds = payloads
+      .map((p) => p && p.record && p.record.syncId)
+      .filter(Boolean);
+    assertPushAccepted(resp, payloads.length, { expectedSyncIds });
     return { payloads, resp };
   }
 
@@ -429,8 +432,21 @@ function createSyncWorker(ctx) {
         const batchResult = await pushRecordBatch(items);
         const payloads = batchResult.payloads || batchResult;
         const resp = batchResult.resp || { ok: true, written: payloads.length };
-        const writtenCount = Array.isArray(resp.written) ? resp.written.length : Number(resp.written);
+        const writtenIds = Array.isArray(resp.written)
+          ? new Set(resp.written.map((v) => String(v)))
+          : null;
+        const writtenCount = writtenIds
+          ? writtenIds.size
+          : Number(resp.written);
         for (const payload of payloads) {
+          const syncId = payload && payload.record && payload.record.syncId
+            ? String(payload.record.syncId)
+            : null;
+          // When server returns per-id written list, only clear matching rows.
+          if (writtenIds && syncId && !writtenIds.has(syncId)) {
+            markFailed(payload.queueId, new Error('Push ack omitted this syncId'), true);
+            continue;
+          }
           const cleared = markSynced(payload.queueId, payload.recordId, payload.capturedVersion, {
             confirmed: true,
             ambiguous: false,

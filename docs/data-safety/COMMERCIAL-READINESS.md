@@ -4,27 +4,29 @@
 
 ## Justification (short)
 
-Client **1.9.86** delivers durable local flush, Force Save local-vs-central status, persistent outbox with mutation IDs / written-ack gating, absence≠delete tombstones, fail-safe monitors, generational verified backups, and a blocking `test:data-safety` CI gate. Website **server-side SoT PITR** (independent S3 snapshots under `sot-pitr/{userId}/`, list/create/restore APIs, push-debounced + hourly cron, retention 48h hourly + 30d daily, fail-safe restore) is documented in the website repo as `docs/data-safety/SERVER-PITR.md` and tracked in [custody-note-website PR #10](https://github.com/robertcashman-bit/custody-note-website/pull/10). Together, live SoT and independent historical recovery are commercially defensible. SoT ≠ backup language remains mandatory in product copy.
+Client **1.9.92** + website SoT/PITR ([PR #13](https://github.com/robertcashman-bit/custody-note-website/pull/13)) close the prior AMBER residuals with evidence: Force Save drain sized from outbox (never false Synced), force-quit/SIGKILL flush durability, monitors fail-closed, app `test:data-safety` **193/193**, website full suite **192/192**, SoT/PITR pack **35/35**, `docs/data-safety/SERVER-PITR-VERIFICATION.md`. Website fixes include 503 `INCOMPLETE_SOT_READ` (no ok+empty on null timeline), snapshot create refuse incomplete live reads, and `classifySyncInventoryResponse` failure≠empty. Historical Costachi never-flushed bytes remain **NON-BLOCKING** (not recoverable).
 
 ## Basis
 
 | Area | Rating | Basis |
 |------|--------|-------|
-| Local durability before user “safe” | GREEN | flushDbSync on all saves (1.9.85) + Force Save verified flush |
+| Local durability before user “safe” | GREEN | flushDbSync + post-flush magic verify + dirty restore on timeout |
 | Honest local vs central status | GREEN | Force Save state machine; no bare “Saved” |
-| Persistent outbox + ack gating | GREEN | sync_queue + mutation_id + written ack; tests |
-| Absence ≠ delete / tombstones | GREEN | Explicit rules + pull guards + tests |
-| Empty / failed cloud non-destructive | GREEN | Preserve policy + empty-cloud alarm lineage |
-| Independent PITR (client) | GREEN | Generational verified backups + integrity gate (refuse empty-over-live) |
-| Server-side SoT PITR | GREEN | Website `sot-pitr/` lane — independent of live KV SoT; see SERVER-PITR.md / website PR #10 |
-| CI gate | GREEN | `npm run test:data-safety` in Test workflow |
-| Fail-safe monitors (operator UX) | AMBER | Detected + logged/IPC alert; not yet a full operator console |
-| Costachi never-event (original bytes) | AMBER | Loss class mitigated going forward; original never-flushed bytes not recoverable |
+| Persistent outbox + ack gating | GREEN | mutation_id + written ack / ID match |
+| Absence ≠ delete / tombstones | GREEN | Explicit rules + pull guards |
+| Empty / failed cloud non-destructive | GREEN | App preserve + website `classifySyncInventoryResponse` / 503 |
+| Force Save large outbox | GREEN | `computeForceSaveMaxCycles` + interpretDrain + drainPending flag |
+| Force-quit / kill durability | GREEN | SIGKILL + crash-before-rename + dirty restore tests |
+| Independent PITR (client) | GREEN | Generational verified backups + integrity gate |
+| Server-side SoT PITR | GREEN | Website PR #13: 192/192 + 35/35; `SERVER-PITR-VERIFICATION.md` |
+| CI gate | GREEN | App `npm run test:data-safety` (193) in Test workflow |
+| Fail-safe monitors | GREEN | `enforceMonitorFailClosed` + syncPull wiring + tests |
+| Costachi historical bytes | NON-BLOCKING | Future routes closed; originals not recoverable |
 
 ## Ship posture
 
-Ship **1.9.86** as commercially **GREEN** for data protection: client SoT+outbox+PITR contract plus website server SoT PITR. Minor AMBER sub-rows do not overturn overall GREEN. Do not market “cloud backup” entitlement as sync SoT or as SoT PITR — keep the three lanes distinct (live SoT / `sot-pitr` / managed AWS backup).
+Ship **1.9.92** as commercially **GREEN** for data protection. Keep live SoT / `sot-pitr` / managed AWS backup as three distinct lanes in product copy.
 
 ## Mac impact / Windows impact
 
-Identical custody data-safety behaviour on both platforms. Path sanitisation and backup folder reset remain the only OS-integration differences; sync SoT is licence-scoped for both.
+Identical custody data-safety behaviour. Sync SoT is licence-scoped on both platforms.
