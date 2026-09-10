@@ -3356,6 +3356,8 @@ var REQUIRED_FIELD_KEYS = [
       if (data.rateLimited) {
         var mins = Math.max(1, Math.ceil((data.rateLimitRemainingMs || 60000) / 60000));
         setFooterIndicator(el, 'Rate limited — retry in ~' + mins + 'm', 'offline', data.lastError || 'Too many requests');
+      } else if (data.authRequired || data.lastSyncSkipReason === 'auth_required') {
+        setFooterIndicator(el, 'Activate licence to sync', 'offline', data.lastError || 'Activate licence / sign in to sync');
       } else if (!data.retryable) {
         setFooterIndicator(el, 'Sync auto-retrying', 'offline', data.lastError || '');
       } else {
@@ -3394,7 +3396,13 @@ var REQUIRED_FIELD_KEYS = [
     var lines = [];
     lines.push('Local records: ' + (st.totalRecords != null ? st.totalRecords : '\u2014'));
     if (st.syncPhase) lines.push('Phase: ' + st.syncPhase);
-    if (st.lastSync) lines.push('Last pull: ' + formatSyncTime(st.lastSync));
+    if (st.lastSyncCycleAt) lines.push('Last cycle: ' + formatSyncTime(st.lastSyncCycleAt));
+    else if (st.lastSync) lines.push('Last pull: ' + formatSyncTime(st.lastSync));
+    if (st.lastSyncSkipReason && st.lastSyncSkipReason !== 'ok' && st.lastSyncSkipReason !== 'ok_empty_outbox' &&
+        st.lastSyncSkipReason !== 'ok_pushed' && st.lastSyncSkipReason !== 'ok_pulled') {
+      lines.push('Cycle: ' + (st.lastSyncSkipLabel || st.lastSyncSkipReason));
+    }
+    if (st.authRequired) lines.push('Action needed: activate licence / sign in');
     var pending = st.pendingChanges || 0;
     var dirty = st.dirtyPushCount || 0;
     if (pending > 0) lines.push('Upload queue: ' + pending + ' pending');
@@ -3407,6 +3415,11 @@ var REQUIRED_FIELD_KEYS = [
     if (st.lastVerifiedCloudInventory != null) {
       lines.push('Cloud inventory: ' + st.lastVerifiedCloudInventory);
     }
+    if (st.emptyCloudHeal && st.emptyCloudHeal.status && st.emptyCloudHeal.status !== 'idle') {
+      lines.push('Empty-cloud heal: ' + st.emptyCloudHeal.status +
+        (st.emptyCloudHeal.lastResult ? ' (' + st.emptyCloudHeal.lastResult + ')' : '') +
+        (st.emptyCloudHeal.attemptCount ? ' attempt ' + st.emptyCloudHeal.attemptCount : ''));
+    }
     if (lp.decryptFailed > 0) {
       lines.push('Warning: ' + lp.decryptFailed + ' record(s) could not be decrypted');
     }
@@ -3414,7 +3427,7 @@ var REQUIRED_FIELD_KEYS = [
     if (st.lastError) lines.push('Last error: ' + st.lastError);
     if (st.rateLimit && st.rateLimit.blocked) {
       lines.push('Rate limited (~' + Math.ceil((st.rateLimit.remainingMs || 0) / 60000) + 'm remaining)' +
-        ((pending + dirty) > 0 ? ' — ' + (pending + dirty) + ' still waiting to upload' : ''));
+        ((pending + dirty) > 0 ? ' — ' + (pending + dirty) + ' still waiting to upload' : ' — resumes automatically'));
     }
     if (st.lastPush && st.lastPush.at) {
       lines.push('Last push: ' + (st.lastPush.ok ? ('ok wrote ' + (st.lastPush.written || 0)) : ('failed — ' + (st.lastPush.error || 'error'))));
@@ -3426,8 +3439,8 @@ var REQUIRED_FIELD_KEYS = [
     statusEl.textContent = lines.join(' \u00b7 ');
     var warnColor = emptyCloud || lp.decryptFailed > 0 || st.failedCount > 0 || st.emptyLargeDb ||
       (st.rateLimit && st.rateLimit.blocked) || (st.lastPush && st.lastPush.ok === false && (pending + dirty) > 0) ||
-      st.syncHealthy === false;
-    statusEl.style.color = warnColor ? (emptyCloud ? '#b91c1c' : '#b45309') : '';
+      st.syncHealthy === false || st.authRequired;
+    statusEl.style.color = warnColor ? (emptyCloud || st.authRequired ? '#b91c1c' : '#b45309') : '';
     if (healthEl) {
       var h = st.health || {};
       healthEl.textContent =
@@ -3436,12 +3449,18 @@ var REQUIRED_FIELD_KEYS = [
         ' · inventory=' + (h.lastVerifiedCloudInventory != null ? h.lastVerifiedCloudInventory : (st.lastVerifiedCloudInventory != null ? st.lastVerifiedCloudInventory : '?')) +
         ' · pending uploads=' + (h.pendingUploads != null ? h.pendingUploads : (pending + dirty)) +
         ' · schema v' + (st.schemaVersion != null ? st.schemaVersion : (h.schemaVersion != null ? h.schemaVersion : '?')) +
+        (st.lastSyncCycleAt ? ' · last cycle ' + formatSyncTime(st.lastSyncCycleAt) : '') +
         (h.cloudLikelyEmpty || emptyCloud ? ' · ERROR: cloud empty for this licence' : '') +
+        (st.authRequired ? ' · AUTH REQUIRED' : '') +
         (h.healthy === false || st.syncHealthy === false ? ' · not healthy' : '');
-      healthEl.style.color = (h.cloudLikelyEmpty || emptyCloud) ? '#b91c1c' : '';
+      healthEl.style.color = (h.cloudLikelyEmpty || emptyCloud || st.authRequired) ? '#b91c1c' : '';
     }
     if (hintEl) {
-      if (emptyCloud) {
+      if (st.authRequired) {
+        hintEl.style.display = '';
+        hintEl.style.color = '#b91c1c';
+        hintEl.textContent = 'Activate your licence (Settings → Licence) to resume cloud sync. Sync restarts automatically after activation.';
+      } else if (emptyCloud) {
         hintEl.style.display = '';
         hintEl.style.color = '#b91c1c';
         hintEl.textContent = 'ERROR: ' + alarmMsg;
