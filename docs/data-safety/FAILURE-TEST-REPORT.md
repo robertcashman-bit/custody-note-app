@@ -20,6 +20,6 @@ Negative / failure-path cases the suite and code must continue to reject.
 
 ## Known residual failure modes (see REMAINING-RISKS.md)
 
-- Server-side PITR not implemented in this repo  
 - Force Save central drain limited to a few cycles (large backlogs may still show “Syncing” / pending)  
-- Revision table stores hashes not full encrypted bodies (full body recovery still depends on generational CNDB)
+- Revision table stores hashes not full encrypted bodies (full body recovery: generational CNDB and/or website `sot-pitr`)  
+- Server SoT PITR is owned by the website repo (`SERVER-PITR.md` / PR #10) — independent of live KV SoT  
