@@ -4,6 +4,12 @@
  * version, and soften Mac notarization marketing copy when shipping a
  * Developer ID–signed (not yet notarised) build.
  *
+ * The live download version is owned by data/releases.json (via getLatestVersion).
+ * When that file already matches TO_VERSION and there are no hardcoded pins left
+ * to rewrite, this script exits 0 as a successful no-op (copy softening may
+ * still apply). It only fails when the site is genuinely behind AND nothing
+ * could be updated.
+ *
  * Run against a clone of robertcashman-bit/custody-note-website:
  *   WEBSITE_ROOT=../custody-note-website node scripts/bump-website-download-version.mjs
  *
@@ -72,6 +78,23 @@ function walk(dir, out = []) {
   return out;
 }
 
+/**
+ * Authoritative live product version on the marketing site.
+ * Download UI uses getLatestVersion() from data/releases.json (synced by
+ * sync-website / changelog bots). Hardcoded download pins may be absent.
+ */
+function readReleasesJsonVersion() {
+  const p = join(WEBSITE_ROOT, 'data', 'releases.json');
+  if (!existsSync(p)) return null;
+  try {
+    const data = JSON.parse(readFileSync(p, 'utf8'));
+    const v = String(data?.version || '').trim();
+    return /^\d+\.\d+\.\d+$/.test(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 function detectFromVersion(files) {
   if (process.env.FROM_VERSION && process.env.FROM_VERSION.trim()) {
     return process.env.FROM_VERSION.trim();
@@ -80,16 +103,18 @@ function detectFromVersion(files) {
   const re = /\b1\.\d+\.\d+\b/g;
   for (const f of files) {
     // Prefer download + API routes for the live product version pin.
+    // Do not treat historical entries inside releases.json as live pins —
+    // the top-level `version` field is authoritative (see readReleasesJsonVersion).
     const rel = relative(WEBSITE_ROOT, f).replace(/\\/g, '/');
     if (
       !rel.includes('download') &&
       !rel.includes('stats/download') &&
-      !rel.endsWith('releases.json') &&
       !rel.includes('lib/site') &&
       !rel.includes('product-copy')
     ) {
       continue;
     }
+    if (rel === 'data/releases.json' || rel.endsWith('/releases.json')) continue;
     const text = readFileSync(f, 'utf8');
     let m;
     while ((m = re.exec(text))) {
@@ -126,12 +151,28 @@ const mutableFiles = files.filter((f) => {
   return true;
 });
 
+const releasesVersion = readReleasesJsonVersion();
 let FROM_VERSION = detectFromVersion(files);
-if (!FROM_VERSION) {
+
+if (releasesVersion === TO_VERSION) {
+  // Site already advertises the target version via releases.json — no hardcoded
+  // pin bump is required. Still allow Mac notarization copy softening below.
   FROM_VERSION = TO_VERSION;
   console.log(
-    `[bump-website-download] No prior version pin found; treating as already at ${TO_VERSION} (copy-only pass).`,
+    `[bump-website-download] releases.json already at ${TO_VERSION} — version pins not required (copy-only pass).`,
   );
+} else if (!FROM_VERSION) {
+  // Prefer releases.json as the prior pin when download UI has no hardcoded version.
+  FROM_VERSION = releasesVersion || TO_VERSION;
+  if (FROM_VERSION === TO_VERSION) {
+    console.log(
+      `[bump-website-download] No prior version pin found; treating as already at ${TO_VERSION} (copy-only pass).`,
+    );
+  } else {
+    console.log(
+      `[bump-website-download] No hardcoded pin; using releases.json ${FROM_VERSION} → ${TO_VERSION}`,
+    );
+  }
 } else if (FROM_VERSION === TO_VERSION) {
   console.log(`[bump-website-download] Already at ${TO_VERSION} — applying copy softening only.`);
 } else {
@@ -264,6 +305,23 @@ console.log(
 );
 
 if (FROM_VERSION !== TO_VERSION && report.versionReplacements === 0) {
+  // Belt-and-suspenders: if releases.json already advertises TO_VERSION, the
+  // download UI is current even with zero hardcoded pin replacements.
+  if (releasesVersion === TO_VERSION) {
+    console.log(
+      `[bump-website-download] No hardcoded version pins to replace; releases.json already at ${TO_VERSION} — success (no-op).`,
+    );
+    process.exit(0);
+  }
   console.error('[bump-website-download] No version strings were replaced — aborting.');
+  if (releasesVersion) {
+    console.error(
+      `[bump-website-download] releases.json is at ${releasesVersion}, expected ${TO_VERSION}. Run sync-website first.`,
+    );
+  } else {
+    console.error(
+      `[bump-website-download] data/releases.json missing or invalid; expected version ${TO_VERSION}.`,
+    );
+  }
   process.exit(1);
 }
