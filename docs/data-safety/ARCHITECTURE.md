@@ -113,6 +113,15 @@ Detect and **retain local / do not overwrite known-good** on:
 - Migration shrink  
 - 429 / auth / master key missing / decrypt failure  
 
+## Durability flush policy (`lib/flushDirtyPolicy.js`)
+
+- Bounded async flush (`flushDbAsyncBounded`) must **restore `_dbDirty`** on timeout or write failure — quit must not treat an unconfirmed write as durable.  
+- Force Save / Save Now post-flush durability requires: not dirty + file exists + **CNDB magic verified** (`evaluatePostFlushDurability`). Existence alone is insufficient.  
+
+## Verification harness (`lib/dataSafetyHarness.js` + `npm run test:data-safety`)
+
+Deterministic (seeded) chaos catalogue, never-event canary invariant, startup circuit breakers (empty-cloud / false-synced / stale pull), and 1000+ canary scale against the in-repo mock licence-scoped SoT. See `docs/data-safety/VERIFICATION-REPORT.md`.
+
 ---
 
 ## Server SoT PITR (website — independent lane)
