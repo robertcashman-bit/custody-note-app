@@ -847,7 +847,7 @@ describe('Re-upload / restore product wiring', () => {
 
   it('restore bumps sync_version for all non-deleted rows', () => {
     const idx = mainJs.indexOf("ipcMain.handle('local-backup-restore'");
-    const body = mainJs.slice(idx, idx + 4000);
+    const body = mainJs.slice(idx, idx + 4500);
     assert.match(body, /sync_version=COALESCE\(sync_version,1\)\+1 WHERE deleted_at IS NULL/);
     assert.match(body, /marked,\s*queued/);
   });

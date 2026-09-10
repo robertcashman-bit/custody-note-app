@@ -127,9 +127,9 @@ describe('Durable pendingSync / honest Saved to disk vs Synced', () => {
     assert.match(appJs, /attendanceSaveDetailed\(\{/);
   });
 
-  it('renderer shows Saved to disk with pending sync, not false Synced', () => {
-    assert.match(appJs, /Saved to disk/);
-    assert.match(appJs, /pending sync/);
+  it('renderer shows Safe locally with pending central sync, not false Synced', () => {
+    assert.match(appJs, /Safe locally/);
+    assert.match(appJs, /pending (central )?sync/);
     assert.match(appJs, /normalizeAttendanceSaveResult/);
     assert.match(appJs, /showAutoSaveIndicator\(\{ durable:/);
     assert.match(appJs, /Unsaved changes/);
