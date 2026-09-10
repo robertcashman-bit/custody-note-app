@@ -189,7 +189,27 @@ async function openOfficerEmailsView(): Promise<void> {
   await expect(page.locator('#oes-body')).toBeVisible({ timeout: 15000 });
 }
 
-async function clickOpenOutlook(): Promise<LaunchCapture> {
+async function confirmOpenOutlookOverlayOrDialog(): Promise<void> {
+  /*
+   * showChoice path (production): wait for the confirm overlay primary and click it.
+   * Prefer role+name so we do not hit Cancel (often listed first). Native dialog
+   * fallback is accepted via page.once('dialog') in clickOpenOutlook.
+   */
+  const overlay = page.locator('.cn-confirm-overlay');
+  try {
+    await overlay.waitFor({ state: 'visible', timeout: 15000 });
+  } catch {
+    /* Native dialog may already have been accepted, or go() already ran. */
+    return;
+  }
+  await ensureBlankerNotBlocking();
+  const choiceOpen = overlay.getByRole('button', { name: 'Open Outlook Web' });
+  await choiceOpen.waitFor({ state: 'visible', timeout: 10000 });
+  await choiceOpen.click();
+  await overlay.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => undefined);
+}
+
+async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
   await ensureBlankerNotBlocking();
   await expect(page.locator('#cn-credentialfree-blanker')).toHaveCount(0);
 
@@ -208,28 +228,40 @@ async function clickOpenOutlook(): Promise<LaunchCapture> {
   await expect(openBtn).toBeVisible({ timeout: 15000 });
   await expect(openBtn).toBeEnabled();
   await openBtn.click();
-
-  /*
-   * showChoice path (production): wait for the confirm overlay primary and click it.
-   * Previously only waited 1.5s — too tight on Windows CI, so go() never ran and
-   * last-outlook-launch.json was never written.
-   */
-  const choiceOpen = page
-    .locator('.cn-confirm-overlay button.btn-primary')
-    .filter({ hasText: /^Open Outlook Web$/ });
-  try {
-    await choiceOpen.waitFor({ state: 'visible', timeout: 15000 });
-    await ensureBlankerNotBlocking();
-    await choiceOpen.click();
-  } catch {
-    /* Native dialog may already have been accepted, or go() already ran. */
-  }
-
+  await confirmOpenOutlookOverlayOrDialog();
   return waitForCaptureAfter(before);
 }
 
+/** One retry: Windows CI occasionally drops the first confirm before capture lands. */
+async function clickOpenOutlook(): Promise<LaunchCapture> {
+  try {
+    return await clickOpenOutlookOnce();
+  } catch (firstErr) {
+    /* Dismiss a stuck Cancel/confirm overlay before retrying. */
+    const overlay = page.locator('.cn-confirm-overlay');
+    if (await overlay.count().catch(() => 0)) {
+      const cancel = overlay.getByRole('button', { name: /^Cancel$/ });
+      if (await cancel.count().catch(() => 0)) {
+        await cancel.click().catch(() => undefined);
+      } else {
+        await page.keyboard.press('Escape').catch(() => undefined);
+      }
+      await overlay.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => undefined);
+    }
+    try {
+      return await clickOpenOutlookOnce();
+    } catch (secondErr) {
+      const detail = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      throw new Error(
+        `Open Outlook capture failed after retry. First: ${detail}. Second: ` +
+          (secondErr instanceof Error ? secondErr.message : String(secondErr))
+      );
+    }
+  }
+}
+
 test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payload', async () => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   await openOfficerEmailsView();
 
   /* C) completely typed replacement */

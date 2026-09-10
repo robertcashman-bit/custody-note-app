@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.89",
+      "version": "1.9.90",
       "date": "2026-09-10",
       "latest": true,
+      "changes": [
+        "QuickFile: confirmed second invoices (allowDuplicate) no longer reuse the existing attendance-tagged invoice \u2014 allocate the next sequential number and create a genuine new QuickFile invoice",
+        "Normal (non-duplicate) path still reuses same-attendance invoices to avoid accidental doubles",
+        "Unit tests: allowDuplicate skips findByAttendanceRef reuse and does not attach on number conflict"
+      ]
+    },
+    {
+      "version": "1.9.89",
+      "date": "2026-09-10",
+      "latest": false,
       "changes": [
         "Footer status honesty: stop showing panic \u201cLocal only \u2014 check sync\u201d when the outbox is clear and pulls succeed (including received=0 steady state) \u2014 sticky default lastPush.ok=false and leftover session errors no longer force an unhealthy chip",
         "Backup footer: after a successful quick backup, do not keep \u201cBackup queued\u201d solely because hourlyDirty is still set for the next generational run \u2014 show Backed up; real queue / degraded / folder-missing states still surface",
