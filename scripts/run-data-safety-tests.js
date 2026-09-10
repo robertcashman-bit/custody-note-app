@@ -9,7 +9,7 @@ const { readdirSync } = require('fs');
 
 const testsDir = path.join(__dirname, '..', 'tests');
 const files = readdirSync(testsDir)
-  .filter((f) => /^dataSafety.*\.test\.js$/.test(f) || f === 'attendanceDurability.test.js' || f === 'saveNowDurability.test.js' || f === 'emptySyncRecovery.test.js' || f === 'backupPathAndGenerational.test.js')
+  .filter((f) => /^dataSafety.*\.test\.js$/.test(f) || f === 'attendanceDurability.test.js' || f === 'saveNowDurability.test.js' || f === 'emptySyncRecovery.test.js' || f === 'backupPathAndGenerational.test.js' || f === 'footerStatusChips.test.js')
   .sort()
   .map((f) => path.join('tests', f));
 

@@ -110,7 +110,8 @@ function createSyncWorker(ctx) {
   let _lastSyncAt = null;
   let _lastSuccessfulPushAt = 0;
   let _lastVerifiedCloudPushAt = null;
-  let _lastPushStats = { attempted: 0, written: 0, ok: false, at: null, error: null };
+  // ok:null = never attempted this session (NOT a failed push). ok:false only after a real failure.
+  let _lastPushStats = { attempted: 0, written: 0, ok: null, at: null, error: null };
   let _lastError = null;
   const rateLimitGate = createRateLimitGate({
     cooldownMs: (ctx && ctx.rateLimitCooldownMs) || RATE_LIMIT_COOLDOWN_MS,
@@ -525,7 +526,9 @@ function createSyncWorker(ctx) {
         return;
       }
       if (ctx.syncPull) {
+        let pullFailed = false;
         const pullResult = await ctx.syncPull().catch((e) => {
+          pullFailed = true;
           _lastError = e && e.message ? e.message : String(e);
           rateLimitGate.noteError(e);
           notifyRenderer({ status: 'error', lastError: _lastError, retryable: isRetryableError(e) });
@@ -546,6 +549,19 @@ function createSyncWorker(ctx) {
             merged: pullResult.pulled || 0,
           });
           notifyRenderer({});
+        }
+        // Healthy pull-only cycle with clear outbox: drop sticky session errors
+        // so the footer does not keep "Sync needs attention" after recovery.
+        if (!pullFailed && ctx.db) {
+          try {
+            const pendingRow = ctx.dbGet(
+              "SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')"
+            ) || { c: 0 };
+            const dirtyRow = ctx.dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1') || { c: 0 };
+            if ((pendingRow.c || 0) === 0 && (dirtyRow.c || 0) === 0) {
+              _lastError = null;
+            }
+          } catch (_) {}
         }
       }
     } finally {
