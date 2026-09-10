@@ -10336,6 +10336,8 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
        Do not use a pre-advance allocator (that burned numbers on failed creates). */
     const createResult = await quickfileInvoiceNumber.createInvoiceWithDuplicateRecovery({
       attendanceId,
+      /* Confirmed second invoice: skip same-attendance QuickFile reuse. */
+      allowDuplicate: !!params.allowDuplicate,
       maxAttempts: quickfileInvoiceNumber.MAX_INVOICE_NUMBER_ATTEMPTS,
       allocateNextNumber: peekNextSequentialInvoiceNumber,
       bumpPastNumber: bumpNextInvoiceNumberPast,

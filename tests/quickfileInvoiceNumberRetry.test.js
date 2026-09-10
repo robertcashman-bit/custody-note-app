@@ -242,6 +242,73 @@ describe('createInvoiceWithDuplicateRecovery — sequential discipline', () => {
     assert.strictEqual(wire.counter.peekFormatted(), '006300');
   });
 
+  it('allowDuplicate skips findByAttendanceRef reuse and creates a new sequential invoice', async () => {
+    const attendanceId = 55;
+    const wire = wireSequentialAllocator(6300);
+    let createdWith = null;
+    let findByRefCalls = 0;
+    const result = await createInvoiceWithDuplicateRecovery({
+      attendanceId,
+      allowDuplicate: true,
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
+      createWithNumber: async (invNum) => {
+        createdWith = invNum;
+        return { InvoiceID: 999, InvoiceNumber: invNum };
+      },
+      findByAttendanceRef: async () => {
+        findByRefCalls += 1;
+        return {
+          InvoiceID: 888,
+          InvoiceNumber: '006299',
+          PurchaseReference: attendancePurchaseReference(attendanceId),
+        };
+      },
+    });
+    assert.strictEqual(result.reused, false);
+    assert.strictEqual(result.invoiceId, '999');
+    assert.strictEqual(result.invoiceNumber, '006300');
+    assert.strictEqual(createdWith, '006300');
+    /* findByAttendanceRef must not be consulted when allowDuplicate is set */
+    assert.strictEqual(findByRefCalls, 0);
+    assert.strictEqual(wire.counter.peekFormatted(), '006301');
+  });
+
+  it('allowDuplicate does not attach same-attendance invoice on number conflict', async () => {
+    const attendanceId = 42;
+    const wire = wireSequentialAllocator(6200);
+    const attempted = [];
+    const result = await createInvoiceWithDuplicateRecovery({
+      attendanceId,
+      allowDuplicate: true,
+      maxAttempts: 5,
+      allocateNextNumber: wire.allocateNextNumber,
+      bumpPastNumber: wire.bumpPastNumber,
+      createWithNumber: async (invNum) => {
+        attempted.push(invNum);
+        if (invNum === '006200') {
+          throw new Error('Invoice number already exists');
+        }
+        return { InvoiceID: 1001, InvoiceNumber: invNum };
+      },
+      findByInvoiceNumber: async (invNum) => ({
+        InvoiceID: 777,
+        InvoiceNumber: invNum,
+        PurchaseReference: attendancePurchaseReference(attendanceId),
+      }),
+      findByAttendanceRef: async () => ({
+        InvoiceID: 777,
+        InvoiceNumber: '006200',
+        PurchaseReference: attendancePurchaseReference(attendanceId),
+      }),
+    });
+    assert.strictEqual(result.reused, false);
+    assert.strictEqual(result.invoiceId, '1001');
+    assert.strictEqual(result.invoiceNumber, '006201');
+    assert.deepStrictEqual(attempted, ['006200', '006201']);
+    assert.strictEqual(wire.counter.peekFormatted(), '006202');
+  });
+
   it('success persists last number so the following create is previous+1', async () => {
     const wire = wireSequentialAllocator(6500);
     const first = await createInvoiceWithDuplicateRecovery({
