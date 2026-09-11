@@ -118,6 +118,10 @@ function generateCorrelationId() {
 function createSyncWorker(ctx) {
   let _timer = null;
   let _inProgress = false;
+  // Depth of runCyclePublic (includes empty-cloud heal). scheduleSoon must defer
+  // while > 0 even after runCycle clears _inProgress, so a save during heal cannot
+  // start a concurrent push/pull beside probe/drain/verify.
+  let _publicCycleDepth = 0;
   let _connectivityState = 'unknown';
   let _lastSyncAt = null;
   let _lastSuccessfulPushAt = 0;
@@ -853,9 +857,10 @@ function createSyncWorker(ctx) {
    * Wrapper: core cycle then empty-cloud auto-heal with the lock released.
    * Pass { skipHeal: true } from drainPendingSyncUploads to avoid recursion.
    * After the cycle (including heal), flush any kick that arrived while
-   * _inProgress so a save during a long pull does not wait for the 10s poll.
+   * the public cycle was busy so a save mid-pull/heal does not wait for the 10s poll.
    */
   async function runCyclePublic(opts) {
+    _publicCycleDepth += 1;
     try {
       const skipHeal = !!(opts && opts.skipHeal);
       const result = await runCycle();
@@ -906,7 +911,11 @@ function createSyncWorker(ctx) {
         pullResult: result.pullResult,
       };
     } finally {
-      flushPendingKick();
+      _publicCycleDepth = Math.max(0, _publicCycleDepth - 1);
+      // Nested drain cycles (skipHeal) must not flush kicks while outer heal runs.
+      if (_publicCycleDepth === 0) {
+        flushPendingKick();
+      }
     }
   }
 
@@ -957,11 +966,16 @@ function createSyncWorker(ctx) {
       clearTimeout(_scheduleSoonTimer);
       _scheduleSoonTimer = null;
     }
+    if (_kickFlushTimer) {
+      clearTimeout(_kickFlushTimer);
+      _kickFlushTimer = null;
+    }
     _kickAfterCycle = false;
     _kickAfterImmediate = false;
   }
 
   let _scheduleSoonTimer = null;
+  let _kickFlushTimer = null;
   let _kickAfterCycle = false;
   let _kickAfterImmediate = false;
 
@@ -973,23 +987,35 @@ function createSyncWorker(ctx) {
     return SCHEDULE_SOON_DEBOUNCE_MS;
   }
 
+  function shouldDeferKick() {
+    return _inProgress || _publicCycleDepth > 0;
+  }
+
   function flushPendingKick() {
     if (!_kickAfterCycle) return;
     _kickAfterCycle = false;
     const immediate = _kickAfterImmediate !== false;
     _kickAfterImmediate = false;
-    setTimeout(() => {
+    if (_kickFlushTimer) {
+      clearTimeout(_kickFlushTimer);
+      _kickFlushTimer = null;
+    }
+    _kickFlushTimer = setTimeout(() => {
+      _kickFlushTimer = null;
       try {
         scheduleSoon({ immediate: !!immediate });
       } catch (_) {}
     }, 0);
+    if (_kickFlushTimer && typeof _kickFlushTimer.unref === 'function') {
+      _kickFlushTimer.unref();
+    }
   }
 
   function fireScheduledCycle() {
     _scheduleSoonTimer = null;
-    if (_inProgress) {
-      // Cycle in flight (often a long pull) — re-kick when it finishes so a
-      // save mid-cycle does not wait for the next 10s poll.
+    if (shouldDeferKick()) {
+      // Cycle or heal in flight — re-kick when the public session finishes so a
+      // save mid-cycle/heal does not wait for the next 10s poll.
       _kickAfterCycle = true;
       _kickAfterImmediate = true;
       return;
@@ -1003,7 +1029,7 @@ function createSyncWorker(ctx) {
    *   autosaves coalesce and do not hammer the API.
    * - { immediate: true }: near-zero delay for Force Save / Save now /
    *   finalise / archive (still respects rate-limit gate).
-   * - While a cycle is in progress: mark pending kick (flushed when idle).
+   * - While a cycle (including heal) is in progress: mark pending kick (flushed when idle).
    */
   function scheduleSoon(opts) {
     const immediate = !!(opts && opts.immediate);
@@ -1022,7 +1048,7 @@ function createSyncWorker(ctx) {
       });
       return;
     }
-    if (_inProgress) {
+    if (shouldDeferKick()) {
       _kickAfterCycle = true;
       _kickAfterImmediate = true;
       return;
