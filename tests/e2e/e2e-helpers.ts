@@ -31,6 +31,37 @@ export async function enableQuickOfficerEmailUi(_page: Page): Promise<void> {
 }
 
 /**
+ * Click the primary action inside `.cn-confirm-overlay` by choice id / role.
+ * Avoids Cancel-first flakes on Windows Electron CI.
+ */
+export async function clickConfirmOverlayPrimary(
+  page: Page,
+  opts: { choiceId?: string; name?: string | RegExp; timeoutMs?: number } = {}
+): Promise<boolean> {
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const overlay = page.locator('.cn-confirm-overlay');
+  try {
+    await overlay.waitFor({ state: 'visible', timeout: timeoutMs });
+  } catch {
+    return false;
+  }
+
+  const byId = opts.choiceId
+    ? overlay.locator(`[data-cn-choice-id="${opts.choiceId}"]`)
+    : null;
+  const byRole = opts.name
+    ? overlay.getByRole('button', { name: opts.name })
+    : overlay.locator('button.btn-primary').first();
+
+  const btn = byId && (await byId.count().catch(() => 0)) > 0 ? byId.first() : byRole;
+  await btn.waitFor({ state: 'visible', timeout: 10_000 });
+  /* DOM click is more reliable than pointer hit-testing when toasts/overlays shift. */
+  await btn.evaluate((el: HTMLElement) => el.click());
+  await overlay.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => undefined);
+  return true;
+}
+
+/**
  * Forces buildOutlookWebComposeUrlWithMeta to truncate: email-modal caps IPC body at 4000 chars,
  * so padding must use characters that **expand** in the query string (e.g. `&` → `%26`).
  * Plain spaces fit within the OWA URL soft limit at 4000 chars — no truncation, no clipboard copy.
