@@ -10,7 +10,7 @@ import { test, expect, _electron, type ElectronApplication, type Page } from '@p
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { dismissFirstLaunchModalIfPresent } from './e2e-helpers';
+import { dismissFirstLaunchModalIfPresent, clickConfirmOverlayPrimary } from './e2e-helpers';
 
 let electronApp: ElectronApplication;
 let page: Page;
@@ -41,8 +41,9 @@ type LaunchCapture = {
   capturedAt?: string;
 };
 
-const CAPTURE_WAIT_MS = 60_000;
-const CAPTURE_POLL_MS = 200;
+const CAPTURE_WAIT_MS = 45_000;
+const CAPTURE_POLL_MS = 150;
+const OPEN_ATTEMPTS = 3;
 
 test.beforeAll(async () => {
   testUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-officer-email-e2e-'));
@@ -117,40 +118,9 @@ function captureFingerprint(): string {
   return `body:${cap.body}\nurl:${cap.url}\nmethod:${cap.method}`;
 }
 
-/**
- * Poll last-outlook-launch.json until a NEW capture appears after prevFingerprint.
- * CI (Windows) can be slow to flush IPC + disk; 15s was too tight.
- */
-async function waitForCaptureAfter(prevFingerprint: string): Promise<LaunchCapture> {
-  const p = capturePath();
-  const deadline = Date.now() + CAPTURE_WAIT_MS;
-  let lastErr = '';
-  while (Date.now() < deadline) {
-    try {
-      const st = fs.statSync(p);
-      if (st.size > 2) {
-        const cap = readCapture();
-        const fp = cap.capturedAt
-          ? `at:${cap.capturedAt}`
-          : `body:${cap.body}\nurl:${cap.url}\nmethod:${cap.method}`;
-        if (fp && fp !== prevFingerprint) {
-          return cap;
-        }
-      }
-    } catch (err) {
-      lastErr = err instanceof Error ? err.message : String(err);
-    }
-    await page.waitForTimeout(CAPTURE_POLL_MS);
-  }
-  const blanker = await page.locator('#cn-credentialfree-blanker').count().catch(() => -1);
-  const overlay = await page.locator('.cn-confirm-overlay').count().catch(() => -1);
-  const exists = fs.existsSync(p);
-  throw new Error(
-    `timed out waiting for last-outlook-launch.json` +
-      ` (waited ${CAPTURE_WAIT_MS}ms, exists=${exists}, blanker=${blanker}, confirmOverlay=${overlay}` +
-      (lastErr ? `, lastReadError=${lastErr}` : '') +
-      `)`
-  );
+function fingerprintOf(cap: LaunchCapture): string {
+  if (cap.capturedAt) return `at:${cap.capturedAt}`;
+  return `body:${cap.body}\nurl:${cap.url}\nmethod:${cap.method}`;
 }
 
 /** Dismiss credential-free session blanker if a CI OS lock event raised it. */
@@ -182,33 +152,33 @@ async function ensureBlankerNotBlocking(): Promise<void> {
   });
 }
 
+async function dismissStuckConfirmOverlay(): Promise<void> {
+  const overlay = page.locator('.cn-confirm-overlay');
+  if (!(await overlay.count().catch(() => 0))) return;
+  const cancel = overlay.locator('[data-cn-choice-id="abort"], button:has-text("Cancel")').first();
+  if (await cancel.count().catch(() => 0)) {
+    await cancel.evaluate((el: HTMLElement) => el.click()).catch(() => undefined);
+  } else {
+    await page.keyboard.press('Escape').catch(() => undefined);
+  }
+  await overlay.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => undefined);
+}
+
 async function openOfficerEmailsView(): Promise<void> {
   await ensureBlankerNotBlocking();
-  await page.locator('#home-card-officer-emails').click();
+  const card = page.locator('#home-card-officer-emails');
+  await card.scrollIntoViewIfNeeded();
+  await card.click();
   await expect(page.locator('#view-officer-emails')).toHaveClass(/active/, { timeout: 15000 });
   await expect(page.locator('#oes-body')).toBeVisible({ timeout: 15000 });
 }
 
-async function confirmOpenOutlookOverlayOrDialog(): Promise<void> {
-  /*
-   * showChoice path (production): wait for the confirm overlay primary and click it.
-   * Prefer role+name so we do not hit Cancel (often listed first). Native dialog
-   * fallback is accepted via page.once('dialog') in clickOpenOutlook.
-   */
-  const overlay = page.locator('.cn-confirm-overlay');
-  try {
-    await overlay.waitFor({ state: 'visible', timeout: 15000 });
-  } catch {
-    /* Native dialog may already have been accepted, or go() already ran. */
-    return;
-  }
-  await ensureBlankerNotBlocking();
-  const choiceOpen = overlay.getByRole('button', { name: 'Open Outlook Web' });
-  await choiceOpen.waitFor({ state: 'visible', timeout: 10000 });
-  await choiceOpen.click();
-  await overlay.waitFor({ state: 'hidden', timeout: 15000 }).catch(() => undefined);
-}
-
+/**
+ * Click Open in Outlook Web and wait until a NEW last-outlook-launch.json appears.
+ * Combines confirm-overlay handling with capture polling so a late overlay
+ * (after generateFromTemplate) is still clicked — the old 15s overlay wait then
+ * 60s capture wait left confirmOverlay=0 and never called go().
+ */
 async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
   await ensureBlankerNotBlocking();
   await expect(page.locator('#cn-credentialfree-blanker')).toHaveCount(0);
@@ -224,44 +194,88 @@ async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
     }
   });
 
+  /* Blur textarea/inputs so leftover key events cannot hit Cancel. */
+  await page.evaluate(() => {
+    const ae = document.activeElement as HTMLElement | null;
+    if (ae && typeof ae.blur === 'function') ae.blur();
+  });
+
   const openBtn = page.locator('#oes-open');
   await expect(openBtn).toBeVisible({ timeout: 15000 });
   await expect(openBtn).toBeEnabled();
-  await openBtn.click();
-  await confirmOpenOutlookOverlayOrDialog();
-  return waitForCaptureAfter(before);
+  await openBtn.scrollIntoViewIfNeeded();
+  /* DOM click avoids intermittent Electron hit-test misses under toast chrome. */
+  await openBtn.evaluate((el: HTMLElement) => el.click());
+
+  const deadline = Date.now() + CAPTURE_WAIT_MS;
+  let clickedPrimary = false;
+  let lastOpenClickAt = Date.now();
+  let reclicks = 0;
+
+  while (Date.now() < deadline) {
+    const cap = tryReadCapture();
+    if (cap) {
+      const fp = fingerprintOf(cap);
+      if (fp && fp !== before) return cap;
+    }
+
+    const overlayVisible = await page
+      .locator('.cn-confirm-overlay')
+      .isVisible()
+      .catch(() => false);
+
+    if (overlayVisible && !clickedPrimary) {
+      await ensureBlankerNotBlocking();
+      const ok = await clickConfirmOverlayPrimary(page, {
+        choiceId: 'open',
+        name: 'Open Outlook Web',
+        timeoutMs: 5_000,
+      });
+      clickedPrimary = ok || clickedPrimary;
+      lastOpenClickAt = Date.now();
+    } else if (!overlayVisible && !clickedPrimary && reclicks < 2 && Date.now() - lastOpenClickAt > 2500) {
+      /* Overlay never appeared — re-fire Open (first click may have raced generate). */
+      lastOpenClickAt = Date.now();
+      reclicks += 1;
+      await ensureBlankerNotBlocking();
+      await openBtn.evaluate((el: HTMLElement) => el.click()).catch(() => undefined);
+    }
+
+    await page.waitForTimeout(CAPTURE_POLL_MS);
+  }
+
+  const blanker = await page.locator('#cn-credentialfree-blanker').count().catch(() => -1);
+  const overlay = await page.locator('.cn-confirm-overlay').count().catch(() => -1);
+  const toastText = await page.locator('#cn-toast').textContent().catch(() => '');
+  const exists = fs.existsSync(capturePath());
+  throw new Error(
+    `timed out waiting for last-outlook-launch.json` +
+      ` (waited ${CAPTURE_WAIT_MS}ms, exists=${exists}, blanker=${blanker}, confirmOverlay=${overlay}` +
+      `, clickedPrimary=${clickedPrimary}, reclicks=${reclicks}` +
+      (toastText ? `, toast=${JSON.stringify(String(toastText).slice(0, 160))}` : '') +
+      `)`
+  );
 }
 
-/** One retry: Windows CI occasionally drops the first confirm before capture lands. */
 async function clickOpenOutlook(): Promise<LaunchCapture> {
-  try {
-    return await clickOpenOutlookOnce();
-  } catch (firstErr) {
-    /* Dismiss a stuck Cancel/confirm overlay before retrying. */
-    const overlay = page.locator('.cn-confirm-overlay');
-    if (await overlay.count().catch(() => 0)) {
-      const cancel = overlay.getByRole('button', { name: /^Cancel$/ });
-      if (await cancel.count().catch(() => 0)) {
-        await cancel.click().catch(() => undefined);
-      } else {
-        await page.keyboard.press('Escape').catch(() => undefined);
-      }
-      await overlay.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => undefined);
-    }
+  const errors: string[] = [];
+  for (let attempt = 1; attempt <= OPEN_ATTEMPTS; attempt++) {
     try {
       return await clickOpenOutlookOnce();
-    } catch (secondErr) {
-      const detail = firstErr instanceof Error ? firstErr.message : String(firstErr);
-      throw new Error(
-        `Open Outlook capture failed after retry. First: ${detail}. Second: ` +
-          (secondErr instanceof Error ? secondErr.message : String(secondErr))
-      );
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+      await dismissStuckConfirmOverlay();
+      await ensureBlankerNotBlocking();
+      await page.waitForTimeout(300);
     }
   }
+  throw new Error(
+    `Open Outlook capture failed after ${OPEN_ATTEMPTS} attempts. ` + errors.map((e, i) => `#${i + 1}: ${e}`).join(' | ')
+  );
 }
 
 test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payload', async () => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   await openOfficerEmailsView();
 
   /* C) completely typed replacement */
@@ -269,6 +283,8 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   await page.locator('#oes-subject').fill('Typed subject');
   const typed = 'Completely typed replacement body.\n\nSecond paragraph.';
   await page.locator('#oes-body').fill(typed);
+  /* Ensure input listeners marked the body dirty (Electron fill can occasionally miss). */
+  await page.locator('#oes-body').dispatchEvent('input');
   let cap = await clickOpenOutlook();
   expect(cap.body).toBe(typed);
   expect(cap.bodyPlacedInCompose).toBe(true);
@@ -293,6 +309,7 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   /* B) amended */
   const amended = generated + '\n\nAMENDED LIVE MARKER';
   await page.locator('#oes-body').fill(amended);
+  await page.locator('#oes-body').dispatchEvent('input');
   cap = await clickOpenOutlook();
   expect(cap.body).toBe(amended);
   expect(cap.body).toContain('AMENDED LIVE MARKER');
@@ -301,6 +318,7 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   /* D + E special multiline */
   await page.locator('#oes-subject').fill('Re: Smith & Jones');
   await page.locator('#oes-body').fill(SPECIAL_BODY);
+  await page.locator('#oes-body').dispatchEvent('input');
   cap = await clickOpenOutlook();
   expect(cap.body).toBe(SPECIAL_BODY);
   const decoded = new URL(cap.url).searchParams.get('body') || '';
@@ -310,12 +328,14 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
 
   /* F) second click newest */
   await page.locator('#oes-body').fill('second click newest body');
+  await page.locator('#oes-body').dispatchEvent('input');
   cap = await clickOpenOutlook();
   expect(cap.body).toBe('second click newest body');
 
   /* Long body → .eml path with full body */
   const longBody = 'LIVE_LONG_MARKER\n\n' + 'x'.repeat(5000);
   await page.locator('#oes-body').fill(longBody);
+  await page.locator('#oes-body').dispatchEvent('input');
   cap = await clickOpenOutlook();
   expect(cap.body).toBe(longBody);
   expect(cap.method).toBe('outlook-desktop-eml');

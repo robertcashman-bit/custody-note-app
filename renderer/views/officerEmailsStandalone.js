@@ -319,9 +319,10 @@
     }
 
     if (typeof window.showChoice === 'function') {
+      /* Primary Open first so stacked layout + focus + Enter all agree; Cancel second. */
       window.showChoice(msg, 'Open Outlook Web', [
-        { id: 'abort', label: 'Cancel', variant: 'secondary' },
         { id: 'open', label: 'Open Outlook Web', variant: 'primary' },
+        { id: 'abort', label: 'Cancel', variant: 'secondary' },
       ]).then(function (choice) {
         if (choice === 'open') go();
       }).catch(function (err) {

@@ -1,7 +1,8 @@
 /**
  * Offline-First Sync Worker — v2
  * Processes sync_queue per-record. One bad item never blocks others.
- * Runs in Electron main process every 10 seconds.
+ * Polls every 10 seconds as a backup; durable saves kick scheduleSoon
+ * (trailing ~350ms debounce, or immediate for Force Save / finalise).
  *
  * ROOT CAUSE ANALYSIS (v1 issues fixed here):
  *
@@ -55,7 +56,11 @@ const {
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
 const HEALTH_CHECK_TIMEOUT_MS = 4000;
-const SCHEDULE_SOON_DEBOUNCE_MS = 1000;
+/** Trailing coalesce for rapid autosave enqueues — keep well under 1s so
+ *  pending-central clears promptly when online (poll remains 10s backup). */
+const SCHEDULE_SOON_DEBOUNCE_MS = 350;
+/** Explicit Save now / Force Save / finalise / archive — no meaningful delay. */
+const SCHEDULE_IMMEDIATE_MS = 0;
 const RETRY_DELAYS_MS = [0, 10_000, 30_000, 120_000, 600_000, 1_800_000]; // attempt 1..6
 const MAX_RETRY_ATTEMPTS = 6;
 const PUSH_HTTP_BATCH_SIZE = 20;
@@ -113,6 +118,10 @@ function generateCorrelationId() {
 function createSyncWorker(ctx) {
   let _timer = null;
   let _inProgress = false;
+  // Depth of runCyclePublic (includes empty-cloud heal). scheduleSoon must defer
+  // while > 0 even after runCycle clears _inProgress, so a save during heal cannot
+  // start a concurrent push/pull beside probe/drain/verify.
+  let _publicCycleDepth = 0;
   let _connectivityState = 'unknown';
   let _lastSyncAt = null;
   let _lastSuccessfulPushAt = 0;
@@ -288,8 +297,11 @@ function createSyncWorker(ctx) {
    *
    *  Mutation IDs are idempotent per sync_id+sync_version+operation. Ambiguous
    *  acks must retry with the same mutationId; never dequeue before confirmed ack.
+   *
+   *  After a successful enqueue, kick scheduleSoon so push does not wait for the
+   *  10s poll. Pass scheduleOpts.immediate for Force Save / finalise / archive.
    */
-  function enqueue(recordId, operation, payload) {
+  function enqueue(recordId, operation, payload, scheduleOpts) {
     if (!ctx.db) return null;
     const id = generateQueueId();
     const now = Date.now();
@@ -333,6 +345,11 @@ function createSyncWorker(ctx) {
         );
       }
       ctx.flushDb && ctx.flushDb();
+      // Kick only when caller opts in (enqueueSyncForRecord always passes scheduleOpts).
+      // Direct enqueue(id, op, payload) from unit tests does not schedule a cycle.
+      if (scheduleOpts !== undefined) {
+        try { scheduleSoon(scheduleOpts || {}); } catch (_) {}
+      }
       return id;
     } catch (e) {
       console.warn('[SyncWorker] Enqueue failed:', e && e.message);
@@ -839,56 +856,67 @@ function createSyncWorker(ctx) {
   /**
    * Wrapper: core cycle then empty-cloud auto-heal with the lock released.
    * Pass { skipHeal: true } from drainPendingSyncUploads to avoid recursion.
+   * After the cycle (including heal), flush any kick that arrived while
+   * the public cycle was busy so a save mid-pull/heal does not wait for the 10s poll.
    */
   async function runCyclePublic(opts) {
-    const skipHeal = !!(opts && opts.skipHeal);
-    const result = await runCycle();
-    if (!result || !result._considerHeal) {
-      return result;
-    }
-    if (skipHeal || !ctx.maybeEmptyCloudAutoHeal) {
-      recordCycleOutcome(result._outcomeReason, result._outcomeDetail);
+    _publicCycleDepth += 1;
+    try {
+      const skipHeal = !!(opts && opts.skipHeal);
+      const result = await runCycle();
+      if (!result || !result._considerHeal) {
+        return result;
+      }
+      if (skipHeal || !ctx.maybeEmptyCloudAutoHeal) {
+        recordCycleOutcome(result._outcomeReason, result._outcomeDetail);
+        return {
+          skipped: false,
+          reason: result._outcomeReason,
+          pushed: result.pushed,
+          pullResult: result.pullResult,
+        };
+      }
+      let outcomeReason = result._outcomeReason || SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
+      let outcomeDetail = result._outcomeDetail || null;
+      try {
+        const heal = await ctx.maybeEmptyCloudAutoHeal({
+          pullResult: result.pullResult,
+          pushed: result.pushed,
+          connectivity: _connectivityState,
+        });
+        if (heal && heal.ran) {
+          if (heal.ok && !heal.skipped) {
+            outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
+            outcomeDetail = 'empty_cloud_heal_verified';
+            _lastError = null;
+          } else if (heal.reason === 'heal_backoff') {
+            outcomeReason = SYNC_SKIP_REASONS.HEAL_BACKOFF;
+            outcomeDetail = heal.error || 'Empty-cloud heal backoff';
+          } else if (heal.skipped) {
+            // keep prior ok reason
+          } else if (heal.ok === false) {
+            outcomeReason = SYNC_SKIP_REASONS.HEAL_PENDING;
+            outcomeDetail = heal.error || heal.code || 'Empty-cloud heal pending';
+            _lastError = outcomeDetail;
+          }
+        }
+      } catch (healErr) {
+        console.warn('[SyncWorker] empty-cloud auto-heal failed:', healErr && healErr.message ? healErr.message : healErr);
+      }
+      recordCycleOutcome(outcomeReason, outcomeDetail);
       return {
         skipped: false,
-        reason: result._outcomeReason,
+        reason: outcomeReason,
         pushed: result.pushed,
         pullResult: result.pullResult,
       };
-    }
-    let outcomeReason = result._outcomeReason || SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
-    let outcomeDetail = result._outcomeDetail || null;
-    try {
-      const heal = await ctx.maybeEmptyCloudAutoHeal({
-        pullResult: result.pullResult,
-        pushed: result.pushed,
-        connectivity: _connectivityState,
-      });
-      if (heal && heal.ran) {
-        if (heal.ok && !heal.skipped) {
-          outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
-          outcomeDetail = 'empty_cloud_heal_verified';
-          _lastError = null;
-        } else if (heal.reason === 'heal_backoff') {
-          outcomeReason = SYNC_SKIP_REASONS.HEAL_BACKOFF;
-          outcomeDetail = heal.error || 'Empty-cloud heal backoff';
-        } else if (heal.skipped) {
-          // keep prior ok reason
-        } else if (heal.ok === false) {
-          outcomeReason = SYNC_SKIP_REASONS.HEAL_PENDING;
-          outcomeDetail = heal.error || heal.code || 'Empty-cloud heal pending';
-          _lastError = outcomeDetail;
-        }
+    } finally {
+      _publicCycleDepth = Math.max(0, _publicCycleDepth - 1);
+      // Nested drain cycles (skipHeal) must not flush kicks while outer heal runs.
+      if (_publicCycleDepth === 0) {
+        flushPendingKick();
       }
-    } catch (healErr) {
-      console.warn('[SyncWorker] empty-cloud auto-heal failed:', healErr && healErr.message ? healErr.message : healErr);
     }
-    recordCycleOutcome(outcomeReason, outcomeDetail);
-    return {
-      skipped: false,
-      reason: outcomeReason,
-      pushed: result.pushed,
-      pullResult: result.pullResult,
-    };
   }
 
   /**
@@ -938,10 +966,73 @@ function createSyncWorker(ctx) {
       clearTimeout(_scheduleSoonTimer);
       _scheduleSoonTimer = null;
     }
+    if (_kickFlushTimer) {
+      clearTimeout(_kickFlushTimer);
+      _kickFlushTimer = null;
+    }
+    _kickAfterCycle = false;
+    _kickAfterImmediate = false;
   }
 
   let _scheduleSoonTimer = null;
-  function scheduleSoon() {
+  let _kickFlushTimer = null;
+  let _kickAfterCycle = false;
+  let _kickAfterImmediate = false;
+
+  function getScheduleDebounceMs() {
+    if (ctx && ctx.scheduleSoonDebounceMs != null) {
+      const n = Number(ctx.scheduleSoonDebounceMs);
+      return Number.isFinite(n) && n >= 0 ? n : SCHEDULE_SOON_DEBOUNCE_MS;
+    }
+    return SCHEDULE_SOON_DEBOUNCE_MS;
+  }
+
+  function shouldDeferKick() {
+    return _inProgress || _publicCycleDepth > 0;
+  }
+
+  function flushPendingKick() {
+    if (!_kickAfterCycle) return;
+    _kickAfterCycle = false;
+    const immediate = _kickAfterImmediate !== false;
+    _kickAfterImmediate = false;
+    if (_kickFlushTimer) {
+      clearTimeout(_kickFlushTimer);
+      _kickFlushTimer = null;
+    }
+    _kickFlushTimer = setTimeout(() => {
+      _kickFlushTimer = null;
+      try {
+        scheduleSoon({ immediate: !!immediate });
+      } catch (_) {}
+    }, 0);
+    if (_kickFlushTimer && typeof _kickFlushTimer.unref === 'function') {
+      _kickFlushTimer.unref();
+    }
+  }
+
+  function fireScheduledCycle() {
+    _scheduleSoonTimer = null;
+    if (shouldDeferKick()) {
+      // Cycle or heal in flight — re-kick when the public session finishes so a
+      // save mid-cycle/heal does not wait for the next 10s poll.
+      _kickAfterCycle = true;
+      _kickAfterImmediate = true;
+      return;
+    }
+    runCyclePublic().catch(() => {});
+  }
+
+  /**
+   * Schedule a sync cycle soon after a durable local mutation.
+   * - Default: trailing debounce (SCHEDULE_SOON_DEBOUNCE_MS) so keystroke
+   *   autosaves coalesce and do not hammer the API.
+   * - { immediate: true }: near-zero delay for Force Save / Save now /
+   *   finalise / archive (still respects rate-limit gate).
+   * - While a cycle (including heal) is in progress: mark pending kick (flushed when idle).
+   */
+  function scheduleSoon(opts) {
+    const immediate = !!(opts && opts.immediate);
     // While rate-limited: coalesce wakes onto the gate expiry (no hammering).
     if (rateLimitGate.isBlocked()) {
       scheduleWakeAfterGate();
@@ -957,11 +1048,20 @@ function createSyncWorker(ctx) {
       });
       return;
     }
-    if (_scheduleSoonTimer) return;
-    _scheduleSoonTimer = setTimeout(() => {
+    if (shouldDeferKick()) {
+      _kickAfterCycle = true;
+      _kickAfterImmediate = true;
+      return;
+    }
+    if (_scheduleSoonTimer) {
+      clearTimeout(_scheduleSoonTimer);
       _scheduleSoonTimer = null;
-      runCyclePublic().catch(() => {});
-    }, SCHEDULE_SOON_DEBOUNCE_MS);
+    }
+    const delay = immediate ? SCHEDULE_IMMEDIATE_MS : getScheduleDebounceMs();
+    _scheduleSoonTimer = setTimeout(fireScheduledCycle, delay);
+    if (_scheduleSoonTimer && typeof _scheduleSoonTimer.unref === 'function') {
+      _scheduleSoonTimer.unref();
+    }
   }
 
   function getDiagnostics() {
@@ -1100,6 +1200,7 @@ module.exports = {
   getNextAttemptMs,
   SYNC_POLL_INTERVAL_MS,
   SCHEDULE_SOON_DEBOUNCE_MS,
+  SCHEDULE_IMMEDIATE_MS,
   RETRY_DELAYS_MS,
   MAX_RETRY_ATTEMPTS,
   SYNC_REQUEST_TIMEOUT_MS,

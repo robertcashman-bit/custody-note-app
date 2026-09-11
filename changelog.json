@@ -1,9 +1,21 @@
 {
   "releases": [
     {
-      "version": "1.9.93",
+      "version": "1.9.94",
       "date": "2026-09-11",
       "latest": true,
+      "changes": [
+        "Sync: after a durable local save that enqueues the outbox, kick a sync cycle immediately (do not wait for the 10s poll)",
+        "Autosave coalesces with a light trailing debounce (~350ms); Force Save / Save now / finalise / archive / delete use immediate kick",
+        "If a save lands mid-cycle (e.g. during pull), re-kick when the cycle finishes so pending central sync clears once the push ack returns",
+        "Rate-limit / Retry-After gate and never-clear-without-ack rules unchanged",
+        "Tests: enqueue\u2192kick promptly, trailing debounce coalescing, immediate bypass, in-progress re-kick"
+      ]
+    },
+    {
+      "version": "1.9.93",
+      "date": "2026-09-11",
+      "latest": false,
       "changes": [
         "Sync: honour Retry-After on 429 with jitter; slow-poll while gated; keep outbox pending (no retry burn); prefer drain when the window opens",
         "Footer / Force Save: \u201cSafe locally \u2014 sync waiting\u201d while rate-limited (nothing dropped)",

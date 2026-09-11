@@ -135,6 +135,12 @@ describe('v1.5.3 — showChoice helper', () => {
     );
   });
 
+  it('showChoice routes Enter/Space to primary and tags choice ids for e2e', () => {
+    assert.match(toastJs, /data-cn-choice-id/);
+    assert.match(toastJs, /Route Enter\/Space to the primary action only/);
+    assert.match(toastJs, /addEventListener\('keydown', onKey, true\)/);
+  });
+
   it('styles.css provides a stacked-button layout for the choice modal', () => {
     assert.match(stylesCss, /\.cn-confirm-btns--stacked\s*\{/);
     assert.match(stylesCss, /flex-direction:\s*column/);

@@ -3662,9 +3662,11 @@ function resetSyncWorkerAfterDbSwap(reason) {
   }
 }
 
-function enqueueSyncForRecord(recordId, operation = 'upsert') {
+function enqueueSyncForRecord(recordId, operation = 'upsert', scheduleOpts) {
   const w = getSyncWorker();
-  if (w) w.enqueue(String(recordId), operation, {});
+  // Always pass scheduleOpts (default {}) so worker.enqueue kicks scheduleSoon.
+  // Direct worker.enqueue(id, op, payload) in unit tests omits the 4th arg and does not kick.
+  if (w) w.enqueue(String(recordId), operation, {}, scheduleOpts || {});
 }
 
 function startSyncTimer() {
@@ -3677,12 +3679,13 @@ function stopSyncTimer() {
 }
 
 /**
- * Schedule sync soon â€” called after any record mutation.
+ * Schedule sync soon — called after any record mutation.
  * Offline-first: sync runs in background; UI never waits.
+ * Pass { immediate: true } for Force Save / Save now / finalise / archive.
  */
-function scheduleSyncSoon() {
+function scheduleSyncSoon(opts) {
   const w = getSyncWorker();
-  if (w) w.scheduleSoon();
+  if (w) w.scheduleSoon(opts);
 }
 
 /** After licence is valid again, unblock sync queue items that failed with 401/403. */
@@ -6915,7 +6918,7 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
       dbRun('UPDATE attendances SET status=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', ['draft', now, nextVer, id]);
       db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'unlocked_for_amendment', now]);
       markDbDirty();
-      enqueueSyncForRecord(id);
+      enqueueSyncForRecord(id, 'upsert', { immediate: true });
       return finishAttendanceSaveResult(id, 'draft', 'unlock');
     }
     return { id: null, durable: false, pendingSync: false, syncDirty: false, error: 'not_found' };
@@ -7008,7 +7011,11 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
     // Durability: every attendance-save must hit disk before the UI reports
     // "Saved locally". Finalise/complete previously flushed; drafts also need
     // this (crash between in-memory write and 30s debounce was a loss window).
-    enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert');
+    // Finalise/complete kick sync immediately; draft autosave uses light debounce.
+    const syncKick = (st === 'finalised' || st === 'completed')
+      ? { immediate: true }
+      : undefined;
+    enqueueSyncForRecord(id, st === 'finalised' ? 'finalise' : 'upsert', syncKick);
     return finishAttendanceSaveResult(id, st, st === 'finalised' ? 'finalise' : 'update');
   }
 
@@ -7108,7 +7115,7 @@ ipcMain.handle('attendance-force-status', (_, { id, status }) => {
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)',
     [id, status === 'finalised' ? 'force_finalised' : 'force_status_change', now, 'Forced status update to ' + status]);
   markDbDirty();
-  enqueueSyncForRecord(id, status === 'finalised' ? 'finalise' : 'upsert');
+  enqueueSyncForRecord(id, status === 'finalised' ? 'finalise' : 'upsert', { immediate: true });
   const saveResult = finishAttendanceSaveResult(id, status, 'force-status');
   const verify = dbGet('SELECT status FROM attendances WHERE id = ?', [id]);
   console.log('[FORCE-STATUS] id=' + id + ' set to ' + status + ', verified=' + (verify ? verify.status : 'MISSING') + ', durable=' + !!saveResult.durable);
@@ -7123,7 +7130,7 @@ ipcMain.handle('attendance-archive', (_, id) => {
   dbRun('UPDATE attendances SET archived_at=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, now, nv, id]);
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'archived', now]);
   markDbDirty();
-  enqueueSyncForRecord(id);
+  enqueueSyncForRecord(id, 'upsert', { immediate: true });
   flushDbSync();
   return true;
 });
@@ -7136,7 +7143,7 @@ ipcMain.handle('attendance-unarchive', (_, id) => {
   dbRun('UPDATE attendances SET archived_at=NULL, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, nv, id]);
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp) VALUES (?,?,?)', [id, 'unarchived', now]);
   markDbDirty();
-  enqueueSyncForRecord(id);
+  enqueueSyncForRecord(id, 'upsert', { immediate: true });
   return true;
 });
 
@@ -7152,7 +7159,7 @@ ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
       [id, existing.status === 'finalised' ? 'soft_deleted' : 'draft_soft_deleted', reason || '', now]
     );
     markDbDirty();
-    enqueueSyncForRecord(id);
+    enqueueSyncForRecord(id, 'upsert', { immediate: true });
     flushDbSync();
     return { soft: true, durable: true };
   }
@@ -7167,7 +7174,7 @@ ipcMain.handle('attendance-undelete', (_, id) => {
   dbRun('UPDATE attendances SET deleted_at=NULL, deletion_reason=NULL, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, nv, id]);
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)', [id, 'restored', now, 'Restored from deleted']);
   markDbDirty();
-  enqueueSyncForRecord(id);
+  enqueueSyncForRecord(id, 'upsert', { immediate: true });
   flushDbSync();
   return true;
 });
@@ -7242,7 +7249,7 @@ ipcMain.handle('supervisor-approve', (_, { id, note, credential }) => {
     'INSERT INTO audit_log (attendance_id, action, user_note, timestamp) VALUES (?,?,?,?)',
     [id, 'supervisor_approved', note || '', now]
   );
-  enqueueSyncForRecord(id);
+  enqueueSyncForRecord(id, 'upsert', { immediate: true });
   return { ok: true, credentialType: auth.credentialType };
 });
 
@@ -7608,6 +7615,8 @@ ipcMain.handle('persist-and-backup', async () => {
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('forceSaveDrainPendingAt', ?)",
             [new Date().toISOString()]
           );
+          // Keep pushing without waiting for the 10s poll (rate-limit gate still respected).
+          try { scheduleSyncSoon({ immediate: true }); } catch (_) {}
         } else {
           dbRun("DELETE FROM settings WHERE key='forceSaveDrainPending'");
           dbRun("DELETE FROM settings WHERE key='forceSaveDrainPendingAt'");
@@ -8385,9 +8394,9 @@ ipcMain.handle('sync-conflict-resolve', (_event, params) => {
       try { saveDb(); } catch (saveErr) { console.error('[sync-conflict-resolve] saveDb failed:', saveErr && saveErr.message); }
       // Keeping local means the local edit must re-propagate to other devices.
       if (result.requeue && result.attendanceId != null) {
-        try { enqueueSyncForRecord(result.attendanceId); } catch (_) {}
+        try { enqueueSyncForRecord(result.attendanceId, 'upsert', { immediate: true }); } catch (_) {}
       }
-      try { scheduleSyncSoon(); } catch (_) {}
+      try { scheduleSyncSoon({ immediate: true }); } catch (_) {}
       if (mainWindow && !mainWindow.isDestroyed()) {
         try { mainWindow.webContents.send('sync-status-changed', { status: 'synced' }); } catch (_) {}
         if (result.resolution === 'accept_remote') {

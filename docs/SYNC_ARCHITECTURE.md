@@ -52,8 +52,10 @@ Sync worker (background) pushes changes when API is reachable; ack before clear
 
 ### Triggers for sync
 - App startup (8s delay)
-- Every 10 seconds (poll)
-- `scheduleSyncSoon()` after any mutation (1s debounce)
+- Every 10 seconds (poll — backup only)
+- `scheduleSoon()` after every successful outbox enqueue (trailing ~350ms debounce for autosave)
+- `{ immediate: true }` for Force Save / Save now / finalise / archive / delete (near-zero delay)
+- Re-kick after an in-progress cycle finishes (save mid-pull must not wait for the next poll)
 - `online` event
 - `visibilitychange` (tab focus / wake from sleep)
 

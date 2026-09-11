@@ -243,17 +243,35 @@
       var btns = document.createElement('div');
       btns.className = 'cn-confirm-btns cn-confirm-btns--stacked';
 
+      var focusBtn = null;
+      var settled = false;
+
       function done(result) {
-        document.removeEventListener('keydown', esc);
+        if (settled) return;
+        settled = true;
+        document.removeEventListener('keydown', onKey, true);
         if (overlay.parentNode) document.body.removeChild(overlay);
         resolve(result);
       }
-      function esc(e) { if (e.key === 'Escape') done(null); }
+
+      function onKey(e) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          done(null);
+          return;
+        }
+        /* Route Enter/Space to the primary action only — never Cancel.
+           Capturing-phase so a focused secondary button cannot abort first. */
+        if ((e.key === 'Enter' || e.key === ' ') && focusBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          try { focusBtn.click(); } catch (err) {}
+        }
+      }
 
       var safeOptions = Array.isArray(options) ? options : [];
       /* Prefer focusing the primary action. Focusing option[0] caused CI flakes when
          Cancel was listed first (Enter activated abort before Playwright clicked Open). */
-      var focusBtn = null;
       safeOptions.forEach(function (opt) {
         var b = document.createElement('button');
         b.type = 'button';
@@ -262,6 +280,9 @@
           : 'btn btn-primary';
         b.className = variant;
         b.textContent = opt.label;
+        if (opt && opt.id != null) {
+          b.setAttribute('data-cn-choice-id', String(opt.id));
+        }
         b.addEventListener('click', function () { done(opt.id); });
         btns.appendChild(b);
         if (!focusBtn && opt.variant !== 'secondary' && opt.variant !== 'danger') {
@@ -269,16 +290,20 @@
         }
       });
       if (!focusBtn && btns.firstChild) focusBtn = btns.firstChild;
-      if (focusBtn) {
-        setTimeout(function () { try { focusBtn.focus(); } catch (e) {} }, 0);
-      }
 
       box.appendChild(btns);
       overlay.appendChild(box);
       document.body.appendChild(overlay);
 
       overlay.addEventListener('click', function (e) { if (e.target === overlay) done(null); });
-      document.addEventListener('keydown', esc);
+      document.addEventListener('keydown', onKey, true);
+
+      if (focusBtn) {
+        /* Immediate + next-tick focus so a stray Enter cannot hit Cancel before
+           Playwright clicks the primary (Windows Electron CI flake class). */
+        try { focusBtn.focus(); } catch (e) {}
+        setTimeout(function () { try { if (!settled) focusBtn.focus(); } catch (e) {} }, 0);
+      }
     });
   }
 
