@@ -1,12 +1,22 @@
 {
   "releases": [
     {
-      "version": "1.9.92",
-      "date": "2026-09-10",
+      "version": "1.9.93",
+      "date": "2026-09-11",
       "latest": true,
       "changes": [
+        "Sync: honour Retry-After on 429 with jitter; slow-poll while gated; keep outbox pending (no retry burn); prefer drain when the window opens",
+        "Footer / Force Save: \u201cSafe locally \u2014 sync waiting\u201d while rate-limited (nothing dropped)",
+        "Pairs with website licence-scoped sync budgets (authenticated 600/min per licence; abuse IP 30/min)"
+      ]
+    },
+    {
+      "version": "1.9.92",
+      "date": "2026-09-10",
+      "latest": false,
+      "changes": [
         "Data-safety verification GREEN: Force Save drain sized from outbox (no unsafe maxCycles:3), background continuation flag, never false Synced on partial drain",
-        "Force-quit / SIGKILL flush durability harness; monitor fail-closed gate wired into sync pull; server PITR client contracts (empty/failed ≠ wipe; restore scoring)",
+        "Force-quit / SIGKILL flush durability harness; monitor fail-closed gate wired into sync pull; server PITR client contracts (empty/failed \u2260 wipe; restore scoring)",
         "Expanded CI gate with seeded chaos, never-event invariant, 1000+ canaries, Mac/Windows account-level SoT proof, Force Save local-vs-central matrix, startup circuit breakers",
         "Durability: flush timeout / write failure restores dirty flag; Force Save verifies on-disk CNDB magic before Safe locally",
         "Push ack: reject padded/wrong written syncId arrays; only clear outbox rows whose syncIds were acknowledged",
@@ -18,9 +28,9 @@
       "date": "2026-09-10",
       "latest": false,
       "changes": [
-        "Cloud sync: end silent death — every sync cycle (including auth_required / rate_limited / offline skips) now persists lastSyncCycleAt + skip reason and logs cycle attempts so Settings / diagnostics never go quiet for days",
-        "Empty-cloud auto-heal: when this device has local notes but a from-epoch probe proves the cloud is empty (or inventory was never verified after a false ack), automatically re-upload all local records with written ack + verify pull — no hidden button required; backoff-capped; never wipes local data",
-        "Footer / Data & Sync: surface Activate licence to sync, Healing empty cloud, rate-limit remaining time, last cycle time, and heal status — never claim Synced while auth is missing or empty-cloud heal is pending",
+        "Cloud sync: end silent death \u2014 every sync cycle (including auth_required / rate_limited / offline skips) now persists lastSyncCycleAt + skip reason and logs cycle attempts so Settings / diagnostics never go quiet for days",
+        "Empty-cloud auto-heal: when this device has local notes but a from-epoch probe proves the cloud is empty (or inventory was never verified after a false ack), automatically re-upload all local records with written ack + verify pull \u2014 no hidden button required; backoff-capped; never wipes local data",
+        "Footer / Data & Sync: surface Activate licence to sync, Healing empty cloud, rate-limit remaining time, last cycle time, and heal status \u2014 never claim Synced while auth is missing or empty-cloud heal is pending",
         "Licence activation immediately restarts the sync worker; rate-limit sticky gate still expires and resumes automatically",
         "Tests: silent skip heartbeat, empty-cloud auto-heal decisions, false-ack lock, preserve-local Full re-sync guards"
       ]

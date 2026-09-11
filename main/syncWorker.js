@@ -37,6 +37,7 @@ const { encryptSyncEnvelope } = require('../lib/syncRecordCrypto');
 const {
   assertPushAccepted,
   createRateLimitGate,
+  isRateLimitError,
   RATE_LIMIT_COOLDOWN_MS,
 } = require('../lib/syncPushAck');
 const { normalizeLicenceKeyForSync } = require('../lib/licenceKeyNormalize');
@@ -63,6 +64,7 @@ const MAX_RECORDS_PER_CYCLE = PUSH_HTTP_BATCH_SIZE * MAX_PUSH_ROUNDS_PER_CYCLE;
 const HEALTH_CHECK_SKIP_WINDOW_MS = 60_000;
 const BLOCKED_RECOVERY_COOLDOWN_MS = 30 * 60_000;
 const MAX_BLOCKED_AUTO_RECOVERIES = 3;
+const RATE_LIMITED_SLOW_POLL_MS = 30_000;
 
 /** Classify errors: retryable vs permanent */
 function isRetryableError(err) {
@@ -123,10 +125,58 @@ function createSyncWorker(ctx) {
   let _lastSkipDetail = null;
   let _lastSkipLogAt = 0;
   let _lastSkipLogReason = null;
+  let _preferOutboxDrain = false;
+  let _gateWakeTimer = null;
+  let _slowPollActive = false;
   const SKIP_ATTEMPT_LOG_COOLDOWN_MS = 60_000;
   const rateLimitGate = createRateLimitGate({
     cooldownMs: (ctx && ctx.rateLimitCooldownMs) || RATE_LIMIT_COOLDOWN_MS,
+    ...(ctx && ctx.rateLimitGateOptions ? ctx.rateLimitGateOptions : {}),
   });
+
+  function ensurePollInterval() {
+    if (!_timer) return;
+    const wantSlow = rateLimitGate.isBlocked();
+    if (wantSlow === _slowPollActive) return;
+    clearInterval(_timer);
+    _slowPollActive = wantSlow;
+    const interval = wantSlow ? RATE_LIMITED_SLOW_POLL_MS : SYNC_POLL_INTERVAL_MS;
+    _timer = setInterval(() => runCyclePublic().catch(() => {}), interval);
+  }
+
+  function scheduleWakeAfterGate() {
+    if (_gateWakeTimer) return;
+    const wait = rateLimitGate.remainingMs();
+    if (wait <= 0) return;
+    _gateWakeTimer = setTimeout(() => {
+      _gateWakeTimer = null;
+      ensurePollInterval();
+      runCyclePublic().catch(() => {});
+    }, wait + 25);
+    if (_gateWakeTimer && typeof _gateWakeTimer.unref === 'function') _gateWakeTimer.unref();
+  }
+
+  /** Restore queue rows to pending without burning retry budget (rate-limit pause). */
+  function restorePendingKeepRetries(id, error) {
+    const errMsg = error && (error.message || String(error))
+      ? (error.message || String(error)).slice(0, 500)
+      : 'Too many requests';
+    ctx.dbRun(
+      'UPDATE sync_queue SET status=?, error=?, last_attempt=? WHERE id=?',
+      ['pending', errMsg, Date.now(), id]
+    );
+    ctx.flushDb && ctx.flushDb();
+  }
+
+  function engageRateLimitFromError(err) {
+    const tripped = rateLimitGate.noteError(err);
+    if (tripped) {
+      _preferOutboxDrain = true;
+      ensurePollInterval();
+      scheduleWakeAfterGate();
+    }
+    return tripped;
+  }
 
   function setConnectivity(state) {
     if (_connectivityState !== state) {
@@ -184,7 +234,9 @@ function createSyncWorker(ctx) {
       }
     }
     notifyRenderer({
-      status: isHardSkipReason(reason) ? 'error' : 'synced',
+      status: reason === SYNC_SKIP_REASONS.RATE_LIMITED
+        ? 'rate_limited'
+        : (isHardSkipReason(reason) ? 'error' : 'synced'),
       lastError: _lastError,
       retryable: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.API_UNREACHABLE,
       rateLimited: reason === SYNC_SKIP_REASONS.RATE_LIMITED,
@@ -193,6 +245,8 @@ function createSyncWorker(ctx) {
       lastSyncCycleAt: _lastCycleAt,
       lastSyncSkipReason: _lastSkipReason,
       connectivity: _connectivityState,
+      localSafe: true,
+      waitingForSync: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE,
     });
     return heartbeat;
   }
@@ -472,6 +526,37 @@ function createSyncWorker(ctx) {
           ctx.logSyncAttempt(generateCorrelationId(), 'push', payloads.length, true, null);
         }
       } catch (e) {
+        if (isRateLimitError(e)) {
+          // Keep outbox intact: do not burn retry_count on 429.
+          for (const item of items) {
+            restorePendingKeepRetries(item.id, e);
+          }
+          _lastError = e && e.message ? e.message : String(e);
+          _lastPushStats = {
+            attempted: items.length,
+            written: 0,
+            ok: false,
+            at: new Date().toISOString(),
+            error: _lastError,
+          };
+          _lastSuccessfulPushAt = 0;
+          engageRateLimitFromError(e);
+          notifyRenderer({
+            status: 'rate_limited',
+            lastError: _lastError,
+            retryable: true,
+            rateLimited: true,
+            rateLimitRemainingMs: rateLimitGate.remainingMs(),
+            localSafe: true,
+            waitingForSync: true,
+            lastSyncSkipReason: SYNC_SKIP_REASONS.RATE_LIMITED,
+          });
+          if (ctx.logSyncAttempt) {
+            ctx.logSyncAttempt(generateCorrelationId(), 'push', items.length, false, _lastError);
+          }
+          setConnectivity('internet_available_api_unreachable');
+          break;
+        }
         const retryable = isRetryableError(e);
         for (const item of items) {
           markFailed(item.id, e, retryable);
@@ -489,12 +574,17 @@ function createSyncWorker(ctx) {
         // claiming api_available for up to 60 seconds.
         _lastSuccessfulPushAt = 0;
         if (rateLimitGate.noteError(e)) {
+          _preferOutboxDrain = true;
+          ensurePollInterval();
+          scheduleWakeAfterGate();
           notifyRenderer({
             status: 'error',
             lastError: _lastError,
             retryable: true,
             rateLimited: true,
             rateLimitRemainingMs: rateLimitGate.remainingMs(),
+            localSafe: true,
+            waitingForSync: true,
           });
         }
         if (ctx.logSyncAttempt) {
@@ -603,8 +693,13 @@ function createSyncWorker(ctx) {
         outcomeReason = SYNC_SKIP_REASONS.RATE_LIMITED;
         outcomeDetail = rateLimitGate.reason() || 'Too many requests. Please try again later.';
         _lastError = outcomeDetail;
+        scheduleWakeAfterGate();
         recordCycleOutcome(outcomeReason, outcomeDetail);
         return { skipped: true, reason: outcomeReason };
+      }
+      if (_slowPollActive) {
+        _slowPollActive = false;
+        ensurePollInterval();
       }
       const conn = await checkConnectivity();
       setConnectivity(conn);
@@ -625,19 +720,44 @@ function createSyncWorker(ctx) {
       const batch = await processBatch();
       pushed = (batch && batch.processed) || 0;
       if (rateLimitGate.isBlocked()) {
-        // Do not spam /api/sync/pull into the same 120/hour budget after a 429.
+        // Do not spam /api/sync/pull into the same rate-limit budget after a 429.
         outcomeReason = SYNC_SKIP_REASONS.RATE_LIMITED;
         outcomeDetail = rateLimitGate.reason() || _lastError || 'Too many requests';
         recordCycleOutcome(outcomeReason, outcomeDetail);
         return { skipped: true, reason: outcomeReason, pushed };
+      }
+      // Prefer draining pending outbox before pull when a rate-limit window opens.
+      if (_preferOutboxDrain && ctx.db) {
+        const pendingRow = ctx.dbGet(
+          "SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing')"
+        ) || { c: 0 };
+        if ((pendingRow.c || 0) > 0) {
+          outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
+          outcomeDetail = 'Draining outbox before pull after rate-limit window';
+          recordCycleOutcome(outcomeReason, outcomeDetail);
+          return { skipped: false, reason: outcomeReason, pushed };
+        }
+        _preferOutboxDrain = false;
       }
       if (ctx.syncPull) {
         let pullFailed = false;
         pullResult = await ctx.syncPull().catch((e) => {
           pullFailed = true;
           _lastError = e && e.message ? e.message : String(e);
-          rateLimitGate.noteError(e);
-          notifyRenderer({ status: 'error', lastError: _lastError, retryable: isRetryableError(e) });
+          if (engageRateLimitFromError(e)) {
+            notifyRenderer({
+              status: 'rate_limited',
+              lastError: _lastError,
+              retryable: true,
+              rateLimited: true,
+              rateLimitRemainingMs: rateLimitGate.remainingMs(),
+              localSafe: true,
+              waitingForSync: true,
+              lastSyncSkipReason: SYNC_SKIP_REASONS.RATE_LIMITED,
+            });
+          } else {
+            notifyRenderer({ status: 'error', lastError: _lastError, retryable: isRetryableError(e) });
+          }
           return { pulled: 0, decryptFailed: 0, received: 0 };
         });
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
@@ -783,6 +903,7 @@ function createSyncWorker(ctx) {
     if (_timer) return;
     _recoverBlockedOnStartup();
     runCyclePublic().catch(() => {});
+    _slowPollActive = false;
     _timer = setInterval(() => runCyclePublic().catch(() => {}), SYNC_POLL_INTERVAL_MS);
   }
 
@@ -808,10 +929,34 @@ function createSyncWorker(ctx) {
   function stop() {
     if (_timer) clearInterval(_timer);
     _timer = null;
+    _slowPollActive = false;
+    if (_gateWakeTimer) {
+      clearTimeout(_gateWakeTimer);
+      _gateWakeTimer = null;
+    }
+    if (_scheduleSoonTimer) {
+      clearTimeout(_scheduleSoonTimer);
+      _scheduleSoonTimer = null;
+    }
   }
 
   let _scheduleSoonTimer = null;
   function scheduleSoon() {
+    // While rate-limited: coalesce wakes onto the gate expiry (no hammering).
+    if (rateLimitGate.isBlocked()) {
+      scheduleWakeAfterGate();
+      notifyRenderer({
+        status: 'rate_limited',
+        coalesced: true,
+        rateLimited: true,
+        rateLimitRemainingMs: rateLimitGate.remainingMs(),
+        localSafe: true,
+        waitingForSync: true,
+        lastSyncSkipReason: SYNC_SKIP_REASONS.RATE_LIMITED,
+        lastError: _lastError,
+      });
+      return;
+    }
     if (_scheduleSoonTimer) return;
     _scheduleSoonTimer = setTimeout(() => {
       _scheduleSoonTimer = null;
@@ -860,6 +1005,9 @@ function createSyncWorker(ctx) {
       lastSyncCycleAt: _lastCycleAt,
       lastSyncSkipReason: _lastSkipReason,
       lastSyncSkipDetail: _lastSkipDetail,
+      preferOutboxDrain: _preferOutboxDrain,
+      localSafe: true,
+      waitingForSync: !!(rateLimitGate.isBlocked() || (pending.c || 0) > 0),
       queueItems,
       conflictItems,
     };
