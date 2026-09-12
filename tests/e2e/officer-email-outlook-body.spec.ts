@@ -173,6 +173,31 @@ async function openOfficerEmailsView(): Promise<void> {
   await expect(page.locator('#oes-body')).toBeVisible({ timeout: 15000 });
 }
 
+async function setOfficerComposeFields(opts: {
+  to?: string;
+  subject?: string;
+  body?: string;
+}): Promise<void> {
+  const to = opts.to;
+  const subject = opts.subject;
+  const body = opts.body;
+  if (to != null) {
+    await page.locator('#oes-to').fill(to);
+    await page.locator('#oes-to').dispatchEvent('input');
+    await expect(page.locator('#oes-to')).toHaveValue(to, { timeout: 5000 });
+  }
+  if (subject != null) {
+    await page.locator('#oes-subject').fill(subject);
+    await page.locator('#oes-subject').dispatchEvent('input');
+    await expect(page.locator('#oes-subject')).toHaveValue(subject, { timeout: 5000 });
+  }
+  if (body != null) {
+    await page.locator('#oes-body').fill(body);
+    await page.locator('#oes-body').dispatchEvent('input');
+    await expect(page.locator('#oes-body')).toHaveValue(body, { timeout: 5000 });
+  }
+}
+
 /**
  * Click Open in Outlook Web and wait until a NEW last-outlook-launch.json appears.
  * Combines confirm-overlay handling with capture polling so a late overlay
@@ -182,6 +207,13 @@ async function openOfficerEmailsView(): Promise<void> {
 async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
   await ensureBlankerNotBlocking();
   await expect(page.locator('#cn-credentialfree-blanker')).toHaveCount(0);
+
+  /* Re-assert recipient before every Open — Windows CI has flaked with a
+   * toast "recipient email does not look valid" when #oes-to was empty/partial. */
+  const toVal = await page.locator('#oes-to').inputValue();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(toVal || '').trim())) {
+    await setOfficerComposeFields({ to: 'officer@kent.police.uk' });
+  }
 
   const before = captureFingerprint();
 
@@ -238,6 +270,10 @@ async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
       lastOpenClickAt = Date.now();
       reclicks += 1;
       await ensureBlankerNotBlocking();
+      const again = await page.locator('#oes-to').inputValue().catch(() => '');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(again || '').trim())) {
+        await setOfficerComposeFields({ to: 'officer@kent.police.uk' });
+      }
       await openBtn.evaluate((el: HTMLElement) => el.click()).catch(() => undefined);
     }
 
@@ -247,11 +283,13 @@ async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
   const blanker = await page.locator('#cn-credentialfree-blanker').count().catch(() => -1);
   const overlay = await page.locator('.cn-confirm-overlay').count().catch(() => -1);
   const toastText = await page.locator('#cn-toast').textContent().catch(() => '');
+  const toAtFail = await page.locator('#oes-to').inputValue().catch(() => '');
   const exists = fs.existsSync(capturePath());
   throw new Error(
     `timed out waiting for last-outlook-launch.json` +
       ` (waited ${CAPTURE_WAIT_MS}ms, exists=${exists}, blanker=${blanker}, confirmOverlay=${overlay}` +
       `, clickedPrimary=${clickedPrimary}, reclicks=${reclicks}` +
+      `, oesTo=${JSON.stringify(String(toAtFail).slice(0, 80))}` +
       (toastText ? `, toast=${JSON.stringify(String(toastText).slice(0, 160))}` : '') +
       `)`
   );
@@ -278,17 +316,19 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   test.setTimeout(300_000);
   await openOfficerEmailsView();
 
-  /* C) completely typed replacement */
-  await page.locator('#oes-to').fill('officer@example.police.uk');
-  await page.locator('#oes-subject').fill('Typed subject');
+  /* C) completely typed replacement — use kent.police.uk (allowlisted root) */
+  const RECIPIENT = 'officer@kent.police.uk';
   const typed = 'Completely typed replacement body.\n\nSecond paragraph.';
-  await page.locator('#oes-body').fill(typed);
-  /* Ensure input listeners marked the body dirty (Electron fill can occasionally miss). */
-  await page.locator('#oes-body').dispatchEvent('input');
+  await setOfficerComposeFields({
+    to: RECIPIENT,
+    subject: 'Typed subject',
+    body: typed,
+  });
   let cap = await clickOpenOutlook();
   expect(cap.body).toBe(typed);
   expect(cap.bodyPlacedInCompose).toBe(true);
   expect(cap.method).toBe('outlook-web');
+  expect(cap.to).toBe(RECIPIENT);
   expect(new URL(cap.url).searchParams.get('body')?.replace(/\r\n/g, '\n')).toBe(typed);
 
   /* A/B) generate then amend */
@@ -300,6 +340,7 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   await page.waitForTimeout(800);
   const generated = await page.locator('#oes-body').inputValue();
   expect(generated.length).toBeGreaterThan(20);
+  await expect(page.locator('#oes-to')).toHaveValue(RECIPIENT);
 
   /* A) unedited generated */
   cap = await clickOpenOutlook();
@@ -308,17 +349,14 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
 
   /* B) amended */
   const amended = generated + '\n\nAMENDED LIVE MARKER';
-  await page.locator('#oes-body').fill(amended);
-  await page.locator('#oes-body').dispatchEvent('input');
+  await setOfficerComposeFields({ body: amended });
   cap = await clickOpenOutlook();
   expect(cap.body).toBe(amended);
   expect(cap.body).toContain('AMENDED LIVE MARKER');
   expect(new URL(cap.url).searchParams.get('body')?.replace(/\r\n/g, '\n')).toBe(amended);
 
   /* D + E special multiline */
-  await page.locator('#oes-subject').fill('Re: Smith & Jones');
-  await page.locator('#oes-body').fill(SPECIAL_BODY);
-  await page.locator('#oes-body').dispatchEvent('input');
+  await setOfficerComposeFields({ subject: 'Re: Smith & Jones', body: SPECIAL_BODY });
   cap = await clickOpenOutlook();
   expect(cap.body).toBe(SPECIAL_BODY);
   const decoded = new URL(cap.url).searchParams.get('body') || '';
@@ -327,15 +365,13 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   expect(decoded).toContain('Smith & Jones');
 
   /* F) second click newest */
-  await page.locator('#oes-body').fill('second click newest body');
-  await page.locator('#oes-body').dispatchEvent('input');
+  await setOfficerComposeFields({ body: 'second click newest body' });
   cap = await clickOpenOutlook();
   expect(cap.body).toBe('second click newest body');
 
   /* Long body → .eml path with full body */
   const longBody = 'LIVE_LONG_MARKER\n\n' + 'x'.repeat(5000);
-  await page.locator('#oes-body').fill(longBody);
-  await page.locator('#oes-body').dispatchEvent('input');
+  await setOfficerComposeFields({ body: longBody });
   cap = await clickOpenOutlook();
   expect(cap.body).toBe(longBody);
   expect(cap.method).toBe('outlook-desktop-eml');

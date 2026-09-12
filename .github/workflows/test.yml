@@ -30,6 +30,9 @@ jobs:
       - name: Data-safety gate
         run: npm run test:data-safety
 
+      - name: Security audit (production deps + secrets)
+        run: npm run security:audit
+
       - name: Playwright e2e
         run: npm run test:e2e
 
