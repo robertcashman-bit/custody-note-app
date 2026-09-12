@@ -671,7 +671,10 @@ body.form-active .autosave-indicator {
    doesn't accidentally search records. Re-shows on Home / Records / etc. */
 body.form-active .global-search { display: none !important; }
 
-/* C9: Cap textareas at ~5 rows by default; auto-grow to ~8 on focus. */
+/* C9: Cap compact form textareas at ~5 rows by default; ~8 on focus.
+   Note-writing fields (.note-writing-textarea) are excluded — they expand
+   by default so long pastes (e.g. solicitor briefs) stay visible without
+   Settings → Larger textareas. Soft vh/em cap keeps short screens usable. */
 .form-group textarea {
   min-height: 96px;
   max-height: 8.5em;
@@ -680,8 +683,21 @@ body.form-active .global-search { display: none !important; }
 .form-group textarea:focus {
   max-height: 14em;
 }
+.form-group textarea.note-writing-textarea {
+  min-height: 12em;
+  max-height: min(70vh, 48em);
+  resize: vertical;
+  overflow-y: auto;
+}
+.form-group textarea.note-writing-textarea:focus {
+  max-height: min(70vh, 48em);
+}
 html.larger-textareas .form-group textarea {
   min-height: 130px;
+  max-height: none;
+}
+html.larger-textareas .form-group textarea.note-writing-textarea {
+  min-height: 14em;
   max-height: none;
 }
 .header-right { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
@@ -6132,6 +6148,9 @@ html.hide-home-status #home-status-section {
 }
 html.larger-textareas .form-group textarea {
   min-height: 180px;
+}
+html.larger-textareas .form-group textarea.note-writing-textarea {
+  min-height: 200px;
 }
 .form-group:has(textarea) {
   padding: 0.65rem 0.75rem 0.8rem;
