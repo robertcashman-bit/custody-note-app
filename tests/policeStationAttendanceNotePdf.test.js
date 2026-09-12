@@ -132,6 +132,11 @@ describe('Police Station Attendance Note PDF — defence summary and outcome fie
     assert.match(buildPdfHtmlBody, /row\('Headline advice', f\.headlineAdvice\)/);
   });
 
+  it('section 8 does not list removed Next Location / Next Date form fields', () => {
+    assert.doesNotMatch(buildPdfHtmlBody, /row\('Next location',\s*d\.nextLocationName\)/);
+    assert.doesNotMatch(buildPdfHtmlBody, /row\('Next date \(form field\)',\s*fmtDate\(d\.nextDate\)\)/);
+  });
+
   it('section 11 always includes privacy notice and applicant declaration calls', () => {
     assert.match(buildPdfHtmlBody, /laaPrivacyNoticePdfHtml\(h\)/);
     assert.match(buildPdfHtmlBody, /laaOnlineApplicantDeclarationPdfHtml\(h\)/);

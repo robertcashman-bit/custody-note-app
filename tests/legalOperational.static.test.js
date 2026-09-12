@@ -90,6 +90,14 @@ function extractCheckboxGroupOptions(source, key) {
   const close = source.indexOf(']', optsIdx);
   const block = source.slice(optsIdx, close + 1);
   const opts = [];
+  if (/value:\s*'/.test(block)) {
+    const valueRe = /value:\s*'((?:\\'|[^'])*)'/g;
+    let m;
+    while ((m = valueRe.exec(block))) {
+      opts.push(m[1].replace(/\\'/g, "'"));
+    }
+    return opts;
+  }
   const re = /'((?:\\'|[^'])*)'/g;
   let m;
   while ((m = re.exec(block))) {
@@ -98,9 +106,28 @@ function extractCheckboxGroupOptions(source, key) {
   return opts;
 }
 
+function extractCheckboxGroupLabels(source, key) {
+  const marker = "key: '" + key + "'";
+  const start = source.indexOf(marker);
+  assert.ok(start !== -1, key + ' field missing');
+  const optsIdx = source.indexOf('options: [', start);
+  assert.ok(optsIdx !== -1 && optsIdx - start < 400, key + ' options missing');
+  const close = source.indexOf(']', optsIdx);
+  const block = source.slice(optsIdx, close + 1);
+  const labels = [];
+  const labelRe = /label:\s*'((?:\\'|[^'])*)'/g;
+  let m;
+  while ((m = labelRe.exec(block))) {
+    labels.push(m[1].replace(/\\'/g, "'"));
+  }
+  return labels;
+}
+
 describe('PACE s.24 / s.37 grounds (statutory lists)', () => {
   const arrest = extractCheckboxGroupOptions(appJs, 'groundsForArrest');
   const detention = extractCheckboxGroupOptions(appJs, 'groundsForDetention');
+  const arrestLabels = extractCheckboxGroupLabels(appJs, 'groundsForArrest');
+  const detentionLabels = extractCheckboxGroupLabels(appJs, 'groundsForDetention');
 
   it('arrest grounds match PACE s.24(5) limbs (10 options)', () => {
     assert.deepStrictEqual(arrest, [
@@ -121,6 +148,17 @@ describe('PACE s.24 / s.37 grounds (statutory lists)', () => {
     assert.ok(!arrest.some((o) => /search powers under PACE/i.test(o)));
   });
 
+  it('arrest option labels include common police shorthand aliases', () => {
+    assert.ok(arrestLabels.length === arrest.length, 'each arrest option should have a display label');
+    const joined = arrestLabels.join('\n');
+    assert.match(joined, /to get name \/ ID/i);
+    assert.match(joined, /to get address/i);
+    assert.match(joined, /to interview/i);
+    assert.match(joined, /to prevent disappearance/i);
+    assert.match(joined, /to search/i);
+    assert.match(joined, /s\.24\(6\)/i);
+  });
+
   it('detention grounds are exactly the two PACE s.37(3) options', () => {
     assert.deepStrictEqual(detention, [
       'To secure or preserve evidence relating to an offence for which the person is under arrest',
@@ -128,8 +166,25 @@ describe('PACE s.24 / s.37 grounds (statutory lists)', () => {
     ]);
   });
 
+  it('detention option labels include interview / evidence shorthand', () => {
+    assert.ok(detentionLabels.length === detention.length, 'each detention option should have a display label');
+    const joined = detentionLabels.join('\n');
+    assert.match(joined, /to secure evidence/i);
+    assert.match(joined, /to preserve evidence/i);
+    assert.match(joined, /to interview/i);
+    assert.match(joined, /to question/i);
+  });
+
   it('detention grounds omit insufficient-evidence / further-investigation item', () => {
     assert.ok(!detention.some((o) => /further investigation|Insufficient evidence/i.test(o)));
+  });
+
+  it('checkboxGroup renderer supports value/label option objects', () => {
+    const start = appJs.indexOf("if (f.type === 'checkboxGroup')");
+    assert.ok(start >= 0, 'checkboxGroup renderer must exist');
+    const block = appJs.slice(start, start + 2500);
+    assert.match(block, /opt\.value/);
+    assert.match(block, /opt\.label/);
   });
 });
 

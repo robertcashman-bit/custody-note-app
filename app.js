@@ -647,21 +647,21 @@ var LAA = {
         { key: 'voluntaryInterview', label: 'Voluntary Interview?', type: 'select', options: ['Yes','No'] },
         { key: '_note_voluntary', label: 'If voluntary interview, arrest/detention grounds and PACE clock do not apply.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'Yes' } },
         { key: 'groundsForArrest', label: 'Grounds for Arrest (PACE s.24)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
-          'To ascertain the person\'s name',
-          'To ascertain the person\'s address',
-          'To prevent causing physical injury to himself or any other person',
-          'To prevent suffering physical injury',
-          'To prevent causing loss of or damage to property',
-          'To prevent an offence against public decency',
-          'To prevent causing an unlawful obstruction of the highway',
-          'To protect a child or other vulnerable person',
-          'To allow the prompt and effective investigation of the offence or of the person\'s conduct',
-          'To prevent any prosecution being hindered by the disappearance of the person'
+          { value: 'To ascertain the person\'s name', label: 'To ascertain the person\'s name (to get name / ID)' },
+          { value: 'To ascertain the person\'s address', label: 'To ascertain the person\'s address (to get address)' },
+          { value: 'To prevent causing physical injury to himself or any other person', label: 'To prevent causing physical injury to himself or any other person (to prevent injury to self or others)' },
+          { value: 'To prevent suffering physical injury', label: 'To prevent suffering physical injury (to prevent suffering injury)' },
+          { value: 'To prevent causing loss of or damage to property', label: 'To prevent causing loss of or damage to property (to prevent damage to property)' },
+          { value: 'To prevent an offence against public decency', label: 'To prevent an offence against public decency (public decency — only if the public cannot reasonably avoid the person, s.24(6))' },
+          { value: 'To prevent causing an unlawful obstruction of the highway', label: 'To prevent causing an unlawful obstruction of the highway (to prevent highway obstruction)' },
+          { value: 'To protect a child or other vulnerable person', label: 'To protect a child or other vulnerable person (to protect child / vulnerable person)' },
+          { value: 'To allow the prompt and effective investigation of the offence or of the person\'s conduct', label: 'To allow the prompt and effective investigation of the offence or of the person\'s conduct (to interview / for investigation / to search — supports investigation only)' },
+          { value: 'To prevent any prosecution being hindered by the disappearance of the person', label: 'To prevent any prosecution being hindered by the disappearance of the person (to prevent disappearance)' }
         ] },
-        { key: '_note_arrest_search', label: 'PACE search powers may support the investigation ground (Code G para 2.9(e)); they are not a separate s.24 necessity criterion.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: '_note_arrest_search', label: 'Police shorthand such as “to search” is not a separate s.24 necessity criterion — tick the investigation ground if search powers support the investigation (Code G para 2.9(e)). Public-decency arrests also need the s.24(6) caveat (public cannot reasonably avoid the person).', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'groundsForDetention', label: 'Grounds for Detention (PACE s.37)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
-          'To secure or preserve evidence relating to an offence for which the person is under arrest',
-          'To obtain such evidence by questioning the person'
+          { value: 'To secure or preserve evidence relating to an offence for which the person is under arrest', label: 'To secure or preserve evidence relating to an offence for which the person is under arrest (to secure evidence / to preserve evidence)' },
+          { value: 'To obtain such evidence by questioning the person', label: 'To obtain such evidence by questioning the person (to interview / to question)' }
         ] },
         { key: 'dateOfArrest', label: 'Date of Arrest', type: 'date', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'timeOfArrest', label: 'Time of Arrest', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
@@ -1014,8 +1014,6 @@ var LAA = {
         { key: 'courtName', label: 'Court Name', type: 'text', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
         { key: 'courtDate', label: 'Court Date', type: 'date', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
         { key: 'courtTime', label: 'Court Time', type: 'time', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
-        { key: 'nextLocationName', label: 'Next Location', type: 'text', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
-        { key: 'nextDate', label: 'Next Date', type: 'date', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
         { key: 'followUpNeeded', label: 'Further follow-up needed?', type: 'select', options: ['No','Yes'], cols: 2 },
         { key: 'followUpRequired', label: 'Follow-up required', type: 'textarea', placeholder: 'What still needs to be done, if anything?', cols: 2, showIf: { field: 'followUpNeeded', value: 'Yes' } },
@@ -1777,8 +1775,6 @@ var LAA = {
           'Draft'
         ], cols: 2 },
         { key: 'stageReachedOrFeeCode', label: 'Stage reached / Fee code', type: 'text', placeholder: 'e.g. INVC', cols: 2 },
-        { key: 'nextLocationName', label: 'Next Location', type: 'text' },
-        { key: 'nextDate', label: 'Next Date', type: 'date' },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
         { key: 'followUpNeeded', label: 'Further follow-up needed?', type: 'select', options: ['No','Yes'], cols: 2 },
         { key: 'followUpRequired', label: 'Follow-up required', type: 'textarea', placeholder: 'What still needs to be done, if anything?', cols: 2, showIf: { field: 'followUpNeeded', value: 'Yes' } },
@@ -5463,7 +5459,7 @@ var REQUIRED_FIELD_KEYS = [
       }
       showAutoSaveIndicator({ durable: normalized.durable, pendingSync: normalized.pendingSync });
       if (normalized.durable === false) {
-        showToast('Saved in memory but disk write may not have finished — press Save now', 'warning', 5000);
+        showToast('Saved in memory but disk write may not have finished — press Force save', 'warning', 5000);
       }
     }).catch(function(e) {
       console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000);
@@ -5519,7 +5515,7 @@ var REQUIRED_FIELD_KEYS = [
       txt = '\u2713 Safe locally ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
       if (pendingSync) txt += ' \u00b7 pending central sync';
     } else {
-      txt = 'Not on disk yet — use Save now';
+      txt = 'Not on disk yet — use Force save';
     }
     var title = dirty
       ? 'Edits are on screen only until the next successful disk write.'
@@ -5529,7 +5525,7 @@ var REQUIRED_FIELD_KEYS = [
           : (pendingSync
             ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Central account sync still pending.'
             : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.'))
-        : 'Save reached memory but disk flush did not complete — press Save now.');
+        : 'Save reached memory but disk flush did not complete — press Force save.');
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
@@ -10894,15 +10890,18 @@ var REQUIRED_FIELD_KEYS = [
       container.className = 'checkbox-group' + (isGrounds ? ' grounds-list' : '');
       const saved = (data[f.key] || '').split('|').filter(Boolean);
       (f.options || []).forEach(opt => {
+        const optValue = (opt && typeof opt === 'object') ? String(opt.value || '') : String(opt);
+        const optLabel = (opt && typeof opt === 'object') ? String(opt.label || opt.value || '') : String(opt);
+        if (!optValue) return;
         const item = document.createElement('label'); item.className = 'checkbox-item' + (isGrounds ? ' grounds-option' : '');
-        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = opt;
-        if (saved.includes(opt)) cb.checked = true;
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = optValue;
+        if (saved.includes(optValue)) cb.checked = true;
         cb.addEventListener('change', () => {
           const checked = Array.from(container.querySelectorAll('input:checked')).map(c => c.value);
           formData[f.key] = checked.join('|');
         });
         item.appendChild(cb);
-        item.appendChild(document.createTextNode(' ' + opt));
+        item.appendChild(document.createTextNode(' ' + optLabel));
         container.appendChild(item);
       });
       if (f.allowOther) {
@@ -14425,7 +14424,7 @@ row('Decision', d.outcomeDecision) +
     row('Headline advice', f.headlineAdvice);
 })() +
 row('Court', d.courtName) + row('Court date', fmtDate(d.courtDate)) + (d.courtTime ? row('Court time', d.courtTime) : '') +
-row('Next location', d.nextLocationName) + row('Next date (form field)', fmtDate(d.nextDate)) + row('Further attendance', d.furtherAttendance) +
+row('Further attendance', d.furtherAttendance) +
 row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes' ? row('Follow-up required', d.followUpRequired) : '') +
 (d.handedBackToDSCCReason ? row('Reason handed back to DSCC (Spec 9.53)', d.handedBackToDSCCReason) : '') +
 (d.nonAttendanceReason ? row('Reason for non-attendance (Spec 9.39/9.44)', d.nonAttendanceReason) : '') +
@@ -15028,7 +15027,6 @@ pdfAuditFooterHtml(d, settings) +
       (d.handedBackToDSCCReason ? row('Reason handed back to DSCC', d.handedBackToDSCCReason) : '') +
       (d.nonAttendanceReason ? row('Reason for non-attendance', d.nonAttendanceReason) : '') +
       row('Outcome code (LAA)', d.outcomeCode) + row('Stage / fee code', d.stageReachedOrFeeCode) +
-      row('Next location', d.nextLocationName) + row('Next date', fmtDate(d.nextDate)) +
       row('Further attendance needed?', d.furtherAttendance) +
       row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes' ? row('Follow-up required', d.followUpRequired) : '') +
       '</table>' +
@@ -16149,7 +16147,7 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
 
-      /* Cmd/Ctrl+S = Save now (disk flush + verified backup) */
+      /* Cmd/Ctrl+S = Force save (disk flush + verified backup + central push) */
       if (modPressed(e) && e.key === 's') {
         e.preventDefault();
         var saveBtn = document.getElementById('form-backup-now-btn') || document.getElementById('header-backup-now-btn');
@@ -16167,10 +16165,10 @@ pdfAuditFooterHtml(d, settings) +
             } else if (res && res.noteDurable) {
               showToast('Safe locally; backup or sync not fully confirmed', 'warning', 9000);
             } else {
-              showToast((res && res.userMessage && res.userMessage.message) || 'Save now failed', 'error', 9000);
+              showToast((res && res.userMessage && res.userMessage.message) || 'Force save failed', 'error', 9000);
             }
           }).catch(function(err) {
-            showToast('Save now failed: ' + (err && err.message), 'error');
+            showToast('Force save failed: ' + (err && err.message), 'error');
           });
         } else {
           quietSave();
@@ -17630,7 +17628,7 @@ pdfAuditFooterHtml(d, settings) +
         if (!apiFn) {
           showToast(afterNoteOk
             ? 'Note saved to this computer, but backup API is unavailable'
-            : 'Save now unavailable', 'warning', 7000);
+            : 'Force save unavailable', 'warning', 7000);
           finishBtn(afterNoteOk ? 'Note saved' : origText, 2500);
           return;
         }
@@ -17686,7 +17684,7 @@ pdfAuditFooterHtml(d, settings) +
           showAutoSaveIndicator({ durable: false, pendingSync: false });
           finishBtn('Attention', 3500);
         }).catch(function(err) {
-          showToast('Save now failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 8000);
+          showToast('Force save failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 8000);
           finishBtn(origText, 500);
         });
       }
@@ -17704,7 +17702,7 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
       if (_finalising) {
-        showToast('Finalise in progress — wait, then try Save now', 'info', 4000);
+        showToast('Finalise in progress — wait, then try Force save', 'info', 4000);
         finishBtn(origText, 500);
         return;
       }
@@ -17723,7 +17721,7 @@ pdfAuditFooterHtml(d, settings) +
         }
         if (normalized.id != null) currentAttendanceId = normalized.id;
         if (!normalized.durable) {
-          showToast('Note did not finish writing to disk — backup not attempted. Try Save now again.', 'error', 9000);
+          showToast('Note did not finish writing to disk — backup not attempted. Try Force save again.', 'error', 9000);
           showAutoSaveIndicator({ durable: false, pendingSync: true });
           finishBtn('Disk failed', 3500);
           return;
