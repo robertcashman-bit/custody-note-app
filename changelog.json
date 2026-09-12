@@ -7,7 +7,7 @@
       "changes": [
         "Licence: one Settings “Email my licence key” control (active, grace, and no-licence); Support links to it instead of a duplicate form",
         "Sign-in overlay keeps Email my licence key when Settings is gated; Send login link stays a separate magic-link action",
-        "Email my licence key always uses licence:email-key (activated key and/or typed email); honest errors on rate limit and sent:false with Ref",
+        "Email my licence key always uses licence:email-key (activated key and/or typed email); success only when API reports sent:true; honest errors on rate limit and sent:false with Ref",
         "Pairs with website email-key index resolution (PR #16) so admin / reverse-index keys on file are emailed"
       ]
     },

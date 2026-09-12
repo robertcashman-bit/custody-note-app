@@ -290,7 +290,7 @@
     window.api.licenceEmailKey({ email: email }).then(function (r) {
       btn.disabled = false;
       if (!msgEl) return;
-      var sent = !!(r && r.ok && r.sent !== false);
+      var sent = !!(r && r.ok && r.sent === true);
       if (!sent) {
         var failMsg = (r && (r.error || r.message)) || 'Could not send email. Try again or contact support.';
         if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';

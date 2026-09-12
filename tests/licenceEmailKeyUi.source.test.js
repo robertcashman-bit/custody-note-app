@@ -54,7 +54,7 @@ describe('licence email-key UI honesty (source)', () => {
   it('Settings recovery always calls licenceEmailKey and treats sent:false as error with Ref', () => {
     assert.match(appJs, /licence-email-key-btn/);
     assert.match(appJs, /window\.api\.licenceEmailKey\(payload\)/);
-    assert.match(appJs, /r\.ok && r\.sent !== false/);
+    assert.match(appJs, /r\.ok && r\.sent === true/);
     assert.match(appJs, /r\.correlationId\) failMsg \+= ' \(Ref: ' \+ r\.correlationId/);
     assert.doesNotMatch(appJs, /custodyNote\.requestLicenceEmail\(email\)/);
     assert.doesNotMatch(appJs, /btn-licence-email-key/);

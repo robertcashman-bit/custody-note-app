@@ -19515,7 +19515,7 @@ pdfAuditFooterHtml(d, settings) +
       var payload = typed ? { email: typed } : {};
       return window.api.licenceEmailKey(payload).then(function(r) {
         if (btn) btn.disabled = false;
-        var sent = !!(r && r.ok && r.sent !== false);
+        var sent = !!(r && r.ok && r.sent === true);
         if (!sent) {
           var failMsg = (r && (r.error || r.message)) || 'Could not send email.';
           if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';

@@ -48,10 +48,8 @@ function buildTypedEmailRetryPayload(typedEmail) {
 /** True when the API (or transport) did not successfully send. */
 function isLicenceEmailKeyFailure(resp) {
   if (!resp || typeof resp !== 'object') return true;
-  if (resp.ok === false) return true;
-  if (resp.sent === false) return true;
-  if (resp.error && resp.ok !== true) return true;
-  return false;
+  if (resp.sent === true && resp.ok !== false) return false;
+  return true;
 }
 
 /**
@@ -66,7 +64,7 @@ function shouldRetryEmailKeyWithTypedEmail(primaryPayload, primaryResult, typedE
 
 /**
  * Map raw API/transport response into the IPC shape used by the renderer.
- * Never invents success when sent is false.
+ * Never invents success unless the API explicitly reports sent:true.
  */
 function mapLicenceEmailKeyResponse(resp, fallbackCorrelationId) {
   const correlationId =
@@ -81,37 +79,21 @@ function mapLicenceEmailKeyResponse(resp, fallbackCorrelationId) {
     };
   }
 
-  if (resp.error && resp.ok !== true) {
+  // Explicit send success only — missing/undefined sent must not become a fake success
+  // (evening retries previously looked "OK" while Resend never ran).
+  if (resp.sent === true && resp.ok !== false) {
     return {
-      ok: false,
-      sent: false,
-      error: resp.error,
-      correlationId,
-    };
-  }
-
-  if (resp.ok === false) {
-    return {
-      ok: false,
-      sent: false,
-      error: resp.error || 'Could not send email',
-      correlationId,
-    };
-  }
-
-  if (resp.sent === false) {
-    return {
-      ok: false,
-      sent: false,
-      error: resp.error || 'Email was not sent',
+      ok: true,
+      sent: true,
+      message: resp.message || "If an account exists, we've sent your key.",
       correlationId,
     };
   }
 
   return {
-    ok: true,
-    sent: true,
-    message: resp.message || "If an account exists, we've sent your key.",
+    ok: false,
+    sent: false,
+    error: resp.error || resp.message || 'Email was not sent',
     correlationId,
   };
 }
