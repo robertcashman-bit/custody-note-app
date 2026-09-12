@@ -26,8 +26,8 @@ describe('licence email-key UI entry points (source)', () => {
     assert.match(indexHtml, /id="licence-email-key-email"/);
     assert.match(indexHtml, /id="licence-email-key-recovery"/);
     assert.match(indexHtml, /id="overlay-forgot-licence-btn"/);
-    assert.match(indexHtml, /id="btn-licence-email-key"/);
     // Removed duplicates
+    assert.doesNotMatch(indexHtml, /id="btn-licence-email-key"/);
     assert.doesNotMatch(indexHtml, /id="forgot-licence-btn"/);
     assert.doesNotMatch(indexHtml, /id="forgot-licence-email"/);
     assert.doesNotMatch(indexHtml, /id="licence-none-forgot-btn"/);
@@ -37,11 +37,10 @@ describe('licence email-key UI entry points (source)', () => {
     assert.match(indexHtml, /id="forgot-licence-goto-settings-btn"/);
   });
 
-  it('does not expose more than one Settings typed-email Email my licence key button', () => {
-    // Active licence uses btn-licence-email-key (one-click); recovery uses licence-email-key-btn.
+  it('has exactly one Settings Email my licence key button and one overlay button', () => {
     assert.equal(countMatches(indexHtml, 'id="licence-email-key-btn"'), 1);
-    assert.equal(countMatches(indexHtml, 'id="btn-licence-email-key"'), 1);
     assert.equal(countMatches(indexHtml, 'id="overlay-forgot-licence-btn"'), 1);
+    assert.equal(countMatches(indexHtml, 'id="forgot-licence-goto-settings-btn"'), 1);
   });
 
   it('keeps magic-link Send login link distinct from email-key', () => {
@@ -52,19 +51,18 @@ describe('licence email-key UI entry points (source)', () => {
 });
 
 describe('licence email-key UI honesty (source)', () => {
-  it('settings Email my key treats sent:false as error with Ref', () => {
-    assert.match(appJs, /btn-licence-email-key/);
+  it('Settings recovery always calls licenceEmailKey and treats sent:false as error with Ref', () => {
+    assert.match(appJs, /licence-email-key-btn/);
+    assert.match(appJs, /window\.api\.licenceEmailKey\(payload\)/);
     assert.match(appJs, /r\.ok && r\.sent !== false/);
-    assert.match(appJs, /r\.correlationId\) err \+= ' \(Ref: ' \+ r\.correlationId/);
+    assert.match(appJs, /r\.correlationId\) failMsg \+= ' \(Ref: ' \+ r\.correlationId/);
+    assert.doesNotMatch(appJs, /custodyNote\.requestLicenceEmail\(email\)/);
+    assert.doesNotMatch(appJs, /btn-licence-email-key/);
   });
 
-  it('requestLicenceKeyEmail maps sent:false to success:false with Ref', () => {
+  it('requestLicenceKeyEmail allows empty typed email for activated-key path', () => {
     assert.match(appJs, /window\.requestLicenceKeyEmail/);
-    assert.match(appJs, /success: false, message: failMsg/);
-    assert.match(appJs, /r\.correlationId\) failMsg \+= ' \(Ref: '/);
-    // Must use licence:email-key path, not legacy email-only IPC as primary
-    assert.match(appJs, /window\.api\.licenceEmailKey\(\{ email: email \}\)/);
-    assert.doesNotMatch(appJs, /custodyNote\.requestLicenceEmail\(email\)/);
+    assert.match(appJs, /var payload = typed \? \{ email: typed \} : \{\}/);
   });
 
   it('overlay email-key uses licenceEmailKey, not legacy requestLicenceEmail', () => {
@@ -84,7 +82,6 @@ describe('licence email-key UI honesty (source)', () => {
   it('legacy custody:requestLicenceEmail does not fake success on rate limit or bad email', () => {
     assert.match(licenceIpcJs, /Enter a valid email address/);
     assert.match(licenceIpcJs, /Too many requests\. Please wait a minute/);
-    // Must not return GENERIC_SUCCESS for invalid email / rate limit
     const handlerSlice = licenceIpcJs.slice(
       licenceIpcJs.indexOf("ipcMain.handle('custody:requestLicenceEmail'"),
       licenceIpcJs.indexOf("ipcMain.handle('custody:adminLogin'"),

@@ -5852,6 +5852,8 @@ var REQUIRED_FIELD_KEYS = [
       if (st && st.email && emailKeyEmailEl && !emailKeyEmailEl.value) {
         emailKeyEmailEl.value = st.email;
       }
+      // Always show the single Settings Email my licence key control when the Licence card is relevant.
+      if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = '';
       if (st && st.key && (st.status === 'active' || st.status === 'expiring_soon')) {
         noneEl.style.display = 'none';
         activeEl.style.display = '';
@@ -5910,7 +5912,6 @@ var REQUIRED_FIELD_KEYS = [
       } else {
         activeEl.style.display = 'none';
         noneEl.style.display = '';
-        if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = '';
         if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
       }
     });
@@ -18250,22 +18251,6 @@ pdfAuditFooterHtml(d, settings) +
       if (typeof saveSettings === 'function') saveSettings();
     });
     /* ─── Licence event handlers ─── */
-    document.getElementById('btn-licence-email-key')?.addEventListener('click', function() {
-      if (!window.api.licenceEmailKey) return;
-      var btn = this;
-      btn.disabled = true;
-      window.api.licenceEmailKey({}).then(function(r) {
-        btn.disabled = false;
-        var sent = !!(r && r.ok && r.sent !== false);
-        if (sent) {
-          showToast(r.message || 'Licence key sent to your email', 'info');
-          return;
-        }
-        var err = (r && (r.error || r.message)) || 'Failed to send';
-        if (r && r.correlationId) err += ' (Ref: ' + r.correlationId + ')';
-        showToast(err, 'error');
-      }).catch(function(e) { btn.disabled = false; showToast('Failed to send', 'error'); console.error('[email-key]', e); });
-    });
     document.getElementById('btn-licence-deactivate-device')?.addEventListener('click', function() {
       if (!window.api.licenceDeactivateMachine) return;
       if (!confirm('Deactivate this device? You will need to enter your licence key again on the new device. This computer will need a new activation.')) return;
@@ -19517,48 +19502,35 @@ pdfAuditFooterHtml(d, settings) +
       }
     });
     window.requestLicenceKeyEmail = function(email, msgEl, btn) {
-      if (!email) {
-        if (msgEl) { msgEl.textContent = 'Enter your email address.'; msgEl.style.color = ''; }
-        return Promise.resolve();
-      }
+      var typed = (email || '').trim();
       if (btn) btn.disabled = true;
       if (msgEl) { msgEl.textContent = 'Sending…'; msgEl.style.color = ''; }
-      var sendPromise;
-      // Single path: licence:email-key (activated key + typed-email retry). Do not use
-      // custody:requestLicenceEmail — it only posts {email} and historically faked success.
-      if (window.api && window.api.licenceEmailKey) {
-        sendPromise = window.api.licenceEmailKey({ email: email }).then(function(r) {
-          var sent = !!(r && r.ok && r.sent !== false);
-          if (!sent) {
-            var failMsg = (r && (r.error || r.message)) || 'Could not send email.';
-            if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
-            return { success: false, message: failMsg, correlationId: r && r.correlationId };
-          }
-          return {
-            success: true,
-            message: r.message || 'If that email exists in our system, your licence code has been sent.',
-            correlationId: r && r.correlationId,
-          };
-        });
-      } else {
+      // Single path: licence:email-key (activated key + typed-email retry). Empty typed
+      // email is allowed when the device has an activated key (main reads licence.dat).
+      if (!(window.api && window.api.licenceEmailKey)) {
         if (btn) btn.disabled = false;
         if (msgEl) { msgEl.textContent = 'Email recovery is not available. Restart the app.'; msgEl.style.color = '#dc2626'; }
         return Promise.resolve();
       }
-      return sendPromise.then(function(res) {
+      var payload = typed ? { email: typed } : {};
+      return window.api.licenceEmailKey(payload).then(function(r) {
         if (btn) btn.disabled = false;
-        if (!msgEl) return;
-        if (res && res.success === false) {
-          var failText = res.message || 'Could not send email. Try again or contact support.';
-          if (res.correlationId && failText.indexOf(res.correlationId) === -1) {
-            failText += ' (Ref: ' + res.correlationId + ')';
+        var sent = !!(r && r.ok && r.sent !== false);
+        if (!sent) {
+          var failMsg = (r && (r.error || r.message)) || 'Could not send email.';
+          if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
+          if (msgEl) {
+            msgEl.textContent = failMsg;
+            msgEl.style.color = '#dc2626';
           }
-          msgEl.textContent = failText;
-          msgEl.style.color = '#dc2626';
-        } else {
-          msgEl.textContent = (res && res.message) ? res.message : 'If that email exists in our system, your licence code has been sent.';
+          return { success: false, message: failMsg, correlationId: r && r.correlationId };
+        }
+        var okMsg = r.message || 'If that email exists in our system, your licence code has been sent.';
+        if (msgEl) {
+          msgEl.textContent = okMsg;
           msgEl.style.color = 'var(--success-color,#16a34a)';
         }
+        return { success: true, message: okMsg, correlationId: r && r.correlationId };
       }).catch(function(e) {
         if (btn) btn.disabled = false;
         if (msgEl) { msgEl.textContent = 'Could not connect. Please try again later.'; msgEl.style.color = ''; }
@@ -19574,8 +19546,7 @@ pdfAuditFooterHtml(d, settings) +
         if (accountTab) accountTab.click();
         setTimeout(function() {
           var target = document.getElementById('licence-email-key-recovery')
-            || document.getElementById('licence-settings-card')
-            || document.getElementById('btn-licence-email-key');
+            || document.getElementById('licence-settings-card');
           if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
           var emailInp = document.getElementById('licence-email-key-email');
           if (emailInp && emailInp.focus) emailInp.focus();

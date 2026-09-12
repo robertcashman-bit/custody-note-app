@@ -913,7 +913,6 @@
             <p id="licence-last-validated" class="settings-hint" style="margin:0 0 1rem 0;font-size:0.8rem;color:var(--text-muted,#64748b);"></p>
             <p id="licence-validate-result" class="settings-hint" style="margin:0 0 0.5rem 0;display:none;"></p>
             <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
-              <button type="button" id="btn-licence-email-key" class="btn btn-secondary">Email my licence key</button>
               <button type="button" id="btn-licence-deactivate-device" class="btn btn-secondary">Deactivate device</button>
               <button type="button" id="btn-licence-change" class="btn btn-secondary">Change licence</button>
               <button type="button" id="btn-licence-remove" class="btn btn-secondary">Remove licence</button>
@@ -982,9 +981,9 @@
             <p id="licence-activate-error" class="licence-error" style="display:none;margin-top:0.5rem;color:#dc2626;"></p>
           </div>
 
-          <!-- Single Settings entry for Email my licence key (no-licence + grace). Active licence uses #btn-licence-email-key. -->
+          <!-- Single Settings entry for Email my licence key (active, grace, and no-licence). Overlay keeps a gated copy. -->
           <div id="licence-email-key-recovery" style="display:none;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border,#e2e8f0);">
-            <p class="settings-hint" style="margin:0 0 0.5rem 0;"><strong>Forgot your licence key?</strong> Enter your purchase email and we&rsquo;ll send it if we have it on file.</p>
+            <p class="settings-hint" style="margin:0 0 0.5rem 0;"><strong>Email my licence key</strong> — enter your purchase email if needed; we&rsquo;ll send the key on file when we have it.</p>
             <div class="forgot-licence-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
               <input type="email" id="licence-email-key-email" placeholder="you@example.com" class="forgot-licence-input settings-input" style="min-width:180px;font-size:0.85rem;" autocomplete="email" />
               <button type="button" id="licence-email-key-btn" class="btn btn-small btn-secondary">Email my licence key</button>
