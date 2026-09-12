@@ -1,11 +1,23 @@
 {
   "releases": [
     {
-      "version": "1.9.98",
+      "version": "1.9.99",
       "date": "2026-09-12",
       "latest": true,
       "changes": [
-        "Licence: one Settings “Email my licence key” control (active, grace, and no-licence); Support links to it instead of a duplicate form",
+        "Billing Close on the Finish-matter screen works again (no silent remount that ignored Close)",
+        "Officer-email Open Outlook is more reliable in Windows CI (recipient field seeding)",
+        "Stress-journey soft FAILs now fail CI hard so regressions cannot ship quietly",
+        "Dependency hardening: electron-updater bump; js-yaml / nanoid overrides keep production npm audit clean",
+        "Production readiness audit 2026-09-12 documented as READY (packages merged PR #49 on top of v1.9.98)"
+      ]
+    },
+    {
+      "version": "1.9.98",
+      "date": "2026-09-12",
+      "latest": false,
+      "changes": [
+        "Licence: one Settings \u201cEmail my licence key\u201d control (active, grace, and no-licence); Support links to it instead of a duplicate form",
         "Sign-in overlay keeps Email my licence key when Settings is gated; Send login link stays a separate magic-link action",
         "Email my licence key always uses licence:email-key (activated key and/or typed email); success only when API reports sent:true; honest errors on rate limit and sent:false with Ref",
         "Pairs with website email-key index resolution (PR #16) so admin / reverse-index keys on file are emailed"
@@ -20,8 +32,8 @@
         "PDF / print / Word exports no longer list those Outcome form fields (bail-return and court fields unchanged)",
         "Existing saved values are left in attendance JSON; they are just no longer collected or shown",
         "Arrest / Detention grounds: option labels now show common police shorthand (to interview, to prevent disappearance, to search, etc.) while still saving the statutory PACE s.24 / s.37 wording",
-        "Clarified note that “to search” is not a separate s.24 necessity criterion, plus s.24(6) public-decency caveat",
-        "Renamed Save now → Force save so the control clearly covers disk write, verified backup, and central push (Ctrl/Cmd+S unchanged)"
+        "Clarified note that \u201cto search\u201d is not a separate s.24 necessity criterion, plus s.24(6) public-decency caveat",
+        "Renamed Save now \u2192 Force save so the control clearly covers disk write, verified backup, and central push (Ctrl/Cmd+S unchanged)"
       ]
     },
     {
