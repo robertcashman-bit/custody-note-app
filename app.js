@@ -5843,14 +5843,14 @@ var REQUIRED_FIELD_KEYS = [
       var lastValidatedEl = document.getElementById('licence-last-validated');
       var resultEl = document.getElementById('licence-validate-result');
       var graceMsgEl = document.getElementById('licence-grace-message');
-      var graceEmailEl = document.getElementById('licence-grace-forgot-email');
-      var noneEmailEl = document.getElementById('licence-none-forgot-email');
+      var emailKeyRecoveryEl = document.getElementById('licence-email-key-recovery');
+      var emailKeyEmailEl = document.getElementById('licence-email-key-email');
       if (!activeEl || !noneEl) return;
       if (resultEl) { resultEl.style.display = 'none'; resultEl.textContent = ''; }
       if (graceEl) graceEl.style.display = 'none';
-      if (st && st.email) {
-        if (graceEmailEl && !graceEmailEl.value) graceEmailEl.value = st.email;
-        if (noneEmailEl && !noneEmailEl.value) noneEmailEl.value = st.email;
+      if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = 'none';
+      if (st && st.email && emailKeyEmailEl && !emailKeyEmailEl.value) {
+        emailKeyEmailEl.value = st.email;
       }
       if (st && st.key && (st.status === 'active' || st.status === 'expiring_soon')) {
         noneEl.style.display = 'none';
@@ -5904,11 +5904,13 @@ var REQUIRED_FIELD_KEYS = [
         activeEl.style.display = 'none';
         noneEl.style.display = 'none';
         graceEl.style.display = '';
+        if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = '';
         if (graceMsgEl) graceMsgEl.textContent = st.message || 'Connect to the internet to verify your subscription. Your licence is still active.';
         if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
       } else {
         activeEl.style.display = 'none';
         noneEl.style.display = '';
+        if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = '';
         if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
       }
     });
@@ -18347,30 +18349,10 @@ pdfAuditFooterHtml(d, settings) +
       );
     });
     document.getElementById('btn-licence-grace-validate')?.addEventListener('click', function() {
-      var msgEl = document.getElementById('licence-grace-forgot-msg');
-      if (msgEl) {
-        msgEl.textContent = 'Validating…';
-        msgEl.style.color = '';
-      }
-      if (!window.api || !window.api.licenceValidate) return;
-      var btn = this;
-      btn.disabled = true;
-      window.api.licenceValidate().then(function(r) {
-        btn.disabled = false;
-        if (r && r.valid === true) {
-          if (msgEl) { msgEl.textContent = 'Licence verified — you are good to go.'; msgEl.style.color = 'var(--success-color,#16a34a)'; }
-          window.__licenceExpired = false;
-          window.__licenceNeedsValidation = false;
-          document.dispatchEvent(new CustomEvent('licence-activated'));
-          loadLicenceSettingsUI();
-        } else if (msgEl) {
-          msgEl.textContent = (r && r.message) || (r && r.status && r.status.message) || 'Could not verify. Check your internet and try again.';
-          msgEl.style.color = '#dc2626';
-        }
-      }).catch(function(e) {
-        btn.disabled = false;
-        if (msgEl) { msgEl.textContent = 'Network error — ' + (e && e.message ? e.message : 'Could not reach server'); msgEl.style.color = '#dc2626'; }
-      });
+      runLicenceValidateUI(
+        document.getElementById('licence-grace-validate-result'),
+        document.getElementById('btn-licence-grace-validate')
+      );
     });
     document.getElementById('btn-licence-activate-settings')?.addEventListener('click', function() {
       var keyInput = document.getElementById('setting-licence-key');
@@ -19542,8 +19524,8 @@ pdfAuditFooterHtml(d, settings) +
       if (btn) btn.disabled = true;
       if (msgEl) { msgEl.textContent = 'Sending…'; msgEl.style.color = ''; }
       var sendPromise;
-      // Prefer licence:email-key so activated-key lookup + typed-email retry can run.
-      // custodyNote.requestLicenceEmail is always exposed by preload and only posts the typed email.
+      // Single path: licence:email-key (activated key + typed-email retry). Do not use
+      // custody:requestLicenceEmail — it only posts {email} and historically faked success.
       if (window.api && window.api.licenceEmailKey) {
         sendPromise = window.api.licenceEmailKey({ email: email }).then(function(r) {
           var sent = !!(r && r.ok && r.sent !== false);
@@ -19558,8 +19540,6 @@ pdfAuditFooterHtml(d, settings) +
             correlationId: r && r.correlationId,
           };
         });
-      } else if (window.custodyNote && window.custodyNote.requestLicenceEmail) {
-        sendPromise = window.custodyNote.requestLicenceEmail(email);
       } else {
         if (btn) btn.disabled = false;
         if (msgEl) { msgEl.textContent = 'Email recovery is not available. Restart the app.'; msgEl.style.color = '#dc2626'; }
@@ -19582,30 +19562,42 @@ pdfAuditFooterHtml(d, settings) +
       }).catch(function(e) {
         if (btn) btn.disabled = false;
         if (msgEl) { msgEl.textContent = 'Could not connect. Please try again later.'; msgEl.style.color = ''; }
-        console.error('[requestLicenceEmail]', e);
+        console.error('[requestLicenceKeyEmail]', e);
       });
     };
 
-    (function initForgotLicence() {
-      var btn = document.getElementById('forgot-licence-btn');
-      var inp = document.getElementById('forgot-licence-email');
-      var msg = document.getElementById('forgot-licence-msg');
-      if (!btn || !inp || !msg) return;
-      btn.addEventListener('click', function() {
-        window.requestLicenceKeyEmail((inp.value || '').trim(), msg, btn);
-      });
-    })();
+    function goToLicenceEmailKeySettings() {
+      try {
+        if (typeof showView === 'function') showView('settings');
+        var tabBar = document.getElementById('settings-tab-bar');
+        var accountTab = tabBar && tabBar.querySelector('.settings-tab[data-stab="account"]');
+        if (accountTab) accountTab.click();
+        setTimeout(function() {
+          var target = document.getElementById('licence-email-key-recovery')
+            || document.getElementById('licence-settings-card')
+            || document.getElementById('btn-licence-email-key');
+          if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          var emailInp = document.getElementById('licence-email-key-email');
+          if (emailInp && emailInp.focus) emailInp.focus();
+        }, 150);
+      } catch (_) {}
+    }
 
-    document.getElementById('licence-none-forgot-btn')?.addEventListener('click', function() {
-      var inp = document.getElementById('licence-none-forgot-email');
-      var msg = document.getElementById('licence-none-forgot-msg');
+    document.getElementById('forgot-licence-goto-settings-btn')?.addEventListener('click', function() {
+      goToLicenceEmailKeySettings();
+    });
+
+    document.getElementById('licence-email-key-btn')?.addEventListener('click', function() {
+      var inp = document.getElementById('licence-email-key-email');
+      var msg = document.getElementById('licence-email-key-msg');
       window.requestLicenceKeyEmail((inp && inp.value || '').trim(), msg, this);
     });
 
-    document.getElementById('btn-licence-grace-email-key')?.addEventListener('click', function() {
-      var inp = document.getElementById('licence-grace-forgot-email');
-      var msg = document.getElementById('licence-grace-forgot-msg');
-      window.requestLicenceKeyEmail((inp && inp.value || '').trim(), msg, this);
+    document.getElementById('licence-email-key-email')?.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('licence-email-key-btn')?.click();
+      }
     });
 
     /**

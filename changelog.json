@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.97",
+      "version": "1.9.98",
       "date": "2026-09-12",
       "latest": true,
+      "changes": [
+        "Licence: one Settings “Email my licence key” recovery control (covers no-licence and grace); Support links to it instead of a duplicate form",
+        "Sign-in overlay keeps Email my licence key when Settings is gated; Send login link stays a separate magic-link action",
+        "Email my licence key always uses licence:email-key (activated key + typed-email retry); honest errors on rate limit and sent:false with Ref",
+        "Pairs with website email-key index resolution (PR #16) so admin / reverse-index keys on file are emailed"
+      ]
+    },
+    {
+      "version": "1.9.97",
+      "date": "2026-09-12",
+      "latest": false,
       "changes": [
         "Outcome (page 8): removed Next Date and Next Location fields from custody and voluntary forms",
         "PDF / print / Word exports no longer list those Outcome form fields (bail-return and court fields unchanged)",

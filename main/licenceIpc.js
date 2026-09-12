@@ -100,9 +100,17 @@ function httpPostForgot(baseUrl, email) {
 
 function registerLicenceIpc(app) {
   ipcMain.handle('custody:requestLicenceEmail', async (_, email) => {
-    if (!validateEmail(email)) return GENERIC_SUCCESS;
+    if (!validateEmail(email)) {
+      return {
+        success: false,
+        message: 'Enter a valid email address.',
+      };
+    }
     if (!requestLicenceEmailRateLimit.checkRateLimit()) {
-      return GENERIC_SUCCESS;
+      return {
+        success: false,
+        message: 'Too many requests. Please wait a minute and try again.',
+      };
     }
     const baseUrl = getServerBaseUrl();
     try {
