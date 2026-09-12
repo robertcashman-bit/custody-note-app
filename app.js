@@ -647,21 +647,21 @@ var LAA = {
         { key: 'voluntaryInterview', label: 'Voluntary Interview?', type: 'select', options: ['Yes','No'] },
         { key: '_note_voluntary', label: 'If voluntary interview, arrest/detention grounds and PACE clock do not apply.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'Yes' } },
         { key: 'groundsForArrest', label: 'Grounds for Arrest (PACE s.24)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
-          'To ascertain the person\'s name',
-          'To ascertain the person\'s address',
-          'To prevent causing physical injury to himself or any other person',
-          'To prevent suffering physical injury',
-          'To prevent causing loss of or damage to property',
-          'To prevent an offence against public decency',
-          'To prevent causing an unlawful obstruction of the highway',
-          'To protect a child or other vulnerable person',
-          'To allow the prompt and effective investigation of the offence or of the person\'s conduct',
-          'To prevent any prosecution being hindered by the disappearance of the person'
+          { value: 'To ascertain the person\'s name', label: 'To ascertain the person\'s name (to get name / ID)' },
+          { value: 'To ascertain the person\'s address', label: 'To ascertain the person\'s address (to get address)' },
+          { value: 'To prevent causing physical injury to himself or any other person', label: 'To prevent causing physical injury to himself or any other person (to prevent injury to self or others)' },
+          { value: 'To prevent suffering physical injury', label: 'To prevent suffering physical injury (to prevent suffering injury)' },
+          { value: 'To prevent causing loss of or damage to property', label: 'To prevent causing loss of or damage to property (to prevent damage to property)' },
+          { value: 'To prevent an offence against public decency', label: 'To prevent an offence against public decency (public decency — only if the public cannot reasonably avoid the person, s.24(6))' },
+          { value: 'To prevent causing an unlawful obstruction of the highway', label: 'To prevent causing an unlawful obstruction of the highway (to prevent highway obstruction)' },
+          { value: 'To protect a child or other vulnerable person', label: 'To protect a child or other vulnerable person (to protect child / vulnerable person)' },
+          { value: 'To allow the prompt and effective investigation of the offence or of the person\'s conduct', label: 'To allow the prompt and effective investigation of the offence or of the person\'s conduct (to interview / for investigation / to search — supports investigation only)' },
+          { value: 'To prevent any prosecution being hindered by the disappearance of the person', label: 'To prevent any prosecution being hindered by the disappearance of the person (to prevent disappearance)' }
         ] },
-        { key: '_note_arrest_search', label: 'PACE search powers may support the investigation ground (Code G para 2.9(e)); they are not a separate s.24 necessity criterion.', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'No' } },
+        { key: '_note_arrest_search', label: 'Police shorthand such as “to search” is not a separate s.24 necessity criterion — tick the investigation ground if search powers support the investigation (Code G para 2.9(e)). Public-decency arrests also need the s.24(6) caveat (public cannot reasonably avoid the person).', type: 'sectionNote', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'groundsForDetention', label: 'Grounds for Detention (PACE s.37)', type: 'checkboxGroup', cols: 2, allowOther: true, showIf: { field: 'voluntaryInterview', value: 'No' }, options: [
-          'To secure or preserve evidence relating to an offence for which the person is under arrest',
-          'To obtain such evidence by questioning the person'
+          { value: 'To secure or preserve evidence relating to an offence for which the person is under arrest', label: 'To secure or preserve evidence relating to an offence for which the person is under arrest (to secure evidence / to preserve evidence)' },
+          { value: 'To obtain such evidence by questioning the person', label: 'To obtain such evidence by questioning the person (to interview / to question)' }
         ] },
         { key: 'dateOfArrest', label: 'Date of Arrest', type: 'date', showIf: { field: 'voluntaryInterview', value: 'No' } },
         { key: 'timeOfArrest', label: 'Time of Arrest', type: 'time', showIf: { field: 'voluntaryInterview', value: 'No' } },
@@ -10890,15 +10890,18 @@ var REQUIRED_FIELD_KEYS = [
       container.className = 'checkbox-group' + (isGrounds ? ' grounds-list' : '');
       const saved = (data[f.key] || '').split('|').filter(Boolean);
       (f.options || []).forEach(opt => {
+        const optValue = (opt && typeof opt === 'object') ? String(opt.value || '') : String(opt);
+        const optLabel = (opt && typeof opt === 'object') ? String(opt.label || opt.value || '') : String(opt);
+        if (!optValue) return;
         const item = document.createElement('label'); item.className = 'checkbox-item' + (isGrounds ? ' grounds-option' : '');
-        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = opt;
-        if (saved.includes(opt)) cb.checked = true;
+        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = optValue;
+        if (saved.includes(optValue)) cb.checked = true;
         cb.addEventListener('change', () => {
           const checked = Array.from(container.querySelectorAll('input:checked')).map(c => c.value);
           formData[f.key] = checked.join('|');
         });
         item.appendChild(cb);
-        item.appendChild(document.createTextNode(' ' + opt));
+        item.appendChild(document.createTextNode(' ' + optLabel));
         container.appendChild(item);
       });
       if (f.allowOther) {
