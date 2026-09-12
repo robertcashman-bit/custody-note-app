@@ -9401,8 +9401,6 @@ ipcMain.handle('export-docx', async (_, { data, settings, filename }) => {
     fieldRow('Outcome', val(d.outcomeDecision)),
     fieldRow('Outcome Code (LAA)', val(d.outcomeCode)),
     fieldRow('Stage / Fee code', val(d.stageReachedOrFeeCode)),
-    fieldRow('Next location', val(d.nextLocationName)),
-    fieldRow('Next date', fmtD(d.nextDate)),
     fieldRow('Further attendance', val(d.furtherAttendance)),
   ].filter(Boolean);
   if (outRows.length) children.push(new Table({ rows: outRows, width: { size: 100, type: WidthType.PERCENTAGE } }));

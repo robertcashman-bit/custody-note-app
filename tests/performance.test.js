@@ -367,6 +367,34 @@ describe('Voluntary form and outcome statuses', () => {
     assert.ok(appJsSource.includes("function isBailReturnOutcomeDecision(decision)"), 'bail return helper should exist');
   });
 
+  it('Outcome schema omits Next Date and Next Location (custody + voluntary)', () => {
+    const formSectionsStart = appJsSource.indexOf('const formSections');
+    const volStart = appJsSource.indexOf('const voluntaryFormSections');
+    const volEnd = appJsSource.indexOf('var activeFormSections');
+    assert.ok(formSectionsStart > 0 && volStart > formSectionsStart, 'formSections and voluntaryFormSections must exist');
+    assert.ok(volEnd > volStart, 'voluntaryFormSections end marker must exist');
+
+    function outcomeFieldsBlock(src, from, to) {
+      const slice = src.substring(from, to);
+      const outcomeIdx = slice.indexOf("id: 'outcome'");
+      assert.ok(outcomeIdx >= 0, 'outcome section must exist in slice');
+      const afterOutcome = slice.substring(outcomeIdx);
+      const nextSection = afterOutcome.search(/\n\s*\{\s*\n\s*id:\s*'/);
+      const block = nextSection >= 0 ? afterOutcome.substring(0, nextSection) : afterOutcome;
+      return block;
+    }
+
+    const custodyOutcome = outcomeFieldsBlock(appJsSource, formSectionsStart, volStart);
+    const voluntaryOutcome = outcomeFieldsBlock(appJsSource, volStart, volEnd);
+
+    assert.ok(!/key:\s*'nextDate'/.test(custodyOutcome), 'custody Outcome must not include nextDate');
+    assert.ok(!/key:\s*'nextLocationName'/.test(custodyOutcome), 'custody Outcome must not include nextLocationName');
+    assert.ok(!/key:\s*'nextDate'/.test(voluntaryOutcome), 'voluntary Outcome must not include nextDate');
+    assert.ok(!/key:\s*'nextLocationName'/.test(voluntaryOutcome), 'voluntary Outcome must not include nextLocationName');
+    assert.ok(/key:\s*'bailDate'/.test(custodyOutcome), 'custody Outcome must still include bailDate');
+    assert.ok(/key:\s*'bailReturnStationName'/.test(custodyOutcome), 'custody Outcome must still include bailReturnStationName');
+  });
+
   it('settings has Additional Modules card', () => {
     assert.ok(indexHtmlSource.includes('modules-installed-card'), 'must have modules-installed-card');
     assert.ok(indexHtmlSource.includes('No additional modules installed'), 'must show no modules message');
