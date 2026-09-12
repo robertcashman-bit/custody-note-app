@@ -181,21 +181,28 @@ async function setOfficerComposeFields(opts: {
   const to = opts.to;
   const subject = opts.subject;
   const body = opts.body;
-  if (to != null) {
-    await page.locator('#oes-to').fill(to);
-    await page.locator('#oes-to').dispatchEvent('input');
-    await expect(page.locator('#oes-to')).toHaveValue(to, { timeout: 5000 });
-  }
-  if (subject != null) {
-    await page.locator('#oes-subject').fill(subject);
-    await page.locator('#oes-subject').dispatchEvent('input');
-    await expect(page.locator('#oes-subject')).toHaveValue(subject, { timeout: 5000 });
-  }
-  if (body != null) {
-    await page.locator('#oes-body').fill(body);
-    await page.locator('#oes-body').dispatchEvent('input');
-    await expect(page.locator('#oes-body')).toHaveValue(body, { timeout: 5000 });
-  }
+  /* Set via DOM evaluate first — Playwright fill() on Electron/Windows has
+   * flaked leaving #oes-to empty/partial, which surfaces as
+   * "recipient email does not look valid" from main validateOpenOutlookFields. */
+  await page.evaluate(
+    ({ toV, subV, bodyV }) => {
+      function setVal(id: string, value: string) {
+        const el = document.getElementById(id) as HTMLInputElement | HTMLTextAreaElement | null;
+        if (!el) throw new Error('missing #' + id);
+        el.focus();
+        el.value = value;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      if (toV != null) setVal('oes-to', toV);
+      if (subV != null) setVal('oes-subject', subV);
+      if (bodyV != null) setVal('oes-body', bodyV);
+    },
+    { toV: to ?? null, subV: subject ?? null, bodyV: body ?? null }
+  );
+  if (to != null) await expect(page.locator('#oes-to')).toHaveValue(to, { timeout: 5000 });
+  if (subject != null) await expect(page.locator('#oes-subject')).toHaveValue(subject, { timeout: 5000 });
+  if (body != null) await expect(page.locator('#oes-body')).toHaveValue(body, { timeout: 5000 });
 }
 
 /**
@@ -208,12 +215,9 @@ async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
   await ensureBlankerNotBlocking();
   await expect(page.locator('#cn-credentialfree-blanker')).toHaveCount(0);
 
-  /* Re-assert recipient before every Open — Windows CI has flaked with a
-   * toast "recipient email does not look valid" when #oes-to was empty/partial. */
-  const toVal = await page.locator('#oes-to').inputValue();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(toVal || '').trim())) {
-    await setOfficerComposeFields({ to: 'officer@kent.police.uk' });
-  }
+  /* Always re-seed a known-good professional recipient before Open.
+   * Windows CI failed when #oes-to was empty/partial at IPC time. */
+  await setOfficerComposeFields({ to: 'officer@kent.police.uk' });
 
   const before = captureFingerprint();
 
@@ -270,10 +274,7 @@ async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
       lastOpenClickAt = Date.now();
       reclicks += 1;
       await ensureBlankerNotBlocking();
-      const again = await page.locator('#oes-to').inputValue().catch(() => '');
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(again || '').trim())) {
-        await setOfficerComposeFields({ to: 'officer@kent.police.uk' });
-      }
+      await setOfficerComposeFields({ to: 'officer@kent.police.uk' });
       await openBtn.evaluate((el: HTMLElement) => el.click()).catch(() => undefined);
     }
 
