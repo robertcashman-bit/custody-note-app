@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.9.95",
+      "version": "1.9.96",
       "date": "2026-09-12",
       "latest": true,
+      "changes": [
+        "Narrative / Disclosure Notes and other long note fields expand by default \u2014 long pastes are visible without Settings \u2192 Larger textareas",
+        "Soft viewport cap keeps short screens usable; Settings toggle still enlarges all form textareas further"
+      ]
+    },
+    {
+      "version": "1.9.95",
+      "date": "2026-09-12",
+      "latest": false,
       "changes": [
         "Licence Email my key: send activated licence key and purchase/account email together when both are available",
         "On activated-key email-key failure, retry once with the email typed in Forgot / grace forms",

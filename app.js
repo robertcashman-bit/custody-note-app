@@ -425,6 +425,30 @@ var OFFENCES_BY_GROUP = [
     ]},
   ];
 
+  /* Long note-writing fields: expand by default (not gated on Settings → Larger textareas).
+     Same set that gets Timestamp buttons; interview notes use ivN_notes keys. */
+  var NOTE_WRITING_TEXTAREA_KEYS = [
+    'disclosureNarrative',
+    'clientInstructions',
+    'clientInstructionsDetail',
+    'reasonsForAdvice',
+    'firstContactOver45MinsReason'
+  ];
+  function isNoteWritingTextareaKey(key) {
+    return NOTE_WRITING_TEXTAREA_KEYS.indexOf(key) !== -1 || /^iv\d+_notes$/.test(key || '');
+  }
+  function fitNoteWritingTextarea(el) {
+    if (!el || !el.classList || !el.classList.contains('note-writing-textarea')) return;
+    el.style.height = 'auto';
+    var uncapped = document.documentElement.classList.contains('larger-textareas');
+    var nextH = el.scrollHeight + 2;
+    if (!uncapped) {
+      var maxH = Math.max(160, Math.floor(window.innerHeight * 0.7));
+      nextH = Math.min(nextH, maxH);
+    }
+    el.style.height = nextH + 'px';
+  }
+
   /* ─── TEMPLATE PHRASES for quick-insert into textareas ─── */
 var TEMPLATE_PHRASES = {
     disclosureNarrative: [
@@ -11164,6 +11188,9 @@ var REQUIRED_FIELD_KEYS = [
       input = document.createElement('textarea');
       input.rows = f.rows || 4;
       if (f.placeholder) input.placeholder = f.placeholder;
+      if (isNoteWritingTextareaKey(f.key)) {
+        input.classList.add('note-writing-textarea');
+      }
     } else if (f.type === 'station') {
       renderStationSearch(f, data, wrap, grid);
       return;
@@ -12148,7 +12175,9 @@ var REQUIRED_FIELD_KEYS = [
       renderTemplateButton(wrap, input, TEMPLATE_PHRASES[f.key]);
     }
 
-    if (f.type === 'textarea' && ['disclosureNarrative','clientInstructions','clientInstructionsDetail','reasonsForAdvice','firstContactOver45MinsReason'].includes(f.key)) {
+    if (f.type === 'textarea' && isNoteWritingTextareaKey(f.key)) {
+      input.addEventListener('input', function () { fitNoteWritingTextarea(input); });
+      requestAnimationFrame(function () { fitNoteWritingTextarea(input); });
       const tsBtn = document.createElement('button');
       tsBtn.type = 'button';
       tsBtn.className = 'btn-small btn-timestamp';
@@ -12680,24 +12709,6 @@ var REQUIRED_FIELD_KEYS = [
           const vals = Object.assign({}, formData);
           vals[fieldKey] = iv[f.key] || '';
           renderField(fieldDef, vals, grid);
-          if (f.key === 'notes') {
-            const ta = grid.querySelector('[data-field="' + fieldKey + '"]');
-            if (ta) {
-              const tsBtn = document.createElement('button');
-              tsBtn.type = 'button';
-              tsBtn.className = 'btn-small btn-timestamp';
-              tsBtn.textContent = 'Timestamp';
-              tsBtn.addEventListener('click', () => {
-                const now = new Date();
-                const stamp = '[' + pad2(now.getHours()) + ':' + pad2(now.getMinutes()) + '] ';
-                const pos = ta.selectionStart || ta.value.length;
-                ta.value = ta.value.slice(0, pos) + stamp + ta.value.slice(pos);
-                ta.focus();
-                ta.selectionStart = ta.selectionEnd = pos + stamp.length;
-              });
-              ta.parentElement.appendChild(tsBtn);
-            }
-          }
         });
         block.appendChild(grid);
         container.appendChild(block);
