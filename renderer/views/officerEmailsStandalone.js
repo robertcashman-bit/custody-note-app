@@ -20,7 +20,7 @@
       '<p class="officer-email-panel-hint">Use this when the email is not tied to a saved custody note. Nothing is sent until you review and send it in Outlook Web.</p>' +
       '<div class="officer-email-form officer-email-standalone-form">' +
       '<label class="officer-email-field"><span>Email type</span><select id="oes-template"></select></label>' +
-      '<label class="officer-email-field"><span>Recipient email</span><input type="email" id="oes-to" autocomplete="off" spellcheck="false" /></label>' +
+      '<label class="officer-email-field"><span>Recipient email</span><input type="text" id="oes-to" inputmode="email" autocomplete="off" spellcheck="false" /></label>' +
       '<label class="officer-email-field"><span>Recipient name</span><input type="text" id="oes-recipient" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Client name</span><input type="text" id="oes-client" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Police station</span><input type="text" id="oes-station" autocomplete="off" /></label>' +

@@ -43,6 +43,23 @@ describe('Officer Emails standalone view', () => {
     assert.ok(standalone.includes('id="oes-time"'));
     assert.ok(standalone.includes('attendanceTime'));
   });
+
+  it('uses type=text (not type=email) for recipient so police domains are never browser-rejected', () => {
+    assert.match(
+      standalone,
+      /id="oes-to"[^>]*inputmode="email"|inputmode="email"[^>]*id="oes-to"/
+    );
+    assert.ok(
+      /<input type="text"[^>]*id="oes-to"/.test(standalone) ||
+        /id="oes-to"[^>]*type="text"/.test(standalone) ||
+        standalone.includes('<input type="text" id="oes-to" inputmode="email"'),
+      'oes-to must be type=text with inputmode=email'
+    );
+    assert.ok(
+      !standalone.includes('<input type="email" id="oes-to"'),
+      'oes-to must not use type=email (Chromium can reject valid .police.uk addresses)'
+    );
+  });
 });
 
 describe('Officer Emails custody-note panel', () => {
@@ -53,5 +70,14 @@ describe('Officer Emails custody-note panel', () => {
     assert.ok(panel.includes('id="oep-clear"'));
     assert.ok(panel.includes('attendanceTime'));
     assert.ok(panel.includes('timeArrival'));
+  });
+
+  it('uses type=text for recipient email (parity with standalone)', () => {
+    assert.ok(
+      panel.includes('<input type="text" id="oep-to" inputmode="email"') ||
+        /<input type="text"[^>]*id="oep-to"/.test(panel),
+      'oep-to must be type=text with inputmode=email'
+    );
+    assert.ok(!panel.includes('<input type="email" id="oep-to"'));
   });
 });

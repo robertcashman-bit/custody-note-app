@@ -7,11 +7,11 @@
  * workflow -> billing review gating -> live recalc -> archive ->
  * billable-attendances visibility -> search post-archive.
  *
- * No expect()s on stage-critical code paths — every check uses record()
- * so the journey continues end-to-end and we get a structured risk report
- * even when individual steps surface failures.
+ * Soft FAIL rows are asserted at the end (expect fails === 0) so CI cannot
+ * go green while the journey report records release-blocking regressions.
+ * Stage checks still use record() so the full report is always produced.
  */
-import { test, _electron, type ElectronApplication, type Page } from '@playwright/test';
+import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -494,18 +494,56 @@ test('full lifecycle stress journey (one Electron run)', async () => {
       if (afterNeg === 0) record('J.2 _wfGoToStep(-5) clamped to 0', 'PASS');
       else record('J.2 _wfGoToStep(-5) NOT clamped', 'FAIL', `step=${afterNeg}`);
 
-      /* ─────────── Stage K — close workflow ─────────── */
-      await page.keyboard.press('Escape');
-      await page.waitForTimeout(400);
-      let stillOpen = await page.locator('#workflow-overlay').isVisible().catch(() => false);
-      if (!stillOpen) {
-        record('K.1 Escape closes workflow overlay', 'PASS');
+      /* ─────────── Stage K — close workflow ───────────
+       * Finish-matter is a full-page inline mount (wf-inline): Escape is
+       * intentionally not bound (host page owns navigation). Close must
+       * dismiss without auto-remounting.
+       * J.2 leaves us on step 0 (documents) — use that step's Close control
+       * (#wf-doc-back) or jump to invoice for #wf-bill-close. */
+      const isInline = await page.evaluate(() => {
+        const ov = document.getElementById('workflow-overlay');
+        return !!(ov && ov.classList.contains('wf-inline'));
+      });
+      let stillOpen = false;
+      if (isInline) {
+        const docClose = page.locator('#wf-doc-back');
+        const billClose = page.locator('#wf-bill-close');
+        if (await docClose.count()) {
+          await docClose.click({ timeout: 5000 }).catch(() => undefined);
+        } else if (await billClose.count()) {
+          await billClose.click({ timeout: 5000 }).catch(() => undefined);
+        } else {
+          await page.evaluate(() => {
+            if (typeof (window as any).closeWorkflow === 'function') (window as any).closeWorkflow();
+          });
+        }
+        await page.waitForTimeout(800);
+        stillOpen = await page.locator('#workflow-overlay').count().then(n => n > 0).catch(() => true);
+        if (stillOpen) {
+          await page.evaluate(() => {
+            if (typeof (window as any).closeWorkflow === 'function') (window as any).closeWorkflow();
+          });
+          await page.waitForTimeout(500);
+          stillOpen = await page.locator('#workflow-overlay').count().then(n => n > 0).catch(() => true);
+        }
+        if (!stillOpen) {
+          record('K.1 Close dismisses inline billing workflow (no auto-remount)', 'PASS');
+        } else {
+          record('K.1 Close did not dismiss inline workflow', 'FAIL', 'persisted after Close — auto-remount or broken closeWorkflow');
+        }
       } else {
-        await page.locator('#wf-bill-close').click().catch(() => undefined);
+        await page.keyboard.press('Escape');
         await page.waitForTimeout(400);
         stillOpen = await page.locator('#workflow-overlay').isVisible().catch(() => false);
-        if (!stillOpen) record('K.1 close-button closed overlay (Escape did not)', 'INFO', 'Escape-to-close may need fixing');
-        else record('K.1 workflow overlay would not close', 'FAIL', 'persisted after Escape and close click');
+        if (!stillOpen) {
+          record('K.1 Escape closes workflow overlay', 'PASS');
+        } else {
+          await page.locator('#wf-bill-close').click().catch(() => undefined);
+          await page.waitForTimeout(400);
+          stillOpen = await page.locator('#workflow-overlay').isVisible().catch(() => false);
+          if (!stillOpen) record('K.1 close-button closed overlay (Escape did not)', 'INFO', 'Escape-to-close may need fixing');
+          else record('K.1 workflow overlay would not close', 'FAIL', 'persisted after Escape and close click');
+        }
       }
     } else {
       record('I/J/K skipped: workflow overlay never opened', 'INFO');
@@ -594,6 +632,10 @@ test('full lifecycle stress journey (one Electron run)', async () => {
     }
     console.log(`\n  TOTAL: ${journey.length} | PASS ${passes} | FAIL ${fails} | INFO ${infos}`);
     console.log('=======================================================\n');
+
+    /* Soft FAILs must fail the Playwright gate — otherwise CI can go green
+     * while the journey report records release-blocking regressions. */
+    expect(fails, `stress journey soft FAILs:\n${journey.filter(j => j.status === 'FAIL').map(j => `- ${j.name}: ${j.detail || ''}`).join('\n')}`).toBe(0);
 
     if (electronApp) {
       try {

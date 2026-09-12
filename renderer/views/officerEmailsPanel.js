@@ -55,7 +55,7 @@
       '<div id="oep-main" class="officer-email-panel-inner">' +
       '<div class="officer-email-form">' +
       '<label class="officer-email-field"><span>Email type</span><select id="oep-template"></select></label>' +
-      '<label class="officer-email-field"><span>Recipient email</span><input type="email" id="oep-to" autocomplete="off" spellcheck="false" /></label>' +
+      '<label class="officer-email-field"><span>Recipient email</span><input type="text" id="oep-to" inputmode="email" autocomplete="off" spellcheck="false" /></label>' +
       '<label class="officer-email-field"><span>Recipient name</span><input type="text" id="oep-recipient" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Client name</span><input type="text" id="oep-client" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Police station</span><input type="text" id="oep-station" autocomplete="off" /></label>' +
