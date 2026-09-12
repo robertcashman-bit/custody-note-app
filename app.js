@@ -19533,9 +19533,9 @@ pdfAuditFooterHtml(d, settings) +
       if (btn) btn.disabled = true;
       if (msgEl) { msgEl.textContent = 'Sending…'; msgEl.style.color = ''; }
       var sendPromise;
-      if (window.custodyNote && window.custodyNote.requestLicenceEmail) {
-        sendPromise = window.custodyNote.requestLicenceEmail(email);
-      } else if (window.api && window.api.licenceEmailKey) {
+      // Prefer licence:email-key so activated-key lookup + typed-email retry can run.
+      // custodyNote.requestLicenceEmail is always exposed by preload and only posts the typed email.
+      if (window.api && window.api.licenceEmailKey) {
         sendPromise = window.api.licenceEmailKey({ email: email }).then(function(r) {
           var sent = !!(r && r.ok && r.sent !== false);
           if (!sent) {
@@ -19549,6 +19549,8 @@ pdfAuditFooterHtml(d, settings) +
             correlationId: r && r.correlationId,
           };
         });
+      } else if (window.custodyNote && window.custodyNote.requestLicenceEmail) {
+        sendPromise = window.custodyNote.requestLicenceEmail(email);
       } else {
         if (btn) btn.disabled = false;
         if (msgEl) { msgEl.textContent = 'Email recovery is not available. Restart the app.'; msgEl.style.color = '#dc2626'; }
