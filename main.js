@@ -5712,45 +5712,35 @@ ipcMain.handle('licence:email-key', async (_, params) => {
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return { ok: false, sent: false, error: 'Cannot reach licence server' };
   const data = readLicenceData();
-  const { buildLicenceEmailKeyPayload } = require('./main/licenceEmailKeyPayload');
-  const payload = buildLicenceEmailKeyPayload(data, params);
-  if (!payload.key && !payload.email) {
+  const {
+    buildLicenceEmailKeyPayload,
+    requestLicenceEmailKeyWithRetry,
+  } = require('./main/licenceEmailKeyPayload');
+  const primary = buildLicenceEmailKeyPayload(data, params);
+  if (!primary.key && !primary.email) {
     return { ok: false, sent: false, error: 'No licence key or account email on this device' };
   }
   const correlationId = 'cn-' + Date.now().toString(36);
   try {
-    const resp = await httpPost(`${apiUrl}/api/licence/email-key`, payload, { headers: _getAuthHeaders() });
-    console.info('[licence:email-key]', {
-      correlationId: resp.correlationId || correlationId,
-      ok: resp.ok,
-      sent: resp.sent,
-      lookup: payload.key ? 'licence_key' : 'email',
+    const result = await requestLicenceEmailKeyWithRetry({
+      licenceData: data,
+      rendererParams: params,
+      correlationId,
+      postFn: async (payload) => {
+        return httpPost(`${apiUrl}/api/licence/email-key`, payload, { headers: _getAuthHeaders() });
+      },
     });
-    if (resp.error && resp.ok !== true) {
-      return { ok: false, sent: false, error: resp.error, correlationId: resp.correlationId || correlationId };
-    }
-    if (resp.ok === false) {
-      return {
-        ok: false,
-        sent: false,
-        error: resp.error || 'Could not send email',
-        correlationId: resp.correlationId || correlationId,
-      };
-    }
-    if (resp.sent === false) {
-      return {
-        ok: false,
-        sent: false,
-        error: resp.error || 'Email was not sent',
-        correlationId: resp.correlationId || correlationId,
-      };
-    }
-    return {
-      ok: true,
-      sent: true,
-      message: resp.message || "If an account exists, we've sent your key.",
-      correlationId: resp.correlationId || correlationId,
-    };
+    // Never log full licence keys — only lookup mode + outcome.
+    console.info('[licence:email-key]', {
+      correlationId: result.correlationId || correlationId,
+      ok: result.ok,
+      sent: result.sent,
+      lookup: result.lookup,
+      retried: result.retried === true,
+      hasKey: !!primary.key,
+      hasAccountEmail: !!primary.email,
+    });
+    return result;
   } catch (e) {
     console.error('[licence:email-key]', correlationId, e && e.message ? e.message : e);
     return { ok: false, sent: false, error: e && e.message ? e.message : 'Failed to send email', correlationId };
