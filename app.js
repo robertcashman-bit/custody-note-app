@@ -3789,7 +3789,7 @@ var REQUIRED_FIELD_KEYS = [
     if (name === 'reports') { loadReports(); }
     if (name === 'station-mileage') { if (typeof loadStationMileage === 'function') loadStationMileage(); }
     if (name === 'authorities') { if (typeof loadAuthorities === 'function') loadAuthorities(); }
-    if (name === 'matter-billing') { if (typeof loadMatterBillingScreen === 'function') loadMatterBillingScreen(); }
+    if (name === 'matter-billing') { if (typeof loadMatterBillingScreen === 'function') loadMatterBillingScreen({ autoStart: true }); }
     if (name === 'settings') {
       loadSettings();
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
@@ -8067,6 +8067,11 @@ var REQUIRED_FIELD_KEYS = [
     return '';
   }
 
+  /* Explicit auto-start control for the Billing screen.
+   * showView / Finish-matter entry passes autoStart:true once.
+   * Close / refresh paths pass autoStart:false so Close cannot remount. */
+  var _matterBillingAutoStartPending = false;
+
   function _matterBillingMountWorkflow() {
     var stage = document.getElementById('matter-billing-stage');
     if (!stage) return;
@@ -8082,16 +8087,17 @@ var REQUIRED_FIELD_KEYS = [
       showToast('Billing workflow is not available on this build.', 'error');
       return;
     }
+    _matterBillingAutoStartPending = false;
     var startBtn = document.getElementById('matter-billing-start-btn');
     if (startBtn) startBtn.textContent = 'Restart from step 1';
     window.mountWorkflowInline(stage, undefined, function () {
-      /* onClose: workflow closed (e.g. step-1 Close, or after Archive).
-       * Reset the stage and the start button so the user can re-enter. */
+      /* onClose: workflow closed (e.g. Close, or after Archive).
+       * Reset the stage and reload chrome WITHOUT auto-starting again. */
       var s = document.getElementById('matter-billing-stage');
       if (s) s.innerHTML = '';
       var b = document.getElementById('matter-billing-start-btn');
       if (b) b.textContent = 'Start billing process';
-      loadMatterBillingScreen();
+      loadMatterBillingScreen({ autoStart: false });
     });
   }
 
@@ -8236,14 +8242,23 @@ var REQUIRED_FIELD_KEYS = [
       }
     }
 
-    if (canStart && stage && !stage.querySelector('#workflow-overlay')) {
+    if (canStart && stage && !stage.querySelector('#workflow-overlay') && _matterBillingAutoStartPending) {
+      _matterBillingAutoStartPending = false;
       _matterBillingMountWorkflow();
     } else if (!canStart && stage && currentAttendanceId) {
       stage.innerHTML = '';
     }
   }
 
-  function loadMatterBillingScreen() {
+  function loadMatterBillingScreen(opts) {
+    opts = opts || {};
+    /* Only auto-start when explicitly requested (showView / Finish matter).
+     * Close / Archive pass { autoStart: false }. Bare calls do not remount. */
+    if (opts.autoStart === true) {
+      _matterBillingAutoStartPending = true;
+    } else {
+      _matterBillingAutoStartPending = false;
+    }
     if (!currentAttendanceId) {
       _matterBillingShowPickerWhenNoRecord();
       return;

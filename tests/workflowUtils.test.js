@@ -540,6 +540,20 @@ describe('Integration: app.js opens workflow', () => {
       'Start billing process label missing from index.html');
   });
 
+  it('Close on billing screen does not auto-remount (autoStart:false after Close)', () => {
+    assert.ok(appJs.includes('_matterBillingAutoStartPending'),
+      'must track auto-start pending so Close does not remount the workflow');
+    assert.ok(
+      /loadMatterBillingScreen\(\s*\{\s*autoStart:\s*false\s*\}\s*\)/.test(appJs),
+      'onClose must call loadMatterBillingScreen({ autoStart: false })'
+    );
+    assert.ok(
+      /_matterBillingAutoStartPending/.test(appJs) &&
+        appJs.includes('&& _matterBillingAutoStartPending'),
+      '_renderMatterBillingScreenBody must require pending auto-start before mount'
+    );
+  });
+
   it('workflow-stepper exposes mountWorkflowInline for the new screen', () => {
     assert.ok(workflowStepperSrc.includes('function mountWorkflowInline'),
       'mountWorkflowInline must exist so the workflow can render inline');
