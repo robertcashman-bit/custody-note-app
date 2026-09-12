@@ -18245,8 +18245,14 @@ pdfAuditFooterHtml(d, settings) +
       btn.disabled = true;
       window.api.licenceEmailKey({}).then(function(r) {
         btn.disabled = false;
-        var sent = r.ok && r.sent !== false;
-        showToast(sent ? (r.message || 'Licence key sent to your email') : (r.error || r.message || 'Failed to send'), sent ? 'info' : 'error');
+        var sent = !!(r && r.ok && r.sent !== false);
+        if (sent) {
+          showToast(r.message || 'Licence key sent to your email', 'info');
+          return;
+        }
+        var err = (r && (r.error || r.message)) || 'Failed to send';
+        if (r && r.correlationId) err += ' (Ref: ' + r.correlationId + ')';
+        showToast(err, 'error');
       }).catch(function(e) { btn.disabled = false; showToast('Failed to send', 'error'); console.error('[email-key]', e); });
     });
     document.getElementById('btn-licence-deactivate-device')?.addEventListener('click', function() {
@@ -19527,15 +19533,24 @@ pdfAuditFooterHtml(d, settings) +
       if (btn) btn.disabled = true;
       if (msgEl) { msgEl.textContent = 'Sending…'; msgEl.style.color = ''; }
       var sendPromise;
-      if (window.custodyNote && window.custodyNote.requestLicenceEmail) {
-        sendPromise = window.custodyNote.requestLicenceEmail(email);
-      } else if (window.api && window.api.licenceEmailKey) {
+      // Prefer licence:email-key so activated-key lookup + typed-email retry can run.
+      // custodyNote.requestLicenceEmail is always exposed by preload and only posts the typed email.
+      if (window.api && window.api.licenceEmailKey) {
         sendPromise = window.api.licenceEmailKey({ email: email }).then(function(r) {
+          var sent = !!(r && r.ok && r.sent !== false);
+          if (!sent) {
+            var failMsg = (r && (r.error || r.message)) || 'Could not send email.';
+            if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
+            return { success: false, message: failMsg, correlationId: r && r.correlationId };
+          }
           return {
-            success: r.ok !== false && r.sent !== false,
-            message: r.message || r.error || (r.ok ? 'If that email exists in our system, your licence code has been sent.' : 'Could not send email.'),
+            success: true,
+            message: r.message || 'If that email exists in our system, your licence code has been sent.',
+            correlationId: r && r.correlationId,
           };
         });
+      } else if (window.custodyNote && window.custodyNote.requestLicenceEmail) {
+        sendPromise = window.custodyNote.requestLicenceEmail(email);
       } else {
         if (btn) btn.disabled = false;
         if (msgEl) { msgEl.textContent = 'Email recovery is not available. Restart the app.'; msgEl.style.color = '#dc2626'; }
@@ -19545,7 +19560,11 @@ pdfAuditFooterHtml(d, settings) +
         if (btn) btn.disabled = false;
         if (!msgEl) return;
         if (res && res.success === false) {
-          msgEl.textContent = res.message || 'Could not send email. Try again or contact support.';
+          var failText = res.message || 'Could not send email. Try again or contact support.';
+          if (res.correlationId && failText.indexOf(res.correlationId) === -1) {
+            failText += ' (Ref: ' + res.correlationId + ')';
+          }
+          msgEl.textContent = failText;
           msgEl.style.color = '#dc2626';
         } else {
           msgEl.textContent = (res && res.message) ? res.message : 'If that email exists in our system, your licence code has been sent.';

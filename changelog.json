@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.95",
+      "date": "2026-09-12",
+      "latest": true,
+      "changes": [
+        "Licence Email my key: send activated licence key and purchase/account email together when both are available",
+        "On activated-key email-key failure, retry once with the email typed in Forgot / grace forms",
+        "Honest UI for sent:false \u2014 show the error and correlationId (no fake success toast)",
+        "Pairs with website email-key fallback (PR #15); logs never include full licence keys"
+      ]
+    },
+    {
       "version": "1.9.94",
       "date": "2026-09-11",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Sync: after a durable local save that enqueues the outbox, kick a sync cycle immediately (do not wait for the 10s poll)",
         "Autosave coalesces with a light trailing debounce (~350ms); Force Save / Save now / finalise / archive / delete use immediate kick",

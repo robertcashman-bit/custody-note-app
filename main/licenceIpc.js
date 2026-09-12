@@ -107,15 +107,19 @@ function registerLicenceIpc(app) {
     const baseUrl = getServerBaseUrl();
     try {
       const resp = await httpPostForgot(baseUrl, email);
-      if (resp && resp.ok === false) {
+      if (resp && (resp.ok === false || resp.sent === false)) {
+        const msg = resp.error || 'Could not send email. Try again or contact support.';
+        const withRef = resp.correlationId ? msg + ' (Ref: ' + resp.correlationId + ')' : msg;
         return {
           success: false,
-          message: resp.error || 'Could not send email. Try again or contact support.',
+          message: withRef,
+          correlationId: resp.correlationId || null,
         };
       }
       return {
         success: true,
         message: (resp && resp.message) || GENERIC_SUCCESS.message,
+        correlationId: resp && resp.correlationId ? resp.correlationId : null,
       };
     } catch (e) {
       if (process.env.NODE_ENV === 'development') {
