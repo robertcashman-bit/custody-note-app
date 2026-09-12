@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.96",
+      "version": "1.9.97",
       "date": "2026-09-12",
       "latest": true,
+      "changes": [
+        "Outcome (page 8): removed Next Date and Next Location fields from custody and voluntary forms",
+        "PDF / print / Word exports no longer list those Outcome form fields (bail-return and court fields unchanged)",
+        "Existing saved values are left in attendance JSON; they are just no longer collected or shown"
+      ]
+    },
+    {
+      "version": "1.9.96",
+      "date": "2026-09-12",
+      "latest": false,
       "changes": [
         "Narrative / Disclosure Notes and other long note fields expand by default \u2014 long pastes are visible without Settings \u2192 Larger textareas",
         "Soft viewport cap keeps short screens usable; Settings toggle still enlarges all form textareas further"

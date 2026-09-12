@@ -1014,8 +1014,6 @@ var LAA = {
         { key: 'courtName', label: 'Court Name', type: 'text', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
         { key: 'courtDate', label: 'Court Date', type: 'date', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
         { key: 'courtTime', label: 'Court Time', type: 'time', showIf: { field: 'outcomeDecision', values: ['Charged without Bail','Charged with Bail','Remanded in Custody'] } },
-        { key: 'nextLocationName', label: 'Next Location', type: 'text', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
-        { key: 'nextDate', label: 'Next Date', type: 'date', hideIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
         { key: 'followUpNeeded', label: 'Further follow-up needed?', type: 'select', options: ['No','Yes'], cols: 2 },
         { key: 'followUpRequired', label: 'Follow-up required', type: 'textarea', placeholder: 'What still needs to be done, if anything?', cols: 2, showIf: { field: 'followUpNeeded', value: 'Yes' } },
@@ -1777,8 +1775,6 @@ var LAA = {
           'Draft'
         ], cols: 2 },
         { key: 'stageReachedOrFeeCode', label: 'Stage reached / Fee code', type: 'text', placeholder: 'e.g. INVC', cols: 2 },
-        { key: 'nextLocationName', label: 'Next Location', type: 'text' },
-        { key: 'nextDate', label: 'Next Date', type: 'date' },
         { key: 'furtherAttendance', label: 'Further attendance needed?', type: 'select', options: ['Yes','No'] },
         { key: 'followUpNeeded', label: 'Further follow-up needed?', type: 'select', options: ['No','Yes'], cols: 2 },
         { key: 'followUpRequired', label: 'Follow-up required', type: 'textarea', placeholder: 'What still needs to be done, if anything?', cols: 2, showIf: { field: 'followUpNeeded', value: 'Yes' } },
@@ -14425,7 +14421,7 @@ row('Decision', d.outcomeDecision) +
     row('Headline advice', f.headlineAdvice);
 })() +
 row('Court', d.courtName) + row('Court date', fmtDate(d.courtDate)) + (d.courtTime ? row('Court time', d.courtTime) : '') +
-row('Next location', d.nextLocationName) + row('Next date (form field)', fmtDate(d.nextDate)) + row('Further attendance', d.furtherAttendance) +
+row('Further attendance', d.furtherAttendance) +
 row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes' ? row('Follow-up required', d.followUpRequired) : '') +
 (d.handedBackToDSCCReason ? row('Reason handed back to DSCC (Spec 9.53)', d.handedBackToDSCCReason) : '') +
 (d.nonAttendanceReason ? row('Reason for non-attendance (Spec 9.39/9.44)', d.nonAttendanceReason) : '') +
@@ -15028,7 +15024,6 @@ pdfAuditFooterHtml(d, settings) +
       (d.handedBackToDSCCReason ? row('Reason handed back to DSCC', d.handedBackToDSCCReason) : '') +
       (d.nonAttendanceReason ? row('Reason for non-attendance', d.nonAttendanceReason) : '') +
       row('Outcome code (LAA)', d.outcomeCode) + row('Stage / fee code', d.stageReachedOrFeeCode) +
-      row('Next location', d.nextLocationName) + row('Next date', fmtDate(d.nextDate)) +
       row('Further attendance needed?', d.furtherAttendance) +
       row('Further follow-up needed?', d.followUpNeeded) + (d.followUpNeeded === 'Yes' ? row('Follow-up required', d.followUpRequired) : '') +
       '</table>' +
