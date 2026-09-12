@@ -440,8 +440,13 @@ var OFFENCES_BY_GROUP = [
   function fitNoteWritingTextarea(el) {
     if (!el || !el.classList || !el.classList.contains('note-writing-textarea')) return;
     el.style.height = 'auto';
-    var maxH = Math.max(160, Math.floor(window.innerHeight * 0.7));
-    el.style.height = Math.min(el.scrollHeight + 2, maxH) + 'px';
+    var uncapped = document.documentElement.classList.contains('larger-textareas');
+    var nextH = el.scrollHeight + 2;
+    if (!uncapped) {
+      var maxH = Math.max(160, Math.floor(window.innerHeight * 0.7));
+      nextH = Math.min(nextH, maxH);
+    }
+    el.style.height = nextH + 'px';
   }
 
   /* ─── TEMPLATE PHRASES for quick-insert into textareas ─── */
