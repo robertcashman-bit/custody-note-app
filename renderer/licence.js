@@ -281,23 +281,25 @@
       window.requestLicenceKeyEmail(email, msgEl, btn);
       return;
     }
-    if (!window.custodyNote || !window.custodyNote.requestLicenceEmail) {
+    if (!window.api || !window.api.licenceEmailKey) {
       if (msgEl) { msgEl.textContent = 'Email recovery is not available. Restart the app.'; msgEl.style.color = '#fca5a5'; }
       return;
     }
     btn.disabled = true;
     if (msgEl) { msgEl.textContent = 'Sending\u2026'; msgEl.style.color = '#94a3b8'; }
-    window.custodyNote.requestLicenceEmail(email).then(function (res) {
+    window.api.licenceEmailKey({ email: email }).then(function (r) {
       btn.disabled = false;
-      if (msgEl) {
-        if (res && res.success === false) {
-          msgEl.textContent = res.message || 'Could not send email. Try again or contact support.';
-          msgEl.style.color = '#fca5a5';
-        } else {
-          msgEl.textContent = (res && res.message) || 'If that email exists in our system, your licence key has been sent. Check spam.';
-          msgEl.style.color = '#86efac';
-        }
+      if (!msgEl) return;
+      var sent = !!(r && r.ok && r.sent === true);
+      if (!sent) {
+        var failMsg = (r && (r.error || r.message)) || 'Could not send email. Try again or contact support.';
+        if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
+        msgEl.textContent = failMsg;
+        msgEl.style.color = '#fca5a5';
+        return;
       }
+      msgEl.textContent = (r && r.message) || 'If that email exists in our system, your licence key has been sent. Check spam.';
+      msgEl.style.color = '#86efac';
     }).catch(function () {
       btn.disabled = false;
       if (msgEl) { msgEl.textContent = 'Could not connect. Please try again later.'; msgEl.style.color = '#fca5a5'; }

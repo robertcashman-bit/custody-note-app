@@ -5711,6 +5711,15 @@ ipcMain.handle('licence:deactivate', () => {
 ipcMain.handle('licence:email-key', async (_, params) => {
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return { ok: false, sent: false, error: 'Cannot reach licence server' };
+  const requestLicenceEmailRateLimit = require('./main/requestLicenceEmailRateLimit');
+  if (!requestLicenceEmailRateLimit.checkRateLimit()) {
+    return {
+      ok: false,
+      sent: false,
+      error: 'Too many requests. Please wait a minute and try again.',
+      correlationId: 'cn-rate-' + Date.now().toString(36),
+    };
+  }
   const data = readLicenceData();
   const {
     buildLicenceEmailKeyPayload,
