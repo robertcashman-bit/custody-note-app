@@ -9,7 +9,8 @@
         "PDF / print / Word exports no longer list those Outcome form fields (bail-return and court fields unchanged)",
         "Existing saved values are left in attendance JSON; they are just no longer collected or shown",
         "Arrest / Detention grounds: option labels now show common police shorthand (to interview, to prevent disappearance, to search, etc.) while still saving the statutory PACE s.24 / s.37 wording",
-        "Clarified note that “to search” is not a separate s.24 necessity criterion, plus s.24(6) public-decency caveat"
+        "Clarified note that “to search” is not a separate s.24 necessity criterion, plus s.24(6) public-decency caveat",
+        "Renamed Save now → Force save so the control clearly covers disk write, verified backup, and central push (Ctrl/Cmd+S unchanged)"
       ]
     },
     {

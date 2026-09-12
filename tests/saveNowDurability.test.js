@@ -62,8 +62,10 @@ describe('Save now — durable disk + backup', () => {
     assert.match(ok.message, /Backup written to|Central confirmation/i);
   });
 
-  it('UI exposes Save now control and Ctrl+S routes to it', () => {
-    assert.match(indexHtml, /Save now/);
+  it('UI exposes Force save control and Ctrl+S routes to it', () => {
+    assert.match(indexHtml, /id="form-backup-now-btn"[^>]*>Force save</);
+    assert.match(indexHtml, /id="header-backup-now-btn"[^>]*>Force save</);
+    assert.match(indexHtml, /Force save \(disk \+ verified backup \+ central push\)/);
     assert.match(appJs, /handleSaveNowClick/);
     assert.match(appJs, /persistAndBackup/);
     assert.match(preloadJs, /persistAndBackup/);

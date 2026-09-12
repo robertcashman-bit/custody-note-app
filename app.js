@@ -5459,7 +5459,7 @@ var REQUIRED_FIELD_KEYS = [
       }
       showAutoSaveIndicator({ durable: normalized.durable, pendingSync: normalized.pendingSync });
       if (normalized.durable === false) {
-        showToast('Saved in memory but disk write may not have finished — press Save now', 'warning', 5000);
+        showToast('Saved in memory but disk write may not have finished — press Force save', 'warning', 5000);
       }
     }).catch(function(e) {
       console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000);
@@ -5515,7 +5515,7 @@ var REQUIRED_FIELD_KEYS = [
       txt = '\u2713 Safe locally ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
       if (pendingSync) txt += ' \u00b7 pending central sync';
     } else {
-      txt = 'Not on disk yet — use Save now';
+      txt = 'Not on disk yet — use Force save';
     }
     var title = dirty
       ? 'Edits are on screen only until the next successful disk write.'
@@ -5525,7 +5525,7 @@ var REQUIRED_FIELD_KEYS = [
           : (pendingSync
             ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Central account sync still pending.'
             : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.'))
-        : 'Save reached memory but disk flush did not complete — press Save now.');
+        : 'Save reached memory but disk flush did not complete — press Force save.');
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
@@ -16147,7 +16147,7 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
 
-      /* Cmd/Ctrl+S = Save now (disk flush + verified backup) */
+      /* Cmd/Ctrl+S = Force save (disk flush + verified backup + central push) */
       if (modPressed(e) && e.key === 's') {
         e.preventDefault();
         var saveBtn = document.getElementById('form-backup-now-btn') || document.getElementById('header-backup-now-btn');
@@ -16165,10 +16165,10 @@ pdfAuditFooterHtml(d, settings) +
             } else if (res && res.noteDurable) {
               showToast('Safe locally; backup or sync not fully confirmed', 'warning', 9000);
             } else {
-              showToast((res && res.userMessage && res.userMessage.message) || 'Save now failed', 'error', 9000);
+              showToast((res && res.userMessage && res.userMessage.message) || 'Force save failed', 'error', 9000);
             }
           }).catch(function(err) {
-            showToast('Save now failed: ' + (err && err.message), 'error');
+            showToast('Force save failed: ' + (err && err.message), 'error');
           });
         } else {
           quietSave();
@@ -17628,7 +17628,7 @@ pdfAuditFooterHtml(d, settings) +
         if (!apiFn) {
           showToast(afterNoteOk
             ? 'Note saved to this computer, but backup API is unavailable'
-            : 'Save now unavailable', 'warning', 7000);
+            : 'Force save unavailable', 'warning', 7000);
           finishBtn(afterNoteOk ? 'Note saved' : origText, 2500);
           return;
         }
@@ -17684,7 +17684,7 @@ pdfAuditFooterHtml(d, settings) +
           showAutoSaveIndicator({ durable: false, pendingSync: false });
           finishBtn('Attention', 3500);
         }).catch(function(err) {
-          showToast('Save now failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 8000);
+          showToast('Force save failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 8000);
           finishBtn(origText, 500);
         });
       }
@@ -17702,7 +17702,7 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
       if (_finalising) {
-        showToast('Finalise in progress — wait, then try Save now', 'info', 4000);
+        showToast('Finalise in progress — wait, then try Force save', 'info', 4000);
         finishBtn(origText, 500);
         return;
       }
@@ -17721,7 +17721,7 @@ pdfAuditFooterHtml(d, settings) +
         }
         if (normalized.id != null) currentAttendanceId = normalized.id;
         if (!normalized.durable) {
-          showToast('Note did not finish writing to disk — backup not attempted. Try Save now again.', 'error', 9000);
+          showToast('Note did not finish writing to disk — backup not attempted. Try Force save again.', 'error', 9000);
           showAutoSaveIndicator({ durable: false, pendingSync: true });
           finishBtn('Disk failed', 3500);
           return;

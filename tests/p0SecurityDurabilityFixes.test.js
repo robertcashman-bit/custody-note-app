@@ -79,9 +79,9 @@ describe('P0 keyboard shortcuts — Ctrl or Meta', () => {
     assert.match(appJs, /modPressed\(e\) && e\.key === 'n'/);
   });
 
-  it('shortcut labels use data-shortcut-mod and Save now (not Save & exit) for Cmd/Ctrl+S', () => {
+  it('shortcut labels use data-shortcut-mod and Force save (not Save & exit) for Cmd/Ctrl+S', () => {
     assert.match(indexHtml, /data-shortcut-mod/);
-    assert.match(indexHtml, /<kbd data-shortcut-mod>Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Save now/);
+    assert.match(indexHtml, /<kbd data-shortcut-mod>Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Force save/);
     assert.doesNotMatch(indexHtml, /Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Save &amp; exit<\/td>/);
   });
 
