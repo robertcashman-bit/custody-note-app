@@ -5843,15 +5843,17 @@ var REQUIRED_FIELD_KEYS = [
       var lastValidatedEl = document.getElementById('licence-last-validated');
       var resultEl = document.getElementById('licence-validate-result');
       var graceMsgEl = document.getElementById('licence-grace-message');
-      var graceEmailEl = document.getElementById('licence-grace-forgot-email');
-      var noneEmailEl = document.getElementById('licence-none-forgot-email');
+      var emailKeyRecoveryEl = document.getElementById('licence-email-key-recovery');
+      var emailKeyEmailEl = document.getElementById('licence-email-key-email');
       if (!activeEl || !noneEl) return;
       if (resultEl) { resultEl.style.display = 'none'; resultEl.textContent = ''; }
       if (graceEl) graceEl.style.display = 'none';
-      if (st && st.email) {
-        if (graceEmailEl && !graceEmailEl.value) graceEmailEl.value = st.email;
-        if (noneEmailEl && !noneEmailEl.value) noneEmailEl.value = st.email;
+      if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = 'none';
+      if (st && st.email && emailKeyEmailEl && !emailKeyEmailEl.value) {
+        emailKeyEmailEl.value = st.email;
       }
+      // Always show the single Settings Email my licence key control when the Licence card is relevant.
+      if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = '';
       if (st && st.key && (st.status === 'active' || st.status === 'expiring_soon')) {
         noneEl.style.display = 'none';
         activeEl.style.display = '';
@@ -5904,6 +5906,7 @@ var REQUIRED_FIELD_KEYS = [
         activeEl.style.display = 'none';
         noneEl.style.display = 'none';
         graceEl.style.display = '';
+        if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = '';
         if (graceMsgEl) graceMsgEl.textContent = st.message || 'Connect to the internet to verify your subscription. Your licence is still active.';
         if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
       } else {
@@ -18248,22 +18251,6 @@ pdfAuditFooterHtml(d, settings) +
       if (typeof saveSettings === 'function') saveSettings();
     });
     /* ─── Licence event handlers ─── */
-    document.getElementById('btn-licence-email-key')?.addEventListener('click', function() {
-      if (!window.api.licenceEmailKey) return;
-      var btn = this;
-      btn.disabled = true;
-      window.api.licenceEmailKey({}).then(function(r) {
-        btn.disabled = false;
-        var sent = !!(r && r.ok && r.sent !== false);
-        if (sent) {
-          showToast(r.message || 'Licence key sent to your email', 'info');
-          return;
-        }
-        var err = (r && (r.error || r.message)) || 'Failed to send';
-        if (r && r.correlationId) err += ' (Ref: ' + r.correlationId + ')';
-        showToast(err, 'error');
-      }).catch(function(e) { btn.disabled = false; showToast('Failed to send', 'error'); console.error('[email-key]', e); });
-    });
     document.getElementById('btn-licence-deactivate-device')?.addEventListener('click', function() {
       if (!window.api.licenceDeactivateMachine) return;
       if (!confirm('Deactivate this device? You will need to enter your licence key again on the new device. This computer will need a new activation.')) return;
@@ -18347,30 +18334,10 @@ pdfAuditFooterHtml(d, settings) +
       );
     });
     document.getElementById('btn-licence-grace-validate')?.addEventListener('click', function() {
-      var msgEl = document.getElementById('licence-grace-forgot-msg');
-      if (msgEl) {
-        msgEl.textContent = 'Validating…';
-        msgEl.style.color = '';
-      }
-      if (!window.api || !window.api.licenceValidate) return;
-      var btn = this;
-      btn.disabled = true;
-      window.api.licenceValidate().then(function(r) {
-        btn.disabled = false;
-        if (r && r.valid === true) {
-          if (msgEl) { msgEl.textContent = 'Licence verified — you are good to go.'; msgEl.style.color = 'var(--success-color,#16a34a)'; }
-          window.__licenceExpired = false;
-          window.__licenceNeedsValidation = false;
-          document.dispatchEvent(new CustomEvent('licence-activated'));
-          loadLicenceSettingsUI();
-        } else if (msgEl) {
-          msgEl.textContent = (r && r.message) || (r && r.status && r.status.message) || 'Could not verify. Check your internet and try again.';
-          msgEl.style.color = '#dc2626';
-        }
-      }).catch(function(e) {
-        btn.disabled = false;
-        if (msgEl) { msgEl.textContent = 'Network error — ' + (e && e.message ? e.message : 'Could not reach server'); msgEl.style.color = '#dc2626'; }
-      });
+      runLicenceValidateUI(
+        document.getElementById('licence-grace-validate-result'),
+        document.getElementById('btn-licence-grace-validate')
+      );
     });
     document.getElementById('btn-licence-activate-settings')?.addEventListener('click', function() {
       var keyInput = document.getElementById('setting-licence-key');
@@ -19535,77 +19502,73 @@ pdfAuditFooterHtml(d, settings) +
       }
     });
     window.requestLicenceKeyEmail = function(email, msgEl, btn) {
-      if (!email) {
-        if (msgEl) { msgEl.textContent = 'Enter your email address.'; msgEl.style.color = ''; }
-        return Promise.resolve();
-      }
+      var typed = (email || '').trim();
       if (btn) btn.disabled = true;
       if (msgEl) { msgEl.textContent = 'Sending…'; msgEl.style.color = ''; }
-      var sendPromise;
-      // Prefer licence:email-key so activated-key lookup + typed-email retry can run.
-      // custodyNote.requestLicenceEmail is always exposed by preload and only posts the typed email.
-      if (window.api && window.api.licenceEmailKey) {
-        sendPromise = window.api.licenceEmailKey({ email: email }).then(function(r) {
-          var sent = !!(r && r.ok && r.sent !== false);
-          if (!sent) {
-            var failMsg = (r && (r.error || r.message)) || 'Could not send email.';
-            if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
-            return { success: false, message: failMsg, correlationId: r && r.correlationId };
-          }
-          return {
-            success: true,
-            message: r.message || 'If that email exists in our system, your licence code has been sent.',
-            correlationId: r && r.correlationId,
-          };
-        });
-      } else if (window.custodyNote && window.custodyNote.requestLicenceEmail) {
-        sendPromise = window.custodyNote.requestLicenceEmail(email);
-      } else {
+      // Single path: licence:email-key (activated key + typed-email retry). Empty typed
+      // email is allowed when the device has an activated key (main reads licence.dat).
+      if (!(window.api && window.api.licenceEmailKey)) {
         if (btn) btn.disabled = false;
         if (msgEl) { msgEl.textContent = 'Email recovery is not available. Restart the app.'; msgEl.style.color = '#dc2626'; }
         return Promise.resolve();
       }
-      return sendPromise.then(function(res) {
+      var payload = typed ? { email: typed } : {};
+      return window.api.licenceEmailKey(payload).then(function(r) {
         if (btn) btn.disabled = false;
-        if (!msgEl) return;
-        if (res && res.success === false) {
-          var failText = res.message || 'Could not send email. Try again or contact support.';
-          if (res.correlationId && failText.indexOf(res.correlationId) === -1) {
-            failText += ' (Ref: ' + res.correlationId + ')';
+        var sent = !!(r && r.ok && r.sent === true);
+        if (!sent) {
+          var failMsg = (r && (r.error || r.message)) || 'Could not send email.';
+          if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
+          if (msgEl) {
+            msgEl.textContent = failMsg;
+            msgEl.style.color = '#dc2626';
           }
-          msgEl.textContent = failText;
-          msgEl.style.color = '#dc2626';
-        } else {
-          msgEl.textContent = (res && res.message) ? res.message : 'If that email exists in our system, your licence code has been sent.';
+          return { success: false, message: failMsg, correlationId: r && r.correlationId };
+        }
+        var okMsg = r.message || 'If that email exists in our system, your licence code has been sent.';
+        if (msgEl) {
+          msgEl.textContent = okMsg;
           msgEl.style.color = 'var(--success-color,#16a34a)';
         }
+        return { success: true, message: okMsg, correlationId: r && r.correlationId };
       }).catch(function(e) {
         if (btn) btn.disabled = false;
         if (msgEl) { msgEl.textContent = 'Could not connect. Please try again later.'; msgEl.style.color = ''; }
-        console.error('[requestLicenceEmail]', e);
+        console.error('[requestLicenceKeyEmail]', e);
       });
     };
 
-    (function initForgotLicence() {
-      var btn = document.getElementById('forgot-licence-btn');
-      var inp = document.getElementById('forgot-licence-email');
-      var msg = document.getElementById('forgot-licence-msg');
-      if (!btn || !inp || !msg) return;
-      btn.addEventListener('click', function() {
-        window.requestLicenceKeyEmail((inp.value || '').trim(), msg, btn);
-      });
-    })();
+    function goToLicenceEmailKeySettings() {
+      try {
+        if (typeof showView === 'function') showView('settings');
+        var tabBar = document.getElementById('settings-tab-bar');
+        var accountTab = tabBar && tabBar.querySelector('.settings-tab[data-stab="account"]');
+        if (accountTab) accountTab.click();
+        setTimeout(function() {
+          var target = document.getElementById('licence-email-key-recovery')
+            || document.getElementById('licence-settings-card');
+          if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          var emailInp = document.getElementById('licence-email-key-email');
+          if (emailInp && emailInp.focus) emailInp.focus();
+        }, 150);
+      } catch (_) {}
+    }
 
-    document.getElementById('licence-none-forgot-btn')?.addEventListener('click', function() {
-      var inp = document.getElementById('licence-none-forgot-email');
-      var msg = document.getElementById('licence-none-forgot-msg');
+    document.getElementById('forgot-licence-goto-settings-btn')?.addEventListener('click', function() {
+      goToLicenceEmailKeySettings();
+    });
+
+    document.getElementById('licence-email-key-btn')?.addEventListener('click', function() {
+      var inp = document.getElementById('licence-email-key-email');
+      var msg = document.getElementById('licence-email-key-msg');
       window.requestLicenceKeyEmail((inp && inp.value || '').trim(), msg, this);
     });
 
-    document.getElementById('btn-licence-grace-email-key')?.addEventListener('click', function() {
-      var inp = document.getElementById('licence-grace-forgot-email');
-      var msg = document.getElementById('licence-grace-forgot-msg');
-      window.requestLicenceKeyEmail((inp && inp.value || '').trim(), msg, this);
+    document.getElementById('licence-email-key-email')?.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('licence-email-key-btn')?.click();
+      }
     });
 
     /**

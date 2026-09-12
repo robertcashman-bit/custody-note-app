@@ -58,9 +58,10 @@ describe('typed-email retry helpers', () => {
     assert.equal(buildTypedEmailRetryPayload(''), null);
   });
 
-  it('treats sent:false and ok:false as failures', () => {
+  it('treats sent:false and missing sent as failures', () => {
     assert.equal(isLicenceEmailKeyFailure({ ok: true, sent: false, error: 'Resend failed' }), true);
     assert.equal(isLicenceEmailKeyFailure({ ok: false, sent: false, error: 'nope' }), true);
+    assert.equal(isLicenceEmailKeyFailure({ ok: true, message: 'anti-enum' }), true);
     assert.equal(isLicenceEmailKeyFailure({ ok: true, sent: true }), false);
   });
 
@@ -112,7 +113,17 @@ describe('mapLicenceEmailKeyResponse', () => {
     assert.equal(mapped.correlationId, 'cid-1');
   });
 
-  it('passes through success with correlationId', () => {
+  it('does not invent success when sent is missing (evening fake-success class)', () => {
+    const mapped = mapLicenceEmailKeyResponse(
+      { ok: true, message: 'If an account exists…', correlationId: 'cid-missing' },
+      'fallback',
+    );
+    assert.equal(mapped.ok, false);
+    assert.equal(mapped.sent, false);
+    assert.equal(mapped.correlationId, 'cid-missing');
+  });
+
+  it('passes through success only when sent is explicitly true', () => {
     const mapped = mapLicenceEmailKeyResponse(
       { ok: true, sent: true, message: 'sent', correlationId: 'cid-2' },
       'fallback',
@@ -121,6 +132,33 @@ describe('mapLicenceEmailKeyResponse', () => {
     assert.equal(mapped.sent, true);
     assert.equal(mapped.message, 'sent');
     assert.equal(mapped.correlationId, 'cid-2');
+  });
+});
+
+describe('evening retry failure modes', () => {
+  it('treats ok:true without sent as failure so typed-email retry can run', () => {
+    assert.equal(
+      isLicenceEmailKeyFailure({ ok: true, message: 'If an account exists…' }),
+      true,
+    );
+    assert.equal(
+      shouldRetryEmailKeyWithTypedEmail(
+        { key: 'CN-ADMIN-AAAA-BBBB-CCCC' },
+        { ok: false, sent: false, error: 'Email was not sent' },
+        'owner@example.com',
+      ),
+      true,
+    );
+  });
+
+  it('surfaces correlationId on rate-limit style failure', () => {
+    assert.equal(
+      formatLicenceEmailKeyError({
+        error: 'Too many requests. Please wait a minute and try again.',
+        correlationId: 'cn-rate-test',
+      }),
+      'Too many requests. Please wait a minute and try again. (Ref: cn-rate-test)',
+    );
   });
 });
 
