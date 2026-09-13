@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.100",
+      "date": "2026-09-13",
+      "latest": true,
+      "changes": [
+        "Email my licence key: unmatched activated keys show an honest error with Ref (no false success toast)",
+        "Activate / validate: server errors such as \u201cNo valid credentials provided\u201d are surfaced clearly",
+        "Licence keys normalised via licenceKeyNormalize so CN-ADMIN hyphens are preserved on activate",
+        "Packages already-merged Email-my-key / activate honesty fixes from PR #52 on top of v1.9.99"
+      ]
+    },
+    {
       "version": "1.9.99",
       "date": "2026-09-12",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Billing Close on the Finish-matter screen works again (no silent remount that ignored Close)",
         "Officer-email Open Outlook is more reliable in Windows CI (recipient field seeding)",
