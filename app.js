@@ -19532,8 +19532,11 @@ pdfAuditFooterHtml(d, settings) +
         if (btn) btn.disabled = false;
         var sent = !!(r && r.ok && r.sent === true);
         if (!sent) {
+          // Main already formats failures via formatLicenceEmailKeyError (includes Ref).
           var failMsg = (r && (r.error || r.message)) || 'Could not send email.';
-          if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
+          if (r && r.correlationId && failMsg.indexOf('(Ref:') === -1) {
+            failMsg += ' (Ref: ' + r.correlationId + ')';
+          }
           if (msgEl) {
             msgEl.textContent = failMsg;
             msgEl.style.color = '#dc2626';

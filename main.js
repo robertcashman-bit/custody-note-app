@@ -5712,22 +5712,31 @@ ipcMain.handle('licence:email-key', async (_, params) => {
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return { ok: false, sent: false, error: 'Cannot reach licence server' };
   const requestLicenceEmailRateLimit = require('./main/requestLicenceEmailRateLimit');
-  if (!requestLicenceEmailRateLimit.checkRateLimit()) {
-    return {
-      ok: false,
-      sent: false,
-      error: 'Too many requests. Please wait a minute and try again.',
-      correlationId: 'cn-rate-' + Date.now().toString(36),
-    };
-  }
-  const data = readLicenceData();
   const {
     buildLicenceEmailKeyPayload,
     requestLicenceEmailKeyWithRetry,
+    withFormattedLicenceEmailKeyError,
   } = require('./main/licenceEmailKeyPayload');
+  if (!requestLicenceEmailRateLimit.checkRateLimit()) {
+    const rateCid = 'cn-rate-' + Date.now().toString(36);
+    return withFormattedLicenceEmailKeyError({
+      ok: false,
+      sent: false,
+      error: 'Too many requests. Please wait a minute and try again.',
+      correlationId: rateCid,
+    });
+  }
+  // Settings / overlay recovery: always prefer stored key + account email from
+  // licence.dat (readLicenceData). Empty licence.dat email still POSTs key alone.
+  const data = readLicenceData();
   const primary = buildLicenceEmailKeyPayload(data, params);
   if (!primary.key && !primary.email) {
-    return { ok: false, sent: false, error: 'No licence key or account email on this device' };
+    return withFormattedLicenceEmailKeyError({
+      ok: false,
+      sent: false,
+      error: 'No licence key or account email on this device',
+      correlationId: null,
+    });
   }
   const correlationId = 'cn-' + Date.now().toString(36);
   try {
@@ -5752,7 +5761,12 @@ ipcMain.handle('licence:email-key', async (_, params) => {
     return result;
   } catch (e) {
     console.error('[licence:email-key]', correlationId, e && e.message ? e.message : e);
-    return { ok: false, sent: false, error: e && e.message ? e.message : 'Failed to send email', correlationId };
+    return withFormattedLicenceEmailKeyError({
+      ok: false,
+      sent: false,
+      error: e && e.message ? e.message : 'Failed to send email',
+      correlationId,
+    });
   }
 });
 
