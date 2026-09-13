@@ -1,99 +1,168 @@
-# Code signing the Windows installer
+# Code signing (Windows + Mac)
 
-An **unsigned** Windows installer triggers SmartScreen warnings ("Windows protected your PC" / "Unknown publisher") and can be blocked by policy. Signing the app fixes this.
+Unsigned Windows installers trigger SmartScreen (“Windows protected your PC” / “Unknown publisher”) and can be blocked by policy. Custody Note signs the Windows NSIS installer in CI with **Azure Artifact Signing** (formerly Trusted Signing), Basic plan.
 
-## What you need
+Mac Developer ID signing + notarization is unchanged — see the Mac secrets listed in [`.github/workflows/release-publish.yml`](.github/workflows/release-publish.yml).
 
-1. **A code signing certificate** from a trusted Certificate Authority (CA), for example:
-   - **Standard OV (Organization Validation)**  
-     DigiCert, Sectigo, SSL.com, etc. — typically £100–400/year.  
-     You’ll get a PFX/P12 file and a password after identity verification.
-   - **EV (Extended Validation)**  
-     Same CAs, higher cost; often uses a hardware token.  
-     Builds gain SmartScreen reputation faster (fewer “Unknown publisher” warnings once the cert is known).
+**Publisher (legal name for identity validation):** `DEFENCELEGALSERVICES LIMITED` (UK).  
+The `publisherName` passed to electron-builder must match the **certificate Common Name (CN)** exactly after Azure finishes identity validation (usually the company legal name without extra suffixes).
 
-2. **The certificate file** (`.pfx` or `.p12`) and its **password** on the machine where you run `npm run build` or `npm run release`.
+---
 
-## Enabling signing in the build
+## Windows — Azure Artifact Signing (Basic) — Robert’s checklist
 
-The build is set up to sign when certificate environment variables are present. No code change is required.
+Do these once in Azure + GitHub. Use **placeholders** below until your real account/profile names exist — do **not** invent production names in the repo.
 
-### Option A: Local build (your PC)
+### 1. Azure subscription + resource provider
 
-1. Put your `.pfx` file somewhere safe (e.g. a folder not in the repo), e.g.  
-   `C:\certs\custody-note.pfx`
+1. Sign in at [portal.azure.com](https://portal.azure.com) with the Microsoft account that owns the subscription.
+2. **Subscriptions** → your subscription → **Settings** → **Resource providers**.
+3. Search `Microsoft.CodeSigning` → **Register**.
+4. Ensure a payment method is on file (Artifact Signing Basic is a paid monthly plan).
 
-2. Set environment variables **before** running the build:
+### 2. Create an Artifact Signing account (Basic)
 
-   **PowerShell:**
+1. Portal search → **Artifact Signing** (may still appear as “Trusted Signing” in older UI).
+2. **Create**:
+   - **Resource group:** e.g. `YOUR_RESOURCE_GROUP` (example: `custody-note-signing`)
+   - **Account name:** e.g. `YOUR_ACCOUNT` (this becomes `codeSigningAccountName`)
+   - **Region / endpoint:** pick one region and note the matching endpoint URI, e.g.  
+     `https://eus.codesigning.azure.net/` (East US example — use the endpoint Azure shows for *your* region)
+3. Open the new account → **Access control (IAM)** → **Add role assignment**:
+   - Role: **Artifact Signing Identity Verifier**
+   - Assign to: your user (the person who will complete identity validation)
 
-   ```powershell
-   $env:CSC_LINK = "C:\certs\custody-note.pfx"
-   $env:CSC_KEY_PASSWORD = "YourCertificatePassword"
-   npm run build
-   ```
+### 3. Organisation identity validation
 
-   **Command Prompt:**
+1. In the Artifact Signing account → **Objects** → **Identity validations**.
+2. **New identity** → **Organization** (public trust) for the company.
+3. Enter legal details for **DEFENCELEGALSERVICES LIMITED** (UK) exactly as on Companies House / verification docs.
+4. Complete the verification partner flow (documents + any authenticator steps).
+5. Wait until status is **Completed** (can take minutes to several business days).
+6. Note the **CN / subject name** Azure shows for the validated identity — that string is `publisherName`.
 
-   ```cmd
-   set CSC_LINK=C:\certs\custody-note.pfx
-   set CSC_KEY_PASSWORD=YourCertificatePassword
-   npm run build
-   ```
+### 4. Certificate profile
 
-   For a full release (build + publish to GitHub):
+1. Same account → **Objects** → **Certificate profiles** → **Create**.
+2. Profile type: **Public Trust**.
+3. Name: e.g. `YOUR_CERT_PROFILE` (this becomes `certificateProfileName`).
+4. Select the completed organisation identity. Prefer **not** embedding street address in the public cert unless you intentionally want it.
+5. Confirm the profile is ready before the first signed release.
 
-   ```powershell
-   $env:CSC_LINK = "C:\certs\custody-note.pfx"
-   $env:CSC_KEY_PASSWORD = "YourCertificatePassword"
-   npm run release patch
-   ```
+### 5. App registration + OIDC federated credential (GitHub)
 
-3. **Security:** Do not commit the `.pfx` or the password to git. Add `*.pfx` and `.env.local` to `.gitignore` if you store the path/password there.
+OIDC avoids long-lived client secrets for CI.
 
-### Option B: CI (GitHub Actions, etc.)
+1. Portal search → **App registrations** → **New registration**.
+   - Name: e.g. `custody-note-github-signing`
+   - Supported account types: **Single tenant**
+   - Redirect URI: leave blank
+2. Overview → copy:
+   - **Application (client) ID** → GitHub secret `AZURE_CLIENT_ID`
+   - **Directory (tenant) ID** → GitHub secret `AZURE_TENANT_ID`
+3. Subscriptions → your subscription → copy **Subscription ID** → GitHub secret `AZURE_SUBSCRIPTION_ID`
+4. App registration → **Certificates & secrets** → **Federated credentials** → **Add credential**:
+   - Scenario: **GitHub Actions deploying Azure resources**
+   - Organization: `robertcashman-bit`
+   - Repository: `custody-note-app`
+   - Entity type: **Environment**
+   - Environment name: `windows-signing` (must match `environment:` on the `release-windows` job)
+   - Name: e.g. `github-custody-note-app-windows-signing`
+   - **Why Environment (not Branch):** release builds run on `refs/tags/v*`. A federated credential scoped only to branch `master` will **not** match tag OIDC subjects, and signing login will fail.
+5. In GitHub → **Settings → Environments** → ensure `windows-signing` exists (Actions will create it on first run if missing). No required reviewers needed unless you want a manual gate.
+6. Back on the **Artifact Signing** account → **IAM** → **Add role assignment**:
+   - Role: **Artifact Signing Certificate Profile Signer**
+   - Members: the app registration (search by app name — it may only appear after you type the name)
+7. Optional but useful: also grant the app **Reader** on the Artifact Signing resource if signer-only auth errors appear during first runs.
 
-- Store the certificate as a **secret** (e.g. base64-encoded PFX in `CSC_LINK`, password in `CSC_KEY_PASSWORD`).
-- In the workflow, set `CSC_LINK` and `CSC_KEY_PASSWORD` (or `WIN_CSC_LINK` / `WIN_CSC_KEY_PASSWORD` for Windows-only) before running `npm run build` or your release script.
+### 6. GitHub Actions secrets / vars
 
-Example (conceptual):
+Repo: **Settings → Secrets and variables → Actions**.
 
-```yaml
-env:
-  CSC_LINK: ${{ secrets.WIN_CODE_SIGNING_PFX_BASE64 }}
-  CSC_KEY_PASSWORD: ${{ secrets.WIN_CODE_SIGNING_PASSWORD }}
-run: npm run build
-```
+| Secret | Example / placeholder | Used for |
+|--------|------------------------|----------|
+| `AZURE_CLIENT_ID` | App registration Application (client) ID | `azure/login` OIDC |
+| `AZURE_TENANT_ID` | Entra directory (tenant) ID | `azure/login` OIDC |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID | `azure/login` OIDC |
+| `AZURE_CODE_SIGNING_ENDPOINT` | `https://eus.codesigning.azure.net/` | electron-builder `endpoint` |
+| `AZURE_CODE_SIGNING_ACCOUNT_NAME` | `YOUR_ACCOUNT` | electron-builder `codeSigningAccountName` |
+| `AZURE_CERTIFICATE_PROFILE_NAME` | `YOUR_CERT_PROFILE` | electron-builder `certificateProfileName` |
+| `AZURE_TRUSTED_SIGNING_PUBLISHER_NAME` | `DEFENCELEGALSERVICES LIMITED` | electron-builder `publisherName` (must match cert CN) |
 
-(Encode the PFX: `base64 -w0 custody-note.pfx` or PowerShell equivalent, then put that string in the secret.)
+Optional repo **variable**:
 
-### Option C: Build on macOS/Linux for Windows
+| Variable | Value | Effect |
+|----------|-------|--------|
+| `CN_WINDOWS_SIGN` | `1` | Force fail-closed signing even on non-tag / `workflow_dispatch` runs |
 
-Use the Windows-specific variables so only the Windows build uses the Windows cert:
+### 7. How CI wires signing (`release-windows`)
+
+In [`.github/workflows/release-publish.yml`](.github/workflows/release-publish.yml):
+
+1. Job permissions include `contents: write` and `id-token: write` (required for OIDC).
+2. A preflight step **fails closed** when signing is required but any of the secrets above are missing:
+   - Required on every **`v*` tag** push
+   - Also required when `CN_WINDOWS_SIGN=1`
+3. When enabled, the job runs `azure/login` (OIDC), then electron-builder with Azure options via CLI (so local/unsigned builds stay unsigned by default):
 
 ```bash
-export WIN_CSC_LINK="/path/to/custody-note.pfx"
-export WIN_CSC_KEY_PASSWORD="YourCertificatePassword"
-npm run release patch
+npx electron-builder --win --publish always \
+  -c.win.azureSignOptions.publisherName="$AZURE_TRUSTED_SIGNING_PUBLISHER_NAME" \
+  -c.win.azureSignOptions.endpoint="$AZURE_CODE_SIGNING_ENDPOINT" \
+  -c.win.azureSignOptions.codeSigningAccountName="$AZURE_CODE_SIGNING_ACCOUNT_NAME" \
+  -c.win.azureSignOptions.certificateProfileName="$AZURE_CERTIFICATE_PROFILE_NAME"
 ```
 
-## Verifying the signed installer
+`azure/login` exports Entra credentials (including federated token material) that the Trusted Signing PowerShell module consumes via `DefaultAzureCredential`.
 
-After building:
+**Why options are not hard-coded in `package.json`:** if `build.win.azureSignOptions` is present, electron-builder always selects the Azure sign manager and will try to sign. Keeping them CLI-only preserves unsigned local builds and PR CI without Azure secrets.
 
-1. Right-click the built `.exe` (e.g. in `custody-note-dist\`) → **Properties** → **Digital Signatures**.
-2. The certificate and publisher name should appear. SmartScreen may still show “Unknown publisher” for a new cert until enough users install it (faster with an EV cert).
+Equivalent structure (reference only — enable via CLI/env in CI):
 
-## If you don’t have a certificate yet
+```json
+{
+  "win": {
+    "azureSignOptions": {
+      "publisherName": "DEFENCELEGALSERVICES LIMITED",
+      "endpoint": "https://eus.codesigning.azure.net/",
+      "codeSigningAccountName": "YOUR_ACCOUNT",
+      "certificateProfileName": "YOUR_CERT_PROFILE"
+    }
+  }
+}
+```
 
-- **Users:** They can still run the app by choosing “More info” → “Run anyway” on the SmartScreen dialog. Not ideal for a professional product.
-- **You:** Obtain a certificate from one of the CAs above, then set `CSC_LINK` and `CSC_KEY_PASSWORD` as above so every build is signed.
+Requires **electron-builder ≥ 26.15** (OIDC / `DefaultAzureCredential` without the old client-secret-only preflight). This repo pins `electron-builder@26.16.1`.
 
-## Summary
+### 8. Before the next version tag
 
-| Step | Action |
-|------|--------|
-| 1 | Obtain a code signing certificate (PFX) from a CA. |
-| 2 | Set `CSC_LINK` (path or base64 of PFX) and `CSC_KEY_PASSWORD` before building. |
-| 3 | Run `npm run build` or `npm run release`; the installer and executable will be signed. |
-| 4 | Do not commit the PFX or password to the repo. |
+Until the secrets in §6 exist, **`release-windows` will fail on `v*` tags** (fail-closed). Complete Azure setup and add secrets **before** the next `npm run deploy` / tag push.
+
+For unsigned experimentation on `workflow_dispatch` without `CN_WINDOWS_SIGN=1`, the job still builds/publishes an unsigned installer when secrets are absent.
+
+### 9. Verify a signed installer
+
+1. Download `Custody-Note-Setup-*.exe` from the GitHub Release.
+2. Right-click → **Properties** → **Digital Signatures**.
+3. Publisher should show the Artifact Signing certificate subject (e.g. DEFENCELEGALSERVICES LIMITED).
+4. SmartScreen reputation still builds over time for a new publisher; first installs may show more warnings than a long-lived EV cert.
+
+---
+
+## Legacy PFX / local CSC signing (optional)
+
+Azure Artifact Signing in CI is the supported production path. Local PFX signing remains possible for ad-hoc machines:
+
+```powershell
+$env:CSC_LINK = "C:\certs\custody-note.pfx"
+$env:CSC_KEY_PASSWORD = "YourCertificatePassword"
+npm run build
+```
+
+Do not commit `.pfx` files or passwords. Prefer Azure OIDC for GitHub Releases.
+
+---
+
+## Mac (unchanged)
+
+Mac release signing uses Developer ID + notarytool secrets (`MAC_CERTIFICATE_*`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). See the header comments in `release-publish.yml`. Do not set `CN_SKIP_NOTARIZE` in that workflow.

@@ -61,7 +61,7 @@ npm run release major
 
 ### Signing the Windows installer (recommended)
 
-Unsigned installers trigger Windows SmartScreen warnings. To sign the app you need a code signing certificate (PFX) from a trusted CA. Set `CSC_LINK` and `CSC_KEY_PASSWORD` before building; see **[SIGNING.md](SIGNING.md)** for full instructions.
+Unsigned installers trigger Windows SmartScreen warnings. Production Windows releases are signed in CI with **Azure Artifact Signing** (OIDC). See **[SIGNING.md](SIGNING.md)** for Robert’s Azure Basic setup checklist and GitHub secrets.
 
 The script: (1) bumps version, (2) updates changelog, (3) syncs to website, (4) builds and publishes the installer to GitHub, (5) deploys the website to Vercel. A token is required by default; pass `--no-publish` explicitly for local build-only runs.
 
