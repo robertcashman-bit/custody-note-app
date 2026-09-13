@@ -51,6 +51,13 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
     );
   });
 
+  it('PR Test workflow includes a Windows msix-package job', () => {
+    const testWf = fs.readFileSync(path.join(root, '.github', 'workflows', 'test.yml'), 'utf8');
+    assert.match(testWf, /msix-package:/);
+    assert.match(testWf, /electron-builder --win appx --publish never/);
+    assert.match(testWf, /custody-note-msix/);
+  });
+
   it('Mac release job remains present and unchanged in structure', () => {
     assert.match(workflow, /release-mac:/);
     assert.match(workflow, /build:mac:signed/);

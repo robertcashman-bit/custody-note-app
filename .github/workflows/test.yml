@@ -53,3 +53,49 @@ jobs:
       # macOS unit tests were removed from this workflow — they duplicated
       # Windows `test:unit` and burned expensive macos-latest minutes.
       # Signed Mac builds still run on macos-latest in release-publish.yml.
+
+  # Proves electron-builder can produce the Store package on Windows.
+  # Does not sideload/install (no interactive Store identity on GHA).
+  msix-package:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate MSIX/AppX config + assets
+        run: npm run validate:msix
+
+      - name: Ensure AppX visual assets
+        run: npm run build:msix:assets
+
+      - name: Build unsigned AppX/MSIX (Windows Kits required)
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          set -euo pipefail
+          npx electron-builder --win appx --publish never
+          VERSION=$(node -p "require('./package.json').version")
+          MSIX="dist/Custody-Note-${VERSION}.msix"
+          if [[ ! -f "$MSIX" ]]; then
+            echo "::error::Expected $MSIX missing after appx build"
+            ls -la dist || true
+            exit 1
+          fi
+          echo "Built $MSIX ($(wc -c < "$MSIX") bytes)"
+          echo "MSIX_PATH=$MSIX" >> "$GITHUB_ENV"
+
+      - name: Upload MSIX artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: custody-note-msix
+          path: dist/Custody-Note-*.msix
+          if-no-files-found: error
