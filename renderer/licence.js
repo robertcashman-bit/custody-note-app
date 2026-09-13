@@ -292,8 +292,11 @@
       if (!msgEl) return;
       var sent = !!(r && r.ok && r.sent === true);
       if (!sent) {
+        // Main formats failures via formatLicenceEmailKeyError (includes Ref).
         var failMsg = (r && (r.error || r.message)) || 'Could not send email. Try again or contact support.';
-        if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
+        if (r && r.correlationId && failMsg.indexOf('(Ref:') === -1) {
+          failMsg += ' (Ref: ' + r.correlationId + ')';
+        }
         msgEl.textContent = failMsg;
         msgEl.style.color = '#fca5a5';
         return;
