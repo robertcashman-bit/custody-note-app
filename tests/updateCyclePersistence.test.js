@@ -62,6 +62,12 @@ describe('update-cycle persistence', () => {
     assert.match(updaterJs, /Portable builds do not auto-update to avoid switching to a different data location/);
   });
 
+  it('disables electron-updater for Microsoft Store / MSIX builds', () => {
+    assert.match(mainJs, /isMsixStoreBuild: IS_MSIX_STORE_BUILD/);
+    assert.match(updaterJs, /Microsoft Store build is updated by the Store/);
+    assert.match(updaterJs, /createNoopUpdaterController\(app, 'msix'\)/);
+  });
+
   it('defers the first update check until the renderer has loaded (no dropped IPC)', () => {
     assert.match(mainJs, /scheduleDeferredCheck/);
     assert.match(updaterJs, /startup-deferred/);
