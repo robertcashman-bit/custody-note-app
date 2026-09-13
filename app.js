@@ -18388,7 +18388,7 @@ pdfAuditFooterHtml(d, settings) +
       var keyInput = document.getElementById('trial-upgrade-key');
       var errEl = document.getElementById('trial-upgrade-error');
       var raw = keyInput ? keyInput.value : '';
-      var key = (typeof raw === 'string' ? raw : '').replace(/[\s-]/g, '').trim().toUpperCase();
+      var key = (typeof raw === 'string' ? raw : '').replace(/\s/g, '').trim().toUpperCase();
       if (!key) {
         if (errEl) { errEl.textContent = 'Please paste your licence key'; errEl.style.display = ''; }
         return;
@@ -19532,8 +19532,11 @@ pdfAuditFooterHtml(d, settings) +
         if (btn) btn.disabled = false;
         var sent = !!(r && r.ok && r.sent === true);
         if (!sent) {
+          // Main already formats failures via formatLicenceEmailKeyError (includes Ref).
           var failMsg = (r && (r.error || r.message)) || 'Could not send email.';
-          if (r && r.correlationId) failMsg += ' (Ref: ' + r.correlationId + ')';
+          if (r && r.correlationId && failMsg.indexOf('(Ref:') === -1) {
+            failMsg += ' (Ref: ' + r.correlationId + ')';
+          }
           if (msgEl) {
             msgEl.textContent = failMsg;
             msgEl.style.color = '#dc2626';

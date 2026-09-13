@@ -4,6 +4,7 @@ const {
   buildLicenceEmailKeyPayload,
   buildTypedEmailRetryPayload,
   isLicenceEmailKeyFailure,
+  isGenericAntiEnumMessage,
   shouldRetryEmailKeyWithTypedEmail,
   mapLicenceEmailKeyResponse,
   requestLicenceEmailKeyWithRetry,
@@ -133,6 +134,71 @@ describe('mapLicenceEmailKeyResponse', () => {
     assert.equal(mapped.message, 'sent');
     assert.equal(mapped.correlationId, 'cid-2');
   });
+
+  it('website honesty: unmatched presented key with sent:false is failure (Ref available)', () => {
+    const mapped = mapLicenceEmailKeyResponse(
+      {
+        ok: true,
+        sent: false,
+        error: 'No matching licence key',
+        message: "If an account exists for that email, we've sent the licence key.",
+        correlationId: 'email-unmatched-key',
+      },
+      'fallback',
+      { presentedKey: true },
+    );
+    assert.equal(mapped.ok, false);
+    assert.equal(mapped.sent, false);
+    assert.equal(mapped.error, 'No matching licence key');
+    assert.equal(mapped.correlationId, 'email-unmatched-key');
+    assert.match(formatLicenceEmailKeyError(mapped), /Ref: email-unmatched-key/);
+  });
+
+  it('activated harden: generic anti-enum sent:true without server correlationId is not success', () => {
+    const mapped = mapLicenceEmailKeyResponse(
+      {
+        ok: true,
+        sent: true,
+        message: "If an account exists for that email, we've sent the licence key.",
+      },
+      'cn-client-fallback',
+      { presentedKey: true },
+    );
+    assert.equal(mapped.ok, false);
+    assert.equal(mapped.sent, false);
+    assert.equal(mapped.correlationId, 'cn-client-fallback');
+  });
+
+  it('activated path still accepts real send with server correlationId', () => {
+    const mapped = mapLicenceEmailKeyResponse(
+      {
+        ok: true,
+        sent: true,
+        message: "If an account exists for that email, we've sent the licence key.",
+        correlationId: 'email-real-send',
+      },
+      'fallback',
+      { presentedKey: true },
+    );
+    assert.equal(mapped.ok, true);
+    assert.equal(mapped.sent, true);
+    assert.equal(mapped.correlationId, 'email-real-send');
+  });
+
+  it('email-only forgot path keeps anti-enum success without presentedKey harden', () => {
+    const mapped = mapLicenceEmailKeyResponse(
+      {
+        ok: true,
+        sent: true,
+        message: "If an account exists for that email, we've sent the licence key.",
+        correlationId: 'email-anti-enum',
+      },
+      'fallback',
+      { presentedKey: false },
+    );
+    assert.equal(mapped.ok, true);
+    assert.equal(mapped.sent, true);
+  });
 });
 
 describe('evening retry failure modes', () => {
@@ -217,9 +283,106 @@ describe('requestLicenceEmailKeyWithRetry', () => {
     });
     assert.equal(result.ok, false);
     assert.equal(result.sent, false);
-    assert.equal(result.error, 'Email was not sent');
+    assert.match(result.error, /Email was not sent/);
+    assert.match(result.error, /Ref: cid-fail/);
     assert.equal(result.correlationId, 'cid-fail');
     assert.equal(result.retried, true);
+  });
+
+  it('unmatched presented key (website sent:false) fails with Ref; no success toast shape', async () => {
+    const posts = [];
+    const result = await requestLicenceEmailKeyWithRetry({
+      licenceData: { key: 'CN-DEAD-BEEF-FAKE-KEY1', email: 'stale@purchase.com' },
+      rendererParams: {},
+      correlationId: 'cn-activated',
+      postFn: async (payload) => {
+        posts.push(payload);
+        // Website honesty contract after unmatched-key fix.
+        return {
+          ok: true,
+          sent: false,
+          error: 'No matching licence key',
+          correlationId: 'email-unmatched',
+        };
+      },
+    });
+    assert.equal(posts.length, 1);
+    assert.deepEqual(posts[0], {
+      key: 'CN-DEAD-BEEF-FAKE-KEY1',
+      email: 'stale@purchase.com',
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.sent, false);
+    assert.equal(result.lookup, 'licence_key');
+    assert.match(result.error, /Ref: email-unmatched/);
+  });
+
+  it('never treats anti-enum copy as success when primary key gets sent:false', async () => {
+    const result = await requestLicenceEmailKeyWithRetry({
+      licenceData: { key: 'cn-dead-beef-fake-key1' },
+      rendererParams: {},
+      correlationId: 'cn-anti',
+      postFn: async () => ({
+        ok: true,
+        sent: false,
+        message: "If an account exists for that email, we've sent the licence key.",
+        correlationId: 'email-anti-unmatched',
+      }),
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.sent, false);
+    assert.notEqual(result.ok && result.sent, true);
+    assert.match(result.error, /Ref: email-anti-unmatched/);
+  });
+
+  it('normalises activated key to uppercase before POST (preserves hyphens)', async () => {
+    const posts = [];
+    await requestLicenceEmailKeyWithRetry({
+      licenceData: { key: '  cn-admin-aaaa-bbbb-cccc  ', email: 'a@b.com' },
+      rendererParams: {},
+      correlationId: 'cn-norm',
+      postFn: async (payload) => {
+        posts.push(payload);
+        return { ok: true, sent: true, message: 'ok', correlationId: 'cid-n' };
+      },
+    });
+    assert.equal(posts[0].key, 'CN-ADMIN-AAAA-BBBB-CCCC');
+  });
+
+  it('posts key alone when licence.dat has key but empty email', async () => {
+    const posts = [];
+    const result = await requestLicenceEmailKeyWithRetry({
+      licenceData: { key: 'CN-ONLY-KEY1-KEY2-KEY3', email: '' },
+      rendererParams: { email: 'typed@firm.com' },
+      correlationId: 'cn-key-only',
+      postFn: async (payload) => {
+        posts.push(payload);
+        return { ok: true, sent: true, message: 'ok', correlationId: 'cid-key-only' };
+      },
+    });
+    assert.deepEqual(posts[0], { key: 'CN-ONLY-KEY1-KEY2-KEY3' });
+    assert.equal(result.ok, true);
+    assert.equal(result.sent, true);
+  });
+
+  it('email-only anti-enum success still works when no activated key', async () => {
+    const result = await requestLicenceEmailKeyWithRetry({
+      licenceData: {},
+      rendererParams: { email: 'unknown@example.com' },
+      correlationId: 'cn-forgot',
+      postFn: async (payload) => {
+        assert.deepEqual(payload, { email: 'unknown@example.com' });
+        return {
+          ok: true,
+          sent: true,
+          message: "If an account exists for that email, we've sent the licence key.",
+          correlationId: 'email-anti-enum',
+        };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.sent, true);
+    assert.equal(result.lookup, 'email');
   });
 });
 
@@ -229,5 +392,29 @@ describe('formatLicenceEmailKeyError', () => {
       formatLicenceEmailKeyError({ error: 'Email was not sent', correlationId: 'cid-9' }),
       'Email was not sent (Ref: cid-9)',
     );
+  });
+
+  it('does not double-append Ref', () => {
+    assert.equal(
+      formatLicenceEmailKeyError({
+        error: 'Email was not sent (Ref: cid-9)',
+        correlationId: 'cid-9',
+      }),
+      'Email was not sent (Ref: cid-9)',
+    );
+  });
+});
+
+describe('isGenericAntiEnumMessage', () => {
+  it('recognises website anti-enum copy', () => {
+    assert.equal(
+      isGenericAntiEnumMessage("If an account exists for that email, we've sent the licence key."),
+      true,
+    );
+    assert.equal(
+      isGenericAntiEnumMessage('If that email exists in our system, your licence code has been sent.'),
+      true,
+    );
+    assert.equal(isGenericAntiEnumMessage('Licence key emailed'), false);
   });
 });

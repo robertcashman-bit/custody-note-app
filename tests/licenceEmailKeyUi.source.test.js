@@ -55,7 +55,8 @@ describe('licence email-key UI honesty (source)', () => {
     assert.match(appJs, /licence-email-key-btn/);
     assert.match(appJs, /window\.api\.licenceEmailKey\(payload\)/);
     assert.match(appJs, /r\.ok && r\.sent === true/);
-    assert.match(appJs, /r\.correlationId\) failMsg \+= ' \(Ref: ' \+ r\.correlationId/);
+    assert.match(appJs, /failMsg\.indexOf\('\(Ref:'\) === -1/);
+    assert.match(appJs, /failMsg \+= ' \(Ref: ' \+ r\.correlationId/);
     assert.doesNotMatch(appJs, /custodyNote\.requestLicenceEmail\(email\)/);
     assert.doesNotMatch(appJs, /btn-licence-email-key/);
   });
@@ -75,8 +76,18 @@ describe('licence email-key UI honesty (source)', () => {
     assert.match(mainJs, /requestLicenceEmailRateLimit\.checkRateLimit/);
     assert.match(mainJs, /Too many requests\. Please wait a minute/);
     assert.match(mainJs, /Never log full licence keys/);
+    assert.match(mainJs, /withFormattedLicenceEmailKeyError/);
+    assert.match(mainJs, /readLicenceData\(\)/);
     assert.doesNotMatch(mainJs, /console\.(info|log|error)\([^)]*payload\.key/);
     assert.doesNotMatch(payloadJs, /console\.(info|log|error)\([^)]*\.key/);
+  });
+
+  it('payload mapper hardens activated key path and formats Ref on failure', () => {
+    assert.match(payloadJs, /presentedKey/);
+    assert.match(payloadJs, /isGenericAntiEnumMessage/);
+    assert.match(payloadJs, /withFormattedLicenceEmailKeyError/);
+    assert.match(payloadJs, /formatLicenceEmailKeyError/);
+    assert.match(payloadJs, /GENERIC_ANTI_ENUM_RE/);
   });
 
   it('legacy custody:requestLicenceEmail does not fake success on rate limit or bad email', () => {
