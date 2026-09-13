@@ -18388,7 +18388,7 @@ pdfAuditFooterHtml(d, settings) +
       var keyInput = document.getElementById('trial-upgrade-key');
       var errEl = document.getElementById('trial-upgrade-error');
       var raw = keyInput ? keyInput.value : '';
-      var key = (typeof raw === 'string' ? raw : '').replace(/[\s-]/g, '').trim().toUpperCase();
+      var key = (typeof raw === 'string' ? raw : '').replace(/\s/g, '').trim().toUpperCase();
       if (!key) {
         if (errEl) { errEl.textContent = 'Please paste your licence key'; errEl.style.display = ''; }
         return;

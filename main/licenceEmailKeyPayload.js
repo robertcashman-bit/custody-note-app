@@ -6,6 +6,8 @@
  * When not activated: prefer account email from licence.dat, else typed email.
  */
 
+const { normalizeLicenceKeyForSync } = require('../lib/licenceKeyNormalize');
+
 /** Privacy / anti-enumeration success copy used by the website API. */
 const GENERIC_ANTI_ENUM_RE =
   /if an account exists|if that email exists/i;
@@ -22,7 +24,8 @@ function buildLicenceEmailKeyPayload(licenceData, rendererParams) {
   const params = rendererParams || {};
 
   if (data.key && String(data.key).trim()) {
-    payload.key = String(data.key).trim();
+    // Same trim+uppercase as activate/validate — keep CN-ADMIN hyphens.
+    payload.key = normalizeLicenceKeyForSync(data.key);
     const accountEmail = normalizeEmail(data.email);
     if (accountEmail) payload.email = accountEmail;
     return payload;

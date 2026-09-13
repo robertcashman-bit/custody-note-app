@@ -317,6 +317,38 @@ describe('requestLicenceEmailKeyWithRetry', () => {
     assert.match(result.error, /Ref: email-unmatched/);
   });
 
+  it('never treats anti-enum copy as success when primary key gets sent:false', async () => {
+    const result = await requestLicenceEmailKeyWithRetry({
+      licenceData: { key: 'cn-dead-beef-fake-key1' },
+      rendererParams: {},
+      correlationId: 'cn-anti',
+      postFn: async () => ({
+        ok: true,
+        sent: false,
+        message: "If an account exists for that email, we've sent the licence key.",
+        correlationId: 'email-anti-unmatched',
+      }),
+    });
+    assert.equal(result.ok, false);
+    assert.equal(result.sent, false);
+    assert.notEqual(result.ok && result.sent, true);
+    assert.match(result.error, /Ref: email-anti-unmatched/);
+  });
+
+  it('normalises activated key to uppercase before POST (preserves hyphens)', async () => {
+    const posts = [];
+    await requestLicenceEmailKeyWithRetry({
+      licenceData: { key: '  cn-admin-aaaa-bbbb-cccc  ', email: 'a@b.com' },
+      rendererParams: {},
+      correlationId: 'cn-norm',
+      postFn: async (payload) => {
+        posts.push(payload);
+        return { ok: true, sent: true, message: 'ok', correlationId: 'cid-n' };
+      },
+    });
+    assert.equal(posts[0].key, 'CN-ADMIN-AAAA-BBBB-CCCC');
+  });
+
   it('posts key alone when licence.dat has key but empty email', async () => {
     const posts = [];
     const result = await requestLicenceEmailKeyWithRetry({

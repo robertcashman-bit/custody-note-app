@@ -5522,9 +5522,10 @@ async function postLicenceValidateRequest(body) {
 async function validateLicenceOnline(key, machineId) {
   const url = getLicenceValidationUrl();
   if (!url) return { valid: true, offline: true };
+  const normalizedKey = normalizeLicenceKeyForSync(key);
   try {
     const resp = await postLicenceValidateRequest({
-      key,
+      key: normalizedKey,
       machineId,
       appVersion: app.getVersion() || '0.0.0',
     });
@@ -5631,13 +5632,19 @@ ipcMain.handle('licence:status', () => {
 });
 
 ipcMain.handle('licence:activate', async (_, { key, email }) => {
-  if (!validateLicenceKeyFormat(key)) return { success: false, message: 'Invalid licence key format' };
+  const { mapLicenceActivateFailure } = require('./main/licenceActivateResult');
+  // Same trim+uppercase as sync / escrow — preserve CN-ADMIN hyphens (never strip dashes).
+  const normalizedKey = normalizeLicenceKeyForSync(key);
+  if (!validateLicenceKeyFormat(normalizedKey)) {
+    return { success: false, message: 'Invalid licence key format' };
+  }
   const machineId = getMachineId();
-  const result = await validateLicenceOnline(key.trim(), machineId);
-  if (result.valid === false) return { success: false, message: result.message || 'Licence key is not valid' };
+  const result = await validateLicenceOnline(normalizedKey, machineId);
+  const activateFail = mapLicenceActivateFailure(result);
+  if (activateFail) return activateFail;
   const now = new Date().toISOString();
   const data = {
-    key: normalizeLicenceKeyForSync(key),
+    key: normalizedKey,
     email: result.email || email || '',
     activatedAt: now,
     lastValidated: now,
