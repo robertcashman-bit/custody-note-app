@@ -6,7 +6,7 @@
 # Required for Windows build (provided automatically):
 # - GITHUB_TOKEN  — automatic, used to create the app release.
 #
-# Required for Windows Azure Artifact Signing on v* tags (or when CN_WINDOWS_SIGN=1):
+# Required for Windows Azure Artifact Signing when enabled (soft gate until Azure is ready):
 # - AZURE_CLIENT_ID                 — Entra app registration Application (client) ID
 # - AZURE_TENANT_ID                 — Entra directory (tenant) ID
 # - AZURE_SUBSCRIPTION_ID           — Azure subscription ID (azure/login)
@@ -14,8 +14,10 @@
 # - AZURE_CODE_SIGNING_ACCOUNT_NAME — Artifact Signing account name (YOUR_ACCOUNT)
 # - AZURE_CERTIFICATE_PROFILE_NAME  — Certificate profile name (YOUR_CERT_PROFILE)
 # - AZURE_TRUSTED_SIGNING_PUBLISHER_NAME — Cert CN, e.g. DEFENCELEGALSERVICES LIMITED
+# Soft gate: if ALL of the above are absent → unsigned Windows build (warning logged).
+# Fail-closed only when CN_WINDOWS_SIGN=1 OR secrets are partially present/misconfigured.
 # Optional repo variable:
-# - CN_WINDOWS_SIGN=1               — Force fail-closed signing on non-tag runs too
+# - CN_WINDOWS_SIGN=1               — Require signing (fail if secrets incomplete)
 # Full Azure setup checklist: SIGNING.md
 #
 # Required for macOS Developer ID–signed + notarised build (fail-closed):
@@ -102,35 +104,42 @@ jobs:
           CN_WINDOWS_SIGN: ${{ vars.CN_WINDOWS_SIGN }}
         run: |
           set -euo pipefail
-          require_sign=false
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]] || [[ "${CN_WINDOWS_SIGN:-}" == "1" ]]; then
-            require_sign=true
+          force_sign=false
+          if [[ "${CN_WINDOWS_SIGN:-}" == "1" ]]; then
+            force_sign=true
           fi
 
-          missing=()
-          for name in \
-            AZURE_CLIENT_ID \
-            AZURE_TENANT_ID \
-            AZURE_SUBSCRIPTION_ID \
-            AZURE_CODE_SIGNING_ENDPOINT \
-            AZURE_CODE_SIGNING_ACCOUNT_NAME \
-            AZURE_CERTIFICATE_PROFILE_NAME \
+          required=(
+            AZURE_CLIENT_ID
+            AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID
+            AZURE_CODE_SIGNING_ENDPOINT
+            AZURE_CODE_SIGNING_ACCOUNT_NAME
+            AZURE_CERTIFICATE_PROFILE_NAME
             AZURE_TRUSTED_SIGNING_PUBLISHER_NAME
-          do
+          )
+          missing=()
+          present=()
+          for name in "${required[@]}"; do
             if [[ -z "${!name:-}" ]]; then
               missing+=("$name")
+            else
+              present+=("$name")
             fi
           done
 
           if [[ ${#missing[@]} -eq 0 ]]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "Azure Artifact Signing enabled for this Windows build."
-          elif [[ "$require_sign" == "true" ]]; then
-            echo "::error::Windows Azure Artifact Signing is required for this run (tag release or CN_WINDOWS_SIGN=1), but secrets are missing: ${missing[*]}. See SIGNING.md."
+            echo "Azure Artifact Signing enabled for this Windows build (all secrets present)."
+          elif [[ ${#present[@]} -gt 0 ]]; then
+            echo "::error::Windows Azure Artifact Signing secrets are partially configured (present: ${present[*]}; missing: ${missing[*]}). Fix or remove the partial set before releasing. See SIGNING.md."
+            exit 1
+          elif [[ "$force_sign" == "true" ]]; then
+            echo "::error::CN_WINDOWS_SIGN=1 requires Windows Azure Artifact Signing, but secrets are missing: ${missing[*]}. See SIGNING.md."
             exit 1
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Azure signing secrets not configured — building an unsigned Windows installer (allowed for non-tag / non-CN_WINDOWS_SIGN runs)."
+            echo "::warning::Azure Artifact Signing secrets are not configured — building and publishing an UNSIGNED Windows installer. Complete SIGNING.md and set secrets (or CN_WINDOWS_SIGN=1 after secrets exist) when ready to require signed releases."
           fi
 
       - name: Azure login (OIDC)
