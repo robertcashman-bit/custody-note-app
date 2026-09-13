@@ -3,7 +3,7 @@
   "version": "1.9.100",
   "lastUpdated": "2026-09-13",
   "buildTime": "2026-09-13T10:08:12.000Z",
-  "description": "Custody Note \u2013 LAA-compliant custody note app",
+  "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -59,7 +59,7 @@
   "devDependencies": {
     "@playwright/test": "^1.58.2",
     "electron": "^42.2.0",
-    "electron-builder": "^26.8.1",
+    "electron-builder": "^26.16.1",
     "jsdom": "^29.0.0",
     "nodemailer": "^8.0.7",
     "pdf-parse": "^1.1.4",

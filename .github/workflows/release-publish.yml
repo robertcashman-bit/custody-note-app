@@ -6,6 +6,20 @@
 # Required for Windows build (provided automatically):
 # - GITHUB_TOKEN  — automatic, used to create the app release.
 #
+# Required for Windows Azure Artifact Signing when enabled (soft gate until Azure is ready):
+# - AZURE_CLIENT_ID                 — Entra app registration Application (client) ID
+# - AZURE_TENANT_ID                 — Entra directory (tenant) ID
+# - AZURE_SUBSCRIPTION_ID           — Azure subscription ID (azure/login)
+# - AZURE_CODE_SIGNING_ENDPOINT     — e.g. https://eus.codesigning.azure.net/
+# - AZURE_CODE_SIGNING_ACCOUNT_NAME — Artifact Signing account name (YOUR_ACCOUNT)
+# - AZURE_CERTIFICATE_PROFILE_NAME  — Certificate profile name (YOUR_CERT_PROFILE)
+# - AZURE_TRUSTED_SIGNING_PUBLISHER_NAME — Cert CN, e.g. DEFENCELEGALSERVICES LIMITED
+# Soft gate: if ALL of the above are absent → unsigned Windows build (warning logged).
+# Fail-closed only when CN_WINDOWS_SIGN=1 OR secrets are partially present/misconfigured.
+# Optional repo variable:
+# - CN_WINDOWS_SIGN=1               — Require signing (fail if secrets incomplete)
+# Full Azure setup checklist: SIGNING.md
+#
 # Required for macOS Developer ID–signed + notarised build (fail-closed):
 # - MAC_CERTIFICATE_P12_BASE64     — Base64-encoded Developer ID Application .p12 bundle.
 # - MAC_CERTIFICATE_P12_PASSWORD   — Passphrase used when the .p12 was exported.
@@ -45,10 +59,19 @@ jobs:
   # ─── Job 1a: Build the Windows installer and upload to GitHub Releases ──────
   # electron-builder creates a DRAFT release (per package.json build.publish.releaseType).
   # The publish-release job below flips it to non-draft once Mac + Windows are present.
+  #
+  # Windows code signing uses Azure Artifact Signing (OIDC via azure/login).
+  # azureSignOptions are passed on the CLI only when signing is enabled so local
+  # / unsigned builds do not force the Azure sign manager (see SIGNING.md).
   release-windows:
     runs-on: windows-latest
+    # Pins OIDC subject to environment:windows-signing so the Entra federated
+    # credential can authorize tag builds (branch-scoped federation alone does
+    # not match refs/tags/v*). Create the empty GitHub Environment once; see SIGNING.md.
+    environment: windows-signing
     permissions:
       contents: write
+      id-token: write
     steps:
       - name: Checkout app
         uses: actions/checkout@v4
@@ -67,11 +90,92 @@ jobs:
         run: npm ci
         working-directory: custody-note-app
 
+      - name: Decide Windows Azure Artifact Signing
+        id: win-sign
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CODE_SIGNING_ENDPOINT: ${{ secrets.AZURE_CODE_SIGNING_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
+          AZURE_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+          CN_WINDOWS_SIGN: ${{ vars.CN_WINDOWS_SIGN }}
+        run: |
+          set -euo pipefail
+          force_sign=false
+          if [[ "${CN_WINDOWS_SIGN:-}" == "1" ]]; then
+            force_sign=true
+          fi
+
+          required=(
+            AZURE_CLIENT_ID
+            AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID
+            AZURE_CODE_SIGNING_ENDPOINT
+            AZURE_CODE_SIGNING_ACCOUNT_NAME
+            AZURE_CERTIFICATE_PROFILE_NAME
+            AZURE_TRUSTED_SIGNING_PUBLISHER_NAME
+          )
+          missing=()
+          present=()
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            else
+              present+=("$name")
+            fi
+          done
+
+          if [[ ${#missing[@]} -eq 0 ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "Azure Artifact Signing enabled for this Windows build (all secrets present)."
+          elif [[ ${#present[@]} -gt 0 ]]; then
+            echo "::error::Windows Azure Artifact Signing secrets are partially configured (present: ${present[*]}; missing: ${missing[*]}). Fix or remove the partial set before releasing. See SIGNING.md."
+            exit 1
+          elif [[ "$force_sign" == "true" ]]; then
+            echo "::error::CN_WINDOWS_SIGN=1 requires Windows Azure Artifact Signing, but secrets are missing: ${missing[*]}. See SIGNING.md."
+            exit 1
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Azure Artifact Signing secrets are not configured — building and publishing an UNSIGNED Windows installer. Complete SIGNING.md and set secrets (or CN_WINDOWS_SIGN=1 after secrets exist) when ready to require signed releases."
+          fi
+
+      - name: Azure login (OIDC)
+        if: steps.win-sign.outputs.enabled == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Build + upload Windows installer to GitHub
         working-directory: custody-note-app
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx electron-builder --win --publish always
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CODE_SIGNING_ENDPOINT: ${{ secrets.AZURE_CODE_SIGNING_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
+          AZURE_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+          CN_WIN_SIGN_ENABLED: ${{ steps.win-sign.outputs.enabled }}
+        run: |
+          set -euo pipefail
+          if [[ "${CN_WIN_SIGN_ENABLED}" == "true" ]]; then
+            echo "Building signed Windows installer via Azure Artifact Signing…"
+            npx electron-builder --win --publish always \
+              "-c.win.azureSignOptions.publisherName=${AZURE_TRUSTED_SIGNING_PUBLISHER_NAME}" \
+              "-c.win.azureSignOptions.endpoint=${AZURE_CODE_SIGNING_ENDPOINT}" \
+              "-c.win.azureSignOptions.codeSigningAccountName=${AZURE_CODE_SIGNING_ACCOUNT_NAME}" \
+              "-c.win.azureSignOptions.certificateProfileName=${AZURE_CERTIFICATE_PROFILE_NAME}"
+          else
+            echo "Building unsigned Windows installer…"
+            npx electron-builder --win --publish always
+          fi
 
   # ─── Job 1b: Build the signed + notarised macOS .dmg/.zip and upload ────────
   # Imports the Developer ID Application certificate into a temporary keychain,
