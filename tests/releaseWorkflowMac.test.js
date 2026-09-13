@@ -11,6 +11,8 @@ describe('release-publish.yml — cross-platform build pipeline', () => {
     assert.match(wf, /^\s*release-windows:/m);
     assert.match(wf, /runs-on:\s*windows-latest/);
     assert.match(wf, /electron-builder --win --publish always/);
+    assert.match(wf, /id-token:\s*write/);
+    assert.match(wf, /azure\/login@v/);
   });
 
   it('has a dedicated macOS job that runs on macos-latest', () => {
