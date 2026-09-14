@@ -176,9 +176,59 @@ function resolveConflict(ctx, conflictId, resolution, opts) {
   return { ok: false, error: 'Unknown resolution: ' + String(resolution) };
 }
 
+/**
+ * Resolve many open conflicts with the same resolution.
+ * Never invents keep_local silently — caller must pass resolution explicitly
+ * (UI confirms Accept all remote / Keep all local / Use cloud for all).
+ *
+ * @param {object} ctx
+ * @param {'keep_local'|'accept_remote'} resolution
+ * @param {object} [opts]
+ *   - force?: boolean (required to overwrite protected locals on accept_remote)
+ *   - conflictIds?: number[] — if omitted, all open conflicts
+ * @returns {{ ok:boolean, resolved:number, blocked:number, errors:number, results:Array, remaining:number }}
+ */
+function resolveConflictsBulk(ctx, resolution, opts) {
+  const options = opts || {};
+  const force = !!options.force;
+  const open = listOpenConflicts(ctx);
+  let targets = open;
+  if (Array.isArray(options.conflictIds) && options.conflictIds.length > 0) {
+    const want = new Set(options.conflictIds.map((id) => Number(id)));
+    targets = open.filter((c) => want.has(Number(c.id)));
+  }
+
+  const results = [];
+  let resolved = 0;
+  let blocked = 0;
+  let errors = 0;
+
+  for (let i = 0; i < targets.length; i++) {
+    const c = targets[i];
+    const res = resolveConflict(ctx, c.id, resolution, { force });
+    results.push({ conflictId: c.id, attendanceId: c.attendanceId, ...res });
+    if (res && res.ok && !res.alreadyResolved) resolved += 1;
+    else if (res && res.blocked) blocked += 1;
+    else if (!res || !res.ok) errors += 1;
+  }
+
+  const remaining = listOpenConflicts(ctx).length;
+  return {
+    ok: errors === 0 && blocked === 0,
+    resolution,
+    force,
+    resolved,
+    blocked,
+    errors,
+    results,
+    remaining,
+  };
+}
+
 module.exports = {
   PROTECTED_STATUSES,
   parseSnapshot,
   listOpenConflicts,
   resolveConflict,
+  resolveConflictsBulk,
 };

@@ -100,8 +100,10 @@ describe('Healthy local + synced outbox — no panic sync chip', () => {
       lastPush: { ok: false, error: 'Network error' },
       syncHealthy: false,
     });
-    assert.match(chip.text, /not confirmed in cloud|pending/);
+    assert.match(chip.text, /not confirmed/);
+    assert.match(chip.text, /Fix sync now/);
     assert.strictEqual(chip.variant, 'offline');
+    assert.strictEqual(chip.action, 'fix_sync_now');
   });
 
   it('still surfaces empty-cloud as Cloud empty — re-upload', () => {
