@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.101",
+      "date": "2026-09-14",
+      "latest": true,
+      "changes": [
+        "Stale-device sync catch-up: after a long gap (or large version jump), pull cloud as source of truth, auto Use cloud for remote-newer conflicts, and drain pending pushes with progress UI",
+        "Sync conflicts: Accept all remote / Keep all local bulk resolve (with confirm) so solicitors are not stuck on dozens of one-by-one cards",
+        "Footer Fix sync now drains unconfirmed cloud pushes until pending/dirty clear (or honest rate-limit pause)",
+        "Builds on v1.9.100 licence honesty (Email my key / activate error surfacing) and packages sell-ready sync catch-up from PR #56"
+      ]
+    },
+    {
       "version": "1.9.100",
       "date": "2026-09-13",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Email my licence key: unmatched activated keys show an honest error with Ref (no false success toast)",
         "Activate / validate: server errors such as \u201cNo valid credentials provided\u201d are surfaced clearly",
