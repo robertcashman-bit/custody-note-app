@@ -160,6 +160,7 @@ const {
   mergeStationsPreservingMileage,
 } = require('./lib/stationMileage');
 const syncConflicts = require('./main/syncConflicts');
+const staleSyncCatchUpRunner = require('./main/staleSyncCatchUpRunner');
 const errorReporting = require('./main/errorReporting');
 const dbCrypto = require('./lib/dbCrypto');
 const { createBackupScheduler } = require('./main/backupScheduler');
@@ -6254,6 +6255,8 @@ app.whenReady().then(async () => {
   setTimeout(() => {
     startSyncTimer();
     scheduleAutoFullResyncIfEmpty();
+    // Stale-device / long-gap catch-up (cloud SoT after >7 days or large version jump).
+    try { maybeRunStaleDeviceCatchUp({ reason: 'startup' }); } catch (_) {}
   }, 8000);
   setInterval(() => {
     cleanupAccidentalDuplicateDrafts();
@@ -8391,6 +8394,31 @@ ipcMain.handle('sync-conflicts-list', () => {
   }
 });
 
+function _conflictResolveCtx() {
+  return {
+    dbGet,
+    dbRun,
+    dbAll,
+    appendAuditLog,
+    nowIso: () => new Date().toISOString(),
+  };
+}
+
+function _afterConflictResolved(result) {
+  if (!result || !result.ok || result.alreadyResolved) return;
+  try { saveDb(); } catch (saveErr) { console.error('[sync-conflict-resolve] saveDb failed:', saveErr && saveErr.message); }
+  if (result.requeue && result.attendanceId != null) {
+    try { enqueueSyncForRecord(result.attendanceId, 'upsert', { immediate: true }); } catch (_) {}
+  }
+  try { scheduleSyncSoon({ immediate: true }); } catch (_) {}
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.webContents.send('sync-status-changed', { status: 'synced' }); } catch (_) {}
+    if (result.resolution === 'accept_remote') {
+      try { mainWindow.webContents.send('records-updated-from-sync', { count: 1 }); } catch (_) {}
+    }
+  }
+}
+
 /* Resolve a single sync conflict. resolution: 'keep_local' | 'accept_remote'.
    { force: true } is required to accept remote over a protected local record. */
 ipcMain.handle('sync-conflict-resolve', (_event, params) => {
@@ -8400,34 +8428,160 @@ ipcMain.handle('sync-conflict-resolve', (_event, params) => {
     const resolution = params && params.resolution;
     const force = !!(params && params.force);
     const result = syncConflicts.resolveConflict(
-      {
-        dbGet,
-        dbRun,
-        appendAuditLog,
-        nowIso: () => new Date().toISOString(),
-      },
+      _conflictResolveCtx(),
       conflictId,
       resolution,
       { force }
     );
-    if (result.ok && !result.alreadyResolved) {
-      try { saveDb(); } catch (saveErr) { console.error('[sync-conflict-resolve] saveDb failed:', saveErr && saveErr.message); }
-      // Keeping local means the local edit must re-propagate to other devices.
-      if (result.requeue && result.attendanceId != null) {
-        try { enqueueSyncForRecord(result.attendanceId, 'upsert', { immediate: true }); } catch (_) {}
-      }
+    _afterConflictResolved(result);
+    return result;
+  } catch (e) {
+    console.error('[sync-conflict-resolve]', e && e.message ? e.message : e);
+    return { ok: false, error: e && e.message ? e.message : 'Failed to resolve conflict' };
+  }
+});
+
+/* Bulk resolve. Never silent — renderer must confirm Accept all / Keep all / Use cloud for all. */
+ipcMain.handle('sync-conflicts-resolve-bulk', (_event, params) => {
+  try {
+    if (!db) return { ok: false, error: 'Database not ready' };
+    const resolution = params && params.resolution;
+    if (resolution !== 'keep_local' && resolution !== 'accept_remote') {
+      return { ok: false, error: 'Invalid resolution' };
+    }
+    const force = !!(params && params.force);
+    const conflictIds = params && Array.isArray(params.conflictIds) ? params.conflictIds : null;
+    const result = syncConflicts.resolveConflictsBulk(
+      _conflictResolveCtx(),
+      resolution,
+      { force, conflictIds: conflictIds || undefined }
+    );
+    if (result.resolved > 0) {
+      try { saveDb(); } catch (saveErr) { console.error('[sync-conflicts-resolve-bulk] saveDb failed:', saveErr && saveErr.message); }
       try { scheduleSyncSoon({ immediate: true }); } catch (_) {}
       if (mainWindow && !mainWindow.isDestroyed()) {
         try { mainWindow.webContents.send('sync-status-changed', { status: 'synced' }); } catch (_) {}
-        if (result.resolution === 'accept_remote') {
-          try { mainWindow.webContents.send('records-updated-from-sync', { count: 1 }); } catch (_) {}
+        if (resolution === 'accept_remote') {
+          try {
+            mainWindow.webContents.send('records-updated-from-sync', { count: result.resolved });
+          } catch (_) {}
+        }
+      }
+      // keep_local bulk: re-queue each requeued attendance
+      if (resolution === 'keep_local' && Array.isArray(result.results)) {
+        for (let i = 0; i < result.results.length; i++) {
+          const r = result.results[i];
+          if (r && r.requeue && r.attendanceId != null) {
+            try { enqueueSyncForRecord(r.attendanceId, 'upsert', { immediate: true }); } catch (_) {}
+          }
         }
       }
     }
     return result;
   } catch (e) {
-    console.error('[sync-conflict-resolve]', e && e.message ? e.message : e);
-    return { ok: false, error: e && e.message ? e.message : 'Failed to resolve conflict' };
+    console.error('[sync-conflicts-resolve-bulk]', e && e.message ? e.message : e);
+    return { ok: false, error: e && e.message ? e.message : 'Bulk resolve failed' };
+  }
+});
+
+let _staleCatchUpInFlight = false;
+
+function _buildCatchUpCtx() {
+  return {
+    dbGet,
+    dbRun,
+    dbAll,
+    appendAuditLog,
+    nowIso: () => new Date().toISOString(),
+    currentAppVersion: app.getVersion() || null,
+    syncEnabled: !!getSyncApiUrl(),
+    getLastSuccessfulSyncAt: () => {
+      const ts = getLastSyncTimestamp();
+      return ts === '1970-01-01T00:00:00.000Z' ? null : ts;
+    },
+    syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
+    drainPendingSyncUploads: (opts) => drainPendingSyncUploads(opts || {}),
+    forceRetryAll: () => {
+      const w = getSyncWorker();
+      if (w) return w.forceRetryAll();
+      return 0;
+    },
+    saveDb,
+    afterResolve: _afterConflictResolved,
+    onProgress: (payload) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        try { mainWindow.webContents.send('sync-catch-up-progress', payload || {}); } catch (_) {}
+        try {
+          mainWindow.webContents.send('sync-status-changed', {
+            status: payload && payload.phase === 'done' ? 'synced' : 'syncing',
+            catchUp: payload || {},
+          });
+        } catch (_) {}
+      }
+    },
+  };
+}
+
+async function maybeRunStaleDeviceCatchUp(opts) {
+  if (_staleCatchUpInFlight) return { ok: true, ran: false, reason: 'in_flight' };
+  if (!db) return { ok: false, ran: false, error: 'Database not ready' };
+  if (!getSyncApiUrl()) {
+    staleSyncCatchUpRunner.stampSeenAppVersion(_buildCatchUpCtx());
+    return { ok: true, ran: false, reason: 'sync_disabled' };
+  }
+  _staleCatchUpInFlight = true;
+  try {
+    console.info('[Sync] Stale catch-up check', opts && opts.reason ? opts.reason : '');
+    const result = await staleSyncCatchUpRunner.runStaleDeviceCatchUp(_buildCatchUpCtx(), {
+      force: !!(opts && opts.force),
+      maxCycles: opts && opts.maxCycles,
+    });
+    if (result && result.ran) {
+      console.info('[Sync] Stale catch-up finished', {
+        reason: result.reason,
+        autoAccepted: result.resolveResult && result.resolveResult.accepted,
+        needsHuman: result.needsHuman ? result.needsHuman.length : 0,
+        code: result.code || null,
+      });
+    }
+    return result;
+  } catch (e) {
+    console.error('[Sync] Stale catch-up failed:', e && e.message ? e.message : e);
+    return { ok: false, ran: true, error: e && e.message ? e.message : 'Catch-up failed' };
+  } finally {
+    _staleCatchUpInFlight = false;
+  }
+}
+
+ipcMain.handle('sync-stale-catch-up', async (_event, params) => {
+  return maybeRunStaleDeviceCatchUp({
+    force: !!(params && params.force),
+    reason: 'ipc',
+  });
+});
+
+ipcMain.handle('sync-fix-now', async () => {
+  try {
+    if (!db) return { ok: false, error: 'Database not ready' };
+    migrateSyncDirtyToQueue();
+    const result = await staleSyncCatchUpRunner.runFixSyncNow(_buildCatchUpCtx(), { maxCycles: 40 });
+    try { scheduleSyncSoon({ immediate: true }); } catch (_) {}
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try { mainWindow.webContents.send('sync-status-changed', { status: result.ok ? 'synced' : 'error' }); } catch (_) {}
+    }
+    return result;
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Fix sync failed' };
+  }
+});
+
+ipcMain.handle('sync-catch-up-banner-consume', () => {
+  try {
+    if (!db) return { ok: true, banner: null };
+    const banner = staleSyncCatchUpRunner.consumeCatchUpBanner({ dbGet, dbRun, saveDb });
+    return { ok: true, banner };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : 'Banner consume failed', banner: null };
   }
 });
 
