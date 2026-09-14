@@ -301,6 +301,23 @@
                   <button type="button" id="home-empty-cloud-alarm-settings" class="btn btn-secondary btn-small">Open Settings</button>
                 </div>
               </div>
+              <div id="home-sync-catch-up-banner" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#ecfdf5,#f0fdf4);border:1px solid #86efac;">
+                <div style="display:flex;align-items:flex-start;gap:0.65rem;">
+                  <div style="flex:1;">
+                    <p style="margin:0;font-weight:600;font-size:0.9rem;color:#166534;">Caught up with other devices</p>
+                    <p id="home-sync-catch-up-banner-body" style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#14532d;line-height:1.4;">This computer was behind after a long gap. Cloud changes have been applied and pending uploads finished.</p>
+                  </div>
+                  <button type="button" id="home-sync-catch-up-banner-dismiss" class="btn btn-secondary btn-small">Dismiss</button>
+                </div>
+              </div>
+              <div id="home-sync-catch-up-progress" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#eff6ff,#f8fafc);border:1px solid #93c5fd;">
+                <div style="display:flex;align-items:flex-start;gap:0.65rem;">
+                  <div style="flex:1;">
+                    <p style="margin:0;font-weight:600;font-size:0.9rem;color:#1e40af;">Sync catch-up in progress</p>
+                    <p id="home-sync-catch-up-progress-body" style="margin:0.25rem 0 0 0;font-size:0.8rem;color:#1e3a8a;line-height:1.4;">Pulling cloud and uploading pending records…</p>
+                  </div>
+                </div>
+              </div>
               <div id="home-backup-degraded" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#fff7ed,#fffbeb);border:1px solid #f59e0b;">
                 <div style="display:flex;align-items:flex-start;gap:0.65rem;">
                   <div style="flex:1;">

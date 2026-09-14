@@ -453,12 +453,17 @@ contextBridge.exposeInMainWorld('api', {
   syncForceRetry: () => ipcRenderer.invoke('sync-force-retry'),
   syncConflictsList: () => ipcRenderer.invoke('sync-conflicts-list'),
   syncConflictResolve: (params) => ipcRenderer.invoke('sync-conflict-resolve', params),
+  syncConflictsResolveBulk: (params) => ipcRenderer.invoke('sync-conflicts-resolve-bulk', params),
+  syncStaleCatchUp: (params) => ipcRenderer.invoke('sync-stale-catch-up', params || {}),
+  syncFixNow: () => ipcRenderer.invoke('sync-fix-now'),
+  syncCatchUpBannerConsume: () => ipcRenderer.invoke('sync-catch-up-banner-consume'),
   /* Lightweight, PII-redacted (main-side) crash/error reporting sink. */
   reportClientError: (payload) => ipcRenderer.invoke('report-client-error', payload),
   onSyncStatusChanged: (cb) => ipcRenderer.on('sync-status-changed', (_, data) => cb(data)),
   onSyncPullWarning: (cb) => ipcRenderer.on('sync-pull-warning', (_, data) => cb(data)),
   onRecordsUpdatedFromSync: (cb) => ipcRenderer.on('records-updated-from-sync', (_, data) => cb(data)),
   onSyncConflictsDetected: (cb) => ipcRenderer.on('sync-conflicts-detected', (_, data) => cb(data)),
+  onSyncCatchUpProgress: (cb) => ipcRenderer.on('sync-catch-up-progress', (_, data) => cb(data)),
   /* Auto-update */
   onAppUpdateStatus: (cb) => ipcRenderer.on('app-update-status', (_, data) => cb(data)),
   appUpdateInstall: () => ipcRenderer.invoke('app-update-install'),

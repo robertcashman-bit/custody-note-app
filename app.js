@@ -3562,6 +3562,79 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   var _syncConflictsModalOpen = false;
+  var _fixSyncNowInFlight = false;
+
+  function showSyncCatchUpProgress(payload) {
+    var el = document.getElementById('home-sync-catch-up-progress');
+    var body = document.getElementById('home-sync-catch-up-progress-body');
+    if (!el) return;
+    var phase = payload && payload.phase;
+    if (!phase || phase === 'done' || phase === 'needs_human' || phase === 'error' || phase === 'incomplete') {
+      if (phase === 'paused_rate_limit') {
+        el.style.display = '';
+        if (body) body.textContent = (payload && payload.message) || 'Safe locally — sync waiting on rate limit.';
+        return;
+      }
+      if (phase === 'needs_human' || phase === 'incomplete' || phase === 'error') {
+        el.style.display = '';
+        if (body) body.textContent = (payload && payload.message) || 'Catch-up needs attention.';
+        return;
+      }
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    if (body) body.textContent = (payload && payload.message) || 'Sync catch-up in progress…';
+  }
+
+  function showSyncCatchUpBanner(message) {
+    var el = document.getElementById('home-sync-catch-up-banner');
+    var body = document.getElementById('home-sync-catch-up-banner-body');
+    if (!el) return;
+    el.style.display = '';
+    if (body && message) body.textContent = message;
+  }
+
+  function hideSyncCatchUpBanner() {
+    var el = document.getElementById('home-sync-catch-up-banner');
+    if (el) el.style.display = 'none';
+  }
+
+  function runFixSyncNow() {
+    if (_fixSyncNowInFlight) return;
+    if (!window.api || !window.api.syncFixNow) {
+      showToast('Fix sync is not available in this build.', 'error');
+      return;
+    }
+    _fixSyncNowInFlight = true;
+    showSyncCatchUpProgress({ phase: 'pushing', message: 'Fixing sync — uploading pending records…' });
+    window.api.syncFixNow().then(function(res) {
+      if (res && res.code === 'RATE_LIMITED') {
+        showToast('Safe locally — sync paused briefly (rate limit). Nothing was dropped.', 'info', 6000);
+        showSyncCatchUpProgress({
+          phase: 'paused_rate_limit',
+          message: 'Safe locally — cloud sync waiting on rate limit. Will resume automatically.',
+        });
+      } else if (res && res.ok) {
+        showToast('All pending records confirmed in cloud.', 'success');
+        showSyncCatchUpProgress({ phase: 'done' });
+      } else {
+        var left = ((res && res.dirtyRemaining) || 0) + ((res && res.pendingRemaining) || 0);
+        showToast((res && res.error) || ('Sync still has ' + left + ' pending — try again shortly.'), 'warning', 6000);
+        showSyncCatchUpProgress({
+          phase: 'incomplete',
+          message: (res && res.error) || ((left || 0) + ' still waiting to confirm in cloud.'),
+        });
+      }
+      try { refreshSyncCounts(); } catch (_) {}
+    }).catch(function(e) {
+      console.error('[syncFixNow]', e);
+      showToast('Could not fix sync.', 'error');
+      showSyncCatchUpProgress({ phase: 'error', message: 'Could not fix sync.' });
+    }).finally(function() {
+      _fixSyncNowInFlight = false;
+    });
+  }
 
   function openSyncConflictsView() {
     if (_syncConflictsModalOpen) return;
@@ -3599,9 +3672,9 @@ var REQUIRED_FIELD_KEYS = [
         '<h3 style="margin:0;font-size:1.1rem;">Sync conflicts</h3>' +
         '<button type="button" class="btn btn-secondary" id="cn-conflicts-close" aria-label="Close">Close</button>' +
         '</div>' +
-        '<p style="margin:0 0 14px;font-size:13px;color:#64748b;">' +
+        '<p style="margin:0 0 10px;font-size:13px;color:#64748b;">' +
         'Another device sent changes that could not be applied automatically. Your local edits are safe. ' +
-        'Choose what to keep for each record.</p>';
+        'Choose what to keep for each record, or use bulk actions below.</p>';
 
       if (!conflicts || !conflicts.length) {
         html += '<div style="padding:24px;text-align:center;color:#16a34a;font-size:14px;">' +
@@ -3611,10 +3684,23 @@ var REQUIRED_FIELD_KEYS = [
         return;
       }
 
-      conflicts.forEach(function(c) {
+      var multi = conflicts.length > 1;
+      html += '' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">' +
+          '<span style="font-size:12px;color:#475569;align-self:center;margin-right:4px;">' +
+            esc(String(conflicts.length)) + ' open</span>' +
+          '<button type="button" class="btn btn-secondary" id="cn-conflicts-accept-all">Accept all remote</button>' +
+          '<button type="button" class="btn btn-secondary" id="cn-conflicts-keep-all">Keep all local</button>' +
+          (multi
+            ? '<button type="button" class="btn btn-primary" id="cn-conflicts-use-cloud-all">Use cloud for all remaining</button>'
+            : '') +
+        '</div>';
+
+      conflicts.forEach(function(c, idx) {
         var L = _conflictSnapshotFields(c.local);
         var R = _conflictSnapshotFields(c.remote);
         var protectedLocal = c.currentLocalStatus === 'finalised' || c.currentLocalStatus === 'completed';
+        var dirtyLocal = c.reason === 'preserve_local_dirty';
         html += '' +
           '<div class="cn-conflict-card" data-id="' + esc(String(c.id)) + '" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff;">' +
             '<div style="font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:5px 8px;margin-bottom:10px;">' +
@@ -3622,27 +3708,68 @@ var REQUIRED_FIELD_KEYS = [
             '</div>' +
             '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
               '<div>' +
-                '<div style="font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px;">This device (local)</div>' +
+                '<div style="font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px;">This PC (local)</div>' +
                 _conflictColHtml(L, c.currentLocalStatus || L.status) +
               '</div>' +
               '<div>' +
-                '<div style="font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px;">Other device (remote)</div>' +
+                '<div style="font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px;">Cloud (other devices)</div>' +
                 _conflictColHtml(R, R.status) +
               '</div>' +
             '</div>' +
             (protectedLocal
               ? '<div style="font-size:11.5px;color:#7c2d12;margin-top:8px;">This record is <strong>' + esc(c.currentLocalStatus) + '</strong> locally. Accepting remote will ask you to confirm.</div>'
               : '') +
+            (dirtyLocal
+              ? '<div style="font-size:11.5px;color:#1e3a8a;margin-top:8px;">This PC has unsynced edits and the cloud also changed this record.</div>'
+              : '') +
             '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
               '<button type="button" class="btn btn-secondary cn-conflict-open" data-att="' + esc(String(c.attendanceId)) + '">Open record</button>' +
-              '<button type="button" class="btn btn-secondary cn-conflict-accept" data-id="' + esc(String(c.id)) + '">Accept remote</button>' +
-              '<button type="button" class="btn btn-primary cn-conflict-keep" data-id="' + esc(String(c.id)) + '">Keep local</button>' +
+              '<button type="button" class="btn btn-secondary cn-conflict-accept" data-id="' + esc(String(c.id)) + '">Use cloud</button>' +
+              '<button type="button" class="btn btn-primary cn-conflict-keep" data-id="' + esc(String(c.id)) + '">Keep this PC</button>' +
+              (multi && idx === 0
+                ? '<button type="button" class="btn btn-secondary cn-conflict-use-cloud-remaining">Use cloud for all remaining</button>'
+                : '') +
             '</div>' +
           '</div>';
       });
 
       box.innerHTML = html;
       box.querySelector('#cn-conflicts-close').addEventListener('click', close);
+
+      var acceptAllBtn = box.querySelector('#cn-conflicts-accept-all');
+      if (acceptAllBtn) {
+        acceptAllBtn.addEventListener('click', function() {
+          var ok = window.confirm(
+            'Accept the cloud version for all ' + conflicts.length +
+            ' conflict(s)?\n\nThis overwrites local copies where they differ, including finalised/completed records if the cloud version differs. This cannot be undone from this screen.'
+          );
+          if (!ok) return;
+          resolveBulk('accept_remote', true);
+        });
+      }
+      var keepAllBtn = box.querySelector('#cn-conflicts-keep-all');
+      if (keepAllBtn) {
+        keepAllBtn.addEventListener('click', function() {
+          var ok = window.confirm(
+            'Keep the local version for all ' + conflicts.length +
+            ' conflict(s)?\n\nLocal copies will re-sync to other devices and may overwrite newer cloud edits.'
+          );
+          if (!ok) return;
+          resolveBulk('keep_local', false);
+        });
+      }
+      function bindUseCloudAll(btn) {
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+          var ok = window.confirm(
+            'Use the cloud version for all remaining conflicts?\n\nLocal unsynced edits on those records will be replaced by the cloud copy.'
+          );
+          if (!ok) return;
+          resolveBulk('accept_remote', true);
+        });
+      }
+      bindUseCloudAll(box.querySelector('#cn-conflicts-use-cloud-all'));
+      bindUseCloudAll(box.querySelector('.cn-conflict-use-cloud-remaining'));
 
       Array.prototype.forEach.call(box.querySelectorAll('.cn-conflict-open'), function(btn) {
         btn.addEventListener('click', function() {
@@ -3660,6 +3787,48 @@ var REQUIRED_FIELD_KEYS = [
       });
     }
 
+    function resolveBulk(resolution, force) {
+      if (!window.api.syncConflictsResolveBulk) {
+        showToast('Bulk conflict resolve is not available in this build.', 'error');
+        return;
+      }
+      box.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
+      window.api.syncConflictsResolveBulk({ resolution: resolution, force: !!force })
+        .then(function(res) {
+          if (!res) {
+            showToast('Could not resolve conflicts.', 'error');
+            load();
+            return;
+          }
+          if (res.blocked > 0 && resolution === 'accept_remote' && !force) {
+            var ok = window.confirm(
+              (res.blocked || 0) + ' protected record(s) need explicit confirmation to accept the cloud version. Continue and overwrite them?'
+            );
+            if (ok) return resolveBulk(resolution, true);
+          }
+          if (res.resolved > 0) {
+            showToast(
+              (resolution === 'accept_remote' ? 'Applied cloud version to ' : 'Kept local version for ') +
+              res.resolved + ' record(s).',
+              'success'
+            );
+            try { loadHomeRecent(); } catch (_) {}
+            try { refreshList(); } catch (_) {}
+          }
+          if (res.errors > 0) {
+            showToast('Some conflicts could not be resolved.', 'warning');
+          }
+          try { refreshSyncCounts(); } catch (_) {}
+          if (res.remaining === 0) close();
+          else load();
+        })
+        .catch(function(e) {
+          console.error('[conflict-resolve-bulk]', e);
+          showToast('Could not resolve conflicts.', 'error');
+          load();
+        });
+    }
+
     function resolve(conflictId, resolution, force) {
       if (!conflictId || !window.api.syncConflictResolve) return;
       window.api.syncConflictResolve({ conflictId: conflictId, resolution: resolution, force: !!force })
@@ -3675,7 +3844,7 @@ var REQUIRED_FIELD_KEYS = [
             return;
           }
           if (resolution === 'accept_remote') {
-            showToast('Remote version applied.' + (res.forced ? ' (Protected record overwritten.)' : ''), 'success');
+            showToast('Cloud version applied.' + (res.forced ? ' (Protected record overwritten.)' : ''), 'success');
             try { loadHomeRecent(); } catch (_) {}
             try { refreshList(); } catch (_) {}
           } else {
@@ -16791,19 +16960,55 @@ pdfAuditFooterHtml(d, settings) +
       syncInd.addEventListener('click', function() {
         var txt = (syncInd.textContent || '');
         if (txt.indexOf('conflict') !== -1) { openSyncConflictsView(); return; }
+        if (txt.indexOf('Fix sync now') !== -1 || txt.indexOf('not confirmed') !== -1) {
+          runFixSyncNow();
+          return;
+        }
         if (txt.indexOf('decrypt failed') !== -1) {
           showView('settings');
           var backupTab = document.querySelector('.settings-tab[data-stab="backup"]');
           if (backupTab) backupTab.click();
           return;
         }
-        if (txt.indexOf('blocked') === -1 && txt.indexOf('retrying') === -1) return;
+        if (txt.indexOf('blocked') === -1 && txt.indexOf('retrying') === -1 && txt.indexOf('auto-retrying') === -1) return;
         if (!window.api || !window.api.syncForceRetry) return;
         window.api.syncForceRetry().then(function(res) {
           showToast('Retrying sync: ' + (res.recovered || 0) + ' item(s)', 'info');
           refreshSyncCounts();
         }).catch(function(e) { console.error('[syncForceRetry]', e); });
       });
+    }
+
+    if (window.api && window.api.onSyncCatchUpProgress) {
+      window.api.onSyncCatchUpProgress(function(payload) {
+        showSyncCatchUpProgress(payload || {});
+        if (payload && payload.phase === 'done') {
+          showSyncCatchUpBanner(payload.message || 'Caught up with other devices.');
+          try { refreshSyncCounts(); } catch (_) {}
+          try { loadHomeRecent(); } catch (_) {}
+        } else if (payload && payload.phase === 'needs_human') {
+          try { refreshSyncCounts(); } catch (_) {}
+          showToast(payload.message || 'Some records need a sync choice.', 'info', 7000);
+        }
+      });
+    }
+
+    document.getElementById('home-sync-catch-up-banner-dismiss')?.addEventListener('click', function() {
+      hideSyncCatchUpBanner();
+      if (window.api && window.api.syncCatchUpBannerConsume) {
+        window.api.syncCatchUpBannerConsume().catch(function() {});
+      }
+    });
+
+    // Surface catch-up banner if main already finished before renderer loaded.
+    if (window.api && window.api.syncCatchUpBannerConsume) {
+      setTimeout(function() {
+        window.api.syncCatchUpBannerConsume().then(function(res) {
+          if (res && res.banner) {
+            showSyncCatchUpBanner(res.banner.message || 'Caught up with other devices.');
+          }
+        }).catch(function() {});
+      }, 2500);
     }
 
     document.getElementById('btn-create-desktop-shortcut')?.addEventListener('click', function() {
