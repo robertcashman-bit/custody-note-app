@@ -2664,7 +2664,10 @@ function getLastVerifiedCloudSyncIds() {
 
 function setLastVerifiedCloudSyncIds(ids) {
   if (!db) return;
-  if (!Array.isArray(ids) || ids.length === 0) {
+  // Non-array clears. Empty array must persist as [] (proven-empty id set),
+  // not DELETE — otherwise getLastVerifiedCloudSyncIds returns null and
+  // integrity treats it as "never pulled", disabling localOnly checks.
+  if (!Array.isArray(ids)) {
     try { dbRun('DELETE FROM settings WHERE key=?', [SETTINGS_CLOUD_SYNC_IDS]); } catch (_) {}
     return;
   }
