@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.102",
+      "version": "1.9.103",
       "date": "2026-09-15",
       "latest": true,
+      "changes": [
+        "Fix sync: clear thrash backoff on pending outbox (not only failed/blocked) and scan due queue items beyond the oldest 20 — so already-cloud written:0 reconcile actually runs after Full re-sync",
+        "Empty-write reconcile confirms per sync_id in the cloud id set (partial batches) instead of failing the whole HTTP batch when one id is missing",
+        "Integrity counts soft-deleted local-only sync_ids; pulls flush lastVerifiedCloudSyncIds even when inventory count is unchanged",
+        "Heals Robsprgr 1.9.102 miss: cloudSyncIdCount 114 + localOnly 0 still left Fix sync UPLOAD_INCOMPLETE with dirty/queue stuck"
+      ]
+    },
+    {
+      "version": "1.9.102",
+      "date": "2026-09-15",
+      "latest": false,
       "changes": [
         "Sync: when integrity proves cloud already holds pushed sync_ids and push returns written:0 (already-present / empty write), dequeue outbox and clear dirty — ends the fake “N not confirmed” footer after Full re-sync",
         "Pending uploads count unique cases (no dirty+queue double-count); Fix sync now remains the preferred heal (not Re-upload all)",

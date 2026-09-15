@@ -51,6 +51,7 @@ const {
   isEmptyWritePushResponse,
   shouldConfirmAlreadyPresent,
   ackMetaForAlreadyPresent,
+  partitionOutboxForReconcile,
 } = require('../lib/staleOutboxReconcile');
 const {
   SYNC_SKIP_REASONS,
@@ -362,7 +363,12 @@ function createSyncWorker(ctx) {
     }
   }
 
-  /** Get next queue item ready to process (pending or retry due) */
+  /** Get next queue item ready to process (pending or retry due).
+   *  Must scan beyond the oldest PUSH_HTTP_BATCH_SIZE rows: after thrash,
+   *  oldest pending often have retry backoff while newer migrate/retry rows
+   *  are immediately due. LIMIT-before-due-filter left Fix sync with 0 pushes
+   *  (Robsprgr 1.9.102: cloud ids present, written:0 path never reached).
+   */
   function getNextQueueItem() {
     if (!ctx.db) return null;
     const now = Date.now();
@@ -370,7 +376,7 @@ function createSyncWorker(ctx) {
       `SELECT id, record_id, operation, payload, retry_count, last_attempt, status, created_at
        FROM sync_queue
        WHERE status = 'pending'
-       ORDER BY created_at ASC LIMIT 20`
+       ORDER BY created_at ASC LIMIT 500`
     );
     for (const row of rows || []) {
       const nextMs = getNextAttemptMs(row.retry_count || 0);
@@ -488,8 +494,10 @@ function createSyncWorker(ctx) {
       assertPushAccepted(resp, payloads.length, { expectedSyncIds });
       return { payloads, resp };
     } catch (e) {
-      // Empty-write (written:0): if integrity proves every pushed syncId is
-      // already in cloud, treat as confirmed — do not leave a fake backlog.
+      // Empty-write (written:0): confirm per syncId proven present in cloud.
+      // Partial batches (mixed already-cloud + local-only) must clear the
+      // proven subset — all-or-nothing left Fix sync stuck when one missing
+      // id blocked the whole HTTP batch (soft-deleted localOnly gap class).
       if (
         e &&
         e.code === 'PUSH_INCOMPLETE' &&
@@ -502,30 +510,57 @@ function createSyncWorker(ctx) {
         } catch (_) {
           proof = null;
         }
-        const decision = shouldConfirmAlreadyPresent({
-          resp,
-          sentCount: payloads.length,
-          pushedSyncIds: expectedSyncIds,
-          cloudSyncIds: proof && proof.cloudSyncIds,
-          localOnly: proof && proof.localOnly,
-          cloudEmptyProven: !!(proof && proof.cloudEmptyProven),
-          cloudInventoryCount: proof && proof.cloudInventoryCount,
-          discrepancies: proof && proof.discrepancies,
-        });
-        if (decision.confirm) {
-          try {
-            console.info('[SYNC-RECONCILE] empty-write already-present', {
-              confirmedCount: decision.confirmedCount,
-              reason: decision.reason,
-              inventory: proof && proof.cloudInventoryCount,
+        if (proof && proof.cloudEmptyProven) {
+          throw e;
+        }
+        const cloudIds = proof && Array.isArray(proof.cloudSyncIds) ? proof.cloudSyncIds : null;
+        if (cloudIds && cloudIds.length > 0) {
+          const parts = partitionOutboxForReconcile({
+            candidates: payloads.map((p) => ({
+              payload: p,
+              syncId: p && p.record ? p.record.syncId : null,
+            })),
+            cloudSyncIds: cloudIds,
+          });
+          if (parts.confirmable.length > 0) {
+            // Prefer whole-batch confirm when every sent id is covered (same
+            // gate as shouldConfirmAlreadyPresent) — else partial clear.
+            const decision = shouldConfirmAlreadyPresent({
+              resp,
+              sentCount: payloads.length,
+              pushedSyncIds: expectedSyncIds,
+              cloudSyncIds: cloudIds,
+              localOnly: null, // per-id partition already scopes confirmable set
+              cloudEmptyProven: false,
+              cloudInventoryCount: proof && proof.cloudInventoryCount,
+              discrepancies: [],
             });
-          } catch (_) {}
-          return {
-            payloads,
-            resp,
-            alreadyPresentConfirmed: true,
-            reconcileReason: decision.reason,
-          };
+            const confirmPayloads = decision.confirm
+              ? payloads
+              : parts.confirmable.map((c) => c.payload);
+            const retainPayloads = decision.confirm
+              ? []
+              : parts.retain.map((c) => c.payload);
+            try {
+              console.info('[SYNC-RECONCILE] empty-write already-present', {
+                confirmedCount: confirmPayloads.length,
+                retainedCount: retainPayloads.length,
+                reason: decision.confirm
+                  ? decision.reason
+                  : 'partial_already_present_in_cloud',
+                inventory: proof && proof.cloudInventoryCount,
+              });
+            } catch (_) {}
+            return {
+              payloads: confirmPayloads,
+              retainPayloads,
+              resp,
+              alreadyPresentConfirmed: true,
+              reconcileReason: decision.confirm
+                ? decision.reason
+                : 'partial_already_present_in_cloud',
+            };
+          }
         }
       }
       throw e;
@@ -551,6 +586,9 @@ function createSyncWorker(ctx) {
       try {
         const batchResult = await pushRecordBatch(items);
         const payloads = batchResult.payloads || batchResult;
+        const retainPayloads = Array.isArray(batchResult.retainPayloads)
+          ? batchResult.retainPayloads
+          : [];
         const resp = batchResult.resp || { ok: true, written: payloads.length };
         const alreadyPresent = !!batchResult.alreadyPresentConfirmed;
         const writtenIds = Array.isArray(resp.written)
@@ -585,6 +623,15 @@ function createSyncWorker(ctx) {
             ackMeta
           );
           if (cleared !== false) totalProcessed++;
+        }
+        // Partial already-present: keep unproven ids pending for a real write.
+        for (const payload of retainPayloads) {
+          if (!payload || !payload.queueId) continue;
+          markFailed(
+            payload.queueId,
+            new Error('Push empty-write: syncId not proven in cloud id set'),
+            true
+          );
         }
         _lastSyncAt = new Date().toISOString();
         _lastSuccessfulPushAt = Date.now();
@@ -1212,18 +1259,22 @@ function createSyncWorker(ctx) {
     };
   }
 
-  /** Force-retry all failed and blocked items by resetting them to pending. */
+  /**
+   * Force-retry outbox items by resetting them to pending with no backoff.
+   * Includes pending/syncing (not only failed/blocked): Fix sync / drain must
+   * clear thrash backoff so empty-write reconcile can run this session.
+   * last_attempt=0 makes retry_count=0 rows immediately due.
+   */
   function forceRetryAll() {
     if (!ctx.db) return 0;
-    const now = Date.now();
     try {
       const stuck = ctx.dbAll(
-        "SELECT id FROM sync_queue WHERE status IN ('failed','blocked')"
+        "SELECT id FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')"
       ) || [];
       for (const row of stuck) {
         ctx.dbRun(
           'UPDATE sync_queue SET status=?, retry_count=0, last_attempt=?, error=NULL WHERE id=?',
-          ['pending', now, row.id]
+          ['pending', 0, row.id]
         );
       }
       if (stuck.length > 0) ctx.flushDb && ctx.flushDb();

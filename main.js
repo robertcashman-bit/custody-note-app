@@ -3609,6 +3609,7 @@ async function syncPull(opts) {
     pulledFromEpoch: pullStartedFromEpoch,
     receivedCount,
   });
+  const cloudIdsBefore = getLastVerifiedCloudSyncIds();
   const cloudSyncIds = persistCloudSyncIdsAfterPull({
     pulledIds: pulledSyncIds,
     pulledFromEpoch: pullStartedFromEpoch,
@@ -3618,6 +3619,9 @@ async function syncPull(opts) {
   const inventoryWritten =
     (pullStartedFromEpoch || receivedCount > 0) &&
     cloudInventory !== inventoryBefore;
+  const cloudIdsWritten =
+    (pullStartedFromEpoch || receivedCount > 0) &&
+    JSON.stringify(cloudIdsBefore || null) !== JSON.stringify(cloudSyncIds || null);
 
   const correlationId = opts && opts.correlationId;
   logSyncAttempt(
@@ -3632,9 +3636,9 @@ async function syncPull(opts) {
 
   if (merged > 0 || conflicts > 0) {
     saveDb();
-  } else if (inventoryWritten) {
-    // Empty from-epoch (or inventory-clearing) pulls merge nothing — flush now
-    // so lastVerifiedCloudInventory survives a crash before the 30s debounce.
+  } else if (inventoryWritten || cloudIdsWritten) {
+    // Empty from-epoch / inventory-or-id-set updates merge nothing — flush now
+    // so lastVerifiedCloudInventory + lastVerifiedCloudSyncIds survive a crash.
     flushDbSync();
   }
   return {
