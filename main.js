@@ -102,6 +102,28 @@ if (IS_PORTABLE_BUILD) {
   app.setPath('userData', PORTABLE_USERDATA_PATH);
 }
 
+/* Windows NSIS + Microsoft Store (AppX/MSIX) coexistence:
+ * Force the classic %APPDATA%\custody-note profile so Store installs never
+ * present an empty package-local DB while NSIS data already exists.
+ * Must run before any other userData reads. See lib/windowsPackageChannel.js. */
+const windowsPackageChannel = require('./lib/windowsPackageChannel');
+const WINDOWS_USERDATA_RESOLUTION = windowsPackageChannel.applySharedWindowsUserData(app, {
+  isPackaged: app.isPackaged,
+  isPortable: IS_PORTABLE_BUILD,
+  windowsStore: !!(typeof process !== 'undefined' && process.windowsStore),
+  execPath: process.execPath,
+  log: (msg) => console.info(msg),
+});
+const WINDOWS_PACKAGE_CHANNEL =
+  (WINDOWS_USERDATA_RESOLUTION && WINDOWS_USERDATA_RESOLUTION.channel) ||
+  windowsPackageChannel.detectWindowsPackageChannel({
+    isPackaged: app.isPackaged,
+    isPortable: IS_PORTABLE_BUILD,
+    windowsStore: !!(typeof process !== 'undefined' && process.windowsStore),
+    execPath: process.execPath,
+  });
+const IS_MSIX_STORE_BUILD = windowsPackageChannel.isMsixChannel(WINDOWS_PACKAGE_CHANNEL);
+
 const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
@@ -6048,7 +6070,7 @@ app.on('second-instance', () => {
 
 app.whenReady().then(async () => {
   _bootMark('whenReady');
-  console.log(`[Startup] Custody Note v${app.getVersion()} â€” packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}`);
+  console.log(`[Startup] Custody Note v${app.getVersion()} â€” packaged=${app.isPackaged}, platform=${process.platform}, arch=${process.arch}, portable=${IS_PORTABLE_BUILD}, channel=${WINDOWS_PACKAGE_CHANNEL}`);
   /* Extra startup diagnostics. Deliberately NOTHING client-sensitive: no
      custody data, no client identifiers, no licence key, no email body — only
      existence flags / paths so the support trail can verify the desktop app
@@ -6056,13 +6078,15 @@ app.whenReady().then(async () => {
      local data store is in the expected place. */
   try {
     const userDataDir = app.getPath('userData');
-    const dbExpected = path.join(userDataDir, 'app.db');
+    const dbExpected = path.join(userDataDir, 'attendances.db');
     const dbExists = (() => { try { return fs.existsSync(dbExpected); } catch (_) { return false; } })();
     const isOnline = (() => {
       try { return require('electron').net.isOnline ? require('electron').net.isOnline() : null; } catch (_) { return null; }
     })();
     console.log('[Startup] userData=' + userDataDir
-      + ' dbExists=' + dbExists
+      + ' attendancesDbExists=' + dbExists
+      + ' winUserDataApplied=' + !!(WINDOWS_USERDATA_RESOLUTION && WINDOWS_USERDATA_RESOLUTION.applied)
+      + ' winUserDataReason=' + ((WINDOWS_USERDATA_RESOLUTION && WINDOWS_USERDATA_RESOLUTION.resolved && WINDOWS_USERDATA_RESOLUTION.resolved.reason) || (WINDOWS_USERDATA_RESOLUTION && WINDOWS_USERDATA_RESOLUTION.reason) || 'n/a')
       + ' online=' + (isOnline === null ? 'unknown' : isOnline ? 'true' : 'false')
       + ' E2E=' + (process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1' ? 'skip-licence' : 'normal'));
   } catch (e) {
@@ -6123,6 +6147,8 @@ app.whenReady().then(async () => {
       }
     },
     isPortableBuild: IS_PORTABLE_BUILD,
+    isMsixStoreBuild: IS_MSIX_STORE_BUILD,
+    windowsPackageChannel: WINDOWS_PACKAGE_CHANNEL,
   });
 
   ipcMain.handle('app-check-updates', () => updaterController.checkForUpdates({ source: 'manual-ipc', force: true }));

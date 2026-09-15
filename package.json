@@ -40,6 +40,8 @@
     "inventory:sync-storage": "node scripts/inventory-sync-storage.mjs",
     "test:deep": "node --test tests/deepAudit.test.js",
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
+    "validate:msix": "node scripts/validate-msix-config.mjs",
+    "build:msix:assets": "node scripts/build-msix-assets.mjs",
     "prepare-trial": "node scripts/prepare-trial.js",
     "capture-screenshots": "node scripts/capture-screenshots.js",
     "capture:marketing-demo": "node scripts/capture-marketing-demo-screens.mjs",
@@ -54,7 +56,7 @@
     "verify:mac:cert": "security find-identity -v -p codesigning",
     "start:mac": "electron ."
   },
-  "author": "",
+  "author": "DEFENCELEGALSERVICES LIMITED",
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -91,7 +93,33 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "appx",
+          "arch": [
+            "x64"
+          ]
         }
+      ]
+    },
+    "appx": {
+      "identityName": "DefenceLegalServices.CustodyNote",
+      "applicationId": "CustodyNote",
+      "publisher": "CN=DEFENCELEGALSERVICES LIMITED",
+      "publisherDisplayName": "DEFENCELEGALSERVICES LIMITED",
+      "displayName": "Custody Note",
+      "languages": [
+        "en-GB",
+        "en-US"
+      ],
+      "backgroundColor": "#0f172a",
+      "showNameOnTiles": true,
+      "setBuildNumber": true,
+      "electronUpdaterAware": false,
+      "artifactName": "Custody-Note-${version}.msix",
+      "capabilities": [
+        "runFullTrust",
+        "internetClient"
       ]
     },
     "mac": {
