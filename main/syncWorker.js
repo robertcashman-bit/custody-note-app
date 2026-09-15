@@ -48,6 +48,11 @@ const {
   isAmbiguousPushAck,
 } = require('../lib/syncMutationId');
 const {
+  isEmptyWritePushResponse,
+  shouldConfirmAlreadyPresent,
+  ackMetaForAlreadyPresent,
+} = require('../lib/staleOutboxReconcile');
+const {
   SYNC_SKIP_REASONS,
   buildCycleHeartbeat,
   isHardSkipReason,
@@ -479,8 +484,52 @@ function createSyncWorker(ctx) {
     const expectedSyncIds = payloads
       .map((p) => p && p.record && p.record.syncId)
       .filter(Boolean);
-    assertPushAccepted(resp, payloads.length, { expectedSyncIds });
-    return { payloads, resp };
+    try {
+      assertPushAccepted(resp, payloads.length, { expectedSyncIds });
+      return { payloads, resp };
+    } catch (e) {
+      // Empty-write (written:0): if integrity proves every pushed syncId is
+      // already in cloud, treat as confirmed — do not leave a fake backlog.
+      if (
+        e &&
+        e.code === 'PUSH_INCOMPLETE' &&
+        isEmptyWritePushResponse(resp, payloads.length) &&
+        typeof ctx.getCloudPresenceProof === 'function'
+      ) {
+        let proof = null;
+        try {
+          proof = ctx.getCloudPresenceProof({ syncIds: expectedSyncIds }) || null;
+        } catch (_) {
+          proof = null;
+        }
+        const decision = shouldConfirmAlreadyPresent({
+          resp,
+          sentCount: payloads.length,
+          pushedSyncIds: expectedSyncIds,
+          cloudSyncIds: proof && proof.cloudSyncIds,
+          localOnly: proof && proof.localOnly,
+          cloudEmptyProven: !!(proof && proof.cloudEmptyProven),
+          cloudInventoryCount: proof && proof.cloudInventoryCount,
+          discrepancies: proof && proof.discrepancies,
+        });
+        if (decision.confirm) {
+          try {
+            console.info('[SYNC-RECONCILE] empty-write already-present', {
+              confirmedCount: decision.confirmedCount,
+              reason: decision.reason,
+              inventory: proof && proof.cloudInventoryCount,
+            });
+          } catch (_) {}
+          return {
+            payloads,
+            resp,
+            alreadyPresentConfirmed: true,
+            reconcileReason: decision.reason,
+          };
+        }
+      }
+      throw e;
+    }
   }
 
   /**
@@ -503,27 +552,38 @@ function createSyncWorker(ctx) {
         const batchResult = await pushRecordBatch(items);
         const payloads = batchResult.payloads || batchResult;
         const resp = batchResult.resp || { ok: true, written: payloads.length };
+        const alreadyPresent = !!batchResult.alreadyPresentConfirmed;
         const writtenIds = Array.isArray(resp.written)
           ? new Set(resp.written.map((v) => String(v)))
           : null;
-        const writtenCount = writtenIds
-          ? writtenIds.size
-          : Number(resp.written);
+        const writtenCount = alreadyPresent
+          ? payloads.length
+          : writtenIds
+            ? writtenIds.size
+            : Number(resp.written);
         for (const payload of payloads) {
           const syncId = payload && payload.record && payload.record.syncId
             ? String(payload.record.syncId)
             : null;
           // When server returns per-id written list, only clear matching rows.
-          if (writtenIds && syncId && !writtenIds.has(syncId)) {
+          if (!alreadyPresent && writtenIds && syncId && !writtenIds.has(syncId)) {
             markFailed(payload.queueId, new Error('Push ack omitted this syncId'), true);
             continue;
           }
-          const cleared = markSynced(payload.queueId, payload.recordId, payload.capturedVersion, {
-            confirmed: true,
-            ambiguous: false,
-            written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
-            sentCount: payloads.length,
-          });
+          const ackMeta = alreadyPresent
+            ? ackMetaForAlreadyPresent(payloads.length)
+            : {
+                confirmed: true,
+                ambiguous: false,
+                written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
+                sentCount: payloads.length,
+              };
+          const cleared = markSynced(
+            payload.queueId,
+            payload.recordId,
+            payload.capturedVersion,
+            ackMeta
+          );
           if (cleared !== false) totalProcessed++;
         }
         _lastSyncAt = new Date().toISOString();
@@ -535,12 +595,20 @@ function createSyncWorker(ctx) {
           ok: true,
           at: _lastVerifiedCloudPushAt,
           error: null,
+          alreadyPresent: alreadyPresent || undefined,
+          reconcileReason: batchResult.reconcileReason || undefined,
         };
         _lastError = null;
         rateLimitGate.clear();
         setConnectivity('api_available');
         if (ctx.logSyncAttempt) {
-          ctx.logSyncAttempt(generateCorrelationId(), 'push', payloads.length, true, null);
+          ctx.logSyncAttempt(
+            generateCorrelationId(),
+            'push',
+            payloads.length,
+            true,
+            alreadyPresent ? 'already_present_reconciled' : null
+          );
         }
       } catch (e) {
         if (isRateLimitError(e)) {
@@ -818,14 +886,45 @@ function createSyncWorker(ctx) {
           outcomeReason = SYNC_SKIP_REASONS.OK_PULLED;
           considerHeal = true;
         } else {
-          outcomeReason = SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
+          // Only claim empty outbox when nothing remains pending/failed/blocked/dirty.
+          let remainingOutbox = 0;
+          try {
+            const pendingRow = ctx.dbGet(
+              "SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')"
+            ) || { c: 0 };
+            const dirtyRow = ctx.dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1') || { c: 0 };
+            remainingOutbox = (pendingRow.c || 0) + (dirtyRow.c || 0);
+          } catch (_) {
+            remainingOutbox = 0;
+          }
+          if (remainingOutbox > 0) {
+            outcomeReason = SYNC_SKIP_REASONS.OK;
+            outcomeDetail = 'no_due_items_outbox_remaining:' + remainingOutbox;
+          } else {
+            outcomeReason = SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
+          }
           considerHeal = true;
         }
       } else if (pushed > 0) {
         outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
         considerHeal = true;
       } else {
-        outcomeReason = SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
+        let remainingOutbox = 0;
+        try {
+          const pendingRow = ctx.dbGet(
+            "SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')"
+          ) || { c: 0 };
+          const dirtyRow = ctx.dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1') || { c: 0 };
+          remainingOutbox = (pendingRow.c || 0) + (dirtyRow.c || 0);
+        } catch (_) {
+          remainingOutbox = 0;
+        }
+        if (remainingOutbox > 0) {
+          outcomeReason = SYNC_SKIP_REASONS.OK;
+          outcomeDetail = 'no_due_items_outbox_remaining:' + remainingOutbox;
+        } else {
+          outcomeReason = SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX;
+        }
         considerHeal = true;
       }
 

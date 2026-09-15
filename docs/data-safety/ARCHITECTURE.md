@@ -99,6 +99,9 @@ Surfaces: last local save, last central sync, pending count, device id.
 - Stale device absence must not erase newer central or local records  
 - Failed cloud reads must **never** be interpreted as empty authoritative dataset for wipe purposes  
 - Push clears dirty only when `assertPushAccepted` / `mayClearOutboxEntry` confirms written ≥ sent  
+  **or** integrity-proven already-present empty-write (`written:0` + cloud sync id set covers pushed ids; never on empty-cloud / localOnly)  
+- Pending UI counts **unique cases** (not `dirty + queue` double-count)  
+- Fix sync / worker reconcile stale outbox; never default heal via Re-upload all; never auto Keep-local  
 
 ---
 

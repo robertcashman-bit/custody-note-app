@@ -91,7 +91,8 @@ describe('Healthy local + synced outbox — no panic sync chip', () => {
     const chip = deriveSyncFooterChip({
       enabled: true,
       pendingChanges: 3,
-      dirtyPushCount: 0,
+      dirtyPushCount: 3,
+      pendingCaseCount: 3,
       failedCount: 0,
       blockedCount: 0,
       conflictCount: 0,
@@ -104,6 +105,24 @@ describe('Healthy local + synced outbox — no panic sync chip', () => {
     assert.match(chip.text, /Fix sync now/);
     assert.strictEqual(chip.variant, 'offline');
     assert.strictEqual(chip.action, 'fix_sync_now');
+  });
+
+  it('does not double-count dirty + queue for the same cases', () => {
+    const chip = deriveSyncFooterChip({
+      enabled: true,
+      pendingChanges: 99,
+      dirtyPushCount: 40,
+      pendingCaseCount: 99,
+      failedCount: 0,
+      blockedCount: 0,
+      conflictCount: 0,
+      totalRecords: 69,
+      lastPull: { received: 114, merged: 0 },
+      lastPush: { ok: false, error: 'Push accepted 0 records (cloud write empty)' },
+      syncHealthy: false,
+    });
+    assert.match(chip.text, /^99 /);
+    assert.doesNotMatch(chip.text, /^139 /);
   });
 
   it('still surfaces empty-cloud as Cloud empty — re-upload', () => {
