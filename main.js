@@ -146,6 +146,10 @@ const {
 const { verifyEncryptedBackupFile } = require('./lib/backupVerify');
 const { buildLocalCloudIntegrityReport } = require('./lib/localCloudIntegrity');
 const {
+  nextCloudSyncIdSet,
+  countUniquePendingSyncCases,
+} = require('./lib/staleOutboxReconcile');
+const {
   detectRevisionGoingBackwards,
   detectSuddenLocalCountDrop,
 } = require('./lib/dataSafetyMonitors');
@@ -2642,6 +2646,95 @@ function setLastVerifiedCloudInventory(count) {
   );
 }
 
+const SETTINGS_CLOUD_SYNC_IDS = 'lastVerifiedCloudSyncIds';
+const MAX_PERSISTED_CLOUD_SYNC_IDS = 5000;
+
+function getLastVerifiedCloudSyncIds() {
+  if (!db) return null;
+  try {
+    const row = dbGet('SELECT value FROM settings WHERE key=?', [SETTINGS_CLOUD_SYNC_IDS]);
+    if (!row || row.value == null || row.value === '') return null;
+    const parsed = JSON.parse(String(row.value));
+    if (!Array.isArray(parsed)) return null;
+    return parsed.map((id) => String(id)).filter(Boolean);
+  } catch (_) {
+    return null;
+  }
+}
+
+function setLastVerifiedCloudSyncIds(ids) {
+  if (!db) return;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    try { dbRun('DELETE FROM settings WHERE key=?', [SETTINGS_CLOUD_SYNC_IDS]); } catch (_) {}
+    return;
+  }
+  const unique = Array.from(new Set(ids.map((id) => String(id).trim()).filter(Boolean)));
+  const capped = unique.slice(0, MAX_PERSISTED_CLOUD_SYNC_IDS);
+  dbRun(
+    'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
+    [SETTINGS_CLOUD_SYNC_IDS, JSON.stringify(capped)]
+  );
+}
+
+function persistCloudSyncIdsAfterPull({ pulledIds, pulledFromEpoch }) {
+  const previous = getLastVerifiedCloudSyncIds();
+  const next = nextCloudSyncIdSet({
+    previousIds: previous,
+    pulledIds,
+    pulledFromEpoch: !!pulledFromEpoch,
+  });
+  // From-epoch always write (including empty = proven empty id set).
+  // Incremental only write when we learned new ids.
+  if (pulledFromEpoch || (Array.isArray(pulledIds) && pulledIds.length > 0)) {
+    setLastVerifiedCloudSyncIds(next);
+  }
+  return next;
+}
+
+/**
+ * Presence proof for empty-write reconcile / integrity.
+ * Never includes note bodies — sync ids and counts only.
+ */
+function getCloudPresenceProof() {
+  const cloudSyncIds = getLastVerifiedCloudSyncIds();
+  const inventory = getLastVerifiedCloudInventory();
+  const rows = dbAll(
+    `SELECT sync_id, sync_dirty, deleted_at, status FROM attendances`
+  ) || [];
+  const report = buildLocalCloudIntegrityReport({
+    localRows: rows.map((r) => ({
+      syncId: r.sync_id,
+      syncDirty: r.sync_dirty === 1,
+      status: r.status,
+      deletedAt: r.deleted_at,
+    })),
+    cloudInventoryCount: inventory,
+    cloudSyncIds,
+    pulledFromEpoch: !!(getLastPullStats() && getLastPullStats().pulledFromEpoch),
+  });
+  return {
+    cloudSyncIds,
+    cloudInventoryCount: inventory,
+    localOnly: report.localOnly,
+    localOnlyDirty: report.localOnlyDirty,
+    localActive: report.localActive,
+    localSoftDeleted: report.localSoftDeleted,
+    cloudEmptyProven: report.cloudEmptyProven,
+    discrepancies: report.discrepancies,
+  };
+}
+
+function countPendingSyncCaseIds() {
+  const dirtyRows = dbAll('SELECT id FROM attendances WHERE sync_dirty=1') || [];
+  const queueRows = dbAll(
+    "SELECT DISTINCT record_id AS id FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')"
+  ) || [];
+  return countUniquePendingSyncCases({
+    dirtyRecordIds: dirtyRows.map((r) => r.id),
+    queueRecordIds: queueRows.map((r) => r.id),
+  });
+}
+
 function persistCloudInventoryAfterPull({ pulledFromEpoch, receivedCount }) {
   const previous = getLastVerifiedCloudInventory();
   const next = nextCloudInventoryCount({
@@ -2967,6 +3060,9 @@ function buildSyncRecoveryHints(statusBase) {
   const totalRecords = statusBase && statusBase.totalRecords != null ? statusBase.totalRecords : 0;
   const pendingChanges = statusBase && statusBase.pendingChanges != null ? statusBase.pendingChanges : 0;
   const dirtyPushCount = statusBase && statusBase.dirtyPushCount != null ? statusBase.dirtyPushCount : 0;
+  const pendingCaseCount = statusBase && statusBase.pendingCaseCount != null
+    ? Number(statusBase.pendingCaseCount)
+    : Math.max(pendingChanges, dirtyPushCount);
   const lastPull = (statusBase && statusBase.lastPull) || {};
   const dbFileBytes = getAttendanceDbFileBytes();
   const emptyLargeDb = detectEmptyLargeDb({
@@ -2999,8 +3095,8 @@ function buildSyncRecoveryHints(statusBase) {
   );
   const suppressSyncedFooter = shouldSuppressSyncedFooter({
     totalRecords,
-    pendingChanges,
-    dirtyPushCount,
+    pendingChanges: pendingCaseCount,
+    dirtyPushCount: 0,
     lastPullReceived: lastPull.received || 0,
     pullEverCompleted,
     lastVerifiedCloudPushAt,
@@ -3013,8 +3109,8 @@ function buildSyncRecoveryHints(statusBase) {
   });
   const syncPhase = deriveSyncPhase({
     inProgress: !!(statusBase && statusBase.inProgress),
-    pendingChanges,
-    dirtyPushCount,
+    pendingChanges: pendingCaseCount,
+    dirtyPushCount: 0,
     failedCount: statusBase && statusBase.failedCount,
     rateLimited,
     lastError: statusBase && statusBase.lastError,
@@ -3036,6 +3132,7 @@ function buildSyncRecoveryHints(statusBase) {
     pulledFromEpoch: !!(lastPull && lastPull.pulledFromEpoch),
     dirtyPushCount,
     pendingChanges,
+    pendingCaseCount,
     lastVerifiedCloudPushAt,
     lastVerifiedCloudInventory,
     syncPhase,
@@ -3048,8 +3145,8 @@ function buildSyncRecoveryHints(statusBase) {
   });
   const syncHealthy = isSyncStatusHealthy({
     totalRecords,
-    pendingChanges,
-    dirtyPushCount,
+    pendingChanges: pendingCaseCount,
+    dirtyPushCount: 0,
     lastPullReceived: lastPull.received || 0,
     pullEverCompleted,
     lastVerifiedCloudPushAt,
@@ -3079,6 +3176,7 @@ function buildSyncRecoveryHints(statusBase) {
     syncHealthy,
     schemaVersion,
     health,
+    pendingCaseCount,
     lastVerifiedCloudPushAt,
     lastVerifiedCloudInventory,
     lastPush,
@@ -3251,6 +3349,7 @@ async function syncPull(opts) {
   let cursorAdvanced = true;
   let iterations = 0;
   const MAX_PULL_ITERATIONS = 50;
+  const pulledSyncIds = [];
   // Capture before the loop: only a from-epoch pull can prove the cloud is empty.
   // Incremental since-cursor pulls with received=0 are normal steady state.
   const pullStartedFromEpoch = getLastSyncTimestamp() === '1970-01-01T00:00:00.000Z';
@@ -3270,6 +3369,10 @@ async function syncPull(opts) {
 
     const masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
     const remoteRecords = resp.records || [];
+    for (let ri = 0; ri < remoteRecords.length; ri++) {
+      const rid = remoteRecords[ri] && (remoteRecords[ri].syncId || remoteRecords[ri].sync_id);
+      if (rid) pulledSyncIds.push(String(rid));
+    }
     // Local-first: empty cloud / empty batch must never wipe local-only rows.
     const preservePolicy = emptyCloudPullPolicy({
       remoteRecords,
@@ -3503,7 +3606,12 @@ async function syncPull(opts) {
     pulledFromEpoch: pullStartedFromEpoch,
     receivedCount,
   });
+  const cloudSyncIds = persistCloudSyncIdsAfterPull({
+    pulledIds: pulledSyncIds,
+    pulledFromEpoch: pullStartedFromEpoch,
+  });
   _lastPullStats.cloudInventory = cloudInventory;
+  _lastPullStats.cloudSyncIdCount = Array.isArray(cloudSyncIds) ? cloudSyncIds.length : null;
   const inventoryWritten =
     (pullStartedFromEpoch || receivedCount > 0) &&
     cloudInventory !== inventoryBefore;
@@ -3634,6 +3742,7 @@ function getSyncWorker() {
       logSyncAttempt,
       persistSyncCycle,
       maybeEmptyCloudAutoHeal,
+      getCloudPresenceProof,
       resolveSyncConflictsForRecord: (recordId, resolutionNote) => clearOpenSyncConflicts(Number(recordId), resolutionNote),
       onStatusChange: () => {},
       sendToRenderer: (channel, data) => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data); },
@@ -7866,6 +7975,7 @@ ipcMain.handle('sync-integrity-check', () => {
   ) || [];
   const index = buildEmergencyRecordIndex(rows);
   const inventory = getLastVerifiedCloudInventory();
+  const cloudSyncIds = getLastVerifiedCloudSyncIds();
   const pull = getLastPullStats();
   const report = buildLocalCloudIntegrityReport({
     localRows: index.map((r) => ({
@@ -7875,14 +7985,16 @@ ipcMain.handle('sync-integrity-check', () => {
       deletedAt: r.deletedAt,
     })),
     cloudInventoryCount: inventory,
-    cloudSyncIds: null,
+    cloudSyncIds,
     pulledFromEpoch: !!(pull && pull.pulledFromEpoch),
   });
   try {
     console.info('[INTEGRITY]', JSON.stringify({
       localActive: report.localActive,
       localDirty: report.localDirty,
+      localOnly: report.localOnly,
       cloudInventoryCount: report.cloudInventoryCount,
+      cloudIdCount: report.cloudIdCount,
       cloudEmptyProven: report.cloudEmptyProven,
       discrepancyCount: (report.discrepancies || []).length,
       autoDelete: false,
@@ -8351,6 +8463,7 @@ ipcMain.handle('sync-status', () => {
   const conflictCount = (conflicts ? conflicts.c : 0) || 0;
   const pending = pendingCount + failedCount + blockedCount;
   const dirtyPushCount = dirtyCount ? dirtyCount.c : 0;
+  const pendingCaseCount = countPendingSyncCaseIds();
   const lastPull = getLastPullStats();
   const healState = getEmptyCloudHealState();
   const statusBase = {
@@ -8358,6 +8471,7 @@ ipcMain.handle('sync-status', () => {
     inProgress: diag.inProgress || false,
     lastSync: lastSync !== '1970-01-01T00:00:00.000Z' ? lastSync : diag.lastSyncAt || null,
     pendingChanges: pending,
+    pendingCaseCount,
     failedCount,
     blockedCount,
     conflictCount,

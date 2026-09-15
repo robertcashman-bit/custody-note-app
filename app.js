@@ -3425,8 +3425,10 @@ var REQUIRED_FIELD_KEYS = [
     if (st.authRequired) lines.push('Action needed: activate licence / sign in');
     var pending = st.pendingChanges || 0;
     var dirty = st.dirtyPushCount || 0;
-    if (pending > 0) lines.push('Upload queue: ' + pending + ' pending');
-    else if (dirty > 0) lines.push('Waiting to upload: ' + dirty + ' record' + (dirty === 1 ? '' : 's'));
+    var pendingCases = (st.pendingCaseCount != null)
+      ? Number(st.pendingCaseCount) || 0
+      : Math.max(pending, dirty);
+    if (pendingCases > 0) lines.push('Upload queue: ' + pendingCases + ' case' + (pendingCases === 1 ? '' : 's') + ' pending');
     else lines.push('Upload queue: clear');
     var lp = st.lastPull || {};
     if (lp.received > 0) {
@@ -3447,7 +3449,7 @@ var REQUIRED_FIELD_KEYS = [
     if (st.lastError) lines.push('Last error: ' + st.lastError);
     if (st.rateLimit && st.rateLimit.blocked) {
       lines.push('Rate limited (~' + Math.ceil((st.rateLimit.remainingMs || 0) / 60000) + 'm remaining)' +
-        ((pending + dirty) > 0 ? ' — ' + (pending + dirty) + ' still waiting to upload' : ' — resumes automatically'));
+        (pendingCases > 0 ? ' — ' + pendingCases + ' still waiting to upload' : ' — resumes automatically'));
     }
     if (st.lastPush && st.lastPush.at) {
       lines.push('Last push: ' + (st.lastPush.ok ? ('ok wrote ' + (st.lastPush.written || 0)) : ('failed — ' + (st.lastPush.error || 'error'))));
@@ -3458,7 +3460,7 @@ var REQUIRED_FIELD_KEYS = [
       'Records are still on this device, but the cloud has none for this licence. Use Re-upload all — do not use Full re-sync while the cloud is empty.';
     statusEl.textContent = lines.join(' \u00b7 ');
     var warnColor = emptyCloud || lp.decryptFailed > 0 || st.failedCount > 0 || st.emptyLargeDb ||
-      (st.rateLimit && st.rateLimit.blocked) || (st.lastPush && st.lastPush.ok === false && (pending + dirty) > 0) ||
+      (st.rateLimit && st.rateLimit.blocked) || (st.lastPush && st.lastPush.ok === false && pendingCases > 0) ||
       st.syncHealthy === false || st.authRequired;
     statusEl.style.color = warnColor ? (emptyCloud || st.authRequired ? '#b91c1c' : '#b45309') : '';
     if (healthEl) {
@@ -3467,7 +3469,7 @@ var REQUIRED_FIELD_KEYS = [
         'Health: local=' + (h.localCount != null ? h.localCount : (st.totalRecords || 0)) +
         ' · last cloud pull received=' + (h.lastCloudPullReceived != null ? h.lastCloudPullReceived : (lp.received || 0)) +
         ' · inventory=' + (h.lastVerifiedCloudInventory != null ? h.lastVerifiedCloudInventory : (st.lastVerifiedCloudInventory != null ? st.lastVerifiedCloudInventory : '?')) +
-        ' · pending uploads=' + (h.pendingUploads != null ? h.pendingUploads : (pending + dirty)) +
+        ' · pending uploads=' + (h.pendingUploads != null ? h.pendingUploads : pendingCases) +
         ' · schema v' + (st.schemaVersion != null ? st.schemaVersion : (h.schemaVersion != null ? h.schemaVersion : '?')) +
         (st.lastSyncCycleAt ? ' · last cycle ' + formatSyncTime(st.lastSyncCycleAt) : '') +
         (h.cloudLikelyEmpty || emptyCloud ? ' · ERROR: cloud empty for this licence' : '') +
@@ -3488,17 +3490,17 @@ var REQUIRED_FIELD_KEYS = [
         hintEl.style.display = '';
         hintEl.style.color = '#b45309';
         hintEl.textContent = 'Recovery: database file is about ' + Math.round((st.dbFileBytes || 0) / 1024) + ' KB but lists 0 records. Restore a local/cloud backup, or on the computer with your data use Re-upload all local records to cloud, then Full re-sync here.';
-      } else if (st.rateLimit && st.rateLimit.blocked && (pending + dirty) > 0) {
+      } else if (st.rateLimit && st.rateLimit.blocked && pendingCases > 0) {
         hintEl.style.display = '';
         hintEl.style.color = '#b45309';
-        hintEl.textContent = 'Upload paused (rate limited). ' + (pending + dirty) +
-          ' local record(s) are still waiting for a confirmed cloud write. Retry Push all pending / Re-upload all after the cooldown — do not assume they left this device.';
-      } else if (st.lastPush && st.lastPush.ok === false && (pending + dirty) > 0) {
+        hintEl.textContent = 'Upload paused (rate limited). ' + pendingCases +
+          ' local case(s) are still waiting for a confirmed cloud write. Use Fix sync now after the cooldown — do not assume they left this device.';
+      } else if (st.lastPush && st.lastPush.ok === false && pendingCases > 0) {
         hintEl.style.display = '';
         hintEl.style.color = '#b45309';
         hintEl.textContent = 'Last push did not confirm a durable cloud write (' +
-          (st.lastPush.error || 'unconfirmed') + '). ' + (pending + dirty) +
-          ' record(s) remain dirty on this device. Use Push all pending now or Re-upload all.';
+          (st.lastPush.error || 'unconfirmed') + '). ' + pendingCases +
+          ' case(s) remain pending on this device. Use Fix sync now (preferred) or Push all pending.';
       } else {
         hintEl.style.display = 'none';
         hintEl.style.color = '#b45309';
