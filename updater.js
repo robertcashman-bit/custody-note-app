@@ -37,6 +37,13 @@ function createNoopUpdaterController(app, reason) {
           currentVersion: app.getVersion(),
         });
       }
+      if (reason === 'msix') {
+        return Promise.resolve({
+          status: 'store',
+          message: 'This Microsoft Store build is updated by the Store. In-app GitHub/electron-updater checks are disabled for this channel.',
+          currentVersion: app.getVersion(),
+        });
+      }
       return Promise.resolve({
         status: 'dev',
         message: 'Updates only apply to the installed app',
@@ -47,11 +54,14 @@ function createNoopUpdaterController(app, reason) {
       if (reason === 'portable') {
         return { ok: false, error: 'Portable builds do not auto-install updates.' };
       }
+      if (reason === 'msix') {
+        return { ok: false, error: 'Microsoft Store builds do not use electron-updater. Update from the Store.' };
+      }
       return { ok: false, error: 'Updater is not available in this environment.' };
     },
     getPublicState() {
       return {
-        status: reason === 'portable' ? 'manual' : 'dev',
+        status: reason === 'portable' ? 'manual' : reason === 'msix' ? 'store' : 'dev',
         currentVersion: app.getVersion(),
         persisted: null,
       };
@@ -74,6 +84,7 @@ function initUpdater(options) {
     stopSyncTimer,
     stopBackupScheduler,
     isPortableBuild,
+    isMsixStoreBuild,
   } = options;
 
   if (!app.isPackaged) {
@@ -81,6 +92,11 @@ function initUpdater(options) {
   }
   if (isPortableBuild) {
     return createNoopUpdaterController(app, 'portable');
+  }
+  /* Microsoft Store / AppX / MSIX: Store owns updates. Competing
+   * electron-updater against GitHub Releases must stay disabled. */
+  if (isMsixStoreBuild) {
+    return createNoopUpdaterController(app, 'msix');
   }
 
   log.transports.file.level = 'info';
