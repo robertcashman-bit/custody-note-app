@@ -25,6 +25,8 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
     assert.equal(pkg.build.appx.identityName, 'PoliceStationAgent.CustodyNoteforWindows');
     /* Package/Properties/DisplayName must match the reserved Store name exactly. */
     assert.equal(pkg.build.appx.displayName, 'Custody Note for Windows');
+    /* UK-only markets: package must not declare en-US (Partner Center requires a listing per language). */
+    assert.deepEqual(pkg.build.appx.languages, ['en-GB']);
     /* NSIS / desktop short name stays separate from Store DisplayName. */
     assert.equal(pkg.build.productName, 'Custody Note');
     const doc = fs.readFileSync(path.join(root, 'docs', 'MICROSOFT_STORE_RELEASE.md'), 'utf8');

@@ -1,9 +1,18 @@
 {
   "releases": [
     {
-      "version": "1.9.105",
+      "version": "1.9.106",
       "date": "2026-09-17",
       "latest": true,
+      "changes": [
+        "Microsoft Store MSIX: declare package language en-GB only (remove en-US) so Partner Center no longer requires an English (United States) Store listing for the UK-only app",
+        "Re-upload package version 1.9.106.0 after the language manifest change"
+      ]
+    },
+    {
+      "version": "1.9.105",
+      "date": "2026-09-17",
+      "latest": false,
       "changes": [
         "Microsoft Store MSIX: set Package/Properties/DisplayName (build.appx.displayName) to the reserved Store name “Custody Note for Windows” so Partner Center accepts the package",
         "NSIS Setup.exe / desktop productName remains “Custody Note” — Store display name is scoped to build.appx only",
