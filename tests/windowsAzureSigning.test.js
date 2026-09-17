@@ -34,7 +34,10 @@ function electronBuilderVersion() {
 function releaseWindowsBlock() {
   const jobIdx = wf.indexOf('release-windows:');
   assert.ok(jobIdx !== -1);
-  const nextJob = wf.indexOf('\n  release-mac:', jobIdx + 1);
+  /* Prefer the dedicated MSIX job boundary; fall back to release-mac. */
+  const nextMsix = wf.indexOf('\n  release-windows-msix:', jobIdx + 1);
+  const nextMac = wf.indexOf('\n  release-mac:', jobIdx + 1);
+  const nextJob = nextMsix !== -1 ? nextMsix : nextMac;
   return wf.slice(jobIdx, nextJob === -1 ? undefined : nextJob);
 }
 
@@ -82,7 +85,7 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
   });
 
   it('passes azureSignOptions via electron-builder CLI when signing is enabled', () => {
-    assert.match(wf, /electron-builder --win --publish always/);
+    assert.match(wf, /electron-builder --win nsis --publish always/);
     assert.match(wf, /-c\.win\.azureSignOptions\.publisherName=/);
     assert.match(wf, /-c\.win\.azureSignOptions\.endpoint=/);
     assert.match(wf, /-c\.win\.azureSignOptions\.codeSigningAccountName=/);

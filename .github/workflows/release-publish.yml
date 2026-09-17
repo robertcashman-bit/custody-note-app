@@ -20,6 +20,12 @@
 # - CN_WINDOWS_SIGN=1               — Require signing (fail if secrets incomplete)
 # Full Azure setup checklist: SIGNING.md
 #
+# Microsoft Store (AppX/MSIX) package:
+# - Built by job release-windows-msix (continue-on-error) so NSIS can still ship.
+# - electron-builder target is "appx"; artefact name is Custody-Note-{version}.msix.
+# - Uploaded UNSIGNED for Partner Center signing — see docs/MICROSOFT_STORE_RELEASE.md.
+# - Not required for publish-release (latest.yml / NSIS updater channel).
+#
 # Required for macOS Developer ID–signed + notarised build (fail-closed):
 # - MAC_CERTIFICATE_P12_BASE64     — Base64-encoded Developer ID Application .p12 bundle.
 # - MAC_CERTIFICATE_P12_PASSWORD   — Passphrase used when the .p12 was exported.
@@ -150,7 +156,7 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build + upload Windows installer to GitHub
+      - name: Build + upload Windows NSIS installer to GitHub
         working-directory: custody-note-app
         shell: bash
         env:
@@ -165,17 +171,107 @@ jobs:
           CN_WIN_SIGN_ENABLED: ${{ steps.win-sign.outputs.enabled }}
         run: |
           set -euo pipefail
+          # NSIS only — AppX/MSIX is a separate job so a Store packaging failure
+          # cannot block the GitHub Releases .exe channel.
           if [[ "${CN_WIN_SIGN_ENABLED}" == "true" ]]; then
-            echo "Building signed Windows installer via Azure Artifact Signing…"
-            npx electron-builder --win --publish always \
+            echo "Building signed Windows NSIS installer via Azure Artifact Signing…"
+            npx electron-builder --win nsis --publish always \
               "-c.win.azureSignOptions.publisherName=${AZURE_TRUSTED_SIGNING_PUBLISHER_NAME}" \
               "-c.win.azureSignOptions.endpoint=${AZURE_CODE_SIGNING_ENDPOINT}" \
               "-c.win.azureSignOptions.codeSigningAccountName=${AZURE_CODE_SIGNING_ACCOUNT_NAME}" \
               "-c.win.azureSignOptions.certificateProfileName=${AZURE_CERTIFICATE_PROFILE_NAME}"
           else
-            echo "Building unsigned Windows installer…"
-            npx electron-builder --win --publish always
+            echo "Building unsigned Windows NSIS installer…"
+            npx electron-builder --win nsis --publish always
           fi
+
+  # ─── Job 1a2: Build Microsoft Store AppX/MSIX (unsigned for Partner Center) ─
+  # electron-builder 26.x Store target is "appx" (produces .msix via artifactName).
+  # Partner Center signs for Store submission — we upload an unsigned package.
+  # continue-on-error: NSIS release must still ship if only this job fails.
+  release-windows-msix:
+    runs-on: windows-latest
+    continue-on-error: true
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+        with:
+          path: custody-note-app
+          ref: ${{ github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: custody-note-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: custody-note-app
+
+      - name: Validate MSIX/AppX config + assets (fail this job only)
+        working-directory: custody-note-app
+        run: npm run validate:msix
+
+      - name: Ensure AppX visual assets
+        working-directory: custody-note-app
+        run: npm run build:msix:assets
+
+      - name: Build unsigned AppX/MSIX package
+        id: msix-build
+        working-directory: custody-note-app
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "Building unsigned Microsoft Store package (appx → .msix). Partner Center will sign."
+          npx electron-builder --win appx --publish never
+          VERSION=$(node -p "require('./package.json').version")
+          MSIX="dist/Custody-Note-${VERSION}.msix"
+          APPX_FALLBACK=$(ls dist/*.appx 2>/dev/null | head -1 || true)
+          if [[ -f "$MSIX" ]]; then
+            echo "artifact=$MSIX" >> "$GITHUB_OUTPUT"
+            echo "Found $MSIX"
+          elif [[ -n "${APPX_FALLBACK}" && -f "${APPX_FALLBACK}" ]]; then
+            echo "::warning::Expected .msix not found; uploading AppX artefact ${APPX_FALLBACK}"
+            echo "artifact=${APPX_FALLBACK}" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::No AppX/MSIX artefact produced under dist/"
+            ls -la dist || true
+            exit 1
+          fi
+
+      - name: Upload Store package to GitHub Release (draft-friendly)
+        if: steps.msix-build.outputs.artifact != ''
+        working-directory: custody-note-app
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          ARTIFACT: ${{ steps.msix-build.outputs.artifact }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          # Wait briefly for NSIS job to create the draft release when racing.
+          for attempt in $(seq 1 30); do
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              break
+            fi
+            echo "Waiting for draft release $TAG (attempt $attempt)…"
+            sleep 10
+          done
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Draft release $TAG not found yet — creating placeholder draft for Store artefact upload."
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "v${VERSION}" --notes "Draft release (Store package uploaded ahead of NSIS/Mac assets)."
+          fi
+          gh release upload "$TAG" "$ARTIFACT" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Uploaded $(basename "$ARTIFACT") to $TAG (unsigned — Partner Center signs for Store)."
+
 
   # ─── Job 1b: Build the signed + notarised macOS .dmg/.zip and upload ────────
   # Imports the Developer ID Application certificate into a temporary keychain,

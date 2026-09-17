@@ -167,6 +167,16 @@ Do not commit `.pfx` files or passwords. Prefer Azure OIDC for GitHub Releases.
 
 ---
 
+## Microsoft Store package (AppX / MSIX)
+
+Store packages are built by job `release-windows-msix` in `release-publish.yml` using electron-builder’s **`appx`** target (artefact `Custody-Note-{version}.msix`).
+
+- **Unsigned in CI** — Partner Center signs for Store submission. Do not expect Azure Artifact Signing to sign the `.msix` in the same way as NSIS.
+- **Publisher CN** in `package.json` → `build.appx.publisher` is the Partner Center identity `CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7` (publisher display name **Police Station Agent**). Do not invent a different CN. See [`docs/MICROSOFT_STORE_RELEASE.md`](docs/MICROSOFT_STORE_RELEASE.md).
+- Failure of the MSIX job is soft (`continue-on-error`) so NSIS GitHub Releases still ship.
+
+---
+
 ## Mac (unchanged)
 
 Mac release signing uses Developer ID + notarytool secrets (`MAC_CERTIFICATE_*`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`). See the header comments in `release-publish.yml`. Do not set `CN_SKIP_NOTARIZE` in that workflow.
