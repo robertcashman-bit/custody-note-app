@@ -33,6 +33,19 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
     assert.match(doc, /electron-updater/);
   });
 
+  it('sets Partner Center–acceptable TargetDeviceFamily MinVersion', () => {
+    assert.equal(pkg.build.appx.minVersion, '10.0.17763.0');
+    assert.equal(pkg.build.appx.maxVersionTested, '10.0.22621.0');
+    assert.ok(
+      Array.isArray(pkg.build.appx.capabilities) && pkg.build.appx.capabilities.includes('runFullTrust'),
+      'runFullTrust must remain declared for Electron full-trust MSIX'
+    );
+    const doc = fs.readFileSync(path.join(root, 'docs', 'MICROSOFT_STORE_RELEASE.md'), 'utf8');
+    assert.match(doc, /10\.0\.17763\.0/);
+    assert.match(doc, /runFullTrust/);
+    assert.match(doc, /restricted capability/i);
+  });
+
   it('validate:msix gate passes', () => {
     const r = spawnSync(process.execPath, [path.join(root, 'scripts', 'validate-msix-config.mjs')], {
       cwd: root,
