@@ -1,8 +1,8 @@
 {
   "name": "custody-note",
-  "version": "1.9.103",
-  "lastUpdated": "2026-09-15",
-  "buildTime": "2026-09-15T19:55:00.000Z",
+  "version": "1.9.104",
+  "lastUpdated": "2026-09-17",
+  "buildTime": "2026-09-17T20:14:12.000Z",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
   "scripts": {
@@ -117,6 +117,8 @@
       "setBuildNumber": true,
       "electronUpdaterAware": false,
       "artifactName": "Custody-Note-${version}.msix",
+      "minVersion": "10.0.17763.0",
+      "maxVersionTested": "10.0.22621.0",
       "capabilities": [
         "runFullTrust",
         "internetClient"

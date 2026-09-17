@@ -66,6 +66,17 @@ Mapped into electron-builder:
 | Display title | `package.json` → `build.appx.displayName` | `Custody Note` |
 | Application Id | `package.json` → `build.appx.applicationId` | `CustodyNote` |
 
+### OS targeting (TargetDeviceFamily)
+
+Partner Center rejects MSIX packages whose `TargetDeviceFamily` **MinVersion ≤ 10.0.17134.0**.
+
+| Field | Repo location | Value | Notes |
+|-------|---------------|-------|-------|
+| MinVersion | `package.json` → `build.appx.minVersion` | `10.0.17763.0` | Windows 10 **1809** — MSIX floor + current Store desktop guidance; matches product support (Windows 10 64-bit / Windows 11) |
+| MaxVersionTested | `package.json` → `build.appx.maxVersionTested` | `10.0.22621.0` | Windows 11 22H2 quirk baseline |
+
+electron-builder’s x64 default (`10.0.14316.0`) is **too low** for Store upload — always set `minVersion` explicitly. `npm run validate:msix` enforces MinVersion ≥ `10.0.17763.0`.
+
 Package family name and Store ID are Partner Center–derived metadata (documented here for upload / support). electron-builder does not take them as config fields; they must continue to match the identity + publisher above.
 
 ---
@@ -105,14 +116,16 @@ Package family name and Store ID are Partner Center–derived metadata (document
 13. **Support contact:** email/URL users can reach (e.g. support or contact page on custodynote.com).
 14. **Properties / category:** Business or Productivity; Windows 10/11 desktop.
 15. Review **capabilities** (`runFullTrust`, `internetClient`) against your declaration — full-trust desktop bridge is expected for Electron.
-16. **Submit** for certification only after Windows smoke tests below. Fix any certification feedback (identity mismatch, missing screenshots, policy URL, etc.) and resubmit.
+    - **Robert — `runFullTrust` approval (expected warning, do not remove):** Partner Center flags `runFullTrust` as a **restricted capability**. On **Submission options**, provide an explanation such as: *“Custody Note is an Electron desktop (Desktop Bridge) app packaged as full-trust MSIX. `runFullTrust` is required so the packaged Win32/Chromium process can run at medium IL and use normal desktop APIs (filesystem under AppData, Outlook Web via browser, printing/exports).”* Approval is requested in Partner Center; keep the capability in `build.appx.capabilities`.
+16. Confirm package **MinVersion** is `10.0.17763.0` (or newer) before upload — older packages are rejected.
+17. **Submit** for certification only after Windows smoke tests below. Fix any certification feedback (identity mismatch, missing screenshots, policy URL, MinVersion, etc.) and resubmit.
 
 ### E. After approval — what users get
 
-17. **Store installs** update only through the Microsoft Store (in-app GitHub/`electron-updater` is disabled on this channel).
-18. **NSIS / website downloads** continue to update via GitHub Releases + `electron-updater` as today — unchanged.
-19. Same machine may have used NSIS first: data must remain under `%APPDATA%\custody-note` (see smoke tests). Do not tell users to “reinstall fresh” as a fix for missing notes.
-20. For each new Store version: bump `package.json` / changelog, produce a new `.msix`, upload a new submission (Store rejects reuse of the same version).
+18. **Store installs** update only through the Microsoft Store (in-app GitHub/`electron-updater` is disabled on this channel).
+19. **NSIS / website downloads** continue to update via GitHub Releases + `electron-updater` as today — unchanged.
+20. Same machine may have used NSIS first: data must remain under `%APPDATA%\custody-note` (see smoke tests). Do not tell users to “reinstall fresh” as a fix for missing notes.
+21. For each new Store version: bump `package.json` / changelog, produce a new `.msix`, upload a new submission (Store rejects reuse of the same version).
 
 ---
 
@@ -233,11 +246,13 @@ Add-AppxPackage -Path .\dist\Custody-Note-1.9.100.msix
 
 Semver `X.Y.Z` in `package.json` → Store four-part `X.Y.Z.0` via `appx.setBuildNumber: true`. Each Store upload must increase the version.
 
+After a rejected upload, **always bump** before re-upload (e.g. `1.9.103` → `1.9.104`) — Partner Center typically will not accept the same package version again.
+
 ---
 
 ## Related files
 
-- `package.json` → `build.win` / `build.appx` / `build.nsis`
+- `package.json` → `build.win` / `build.appx` (`minVersion`, `maxVersionTested`, capabilities) / `build.nsis`
 - `lib/windowsPackageChannel.js`
 - `updater.js` (Store no-op)
 - `scripts/validate-msix-config.mjs`
