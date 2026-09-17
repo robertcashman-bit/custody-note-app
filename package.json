@@ -1,8 +1,8 @@
 {
   "name": "custody-note",
-  "version": "1.9.104",
+  "version": "1.9.105",
   "lastUpdated": "2026-09-17",
-  "buildTime": "2026-09-17T20:14:12.000Z",
+  "buildTime": "2026-09-17T20:31:13.000Z",
   "description": "Custody Note – LAA-compliant custody note app",
   "main": "main.js",
   "scripts": {
@@ -107,7 +107,7 @@
       "applicationId": "CustodyNote",
       "publisher": "CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7",
       "publisherDisplayName": "Police Station Agent",
-      "displayName": "Custody Note",
+      "displayName": "Custody Note for Windows",
       "languages": [
         "en-GB",
         "en-US"
