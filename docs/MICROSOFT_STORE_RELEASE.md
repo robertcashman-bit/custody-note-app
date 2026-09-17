@@ -23,64 +23,96 @@ macOS (DMG/ZIP + notarisation) is unchanged.
 | Unit/source tests (channel, updater off, shared path, migration hash) | Done on CI/Linux |
 | PR `validate:msix` | Done |
 | Actual `.msix` produced on Windows CI | Required (see Test workflow `msix-package` job) |
-| Partner Center Publisher CN pasted (not placeholder) | **Robert — blocking for Store submit** |
+| Partner Center Product identity wired into `build.appx` | **Done** (see Identity table below) |
 | Real Windows install: NSIS ↔ Store coexistence + SQLite round-trip | **Robert — smoke-test on a Windows PC** |
 | Mac packaging | Untouched |
 
-**Verdict for Store submission:** treat as **AMBER** until (a) Windows CI has produced a `.msix`, (b) Partner Center identity fields are pasted from your account (not invented), and (c) you complete the Windows smoke checklist below. Do **not** submit to certification on placeholder publisher CN alone.
+**Verdict for Store submission:** treat as **AMBER** until (a) Windows CI has produced a `.msix` with the Partner Center identity above, and (b) you complete the Windows smoke checklist below. Identity placeholders are gone — do **not** invent a different Publisher CN.
 
 ---
 
-## Robert — numbered Partner Center release checklist
+## Store listing names (reservation vs display)
 
-Do these in order. **Do not invent** Package Identity / Publisher CN values — copy them from Partner Center into the repo placeholders.
+| Field | Value | Notes |
+|-------|-------|-------|
+| **Reserved Store name** (Partner Center reservation) | `Custody Note for Windows` | Must match the reserved product name in Partner Center |
+| **Display title** (Store listing / tile) | `Custody Note` | Repo `build.appx.displayName`; users can see this shorter title |
+| **Publisher display name** | `Police Station Agent` | Shown as the publisher on the Store page |
 
-### A. Account & reservation
+Keep the reservation name and the display title consistent with Partner Center. Do **not** rename the reservation without updating Partner Center first.
 
-1. Sign in at [Partner Center](https://partner.microsoft.com/dashboard) with the Microsoft account that will own the company publisher.
-2. Create or join a **developer account** as organisation **DEFENCELEGALSERVICES LIMITED** (UK company legal name).
-3. Pay the one-time Microsoft developer registration fee if Partner Center requires it for a new account.
-4. Complete any organisation identity / tax / payout profile steps Partner Center shows (needed before Store publish).
-5. **Create a new app** → reserve the name **Custody Note** (must match what you want users to see; keep it consistent with `build.appx.displayName`).
+---
 
-### B. Copy identity into this repo (placeholders only until you paste)
+## Partner Center Product identity (wired in repo)
 
-6. Open the app’s **Product identity** / package identity page in Partner Center.
-7. Copy these **exactly** (character-for-character):
-   - **Package/Identity Name** → paste into `package.json` → `build.appx.identityName`  
-     (repo placeholder today: `DefenceLegalServices.CustodyNote`)
-   - **Publisher** (CN=…) → paste into `package.json` → `build.appx.publisher`  
-     (repo placeholder today: `CN=DEFENCELEGALSERVICES LIMITED` — often Partner Center shows a GUID-style CN instead; **use theirs**)
-   - **Publisher display name** → paste into `package.json` → `build.appx.publisherDisplayName`  
-     (repo placeholder today: `DEFENCELEGALSERVICES LIMITED`)
-8. Commit and push those three strings on a release branch. Re-run `npm run validate:msix`.  
-   **Do not** guess GUIDs. If Partner Center has not issued them yet, leave the placeholders and stop before certification upload.
+Copied **exactly** from Partner Center — do not invent or “fix” these strings:
+
+| Field | Value |
+|-------|-------|
+| Reserved Store name | `Custody Note for Windows` |
+| Publisher display name | `Police Station Agent` |
+| Package / Identity name | `PoliceStationAgent.CustodyNoteforWindows` |
+| Publisher | `CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7` |
+| Package family name | `PoliceStationAgent.CustodyNoteforWindows_pmk3my2z6b2bj` |
+| Store ID | `9NFSRVT3T45V` |
+
+Mapped into electron-builder:
+
+| Partner Center field | Repo location | Value in repo |
+|----------------------|---------------|---------------|
+| Package / Identity name | `package.json` → `build.appx.identityName` | `PoliceStationAgent.CustodyNoteforWindows` |
+| Publisher (`CN=…`) | `package.json` → `build.appx.publisher` | `CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7` |
+| Publisher display name | `package.json` → `build.appx.publisherDisplayName` | `Police Station Agent` |
+| Display title | `package.json` → `build.appx.displayName` | `Custody Note` |
+| Application Id | `package.json` → `build.appx.applicationId` | `CustodyNote` |
+
+Package family name and Store ID are Partner Center–derived metadata (documented here for upload / support). electron-builder does not take them as config fields; they must continue to match the identity + publisher above.
+
+---
+
+## Robert — numbered Partner Center upload checklist
+
+### A. Account (already done for this identity)
+
+1. Partner Center developer account owns publisher **Police Station Agent**.
+2. App reserved as **Custody Note for Windows** (Store ID `9NFSRVT3T45V`).
+
+### B. Identity in repo (done)
+
+3. `build.appx.identityName` / `publisher` / `publisherDisplayName` match Partner Center (see table above).
+4. After any identity change: `npm run validate:msix` must pass (CI also runs it).
 
 ### C. Build / obtain the MSIX
 
-9. Prefer a tagged release so `release-windows-msix` uploads `Custody-Note-{version}.msix` to the GitHub Release (unsigned).  
+5. Prefer a tagged release so `release-windows-msix` uploads `Custody-Note-{version}.msix` to the GitHub Release (unsigned).  
    Or build on a Windows machine: `npm run build:msix:assets && npx electron-builder --win appx --publish never`.  
    Or download the artefact from the PR/CI `msix-package` job when present.
-10. Confirm the file exists and version matches `package.json` (Store needs four-part `X.Y.Z.0` via `setBuildNumber`).
+6. Confirm the file exists and version matches `package.json` (Store needs four-part `X.Y.Z.0` via `setBuildNumber`).
+7. Optional sanity check after build: package identity in the MSIX should be  
+   `PoliceStationAgent.CustodyNoteforWindows` with publisher `CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7`.
 
-### D. Store listing & submission
+### D. Upload package in Partner Center (brief field notes)
 
-11. In Partner Center → your Custody Note app → **Start submission** (or next submission).
-12. **Packages:** upload the `.msix`. Partner Center signs for Store distribution.
-13. **Store listings (en-GB at minimum):** description, feature bullets, screenshots / Store logos, search terms.
-14. **Age ratings:** complete the questionnaire (business / productivity; no child-directed content).
-15. **Privacy policy URL:** use the live site policy, e.g. `https://custodynote.com/privacy` (confirm the path still resolves before submit).
-16. **Support contact:** email/URL users can reach (e.g. support@ or contact page on custodynote.com).
-17. **Properties / category:** Business or Productivity as appropriate; Windows 10/11 desktop.
-18. Review **capabilities** (`runFullTrust`, `internetClient`) against your declaration — full-trust desktop bridge is expected for Electron.
-19. **Submit** for certification. Fix any certification feedback (identity mismatch, missing screenshots, policy URL, etc.) and resubmit.
+8. Open [Partner Center](https://partner.microsoft.com/dashboard) → app **Custody Note for Windows** (`9NFSRVT3T45V`) → **Start submission** (or next submission).
+9. **Packages:** upload the unsigned `Custody-Note-{version}.msix` from CI/GitHub Release. Partner Center signs for Store distribution.
+   - If Partner Center rejects identity mismatch, re-check `identityName` + `publisher` against Product identity — do not invent a new CN.
+10. **Store listings (en-GB at minimum):**
+    - Product/reservation name remains **Custody Note for Windows**.
+    - Listing **title** may be **Custody Note** (matches `displayName`).
+    - Description, feature bullets, screenshots / Store logos, search terms.
+11. **Age ratings:** complete the questionnaire (business / productivity; no child-directed content).
+12. **Privacy policy URL:** `https://custodynote.com/privacy` (confirm it still resolves before submit).
+13. **Support contact:** email/URL users can reach (e.g. support or contact page on custodynote.com).
+14. **Properties / category:** Business or Productivity; Windows 10/11 desktop.
+15. Review **capabilities** (`runFullTrust`, `internetClient`) against your declaration — full-trust desktop bridge is expected for Electron.
+16. **Submit** for certification only after Windows smoke tests below. Fix any certification feedback (identity mismatch, missing screenshots, policy URL, etc.) and resubmit.
 
 ### E. After approval — what users get
 
-20. **Store installs** update only through the Microsoft Store (in-app GitHub/`electron-updater` is disabled on this channel).
-21. **NSIS / website downloads** continue to update via GitHub Releases + `electron-updater` as today — unchanged.
-22. Same machine may have used NSIS first: data must remain under `%APPDATA%\custody-note` (see smoke tests). Do not tell users to “reinstall fresh” as a fix for missing notes.
-23. For each new Store version: bump `package.json` / changelog, produce a new `.msix`, upload a new submission (Store rejects reuse of the same version).
+17. **Store installs** update only through the Microsoft Store (in-app GitHub/`electron-updater` is disabled on this channel).
+18. **NSIS / website downloads** continue to update via GitHub Releases + `electron-updater` as today — unchanged.
+19. Same machine may have used NSIS first: data must remain under `%APPDATA%\custody-note` (see smoke tests). Do not tell users to “reinstall fresh” as a fix for missing notes.
+20. For each new Store version: bump `package.json` / changelog, produce a new `.msix`, upload a new submission (Store rejects reuse of the same version).
 
 ---
 
@@ -91,17 +123,11 @@ Do these in order. **Do not invent** Package Identity / Publisher CN values — 
 | Electron `appId` | `com.custodynote.app` | **Do not change** without a migration plan. Affects updater / historical assumptions. |
 | package.json `name` | `custody-note` | Drives classic userData folder name |
 | Classic userData (NSIS + Store) | `%APPDATA%\custody-note` | Shared DB / licence / backups — **required for coexistence** |
-| Store `identityName` | Placeholder `DefenceLegalServices.CustodyNote` until you paste Partner Center | Package identity |
+| Store `identityName` | `PoliceStationAgent.CustodyNoteforWindows` | Package identity (Partner Center) |
 | Store `applicationId` | `CustodyNote` | AppX Application Id |
-| Store `publisher` | Placeholder `CN=DEFENCELEGALSERVICES LIMITED` until you paste Partner Center CN | Must match Store signing identity |
-
-### Where to paste Partner Center values
-
-| Partner Center field | Repo location |
-|----------------------|---------------|
-| Package / Identity name | `package.json` → `build.appx.identityName` |
-| Publisher (`CN=…`) | `package.json` → `build.appx.publisher` |
-| Publisher display name | `package.json` → `build.appx.publisherDisplayName` |
+| Store `publisher` | `CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7` | Must match Store signing identity |
+| Package family name | `PoliceStationAgent.CustodyNoteforWindows_pmk3my2z6b2bj` | Derived; document only |
+| Store ID | `9NFSRVT3T45V` | Partner Center product id |
 
 ---
 

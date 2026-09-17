@@ -14,7 +14,7 @@ describe('windowsPackageChannel — detection', () => {
         platform: 'win32',
         isPackaged: true,
         windowsStore: true,
-        execPath: 'C:\\Program Files\\WindowsApps\\DefenceLegalServices.CustodyNote_1.0.0.0_x64\\app\\Custody Note.exe',
+        execPath: 'C:\\Program Files\\WindowsApps\\PoliceStationAgent.CustodyNoteforWindows_1.0.0.0_x64__pmk3my2z6b2bj\\app\\Custody Note.exe',
       }),
       'msix'
     );

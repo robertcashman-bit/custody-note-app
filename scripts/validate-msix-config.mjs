@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * CI / local gate for Microsoft Store (AppX/MSIX) packaging config.
- * Fail closed on missing icons, invalid version, or incomplete identity placeholders.
+ * Fail closed on missing icons, invalid version, or Partner Center identity mismatch.
  *
  * Does NOT require Windows — config/assets only.
  * Run: npm run validate:msix
@@ -14,13 +14,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const errors = [];
-const warnings = [];
 
 function fail(msg) {
   errors.push(msg);
-}
-function warn(msg) {
-  warnings.push(msg);
 }
 
 const version = String(pkg.version || '');
@@ -55,13 +51,37 @@ if (!String(appx.artifactName || '').includes('.msix')) {
   fail('build.appx.artifactName should produce a .msix artefact (Store-compatible)');
 }
 
+/** Partner Center Product identity (paste-exact — do not invent). */
+const EXPECTED_IDENTITY = {
+  identityName: 'PoliceStationAgent.CustodyNoteforWindows',
+  publisher: 'CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7',
+  publisherDisplayName: 'Police Station Agent',
+  displayName: 'Custody Note',
+};
+
 const publisher = String(appx.publisher);
 if (!publisher.startsWith('CN=')) fail('build.appx.publisher must be a CN=… Distinguished Name');
 if (/TBD|REPLACE|YOUR_|PLACEHOLDER/i.test(publisher)) {
-  warn('publisher still looks like a placeholder — replace with Partner Center Publisher CN before Store submission');
-} else if (publisher === 'CN=DEFENCELEGALSERVICES LIMITED') {
-  warn(
-    'publisher is the documented Partner Center placeholder (CN=DEFENCELEGALSERVICES LIMITED). Replace with the exact Partner Center Publisher CN before Store certification signing.'
+  fail('publisher still looks like a placeholder — use the Partner Center Publisher CN');
+}
+if (String(appx.identityName) !== EXPECTED_IDENTITY.identityName) {
+  fail(
+    `build.appx.identityName must be Partner Center Package/Identity name "${EXPECTED_IDENTITY.identityName}" (got "${appx.identityName}")`
+  );
+}
+if (publisher !== EXPECTED_IDENTITY.publisher) {
+  fail(
+    `build.appx.publisher must be Partner Center Publisher "${EXPECTED_IDENTITY.publisher}" (got "${publisher}")`
+  );
+}
+if (String(appx.publisherDisplayName) !== EXPECTED_IDENTITY.publisherDisplayName) {
+  fail(
+    `build.appx.publisherDisplayName must be "${EXPECTED_IDENTITY.publisherDisplayName}" (got "${appx.publisherDisplayName}")`
+  );
+}
+if (String(appx.displayName) !== EXPECTED_IDENTITY.displayName) {
+  fail(
+    `build.appx.displayName must remain "${EXPECTED_IDENTITY.displayName}" (Store listing title; reservation name differs — see docs)`
   );
 }
 
@@ -106,9 +126,6 @@ if (nsis.deleteAppDataOnUninstall === true) {
   fail('nsis.deleteAppDataOnUninstall must remain false (record safety)');
 }
 
-if (warnings.length) {
-  for (const w of warnings) console.warn('[validate:msix] WARN:', w);
-}
 if (errors.length) {
   for (const e of errors) console.error('[validate:msix] FAIL:', e);
   process.exit(1);
@@ -116,4 +133,4 @@ if (errors.length) {
 
 console.log('[validate:msix] OK — AppX/MSIX config, assets, updater gate, and shared userData wiring look valid.');
 console.log(`[validate:msix] version ${version} → Windows Store form ${version}.0 (via setBuildNumber)`);
-console.log(`[validate:msix] publisher placeholder: ${publisher}`);
+console.log(`[validate:msix] Partner Center identity: ${appx.identityName} / ${publisher}`);

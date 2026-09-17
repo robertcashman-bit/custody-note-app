@@ -103,10 +103,10 @@
       ]
     },
     "appx": {
-      "identityName": "DefenceLegalServices.CustodyNote",
+      "identityName": "PoliceStationAgent.CustodyNoteforWindows",
       "applicationId": "CustodyNote",
-      "publisher": "CN=DEFENCELEGALSERVICES LIMITED",
-      "publisherDisplayName": "DEFENCELEGALSERVICES LIMITED",
+      "publisher": "CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7",
+      "publisherDisplayName": "Police Station Agent",
       "displayName": "Custody Note",
       "languages": [
         "en-GB",

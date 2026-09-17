@@ -19,13 +19,17 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
     assert.equal(pkg.build.appId, 'com.custodynote.app');
   });
 
-  it('documents Partner Center publisher placeholder (not a secret)', () => {
-    assert.equal(pkg.build.appx.publisher, 'CN=DEFENCELEGALSERVICES LIMITED');
-    assert.equal(pkg.build.appx.publisherDisplayName, 'DEFENCELEGALSERVICES LIMITED');
-    assert.equal(pkg.build.appx.identityName, 'DefenceLegalServices.CustodyNote');
+  it('wires Partner Center Product identity (not placeholders)', () => {
+    assert.equal(pkg.build.appx.publisher, 'CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7');
+    assert.equal(pkg.build.appx.publisherDisplayName, 'Police Station Agent');
+    assert.equal(pkg.build.appx.identityName, 'PoliceStationAgent.CustodyNoteforWindows');
+    assert.equal(pkg.build.appx.displayName, 'Custody Note');
     const doc = fs.readFileSync(path.join(root, 'docs', 'MICROSOFT_STORE_RELEASE.md'), 'utf8');
     assert.match(doc, /Partner Center/);
-    assert.match(doc, /CN=DEFENCELEGALSERVICES LIMITED/);
+    assert.match(doc, /CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7/);
+    assert.match(doc, /PoliceStationAgent\.CustodyNoteforWindows/);
+    assert.match(doc, /Custody Note for Windows/);
+    assert.match(doc, /9NFSRVT3T45V/);
     assert.match(doc, /electron-updater/);
   });
 
