@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.104",
+      "date": "2026-09-17",
+      "latest": true,
+      "changes": [
+        "Microsoft Store MSIX: raise AppX TargetDeviceFamily MinVersion to 10.0.17763.0 (Windows 10 1809) so Partner Center accepts the package (rejects ≤ 10.0.17134)",
+        "Set MaxVersionTested to 10.0.22621.0; keep runFullTrust (Electron desktop bridge — Robert must request restricted-capability approval in Partner Center if prompted)",
+        "Re-upload package version 1.9.104.0 (Store rejects reuse of the rejected 1.9.103.0 MSIX)"
+      ]
+    },
+    {
       "version": "1.9.103",
       "date": "2026-09-15",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Fix sync: clear thrash backoff on pending outbox (not only failed/blocked) and scan due queue items beyond the oldest 20 — so already-cloud written:0 reconcile actually runs after Full re-sync",
         "Empty-write reconcile confirms per sync_id in the cloud id set (partial batches) instead of failing the whole HTTP batch when one id is missing",

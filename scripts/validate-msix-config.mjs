@@ -51,6 +51,53 @@ if (!String(appx.artifactName || '').includes('.msix')) {
   fail('build.appx.artifactName should produce a .msix artefact (Store-compatible)');
 }
 
+/** Partner Center rejects MSIX packages with TargetDeviceFamily MinVersion ≤ 10.0.17134.0. */
+const STORE_MIN_VERSION_FLOOR = '10.0.17763.0';
+const WIN_VERSION_RE = /^\d+\.\d+\.\d+\.\d+$/;
+
+function parseWinVersion(v) {
+  return String(v).split('.').map((n) => Number(n));
+}
+
+function compareWinVersion(a, b) {
+  const pa = parseWinVersion(a);
+  const pb = parseWinVersion(b);
+  for (let i = 0; i < 4; i++) {
+    const da = pa[i] || 0;
+    const db = pb[i] || 0;
+    if (da !== db) return da - db;
+  }
+  return 0;
+}
+
+const minVersion = String(appx.minVersion || '');
+if (!WIN_VERSION_RE.test(minVersion)) {
+  fail(
+    `build.appx.minVersion must be a four-part Windows version (got "${minVersion || '(missing)'}"); ` +
+      `electron-builder x64 default 10.0.14316.0 is rejected by Partner Center`
+  );
+} else if (compareWinVersion(minVersion, STORE_MIN_VERSION_FLOOR) < 0) {
+  fail(
+    `build.appx.minVersion must be ≥ ${STORE_MIN_VERSION_FLOOR} for Partner Center ` +
+      `(got "${minVersion}"; packages with MinVersion ≤ 10.0.17134.0 are rejected)`
+  );
+}
+
+const maxVersionTested = String(appx.maxVersionTested || '');
+if (maxVersionTested && !WIN_VERSION_RE.test(maxVersionTested)) {
+  fail(`build.appx.maxVersionTested must be a four-part Windows version (got "${maxVersionTested}")`);
+} else if (maxVersionTested && compareWinVersion(maxVersionTested, minVersion) < 0) {
+  fail(
+    `build.appx.maxVersionTested (${maxVersionTested}) must be ≥ minVersion (${minVersion})`
+  );
+}
+
+if (!Array.isArray(appx.capabilities) || !appx.capabilities.includes('runFullTrust')) {
+  fail(
+    'build.appx.capabilities must include runFullTrust (required for Electron Desktop Bridge / full-trust MSIX)'
+  );
+}
+
 /** Partner Center Product identity (paste-exact — do not invent). */
 const EXPECTED_IDENTITY = {
   identityName: 'PoliceStationAgent.CustodyNoteforWindows',
@@ -133,4 +180,8 @@ if (errors.length) {
 
 console.log('[validate:msix] OK — AppX/MSIX config, assets, updater gate, and shared userData wiring look valid.');
 console.log(`[validate:msix] version ${version} → Windows Store form ${version}.0 (via setBuildNumber)`);
+console.log(`[validate:msix] TargetDeviceFamily MinVersion=${minVersion} MaxVersionTested=${maxVersionTested || minVersion}`);
 console.log(`[validate:msix] Partner Center identity: ${appx.identityName} / ${publisher}`);
+console.log(
+  '[validate:msix] NOTE: runFullTrust is a restricted capability — Robert must provide approval/explanation in Partner Center Submission options if prompted (expected for Electron; do not remove).'
+);
