@@ -134,6 +134,13 @@ if (String(appx.displayName) !== EXPECTED_IDENTITY.displayName) {
   );
 }
 
+const languages = appx.languages;
+if (!Array.isArray(languages) || languages.length !== 1 || languages[0] !== 'en-GB') {
+  fail(
+    `build.appx.languages must be ["en-GB"] only (UK markets; Partner Center requires a listing per declared language; got ${JSON.stringify(languages)})`
+  );
+}
+
 const productName = String((pkg.build || {}).productName || '');
 if (productName !== 'Custody Note') {
   fail(
