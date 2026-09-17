@@ -1,9 +1,19 @@
 {
   "releases": [
     {
-      "version": "1.9.104",
+      "version": "1.9.105",
       "date": "2026-09-17",
       "latest": true,
+      "changes": [
+        "Microsoft Store MSIX: set Package/Properties/DisplayName (build.appx.displayName) to the reserved Store name “Custody Note for Windows” so Partner Center accepts the package",
+        "NSIS Setup.exe / desktop productName remains “Custody Note” — Store display name is scoped to build.appx only",
+        "Re-upload package version 1.9.105.0 (Store rejects reuse of the rejected 1.9.104.0 MSIX with DisplayName “Custody Note”)"
+      ]
+    },
+    {
+      "version": "1.9.104",
+      "date": "2026-09-17",
+      "latest": false,
       "changes": [
         "Microsoft Store MSIX: raise AppX TargetDeviceFamily MinVersion to 10.0.17763.0 (Windows 10 1809) so Partner Center accepts the package (rejects ≤ 10.0.17134)",
         "Set MaxVersionTested to 10.0.22621.0; keep runFullTrust (Electron desktop bridge — Robert must request restricted-capability approval in Partner Center if prompted)",

@@ -103,7 +103,8 @@ const EXPECTED_IDENTITY = {
   identityName: 'PoliceStationAgent.CustodyNoteforWindows',
   publisher: 'CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7',
   publisherDisplayName: 'Police Station Agent',
-  displayName: 'Custody Note',
+  /* Package/Properties/DisplayName must equal the reserved Store name exactly. */
+  displayName: 'Custody Note for Windows',
 };
 
 const publisher = String(appx.publisher);
@@ -128,7 +129,16 @@ if (String(appx.publisherDisplayName) !== EXPECTED_IDENTITY.publisherDisplayName
 }
 if (String(appx.displayName) !== EXPECTED_IDENTITY.displayName) {
   fail(
-    `build.appx.displayName must remain "${EXPECTED_IDENTITY.displayName}" (Store listing title; reservation name differs — see docs)`
+    `build.appx.displayName must be reserved Store name "${EXPECTED_IDENTITY.displayName}" ` +
+      `(Package/Properties/DisplayName — Partner Center rejects mismatches; got "${appx.displayName}")`
+  );
+}
+
+const productName = String((pkg.build || {}).productName || '');
+if (productName !== 'Custody Note') {
+  fail(
+    `build.productName must remain "Custody Note" for NSIS/desktop branding ` +
+      `(Store DisplayName is build.appx.displayName only; got "${productName}")`
   );
 }
 

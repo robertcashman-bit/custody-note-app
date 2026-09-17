@@ -31,15 +31,16 @@ macOS (DMG/ZIP + notarisation) is unchanged.
 
 ---
 
-## Store listing names (reservation vs display)
+## Store listing names (reservation = DisplayName)
 
 | Field | Value | Notes |
 |-------|-------|-------|
 | **Reserved Store name** (Partner Center reservation) | `Custody Note for Windows` | Must match the reserved product name in Partner Center |
-| **Display title** (Store listing / tile) | `Custody Note` | Repo `build.appx.displayName`; users can see this shorter title |
+| **Package DisplayName** (`Package/Properties/DisplayName`) | `Custody Note for Windows` | Repo `build.appx.displayName` — **must equal the reserved name exactly** or Partner Center rejects the MSIX |
+| **NSIS / desktop productName** | `Custody Note` | Repo `build.productName` — Setup.exe / shortcuts; not the Store DisplayName |
 | **Publisher display name** | `Police Station Agent` | Shown as the publisher on the Store page |
 
-Keep the reservation name and the display title consistent with Partner Center. Do **not** rename the reservation without updating Partner Center first.
+Partner Center validates `Package/Properties/DisplayName` against the reserved app name. Do **not** use a shorter title in the MSIX manifest. Do **not** rename the reservation without updating Partner Center and `build.appx.displayName` together.
 
 ---
 
@@ -63,7 +64,7 @@ Mapped into electron-builder:
 | Package / Identity name | `package.json` → `build.appx.identityName` | `PoliceStationAgent.CustodyNoteforWindows` |
 | Publisher (`CN=…`) | `package.json` → `build.appx.publisher` | `CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7` |
 | Publisher display name | `package.json` → `build.appx.publisherDisplayName` | `Police Station Agent` |
-| Display title | `package.json` → `build.appx.displayName` | `Custody Note` |
+| Package/Properties/DisplayName (reserved name) | `package.json` → `build.appx.displayName` | `Custody Note for Windows` |
 | Application Id | `package.json` → `build.appx.applicationId` | `CustodyNote` |
 
 ### OS targeting (TargetDeviceFamily)
@@ -90,7 +91,7 @@ Package family name and Store ID are Partner Center–derived metadata (document
 
 ### B. Identity in repo (done)
 
-3. `build.appx.identityName` / `publisher` / `publisherDisplayName` match Partner Center (see table above).
+3. `build.appx.identityName` / `publisher` / `publisherDisplayName` / `displayName` match Partner Center (see table above). `displayName` must be exactly **Custody Note for Windows**.
 4. After any identity change: `npm run validate:msix` must pass (CI also runs it).
 
 ### C. Build / obtain the MSIX
@@ -109,7 +110,7 @@ Package family name and Store ID are Partner Center–derived metadata (document
    - If Partner Center rejects identity mismatch, re-check `identityName` + `publisher` against Product identity — do not invent a new CN.
 10. **Store listings (en-GB at minimum):**
     - Product/reservation name remains **Custody Note for Windows**.
-    - Listing **title** may be **Custody Note** (matches `displayName`).
+    - MSIX `Package/Properties/DisplayName` must also be **Custody Note for Windows** (`build.appx.displayName`) — Partner Center rejects any other value.
     - Description, feature bullets, screenshots / Store logos, search terms.
 11. **Age ratings:** complete the questionnaire (business / productivity; no child-directed content).
 12. **Privacy policy URL:** `https://custodynote.com/privacy` (confirm it still resolves before submit).
