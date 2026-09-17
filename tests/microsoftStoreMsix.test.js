@@ -23,7 +23,10 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
     assert.equal(pkg.build.appx.publisher, 'CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7');
     assert.equal(pkg.build.appx.publisherDisplayName, 'Police Station Agent');
     assert.equal(pkg.build.appx.identityName, 'PoliceStationAgent.CustodyNoteforWindows');
-    assert.equal(pkg.build.appx.displayName, 'Custody Note');
+    /* Package/Properties/DisplayName must match the reserved Store name exactly. */
+    assert.equal(pkg.build.appx.displayName, 'Custody Note for Windows');
+    /* NSIS / desktop short name stays separate from Store DisplayName. */
+    assert.equal(pkg.build.productName, 'Custody Note');
     const doc = fs.readFileSync(path.join(root, 'docs', 'MICROSOFT_STORE_RELEASE.md'), 'utf8');
     assert.match(doc, /Partner Center/);
     assert.match(doc, /CN=E2B27EAF-500B-4615-A55C-DB01E913CBC7/);
@@ -31,6 +34,7 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
     assert.match(doc, /Custody Note for Windows/);
     assert.match(doc, /9NFSRVT3T45V/);
     assert.match(doc, /electron-updater/);
+    assert.match(doc, /Package\/Properties\/DisplayName/);
   });
 
   it('sets Partner Center–acceptable TargetDeviceFamily MinVersion', () => {
