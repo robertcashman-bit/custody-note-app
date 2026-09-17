@@ -108,7 +108,8 @@ Package family name and Store ID are Partner Center–derived metadata (document
 8. Open [Partner Center](https://partner.microsoft.com/dashboard) → app **Custody Note for Windows** (`9NFSRVT3T45V`) → **Start submission** (or next submission).
 9. **Packages:** upload the unsigned `Custody-Note-{version}.msix` from CI/GitHub Release. Partner Center signs for Store distribution.
    - If Partner Center rejects identity mismatch, re-check `identityName` + `publisher` against Product identity — do not invent a new CN.
-10. **Store listings (en-GB at minimum):**
+10. **Store listings (en-GB only):**
+    - Package `build.appx.languages` is `["en-GB"]` only — do **not** add `en-US` (Partner Center requires a Store listing for every declared package language; markets are UK-only).
     - Product/reservation name remains **Custody Note for Windows**.
     - MSIX `Package/Properties/DisplayName` must also be **Custody Note for Windows** (`build.appx.displayName`) — Partner Center rejects any other value.
     - Description, feature bullets, screenshots / Store logos, search terms.
