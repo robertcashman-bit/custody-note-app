@@ -42,6 +42,7 @@ const {
   RATE_LIMIT_COOLDOWN_MS,
 } = require('../lib/syncPushAck');
 const { normalizeLicenceKeyForSync } = require('../lib/licenceKeyNormalize');
+const { buildSyncAuthHeaders } = require('../lib/syncPullGuard');
 const {
   buildMutationId,
   mayClearOutboxEntry,
@@ -435,6 +436,7 @@ function createSyncWorker(ctx) {
     const masterKeyHex = ctx.getMasterKeyHex && ctx.getMasterKeyHex();
     if (!masterKeyHex) throw new Error('No encryption key; cannot sync');
     const envelope = encryptSyncEnvelope(masterKeyHex, {
+      syncId: row.sync_id,
       data: row.data,
       status: row.status || 'draft',
       clientName: row.client_name || '',
@@ -472,14 +474,21 @@ function createSyncWorker(ctx) {
     if (!licenceKey) throw new Error('No licence');
     const payloads = queueItems.map((item) => buildPushPayload(item));
     const correlationId = generateCorrelationId();
+    const authHeaders = buildSyncAuthHeaders({
+      authToken: data.authToken || null,
+      correlationId,
+      licenceKey,
+      accountId: data.accountId || null,
+    });
     const resp = await ctx.httpPost(
       `${apiUrl.replace(/\/$/, '')}/api/sync/push`,
       {
         key: licenceKey,
         machineId: ctx.getMachineId(),
+        accountId: data.accountId || undefined,
         records: payloads.map((p) => p.record),
       },
-      { timeout: SYNC_REQUEST_TIMEOUT_MS, correlationId }
+      { timeout: SYNC_REQUEST_TIMEOUT_MS, headers: authHeaders, correlationId }
     );
     if (isAmbiguousPushAck(resp, payloads.length)) {
       const err = new Error('Push unconfirmed: ambiguous acknowledgement — safe retry');

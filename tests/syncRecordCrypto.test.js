@@ -19,10 +19,16 @@ test('encryptSyncEnvelope round-trips attendance payload', () => {
   assert.deepEqual(decoded, payload);
 });
 
-test('decryptSyncEnvelope supports legacy plaintext JSON', () => {
+test('decryptSyncEnvelope rejects plaintext JSON by default (hostile cloud)', () => {
   const masterKeyHex = crypto.randomBytes(32).toString('hex');
   const legacy = JSON.stringify({ data: 'x', status: 'draft' });
-  const decoded = decryptSyncEnvelope(masterKeyHex, legacy);
+  assert.equal(decryptSyncEnvelope(masterKeyHex, legacy), null);
+});
+
+test('decryptSyncEnvelope supports legacy plaintext only with explicit opt-in', () => {
+  const masterKeyHex = crypto.randomBytes(32).toString('hex');
+  const legacy = JSON.stringify({ data: 'x', status: 'draft' });
+  const decoded = decryptSyncEnvelope(masterKeyHex, legacy, { allowLegacyPlaintext: true });
   assert.equal(decoded.data, 'x');
 });
 

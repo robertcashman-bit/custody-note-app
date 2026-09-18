@@ -846,12 +846,12 @@ describe('Re-upload / restore product wiring', () => {
     assert.match(body, /await syncPull\(/);
     assert.doesNotMatch(body, /await w\.runCycle\(\)/);
     const ipcIdx = mainJs.indexOf("ipcMain.handle('sync-full-resync'");
-    const ipcBody = mainJs.slice(ipcIdx, ipcIdx + 900);
+    const ipcBody = mainJs.slice(ipcIdx, ipcIdx + 1600);
+    assert.match(ipcBody, /hasExplicitUserConfirmation|CONFIRMATION_REQUIRED/);
     assert.match(ipcBody, /received:/);
     assert.match(ipcBody, /merged:/);
     assert.match(ipcBody, /rateLimited/);
   });
-
   it('re-upload drains pending uploads before verify pull', () => {
     assert.match(mainJs, /async function drainPendingSyncUploads/);
     const idx = mainJs.indexOf("ipcMain.handle('sync-reupload-all'");

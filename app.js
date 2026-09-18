@@ -7814,6 +7814,8 @@ var REQUIRED_FIELD_KEYS = [
     const postFinaliseBar = document.getElementById('form-post-finalise-bar');
     const archiveBtn = document.getElementById('form-archive-btn');
     const unarchiveBtn = document.getElementById('form-unarchive-btn');
+    const markBilledBtn = document.getElementById('form-mark-billed-btn');
+    const purgeBtn = document.getElementById('form-purge-after-billed-btn');
     /* §9 Finalise / Finish bars stay hidden — primary action is the header pill. */
     if (finaliseBar) finaliseBar.style.display = 'none';
     if (endBillingBtn) endBillingBtn.style.display = 'none';
@@ -7826,7 +7828,92 @@ var REQUIRED_FIELD_KEYS = [
     if (unarchiveBtn) {
       unarchiveBtn.style.display = (currentAttendanceId && currentRecordArchived) ? '' : 'none';
     }
+    var d = formData || {};
+    var locked = (currentRecordStatus === 'finalised' || currentRecordStatus === 'completed');
+    var hasInvoice = !!(d.quickfile_invoice_id || d.quickfileInvoiceNumber || d.quickfileInvoiceUrl);
+    var markedBilled = !!(d.billedToFirmAt || d.billedToFirm === true || d.billedToFirm === 'Yes');
+    var billingDone = !!d.billingProcessCompletedAt;
+    var canPurge = !!(currentAttendanceId && locked && (hasInvoice || markedBilled || (billingDone && currentRecordStatus === 'completed')));
+    var canMark = !!(currentAttendanceId && locked && !hasInvoice && !markedBilled);
+    if (markBilledBtn) markBilledBtn.style.display = canMark ? '' : 'none';
+    if (purgeBtn) purgeBtn.style.display = canPurge ? '' : 'none';
   }
+
+  /** Mark billed to firm — enables Clear after billed without QuickFile. */
+  function runMarkBilledToFirm() {
+    if (!currentAttendanceId || !window.api || !window.api.attendanceMarkBilledToFirm) {
+      showToast('Mark billed is not available', 'error');
+      return;
+    }
+    showConfirm(
+      'Mark this matter as billed to the firm?\n\nThis enables permanent Clear after billed (remove from device and cloud). It does not create a QuickFile invoice.',
+      'Mark billed to firm'
+    ).then(function (ok) {
+      if (!ok) return;
+      return window.api.attendanceMarkBilledToFirm({ id: currentAttendanceId });
+    }).then(function (res) {
+      if (!res || !res.ok) {
+        if (res) showToast(res.error || 'Could not mark billed', 'error');
+        return;
+      }
+      if (formData) {
+        formData.billedToFirm = true;
+        formData.billedToFirmAt = res.billedToFirmAt || new Date().toISOString();
+        if (!formData.billingProcessCompletedAt) formData.billingProcessCompletedAt = formData.billedToFirmAt;
+      }
+      showToast('Marked billed to firm — you can now Clear after billed', 'success');
+      updateFormBarVisibility();
+      if (typeof _wfRenderCompletionStep === 'function' && document.querySelector('.wf-completion')) {
+        try { /* refresh workflow if open */ } catch (_) {}
+      }
+    }).catch(function () { showToast('Could not mark billed', 'error'); });
+  }
+  window.runMarkBilledToFirm = runMarkBilledToFirm;
+
+  /**
+   * Permanent purge after billed — type DELETE to confirm.
+   * Removes confidential content from device and requests cloud purge.
+   */
+  function runPostBillPurge() {
+    if (!currentAttendanceId || !window.api || !window.api.attendancePurgeAfterBilled) {
+      showToast('Clear after billed is not available', 'error');
+      return;
+    }
+    var phrase = 'DELETE';
+    var msg =
+      'PERMANENTLY remove this custody note from this device and cloud?\n\n' +
+      'This deletes client details, advice, and attachments for this matter. ' +
+      'Your firm remains responsible for any legal / LAA retention outside Custody Note.\n\n' +
+      'Type ' + phrase + ' to confirm.';
+    var typed = window.prompt(msg, '');
+    if (typed == null) return;
+    if (String(typed).trim().toUpperCase() !== phrase) {
+      showToast('Purge cancelled — confirmation phrase did not match', 'info');
+      return;
+    }
+    window.api.attendancePurgeAfterBilled({
+      id: currentAttendanceId,
+      confirmationPhrase: typed,
+    }).then(function (res) {
+      if (!res || !res.ok) {
+        showToast((res && res.error) || 'Purge failed', 'error', 7000);
+        return;
+      }
+      showToast('Record cleared from device' + (res.cloud && res.cloud.ok ? ' and cloud' : ' (cloud tombstone queued)'), 'success', 6000);
+      currentAttendanceId = null;
+      currentRecordStatus = null;
+      formData = {};
+      if (typeof closeWorkflow === 'function') {
+        try { closeWorkflow(); } catch (_) {}
+      }
+      if (typeof setListFilterAndShowList === 'function') setListFilterAndShowList('all');
+      else if (typeof showView === 'function') showView('list');
+      updateFormBarVisibility();
+    }).catch(function (err) {
+      showToast('Purge failed: ' + (err && err.message ? err.message : err), 'error');
+    });
+  }
+  window.runPostBillPurge = runPostBillPurge;
 
   function getPrimaryRecordActionState() {
     if (!currentAttendanceId || currentRecordArchived) return null;
@@ -9558,6 +9645,8 @@ var REQUIRED_FIELD_KEYS = [
           '<button type="button" class="btn btn-primary" id="form-end-billing-btn" style="display:none;">Finish matter</button>' +
           '<button type="button" class="btn btn-secondary" id="form-archive-btn" style="display:none;">Archive Record</button>' +
           '<button type="button" class="btn btn-secondary" id="form-unarchive-btn" style="display:none;">Unarchive Record</button>' +
+          '<button type="button" class="btn btn-secondary" id="form-mark-billed-btn" style="display:none;">Mark billed to firm</button>' +
+          '<button type="button" class="btn btn-danger" id="form-purge-after-billed-btn" style="display:none;" title="Permanently remove client custody data from this device and cloud">Clear after billed</button>' +
           '<div id="form-post-finalise-bar" class="form-post-finalise-bar" style="display:none;">' +
             '<div class="form-post-finalise-inner">' +
               '<span class="form-post-finalise-text">This note is finalised. Next: finish matter — documents, QuickFile invoice, mark office complete.</span>' +
@@ -15412,7 +15501,16 @@ pdfAuditFooterHtml(d, settings) +
     // is required if any caller uses esc() inside an attribute context;
     // currently this scope only emits text-context but the wider escape
     // is safer if call sites change).
-    function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+        .replace(/`/g, '&#96;')
+        .replace(/=/g, '&#61;');
+    }
     function fmtDate(v) { if (!v) return ''; var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : v; }
     var vatPct = (totals.vatRate != null) ? (Math.round(totals.vatRate * 1000) / 10) : 20;
     if (Math.abs(vatPct - Math.round(vatPct)) < 0.01) vatPct = Math.round(vatPct);
@@ -17684,6 +17782,14 @@ pdfAuditFooterHtml(d, settings) +
         case 'form-archive-btn':
           archiveCurrentMatterFromForm();
           break;
+        case 'form-mark-billed-btn':
+          e.preventDefault();
+          runMarkBilledToFirm();
+          break;
+        case 'form-purge-after-billed-btn':
+          e.preventDefault();
+          runPostBillPurge();
+          break;
         case 'form-unarchive-btn':
           if (!currentAttendanceId) return;
           window.api.attendanceUnarchive(currentAttendanceId).then(function() {
@@ -18276,7 +18382,7 @@ pdfAuditFooterHtml(d, settings) +
       if (!confirm('Re-download all records from the cloud? This is safe and does not delete local records unless newer remote versions apply.')) return;
       btn.disabled = true;
       if (statusEl) { statusEl.textContent = 'Full re-sync running\u2026'; statusEl.style.color = '#d97706'; }
-      window.api.syncFullResync().then(function(res) {
+      window.api.syncFullResync({ confirmed: true }).then(function(res) {
         if (res && res.ok) {
           var received = res.received || 0;
           var merged = res.merged || 0;
@@ -18390,9 +18496,10 @@ pdfAuditFooterHtml(d, settings) +
       if (!window.api || !window.api.syncExportRecordIndex) return;
       var btn = this;
       var statusEl = document.getElementById('cross-device-sync-action-status');
+      if (!confirm('Export a metadata-only record index (no note text)? Save the file somewhere only you can access.')) return;
       btn.disabled = true;
       if (statusEl) { statusEl.textContent = 'Exporting record index\u2026'; statusEl.style.color = '#d97706'; }
-      window.api.syncExportRecordIndex().then(function(res) {
+      window.api.syncExportRecordIndex({ confirmed: true }).then(function(res) {
         if (!res || !res.ok) {
           showToast('Export failed: ' + ((res && res.error) || 'Unknown error'), 'error');
           if (statusEl) { statusEl.textContent = (res && res.error) || 'Export failed'; statusEl.style.color = '#dc2626'; }
