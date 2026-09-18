@@ -173,7 +173,7 @@ describe('cloudAuthSession — short-lived tokens + revoke', () => {
     assert.equal(r.reason, 'expired');
   });
 
-  it('applyIssuedTokens stamps expiry; clearSessionTokens removes secrets', () => {
+  it('applyIssuedTokens stamps expiry when server sends expiresIn; clearSessionTokens removes secrets', () => {
     const data = {};
     applyIssuedTokens(data, { accessToken: 'a', refreshToken: 'r', expiresIn: 60 }, { now: 1_000_000 });
     assert.equal(data.authToken, 'a');
@@ -181,6 +181,14 @@ describe('cloudAuthSession — short-lived tokens + revoke', () => {
     clearSessionTokens(data);
     assert.equal(data.authToken, undefined);
     assert.equal(data.refreshToken, undefined);
+  });
+
+  it('applyIssuedTokens does not invent expiry when server omits it (keeps magic-link sessions alive)', () => {
+    const data = {};
+    applyIssuedTokens(data, { accessToken: 'a', refreshToken: 'r' }, { now: 1_000_000 });
+    assert.equal(data.authToken, 'a');
+    assert.equal(data.refreshToken, 'r');
+    assert.equal(data.tokenExpiresAt, undefined);
   });
 
   it('revokeSessionTokens always clears local even if remote fails', async () => {

@@ -69,9 +69,11 @@ describe('Durable pendingSync / honest Saved to disk vs Synced', () => {
     assert.match(mainJs, /function finishAttendanceSaveResult/);
     const idx = mainJs.indexOf("ipcMain.handle('attendance-save'");
     assert.ok(idx > 0);
-    const chunk = mainJs.slice(idx, idx + 12000);
+    // Window includes post-bill purge guard at the top of the handler.
+    const chunk = mainJs.slice(idx, idx + 16000);
     assert.match(chunk, /finishAttendanceSaveResult/);
     assert.match(chunk, /flushDbSync\(\)/);
+    assert.match(chunk, /isPostBillPurgeReason/);
     // Draft create/update paths must also return durable result (not bare id).
     assert.match(chunk, /finishAttendanceSaveResult\(newId/);
     assert.match(chunk, /finishAttendanceSaveResult\(existingId/);
