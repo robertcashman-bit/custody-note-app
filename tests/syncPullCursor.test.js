@@ -21,3 +21,10 @@ describe('shouldAdvanceSyncPullCursor', () => {
     assert.strictEqual(shouldAdvanceSyncPullCursor({ receivedCount: 2, noMasterKeySkipped: 2 }), false);
   });
 });
+  it('advances when only hostile/shell rejects occurred (poison rows skipped)', () => {
+    assert.strictEqual(
+      shouldAdvanceSyncPullCursor({ receivedCount: 3, decryptFailed: 0, rejectedHostile: 2 }),
+      true
+    );
+  });
+
