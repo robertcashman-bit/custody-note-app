@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.107",
+      "date": "2026-09-18",
+      "latest": true,
+      "changes": [
+        "Security hardening: treat cloud sync as hostile — reject plaintext sync envelopes, bind pull/auth headers, guard dump IPC, fail-closed updater signature checks, seal sensitive local files (safeStorage)",
+        "Clear after billed: permanent purge on completion and form when billed (typed DELETE confirm) — local content scrub + sticky tombstone; requests POST /api/sync/purge when licensed (tombstone still syncs if API missing)",
+        "Bugbot hardening follow-ups: stale token expiry cleared on reissue, sticky post_bill_purge before status gates, tombstone version overtakes remote, OpenAI key seal/clear edge cases",
+        "Ships merged security stack from PRs #64–#66 on top of v1.9.106; no new client field-level encryption — sync already uses AES-256-GCM envelopes; website field-encrypt (if added) should decrypt transparently on pull"
+      ]
+    },
+    {
       "version": "1.9.106",
       "date": "2026-09-17",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Microsoft Store MSIX: declare package language en-GB only (remove en-US) so Partner Center no longer requires an English (United States) Store listing for the UK-only app",
         "Re-upload package version 1.9.106.0 after the language manifest change"
