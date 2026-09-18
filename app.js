@@ -7863,8 +7863,14 @@ var REQUIRED_FIELD_KEYS = [
       }
       showToast('Marked billed to firm — you can now Clear after billed', 'success');
       updateFormBarVisibility();
-      if (typeof _wfRenderCompletionStep === 'function' && document.querySelector('.wf-completion')) {
-        try { /* refresh workflow if open */ } catch (_) {}
+      if (typeof _wfRenderCurrentStep === 'function' && document.getElementById('wf-body') && document.getElementById('wf-footer')) {
+        try { _wfRenderCurrentStep(); } catch (_) {}
+      } else if (typeof _wfRenderCompletionStep === 'function') {
+        var bodyEl = document.getElementById('wf-body');
+        var footerEl = document.getElementById('wf-footer');
+        if (bodyEl && footerEl) {
+          try { _wfRenderCompletionStep(bodyEl, footerEl); } catch (_) {}
+        }
       }
     }).catch(function () { showToast('Could not mark billed', 'error'); });
   }

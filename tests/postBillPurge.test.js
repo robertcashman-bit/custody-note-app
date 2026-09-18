@@ -11,6 +11,9 @@ const {
   isValidPurgeConfirmation,
   buildPurgedAttendanceStub,
   buildCloudPurgeRequest,
+  isPostBillPurgeReason,
+  shouldKeepLocalPostBillPurgeTombstone,
+  buildRedactedAuditSnapshotJson,
 } = require('../lib/postBillPurge');
 
 describe('postBillPurge eligibility', () => {
@@ -109,5 +112,59 @@ describe('postBillPurge wiring (source)', () => {
     const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
     assert.ok(main.includes("deletion_reason === POST_BILL_PURGE_REASON"));
     assert.ok(main.includes('cannot restore confidential content'));
+  });
+});
+
+describe('postBillPurge sticky tombstone + audit redaction', () => {
+  it('keeps local post_bill_purge when remote tries to restore a body', () => {
+    assert.equal(
+      shouldKeepLocalPostBillPurgeTombstone(PURGE_REASON, null),
+      true
+    );
+    assert.equal(
+      shouldKeepLocalPostBillPurgeTombstone(PURGE_REASON, 'user_deleted'),
+      true
+    );
+    assert.equal(
+      shouldKeepLocalPostBillPurgeTombstone(PURGE_REASON, PURGE_REASON),
+      false
+    );
+    assert.equal(shouldKeepLocalPostBillPurgeTombstone(null, null), false);
+    assert.equal(isPostBillPurgeReason(PURGE_REASON), true);
+  });
+
+  it('redacted audit snapshot has no note body fields', () => {
+    const snap = JSON.parse(buildRedactedAuditSnapshotJson());
+    assert.equal(snap.redacted, true);
+    assert.equal(snap.reason, PURGE_REASON);
+    assert.equal(snap.advice, undefined);
+    assert.equal(snap.forename, undefined);
+  });
+});
+
+describe('postBillPurge Bugbot wiring (source)', () => {
+  const root = path.join(__dirname, '..');
+  it('sync pull keeps sticky purge tombstone and does not count hostile rejects as decryptFailed', () => {
+    const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+    assert.ok(main.includes('shouldKeepLocalPostBillPurgeTombstone'));
+    assert.ok(main.includes('Sticky post_bill_purge'));
+    assert.ok(main.includes('Do not count shell/hostile rejects as decryptFailed'));
+    assert.ok(main.includes('isPostBillPurgeReason(purgedRow.deletion_reason)'));
+    assert.ok(main.includes('buildRedactedAuditSnapshotJson'));
+    assert.ok(main.includes("UPDATE audit_log SET previous_snapshot=?"));
+  });
+
+  it('cloud-backup-list surfaces API errors; openai key not re-seeded to plaintext', () => {
+    const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+    assert.ok(main.includes("resp.ok === false || resp.error"));
+    assert.ok(main.includes('Migrated OpenAI API key to secure store and cleared plaintext settings') ||
+              main.includes('cleared plaintext settings'));
+    assert.ok(main.includes("['openaiApiKey', '']"));
+    assert.ok(main.includes('refreshAccessTokenIfNeeded'));
+  });
+
+  it('mark billed refreshes workflow footer without leaving completion step', () => {
+    const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+    assert.ok(app.includes('_wfRenderCurrentStep()'));
   });
 });

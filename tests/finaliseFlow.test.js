@@ -260,9 +260,14 @@ describe('Main process — attendance-force-status handler', () => {
 
   it('verifies the write and returns result', () => {
     const handlerStart = mainJsSource.indexOf("ipcMain.handle('attendance-force-status'");
-    const handler = mainJsSource.substring(handlerStart, handlerStart + 1200);
+    // Include post-bill purge refusal at the top of the handler.
+    const handler = mainJsSource.substring(handlerStart, handlerStart + 1800);
     assert.ok(handler.includes('verify'), 'must verify the write');
     assert.ok(handler.includes("ok: true"), 'must return ok: true on success');
+    assert.ok(
+      handler.includes('isPostBillPurgeReason'),
+      'must refuse writes to post-bill purged records'
+    );
   });
 });
 

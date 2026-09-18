@@ -202,6 +202,9 @@ const {
   isValidPurgeConfirmation,
   buildPurgedAttendanceStub,
   buildCloudPurgeRequest,
+  isPostBillPurgeReason,
+  shouldKeepLocalPostBillPurgeTombstone,
+  buildRedactedAuditSnapshotJson,
 } = require('./lib/postBillPurge');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
@@ -3514,7 +3517,8 @@ async function syncPull(opts) {
       if (!shell.ok) {
         console.warn('[SYNC-PULL] Rejected hostile/malformed cloud record:', shell.code);
         batchRejectedHostile++;
-        batchDecryptFailed++;
+        // Do not count shell/hostile rejects as decryptFailed — poison rows must
+        // not stall the since-cursor; skip with metric and keep pulling.
         continue;
       }
       if (!masterKeyHex) {
@@ -3533,7 +3537,7 @@ async function syncPull(opts) {
       if (!bound.ok) {
         console.warn('[SYNC-PULL] Rejected decrypted payload:', bound.code);
         batchRejectedHostile++;
-        batchDecryptFailed++;
+        // Poison/bind failures: skip + metric; do not block cursor advance.
         continue;
       }
       const payload = bound.payload;
@@ -3554,7 +3558,7 @@ async function syncPull(opts) {
         archivedAt: payload.archivedAt || null,
         version: shell.version,
       };
-      const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty FROM attendances WHERE sync_id=?', [remote.syncId]);
+      const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty, deletion_reason FROM attendances WHERE sync_id=?', [remote.syncId]);
 
       if (!local) {
         dbRun(
@@ -3625,6 +3629,15 @@ async function syncPull(opts) {
         (remoteVersion === localVersion && remote.updatedAt > (local.updated_at || ''));
 
       if (remoteNewer) {
+        if (shouldKeepLocalPostBillPurgeTombstone(local.deletion_reason, remote.deletionReason)) {
+          console.warn('[SYNC-PULL] Sticky post_bill_purge tombstone retained for', remote.syncId);
+          // Re-queue local tombstone so cloud converges to purge (optional push-back).
+          try {
+            dbRun('UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE id=?', [local.id]);
+            enqueueSyncForRecord(local.id, 'upsert', { immediate: true });
+          } catch (_) {}
+          continue;
+        }
         if (local.sync_dirty === 1) {
           recordSyncConflict(local.id, local, remote, 'preserve_local_dirty');
           batchConflicts++;
@@ -5698,17 +5711,46 @@ function httpPost(url, body, opts) {
   });
 }
 
+let _cloudAuthRefreshInFlight = null;
+function _scheduleCloudAuthRefresh() {
+  if (_cloudAuthRefreshInFlight) return _cloudAuthRefreshInFlight;
+  _cloudAuthRefreshInFlight = (async () => {
+    try {
+      const data = readLicenceData();
+      if (!data) return;
+      const apiUrl = getManagedCloudApiUrl();
+      if (!apiUrl) return;
+      const result = await cloudAuthSession.refreshAccessTokenIfNeeded(data, {
+        httpPost,
+        apiUrl,
+      });
+      if (result && result.refreshed) writeLicenceData(data);
+    } catch (err) {
+      console.warn('[auth] background refresh failed:', err && err.message);
+    } finally {
+      _cloudAuthRefreshInFlight = null;
+    }
+  })();
+  return _cloudAuthRefreshInFlight;
+}
+
 function _getAuthHeaders() {
   const data = readLicenceData();
   if (!data) return {};
   const evalTok = cloudAuthSession.evaluateAccessToken(data);
   if (!evalTok.usable) {
-    if (evalTok.reason === 'expired' && data.authToken) {
-      // Fail closed for expired bearer — do not send a stale token.
-      try {
-        cloudAuthSession.clearSessionTokens(data);
-        writeLicenceData(data);
-      } catch (_) {}
+    if (evalTok.reason === 'expired') {
+      const hasRefresh = !!(data.refreshToken && String(data.refreshToken).trim());
+      if (hasRefresh) {
+        // Never wipe refreshToken on access expiry — attempt refresh first.
+        _scheduleCloudAuthRefresh();
+      } else if (data.authToken) {
+        // Fail closed for expired bearer with no refresh path.
+        try {
+          cloudAuthSession.clearSessionTokens(data);
+          writeLicenceData(data);
+        } catch (_) {}
+      }
     }
     return {};
   }
@@ -5716,6 +5758,13 @@ function _getAuthHeaders() {
     return { Authorization: 'Bearer ' + data.authToken };
   }
   return {};
+}
+
+async function _getAuthHeadersAsync() {
+  try {
+    await _scheduleCloudAuthRefresh();
+  } catch (_) {}
+  return _getAuthHeaders();
 }
 
 async function postLicenceValidateRequest(body) {
@@ -6681,25 +6730,19 @@ function persistOpenAiApiKeySecure(key) {
 }
 
 function seedOpenAiApiKeyIntoSettings() {
+  // Migrate any leftover plaintext settings value into the OS-sealed store, then
+  // clear the plaintext column. Never copy a sealed key back into SQLite.
   try {
     const existing = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
-    if (existing && String(existing.value || '').trim()) return;
-    const key = resolveOpenAiApiKey();
-    if (!key) return;
-    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', key]);
-    markDbDirty();
-    console.log('[ai-law] OpenAI API key seeded into settings from local secret file');
-    setTimeout(function () {
-      if (typeof scheduleUserSettingsCloudPush === 'function') {
-        scheduleUserSettingsCloudPush('openai-seed');
-      } else if (typeof pushQuickFileSettingsToCloud === 'function') {
-        pushQuickFileSettingsToCloud('openai-seed').catch(function (err) {
-          console.warn('[ai-law] cloud push after seed failed:', err && err.message);
-        });
-      }
-    }, 2500);
+    const plaintext = existing && String(existing.value || '').trim();
+    if (plaintext) {
+      try { persistOpenAiApiKeySecure(plaintext); } catch (_) {}
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
+      markDbDirty();
+      console.log('[ai-law] Migrated OpenAI API key to secure store and cleared plaintext settings');
+    }
   } catch (e) {
-    console.warn('[ai-law] could not seed OpenAI key:', e && e.message);
+    console.warn('[ai-law] could not migrate/clear OpenAI key plaintext:', e && e.message);
   }
 }
 
@@ -6968,6 +7011,9 @@ ipcMain.handle('set-settings', (_, settings) => {
       if (QUICKFILE_CREDENTIAL_KEYS.has(key)) wroteQuickFile = true;
       if (key === 'openaiApiKey' && incoming) {
         persistOpenAiApiKeySecure(incoming);
+        // Persist sealed only — never keep the raw key in SQLite settings.
+        dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
+        continue;
       }
     }
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value == null ? '' : String(value)]);
@@ -7249,6 +7295,16 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   // so sql.js never binds [object Object].
   id = coerceAttendanceIdArg(id);
 
+  if (id) {
+    const purgedRow = dbGet('SELECT deletion_reason FROM attendances WHERE id = ?', [id]);
+    if (purgedRow && isPostBillPurgeReason(purgedRow.deletion_reason)) {
+      return {
+        error: 'purged',
+        message: 'Record was permanently purged after billing and cannot be modified',
+      };
+    }
+  }
+
   /* Unlock: change status back to draft without overwriting data */
   if (id && unlock && !data) {
     const existing = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
@@ -7445,8 +7501,11 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
 
 ipcMain.handle('attendance-force-status', (_, { id, status }) => {
   if (!id || !status) return { error: 'missing_params' };
-  const existing = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
+  const existing = dbGet('SELECT status, sync_version, deletion_reason FROM attendances WHERE id = ?', [id]);
   if (!existing) return { error: 'not_found' };
+  if (isPostBillPurgeReason(existing.deletion_reason)) {
+    return { error: 'purged', message: 'Record was permanently purged after billing and cannot be modified' };
+  }
   const now = new Date().toISOString();
   const nextVer = (existing.sync_version || 1) + 1;
   dbRun('UPDATE attendances SET status=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?',
@@ -7609,6 +7668,18 @@ ipcMain.handle('attendance-purge-after-billed', async (_event, params) => {
   try {
     dbRun('DELETE FROM record_revisions WHERE attendance_id=?', [id]);
   } catch (_) { /* table may not exist on older DBs */ }
+
+  // Scrub audit_log previous_snapshot bodies so history cannot return note content.
+  try {
+    const redacted = buildRedactedAuditSnapshotJson();
+    dbRun(
+      `UPDATE audit_log SET previous_snapshot=?
+        WHERE attendance_id=? AND previous_snapshot IS NOT NULL AND previous_snapshot != ''`,
+      [redacted, id]
+    );
+  } catch (auditScrubErr) {
+    console.warn('[PURGE] audit_log snapshot scrub failed:', auditScrubErr && auditScrubErr.message);
+  }
 
   markDbDirty();
   if (syncId) {
@@ -8498,11 +8569,18 @@ ipcMain.handle('cloud-backup-subscribe', async () => {
 
 ipcMain.handle('cloud-backup-list', async () => {
   const data = readLicenceData();
-  if (!data || (!data.key && !data.authToken)) return { backups: [], error: 'No licence key' };
+  if (!data || (!data.key && !data.authToken)) return { ok: false, backups: [], error: 'No licence key' };
   const apiUrl = getManagedCloudApiUrl();
   try {
-    const authHeaders = _getAuthHeaders();
+    const authHeaders = await _getAuthHeadersAsync();
     const resp = await httpPost(`${apiUrl}/api/backup/list`, { key: data.key }, { headers: authHeaders });
+    if (!resp || resp.ok === false || resp.error) {
+      return {
+        ok: false,
+        backups: [],
+        error: (resp && resp.error) ? String(resp.error) : 'Backup list failed',
+      };
+    }
     // Metadata only — never return blob bodies / ciphertext dumps to the renderer.
     const rawList = (resp && (resp.backups || resp.items || resp.objects)) || [];
     const backups = (Array.isArray(rawList) ? rawList : []).map(function (b) {
@@ -8516,7 +8594,7 @@ ipcMain.handle('cloud-backup-list', async () => {
     }).filter(Boolean);
     return { backups, ok: true };
   } catch (e) {
-    return { backups: [], error: e && e.message ? e.message : 'Failed to list backups' };
+    return { ok: false, backups: [], error: e && e.message ? e.message : 'Failed to list backups' };
   }
 });
 
