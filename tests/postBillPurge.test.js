@@ -13,6 +13,7 @@ const {
   buildCloudPurgeRequest,
   isPostBillPurgeReason,
   shouldKeepLocalPostBillPurgeTombstone,
+  nextTombstoneSyncVersion,
   buildRedactedAuditSnapshotJson,
 } = require('../lib/postBillPurge');
 
@@ -140,6 +141,14 @@ describe('postBillPurge sticky tombstone + audit redaction', () => {
     assert.equal(snap.advice, undefined);
     assert.equal(snap.forename, undefined);
   });
+
+  it('nextTombstoneSyncVersion overtakes max(local, remote) in one bump', () => {
+    assert.equal(nextTombstoneSyncVersion(2, 10), 11);
+    assert.equal(nextTombstoneSyncVersion(10, 2), 11);
+    assert.equal(nextTombstoneSyncVersion(5, 5), 6);
+    assert.equal(nextTombstoneSyncVersion(null, 7), 8);
+    assert.equal(nextTombstoneSyncVersion(3, undefined), 4);
+  });
 });
 
 describe('postBillPurge Bugbot wiring (source)', () => {
@@ -161,6 +170,31 @@ describe('postBillPurge Bugbot wiring (source)', () => {
               main.includes('cleared plaintext settings'));
     assert.ok(main.includes("['openaiApiKey', '']"));
     assert.ok(main.includes('refreshAccessTokenIfNeeded'));
+  });
+
+  it('sticky purge runs before status protect gates and bumps version past remote', () => {
+    const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+    const stickyIdx = main.indexOf('shouldKeepLocalPostBillPurgeTombstone(local.deletion_reason');
+    const protectIdx = main.indexOf("localStatus === 'finalised' && remote.status !== 'finalised'");
+    const completedIdx = main.indexOf("localStatus === 'completed' && remote.status !== 'completed'");
+    assert.ok(stickyIdx > 0, 'sticky purge check present');
+    assert.ok(protectIdx > stickyIdx, 'sticky purge must run before finalised protect gate');
+    assert.ok(completedIdx > stickyIdx, 'sticky purge must run before completed protect gate');
+    assert.ok(main.includes('nextTombstoneSyncVersion(localVersion, remoteVersion)'));
+    assert.ok(main.includes('sync_dirty=1, sync_version=?, updated_at=?'));
+  });
+
+  it('OpenAI key seal failure keeps plaintext; clear deletes sealed file', () => {
+    const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
+    assert.ok(main.includes('Seal failed; keeping plaintext OpenAI key in settings until seal succeeds'));
+    assert.ok(main.includes("persistOpenAiApiKeySecure('')"));
+    assert.ok(main.includes('return true;'));
+    assert.ok(main.includes('return false;'));
+    const seedStart = main.indexOf('function seedOpenAiApiKeyIntoSettings');
+    assert.ok(seedStart > 0);
+    const seedFn = main.slice(seedStart, seedStart + 900);
+    assert.ok(seedFn.includes('sealedOk') || seedFn.includes('!sealedOk'));
+    assert.ok(seedFn.includes("['openaiApiKey', '']"));
   });
 
   it('mark billed refreshes workflow footer without leaving completion step', () => {
