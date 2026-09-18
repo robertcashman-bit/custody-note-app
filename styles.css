@@ -3535,6 +3535,15 @@ html.dark .form-post-finalise-text { color: #a7f3d0; }
 }
 .btn-primary { background: linear-gradient(135deg, #1e40af, #2563eb); color: white; border-radius: 10px; }
 .btn-primary:hover { background: linear-gradient(135deg, #1d4ed8, #3b82f6); }
+.btn-danger {
+  background: linear-gradient(135deg, #991b1b, #dc2626);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+}
+.btn-danger:hover { background: linear-gradient(135deg, #7f1d1d, #b91c1c); }
+.wf-btn-purge { margin-right: 0.5rem; }
 .btn-secondary { background: var(--surface); color: var(--on-surface); border: 2px solid var(--border); border-radius: 10px; }
 .btn-secondary:hover { background: var(--surface-alt); border-color: var(--primary); }
 .btn-tertiary {

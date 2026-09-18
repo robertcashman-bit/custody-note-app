@@ -169,6 +169,21 @@ function initUpdater(options) {
     return m.includes('sha512') || m.includes('checksum');
   }
 
+  /** Fail closed on signature / code-sign / notarization / publisher mismatches (Win + Mac). */
+  function isSignatureTamperError(message) {
+    const m = String(message || '').toLowerCase();
+    return (
+      m.includes('signature')
+      || m.includes('codesign')
+      || m.includes('code sign')
+      || m.includes('notar')
+      || m.includes('publisher name')
+      || m.includes('authenticode')
+      || m.includes('blockmap')
+      || (m.includes('digest') && m.includes('valid'))
+    );
+  }
+
   function getUpdaterCacheRoots() {
     const roots = [];
     try {
@@ -586,6 +601,23 @@ function initUpdater(options) {
       updaterState = 'idle';
       const message = err && err.message ? err.message : String(err);
       logger.error('Event: error', message);
+      // Tamper / signature / checksum failures: fail closed — clear cache, do not auto-retry install.
+      if (isSignatureTamperError(message) || isChecksumError(message)) {
+        clearUpdaterPendingCache();
+        bustUpdaterFeedCache('signature-or-checksum-failure');
+        consecutiveFailures += 1;
+        setPersistedState({
+          lastError: message,
+          consecutiveDownloadFailures: (getPersistedState().consecutiveDownloadFailures || 0) + 1,
+        });
+        sendStatus({
+          status: 'error',
+          message: 'Update verification failed. The download may be corrupted or tampered — install was blocked. Try again later or download from custodynote.com.',
+          code: isSignatureTamperError(message) ? 'SIGNATURE_TAMPER' : 'CHECKSUM_MISMATCH',
+        });
+        logger.warn('Fail-closed: refusing to install update after verification failure');
+        return;
+      }
       if (handleDownloadFailure(message, downloadedVersion)) {
         return;
       }

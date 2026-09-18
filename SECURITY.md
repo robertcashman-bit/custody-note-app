@@ -204,10 +204,14 @@ You should expect an acknowledgement within 5 working days for serious issues.
 
 ## 10. Deployment requirements
 
-Before installing CustodyNote on a workstation that will hold real client
+Before installing Custody Note on a workstation that will hold real client
 data, the firm or solicitor MUST:
 
-1. Enable full-disk encryption (BitLocker / FileVault).
+1. **Enable full-disk encryption on the OS:**
+   - **Windows:** BitLocker (or device encryption) on the system volume.
+   - **macOS:** FileVault on the startup disk.
+   Without this, OS-level recovery of `userData` / SQLite / key material is
+   far easier if the laptop is stolen.
 2. Enable an OS-level idle lock at no more than 10 minutes.
 3. Use a unique non-shared OS user account per solicitor.
 4. Set a recovery password from inside the app (Settings → Security).
@@ -217,3 +221,25 @@ data, the firm or solicitor MUST:
 7. Document a data-retention period and configure auto-deletion.
 8. Train users on the Outlook Web confirmation dialog and the difference
    between "subject only" and "subject + body" modes.
+9. **Device loss / theft:** immediately sign out and use **Revoke session**
+   (or contact support) to revoke the licence machine and cloud session.
+   Do not rely on disk wipe alone.
+
+---
+
+## 11. Platform parity (Mac + Windows)
+
+Security controls are shared code paths. Packaging differs (NSIS / AppX vs
+DMG / ZIP) but renderer lockdown, sync auth binding, hostile-cloud rejection,
+`safeStorage` secrets (Windows DPAPI / macOS Keychain), and auto-update
+fail-closed verification apply on both. File mode `chmod 0o600` is
+POSIX-correct on Mac and best-effort on Windows ACLs — never skipped on one OS.
+
+---
+
+## 12. Phased follow-up: SQLCipher
+
+The attendance DB is already AES-256-GCM encrypted at rest (`lib/dbCrypto.js`)
+with the master key in `safeStorage`. A further SQLCipher page-level layer
+would add defense in depth but needs native modules + dual-platform CI —
+tracked as a separate project, not blocking this hardening pass.

@@ -180,6 +180,29 @@ const {
   assessBackupPathUsability,
   planBackupFolderReset,
 } = require('./lib/backupPathSanitize');
+const {
+  validatePullResponse,
+  validatePullRecordShell,
+  bindDecryptedPullPayload,
+  buildSyncAuthHeaders,
+  hasExplicitUserConfirmation,
+} = require('./lib/syncPullGuard');
+const {
+  writeRestrictedFile,
+  restrictOwnerOnlyFile,
+  restrictOwnerOnlyDir,
+  assertPathInsideAllowedRoots,
+  FILE_MODE_OWNER_RW,
+} = require('./lib/secureLocalFiles');
+const cloudAuthSession = require('./lib/cloudAuthSession');
+const {
+  CONFIRM_PHRASE: POST_BILL_PURGE_CONFIRM_PHRASE,
+  PURGE_REASON: POST_BILL_PURGE_REASON,
+  isEligibleForPostBillPurge,
+  isValidPurgeConfirmation,
+  buildPurgedAttendanceStub,
+  buildCloudPurgeRequest,
+} = require('./lib/postBillPurge');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
@@ -349,7 +372,8 @@ function _writeFallbackKeyEncrypted(filePath, hexKey) {
     const cipher = crypto.createCipheriv('aes-256-gcm', mk, iv);
     const enc = Buffer.concat([cipher.update(Buffer.from(hexKey, 'utf8')), cipher.final()]);
     const tag = cipher.getAuthTag();
-    fs.writeFileSync(filePath, Buffer.concat([iv, tag, enc]));
+    fs.writeFileSync(filePath, Buffer.concat([iv, tag, enc]), { mode: FILE_MODE_OWNER_RW });
+    restrictOwnerOnlyFile(filePath);
   } catch (err) {
     console.error('[Encryption] Cannot write obfuscated fallback key:', err.message);
   }
@@ -374,7 +398,7 @@ function saveMasterKeyToSafeStorage(hexKey) {
   if (safeStorage.isEncryptionAvailable()) {
     try {
       const encrypted = safeStorage.encryptString(hexKey);
-      fs.writeFileSync(getKeyFilePath(), encrypted);
+      writeRestrictedFile(getKeyFilePath(), encrypted);
       deleteFallbackKeyIfExists();
     } catch (err) {
       console.error('[Encryption] Failed to save key to safeStorage:', err.message);
@@ -382,6 +406,7 @@ function saveMasterKeyToSafeStorage(hexKey) {
   }
   if (!safeStorage.isEncryptionAvailable()) {
     _writeFallbackKeyEncrypted(getFallbackKeyPath(), hexKey);
+    restrictOwnerOnlyFile(getFallbackKeyPath());
   }
 }
 
@@ -662,6 +687,7 @@ function showPasswordInputDialog() {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
+        webSecurity: true,
         preload: path.join(__dirname, 'password-preload.js'),
       },
       title: 'Recovery Password',
@@ -869,10 +895,14 @@ function writeFileAtomicAsync(destPath, data) {
 
 function writeFileAtomicSync(destPath, data) {
   const dir = path.dirname(destPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    restrictOwnerOnlyDir(dir);
+  }
   const tmpPath = getAtomicTempPath(destPath);
   try {
-    fs.writeFileSync(tmpPath, data);
+    // Owner-only mode on Mac/Linux; best-effort on Windows (same call path).
+    fs.writeFileSync(tmpPath, data, { mode: FILE_MODE_OWNER_RW });
     try {
       fs.renameSync(tmpPath, destPath);
     } catch (renameErr) {
@@ -880,6 +910,7 @@ function writeFileAtomicSync(destPath, data) {
       fs.copyFileSync(tmpPath, destPath);
       try { fs.unlinkSync(tmpPath); } catch (_) {}
     }
+    restrictOwnerOnlyFile(destPath);
   } finally {
     try {
       if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
@@ -3363,13 +3394,22 @@ async function syncPull(opts) {
   }
 
   const { decryptSyncEnvelope } = require('./lib/syncRecordCrypto');
-  const syncOpts = { timeout: 30000 };
-  if (opts && opts.correlationId) syncOpts.headers = { 'X-Correlation-Id': opts.correlationId };
+  // Auth-bound pull (Mac + Windows identical): Bearer when present + licence/account headers.
+  const syncOpts = {
+    timeout: 30000,
+    headers: buildSyncAuthHeaders({
+      authToken: data.authToken || null,
+      correlationId: opts && opts.correlationId ? opts.correlationId : null,
+      licenceKey,
+      accountId: data.accountId || null,
+    }),
+  };
 
   let merged = 0;
   let conflicts = 0;
   let decryptFailed = 0;
   let noMasterKeySkipped = 0;
+  let rejectedHostile = 0;
   let receivedCount = 0;
   let cursorAdvanced = true;
   let iterations = 0;
@@ -3386,14 +3426,22 @@ async function syncPull(opts) {
       key: licenceKey,
       machineId: getMachineId(),
       since,
+      accountId: data.accountId || undefined,
     }, syncOpts);
 
-    if (!resp || !resp.ok) {
-      throw new Error(resp && resp.error ? resp.error : 'Pull failed');
+    // Hostile-cloud schema / cross-account gate before any merge.
+    const validated = validatePullResponse(resp, {
+      expectedLicenceKey: licenceKey,
+      expectedAccountId: data.accountId || null,
+    });
+    if (!validated.ok) {
+      const err = new Error(validated.error || 'Pull rejected');
+      err.code = validated.code || 'PULL_REJECTED';
+      throw err;
     }
 
     const masterKeyHex = getOrCreateMasterKey({ allowCreate: false });
-    const remoteRecords = resp.records || [];
+    const remoteRecords = validated.records;
     for (let ri = 0; ri < remoteRecords.length; ri++) {
       const rid = remoteRecords[ri] && (remoteRecords[ri].syncId || remoteRecords[ri].sync_id);
       if (rid) pulledSyncIds.push(String(rid));
@@ -3457,40 +3505,55 @@ async function syncPull(opts) {
     let batchConflicts = 0;
     let batchDecryptFailed = 0;
     let batchNoMasterKeySkipped = 0;
+    let batchRejectedHostile = 0;
     receivedCount += remoteRecords.length;
 
     for (const rawRemote of remoteRecords) {
-      let remote = rawRemote;
-      if (rawRemote.envelope) {
-        if (!masterKeyHex) {
-          console.warn('[SYNC-PULL] Cannot decrypt envelope without local master key');
-          batchNoMasterKeySkipped++;
-          continue;
-        }
-        const payload = decryptSyncEnvelope(masterKeyHex, rawRemote.envelope);
-        if (!payload) {
-          console.warn('[SYNC-PULL] Failed to decrypt sync record', rawRemote.syncId);
-          batchDecryptFailed++;
-          continue;
-        }
-        remote = {
-          syncId: rawRemote.syncId,
-          data: payload.data,
-          status: payload.status,
-          createdAt: rawRemote.createdAt,
-          updatedAt: rawRemote.updatedAt,
-          deletedAt: payload.deletedAt || null,
-          deletionReason: payload.deletionReason || null,
-          clientName: payload.clientName || '',
-          stationName: payload.stationName || '',
-          dsccRef: payload.dsccRef || '',
-          attendanceDate: payload.attendanceDate || '',
-          supervisorApprovedAt: payload.supervisorApprovedAt || null,
-          supervisorNote: payload.supervisorNote || '',
-          archivedAt: payload.archivedAt || null,
-          version: rawRemote.version,
-        };
+      // Fail closed: every cloud row must present a valid encrypted envelope.
+      const shell = validatePullRecordShell(rawRemote);
+      if (!shell.ok) {
+        console.warn('[SYNC-PULL] Rejected hostile/malformed cloud record:', shell.code);
+        batchRejectedHostile++;
+        batchDecryptFailed++;
+        continue;
       }
+      if (!masterKeyHex) {
+        console.warn('[SYNC-PULL] Cannot decrypt envelope without local master key');
+        batchNoMasterKeySkipped++;
+        continue;
+      }
+      // Never allowLegacyPlaintext on the production pull path (cloud is hostile).
+      const decrypted = decryptSyncEnvelope(masterKeyHex, shell.envelope);
+      if (!decrypted) {
+        console.warn('[SYNC-PULL] Failed to decrypt sync record', shell.syncId);
+        batchDecryptFailed++;
+        continue;
+      }
+      const bound = bindDecryptedPullPayload(decrypted, shell.syncId);
+      if (!bound.ok) {
+        console.warn('[SYNC-PULL] Rejected decrypted payload:', bound.code);
+        batchRejectedHostile++;
+        batchDecryptFailed++;
+        continue;
+      }
+      const payload = bound.payload;
+      const remote = {
+        syncId: shell.syncId,
+        data: payload.data,
+        status: payload.status,
+        createdAt: shell.createdAt,
+        updatedAt: shell.updatedAt,
+        deletedAt: payload.deletedAt || null,
+        deletionReason: payload.deletionReason || null,
+        clientName: payload.clientName || '',
+        stationName: payload.stationName || '',
+        dsccRef: payload.dsccRef || '',
+        attendanceDate: payload.attendanceDate || '',
+        supervisorApprovedAt: payload.supervisorApprovedAt || null,
+        supervisorNote: payload.supervisorNote || '',
+        archivedAt: payload.archivedAt || null,
+        version: shell.version,
+      };
       const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty FROM attendances WHERE sync_id=?', [remote.syncId]);
 
       if (!local) {
@@ -3597,6 +3660,7 @@ async function syncPull(opts) {
     conflicts += batchConflicts;
     decryptFailed += batchDecryptFailed;
     noMasterKeySkipped += batchNoMasterKeySkipped;
+    rejectedHostile += batchRejectedHostile;
 
     const { shouldAdvanceSyncPullCursor } = require('./lib/syncPullCursor');
     cursorAdvanced = shouldAdvanceSyncPullCursor({
@@ -3604,13 +3668,13 @@ async function syncPull(opts) {
       decryptFailed: batchDecryptFailed,
       noMasterKeySkipped: batchNoMasterKeySkipped,
     });
-    if (resp.serverTime && cursorAdvanced) {
-      setLastSyncTimestamp(resp.serverTime);
+    if (validated.serverTime && cursorAdvanced) {
+      setLastSyncTimestamp(validated.serverTime);
     } else if (!cursorAdvanced && (batchDecryptFailed > 0 || batchNoMasterKeySkipped > 0)) {
       console.warn('[SYNC-PULL] Pull cursor not advanced —', batchDecryptFailed, 'decrypt failed,', batchNoMasterKeySkipped, 'skipped (no key)');
     }
 
-    if (!resp.hasMore || remoteRecords.length === 0) break;
+    if (!validated.hasMore || remoteRecords.length === 0) break;
   }
 
   _lastPullStats = {
@@ -3619,6 +3683,7 @@ async function syncPull(opts) {
     conflicts,
     decryptFailed,
     noMasterKeySkipped,
+    rejectedHostile,
     cursorAdvanced,
     pulledFromEpoch: pullStartedFromEpoch,
     at: new Date().toISOString(),
@@ -3857,6 +3922,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webSecurity: true,
     },
     title: 'Custody Note',
   });
@@ -5428,10 +5494,12 @@ function writeLicenceData(data) {
   const lpath = getLicencePath();
   const json = JSON.stringify(data);
   try {
+    // Prefer OS secure storage (Windows DPAPI / macOS Keychain via safeStorage).
+    // Always restrict file mode afterward — same path on Win and Mac.
     if (safeStorage.isEncryptionAvailable()) {
-      fs.writeFileSync(lpath, safeStorage.encryptString(json));
+      writeRestrictedFile(lpath, safeStorage.encryptString(json));
     } else {
-      fs.writeFileSync(lpath, json, 'utf8');
+      writeRestrictedFile(lpath, json, { encoding: 'utf8' });
     }
   } catch (e) {
     console.error('[Licence] Failed to write licence data:', e.message);
@@ -5632,7 +5700,19 @@ function httpPost(url, body, opts) {
 
 function _getAuthHeaders() {
   const data = readLicenceData();
-  if (data && data.authToken) {
+  if (!data) return {};
+  const evalTok = cloudAuthSession.evaluateAccessToken(data);
+  if (!evalTok.usable) {
+    if (evalTok.reason === 'expired' && data.authToken) {
+      // Fail closed for expired bearer — do not send a stale token.
+      try {
+        cloudAuthSession.clearSessionTokens(data);
+        writeLicenceData(data);
+      } catch (_) {}
+    }
+    return {};
+  }
+  if (data.authToken) {
     return { Authorization: 'Bearer ' + data.authToken };
   }
   return {};
@@ -5965,10 +6045,15 @@ ipcMain.handle('auth:poll', async (_, { pollId }) => {
     const resp = await httpPost(`${apiUrl}/api/auth/poll`, { pollId });
     if (resp.ok && resp.accessToken) {
       let data = readLicenceData() || {};
-      data.authToken = resp.accessToken;
-      data.refreshToken = resp.refreshToken || '';
+      cloudAuthSession.applyIssuedTokens(data, {
+        accessToken: resp.accessToken,
+        refreshToken: resp.refreshToken || '',
+        expiresAt: resp.expiresAt || resp.tokenExpiresAt,
+        expiresIn: resp.expiresIn,
+        accountId: resp.user?.id || '',
+      });
       data.email = resp.user?.email || '';
-      data.accountId = resp.user?.id || '';
+      data.accountId = resp.user?.id || data.accountId || '';
       if (resp.subscription && resp.subscription.licenceKey) {
         data.key = resp.subscription.licenceKey;
         data.status = resp.subscription.status || 'active';
@@ -5983,15 +6068,35 @@ ipcMain.handle('auth:poll', async (_, { pollId }) => {
   }
 });
 
-ipcMain.handle('auth:logout', () => {
+ipcMain.handle('auth:logout', async () => {
   const data = readLicenceData();
   if (data) {
-    delete data.authToken;
-    delete data.refreshToken;
+    const apiUrl = getManagedCloudApiUrl();
+    try {
+      await cloudAuthSession.revokeSessionTokens(data, {
+        httpPost,
+        apiUrl: apiUrl || '',
+      });
+    } catch (_) {
+      cloudAuthSession.clearSessionTokens(data);
+    }
     delete data.accountId;
     writeLicenceData(data);
   }
   return { ok: true };
+});
+
+/** Device-loss / revoke session — same path Mac + Windows. */
+ipcMain.handle('auth:revoke-session', async () => {
+  const data = readLicenceData();
+  if (!data) return { ok: true, localCleared: true };
+  const apiUrl = getManagedCloudApiUrl();
+  const result = await cloudAuthSession.revokeSessionTokens(data, {
+    httpPost,
+    apiUrl: apiUrl || '',
+  });
+  writeLicenceData(data);
+  return { ok: true, ...result };
 });
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -6325,8 +6430,15 @@ app.whenReady().then(async () => {
     }
   }
 
-  // CLI: dump a record's full JSON blob
+  // CLI: dump a record's full JSON blob — NEVER in packaged builds (exfil aid).
   if (cliDumpId) {
+    if (app.isPackaged) {
+      const denied = 'Refused: --dump-record is disabled in packaged builds';
+      writeCliError(denied);
+      console.error(denied);
+      app.exit(1);
+      return;
+    }
     try {
       const row = dbGet('SELECT id, status, data, updated_at, created_at FROM attendances WHERE id=?', [cliDumpId]);
       if (!row) {
@@ -6471,6 +6583,11 @@ ipcMain.handle('get-settings', () => {
   try { ensureBackupPathsSane({ emit: true }); } catch (_) {}
   const rows = dbAll('SELECT key, value FROM settings');
   const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  // Prefer OS-sealed OpenAI key when present (same on Win DPAPI / Mac Keychain via safeStorage).
+  try {
+    const sealed = resolveOpenAiApiKey();
+    if (sealed) settings.openaiApiKey = sealed;
+  } catch (_) {}
   settings.effectiveBackupFolder = getBackupFolder();
   settings.effectiveOffsiteBackupFolder = getOffsiteBackupFolder();
   settings.defaultBackupFolder = _defaultBackupFolder();
@@ -6514,6 +6631,22 @@ function loadOpenAiKeyFromEnvLocal() {
 }
 
 function resolveOpenAiApiKey() {
+  // Prefer OS-protected secret file (safeStorage when available) over DB plaintext column.
+  try {
+    const sealedPath = path.join(app.getPath('userData'), 'openai-api-key.dat');
+    if (fs.existsSync(sealedPath)) {
+      const raw = fs.readFileSync(sealedPath);
+      if (safeStorage.isEncryptionAvailable()) {
+        try {
+          const v = String(safeStorage.decryptString(raw) || '').trim();
+          if (v) return v;
+        } catch (_) { /* fall through */ }
+      } else {
+        const v = String(raw.toString('utf8') || '').trim();
+        if (v) return v;
+      }
+    }
+  } catch (_) {}
   try {
     const row = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
     const fromDb = row && row.value ? String(row.value).trim() : '';
@@ -6527,6 +6660,24 @@ function resolveOpenAiApiKey() {
     }
   } catch (_) {}
   return loadOpenAiKeyFromEnvLocal();
+}
+
+function persistOpenAiApiKeySecure(key) {
+  const trimmed = key != null ? String(key).trim() : '';
+  const sealedPath = path.join(app.getPath('userData'), 'openai-api-key.dat');
+  try {
+    if (!trimmed) {
+      try { if (fs.existsSync(sealedPath)) fs.unlinkSync(sealedPath); } catch (_) {}
+      return;
+    }
+    if (safeStorage.isEncryptionAvailable()) {
+      writeRestrictedFile(sealedPath, safeStorage.encryptString(trimmed));
+    } else {
+      writeRestrictedFile(sealedPath, trimmed, { encoding: 'utf8' });
+    }
+  } catch (err) {
+    console.warn('[ai-law] Failed to persist OpenAI key to secure store:', err && err.message);
+  }
 }
 
 function seedOpenAiApiKeyIntoSettings() {
@@ -6815,6 +6966,9 @@ ipcMain.handle('set-settings', (_, settings) => {
         }
       }
       if (QUICKFILE_CREDENTIAL_KEYS.has(key)) wroteQuickFile = true;
+      if (key === 'openaiApiKey' && incoming) {
+        persistOpenAiApiKeySecure(incoming);
+      }
     }
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, value == null ? '' : String(value)]);
     if (typeof quickfileSettingsSync !== 'undefined' && quickfileSettingsSync.isSyncableSettingsKey && quickfileSettingsSync.isSyncableSettingsKey(key)) {
@@ -6983,7 +7137,27 @@ function coerceAttendanceIdArg(id) {
 ipcMain.handle('attendance-get', (_, id) => {
   const coerced = coerceAttendanceIdArg(id);
   if (coerced == null) return null;
-  return dbGet('SELECT id, data, status, supervisor_approved_at, supervisor_note, archived_at FROM attendances WHERE id = ?', [coerced]) || null;
+  const row = dbGet(
+    `SELECT id, data, status, supervisor_approved_at, supervisor_note, archived_at,
+            deleted_at, deletion_reason, sync_id
+       FROM attendances WHERE id = ?`,
+    [coerced]
+  );
+  if (!row) return null;
+  if (row.deletion_reason === POST_BILL_PURGE_REASON) {
+    return {
+      id: row.id,
+      status: row.status,
+      purged: true,
+      deleted_at: row.deleted_at,
+      deletion_reason: row.deletion_reason,
+      data: JSON.stringify({ purged: true, purgeReason: POST_BILL_PURGE_REASON }),
+      supervisor_approved_at: null,
+      supervisor_note: '',
+      archived_at: row.archived_at,
+    };
+  }
+  return row;
 });
 
 /**
@@ -7314,8 +7488,11 @@ ipcMain.handle('attendance-unarchive', (_, id) => {
 
 ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
   if (!id) return false;
-  const existing = dbGet('SELECT status, sync_version FROM attendances WHERE id = ?', [id]);
+  const existing = dbGet('SELECT status, sync_version, deletion_reason FROM attendances WHERE id = ?', [id]);
   if (existing) {
+    if (existing.deletion_reason === POST_BILL_PURGE_REASON) {
+      return { error: 'Record was permanently purged after billing and cannot be modified' };
+    }
     const now = new Date().toISOString();
     const nv = (existing.sync_version || 1) + 1;
     dbRun('UPDATE attendances SET deleted_at=?, deletion_reason=?, sync_dirty=1, sync_version=? WHERE id=?', [now, reason || '', nv, id]);
@@ -7333,15 +7510,198 @@ ipcMain.handle('attendance-delete', (_, { id, reason } = {}) => {
 
 ipcMain.handle('attendance-undelete', (_, id) => {
   if (!id) return false;
+  const existing = dbGet('SELECT sync_version, deletion_reason FROM attendances WHERE id=?', [id]);
+  if (existing && existing.deletion_reason === POST_BILL_PURGE_REASON) {
+    return { ok: false, error: 'Purged after billing — cannot restore confidential content' };
+  }
   const now = new Date().toISOString();
-  const ev = dbGet('SELECT sync_version FROM attendances WHERE id=?', [id]);
-  const nv = (ev && ev.sync_version || 1) + 1;
+  const nv = (existing && existing.sync_version || 1) + 1;
   dbRun('UPDATE attendances SET deleted_at=NULL, deletion_reason=NULL, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?', [now, nv, id]);
   db.run('INSERT INTO audit_log (attendance_id, action, timestamp, user_note) VALUES (?,?,?,?)', [id, 'restored', now, 'Restored from deleted']);
   markDbDirty();
   enqueueSyncForRecord(id, 'upsert', { immediate: true });
   flushDbSync();
   return true;
+});
+
+/**
+ * Permanent post-bill purge — scrub content locally, tombstone for sync, optional cloud purge API.
+ * Requires typed confirmation phrase. Same behaviour on Mac and Windows.
+ */
+ipcMain.handle('attendance-purge-after-billed', async (_event, params) => {
+  const id = params && params.id;
+  if (!id) return { ok: false, error: 'Missing record id', code: 'MISSING_ID' };
+  if (!isValidPurgeConfirmation(params && params.confirmationPhrase)) {
+    return {
+      ok: false,
+      error: 'Type ' + POST_BILL_PURGE_CONFIRM_PHRASE + ' to confirm permanent purge',
+      code: 'CONFIRMATION_REQUIRED',
+      confirmPhrase: POST_BILL_PURGE_CONFIRM_PHRASE,
+    };
+  }
+
+  const row = dbGet(
+    `SELECT id, sync_id, sync_version, status, data, deleted_at, deletion_reason,
+            quickfile_invoice_id, quickfile_invoice_number, client_name
+       FROM attendances WHERE id=?`,
+    [id]
+  );
+  if (!row) return { ok: false, error: 'Record not found', code: 'NOT_FOUND' };
+  if (row.deletion_reason === POST_BILL_PURGE_REASON) {
+    return { ok: true, alreadyPurged: true };
+  }
+
+  let parsed = {};
+  try { parsed = JSON.parse(row.data || '{}'); } catch (_) { parsed = {}; }
+  const eligibility = isEligibleForPostBillPurge({
+    status: row.status,
+    deleted_at: row.deleted_at,
+    deletion_reason: row.deletion_reason,
+    quickfile_invoice_id: row.quickfile_invoice_id,
+    quickfileInvoiceNumber: row.quickfile_invoice_number,
+    data: parsed,
+  });
+  if (!eligibility.eligible) {
+    return {
+      ok: false,
+      error: 'Record is not marked billed. Link a QuickFile invoice, finish matter billing, or mark billed to firm first.',
+      code: 'NOT_BILLED',
+      reason: eligibility.reason,
+    };
+  }
+
+  const now = new Date().toISOString();
+  const nv = (row.sync_version || 1) + 1;
+  const syncId = row.sync_id || null;
+  const stub = buildPurgedAttendanceStub({ syncId, nowIso: now });
+
+  // Wipe confidential columns + softstone (never leave note body for restore).
+  dbRun(
+    `UPDATE attendances SET
+       data=?, status=?, client_name=?, station_name=?, dscc_ref=?, attendance_date=?,
+       supervisor_note=?, supervisor_approved_at=NULL,
+       deleted_at=?, deletion_reason=?, updated_at=?,
+       sync_dirty=1, sync_version=?,
+       quickfile_invoice_id=COALESCE(quickfile_invoice_id, ''),
+       quickfile_invoice_number=COALESCE(quickfile_invoice_number, '')
+     WHERE id=?`,
+    [
+      stub.dataJson, stub.status, stub.clientName, stub.stationName, stub.dsccRef, stub.attendanceDate,
+      stub.supervisorNote, stub.deletedAt, stub.deletionReason, now, nv, id,
+    ]
+  );
+  db.run(
+    'INSERT INTO audit_log (attendance_id, action, user_note, timestamp) VALUES (?,?,?,?)',
+    [id, 'post_bill_purge', 'User purged after billed — content removed (no body logged)', now]
+  );
+
+  // Delete encrypted photo attachments for this attendance (best-effort).
+  try {
+    const photoDir = path.join(app.getPath('userData'), 'photos', String(id));
+    if (fs.existsSync(photoDir)) {
+      fs.rmSync(photoDir, { recursive: true, force: true });
+    }
+  } catch (photoErr) {
+    console.warn('[PURGE] Photo folder cleanup failed:', photoErr && photoErr.message);
+  }
+
+  // Scrub revision history bodies for this attendance if table exists.
+  try {
+    dbRun('DELETE FROM record_revisions WHERE attendance_id=?', [id]);
+  } catch (_) { /* table may not exist on older DBs */ }
+
+  markDbDirty();
+  if (syncId) {
+    enqueueSyncForRecord(id, 'upsert', { immediate: true });
+  }
+  flushDbSync();
+
+  try {
+    _securityLog.record('post_bill_purge', {
+      attendanceId: Number(id) || null,
+      hasSyncId: !!syncId,
+      eligibility: eligibility.reason,
+    });
+  } catch (_) {}
+
+  // Cloud purge API (website agent) — fail soft if endpoint missing; tombstone still syncs.
+  let cloud = { attempted: false, ok: false, reason: 'skipped' };
+  if (syncId) {
+    try {
+      const lic = readLicenceData();
+      const apiUrl = getSyncApiUrl();
+      if (lic && lic.key && apiUrl) {
+        cloud.attempted = true;
+        const body = buildCloudPurgeRequest({
+          licenceKey: normalizeLicenceKeyForSync(lic.key),
+          machineId: getMachineId(),
+          syncId,
+        });
+        const headers = buildSyncAuthHeaders({
+          authToken: lic.authToken || null,
+          licenceKey: body.key,
+          accountId: lic.accountId || null,
+          correlationId: 'purge-' + Date.now().toString(36),
+        });
+        try {
+          const resp = await httpPost(`${apiUrl.replace(/\/$/, '')}/api/sync/purge`, body, {
+            timeout: 20000,
+            headers,
+          });
+          cloud.ok = !!(resp && (resp.ok === true || resp.purged === true));
+          cloud.reason = cloud.ok ? 'purged' : (resp && resp.error ? String(resp.error).slice(0, 80) : 'not_ok');
+        } catch (apiErr) {
+          // 404 = endpoint not deployed yet — tombstone push remains the contract.
+          const code = apiErr && apiErr.statusCode;
+          cloud.ok = false;
+          cloud.reason = code === 404 ? 'api_not_deployed' : (apiErr && apiErr.message ? String(apiErr.message).slice(0, 80) : 'api_error');
+        }
+      } else {
+        cloud.reason = 'no_licence_or_api';
+      }
+    } catch (_) {
+      cloud.reason = 'cloud_error';
+    }
+  }
+
+  return {
+    ok: true,
+    purged: true,
+    id: Number(id),
+    syncId: syncId || null,
+    cloud,
+    confirmPhrase: POST_BILL_PURGE_CONFIRM_PHRASE,
+  };
+});
+
+/** Mark matter billed to firm (enables Clear after billed without QuickFile). */
+ipcMain.handle('attendance-mark-billed-to-firm', (_, params) => {
+  const id = params && params.id;
+  if (!id) return { ok: false, error: 'Missing id' };
+  const row = dbGet('SELECT id, data, sync_version, deleted_at, deletion_reason FROM attendances WHERE id=?', [id]);
+  if (!row) return { ok: false, error: 'Not found' };
+  if (row.deleted_at || row.deletion_reason === POST_BILL_PURGE_REASON) {
+    return { ok: false, error: 'Record already deleted or purged' };
+  }
+  let data = {};
+  try { data = JSON.parse(row.data || '{}'); } catch (_) { data = {}; }
+  const now = new Date().toISOString();
+  data.billedToFirm = true;
+  data.billedToFirmAt = now;
+  if (!data.billingProcessCompletedAt) data.billingProcessCompletedAt = now;
+  const nv = (row.sync_version || 1) + 1;
+  dbRun(
+    'UPDATE attendances SET data=?, updated_at=?, sync_dirty=1, sync_version=? WHERE id=?',
+    [JSON.stringify(data), now, nv, id]
+  );
+  db.run(
+    'INSERT INTO audit_log (attendance_id, action, user_note, timestamp) VALUES (?,?,?,?)',
+    [id, 'marked_billed_to_firm', 'Marked billed to firm (enables post-bill purge)', now]
+  );
+  markDbDirty();
+  enqueueSyncForRecord(id, 'upsert', { immediate: true });
+  flushDbSync();
+  return { ok: true, billedToFirmAt: now };
 });
 
 ipcMain.handle('audit-log-get', (_, attendanceId) => {
@@ -8059,10 +8419,15 @@ ipcMain.handle('db-repair', () => {
 
 ipcMain.handle('save-csv', (_, { csv, filename }) => {
   try {
+    if (typeof csv !== 'string') return { error: 'Invalid CSV payload' };
+    // Cap export size — defensive against renderer abuse.
+    if (csv.length > 25 * 1024 * 1024) return { error: 'CSV export too large' };
     const desktop = app.getPath('desktop');
-    const safeName = path.basename(filename || 'attendances-export.csv').replace(/[<>:"/\\|?*]/g, '_');
+    const safeName = path.basename(filename || 'attendances-export.csv').replace(/[<>:"/\\|?*\u0000]/g, '_');
     const filePath = path.join(desktop, safeName);
-    fs.writeFileSync(filePath, csv, 'utf8');
+    const gate = assertPathInsideAllowedRoots(filePath, [desktop]);
+    if (!gate.allowed) return { error: 'Export path outside user Desktop' };
+    writeRestrictedFile(filePath, csv, { encoding: 'utf8' });
     return filePath;
   } catch (e) {
     return { error: e.message || 'Failed to save CSV' };
@@ -8138,7 +8503,18 @@ ipcMain.handle('cloud-backup-list', async () => {
   try {
     const authHeaders = _getAuthHeaders();
     const resp = await httpPost(`${apiUrl}/api/backup/list`, { key: data.key }, { headers: authHeaders });
-    return resp;
+    // Metadata only — never return blob bodies / ciphertext dumps to the renderer.
+    const rawList = (resp && (resp.backups || resp.items || resp.objects)) || [];
+    const backups = (Array.isArray(rawList) ? rawList : []).map(function (b) {
+      if (!b || typeof b !== 'object') return null;
+      return {
+        key: b.key || b.Key || b.id || null,
+        lastModified: b.lastModified || b.LastModified || b.updatedAt || null,
+        size: b.size != null ? b.size : (b.Size != null ? b.Size : null),
+        // Explicitly omit Body / data / ciphertext / content
+      };
+    }).filter(Boolean);
+    return { backups, ok: true };
   } catch (e) {
     return { backups: [], error: e && e.message ? e.message : 'Failed to list backups' };
   }
@@ -8347,7 +8723,12 @@ ipcMain.handle('sync-now', async () => {
   }
 });
 
-ipcMain.handle('sync-full-resync', async () => {
+ipcMain.handle('sync-full-resync', async (_event, params) => {
+  // Exfil resistance: renderer cannot silently trigger a full cloud download.
+  // Same gate on Mac and Windows — UI must pass confirmed:true after user dialog.
+  if (!hasExplicitUserConfirmation(params)) {
+    return { ok: false, error: 'Full re-sync requires explicit user confirmation', code: 'CONFIRMATION_REQUIRED' };
+  }
   try {
     const result = await runFullSyncFromCloud();
     return {
@@ -8365,7 +8746,11 @@ ipcMain.handle('sync-full-resync', async () => {
   }
 });
 
-ipcMain.handle('sync-export-record-index', async () => {
+ipcMain.handle('sync-export-record-index', async (_event, params) => {
+  // Metadata-only export still requires explicit confirmation — never a silent dump.
+  if (!hasExplicitUserConfirmation(params)) {
+    return { ok: false, error: 'Record index export requires explicit user confirmation', code: 'CONFIRMATION_REQUIRED', records: [] };
+  }
   try {
     if (!db) return { ok: false, error: 'Database not ready', records: [] };
     const rows = dbAll(
@@ -9449,7 +9834,7 @@ async function renderHtmlToPdfBuffer(html, options) {
 
   const win = new BrowserWindow({
     width: 800, height: 600, show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
   // Offscreen PDF window: belt-and-braces — should never need to navigate
   // anywhere except the local temp file we just wrote.
@@ -9787,7 +10172,7 @@ ipcMain.handle('print-pdf-file', async (_, filePath) => {
   }
   const win = new BrowserWindow({
     width: 800, height: 600, show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true },
   });
   try {
     hardenWindow(win, {
