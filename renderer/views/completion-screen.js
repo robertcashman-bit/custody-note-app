@@ -106,6 +106,8 @@ function _wfRenderCompletionStepBody(body, footer, qfOn) {
   _wfBuildCompletionFooter(footer, {
     noteOk: noteOk,
     canArchive: noteOk && !archived,
+    canPurge: (invOk || !!(d.billedToFirmAt || d.billedToFirm === true || d.billingProcessCompletedAt)) && noteOk,
+    canMarkBilled: noteOk && !invOk && !(d.billedToFirmAt || d.billedToFirm === true),
   });
 }
 
@@ -115,11 +117,20 @@ function _wfBuildCompletionFooter(footer, ctx) {
    * "Close" button was removed \u2014 if Archive isn't ready (note not yet
    * finalised) Back is the way out. */
   var canArchive = ctx.canArchive;
+  var canPurge = !!ctx.canPurge;
+  var canMarkBilled = !!ctx.canMarkBilled;
 
   var html =
     '<button type="button" id="wf-complete-back" class="btn btn-secondary btn-small">&#9664; Back</button>' +
     '<button type="button" id="wf-export-billing-pdf" class="btn btn-secondary btn-small">Export PDF</button>' +
     '<span class="wf-footer-spacer"></span>';
+
+  if (canMarkBilled) {
+    html += '<button type="button" id="wf-mark-billed-firm" class="btn btn-secondary btn-small">Mark billed to firm</button>';
+  }
+  if (canPurge) {
+    html += '<button type="button" id="wf-purge-after-billed" class="btn btn-danger wf-btn-purge">Clear after billed</button>';
+  }
 
   if (canArchive) {
     html += '<button type="button" id="wf-complete-archive" class="btn btn-primary wf-btn-next-action">Archive &amp; close</button>';
@@ -135,6 +146,19 @@ function _wfBuildCompletionFooter(footer, ctx) {
     exportBillingBtn.addEventListener('click', function () {
       if (typeof window.exportBillingSummaryPdf === 'function') window.exportBillingSummaryPdf();
       else showToast('Billing summary export not available', 'error');
+    });
+  }
+
+  var markBilledBtn = document.getElementById('wf-mark-billed-firm');
+  if (markBilledBtn) {
+    markBilledBtn.addEventListener('click', function () {
+      if (typeof window.runMarkBilledToFirm === 'function') window.runMarkBilledToFirm();
+    });
+  }
+  var purgeBtn = document.getElementById('wf-purge-after-billed');
+  if (purgeBtn) {
+    purgeBtn.addEventListener('click', function () {
+      if (typeof window.runPostBillPurge === 'function') window.runPostBillPurge();
     });
   }
 

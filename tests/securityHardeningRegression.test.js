@@ -56,11 +56,20 @@ describe('security hardening regressions', () => {
     assert.ok(client.includes('safeLog'), 'openaiClient must use safeLog');
   });
 
-  it('BrowserWindow uses contextIsolation and sandbox', () => {
+  it('BrowserWindow uses contextIsolation, sandbox, and webSecurity', () => {
     const src = read('main.js');
     assert.ok(/contextIsolation:\s*true/.test(src), 'contextIsolation must be true');
     assert.ok(/sandbox:\s*true/.test(src), 'sandbox must be true');
     assert.ok(/nodeIntegration:\s*false/.test(src), 'nodeIntegration must be false');
+    assert.ok(/webSecurity:\s*true/.test(src), 'webSecurity must be true');
+  });
+
+  it('hostile-cloud sync pull guard and confirmation gates are wired', () => {
+    const src = read('main.js');
+    assert.ok(src.includes('syncPullGuard'), 'syncPullGuard required');
+    assert.ok(src.includes('buildSyncAuthHeaders'), 'auth-bound sync headers');
+    assert.ok(src.includes('hasExplicitUserConfirmation'), 'exfil confirmation gate');
+    assert.ok(src.includes('writeRestrictedFile'), 'restricted secret file writes');
   });
 
   it('.env.example has placeholders only — no live secrets', () => {

@@ -302,6 +302,8 @@ contextBridge.exposeInMainWorld('api', {
   attendanceArchive: (id) => ipcRenderer.invoke('attendance-archive', id),
   attendanceUnarchive: (id) => ipcRenderer.invoke('attendance-unarchive', id),
   attendanceUndelete: (id) => ipcRenderer.invoke('attendance-undelete', id),
+  attendancePurgeAfterBilled: (params) => ipcRenderer.invoke('attendance-purge-after-billed', params || {}),
+  attendanceMarkBilledToFirm: (params) => ipcRenderer.invoke('attendance-mark-billed-to-firm', params || {}),
   attendanceCheckDuplicate: (params) => ipcRenderer.invoke('attendance-check-duplicate', params),
   stationsList: () => ipcRenderer.invoke('stations-list'),
   stationsReplace: (stations) => ipcRenderer.invoke('stations-replace', stations),
@@ -420,6 +422,7 @@ contextBridge.exposeInMainWorld('api', {
   authMagicLink: (params) => ipcRenderer.invoke('auth:magic-link', params),
   authPoll: (params) => ipcRenderer.invoke('auth:poll', params),
   authLogout: () => ipcRenderer.invoke('auth:logout'),
+  authRevokeSession: () => ipcRenderer.invoke('auth:revoke-session'),
   /* Licence */
   licenceStatus: () => ipcRenderer.invoke('licence:status'),
   licenceActivate: (params) => ipcRenderer.invoke('licence:activate', params),
@@ -442,9 +445,9 @@ contextBridge.exposeInMainWorld('api', {
   onCloudBackupStatusChanged: (cb) => ipcRenderer.on('cloud-backup-status-changed', (_, data) => cb(data)),
   /* Cross-device sync */
   syncNow: () => ipcRenderer.invoke('sync-now'),
-  syncFullResync: () => ipcRenderer.invoke('sync-full-resync'),
+  syncFullResync: (params) => ipcRenderer.invoke('sync-full-resync', params || {}),
   syncReuploadAll: () => ipcRenderer.invoke('sync-reupload-all'),
-  syncExportRecordIndex: () => ipcRenderer.invoke('sync-export-record-index'),
+  syncExportRecordIndex: (params) => ipcRenderer.invoke('sync-export-record-index', params || {}),
   syncIntegrityCheck: () => ipcRenderer.invoke('sync-integrity-check'),
   syncStatus: () => ipcRenderer.invoke('sync-status'),
   syncScheduleOnReconnect: () => ipcRenderer.invoke('sync-schedule-on-reconnect'),

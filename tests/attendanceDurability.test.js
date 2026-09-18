@@ -236,7 +236,8 @@ describe('Backup multi-generation + verify', () => {
 describe('Soft-delete preference', () => {
   it('attendance-delete soft-deletes and flushes', () => {
     const idx = mainJs.indexOf("ipcMain.handle('attendance-delete'");
-    const chunk = mainJs.slice(idx, idx + 900);
+    // Slice must cover purge guard + soft-delete return (post-bill purge blocks restore).
+    const chunk = mainJs.slice(idx, idx + 1600);
     assert.match(chunk, /deleted_at/);
     assert.match(chunk, /soft:\s*true/);
     assert.match(chunk, /flushDbSync\(\)/);
