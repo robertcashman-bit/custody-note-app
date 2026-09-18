@@ -191,6 +191,34 @@ describe('cloudAuthSession — short-lived tokens + revoke', () => {
     assert.equal(data.tokenExpiresAt, undefined);
   });
 
+  it('applyIssuedTokens clears stale tokenExpiresAt when reissuing without server expiry', () => {
+    const data = {
+      authToken: 'old',
+      refreshToken: 'r',
+      tokenExpiresAt: new Date(Date.now() - 60_000).toISOString(),
+    };
+    applyIssuedTokens(data, { accessToken: 'new-token', refreshToken: 'r2' }, { now: Date.now() });
+    assert.equal(data.authToken, 'new-token');
+    assert.equal(data.refreshToken, 'r2');
+    assert.equal(data.tokenExpiresAt, undefined);
+    const ev = evaluateAccessToken(data);
+    assert.equal(ev.usable, true);
+    assert.equal(ev.reason, 'ok');
+  });
+
+  it('applyIssuedTokens replaces expiry when server sends a new expiresAt', () => {
+    const data = {
+      authToken: 'old',
+      tokenExpiresAt: '2000-01-01T00:00:00.000Z',
+    };
+    applyIssuedTokens(data, {
+      accessToken: 'new',
+      expiresAt: '2099-01-01T00:00:00.000Z',
+    });
+    assert.equal(data.tokenExpiresAt, '2099-01-01T00:00:00.000Z');
+    assert.equal(evaluateAccessToken(data).usable, true);
+  });
+
   it('revokeSessionTokens always clears local even if remote fails', async () => {
     const data = { authToken: 'a', refreshToken: 'r' };
     const out = await revokeSessionTokens(data, {

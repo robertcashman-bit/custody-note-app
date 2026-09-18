@@ -204,6 +204,7 @@ const {
   buildCloudPurgeRequest,
   isPostBillPurgeReason,
   shouldKeepLocalPostBillPurgeTombstone,
+  nextTombstoneSyncVersion,
   buildRedactedAuditSnapshotJson,
 } = require('./lib/postBillPurge');
 const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
@@ -3606,6 +3607,23 @@ async function syncPull(opts) {
         }
       }
 
+      // Sticky post_bill_purge BEFORE status protection gates. Purged rows are
+      // status=completed; a newer remote draft/finalised body must not skip
+      // tombstone retention via protect_finalised (catch-up can force-accept those).
+      if (shouldKeepLocalPostBillPurgeTombstone(local.deletion_reason, remote.deletionReason)) {
+        console.warn('[SYNC-PULL] Sticky post_bill_purge tombstone retained for', remote.syncId);
+        try {
+          const newVersion = nextTombstoneSyncVersion(localVersion, remoteVersion);
+          const nowIso = new Date().toISOString();
+          dbRun(
+            'UPDATE attendances SET sync_dirty=1, sync_version=?, updated_at=? WHERE id=?',
+            [newVersion, nowIso, local.id]
+          );
+          enqueueSyncForRecord(local.id, 'upsert', { immediate: true });
+        } catch (_) {}
+        continue;
+      }
+
       const localStatus = (() => {
         const s = dbGet('SELECT status FROM attendances WHERE id=?', [local.id]);
         return s ? s.status : null;
@@ -3629,15 +3647,6 @@ async function syncPull(opts) {
         (remoteVersion === localVersion && remote.updatedAt > (local.updated_at || ''));
 
       if (remoteNewer) {
-        if (shouldKeepLocalPostBillPurgeTombstone(local.deletion_reason, remote.deletionReason)) {
-          console.warn('[SYNC-PULL] Sticky post_bill_purge tombstone retained for', remote.syncId);
-          // Re-queue local tombstone so cloud converges to purge (optional push-back).
-          try {
-            dbRun('UPDATE attendances SET sync_dirty=1, sync_version=COALESCE(sync_version,1)+1 WHERE id=?', [local.id]);
-            enqueueSyncForRecord(local.id, 'upsert', { immediate: true });
-          } catch (_) {}
-          continue;
-        }
         if (local.sync_dirty === 1) {
           recordSyncConflict(local.id, local, remote, 'preserve_local_dirty');
           batchConflicts++;
@@ -6717,26 +6726,33 @@ function persistOpenAiApiKeySecure(key) {
   try {
     if (!trimmed) {
       try { if (fs.existsSync(sealedPath)) fs.unlinkSync(sealedPath); } catch (_) {}
-      return;
+      return true;
     }
     if (safeStorage.isEncryptionAvailable()) {
       writeRestrictedFile(sealedPath, safeStorage.encryptString(trimmed));
     } else {
       writeRestrictedFile(sealedPath, trimmed, { encoding: 'utf8' });
     }
+    return true;
   } catch (err) {
     console.warn('[ai-law] Failed to persist OpenAI key to secure store:', err && err.message);
+    return false;
   }
 }
 
 function seedOpenAiApiKeyIntoSettings() {
   // Migrate any leftover plaintext settings value into the OS-sealed store, then
-  // clear the plaintext column. Never copy a sealed key back into SQLite.
+  // clear the plaintext column only after seal succeeds. Never copy a sealed
+  // key back into SQLite.
   try {
     const existing = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
     const plaintext = existing && String(existing.value || '').trim();
     if (plaintext) {
-      try { persistOpenAiApiKeySecure(plaintext); } catch (_) {}
+      const sealedOk = persistOpenAiApiKeySecure(plaintext);
+      if (!sealedOk) {
+        console.warn('[ai-law] Seal failed; keeping plaintext OpenAI key in settings until seal succeeds');
+        return;
+      }
       dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
       markDbDirty();
       console.log('[ai-law] Migrated OpenAI API key to secure store and cleared plaintext settings');
@@ -7009,9 +7025,20 @@ ipcMain.handle('set-settings', (_, settings) => {
         }
       }
       if (QUICKFILE_CREDENTIAL_KEYS.has(key)) wroteQuickFile = true;
-      if (key === 'openaiApiKey' && incoming) {
-        persistOpenAiApiKeySecure(incoming);
-        // Persist sealed only — never keep the raw key in SQLite settings.
+      if (key === 'openaiApiKey') {
+        if (incoming) {
+          const sealedOk = persistOpenAiApiKeySecure(incoming);
+          if (sealedOk) {
+            // Persist sealed only — never keep the raw key in SQLite settings.
+            dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
+          } else {
+            // Seal failed: keep the working plaintext copy until seal succeeds.
+            dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', incoming]);
+          }
+          continue;
+        }
+        // Explicit clear (empty incoming, no plaintext to preserve): delete sealed file too.
+        persistOpenAiApiKeySecure('');
         dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
         continue;
       }
