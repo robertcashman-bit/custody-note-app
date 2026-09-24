@@ -400,6 +400,8 @@ contextBridge.exposeInMainWorld('api', {
   auditLogGet: (id) => ipcRenderer.invoke('audit-log-get', id),
   supervisorApprove: (params) => ipcRenderer.invoke('supervisor-approve', params),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  msStoreRatingEligibility: (payload) => ipcRenderer.invoke('ms-store-rating-eligibility', payload),
+  msStoreRatingSnoozeUntil: () => ipcRenderer.invoke('ms-store-rating-snooze-until'),
   getBankHolidays: () => ipcRenderer.invoke('get-bank-holidays'),
   getSafeStorageStatus: () => ipcRenderer.invoke('get-safe-storage-status'),
   auditLogGetHistory: (id) => ipcRenderer.invoke('audit-log-get-history', id),

@@ -5091,6 +5091,28 @@ html.dark #admin-dash-stats > div > div:first-child { color: #f1f5f9 !important;
 }
 .licence-warning-dismiss:hover { opacity: 1; }
 
+.ms-store-rating-banner {
+  flex-wrap: wrap;
+  text-align: left;
+  font-weight: 500;
+  gap: 0.65rem 1rem;
+  padding: 0.65rem 1rem;
+}
+.ms-store-rating-text {
+  flex: 1 1 16rem;
+  line-height: 1.35;
+}
+.ms-store-rating-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.ms-store-rating-actions .btn-sm {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+}
+
 /* Inline field error */
 .field-error {
   color: #dc2626;
