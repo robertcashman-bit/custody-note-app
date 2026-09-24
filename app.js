@@ -3333,6 +3333,7 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function applySyncSnapshot(st) {
+    try { window.__cnMsStoreRatingSyncBusy = !!(st && st.inProgress); } catch (_) {}
     var wrap = document.getElementById('sync-footer-wrap');
     var homeSyncWrap = document.getElementById('home-sync-now-wrap');
     var el = document.getElementById('sync-status-indicator');
@@ -13389,6 +13390,20 @@ var REQUIRED_FIELD_KEYS = [
   window.getFieldValue = getFieldValue;
 
   /* ─── SAVE ─── */
+  function scheduleMsStoreRatingPromptAfterList() {
+    try {
+      if (!window.MsStoreRatingPrompt || typeof window.MsStoreRatingPrompt.maybeShowAfterReturnToList !== 'function') return;
+      window.MsStoreRatingPrompt.maybeShowAfterReturnToList({
+        calmUiMoment: true,
+        onRecordsList: _currentView === 'list',
+        onActiveNoteForm: false,
+        saveInProgress: !!(_draftSaveInFlight || _finalising),
+        syncInProgress: !!window.__cnMsStoreRatingSyncBusy,
+        startupSyncSettling: !!window.__cnMsStoreRatingStartupBusy,
+      });
+    } catch (_) {}
+  }
+
   function setListFilterAndShowList(filter) {
     listStatusFilter = filter;
     document.querySelectorAll('.filter-btn').forEach(function(b) {
@@ -13397,6 +13412,7 @@ var REQUIRED_FIELD_KEYS = [
     });
     showView('list');
     refreshList();
+    scheduleMsStoreRatingPromptAfterList();
   }
 
   function saveForm(status) {
@@ -13596,6 +13612,7 @@ var REQUIRED_FIELD_KEYS = [
         stopAutoSave();
         goBack();
         showToast('Saved as draft', 'success');
+        if (_currentView === 'list') scheduleMsStoreRatingPromptAfterList();
       }).catch(function(err) { showToast('Failed to save: ' + (err && err.message || err), 'error', 5000); });
     });
     document.getElementById('save-exit-finalise').addEventListener('click', function() {
@@ -21680,6 +21697,10 @@ function _initCloseGuard() {
 
 function safeInit() {
   try {
+    try {
+      window.__cnMsStoreRatingStartupBusy = true;
+      setTimeout(function () { window.__cnMsStoreRatingStartupBusy = false; }, 30000);
+    } catch (_) {}
     init();
     if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.init === 'function') {
       try { window.OfficerEmailsPanel.init(); } catch (e) { console.error('[OfficerEmailsPanel.init]', e); }
