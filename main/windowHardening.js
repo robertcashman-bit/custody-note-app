@@ -28,6 +28,20 @@
 
 const URL_ALLOWED_PROTOCOLS = new Set(['https:', 'http:']);
 const URL_ALLOWED_LOCAL_ONLY_PROTOCOLS = new Set(['file:']);
+const MS_STORE_REVIEW_PRODUCT_ID = '9NFSRVT3T45V';
+
+/**
+ * Narrow allow-list: only the in-app Microsoft Store review deeplink for this product.
+ */
+function isSafeMsStoreReviewUrl(urlStr) {
+  if (typeof urlStr !== 'string') return false;
+  if (/[\u0000-\u001F\u007F]/.test(urlStr)) return false;
+  let parsed;
+  try { parsed = new URL(urlStr.trim()); } catch (_) { return false; }
+  if (parsed.protocol !== 'ms-windows-store:') return false;
+  if (parsed.hostname !== 'review') return false;
+  return parsed.searchParams.get('ProductId') === MS_STORE_REVIEW_PRODUCT_ID;
+}
 
 /**
  * Return true if the renderer should be allowed to navigate to `urlStr` in-place.
@@ -63,6 +77,7 @@ function isSafeExternalUrl(urlStr) {
   if (typeof urlStr !== 'string') return false;
   // Reject obvious smuggling.
   if (/[\u0000-\u001F\u007F]/.test(urlStr)) return false;
+  if (isSafeMsStoreReviewUrl(urlStr)) return true;
   let parsed;
   try { parsed = new URL(urlStr.trim()); } catch (_) { return false; }
   if (!URL_ALLOWED_PROTOCOLS.has(parsed.protocol)) return false;
@@ -293,6 +308,7 @@ module.exports = {
   hardenSession,
   isInternalNavigation,
   isSafeExternalUrl,
+  isSafeMsStoreReviewUrl,
   isSafeMailtoDraftUrl,
   ELECTRON_CSP,
   ALLOWED_PERMISSIONS,
