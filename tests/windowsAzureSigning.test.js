@@ -85,7 +85,7 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
   });
 
   it('passes azureSignOptions via electron-builder CLI when signing is enabled', () => {
-    assert.match(wf, /electron-builder --win nsis --publish always/);
+    assert.match(wf, /electron-builder --win nsis --publish never/);
     assert.match(wf, /-c\.win\.azureSignOptions\.publisherName=/);
     assert.match(wf, /-c\.win\.azureSignOptions\.endpoint=/);
     assert.match(wf, /-c\.win\.azureSignOptions\.codeSigningAccountName=/);
