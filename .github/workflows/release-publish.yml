@@ -277,6 +277,7 @@ jobs:
       - name: Upload Store package to canonical draft release
         if: steps.msix-build.outputs.artifact != ''
         working-directory: custody-note-app
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARTIFACT: ${{ steps.msix-build.outputs.artifact }}

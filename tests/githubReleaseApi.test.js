@@ -47,9 +47,9 @@ describe('release workflow — canonical draft + publish gate', () => {
     assert.doesNotMatch(wf, /gh release create.*Store artefact/);
   });
 
-  it('publish-release waits for MSIX on the canonical release', () => {
+  it('publish-release waits for NSIS/Mac updater assets but not MSIX (MSIX job is continue-on-error)', () => {
     assert.match(wf, /needs:\s*\[release-windows,\s*release-mac,\s*release-windows-msix\]/);
-    assert.match(waitScript, /Custody-Note-\$\{version\}\.msix/);
+    assert.doesNotMatch(waitScript, /Custody-Note-\$\{version\}\.msix/);
     assert.match(wf, /wait-and-publish-release\.mjs/);
   });
 });
