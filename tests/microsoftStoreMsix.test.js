@@ -69,7 +69,7 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
     assert.match(workflow, /prepare-release-draft:/);
     assert.match(workflow, /upload-single-release-asset\.mjs/);
     const waitScript = fs.readFileSync(path.join(root, 'scripts', 'wait-and-publish-release.mjs'), 'utf8');
-    assert.match(waitScript, /Custody-Note-\$\{version\}\.msix/);
+    assert.doesNotMatch(waitScript, /Custody-Note-\$\{version\}\.msix/);
     assert.match(waitScript, /Custody-Note-Setup-\$\{version\}\.exe/);
   });
 

@@ -32,7 +32,6 @@ function requiredAssetNames(version) {
     `Custody-Note-${version}-x64.dmg`,
     `Custody-Note-${version}-x64.zip`,
     'latest-mac.yml',
-    `Custody-Note-${version}.msix`,
   ];
 }
 

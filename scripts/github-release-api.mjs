@@ -119,6 +119,7 @@ async function deleteRelease(releaseId, token, owner, repo) {
     method: 'DELETE',
     headers: releaseApiHeaders(token),
   });
+  if (res.status === 404) return;
   if (res.status !== 204 && !res.ok) {
     throw new Error(`Delete release ${releaseId} failed: HTTP ${res.status} ${await res.text()}`);
   }
