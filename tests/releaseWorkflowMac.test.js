@@ -10,7 +10,8 @@ describe('release-publish.yml — cross-platform build pipeline', () => {
   it('has a dedicated Windows job', () => {
     assert.match(wf, /^\s*release-windows:/m);
     assert.match(wf, /runs-on:\s*windows-latest/);
-    assert.match(wf, /electron-builder --win nsis --publish always/);
+    assert.match(wf, /electron-builder --win nsis --publish never/);
+    assert.match(wf, /prepare-release-draft:/);
     assert.match(wf, /id-token:\s*write/);
     assert.match(wf, /azure\/login@v/);
   });
@@ -56,14 +57,16 @@ describe('release-publish.yml — cross-platform build pipeline', () => {
   });
 
   it('publishes the release only after BOTH platform asset sets are present', () => {
+    const gate = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'wait-and-publish-release.mjs'), 'utf8');
     assert.match(wf, /^\s*publish-release:/m);
-    assert.match(wf, /needs:\s*\[release-windows,\s*release-mac\]/);
-    assert.match(wf, /latest\.yml/);
-    assert.match(wf, /latest-mac\.yml/);
-    assert.match(wf, /Custody-Note-\$\{VERSION\}-arm64\.dmg/);
-    assert.match(wf, /Custody-Note-\$\{VERSION\}-x64\.dmg/);
-    assert.match(wf, /Custody-Note-Setup-\$\{VERSION\}\.exe/);
-    assert.match(wf, /--draft=false --latest/);
+    assert.match(wf, /needs:\s*\[release-windows,\s*release-mac,\s*release-windows-msix\]/);
+    assert.match(wf, /wait-and-publish-release\.mjs/);
+    assert.match(gate, /latest\.yml/);
+    assert.match(gate, /latest-mac\.yml/);
+    assert.match(gate, /Custody-Note-\$\{version\}-arm64\.dmg/);
+    assert.match(gate, /Custody-Note-\$\{version\}-x64\.dmg/);
+    assert.match(gate, /Custody-Note-Setup-\$\{version\}\.exe/);
+    assert.match(gate, /--draft=false --latest/);
   });
 
   it('deploys the website only after the release is fully published', () => {

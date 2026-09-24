@@ -551,7 +551,7 @@ if (PUBLISH_MODE) {
   }
   const tag = `v${pkg.version}`;
   info(`Gatekeeper OK — ensuring GitHub release ${tag} exists, then uploading…`);
-  const { fetchReleaseByTag, waitForReleaseByTag, RELEASE_OWNER, RELEASE_REPO, releaseApiHeaders } =
+  const { fetchReleaseByTag, waitForReleaseByTag } =
     await import('./github-release-api.mjs');
 
   let release;
@@ -562,32 +562,10 @@ if (PUBLISH_MODE) {
     try {
       release = await waitForReleaseByTag(tag, token, { maxAttempts: 24, delayMs: 5000 });
     } catch (waitErr) {
-      info(`Still no release after wait (${waitErr.message || waitErr}) — creating draft…`);
-      const createRes = await fetch(
-        `https://api.github.com/repos/${RELEASE_OWNER}/${RELEASE_REPO}/releases`,
-        {
-          method: 'POST',
-          headers: {
-            ...releaseApiHeaders(token),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            tag_name: tag,
-            name: tag,
-            draft: true,
-            prerelease: false,
-            generate_release_notes: false,
-          }),
-        },
+      fail(
+        `GitHub draft release ${tag} not found after wait (${waitErr.message || waitErr}). ` +
+        'CI must run prepare-release-draft before release-mac uploads.',
       );
-      if (!createRes.ok) {
-        fail(
-          `Failed to create draft release ${tag}: HTTP ${createRes.status} ` +
-          `${(await createRes.text()).slice(0, 300)}`,
-        );
-      }
-      release = await createRes.json();
-      info(`Created draft release ${tag} (id ${release.id}).`);
     }
   }
   if (!release || !release.id) {

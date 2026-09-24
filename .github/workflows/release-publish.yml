@@ -24,7 +24,7 @@
 # - Built by job release-windows-msix (continue-on-error) so NSIS can still ship.
 # - electron-builder target is "appx"; artefact name is Custody-Note-{version}.msix.
 # - Uploaded UNSIGNED for Partner Center signing — see docs/MICROSOFT_STORE_RELEASE.md.
-# - Not required for publish-release (latest.yml / NSIS updater channel).
+# - Required on the canonical draft before publish-release flips draft → live.
 #
 # Required for macOS Developer ID–signed + notarised build (fail-closed):
 # - MAC_CERTIFICATE_P12_BASE64     — Base64-encoded Developer ID Application .p12 bundle.
@@ -62,14 +62,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ─── Job 0: Single canonical draft release (prevents parallel draft races) ───
+  prepare-release-draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Ensure one draft GitHub release for this tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ensure-github-release-draft.mjs
+
   # ─── Job 1a: Build the Windows installer and upload to GitHub Releases ──────
-  # electron-builder creates a DRAFT release (per package.json build.publish.releaseType).
-  # The publish-release job below flips it to non-draft once Mac + Windows are present.
+  # Upload-only: prepare-release-draft created the draft; we never let electron-builder
+  # create a second release (parallel MSIX/Mac previously caused duplicate drafts).
   #
   # Windows code signing uses Azure Artifact Signing (OIDC via azure/login).
   # azureSignOptions are passed on the CLI only when signing is enabled so local
   # / unsigned builds do not force the Azure sign manager (see SIGNING.md).
   release-windows:
+    needs: prepare-release-draft
     runs-on: windows-latest
     # Pins OIDC subject to environment:windows-signing so the Entra federated
     # credential can authorize tag builds (branch-scoped federation alone does
@@ -175,21 +197,28 @@ jobs:
           # cannot block the GitHub Releases .exe channel.
           if [[ "${CN_WIN_SIGN_ENABLED}" == "true" ]]; then
             echo "Building signed Windows NSIS installer via Azure Artifact Signing…"
-            npx electron-builder --win nsis --publish always \
+            npx electron-builder --win nsis --publish never \
               "-c.win.azureSignOptions.publisherName=${AZURE_TRUSTED_SIGNING_PUBLISHER_NAME}" \
               "-c.win.azureSignOptions.endpoint=${AZURE_CODE_SIGNING_ENDPOINT}" \
               "-c.win.azureSignOptions.codeSigningAccountName=${AZURE_CODE_SIGNING_ACCOUNT_NAME}" \
               "-c.win.azureSignOptions.certificateProfileName=${AZURE_CERTIFICATE_PROFILE_NAME}"
           else
             echo "Building unsigned Windows NSIS installer…"
-            npx electron-builder --win nsis --publish always
+            npx electron-builder --win nsis --publish never
           fi
+
+      - name: Upload Windows NSIS assets to canonical draft release
+        working-directory: custody-note-app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/upload-windows-release-assets.mjs
 
   # ─── Job 1a2: Build Microsoft Store AppX/MSIX (unsigned for Partner Center) ─
   # electron-builder 26.x Store target is "appx" (produces .msix via artifactName).
   # Partner Center signs for Store submission — we upload an unsigned package.
   # continue-on-error: NSIS release must still ship if only this job fails.
   release-windows-msix:
+    needs: prepare-release-draft
     runs-on: windows-latest
     continue-on-error: true
     permissions:
@@ -245,40 +274,24 @@ jobs:
             exit 1
           fi
 
-      - name: Upload Store package to GitHub Release (draft-friendly)
+      - name: Upload Store package to canonical draft release
         if: steps.msix-build.outputs.artifact != ''
         working-directory: custody-note-app
-        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
           ARTIFACT: ${{ steps.msix-build.outputs.artifact }}
         run: |
-          set -euo pipefail
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v${VERSION}"
-          # Wait briefly for NSIS job to create the draft release when racing.
-          for attempt in $(seq 1 30); do
-            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              break
-            fi
-            echo "Waiting for draft release $TAG (attempt $attempt)…"
-            sleep 10
-          done
-          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Draft release $TAG not found yet — creating placeholder draft for Store artefact upload."
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --title "v${VERSION}" --notes "Draft release (Store package uploaded ahead of NSIS/Mac assets)."
-          fi
-          gh release upload "$TAG" "$ARTIFACT" --repo "$GITHUB_REPOSITORY" --clobber
-          echo "Uploaded $(basename "$ARTIFACT") to $TAG (unsigned — Partner Center signs for Store)."
-
+          node scripts/ensure-github-release-draft.mjs --wait-only --max-attempts 60
+          node scripts/upload-single-release-asset.mjs "$ARTIFACT"
+          echo "Uploaded Store package (unsigned — Partner Center signs for Store)."
 
   # ─── Job 1b: Build the signed + notarised macOS .dmg/.zip and upload ────────
   # Imports the Developer ID Application certificate into a temporary keychain,
   # then runs the same scripts/build-mac-signed.mjs the developer uses locally.
   # The same package.json build.publish config drops the assets onto the matching
-  # draft release that release-windows created (whichever job runs first creates it).
+  # draft release created by prepare-release-draft (upload-only from build-mac-signed).
   release-mac:
+    needs: prepare-release-draft
     runs-on: macos-latest
     permissions:
       contents: write
@@ -360,7 +373,7 @@ jobs:
   # half-finished release.
   publish-release:
     runs-on: ubuntu-latest
-    needs: [release-windows, release-mac]
+    needs: [release-windows, release-mac, release-windows-msix]
     permissions:
       contents: write
     steps:
@@ -369,74 +382,16 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
-      - name: Wait for cross-platform updater assets, then publish
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Wait for all assets on canonical release, verify, publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -e
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v${VERSION}"
-          REQUIRED=(
-            "Custody-Note-Setup-${VERSION}.exe"
-            "Custody-Note-Setup-${VERSION}.exe.blockmap"
-            "latest.yml"
-            "Custody-Note-${VERSION}-arm64.dmg"
-            "Custody-Note-${VERSION}-arm64.zip"
-            "Custody-Note-${VERSION}-x64.dmg"
-            "Custody-Note-${VERSION}-x64.zip"
-            "latest-mac.yml"
-          )
-          for attempt in $(seq 1 30); do
-            assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft \
-                      --jq '.assets[].name' 2>/dev/null || echo "")
-            missing=""
-            for need in "${REQUIRED[@]}"; do
-              echo "$assets" | grep -qx "$need" || missing+="$need "
-            done
-            if [ -z "$missing" ]; then
-              echo "All asset names present — waiting 45s for GitHub uploads to settle…"
-              sleep 45
-              verify_ok=false
-              for vattempt in $(seq 1 5); do
-                echo "Verifying updater checksums (attempt $vattempt/5)…"
-                if node scripts/verify-github-updater-assets.mjs --tag "$TAG"; then
-                  verify_ok=true
-                  break
-                fi
-                sleep 15
-              done
-              if [ "$verify_ok" != "true" ]; then
-                echo "Checksum verification failed — attempting Mac updater feed repair…"
-                node scripts/repair-github-mac-updater-feed.mjs --tag "$TAG" || true
-                for vattempt in $(seq 1 12); do
-                  echo "Post-repair verify (attempt $vattempt/12)…"
-                  if node scripts/verify-github-updater-assets.mjs --tag "$TAG"; then
-                    verify_ok=true
-                    break
-                  fi
-                  sleep 15
-                done
-              fi
-              if [ "$verify_ok" != "true" ]; then
-                echo "Checksum verification still failed for $TAG — release stays draft."
-                exit 1
-              fi
-              is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')
-              if [ "$is_draft" = "true" ]; then
-                gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
-                echo "Published $TAG after all cross-platform updater assets were uploaded."
-              else
-                echo "$TAG is already live."
-                gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --latest || true
-              fi
-              exit 0
-            fi
-            echo "Waiting on $TAG (attempt $attempt): $missing"
-            sleep 10
-          done
-          echo "Timed out waiting for updater assets on $TAG. Still missing: $missing"
-          exit 1
+        run: node scripts/wait-and-publish-release.mjs
 
   # ─── Job 3: Sync website changelog and deploy to Vercel ─────────────────────
   # Optional — continue-on-error means a missing GH_PAT/VERCEL_TOKEN won't fail
