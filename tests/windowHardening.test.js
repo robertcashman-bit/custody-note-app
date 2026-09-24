@@ -77,6 +77,18 @@ describe('windowHardening.isSafeExternalUrl', () => {
     assert.strictEqual(isSafeExternalUrl('mailto:test@example.com'), false);
   });
 
+  it('accepts only the Custody Note Microsoft Store review deeplink', () => {
+    assert.strictEqual(
+      isSafeExternalUrl('ms-windows-store://review/?ProductId=9NFSRVT3T45V'),
+      true
+    );
+    assert.strictEqual(
+      isSafeExternalUrl('ms-windows-store://review/?ProductId=OTHER'),
+      false
+    );
+    assert.strictEqual(isSafeExternalUrl('ms-windows-store://pdp/?ProductId=9NFSRVT3T45V'), false);
+  });
+
   it('rejects malformed input', () => {
     assert.strictEqual(isSafeExternalUrl(''), false);
     assert.strictEqual(isSafeExternalUrl(null), false);

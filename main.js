@@ -223,6 +223,11 @@ const _safeLog = require('./lib/safeLog');
 const officerEmailDrafts = require('./lib/officerEmailDrafts');
 const outlookWebCompose = require('./lib/outlookWebCompose');
 const openExternalUrlModule = require('./lib/openExternalUrl');
+const { isWindowsStoreBuild } = require('./lib/isWindowsStoreBuild');
+const {
+  evaluateMsStoreRatingEligibility,
+  snoozeUntilIso,
+} = require('./lib/msStoreRatingEligibility');
 const {
   resolveAdminEmails,
   isAdminEmail,
@@ -1769,6 +1774,10 @@ async function initDb() {
   // Fresh installs previously only stored the path and never mkdir'd it, so
   // scheduled backups silently skipped via isBackupFolderReady(). Create now.
   try { ensureBackupFolderExists(); } catch (_) {}
+
+  try { ensureAppFirstLaunchAt(); } catch (e) {
+    console.warn('[initDb] ensureAppFirstLaunchAt failed:', e && e.message);
+  }
 
   loadStationsFromFile();
   _bootMark('initDb-stations-loaded');
@@ -5254,6 +5263,63 @@ async function fetchAndCacheBankHolidays() {
   });
 }
 
+function detectMsStoreBuildRuntime() {
+  if (IS_MSIX_STORE_BUILD) return true;
+  const channel = [
+    process.env.CN_DISTRIBUTION_CHANNEL,
+    process.env.CN_MSIX_BUILD,
+    process.env.CUSTODYNOTE_CHANNEL,
+  ].find((v) => v != null && String(v).trim() !== '') || '';
+  return isWindowsStoreBuild({
+    platform: process.platform,
+    windowsStore: !!process.windowsStore,
+    distributionChannel: channel,
+    execPath: process.execPath,
+  });
+}
+
+function readSettingsValue(key) {
+  try {
+    const row = dbGet('SELECT value FROM settings WHERE key = ?', [key]);
+    return row && row.value != null ? String(row.value) : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function ensureAppFirstLaunchAt() {
+  const existing = readSettingsValue('appFirstLaunchAt').trim();
+  if (existing) return;
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [
+    'appFirstLaunchAt',
+    new Date().toISOString(),
+  ]);
+  markDbDirty();
+}
+
+function countSavedAttendances() {
+  try {
+    const row = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
+    return row && row.c != null ? Number(row.c) : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function evaluateMsStoreRatingForRenderer(moment) {
+  return evaluateMsStoreRatingEligibility({
+    isWindowsStoreBuild: detectMsStoreBuildRuntime(),
+    platform: process.platform,
+    firstLaunchAtIso: readSettingsValue('appFirstLaunchAt'),
+    savedAttendanceCount: countSavedAttendances(),
+    neverAsk: readSettingsValue('msStoreRatingNeverAsk'),
+    promptCount: readSettingsValue('msStoreRatingPromptCount'),
+    snoozeUntilIso: readSettingsValue('msStoreRatingSnoozeUntil'),
+    nowMs: Date.now(),
+    moment: moment && typeof moment === 'object' ? moment : {},
+  });
+}
+
 /** When the running build first ran on this computer (set when app version in userData changes). ISO string. */
 function readAndRefreshVersionState() {
   let st = { lastRunVersion: null, versionAppliedAt: null };
@@ -5305,9 +5371,32 @@ ipcMain.handle('get-app-version', () => {
       /* First time this semver ran on this machine (after install or auto-update). */
       versionAppliedAt: vs.versionAppliedAt || null,
       platform: process.platform,
+      isWindowsStoreBuild: detectMsStoreBuildRuntime(),
     };
-  } catch (_) { return { version: '0.0.0', lastUpdated: '', buildTime: null, versionAppliedAt: null, platform: process.platform }; }
+  } catch (_) {
+    return {
+      version: '0.0.0',
+      lastUpdated: '',
+      buildTime: null,
+      versionAppliedAt: null,
+      platform: process.platform,
+      isWindowsStoreBuild: detectMsStoreBuildRuntime(),
+    };
+  }
 });
+
+ipcMain.handle('ms-store-rating-eligibility', (_, payload) => {
+  try {
+    const moment = payload && payload.moment ? payload.moment : {};
+    const evaluation = evaluateMsStoreRatingForRenderer(moment);
+    return Object.assign({}, evaluation, { isWindowsStoreBuild: detectMsStoreBuildRuntime() });
+  } catch (e) {
+    console.warn('[ms-store-rating] eligibility failed:', e && e.message);
+    return { eligible: false, reason: 'error', isWindowsStoreBuild: detectMsStoreBuildRuntime() };
+  }
+});
+
+ipcMain.handle('ms-store-rating-snooze-until', () => snoozeUntilIso(Date.now()));
 
 ipcMain.handle('app-update-install', () => {
   try {
