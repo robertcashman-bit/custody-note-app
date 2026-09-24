@@ -32,6 +32,25 @@
     });
   }
 
+  function readPersistedPromptCount() {
+    if (window.api && window.api.getSettings) {
+      return window.api.getSettings().then(function (s) {
+        return parseCount(s && s[SETTINGS_COUNT]);
+      });
+    }
+    return Promise.resolve(parseCount(window.__cnMsStoreRatingPromptCount));
+  }
+
+  function bumpPromptCountPatch() {
+    return readPersistedPromptCount().then(function (prev) {
+      var next = prev + 1;
+      window.__cnMsStoreRatingPromptCount = next;
+      var patch = {};
+      patch[SETTINGS_COUNT] = String(next);
+      return patch;
+    });
+  }
+
   function readEligibility(moment) {
     if (!window.api || !window.api.msStoreRatingEligibility) {
       return Promise.resolve({ eligible: false, reason: 'no_api' });
@@ -68,13 +87,10 @@
     if (_openingStore) return;
     _openingStore = true;
     hideBanner();
-    var prev = parseCount(window.__cnMsStoreRatingPromptCount);
-    var next = prev + 1;
-    window.__cnMsStoreRatingPromptCount = next;
-    var patch = {};
-    patch[SETTINGS_COUNT] = String(next);
-    patch[SETTINGS_NEVER] = 'true';
-    persistSettings(patch).then(function () {
+    bumpPromptCountPatch().then(function (patch) {
+      patch[SETTINGS_NEVER] = 'true';
+      return persistSettings(patch);
+    }).then(function () {
       if (window.api && window.api.openExternal) {
         return window.api.openExternal('ms-windows-store://review/?ProductId=9NFSRVT3T45V');
       }
@@ -85,18 +101,15 @@
 
   function onLater() {
     hideBanner();
-    var prev = parseCount(window.__cnMsStoreRatingPromptCount);
-    var next = prev + 1;
-    window.__cnMsStoreRatingPromptCount = next;
-    var patch = {};
-    patch[SETTINGS_COUNT] = String(next);
-    if (window.api && window.api.msStoreRatingSnoozeUntil) {
-      return window.api.msStoreRatingSnoozeUntil().then(function (iso) {
-        patch[SETTINGS_SNOOZE] = iso || '';
-        return persistSettings(patch);
-      });
-    }
-    return persistSettings(patch);
+    bumpPromptCountPatch().then(function (patch) {
+      if (window.api && window.api.msStoreRatingSnoozeUntil) {
+        return window.api.msStoreRatingSnoozeUntil().then(function (iso) {
+          patch[SETTINGS_SNOOZE] = iso || '';
+          return persistSettings(patch);
+        });
+      }
+      return persistSettings(patch);
+    });
   }
 
   function onNever() {
@@ -120,6 +133,7 @@
         base[k] = override[k];
       });
     }
+    base.onActiveNoteForm = !!document.body.classList.contains('form-active');
     return base;
   }
 
