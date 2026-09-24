@@ -41,10 +41,12 @@ describe('1 · Packaging & Config Consistency', () => {
     // set, then flips draft → live. Asserting both feeds + the gh-cli edit
     // protects the gating from a Windows-only regression.
     assert.ok(workflowSrc.includes('publish-release:'));
-    assert.ok(workflowSrc.includes('verify-github-updater-assets.mjs'));
-    assert.ok(workflowSrc.includes('latest.yml'));
-    assert.ok(workflowSrc.includes('latest-mac.yml'));
-    assert.ok(/gh release edit\s+"\$TAG"/.test(workflowSrc));
+    assert.ok(workflowSrc.includes('wait-and-publish-release.mjs'));
+    const publishGate = readFile('scripts/wait-and-publish-release.mjs');
+    assert.ok(publishGate.includes('verify-github-updater-assets.mjs'));
+    assert.ok(publishGate.includes('latest.yml'));
+    assert.ok(publishGate.includes('latest-mac.yml'));
+    assert.ok(/gh release edit/.test(publishGate));
   });
 
   it('build.nsis config exists', () => {

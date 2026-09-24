@@ -66,12 +66,11 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
     assert.match(workflow, /electron-builder --win appx/);
     assert.match(workflow, /release-windows-msix/);
     assert.match(workflow, /continue-on-error:\s*true/);
-    /* publish-release must still require NSIS updater assets, not MSIX */
-    assert.match(workflow, /Custody-Note-Setup-\$\{VERSION\}\.exe/);
-    assert.doesNotMatch(
-      workflow,
-      /REQUIRED=\([\s\S]*Custody-Note-\$\{VERSION\}\.msix/
-    );
+    assert.match(workflow, /prepare-release-draft:/);
+    assert.match(workflow, /upload-single-release-asset\.mjs/);
+    const waitScript = fs.readFileSync(path.join(root, 'scripts', 'wait-and-publish-release.mjs'), 'utf8');
+    assert.doesNotMatch(waitScript, /Custody-Note-\$\{version\}\.msix/);
+    assert.match(waitScript, /Custody-Note-Setup-\$\{version\}\.exe/);
   });
 
   it('PR Test workflow includes a Windows msix-package job', () => {
@@ -84,6 +83,6 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
   it('Mac release job remains present and unchanged in structure', () => {
     assert.match(workflow, /release-mac:/);
     assert.match(workflow, /build:mac:signed/);
-    assert.match(workflow, /needs:\s*\[release-windows,\s*release-mac\]/);
+    assert.match(workflow, /release-mac:\s*\n\s*needs:\s*prepare-release-draft/m);
   });
 });
