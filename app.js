@@ -3324,6 +3324,49 @@ var REQUIRED_FIELD_KEYS = [
   var _footerSyncSnapshot = null;
   var _footerBackupSnapshot = null;
 
+  function hasValidatedCloudLicence(st) {
+    if (!st || !st.key) return false;
+    var keyStr = String(st.key || '');
+    if (keyStr.indexOf('TRIAL-') === 0 || keyStr.indexOf('FREE-') === 0 || keyStr.indexOf('ACCOUNT-') === 0) return false;
+    if (st.isTrial || st.tier === 'trial' || st.tier === 'free' || st.isFree) return false;
+    if (st.status === 'revoked' || st.status === 'expired' || st.status === 'error') return false;
+    return st.status === 'active' || st.status === 'expiring_soon' || st.status === 'grace_expired';
+  }
+
+  function isSyncLicenceAuthFailure(st) {
+    if (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.isLicenceAuthSyncFailure) {
+      return FooterStatusChips.isLicenceAuthSyncFailure(st);
+    }
+    return !!(st && (st.authRequired || st.connectivity === 'auth_required' || st.lastSyncSkipReason === 'auth_required'));
+  }
+
+  function syncLicenceRecoveryHint(st) {
+    if (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.licenceAuthSyncRecoveryHint) {
+      return FooterStatusChips.licenceAuthSyncRecoveryHint(st);
+    }
+    return 'Open Settings → Licence and use Email my licence key or paste your licence key. Sync resumes automatically after activation.';
+  }
+
+  function syncLicenceRecoveryTitle(st) {
+    if (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.licenceAuthSyncRecoveryTitle) {
+      return FooterStatusChips.licenceAuthSyncRecoveryTitle(st);
+    }
+    return syncLicenceRecoveryHint(st);
+  }
+
+  function refreshHomeSyncLicenceAuthBanner(st) {
+    var el = document.getElementById('home-sync-licence-auth-banner');
+    var body = document.getElementById('home-sync-licence-auth-banner-body');
+    if (!el) return;
+    var packaged = !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isPackaged);
+    if (!packaged || !st || !st.enabled || !isSyncLicenceAuthFailure(st)) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+    if (body) body.textContent = syncLicenceRecoveryHint(st);
+  }
+
   function setFooterIndicator(el, text, variant, title) {
     if (!el) return;
     el.textContent = text || '';
@@ -3377,8 +3420,16 @@ var REQUIRED_FIELD_KEYS = [
       if (data.rateLimited) {
         var mins = Math.max(1, Math.ceil((data.rateLimitRemainingMs || 60000) / 60000));
         setFooterIndicator(el, 'Rate limited — retry in ~' + mins + 'm', 'offline', data.lastError || 'Too many requests');
-      } else if (data.authRequired || data.lastSyncSkipReason === 'auth_required') {
-        setFooterIndicator(el, 'Activate licence to sync', 'offline', data.lastError || 'Activate licence / sign in to sync');
+      } else if (isSyncLicenceAuthFailure(data)) {
+        var authChip = (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.deriveSyncFooterChip)
+          ? FooterStatusChips.deriveSyncFooterChip(Object.assign({}, _footerSyncSnapshot || {}, data))
+          : null;
+        setFooterIndicator(
+          el,
+          (authChip && authChip.text) || 'Activate licence to sync',
+          'offline',
+          (authChip && authChip.title) || syncLicenceRecoveryTitle(data)
+        );
       } else if (!data.retryable) {
         setFooterIndicator(el, 'Sync auto-retrying', 'offline', data.lastError || '');
       } else {
@@ -3400,6 +3451,7 @@ var REQUIRED_FIELD_KEYS = [
       applySyncSnapshot(st || {});
       try { refreshCrossDeviceSyncPanel(st || {}); } catch (_) {}
       try { refreshHomeEmptyCloudAlarm(st || {}); } catch (_) {}
+      try { refreshHomeSyncLicenceAuthBanner(st || {}); } catch (_) {}
     }).catch(function(e) { console.error('[sync-status]', e); });
   }
 
@@ -3462,8 +3514,8 @@ var REQUIRED_FIELD_KEYS = [
     statusEl.textContent = lines.join(' \u00b7 ');
     var warnColor = emptyCloud || lp.decryptFailed > 0 || st.failedCount > 0 || st.emptyLargeDb ||
       (st.rateLimit && st.rateLimit.blocked) || (st.lastPush && st.lastPush.ok === false && pendingCases > 0) ||
-      st.syncHealthy === false || st.authRequired;
-    statusEl.style.color = warnColor ? (emptyCloud || st.authRequired ? '#b91c1c' : '#b45309') : '';
+      st.syncHealthy === false || isSyncLicenceAuthFailure(st);
+    statusEl.style.color = warnColor ? (emptyCloud || isSyncLicenceAuthFailure(st) ? '#b91c1c' : '#b45309') : '';
     if (healthEl) {
       var h = st.health || {};
       healthEl.textContent =
@@ -3474,15 +3526,15 @@ var REQUIRED_FIELD_KEYS = [
         ' · schema v' + (st.schemaVersion != null ? st.schemaVersion : (h.schemaVersion != null ? h.schemaVersion : '?')) +
         (st.lastSyncCycleAt ? ' · last cycle ' + formatSyncTime(st.lastSyncCycleAt) : '') +
         (h.cloudLikelyEmpty || emptyCloud ? ' · ERROR: cloud empty for this licence' : '') +
-        (st.authRequired ? ' · AUTH REQUIRED' : '') +
+        (isSyncLicenceAuthFailure(st) ? ' · AUTH REQUIRED' : '') +
         (h.healthy === false || st.syncHealthy === false ? ' · not healthy' : '');
-      healthEl.style.color = (h.cloudLikelyEmpty || emptyCloud || st.authRequired) ? '#b91c1c' : '';
+      healthEl.style.color = (h.cloudLikelyEmpty || emptyCloud || isSyncLicenceAuthFailure(st)) ? '#b91c1c' : '';
     }
     if (hintEl) {
-      if (st.authRequired) {
+      if (isSyncLicenceAuthFailure(st)) {
         hintEl.style.display = '';
         hintEl.style.color = '#b91c1c';
-        hintEl.textContent = 'Activate your licence (Settings → Licence) to resume cloud sync. Sync restarts automatically after activation.';
+        hintEl.textContent = syncLicenceRecoveryHint(st);
       } else if (emptyCloud) {
         hintEl.style.display = '';
         hintEl.style.color = '#b91c1c';
@@ -4176,25 +4228,26 @@ var REQUIRED_FIELD_KEYS = [
   function updateHomeLicenceCard() {
     var card = document.getElementById('home-enter-licence-card');
     if (!window.api || !window.api.licenceStatus) { if (card) card.style.display = 'none'; return; }
+    var packaged = !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isPackaged);
     window.api.licenceStatus().then(function(st) {
       updateLicenceFooterBadge(st);
       if (typeof updateAddonUIs === 'function') updateAddonUIs(st);
       if (!card) return;
-      var isPaid = st && st.key && (st.status === 'active' || st.status === 'expiring_soon') && !st.isTrial;
-      card.style.display = isPaid ? 'none' : '';
-      var titleEl = card.querySelector('p:first-of-type');
-      var subEl = card.querySelector('p:last-of-type');
-      var btnEl = card.querySelector('button');
-      if (st && st.isTrial) {
-        var trialDays = st.daysRemaining != null ? ' \u2014 ' + st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' remaining' : '';
-        if (titleEl) titleEl.textContent = 'Free trial' + trialDays;
-        if (subEl) subEl.innerHTML = 'Enter a licence key if you have one. Managed cloud backup is planned for Pro after beta. <strong>Free during beta. No credit card. Paid Pro planned after beta.</strong>';
-        if (btnEl) btnEl.textContent = 'Enter licence key \u2192';
-      } else {
-        if (titleEl) titleEl.textContent = 'Enter your licence key';
-        if (subEl) subEl.innerHTML = 'Paste a licence key if you have one. <strong>Free during beta. No credit card. Paid Pro planned after beta.</strong>';
-        if (btnEl) btnEl.textContent = 'Enter key \u2192';
+      var showCard = packaged && !hasValidatedCloudLicence(st);
+      card.style.display = showCard ? '' : 'none';
+      var titleEl = document.getElementById('home-enter-licence-title');
+      var subEl = document.getElementById('home-enter-licence-sub');
+      if (st && st.isTrial && titleEl) {
+        var trialDays = st.daysRemaining != null ? ' (' + st.daysRemaining + ' day' + (st.daysRemaining !== 1 ? 's' : '') + ' left)' : '';
+        titleEl.textContent = 'Free trial on this device' + trialDays;
+      } else if (titleEl) {
+        titleEl.textContent = 'Activate your licence on this computer';
       }
+      if (subEl) {
+        subEl.textContent = 'Microsoft Store and fresh installs start with a blank trial here. If you already subscribe, we can email your licence key — no need to hunt through old messages.';
+      }
+      var emailInp = document.getElementById('licence-email-key-email');
+      if (emailInp && st && st.email && !emailInp.value) emailInp.value = st.email;
     }).catch(function() {
       if (card) card.style.display = 'none';
       var hintWrapErr = document.getElementById('home-subscription-features-hint');
@@ -17269,7 +17322,10 @@ pdfAuditFooterHtml(d, settings) +
           case 'home-enter-licence-btn':
             e.preventDefault();
             showView('settings');
-            // Wait for loadLicenceSettingsUI async call to resolve before focusing
+            var tabBarLic = document.getElementById('settings-tab-bar');
+            var accountTabLic = tabBarLic && tabBarLic.querySelector('.settings-tab[data-stab="account"]');
+            if (accountTabLic) accountTabLic.click();
+            if (typeof loadLicenceSettingsUI === 'function') loadLicenceSettingsUI();
             (window.api && window.api.licenceStatus ? window.api.licenceStatus() : Promise.resolve(null)).then(function(st) {
               var licCard = document.getElementById('licence-settings-card');
               if (licCard) licCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -17281,6 +17337,26 @@ pdfAuditFooterHtml(d, settings) +
                 if (inp2) { inp2.focus(); inp2.select(); }
               }
             });
+            return;
+          case 'home-email-licence-key-btn':
+            e.preventDefault();
+            if (window.goToLicenceEmailKeySettings) window.goToLicenceEmailKeySettings();
+            return;
+          case 'home-sync-licence-email-btn':
+            e.preventDefault();
+            if (window.goToLicenceEmailKeySettings) window.goToLicenceEmailKeySettings();
+            return;
+          case 'home-sync-licence-settings-btn':
+            e.preventDefault();
+            showView('settings');
+            var tabBarSync = document.getElementById('settings-tab-bar');
+            var accountTabSync = tabBarSync && tabBarSync.querySelector('.settings-tab[data-stab="account"]');
+            if (accountTabSync) accountTabSync.click();
+            if (typeof loadLicenceSettingsUI === 'function') loadLicenceSettingsUI();
+            setTimeout(function() {
+              var target = document.getElementById('licence-settings-card');
+              if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 150);
             return;
           case 'home-card-attendance':
             e.preventDefault();
@@ -19899,6 +19975,7 @@ pdfAuditFooterHtml(d, settings) +
         var tabBar = document.getElementById('settings-tab-bar');
         var accountTab = tabBar && tabBar.querySelector('.settings-tab[data-stab="account"]');
         if (accountTab) accountTab.click();
+        if (typeof loadLicenceSettingsUI === 'function') loadLicenceSettingsUI();
         setTimeout(function() {
           var target = document.getElementById('licence-email-key-recovery')
             || document.getElementById('licence-settings-card');
@@ -19908,6 +19985,7 @@ pdfAuditFooterHtml(d, settings) +
         }, 150);
       } catch (_) {}
     }
+    window.goToLicenceEmailKeySettings = goToLicenceEmailKeySettings;
 
     document.getElementById('forgot-licence-goto-settings-btn')?.addEventListener('click', function() {
       goToLicenceEmailKeySettings();
