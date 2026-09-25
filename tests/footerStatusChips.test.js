@@ -13,6 +13,8 @@ const {
   deriveSyncFooterChip,
   deriveBackupFooterChip,
   deriveManagedCloudBackupFooterChip,
+  isLicenceAuthSyncFailure,
+  licenceAuthSyncRecoveryHint,
 } = require('../lib/footerStatusChips');
 const {
   isSyncStatusHealthy,
@@ -288,5 +290,16 @@ describe('Wiring + worker defaults', () => {
     const diag = worker.getDiagnostics();
     assert.strictEqual(diag.lastPush.ok, null, 'never-attempted push must not look like a failure');
     assert.strictEqual(diag.lastError, null);
+  });
+});
+
+describe('Licence auth sync recovery copy', () => {
+  it('treats Invalid licence key lastError as auth failure', () => {
+    const st = { enabled: true, lastError: 'Invalid licence key', authRequired: false };
+    assert.strictEqual(isLicenceAuthSyncFailure(st), true);
+    assert.match(licenceAuthSyncRecoveryHint(st), /Email my licence key/i);
+    const chip = deriveSyncFooterChip(st);
+    assert.match(chip.text, /Invalid licence/i);
+    assert.match(chip.title, /Email my licence key/i);
   });
 });
