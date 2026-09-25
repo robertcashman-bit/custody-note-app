@@ -3358,7 +3358,7 @@ var REQUIRED_FIELD_KEYS = [
     var el = document.getElementById('home-sync-licence-auth-banner');
     var body = document.getElementById('home-sync-licence-auth-banner-body');
     if (!el) return;
-    var packaged = !!(window.api && window.api.isPackaged);
+    var packaged = !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isPackaged);
     if (!packaged || !st || !st.enabled || !isSyncLicenceAuthFailure(st)) {
       el.style.display = 'none';
       return;
@@ -4228,13 +4228,13 @@ var REQUIRED_FIELD_KEYS = [
   function updateHomeLicenceCard() {
     var card = document.getElementById('home-enter-licence-card');
     if (!window.api || !window.api.licenceStatus) { if (card) card.style.display = 'none'; return; }
-    var packaged = !!(window.api && window.api.isPackaged);
+    var packaged = !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isPackaged);
     window.api.licenceStatus().then(function(st) {
       updateLicenceFooterBadge(st);
       if (typeof updateAddonUIs === 'function') updateAddonUIs(st);
       if (!card) return;
       var showCard = packaged && !hasValidatedCloudLicence(st);
-      card.style.display = showCard ? '' : '';
+      card.style.display = showCard ? '' : 'none';
       var titleEl = document.getElementById('home-enter-licence-title');
       var subEl = document.getElementById('home-enter-licence-sub');
       if (st && st.isTrial && titleEl) {

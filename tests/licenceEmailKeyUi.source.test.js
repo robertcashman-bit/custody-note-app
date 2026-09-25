@@ -48,7 +48,7 @@ describe('licence email-key UI entry points (source)', () => {
     assert.match(indexHtml, /email me the key/i);
     assert.match(indexHtml, /id="home-sync-licence-auth-banner"/);
     assert.match(appJs, /hasValidatedCloudLicence/);
-    assert.match(appJs, /window\.api\.isPackaged/);
+    assert.match(appJs, /window\.custodyNoteBuildInfo\.isPackaged/);
     assert.match(appJs, /goToLicenceEmailKeySettings/);
   });
 
