@@ -150,15 +150,32 @@
       <!-- HOME / COMMAND CENTER -->
       <div id="view-home" class="view active">
         <div class="home-container">
-          <!-- First thing users see when no licence - impossible to miss -->
+          <!-- Packaged first-run: no validated cloud licence (trial, free, or invalid key) -->
           <div id="home-enter-licence-card" class="home-enter-licence-card" style="display:none;">
-            <div style="display:flex;align-items:center;gap:1rem;padding:1.25rem 1.5rem;background:linear-gradient(135deg,#1e40af,#1e3a8a);border:2px solid #60a5fa;border-radius:12px;box-shadow:0 4px 12px rgba(30,64,175,0.4);">
-              <span style="font-size:2.5rem;line-height:1;">&#128274;</span>
-              <div style="flex:1;">
-                <p style="margin:0;font-weight:800;font-size:1.25rem;color:#fff;">Enter your licence key</p>
-                <p style="margin:0.35rem 0 0 0;font-size:0.95rem;color:#bfdbfe;">Paste a licence key if you have one. <strong>Free during beta. No credit card. Paid Pro planned after beta.</strong></p>
+            <div style="padding:1.25rem 1.5rem;background:linear-gradient(135deg,#1e40af,#1e3a8a);border:2px solid #60a5fa;border-radius:12px;box-shadow:0 4px 12px rgba(30,64,175,0.4);">
+              <div style="display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+                <span style="font-size:2.5rem;line-height:1;">&#128274;</span>
+                <div style="flex:1;min-width:220px;">
+                  <p id="home-enter-licence-title" style="margin:0;font-weight:800;font-size:1.25rem;color:#fff;">Activate your licence on this computer</p>
+                  <p id="home-enter-licence-sub" style="margin:0.35rem 0 0 0;font-size:0.95rem;color:#bfdbfe;line-height:1.45;">Microsoft Store and fresh installs start with a blank trial here. If you already subscribe, we can email your licence key — no need to hunt through old messages.</p>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:0.5rem;align-items:stretch;min-width:200px;">
+                  <button type="button" id="home-email-licence-key-btn" class="btn btn-primary" style="background:#fff;color:#1e40af;font-weight:700;font-size:0.95rem;padding:0.6rem 1rem;">I already have a licence &mdash; email me the key</button>
+                  <button type="button" id="home-enter-licence-btn" class="btn btn-secondary" style="background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.35);font-weight:600;font-size:0.9rem;padding:0.5rem 1rem;">Paste key manually</button>
+                </div>
               </div>
-              <button type="button" id="home-enter-licence-btn" class="btn btn-primary" style="background:#fff;color:#1e40af;font-weight:700;font-size:1rem;padding:0.6rem 1.2rem;">Enter key &rarr;</button>
+            </div>
+          </div>
+          <div id="home-sync-licence-auth-banner" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#fef2f2,#fff7ed);border:1px solid #fca5a5;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;padding:0.85rem 1rem;">
+              <div style="flex:1;min-width:200px;">
+                <p style="margin:0;font-weight:700;font-size:0.92rem;color:#991b1b;">Cloud sync needs your licence</p>
+                <p id="home-sync-licence-auth-banner-body" style="margin:0.35rem 0 0 0;font-size:0.85rem;color:#7f1d1d;line-height:1.45;">Use Email my licence key in Settings &rarr; Licence.</p>
+              </div>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+                <button type="button" id="home-sync-licence-email-btn" class="btn btn-primary btn-small">Email my licence key</button>
+                <button type="button" id="home-sync-licence-settings-btn" class="btn btn-secondary btn-small">Settings &rarr; Licence</button>
+              </div>
             </div>
           </div>
           <div class="home-top">
@@ -936,6 +953,17 @@
             </div>
           </div>
 
+          <!-- Email licence key — prominent for Store / fresh installs -->
+          <div id="licence-email-key-recovery" style="display:none;margin-top:1rem;padding:1rem 1.1rem;background:linear-gradient(135deg,#ecfdf5,#f0fdf4);border:2px solid #34d399;border-radius:10px;">
+            <p style="margin:0 0 0.35rem 0;font-weight:700;font-size:1rem;color:#065f46;">&#9993; Email my licence key</p>
+            <p class="settings-hint" style="margin:0 0 0.75rem 0;color:#047857;">Microsoft Store and new installs start fresh on this device. Enter the email you used to purchase and we&rsquo;ll send the licence key on file (once per device).</p>
+            <div class="forgot-licence-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+              <input type="email" id="licence-email-key-email" placeholder="you@firm.co.uk" class="forgot-licence-input settings-input" style="min-width:200px;flex:1;max-width:320px;font-size:0.9rem;" autocomplete="email" />
+              <button type="button" id="licence-email-key-btn" class="btn btn-primary">Email my licence key</button>
+            </div>
+            <span id="licence-email-key-msg" class="forgot-licence-msg" style="display:block;font-size:0.8rem;color:var(--text-muted,#666);margin-top:0.5rem;min-height:1.2em;"></span>
+          </div>
+
           <!-- Shown only when on a trial — direct paid key entry -->
           <div id="licence-trial-upgrade" style="display:none;margin-top:1.25rem;padding:1rem 1.1rem;background:linear-gradient(135deg,#eff6ff,#f0f9ff);border:2px solid #3b82f6;border-radius:10px;">
             <p style="margin:0 0 0.4rem 0;font-weight:700;font-size:1rem;color:#1e40af;">&#128273; Enter a licence key</p>
@@ -998,15 +1026,6 @@
             <p id="licence-activate-error" class="licence-error" style="display:none;margin-top:0.5rem;color:#dc2626;"></p>
           </div>
 
-          <!-- Single Settings entry for Email my licence key (active, grace, and no-licence). Overlay keeps a gated copy. -->
-          <div id="licence-email-key-recovery" style="display:none;margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border,#e2e8f0);">
-            <p class="settings-hint" style="margin:0 0 0.5rem 0;"><strong>Email my licence key</strong> — enter your purchase email if needed; we&rsquo;ll send the key on file when we have it.</p>
-            <div class="forgot-licence-row" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
-              <input type="email" id="licence-email-key-email" placeholder="you@example.com" class="forgot-licence-input settings-input" style="min-width:180px;font-size:0.85rem;" autocomplete="email" />
-              <button type="button" id="licence-email-key-btn" class="btn btn-small btn-secondary">Email my licence key</button>
-              <span id="licence-email-key-msg" class="forgot-licence-msg" style="font-size:0.8rem;color:var(--text-muted,#666);"></span>
-            </div>
-          </div>
         </div>
 
         <div class="settings-card">
