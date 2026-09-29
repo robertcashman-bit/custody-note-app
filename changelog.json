@@ -1,9 +1,21 @@
 {
   "releases": [
     {
+      "version": "1.9.109",
+      "date": "2026-09-29",
+      "latest": true,
+      "changes": [
+        "Home: Free during beta users see a friendly “start your first attendance” card instead of a licence lock screen; paid Store installs can still email or paste a licence key",
+        "Licence: Email my licence key recovery is easier to find from Home and Settings (for installs that hit Invalid licence)",
+        "Welcome setup: DSCC PIN is optional — skip the wizard anytime and finish details later in Settings",
+        "Invite a colleague: share your personal https://custodynote.com/r/… link from Home (after your first finalised or exported note) and from Settings → Help",
+        "Reliability: daily usage pings and trial-started stats use firm-friendly network settings (system proxy) and retry more reliably"
+      ]
+    },
+    {
       "version": "1.9.108",
       "date": "2026-09-24",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Microsoft Store (MSIX only): polite rating prompt after you save and return to the records list — up to two times, with Maybe later (30 days) or No thanks; opens the Store review page for Custody Note (NSIS Setup.exe and Mac unchanged)",
         "Store detection uses the existing MSIX/Store build path; settings remember your choice (no telemetry)"
