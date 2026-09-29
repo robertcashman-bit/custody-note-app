@@ -5442,20 +5442,11 @@ function isFreeTierEnabled() {
   return true;
 }
 
-/** One anonymous ping when a packaged install starts Free / legacy trial (no case data). */
-function reportTrialStartedToServer() {
-  if (!app.isPackaged) return;
-  const apiUrl = getManagedCloudApiUrl();
-  if (!apiUrl) return;
-  httpPost(`${apiUrl}/api/stats/trial-started`, {
-    machineId: getMachineId(),
-    platform: process.platform,
-    appVersion: app.getVersion(),
-    tier: isFreeTierEnabled() ? 'free' : 'trial',
-  }, { timeout: 8000 }).catch(function () {});
-}
-
 const usageHeartbeat = require('./main/usageHeartbeat');
+
+let _usageHeartbeatPeriodicTimer = null;
+let _usageHeartbeatSendInFlight = false;
+let _trialStartedSendInFlight = false;
 
 /** Current licence tier for analytics only — free / pro / trial / none. No case data. */
 function getAnalyticsLicenceTier() {
@@ -5463,15 +5454,65 @@ function getAnalyticsLicenceTier() {
     const data = readLicenceData();
     if (!data || !data.key) return isFreeTierEnabled() ? 'free' : 'none';
     const st = computeLicenceStatus(data);
-    return (st && st.tier) || 'none';
+    return usageHeartbeat.resolveAnalyticsTier(st, data);
   } catch (_) {
     return 'none';
   }
 }
 
+function buildTrialStartedPayload() {
+  return usageHeartbeat.buildHeartbeatPayload({
+    machineId: getMachineId(),
+    platform: process.platform,
+    appVersion: app.getVersion(),
+    tier: isFreeTierEnabled() ? 'free' : 'trial',
+  });
+}
+
+/** One anonymous ping when a packaged install starts Free / legacy trial (no case data). */
+function reportTrialStartedToServer() {
+  if (!app.isPackaged) return;
+  const apiUrl = getManagedCloudApiUrl();
+  if (!apiUrl) return;
+  const sentPath = path.join(app.getPath('userData'), usageHeartbeat.TRIAL_STARTED_STATE_FILE);
+  let sentAt = null;
+  try {
+    sentAt = usageHeartbeat.readTrialStartedSentAt(sentPath, fs);
+  } catch (_) {}
+  const data = readLicenceData();
+  if (!usageHeartbeat.shouldAttemptTrialStartedPing(data, sentAt)) return;
+  if (_trialStartedSendInFlight) return;
+  _trialStartedSendInFlight = true;
+  const payload = buildTrialStartedPayload();
+  usageHeartbeat
+    .postStatsWithRetry({
+      postFn: httpPost,
+      url: `${apiUrl}/api/stats/trial-started`,
+      body: payload,
+      timeoutMs: usageHeartbeat.HEARTBEAT_POST_TIMEOUT_MS,
+      retryDelaysMs: usageHeartbeat.HEARTBEAT_RETRY_DELAYS_MS,
+      onSuccess: () => {
+        try {
+          usageHeartbeat.writeTrialStartedSentAt(sentPath, fs, new Date().toISOString());
+        } catch (_) {}
+        try {
+          const lic = readLicenceData();
+          if (lic && lic.trialStartedPending) {
+            delete lic.trialStartedPending;
+            writeLicenceData(lic);
+          }
+        } catch (_) {}
+      },
+    })
+    .catch(function () {})
+    .finally(function () {
+      _trialStartedSendInFlight = false;
+    });
+}
+
 /**
  * Privacy-safe daily usage heartbeat (packaged only).
- * Fire-and-forget; rate-limited to once per 24h via userData stamp.
+ * Fire-and-forget; rate-limited to once per 24h via userData stamp (written only after 2xx).
  * Must never run on the startup critical path.
  */
 function reportUsageHeartbeatToServer() {
@@ -5484,6 +5525,7 @@ function reportUsageHeartbeatToServer() {
     lastAt = usageHeartbeat.readLastHeartbeatAt(stampPath, fs);
   } catch (_) {}
   if (!usageHeartbeat.shouldSendHeartbeat(lastAt)) return;
+  if (_usageHeartbeatSendInFlight) return;
 
   const payload = usageHeartbeat.buildHeartbeatPayload({
     machineId: getMachineId(),
@@ -5491,23 +5533,53 @@ function reportUsageHeartbeatToServer() {
     appVersion: app.getVersion(),
     tier: getAnalyticsLicenceTier(),
   });
-  // Stamp when sending so relaunches the same day do not ping again (at-most-once / 24h).
-  try {
-    usageHeartbeat.writeLastHeartbeatAt(stampPath, fs, new Date().toISOString());
-  } catch (_) {}
-  httpPost(`${apiUrl}/api/stats/heartbeat`, payload, { timeout: 8000 }).catch(function () {});
+  if (!usageHeartbeat.payloadIsPrivacySafe(payload)) return;
+
+  _usageHeartbeatSendInFlight = true;
+  usageHeartbeat
+    .postStatsWithRetry({
+      postFn: httpPost,
+      url: `${apiUrl}/api/stats/heartbeat`,
+      body: payload,
+      timeoutMs: usageHeartbeat.HEARTBEAT_POST_TIMEOUT_MS,
+      retryDelaysMs: usageHeartbeat.HEARTBEAT_RETRY_DELAYS_MS,
+      onSuccess: () => {
+        try {
+          usageHeartbeat.writeLastHeartbeatAt(stampPath, fs, new Date().toISOString());
+        } catch (_) {}
+      },
+    })
+    .catch(function () {})
+    .finally(function () {
+      _usageHeartbeatSendInFlight = false;
+    });
 }
 
-/** Defer heartbeat until after first renderer load — same pattern as updater startup-deferred. */
-function scheduleUsageHeartbeat(browserWindow) {
+function scheduleDeferredUsageAnalytics(browserWindow) {
   if (!browserWindow || browserWindow.isDestroyed()) return;
-  browserWindow.webContents.once('did-finish-load', () => {
-    setTimeout(() => {
-      try {
-        reportUsageHeartbeatToServer();
-      } catch (_) {}
-    }, 3000);
-  });
+  usageHeartbeat.deferAfterWebContentsLoad(
+    browserWindow.webContents,
+    usageHeartbeat.HEARTBEAT_STARTUP_DELAY_MS,
+    () => {
+      reportUsageHeartbeatToServer();
+      reportTrialStartedToServer();
+    }
+  );
+}
+
+/** Defer heartbeat until after first renderer load; re-check every few hours while running. */
+function scheduleUsageHeartbeat(browserWindow) {
+  scheduleDeferredUsageAnalytics(browserWindow);
+  if (_usageHeartbeatPeriodicTimer) return;
+  _usageHeartbeatPeriodicTimer = setInterval(() => {
+    try {
+      reportUsageHeartbeatToServer();
+      reportTrialStartedToServer();
+    } catch (_) {}
+  }, usageHeartbeat.HEARTBEAT_RECHECK_INTERVAL_MS);
+  if (typeof _usageHeartbeatPeriodicTimer.unref === 'function') {
+    _usageHeartbeatPeriodicTimer.unref();
+  }
 }
 
 function buildLocalFreeLicenceData() {
@@ -5523,6 +5595,7 @@ function buildLocalFreeLicenceData() {
     isTrial: false,
     isFree: true,
     tier: 'free',
+    trialStartedPending: true,
   };
 }
 
@@ -5790,6 +5863,9 @@ function httpPost(url, body, opts) {
           err.statusCode = res.statusCode;
           return done(reject, err);
         }
+        if (res.statusCode === 204 || res.statusCode === 205 || !String(data || '').trim()) {
+          return done(resolve, {});
+        }
         try { done(resolve, JSON.parse(data)); } catch (_) { done(reject, new Error('Invalid response from server')); }
       });
     });
@@ -5978,6 +6054,7 @@ ipcMain.handle('licence:status', () => {
         status: 'active',
         isTrial: true,
         tier: 'trial',
+        trialStartedPending: true,
       };
       writeLicenceData(data);
       reportTrialStartedToServer();
