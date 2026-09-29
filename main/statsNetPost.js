@@ -40,7 +40,6 @@ function createStatsNetPost(deps) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Content-Length': String(Buffer.byteLength(payload)),
         },
         body: payload,
       };
