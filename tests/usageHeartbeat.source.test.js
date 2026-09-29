@@ -25,8 +25,10 @@ describe('usage heartbeat wiring (source)', () => {
     const fnBody = mainJs.slice(fnStart, fnStart + 2200);
     assert.match(fnBody, /app\.isPackaged/);
     assert.match(fnBody, /postStatsWithRetry/);
+    assert.match(fnBody, /getStatsNetPost\(\)/);
     assert.match(fnBody, /onSuccess:/);
     assert.doesNotMatch(fnBody, /writeLastHeartbeatAt[\s\S]{0,120}postStatsWithRetry/);
+    assert.doesNotMatch(fnBody, /postFn:\s*httpPost/);
 
     const scheduleStart = mainJs.indexOf('function scheduleUsageHeartbeat');
     assert.ok(scheduleStart > 0);
@@ -43,7 +45,19 @@ describe('usage heartbeat wiring (source)', () => {
     const trialBody = mainJs.slice(trialStart, trialStart + 1800);
     assert.match(trialBody, /TRIAL_STARTED_STATE_FILE/);
     assert.match(trialBody, /postStatsWithRetry/);
+    assert.match(trialBody, /getStatsNetPost\(\)/);
     assert.match(trialBody, /writeTrialStartedSentAt/);
+    assert.doesNotMatch(trialBody, /postFn:\s*httpPost/);
+  });
+
+  it('uses Electron net for stats POST (system proxy)', () => {
+    assert.match(mainJs, /createStatsNetPost/);
+    assert.match(mainJs, /main\/statsNetPost/);
+    assert.match(mainJs, /reconcileTrialStartedPendingFlag/);
+    const statusStart = mainJs.indexOf("ipcMain.handle('licence:status'");
+    assert.ok(statusStart > 0);
+    const statusChunk = mainJs.slice(statusStart, statusStart + 3500);
+    assert.doesNotMatch(statusChunk, /writeLicenceData\(data\);\s*\n\s*reportTrialStartedToServer/);
   });
 
   it('documents the heartbeat in ANALYTICS.md', () => {
