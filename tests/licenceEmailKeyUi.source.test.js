@@ -43,11 +43,13 @@ describe('licence email-key UI entry points (source)', () => {
     assert.equal(countMatches(indexHtml, 'id="forgot-licence-goto-settings-btn"'), 1);
   });
 
-  it('surfaces packaged first-run email-key CTA on home and sync auth banner', () => {
+  it('surfaces packaged email-key CTA on home (free + licence cards) and sync auth banner', () => {
     assert.match(indexHtml, /id="home-email-licence-key-btn"/);
+    assert.match(indexHtml, /id="home-licence-email-key-btn"/);
     assert.match(indexHtml, /email me the key/i);
     assert.match(indexHtml, /id="home-sync-licence-auth-banner"/);
     assert.match(appJs, /hasValidatedCloudLicence/);
+    assert.match(appJs, /isFreeBetaLicence/);
     assert.match(appJs, /window\.custodyNoteBuildInfo\.isPackaged/);
     assert.match(appJs, /goToLicenceEmailKeySettings/);
   });

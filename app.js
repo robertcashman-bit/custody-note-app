@@ -3323,14 +3323,25 @@ var REQUIRED_FIELD_KEYS = [
   var _syncRetryableErrorCount = 0;
   var _footerSyncSnapshot = null;
   var _footerBackupSnapshot = null;
+  var _lastLicenceStatusForHome = null;
 
   function hasValidatedCloudLicence(st) {
+    if (typeof HomeOnboarding !== 'undefined' && HomeOnboarding.hasValidatedCloudLicence) {
+      return HomeOnboarding.hasValidatedCloudLicence(st);
+    }
     if (!st || !st.key) return false;
     var keyStr = String(st.key || '');
     if (keyStr.indexOf('TRIAL-') === 0 || keyStr.indexOf('FREE-') === 0 || keyStr.indexOf('ACCOUNT-') === 0) return false;
     if (st.isTrial || st.tier === 'trial' || st.tier === 'free' || st.isFree) return false;
     if (st.status === 'revoked' || st.status === 'expired' || st.status === 'error') return false;
     return st.status === 'active' || st.status === 'expiring_soon' || st.status === 'grace_expired';
+  }
+
+  function isFreeBetaLicence(st) {
+    if (typeof HomeOnboarding !== 'undefined' && HomeOnboarding.isFreeBetaLicence) {
+      return HomeOnboarding.isFreeBetaLicence(st);
+    }
+    return !!(st && (st.tier === 'free' || st.isFree || (st.key && String(st.key).indexOf('FREE-') === 0)));
   }
 
   function isSyncLicenceAuthFailure(st) {
@@ -3354,11 +3365,15 @@ var REQUIRED_FIELD_KEYS = [
     return syncLicenceRecoveryHint(st);
   }
 
-  function refreshHomeSyncLicenceAuthBanner(st) {
+  function refreshHomeSyncLicenceAuthBanner(st, licenceSt) {
     var el = document.getElementById('home-sync-licence-auth-banner');
     var body = document.getElementById('home-sync-licence-auth-banner-body');
     if (!el) return;
     var packaged = !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isPackaged);
+    if (licenceSt && isFreeBetaLicence(licenceSt)) {
+      el.style.display = 'none';
+      return;
+    }
     if (!packaged || !st || !st.enabled || !isSyncLicenceAuthFailure(st)) {
       el.style.display = 'none';
       return;
@@ -3451,7 +3466,7 @@ var REQUIRED_FIELD_KEYS = [
       applySyncSnapshot(st || {});
       try { refreshCrossDeviceSyncPanel(st || {}); } catch (_) {}
       try { refreshHomeEmptyCloudAlarm(st || {}); } catch (_) {}
-      try { refreshHomeSyncLicenceAuthBanner(st || {}); } catch (_) {}
+      try { refreshHomeSyncLicenceAuthBanner(st || {}, _lastLicenceStatusForHome); } catch (_) {}
     }).catch(function(e) { console.error('[sync-status]', e); });
   }
 
@@ -4226,15 +4241,27 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function updateHomeLicenceCard() {
-    var card = document.getElementById('home-enter-licence-card');
-    if (!window.api || !window.api.licenceStatus) { if (card) card.style.display = 'none'; return; }
+    var licenceCard = document.getElementById('home-enter-licence-card');
+    var freeCard = document.getElementById('home-free-beta-card');
+    if (!window.api || !window.api.licenceStatus) {
+      if (licenceCard) licenceCard.style.display = 'none';
+      if (freeCard) freeCard.style.display = 'none';
+      return;
+    }
     var packaged = !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isPackaged);
     window.api.licenceStatus().then(function(st) {
+      _lastLicenceStatusForHome = st;
       updateLicenceFooterBadge(st);
       if (typeof updateAddonUIs === 'function') updateAddonUIs(st);
-      if (!card) return;
-      var showCard = packaged && !hasValidatedCloudLicence(st);
-      card.style.display = showCard ? '' : 'none';
+      var showFree = typeof HomeOnboarding !== 'undefined' && HomeOnboarding.shouldShowFreeBetaHomeCard
+        ? HomeOnboarding.shouldShowFreeBetaHomeCard(packaged, st)
+        : packaged && isFreeBetaLicence(st);
+      var showLicence = typeof HomeOnboarding !== 'undefined' && HomeOnboarding.shouldShowLicenceActivationHomeCard
+        ? HomeOnboarding.shouldShowLicenceActivationHomeCard(packaged, st)
+        : packaged && !hasValidatedCloudLicence(st) && !isFreeBetaLicence(st);
+      if (freeCard) freeCard.style.display = showFree ? '' : 'none';
+      if (licenceCard) licenceCard.style.display = showLicence ? '' : 'none';
+      if (showFree && _footerSyncSnapshot) refreshHomeSyncLicenceAuthBanner(_footerSyncSnapshot, st);
       var titleEl = document.getElementById('home-enter-licence-title');
       var subEl = document.getElementById('home-enter-licence-sub');
       if (st && st.isTrial && titleEl) {
@@ -4248,11 +4275,63 @@ var REQUIRED_FIELD_KEYS = [
       }
       var emailInp = document.getElementById('licence-email-key-email');
       if (emailInp && st && st.email && !emailInp.value) emailInp.value = st.email;
+      updateHomeInviteColleagueCard();
     }).catch(function() {
-      if (card) card.style.display = 'none';
+      if (licenceCard) licenceCard.style.display = 'none';
+      if (freeCard) freeCard.style.display = 'none';
       var hintWrapErr = document.getElementById('home-subscription-features-hint');
       if (hintWrapErr) hintWrapErr.style.display = 'none';
     });
+  }
+
+  function getReferralInviteCode() {
+    var code = '';
+    try {
+      var cache = window._appSettingsCache || {};
+      if (cache.referralCode) code = String(cache.referralCode);
+    } catch (_) {}
+    if (!code) {
+      try { code = localStorage.getItem('cn_referral_code') || ''; } catch (_) {}
+    }
+    if (!code) {
+      code = 'CN' + Date.now().toString(36).toUpperCase().slice(-6);
+      try { localStorage.setItem('cn_referral_code', code); } catch (_) {}
+      if (window.api && window.api.setSettings) {
+        window.api.setSettings({ referralCode: code }).catch(function () {});
+      }
+    }
+    return code;
+  }
+
+  function getReferralInvitePathUrl() {
+    var code = getReferralInviteCode();
+    if (typeof HomeOnboarding !== 'undefined' && HomeOnboarding.buildReferralInviteUrl) {
+      return HomeOnboarding.buildReferralInviteUrl(code);
+    }
+    return 'https://custodynote.com/r/' + encodeURIComponent(code);
+  }
+
+  function markReferralInviteMilestone() {
+    try { localStorage.setItem('cn_referral_invite_milestone', '1'); } catch (_) {}
+    updateHomeInviteColleagueCard();
+  }
+
+  function updateHomeInviteColleagueCard() {
+    var card = document.getElementById('home-invite-colleague-card');
+    if (!card) return;
+    var dismissed = false;
+    var milestone = false;
+    try {
+      dismissed = localStorage.getItem('cn_referral_home_card_dismissed') === '1';
+      milestone = localStorage.getItem('cn_referral_invite_milestone') === '1';
+    } catch (_) {}
+    var show = typeof HomeOnboarding !== 'undefined' && HomeOnboarding.shouldShowHomeInviteCard
+      ? HomeOnboarding.shouldShowHomeInviteCard({ dismissed: dismissed, milestone: milestone })
+      : milestone && !dismissed;
+    card.style.display = show ? '' : 'none';
+    if (!show) return;
+    var urlEl = document.getElementById('home-invite-colleague-url');
+    if (urlEl) urlEl.textContent = getReferralInvitePathUrl();
   }
 
   function updateGearLicenceItem() {
@@ -8062,46 +8141,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function showPostFinaliseNextStepsHint() {
     showToast('Next: tap Finish matter in the bottom bar for documents, QuickFile invoice, and archive.', 'info', 7500);
-    maybeShowReferralInviteAfterFinalise();
-  }
-
-  function maybeShowReferralInviteAfterFinalise() {
-    try {
-      if (localStorage.getItem('cn_referral_invite_done') === '1') return;
-    } catch (_) {
-      return;
-    }
-    setTimeout(function () {
-      if (typeof showConfirm !== 'function') return;
-      showConfirm(
-        'Invite a colleague to Custody Note?\n\nFree during beta. No credit card. Paid Pro planned after beta. We will copy a short message you can paste into WhatsApp or email.',
-        'Share Custody Note'
-      ).then(function (ok) {
-        try { localStorage.setItem('cn_referral_invite_done', '1'); } catch (_) {}
-        if (!ok) return;
-        var url = 'https://custodynote.com/download';
-        try {
-          if (window.WEBSITE_LINKS && typeof window.WEBSITE_LINKS.download === 'function') {
-            url = window.WEBSITE_LINKS.download();
-          }
-        } catch (_) {}
-        var text =
-          'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\n' +
-          'Download free: ' + url + '\n\nFree during beta. No credit card. Paid Pro planned after beta.';
-        var copied = false;
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(function () {
-              showToast('Invite text copied — paste it to a colleague', 'success', 5000);
-            }).catch(function () {
-              showToast(text, 'info', 12000);
-            });
-            copied = true;
-          }
-        } catch (_) {}
-        if (!copied) showToast(text, 'info', 12000);
-      }).catch(function () {});
-    }, 2500);
+    markReferralInviteMilestone();
   }
 
   function getBillingReadinessWarnings() {
@@ -15502,6 +15542,7 @@ pdfAuditFooterHtml(d, settings) +
         brandingFooter: pdfBrandingEnabled(settings),
       }).then(function(p) {
         showToast('PDF saved: ' + p, 'success');
+        markReferralInviteMilestone();
       }).catch(e => showToast('PDF failed: ' + (e && e.message), 'error'));
     }).catch(function(e) { showToast('Export failed: could not load settings', 'error'); console.error('[exportPdf]', e); });
   }
@@ -15515,6 +15556,7 @@ pdfAuditFooterHtml(d, settings) +
       var fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.docx';
       window.api.exportDocx({ data: data, settings: settings, filename: fn }).then(function(p) {
         showToast('Word document saved: ' + (p || '').replace(/\\/g, '/').split('/').pop(), 'success');
+        markReferralInviteMilestone();
       }).catch(function(e) { showToast('Word export failed: ' + (e && e.message), 'error'); });
     }).catch(function(e) { showToast('Export failed: could not load settings', 'error'); console.error('[exportDocx]', e); });
   }
@@ -17339,8 +17381,42 @@ pdfAuditFooterHtml(d, settings) +
             });
             return;
           case 'home-email-licence-key-btn':
+          case 'home-licence-email-key-btn':
             e.preventDefault();
             if (window.goToLicenceEmailKeySettings) window.goToLicenceEmailKeySettings();
+            return;
+          case 'home-free-start-attendance-btn':
+            e.preventDefault();
+            document.getElementById('home-card-attendance')?.click();
+            return;
+          case 'home-invite-colleague-dismiss':
+            e.preventDefault();
+            try { localStorage.setItem('cn_referral_home_card_dismissed', '1'); } catch (_) {}
+            updateHomeInviteColleagueCard();
+            return;
+          case 'home-invite-colleague-copy-btn':
+            e.preventDefault();
+            (function () {
+              var url = getReferralInvitePathUrl();
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(function () {
+                  showToast('Invite link copied', 'success');
+                }).catch(function () { showToast('Could not copy link', 'error'); });
+              }
+            })();
+            return;
+          case 'home-invite-colleague-email-btn':
+            e.preventDefault();
+            (function () {
+              var url = getReferralInvitePathUrl();
+              var subject = 'Custody Note – custody notes app for police station reps';
+              var body =
+                'I use Custody Note for custody notes and police station attendances — it\'s built for reps and criminal solicitors.\n\nDownload free: ' + url + '\n\nFree during beta. No credit card. Paid Pro planned after beta.';
+              copyOutlookComposeFields('', subject, body, {
+                allowEmptyTo: true,
+                successToast: 'Copied — paste into Outlook or any mail client',
+              });
+            })();
             return;
           case 'home-sync-licence-email-btn':
             e.preventDefault();
@@ -17836,9 +17912,12 @@ pdfAuditFooterHtml(d, settings) +
         vatRate: _normaliseVatRate(s.billingVatRate, 0.20),
       };
       if (typeof updateAddonUIs === 'function' && window._addons) updateAddonUIs({ addons: window._addons });
-      if (!s.dsccPin || !s.feeEarnerNameDefault) {
+      var autoWelcome = typeof HomeOnboarding !== 'undefined' && HomeOnboarding.shouldAutoShowWelcomeWizard
+        ? HomeOnboarding.shouldAutoShowWelcomeWizard(s)
+        : !s.welcomeWizardDoneAt && !s.feeEarnerNameDefault;
+      if (autoWelcome) {
         hideSplash();
-        initFirstLaunchModal();
+        initFirstLaunchModal({ auto: true });
       }
       if (typeof tplStoreInit === 'function') {
         tplStoreInit().catch(function() {});
@@ -20368,28 +20447,11 @@ pdfAuditFooterHtml(d, settings) +
       }
     });
     function getShareInviteUrl() {
-      var code = '';
-      try {
-        var cache = window._appSettingsCache || {};
-        if (cache.referralCode) code = String(cache.referralCode);
-      } catch (_) {}
-      if (!code) {
-        try {
-          code = localStorage.getItem('cn_referral_code') || '';
-        } catch (_) {}
+      var pathUrl = getReferralInvitePathUrl();
+      if (window.WEBSITE_LINKS && typeof window.appendWebsiteUtm === 'function') {
+        return window.appendWebsiteUtm(pathUrl, { campaign: 'referral', content: 'invite' });
       }
-      if (!code) {
-        code = 'CN' + Date.now().toString(36).toUpperCase().slice(-6);
-        try { localStorage.setItem('cn_referral_code', code); } catch (_) {}
-        if (window.api && window.api.setSettings) {
-          window.api.setSettings({ referralCode: code }).catch(function () {});
-        }
-      }
-      if (window.WEBSITE_LINKS && typeof window.WEBSITE_LINKS.referral === 'function') {
-        return window.WEBSITE_LINKS.referral(code);
-      }
-      return 'https://custodynote.com/r/' + encodeURIComponent(code) +
-        '?utm_source=app&utm_medium=referral&utm_campaign=invite';
+      return pathUrl + '?utm_source=app&utm_medium=referral&utm_campaign=invite';
     }
     var shareAppUrl = getShareInviteUrl();
     var shareUrlEl = document.getElementById('share-referral-url');
@@ -20468,6 +20530,10 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('setting-fee-earner-name')?.addEventListener('input', debounce((e) => {
       window.api.setSettings({ feeEarnerNameDefault: e.target.value.trim() }).then(showSettingsSavedToast).catch(function(e) { console.error('[setSettings]', e); });
     }, 800));
+
+    document.getElementById('settings-open-welcome-wizard')?.addEventListener('click', function () {
+      if (typeof initFirstLaunchModal === 'function') initFirstLaunchModal({ manual: true });
+    });
 
     document.getElementById('setting-outlook-account-type')?.addEventListener('change', function(e) {
       var v = String(e.target.value || 'personal').toLowerCase();
@@ -21096,12 +21162,18 @@ pdfAuditFooterHtml(d, settings) +
   }
 
   /* ─── First-launch setup (single step) ─── */
-  function initFirstLaunchModal() {
+  var _firstLaunchModalBound = false;
+  function markWelcomeWizardDone() {
+    var stamp = new Date().toISOString();
+    if (window.api && window.api.setSettings) {
+      window.api.setSettings({ welcomeWizardDoneAt: stamp }).catch(function () {});
+    }
+    window._appSettingsCache = Object.assign({}, window._appSettingsCache || {}, { welcomeWizardDoneAt: stamp });
+  }
+
+  function initFirstLaunchModal(options) {
     var modal = document.getElementById('first-launch-modal');
     if (!modal) return;
-    modal.style.display = 'flex';
-
-    var _flSettings = {};
 
     function showStep(n) {
       modal.querySelectorAll('.fl-step').forEach(function(s) { s.style.display = 'none'; });
@@ -21109,15 +21181,23 @@ pdfAuditFooterHtml(d, settings) +
       if (step) step.style.display = '';
     }
 
+    modal.style.display = 'flex';
+    showStep(1);
+
+    if (_firstLaunchModalBound) return;
+    _firstLaunchModalBound = true;
+
+    var _flSettings = {};
+
     /* Step 1 -> Step 2 */
     document.getElementById('fl-next-1')?.addEventListener('click', function() {
       var name = (document.getElementById('fl-fee-earner-name').value || '').trim();
       var pin = (document.getElementById('fl-dscc-pin').value || '').trim();
       if (!name) { showToast('Please enter your fee earner name', 'error'); return; }
-      if (!pin) { showToast('Please enter your DSCC PIN/number', 'error'); return; }
       var email = (document.getElementById('fl-email').value || '').trim();
       var officePostcode = (document.getElementById('fl-office-postcode')?.value || '').trim();
-      _flSettings = { feeEarnerNameDefault: name, dsccPin: pin };
+      _flSettings = { feeEarnerNameDefault: name };
+      if (pin) _flSettings.dsccPin = pin;
       if (email) _flSettings.email = email;
       if (officePostcode) _flSettings.officePostcode = officePostcode;
       window.api.setSettings(_flSettings).then(function() {
@@ -21158,6 +21238,7 @@ pdfAuditFooterHtml(d, settings) +
     /* Step 3: Done */
     document.getElementById('fl-save')?.addEventListener('click', function() {
       modal.style.display = 'none';
+      markWelcomeWizardDone();
       var name = _flSettings.feeEarnerNameDefault || '';
       showToast('Welcome to Custody Note' + (name ? ', ' + name : '') + '!', 'success', 4000);
     });
@@ -21165,14 +21246,7 @@ pdfAuditFooterHtml(d, settings) +
     /* Skip (from step 1) */
     document.getElementById('fl-skip')?.addEventListener('click', function() {
       modal.style.display = 'none';
-      var banner = document.createElement('div');
-      banner.className = 'setup-warning-banner';
-      banner.textContent = 'Setup incomplete \u2014 click here to add your name and DSCC PIN (required for billing)';
-      banner.addEventListener('click', function() {
-        showView('settings');
-        banner.remove();
-      });
-      document.querySelector('.app-header')?.insertAdjacentElement('afterend', banner);
+      markWelcomeWizardDone();
     });
   }
 
