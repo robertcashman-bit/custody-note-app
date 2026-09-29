@@ -165,10 +165,11 @@ describe('shouldAttemptTrialStartedPing', () => {
     assert.equal(shouldAttemptTrialStartedPing({ key: 'FREE-X' }, '2026-01-01'), false);
   });
 
-  it('retries pending or legacy free/trial keys', () => {
+  it('retries only while trialStartedPending is set', () => {
     assert.equal(shouldAttemptTrialStartedPing({ key: 'FREE-X', trialStartedPending: true }, null), true);
-    assert.equal(shouldAttemptTrialStartedPing({ key: 'TRIAL-X' }, null), true);
-    assert.equal(shouldAttemptTrialStartedPing({ key: 'CN-PRO' }, null), false);
+    assert.equal(shouldAttemptTrialStartedPing({ key: 'TRIAL-X' }, null), false);
+    assert.equal(shouldAttemptTrialStartedPing({ key: 'CN-PRO', trialStartedPending: true }, null), true);
+    assert.equal(shouldAttemptTrialStartedPing({ key: 'FREE-X' }, '2026-01-01'), false);
   });
 });
 
