@@ -116,7 +116,18 @@ describe('usageHeartbeat payload', () => {
 describe('resolveAnalyticsTier', () => {
   it('maps admin and cloud-backup users to pro', () => {
     assert.equal(resolveAnalyticsTier({ tier: 'free', isAdmin: true }, {}), 'pro');
-    assert.equal(resolveAnalyticsTier({ tier: 'trial' }, { cachedCloudBackup: true }), 'pro');
+    assert.equal(
+      resolveAnalyticsTier(
+        { tier: 'trial' },
+        { cachedCloudBackup: true, cachedCloudBackupAt: new Date().toISOString() }
+      ),
+      'pro'
+    );
+    const staleAt = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    assert.equal(
+      resolveAnalyticsTier({ tier: 'trial' }, { cachedCloudBackup: true, cachedCloudBackupAt: staleAt }),
+      'trial'
+    );
     assert.equal(resolveAnalyticsTier({ tier: 'pro' }, {}), 'pro');
   });
 

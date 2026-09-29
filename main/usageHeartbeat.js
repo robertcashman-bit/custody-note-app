@@ -17,6 +17,20 @@ const HEARTBEAT_RETRY_DELAYS_MS = Object.freeze([5000, 30_000, 120_000]);
 const ALLOWED_PAYLOAD_KEYS = Object.freeze(['machineId', 'platform', 'appVersion', 'tier']);
 const ALLOWED_TIERS = Object.freeze(['free', 'pro', 'trial', 'none']);
 const MACHINE_ID_HEX_RE = /^[a-f0-9]{32}$/;
+const CLOUD_BACKUP_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * @param {object|null|undefined} licenceData
+ * @returns {boolean}
+ */
+function cachedCloudBackupEntitled(licenceData) {
+  if (!licenceData || licenceData.cachedCloudBackup !== true) return false;
+  const atRaw = licenceData.cachedCloudBackupAt;
+  if (atRaw == null || atRaw === '') return false;
+  const cachedAt = Date.parse(String(atRaw));
+  if (!Number.isFinite(cachedAt)) return false;
+  return Date.now() - cachedAt < CLOUD_BACKUP_CACHE_MAX_AGE_MS;
+}
 
 /**
  * @param {string|number|null|undefined} lastHeartbeatAt ISO string or epoch ms
@@ -63,7 +77,7 @@ function resolveAnalyticsTier(status, licenceData) {
   const data = licenceData && typeof licenceData === 'object' ? licenceData : null;
   const st = status && typeof status === 'object' ? status : null;
   if (st && (st.isAdmin || st.tier === 'pro')) return 'pro';
-  if (data && data.cachedCloudBackup === true) return 'pro';
+  if (cachedCloudBackupEntitled(data)) return 'pro';
   if (st && ALLOWED_TIERS.includes(st.tier)) return st.tier;
   if (data && data.key) {
     const key = String(data.key).toUpperCase();
