@@ -10,12 +10,19 @@ const crypto = require('crypto');
 const {
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_STATE_FILE,
+  TRIAL_STARTED_STATE_FILE,
   ALLOWED_PAYLOAD_KEYS,
   shouldSendHeartbeat,
   buildHeartbeatPayload,
+  resolveAnalyticsTier,
   payloadIsPrivacySafe,
   readLastHeartbeatAt,
   writeLastHeartbeatAt,
+  readTrialStartedSentAt,
+  writeTrialStartedSentAt,
+  shouldAttemptTrialStartedPing,
+  postStatsWithRetry,
+  deferAfterWebContentsLoad,
 } = require('../main/usageHeartbeat');
 
 describe('usageHeartbeat gate', () => {
@@ -94,6 +101,30 @@ describe('usageHeartbeat payload', () => {
     });
     assert.equal(payloadIsPrivacySafe(good), true);
   });
+
+  it('coerces invalid tier values to none', () => {
+    const payload = buildHeartbeatPayload({
+      machineId: 'b'.repeat(32),
+      platform: 'win32',
+      appVersion: '1.9.80',
+      tier: 'enterprise',
+    });
+    assert.equal(payload.tier, 'none');
+  });
+});
+
+describe('resolveAnalyticsTier', () => {
+  it('maps admin and cloud-backup users to pro', () => {
+    assert.equal(resolveAnalyticsTier({ tier: 'free', isAdmin: true }, {}), 'pro');
+    assert.equal(resolveAnalyticsTier({ tier: 'trial' }, { cachedCloudBackup: true }), 'pro');
+    assert.equal(resolveAnalyticsTier({ tier: 'pro' }, {}), 'pro');
+  });
+
+  it('falls back to licence key shape', () => {
+    assert.equal(resolveAnalyticsTier(null, { key: 'FREE-ABC' }), 'free');
+    assert.equal(resolveAnalyticsTier(null, { key: 'TRIAL-ABC' }), 'trial');
+    assert.equal(resolveAnalyticsTier(null, { key: 'CN-AAAA-BBBB' }), 'pro');
+  });
 });
 
 describe('usageHeartbeat persistence', () => {
@@ -107,5 +138,109 @@ describe('usageHeartbeat persistence', () => {
     assert.equal(readLastHeartbeatAt(stampPath, fs), at);
     assert.equal(shouldSendHeartbeat(readLastHeartbeatAt(stampPath, fs), Date.parse('2026-08-31T12:00:00.000Z')), false);
     assert.equal(shouldSendHeartbeat(readLastHeartbeatAt(stampPath, fs), Date.parse('2026-09-01T11:00:00.000Z')), true);
+  });
+
+  it('tracks trial-started one-shot sentAt separately', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-trial-'));
+    const sentPath = path.join(dir, TRIAL_STARTED_STATE_FILE);
+    assert.equal(readTrialStartedSentAt(sentPath, fs), null);
+    writeTrialStartedSentAt(sentPath, fs, '2026-09-01T00:00:00.000Z');
+    assert.equal(readTrialStartedSentAt(sentPath, fs), '2026-09-01T00:00:00.000Z');
+  });
+});
+
+describe('shouldAttemptTrialStartedPing', () => {
+  it('skips when already sent', () => {
+    assert.equal(shouldAttemptTrialStartedPing({ key: 'FREE-X' }, '2026-01-01'), false);
+  });
+
+  it('retries pending or legacy free/trial keys', () => {
+    assert.equal(shouldAttemptTrialStartedPing({ key: 'FREE-X', trialStartedPending: true }, null), true);
+    assert.equal(shouldAttemptTrialStartedPing({ key: 'TRIAL-X' }, null), true);
+    assert.equal(shouldAttemptTrialStartedPing({ key: 'CN-PRO' }, null), false);
+  });
+});
+
+describe('postStatsWithRetry', () => {
+  it('calls onSuccess only after postFn succeeds', async () => {
+    let calls = 0;
+    let stamped = false;
+    const ok = await postStatsWithRetry({
+      postFn: async () => {
+        calls += 1;
+        if (calls < 2) throw new Error('offline');
+        return {};
+      },
+      url: 'https://custodynote.com/api/stats/heartbeat',
+      body: { machineId: 'c'.repeat(32), platform: 'win32', appVersion: '1.0.0', tier: 'free' },
+      retryDelaysMs: [0, 0],
+      onSuccess: () => {
+        stamped = true;
+      },
+    });
+    assert.equal(ok, true);
+    assert.equal(calls, 2);
+    assert.equal(stamped, true);
+  });
+
+  it('does not call onSuccess when all attempts fail', async () => {
+    let stamped = false;
+    const ok = await postStatsWithRetry({
+      postFn: async () => {
+        throw new Error('fail');
+      },
+      url: 'https://example.com/x',
+      body: {},
+      retryDelaysMs: [0],
+      onSuccess: () => {
+        stamped = true;
+      },
+    });
+    assert.equal(ok, false);
+    assert.equal(stamped, false);
+  });
+});
+
+describe('deferAfterWebContentsLoad', () => {
+  it('runs immediately when webContents is not loading', async () => {
+    let ran = false;
+    deferAfterWebContentsLoad(
+      {
+        isDestroyed: () => false,
+        isLoading: () => false,
+        once: () => {
+          throw new Error('should not attach listener');
+        },
+      },
+      0,
+      () => {
+        ran = true;
+      }
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(ran, true);
+  });
+
+  it('waits for did-finish-load when still loading', async () => {
+    let handler = null;
+    let ran = false;
+    deferAfterWebContentsLoad(
+      {
+        isDestroyed: () => false,
+        isLoading: () => true,
+        once: (_ev, fn) => {
+          handler = fn;
+        },
+      },
+      0,
+      () => {
+        ran = true;
+      }
+    );
+    assert.equal(ran, false);
+    assert.equal(typeof handler, 'function');
+    handler();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    assert.equal(ran, true);
   });
 });
