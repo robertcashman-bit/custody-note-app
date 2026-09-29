@@ -178,6 +178,7 @@ function writeTrialStartedSentAt(filePath, fsModule, at) {
 
 /**
  * Whether a one-shot trial-started ping should still be attempted.
+ * Retries on every launch while trialStartedPending is set (cleared only after 2xx).
  *
  * @param {object|null|undefined} licenceData
  * @param {string|null|undefined} sentAt from readTrialStartedSentAt
@@ -186,9 +187,7 @@ function writeTrialStartedSentAt(filePath, fsModule, at) {
 function shouldAttemptTrialStartedPing(licenceData, sentAt) {
   if (sentAt) return false;
   if (!licenceData || !licenceData.key) return false;
-  if (licenceData.trialStartedPending === true) return true;
-  const key = String(licenceData.key).toUpperCase();
-  return key.startsWith('FREE-') || key.startsWith('TRIAL-');
+  return licenceData.trialStartedPending === true;
 }
 
 function sleepMs(ms) {

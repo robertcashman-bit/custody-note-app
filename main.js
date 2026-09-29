@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu, powerMonitor, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu, powerMonitor, clipboard, net } = require('electron');
 const os = require('os');
 const path = require('path');
 /* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use). */
@@ -5443,6 +5443,15 @@ function isFreeTierEnabled() {
 }
 
 const usageHeartbeat = require('./main/usageHeartbeat');
+const { createStatsNetPost } = require('./main/statsNetPost');
+
+let _statsNetPost = null;
+function getStatsNetPost() {
+  if (!_statsNetPost) {
+    _statsNetPost = createStatsNetPost({ net, isAllowedApiUrl });
+  }
+  return _statsNetPost;
+}
 
 let _usageHeartbeatPeriodicTimer = null;
 let _usageHeartbeatSendInFlight = false;
@@ -5469,6 +5478,34 @@ function buildTrialStartedPayload() {
   });
 }
 
+/** Ensure local FREE/TRIAL licences keep trialStartedPending until stats ack (not sent on write). */
+function reconcileTrialStartedPendingFlag(data) {
+  if (!data || !data.key) return data;
+  const sentPath = path.join(app.getPath('userData'), usageHeartbeat.TRIAL_STARTED_STATE_FILE);
+  let sentAt = null;
+  try {
+    sentAt = usageHeartbeat.readTrialStartedSentAt(sentPath, fs);
+  } catch (_) {}
+  if (sentAt) {
+    if (data.trialStartedPending) {
+      try {
+        delete data.trialStartedPending;
+        writeLicenceData(data);
+      } catch (_) {}
+    }
+    return data;
+  }
+  if (data.trialStartedPending === true) return data;
+  const key = String(data.key).toUpperCase();
+  if (key.startsWith('FREE-') || key.startsWith('TRIAL-')) {
+    data.trialStartedPending = true;
+    try {
+      writeLicenceData(data);
+    } catch (_) {}
+  }
+  return data;
+}
+
 /** One anonymous ping when a packaged install starts Free / legacy trial (no case data). */
 function reportTrialStartedToServer() {
   if (!app.isPackaged) return;
@@ -5486,7 +5523,7 @@ function reportTrialStartedToServer() {
   const payload = buildTrialStartedPayload();
   usageHeartbeat
     .postStatsWithRetry({
-      postFn: httpPost,
+      postFn: getStatsNetPost(),
       url: `${apiUrl}/api/stats/trial-started`,
       body: payload,
       timeoutMs: usageHeartbeat.HEARTBEAT_POST_TIMEOUT_MS,
@@ -5538,7 +5575,7 @@ function reportUsageHeartbeatToServer() {
   _usageHeartbeatSendInFlight = true;
   usageHeartbeat
     .postStatsWithRetry({
-      postFn: httpPost,
+      postFn: getStatsNetPost(),
       url: `${apiUrl}/api/stats/heartbeat`,
       body: payload,
       timeoutMs: usageHeartbeat.HEARTBEAT_POST_TIMEOUT_MS,
@@ -6040,7 +6077,6 @@ ipcMain.handle('licence:status', () => {
     if (isFreeTierEnabled()) {
       data = buildLocalFreeLicenceData();
       writeLicenceData(data);
-      reportTrialStartedToServer();
     } else {
       const now = new Date();
       const expires = new Date(now.getTime() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
@@ -6057,10 +6093,10 @@ ipcMain.handle('licence:status', () => {
         trialStartedPending: true,
       };
       writeLicenceData(data);
-      reportTrialStartedToServer();
     }
   } else {
     data = maybeMigrateLicenceToFree(data);
+    data = reconcileTrialStartedPendingFlag(data);
   }
   const result = computeLicenceStatus(data);
   result.enforced = enforced;
