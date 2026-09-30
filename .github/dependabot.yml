@@ -1,0 +1,42 @@
+# Dependabot version updates + security alerts (enable in repo Settings if not already).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      npm-production:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "electron"
+          - "electron-builder"
+          - "@playwright/*"
+          - "playwright"
+          - "jsdom"
+          - "sharp"
+          - "nodemailer"
+        update-types:
+          - "minor"
+          - "patch"
+      npm-dev-tooling:
+        patterns:
+          - "electron"
+          - "electron-builder"
+          - "@playwright/*"
+          - "playwright"
+        update-types:
+          - "patch"
+    ignore:
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
