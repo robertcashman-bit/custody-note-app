@@ -70,7 +70,7 @@ jobs:
           find /tmp/blog-scaffold -type f | sort
 
       - name: Upload scaffold
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: website-blog-scaffold
           path: /tmp/blog-scaffold

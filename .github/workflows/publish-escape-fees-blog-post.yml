@@ -65,7 +65,7 @@ jobs:
           grep -n 'slug: "police-station-escape-fees-2026"' custody-note-website/lib/staticBlogPosts.ts
 
       - name: Upload applied website files
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: escape-fees-blog-applied
           path: |
