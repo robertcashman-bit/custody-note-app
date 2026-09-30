@@ -19991,7 +19991,7 @@ pdfAuditFooterHtml(d, settings) +
       if (contactBtn) {
         e.preventDefault();
         e.stopPropagation();
-        copyOutlookComposeFields('robertcashman@defencelegalservices.com', 'Custody Note Enquiry', '', {
+        copyOutlookComposeFields('robertcashman@defencelegalservices.co.uk', 'Custody Note Enquiry', '', {
           successToast: 'Copied — paste into Outlook to send',
         });
         return;
