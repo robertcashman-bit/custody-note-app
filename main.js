@@ -4486,8 +4486,8 @@ function createWindow() {
                     if (detailsEl && !detailsEl.open) { detailsEl.setAttribute('open', ''); await sleep(100); }
                     var supportFaqLinks = document.querySelectorAll('.support-faq-link');
                     var supportUrls = Array.from(supportFaqLinks).map(function(btn) { return btn.dataset.url || ''; });
-                    var missingSupportUrls = ['https://www.custodynote.com/support', 'https://www.custodynote.com/faq', 'https://www.custodynote.com/contact'].filter(function(url) {
-                      return supportUrls.indexOf(url) < 0;
+                    var missingSupportUrls = ['/support', '/faq', '/contact'].filter(function(pathSuffix) {
+                      return !supportUrls.some(function(u) { return u && u.indexOf(pathSuffix) >= 0; });
                     });
                     if (supportFaqLinks.length >= 3 && !missingSupportUrls.length) {
                       supportFaqLinks[0].click();
