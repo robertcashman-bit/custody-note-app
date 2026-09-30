@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.110",
+      "date": "2026-09-30",
+      "latest": true,
+      "changes": [
+        "Security: Electron updated to 42.11.9 (webview and sandbox hardening), plus patched tar, extract-zip, and nodemailer dependencies",
+        "Contact: support enquiry email now uses @defencelegalservices.co.uk (the old .com domain was unregistered)",
+        "Maintenance: Dependabot config added for npm and GitHub Actions — enable Dependabot alerts and secret scanning in repo settings if not already on"
+      ]
+    },
+    {
       "version": "1.9.109",
       "date": "2026-09-29",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Home: Free during beta users see a friendly “start your first attendance” card instead of a licence lock screen; paid Store installs can still email or paste a licence key",
         "Licence: Email my licence key recovery is easier to find from Home and Settings (for installs that hit Invalid licence)",
