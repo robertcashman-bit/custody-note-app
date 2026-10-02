@@ -1,0 +1,14 @@
+# Bugbot repo config. Read by Bugbot from the DEFAULT branch only.
+# Docs: https://cursor.com/docs/bugbot (section "Repo configuration").
+# Precedence: PR author's personal Bugbot overrides > this file > team dashboard.
+#
+# Cost controls (Oct 2026): review at Default effort instead of High, and
+# never let Bugbot push autofix commits/branches. Autofix can still be run by
+# hand from a Bugbot comment when wanted.
+version: 1
+
+review:
+  effort: default # low | default | high | smart
+
+autofix:
+  mode: disabled # disabled | newBranch | existingBranch
