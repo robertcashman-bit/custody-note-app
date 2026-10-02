@@ -26,7 +26,7 @@ jobs:
       WEBSITE_REPO: robertcashman-bit/custody-note-website
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Require GH_PAT
         env:
@@ -39,7 +39,7 @@ jobs:
           fi
 
       - name: Checkout website master
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: robertcashman-bit/custody-note-website
           path: custody-note-website
