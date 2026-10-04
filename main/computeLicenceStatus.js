@@ -7,6 +7,8 @@
  *   trial — legacy timed trial (migrated to free when FREE_TIER_ENABLED)
  *   pro   — paid / complimentary Lemon subscription
  */
+const { isAdminEmail } = require('./licenceAdminEmails');
+
 const DEFAULT_GRACE_DAYS = 60;
 const DEFAULT_TRIAL_DAYS = 30;
 
@@ -49,7 +51,7 @@ function computeLicenceStatus(data, options) {
     };
   }
 
-  const isAdmin = !!(data.email && adminEmails.includes(String(data.email).toLowerCase()));
+  const isAdmin = !!(data.email && isAdminEmail(data.email, adminEmails));
   const isAddonValid = (exp) => exp && new Date(exp).getTime() > Date.now();
   const addons = {
     quickfile: isAdmin || isAddonValid(data.entitlements?.quickfile?.expiresAt),

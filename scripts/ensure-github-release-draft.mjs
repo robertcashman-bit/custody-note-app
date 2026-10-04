@@ -6,6 +6,7 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import {
   ensureDraftRelease,
   normaliseReleaseTag,
@@ -14,6 +15,19 @@ import {
 } from './github-release-api.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
+const { buildPublicReleaseBody } = require('../lib/publicReleaseNotes.js');
+
+/** Customer-level public body for this version (filtered by lib/publicReleaseNotes.js). */
+function publicBodyFor(version) {
+  try {
+    const changelog = JSON.parse(readFileSync(join(root, 'changelog.json'), 'utf8'));
+    const rel = (changelog.releases || []).find((r) => r.version === version);
+    return rel ? buildPublicReleaseBody(rel) : '';
+  } catch (_) {
+    return '';
+  }
+}
 
 function tokenFromEnv() {
   const t = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
@@ -61,7 +75,7 @@ async function main() {
     return;
   }
 
-  const release = await ensureDraftRelease(tag, token, { title: pkg.version });
+  const release = await ensureDraftRelease(tag, token, { title: pkg.version, body: publicBodyFor(pkg.version) });
   console.log(`[ensure-release-draft] Draft ${tag} id=${release.id} (single canonical release for uploads).`);
 }
 
