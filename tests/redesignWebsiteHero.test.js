@@ -18,14 +18,4 @@ describe('redesign-website-hero script', () => {
     assert.match(src, /FloatingTrialCta/);
     assert.match(src, /No lightning/);
   });
-
-  test('workflow pushes website branch via GH_PAT', () => {
-    const p = join(root, '.github/workflows/redesign-website-hero.yml');
-    assert.ok(existsSync(p));
-    const yml = readFileSync(p, 'utf8');
-    assert.match(yml, /robertcashman-bit\/custody-note-website/);
-    assert.match(yml, /secrets\.GH_PAT/);
-    assert.match(yml, /cursor\/hero-product-first-screen-88b9/);
-    assert.match(yml, /Vercel production deploy/);
-  });
 });

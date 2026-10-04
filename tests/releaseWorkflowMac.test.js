@@ -69,9 +69,20 @@ describe('release-publish.yml — cross-platform build pipeline', () => {
     assert.match(gate, /--draft=false --latest/);
   });
 
-  it('deploys the website only after the release is fully published', () => {
-    assert.match(wf, /^\s*deploy-website:/m);
-    assert.match(wf, /needs:\s*publish-release/);
+  it('mirrors the verified release to the public custody-note-releases repo', () => {
+    assert.match(wf, /mirror-release-to-public-repo\.mjs/);
+    assert.match(wf, /RELEASES_REPO_TOKEN:\s*\$\{\{\s*secrets\.RELEASES_REPO_TOKEN\s*\}\}/);
+    assert.match(wf, /GITHUB_REPOSITORY:\s*robertcashman-bit\/custody-note-releases/);
+    // Legacy app-repo feed only gets the v1.9.111 bridge release.
+    assert.match(wf, /if:\s*github\.ref_name == 'v1\.9\.111'/);
+    const mirrorIdx = wf.indexOf('mirror-release-to-public-repo.mjs');
+    const bridgeIdx = wf.indexOf("CN_PUBLISH_LEGACY_REPO: '1'");
+    assert.ok(mirrorIdx !== -1 && bridgeIdx !== -1 && mirrorIdx < bridgeIdx, 'mirror before legacy bridge publish');
+  });
+
+  it('holds no cross-repo website token (website syncs itself from the public releases repo)', () => {
+    assert.doesNotMatch(wf, /^\s*deploy-website:/m);
+    assert.doesNotMatch(wf, /GH_PAT|VERCEL_TOKEN/);
   });
 
   it('does not have the legacy single-platform "release" job', () => {
