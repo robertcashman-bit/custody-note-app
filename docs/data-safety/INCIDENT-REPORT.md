@@ -1,12 +1,12 @@
-# INCIDENT REPORT — Costachi / Costache never-event (Medway, 7 Sep 2026)
+# INCIDENT REPORT — the client never-event ([station], 7 Sep 2026)
 
 **Status:** Confirmed loss of original attendance bytes from recoverable stores investigated to date.  
 **Product:** Custody Note (Electron desktop)  
-**Client (field report):** Calin Costachi / Costache, DOB 26/02/1970, Medway/Gillingham  
-**Interview:** ~15:44 on 7 Sep 2026, typed on Windows Framework12  
+**Client (field report):** [client name and DOB redacted], [station]  
+**Interview:** ~15:44 on 7 Sep 2026, typed on Windows the user's  
 **Reconstructed draft:** Later inserted as live id **112** (draft) and synced when cloud was healthy  
 
-This report is metadata-oriented. It does **not** invent recovery of the original Costachi note body.
+This report is metadata-oriented. It does **not** invent recovery of the original the client note body.
 
 ---
 
@@ -42,7 +42,7 @@ This matches “never found in any historical DB.”
 
 After Mac→Windows restore, `settings.backupFolder` could still hold a Mac path (`/Users/...`). On Windows the local Backups folder appeared **missing/empty** while OneDrive still held an **older** series that stopped before the interview.
 
-**Effect:** User lacked usable **local** recovery copies on Framework12 even if a later draft had been saved. Does not by itself delete cloud SoT; it removes a recovery lane.
+**Effect:** User lacked usable **local** recovery copies on the user's even if a later draft had been saved. Does not by itself delete cloud SoT; it removes a recovery lane.
 
 **Mitigation shipped in 1.9.85:** foreign-OS backup path auto-reset to `userData/Backups`; Settings shows effective paths and failures.
 
@@ -64,10 +64,10 @@ Footer/settings copy historically conflated managed AWS cloud **backup entitleme
 
 | Item | Status |
 |------|--------|
-| Original Costachi attendance bytes | **Not recoverable** from stores examined; do not invent them |
+| Original the client attendance bytes | **Not recoverable** from stores examined; do not invent them |
 | Reconstructed draft id 112 | Exists as later user reconstruction; synced when cloud healthy |
 | Cloud at times 429-limited | May delay propagation; does not restore missing original |
-| Recommended operator actions | Preserve all Framework12/OneDrive/Mac images; run Integrity check + inventory script; do **not** Full re-sync while cloud inventory is 0 |
+| Recommended operator actions | Preserve all the user's/OneDrive/Mac images; run Integrity check + inventory script; do **not** Full re-sync while cloud inventory is 0 |
 
 ---
 
@@ -84,6 +84,6 @@ Footer/settings copy historically conflated managed AWS cloud **backup entitleme
 
 ## Related documents
 
-- `docs/forensics/MEDWAY_2026-09-07_ATTENDANCE_INVESTIGATION.md`
+- `docs/forensics/2026-09-07_ATTENDANCE_INVESTIGATION.md`
 - `docs/data-safety/ARCHITECTURE.md`
 - `docs/EMPTY_SYNC_INCIDENT_RCA.md`
