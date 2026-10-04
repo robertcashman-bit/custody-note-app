@@ -80,7 +80,7 @@ Client PITR — generational Backups/*.db (magic-verified) ± offsite ± managed
 | Playwright critical/stress/cross-device/billing/LAA/officer-email | PASS |
 | `npm run security:audit` (prod) | PASS |
 | Deliberate break `written:0` | **Fails as required**; restore green |
-| Flush/durability pack ([client] non-recurrence) | **35/35** |
+| Flush/durability pack (incident non-recurrence) | **35/35** |
 
 ---
 
@@ -147,7 +147,7 @@ No website API/PITR defect requiring a separate PR from this audit.
 
 ## M. Residuals (documented, non-blocking)
 
-1. **Historical [client] never-flushed bytes** — not recoverable; **cannot recur** for new saves: flush dirty policy + Force Save magic verify + SIGKILL/dirty-restore tests PASS (`flush-nonrecurrence.log`, data-safety 193). GREEN = future routes closed.  
+1. **Historical incident never-flushed bytes** — not recoverable; **cannot recur** for new saves: flush dirty policy + Force Save magic verify + SIGKILL/dirty-restore tests PASS (`flush-nonrecurrence.log`, data-safety 193). GREEN = future routes closed.  
 2. Optional metal dual Mac+Windows kill-9 — harness covers.  
 3. Shared 429 can delay central confirm — local+outbox remain authoritative until ack.  
 4. Ongoing `innerHTML` escape discipline.

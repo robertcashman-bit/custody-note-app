@@ -4,7 +4,7 @@
 
 ## Justification (short)
 
-Client **1.9.97** + website SoT/PITR (PR #13) + production-readiness audit **2026-09-12** (PR #49): Force Save drain sized from outbox (never false Synced), force-quit/SIGKILL flush durability, monitors fail-closed, app `test:data-safety` **193/193**, unit **2222+**, Playwright critical paths green (stress soft-FAIL = CI fail), prod `security:audit` clean. Historical [client] never-flushed bytes remain **NON-BLOCKING** and **cannot recur** for new durable saves (flush/dirty/Force Save magic verify reconfirmed 2026-09-12).
+Client **1.9.97** + website SoT/PITR (PR #13) + production-readiness audit **2026-09-12** (PR #49): Force Save drain sized from outbox (never false Synced), force-quit/SIGKILL flush durability, monitors fail-closed, app `test:data-safety` **193/193**, unit **2222+**, Playwright critical paths green (stress soft-FAIL = CI fail), prod `security:audit` clean. Historical incident never-flushed bytes remain **NON-BLOCKING** and **cannot recur** for new durable saves (flush/dirty/Force Save magic verify reconfirmed 2026-09-12).
 
 ## Basis
 
@@ -21,7 +21,7 @@ Client **1.9.97** + website SoT/PITR (PR #13) + production-readiness audit **202
 | Server-side SoT PITR | GREEN | Website PR #13 |
 | CI gate | GREEN | unit + data-safety + security:audit + e2e (stress hard-fail) |
 | Fail-safe monitors | GREEN | enforceMonitorFailClosed |
-| [client] historical bytes | NON-BLOCKING | Future routes closed; new saves flush-verified |
+| Incident historical bytes | NON-BLOCKING | Future routes closed; new saves flush-verified |
 | Billing Close / officer-email Open | GREEN | Fixed + E2E regression in audit PR |
 
 ## Ship posture
