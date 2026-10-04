@@ -11,22 +11,29 @@
  */
 'use strict';
 
+const crypto = require('crypto');
+
+// Built-in entries are stored as SHA-256 hashes of the normalised email so no
+// personal email address appears in this public repo or the shipped app.
 const BUILTIN_ADMIN_EMAILS = Object.freeze([
-  'robertdavidcashman@gmail.com',
-  'nerijus83@gmail.com',
+  'sha256:5752a0dad8850b5b6683fead3cd189b7f7a876677b22b5e31a391d1215bd94fb',
+  'sha256:cae47797906933444ef91301ac6b6eefed3ef8a683db06b421cdddcbbbcee053',
 ]);
+
+function emailHash(email) {
+  return 'sha256:' + crypto.createHash('sha256').update(String(email || '').trim().toLowerCase()).digest('hex');
+}
 
 function normalizeEmailList(list) {
   if (!Array.isArray(list)) return [];
   const out = [];
   const seen = new Set();
   for (const raw of list) {
-    const email = String(raw || '')
-      .trim()
-      .toLowerCase();
-    if (!email || seen.has(email)) continue;
-    seen.add(email);
-    out.push(email);
+    const email = String(raw || '').trim();
+    const norm = email.startsWith('sha256:') ? email : email.toLowerCase();
+    if (!norm || seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(norm);
   }
   return out;
 }
@@ -53,7 +60,9 @@ function resolveAdminEmails(opts) {
 function isAdminEmail(email, adminEmails) {
   if (!email) return false;
   const list = Array.isArray(adminEmails) ? adminEmails : [];
-  return list.includes(String(email).trim().toLowerCase());
+  const e = String(email).trim().toLowerCase();
+  if (!e) return false;
+  return list.includes(e) || list.includes(emailHash(e));
 }
 
 function isSyntheticLocalLicenceKey(key) {
@@ -63,6 +72,7 @@ function isSyntheticLocalLicenceKey(key) {
 
 module.exports = {
   BUILTIN_ADMIN_EMAILS,
+  emailHash,
   normalizeEmailList,
   parseAdminEmailsEnv,
   resolveAdminEmails,

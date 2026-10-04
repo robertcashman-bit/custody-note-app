@@ -51,6 +51,15 @@ try {
   process.exit(1);
 }
 
+// Public-notes gate: changelog.json is published on custodynote.com — refuse to
+// sync personal data or internal security/architecture detail.
+try {
+  execSync('node scripts/check-public-release-notes.mjs', { cwd: APP_ROOT, stdio: 'inherit' });
+} catch {
+  console.error('[sync-website] Aborting — changelog.json failed the public release-notes check.');
+  process.exit(1);
+}
+
 const pkg = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8'));
 const changelog = JSON.parse(readFileSync(join(APP_ROOT, 'changelog.json'), 'utf8'));
 

@@ -214,6 +214,7 @@ export async function ensureDraftRelease(tag, token, opts = {}) {
     body: JSON.stringify({
       tag_name: normalised,
       name: title,
+      ...(typeof opts.body === 'string' && opts.body ? { body: opts.body } : {}),
       draft: true,
       prerelease: false,
       generate_release_notes: false,
