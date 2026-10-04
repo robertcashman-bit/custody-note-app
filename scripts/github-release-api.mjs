@@ -4,6 +4,13 @@
  */
 export const RELEASE_OWNER = 'robertcashman-bit';
 export const RELEASE_REPO = 'custody-note-app';
+/**
+ * Public, releases-only repo that hosts installers + electron-updater feeds
+ * (latest.yml / latest-mac.yml). The app repo above is only the CI staging area
+ * (draft releases) so it can become private without breaking auto-update.
+ */
+export const PUBLIC_RELEASES_OWNER = 'robertcashman-bit';
+export const PUBLIC_RELEASES_REPO = 'custody-note-releases';
 
 export function normaliseReleaseTag(tag) {
   const t = String(tag || '').trim();
@@ -72,7 +79,7 @@ export function pickPrimaryRelease(releases) {
   return sorted[0];
 }
 
-async function downloadReleaseAsset(asset, token) {
+export async function downloadReleaseAsset(asset, token) {
   const headers = {
     ...releaseApiHeaders(token),
     Accept: 'application/octet-stream',

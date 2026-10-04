@@ -1,6 +1,8 @@
 # On push of a version tag (e.g. v1.4.24), build the Windows installer AND the
-# signed + notarised macOS .dmg/.zip, publish both to GitHub Releases, then sync
-# the marketing website to Vercel.
+# signed + notarised macOS .dmg/.zip into a staging draft on this repo, then mirror
+# them to the public releases-only repo robertcashman-bit/custody-note-releases
+# (electron-updater feed + website downloads). The website syncs itself from that
+# repo (custody-note-website/.github/workflows/sync-releases.yml).
 #
 # Prerequisites (Settings > Secrets and variables > Actions):
 # Required for Windows build (provided automatically):
@@ -39,13 +41,13 @@
 # Developer ID–signed-but-unnotarized dmgs/zips. Do not set CN_SKIP_NOTARIZE in
 # this workflow (that flag is a local/dev escape only).
 #
-# Optional (website deploy):
-# - VERCEL_TOKEN  — Vercel dashboard > Settings > Tokens.
-# - GH_PAT        — GitHub PAT with repo scope to clone the website repo.
+# Required for the public feed:
+# - RELEASES_REPO_TOKEN — fine-grained PAT, repository access ONLY
+#   robertcashman-bit/custody-note-releases, permission Contents: read & write.
 #
 # To run:
 #   • Automatic: push version + changelog to main/master → "Auto-tag release if needed"
-#     creates v{x.y.z} if missing → this workflow runs on that tag.
+#     creates v{x.y.z} if missing and dispatches this workflow on that tag.
 #   • Manual app build: Actions → this workflow → Run workflow (builds from selected branch).
 #   • Manual tag: git tag v1.4.24 && git push origin v1.4.24
 
@@ -367,11 +369,14 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           node scripts/repair-github-mac-updater-feed.mjs --tag "v${VERSION}"
 
-  # ─── Job 2: Wait for all platform assets, then flip the release to live ─────
-  # Runs after both platform builds. Polls the draft release for the full asset
-  # set (Windows .exe + latest.yml, Mac .dmg/.zip for both arches + latest-mac.yml)
-  # before flipping draft → published, so end-user auto-updaters never see a
-  # half-finished release.
+  # ─── Job 2: Verify the staging draft, mirror it to the public releases repo ──
+  # The app repo's draft release is only the CI staging area. Customers' installers
+  # and the electron-updater feed (package.json build.publish) live in the public,
+  # releases-only repo robertcashman-bit/custody-note-releases, so the app repo can
+  # become private without breaking auto-update or website downloads.
+  #
+  # Order: verify checksums → mirror to custody-note-releases (draft → latest) →
+  # (bridge only) publish the app-repo draft for installs that still read the old feed.
   publish-release:
     runs-on: ubuntu-latest
     needs: [release-windows, release-mac, release-windows-msix]
@@ -388,71 +393,40 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Wait for all assets on canonical release, verify, publish
+      - name: Wait for all assets on staging draft and verify updater checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          CN_PUBLISH_LEGACY_REPO: '0'
         run: node scripts/wait-and-publish-release.mjs
 
-  # ─── Job 3: Sync website changelog and deploy to Vercel ─────────────────────
-  # Optional — continue-on-error means a missing GH_PAT/VERCEL_TOKEN won't fail
-  # the overall workflow.
-  deploy-website:
-    runs-on: ubuntu-latest
-    needs: publish-release
-    continue-on-error: true
-    steps:
-      - name: Checkout app
-        uses: actions/checkout@v4
-        with:
-          path: custody-note-app
-          ref: ${{ github.ref }}
-
-      - name: Checkout website
-        uses: actions/checkout@v4
-        with:
-          repository: robertcashman-bit/custody-note-website
-          path: custody-note-website
-          token: ${{ secrets.GH_PAT }}
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-          cache-dependency-path: custody-note-app/package-lock.json
-
-      - name: Install app dependencies
-        run: npm ci
-        working-directory: custody-note-app
-
-      - name: Configure git for website commit
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Sync website releases.json and push
-        working-directory: custody-note-app
+      # RELEASES_REPO_TOKEN: fine-grained PAT scoped ONLY to
+      # robertcashman-bit/custody-note-releases with Contents: read & write.
+      # No other repo and no other permission is needed.
+      - name: Mirror release to public custody-note-releases (updater feed + downloads)
         env:
-          WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
-        run: node scripts/sync-website.mjs
+          SOURCE_GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node scripts/mirror-release-to-public-repo.mjs --tag "${{ github.ref_name }}"
 
-      - name: Bump download page version + soften Mac notarization copy
-        working-directory: custody-note-app
+      - name: Verify public feed checksums on custody-note-releases
         env:
-          WEBSITE_ROOT: ${{ github.workspace }}/custody-note-website
-        run: |
-          set -euo pipefail
-          node scripts/bump-website-download-version.mjs
-          cd "$WEBSITE_ROOT"
-          if [ -n "$(git status --porcelain)" ]; then
-            git add -A
-            VERSION=$(node -p "require('${{ github.workspace }}/custody-note-app/package.json').version")
-            git commit -m "Download: bump to v${VERSION} (Developer ID signed Mac; notarization pending)"
-            BRANCH=$(git rev-parse --abbrev-ref HEAD)
-            git pull --rebase origin "$BRANCH" || true
-            git push origin "HEAD:${BRANCH}"
-            echo "Pushed download-page bump to website ${BRANCH}."
-          else
-            echo "Website download page already matched app version / copy."
-          fi
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: robertcashman-bit/custody-note-releases
+        run: node scripts/verify-github-updater-assets.mjs --tag "${{ github.ref_name }}"
+
+      # Bridge: v1.9.111 is ALSO published on the app repo so installs <= 1.9.110
+      # (whose baked feed is custody-note-app) find it; 1.9.111 itself reads the new
+      # repo. From v1.9.112 the app-repo draft stays a draft.
+      - name: Bridge — publish staging release on legacy app-repo feed (v1.9.111 only)
+        if: github.ref_name == 'v1.9.111'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CN_PUBLISH_LEGACY_REPO: '1'
+        run: node scripts/wait-and-publish-release.mjs
+
+  # Website sync (releases.json, changelog post, deploy) now runs from the PRIVATE
+  # website repo (.github/workflows/sync-releases.yml), which polls the public
+  # custody-note-releases API. No cross-repo token is held for it here.

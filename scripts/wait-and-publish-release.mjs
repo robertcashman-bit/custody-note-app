@@ -1,7 +1,13 @@
 #!/usr/bin/env node
 /**
- * Wait for all release assets on the single canonical GitHub release, verify updater
- * checksums, then publish (draft → latest).
+ * Wait for all release assets on the single canonical GitHub release (the app-repo
+ * CI staging draft) and verify updater checksums.
+ *
+ * Since v1.9.111 the public updater feed + downloads live in
+ * robertcashman-bit/custody-note-releases (scripts/mirror-release-to-public-repo.mjs).
+ * The app-repo draft is only flipped draft → latest when CN_PUBLISH_LEGACY_REPO=1
+ * (the v1.9.111 bridge release, so installs that still read the app repo's
+ * latest.yml can move to the new feed). Otherwise the staging draft stays a draft.
  */
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -117,7 +123,14 @@ async function main() {
         process.exit(1);
       }
 
-      await publishDraft(tag, token);
+      if (process.env.CN_PUBLISH_LEGACY_REPO === '1') {
+        await publishDraft(tag, token);
+      } else {
+        console.log(
+          `[publish-release] ${tag} verified. Staging draft left as draft (public feed = custody-note-releases; ` +
+            'set CN_PUBLISH_LEGACY_REPO=1 only for a legacy-repo bridge release).',
+        );
+      }
       return;
     }
     console.log(`[publish-release] Waiting on ${tag} (${attempt}/45): missing ${missing.join(', ')}`);
