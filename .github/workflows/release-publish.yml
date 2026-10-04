@@ -419,8 +419,10 @@ jobs:
       # Bridge: v1.9.111 is ALSO published on the app repo so installs <= 1.9.110
       # (whose baked feed is custody-note-app) find it; 1.9.111 itself reads the new
       # repo. From v1.9.112 the app-repo draft stays a draft.
+      # If v1.9.111 never ships (e.g. blocked) and a later version must carry the
+      # bridge, set repo variable CN_LEGACY_BRIDGE_TAG to that tag (e.g. v1.9.112).
       - name: Bridge — publish staging release on legacy app-repo feed (v1.9.111 only)
-        if: github.ref_name == 'v1.9.111'
+        if: github.ref_name == 'v1.9.111' || (vars.CN_LEGACY_BRIDGE_TAG != '' && vars.CN_LEGACY_BRIDGE_TAG == github.ref_name)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
