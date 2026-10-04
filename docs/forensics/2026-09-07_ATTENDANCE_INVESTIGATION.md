@@ -1,9 +1,9 @@
-# Forensics: Missing Medway attendance — 7 Sep 2026
+# Forensics: Missing [station] attendance — 7 Sep 2026
 
 **Product:** Custody Note (Electron + custodynote.com sync)  
 **Investigation branch:** `cursor/attendance-durability-forensics-f170` (extends empty-cloud alarm PR #33 / 1.9.84 → **1.9.85**)  
-**Case (field report, non-binding):** Calin Costache / Costa — Medway/Gillingham — interview ~15:44 BST 7 Sep 2026  
-**Agent limitation:** This environment cannot see Robert’s disks or live licence cloud data. Do not invent that the Costache row exists in cloud.
+**Case (field report, non-binding):** [client name redacted] — [station] — interview ~15:44 BST 7 Sep 2026  
+**Agent limitation:** This environment cannot see the user's disks or live licence cloud data. Do not invent that the the client row exists in cloud.
 
 ---
 
@@ -84,7 +84,7 @@ No reverts performed. Shortlist of commits touching sync / save / dirty / Full r
 
 **Ruled out as wipe mechanism:** empty pull / Full re-sync deleting local-only (code never did hard wipe on empty cloud).
 
-**Still plausible for Costache absence (needs live disks):**
+**Still plausible for the client absence (needs live disks):**
 
 1. Draft never durable-flushed on creating Windows machine (crash/kill within debounce window) — **addressed in 1.9.85**  
 2. Note never created on that device (only reconstructed draft from transcript later)  
@@ -107,7 +107,7 @@ No reverts performed. Shortlist of commits touching sync / save / dirty / Full r
 
 ## Live-machine evidence still required
 
-This agent **cannot** confirm whether Costache exists in production cloud or on Robert’s Framework12 / Macs / Main-PC.
+This agent **cannot** confirm whether the client exists in production cloud or on the user's devices.
 
 ### How to verify cloud inventory (read-only)
 
@@ -117,7 +117,7 @@ On a machine with the live licence activated:
 2. Settings → **Full re-sync from cloud** (only if cloud is known non-empty) — note `received` / `merged`.  
 3. Or scripted: authenticate and call `POST https://custodynote.com/api/sync/pull` with `{ key, machineId, since: "1970-01-01T00:00:00.000Z" }` and inspect `record_count` / `records.length` (metadata only; envelopes need master key to decrypt bodies).  
 4. Preserve-first local inventory: `npm run inventory:sync-storage` / `CUSTODYNOTE_USERDATA=... node scripts/inventory-sync-storage.mjs`  
-5. Search local/backups for station Medway/Gillingham + date 2026-09-07 via record-index export (no bodies) or offline decrypt of a **copy** of `attendances.db` + key.
+5. Search local/backups for station [station] + date 2026-09-07 via record-index export (no bodies) or offline decrypt of a **copy** of `attendances.db` + key.
 
 **Do not** invent a cloud row. If from-epoch pull returns `records: []` / inventory 0 and no local/backup row matches, the attendance is not recoverable from sync alone.
 
@@ -131,12 +131,12 @@ On a machine with the live licence activated:
 | Empty cloud pull wiped local DBs | **Ruled out** in code |
 | Full re-sync destroyed local-only | **Ruled out** in code |
 | False push-ack could hide empty cloud | **Confirmed** historically; mitigated 1.9.82–1.9.84 |
-| Costache row exists in cloud | **Unknown** — needs live `/api/sync/pull` inventory |
-| Costache wiped by reconciliation | **Unlikely** — no empty-wipe path; prefer “never durable / never pushed / never created” |
+| the client row exists in cloud | **Unknown** — needs live `/api/sync/pull` inventory |
+| the client wiped by reconciliation | **Unlikely** — no empty-wipe path; prefer “never durable / never pushed / never created” |
 
 ---
 
-## Backup scheduler reality (Framework12 follow-up)
+## Backup scheduler reality (the user's follow-up)
 
 ### (1) Confirmed in source — intervals & overwrite (pre-1.9.85)
 
@@ -156,7 +156,7 @@ Robert expected backups every couple of minutes; production quick cadence was **
 1. After Mac→Windows restore, `settings.backupFolder` still held `/Users/…/Backups` — not creatable on Windows; every scheduled run skipped.  
 2. Fresh installs historically stored the path without `mkdir` (later mitigated by `ensureBackupFolderExists`, but foreign OS paths still broke readiness).  
 3. Off-site OneDrive (`offsiteBackupFolder`) could still receive copies while primary local Backups never wrote — UI did not make the split obvious.  
-4. **Do not invent** that Costache is in any Framework12 backup without reading those files (prefer preserve-first search of OneDrive Sep 7–8 offsite copies).
+4. **Do not invent** that the client is in any the user's backup without reading those files (prefer preserve-first search of OneDrive Sep 7–8 offsite copies).
 
 ### (3) 1.9.85 hardenings
 

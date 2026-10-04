@@ -10,7 +10,7 @@ Honest residual risks after v1.9.86 data-safety hardening (client) + website ser
 
 ## True residuals (NON-BLOCKING)
 
-1. **Original Costachi bytes** — Not recoverable if never flushed; GREEN means future silent-loss routes closed, not resurrection.  
+1. **Original incident bytes** — Not recoverable if never flushed; GREEN means future silent-loss routes closed, not resurrection.  
 2. **Dual physical Mac+Windows kill-9** — In-process SIGKILL + durability harness covers the claim; optional ops validation on metal.  
 3. **429 budget** — Shared push/pull rate limit can still delay central confirmation; local + outbox remain authoritative until ack.  
 4. **Key/escrow** — Cross-platform safeStorage issues can stall decrypt; fail-safe keeps local.  

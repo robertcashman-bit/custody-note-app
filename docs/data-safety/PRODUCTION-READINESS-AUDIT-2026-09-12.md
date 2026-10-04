@@ -66,7 +66,7 @@ Client PITR — generational Backups/*.db (magic-verified) ± offsite ± managed
 | T-E2E-CLOSE | Billing Close no remount | S2 | PASS | `billing-close-no-remount.spec.ts` |
 | T-SEC-AUDIT | Prod npm + secrets + static | S1 | PASS 0 high/crit | `security-audit-after.log` |
 | T-BREAK | Deliberate mock `written:0` | S0 | FAIL 2 then restore PASS | `deliberate-break-*.log` |
-| T-FLUSH | Flush/dirty/Force save durability | S0 | PASS 35 | `costachi-nonrecurrence.log` |
+| T-FLUSH | Flush/dirty/Force save durability | S0 | PASS 35 | `flush-nonrecurrence.log` |
 | T-IDOR | Licence-scoped mock SoT | S1 | PASS (unit/mock) | crossDeviceSync |
 
 ---
@@ -80,7 +80,7 @@ Client PITR — generational Backups/*.db (magic-verified) ± offsite ± managed
 | Playwright critical/stress/cross-device/billing/LAA/officer-email | PASS |
 | `npm run security:audit` (prod) | PASS |
 | Deliberate break `written:0` | **Fails as required**; restore green |
-| Flush/durability pack (Costachi non-recurrence) | **35/35** |
+| Flush/durability pack (incident non-recurrence) | **35/35** |
 
 ---
 
@@ -147,7 +147,7 @@ No website API/PITR defect requiring a separate PR from this audit.
 
 ## M. Residuals (documented, non-blocking)
 
-1. **Historical Costachi never-flushed bytes** — not recoverable; **cannot recur** for new saves: flush dirty policy + Force Save magic verify + SIGKILL/dirty-restore tests PASS (`costachi-nonrecurrence.log`, data-safety 193). GREEN = future routes closed.  
+1. **Historical incident never-flushed bytes** — not recoverable; **cannot recur** for new saves: flush dirty policy + Force Save magic verify + SIGKILL/dirty-restore tests PASS (`flush-nonrecurrence.log`, data-safety 193). GREEN = future routes closed.  
 2. Optional metal dual Mac+Windows kill-9 — harness covers.  
 3. Shared 429 can delay central confirm — local+outbox remain authoritative until ack.  
 4. Ongoing `innerHTML` escape discipline.
