@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.111",
+      "date": "2026-10-04",
+      "latest": true,
+      "changes": [
+        "Updates and installers now come from a dedicated Custody Note releases download location — no action needed, automatic updates continue as normal",
+        "Release notes are now written in plain, customer-focused language"
+      ]
+    },
+    {
       "version": "1.9.110",
       "date": "2026-09-30",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Dependency and security maintenance updates",
         "Contact: support enquiry email now uses @defencelegalservices.co.uk (the old .com domain was unregistered)"

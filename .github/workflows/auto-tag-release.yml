@@ -1,6 +1,8 @@
 # When you push to main/master, create and push git tag v{package.json version} if it
-# does not exist on the remote yet. That triggers "Release and deploy" (tag push) which
-# builds the Windows installer and (optionally) syncs the marketing site.
+# does not exist on the remote yet, then dispatch "Release and deploy" on that tag.
+# Uses only the built-in GITHUB_TOKEN: tag pushes made with it do not trigger other
+# workflows, so the release workflow is started explicitly via workflow_dispatch
+# (which GITHUB_TOKEN is allowed to trigger). No PAT is needed.
 #
 # Flow: bump version + changelog on main → push → this workflow tags → release-publish runs.
 #
@@ -24,22 +26,20 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   tag:
     runs-on: ubuntu-latest
     steps:
-      # Use GH_PAT so the tag push can trigger "Release and deploy".
-      # Default GITHUB_TOKEN pushes do not start other workflows.
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Create and push release tag when missing
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
           VERSION=$(node -p "require('./package.json').version")
@@ -53,4 +53,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${TAG}" -m "Release ${TAG}"
           git push origin "${TAG}"
-          echo "Pushed ${TAG} — Release and deploy workflow should start."
+          echo "Pushed ${TAG}; dispatching Release and deploy on it."
+          gh workflow run "Release and deploy" --repo "${{ github.repository }}" --ref "${TAG}"
