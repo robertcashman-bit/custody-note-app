@@ -90,7 +90,7 @@ describe('Durable pendingSync / honest Saved to disk vs Synced', () => {
     assert.strictEqual(log.tag, 'SAVE');
     assert.strictEqual(log.durable, true);
     assert.strictEqual(log.pendingSync, true);
-    assert.ok(!JSON.stringify(log).includes('[client]'));
+    assert.ok(!JSON.stringify(log).includes('surname'));
 
     const n = normalizeAttendanceSaveResult({
       id: 7,

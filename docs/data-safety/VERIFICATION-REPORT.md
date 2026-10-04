@@ -67,7 +67,7 @@ Renderer (app.js) ──IPC──► Main (main.js)
 | Packaged / force-quit | **CLOSED** (in-process equivalent) | SIGKILL + crash-before-rename + dirty restore |
 | Operator / monitors | **CLOSED** | `enforceMonitorFailClosed` + syncPull wiring |
 | Server sot-pitr / central SoT | **CLOSED** | Website PR #13: 192/192 + 35/35 SoT/PITR; `SERVER-PITR-VERIFICATION.md`; 503 `INCOMPLETE_SOT_READ`; `classifySyncInventoryResponse` |
-| [client] historical bytes | **NON-BLOCKING** | Never-flushed originals not recoverable; GREEN = **future** silent-loss routes closed |
+| Incident historical bytes | **NON-BLOCKING** | Never-flushed originals not recoverable; GREEN = **future** silent-loss routes closed |
 
 ---
 
@@ -94,7 +94,7 @@ Renderer (app.js) ──IPC──► Main (main.js)
 
 ## NON-BLOCKING residuals only
 
-1. **Historical [client] never-flushed bytes** — not resurrectable; class prevented going forward.  
+1. **Historical incident never-flushed bytes** — not resurrectable; class prevented going forward.  
 2. **Dual physical Mac+Windows kill-9 on metal** — in-process SIGKILL + durability harness covers the durability claim; optional ops validation.
 
 ---
