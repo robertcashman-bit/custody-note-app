@@ -145,6 +145,7 @@ const {
   isSyncStatusHealthy,
 } = require('./lib/syncRecoveryHints');
 const { normalizeLicenceKeyForSync } = require('./lib/licenceKeyNormalize');
+const { extractRetryAfter } = require('./lib/syncPushAck');
 const { buildLocalCloudHealth, buildEmergencyRecordIndex } = require('./lib/syncHealth');
 const { buildAttendanceSaveLog } = require('./lib/attendanceSaveResult');
 const {
@@ -5895,9 +5896,15 @@ function httpPost(url, body, opts) {
       res.on('end', () => {
         if (res.statusCode >= 400) {
           let errMsg = 'Server error ' + res.statusCode;
-          try { const j = JSON.parse(data); if (j.error) errMsg = j.error; } catch (_) {}
+          let errBody = null;
+          try { errBody = JSON.parse(data); if (errBody && errBody.error) errMsg = errBody.error; } catch (_) {}
           const err = new Error(errMsg);
           err.statusCode = res.statusCode;
+          // Honour server back-off (Retry-After header or JSON retryAfterSeconds)
+          // so the sync rate-limit gate waits exactly as long as the server asks;
+          // the 5-minute fallback applies only when neither is present.
+          const retryAfter = extractRetryAfter(res.headers && res.headers['retry-after'], errBody);
+          if (retryAfter != null) err.retryAfter = retryAfter;
           return done(reject, err);
         }
         if (res.statusCode === 204 || res.statusCode === 205 || !String(data || '').trim()) {
