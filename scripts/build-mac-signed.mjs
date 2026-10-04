@@ -359,8 +359,11 @@ try {
   const buildOpts = {
     targets: Platform.MAC.createTarget(),
     config,
+    // Explicit "never": otherwise electron-builder implicitly publishes on a CI tag
+    // (or CI draft) to build.publish (custody-note-releases), which the app repo's
+    // GITHUB_TOKEN cannot write (403). Assess first, then upload below.
+    publish: 'never',
   };
-  // Never pass publish here — assess first, then upload below.
   artefacts = await build(buildOpts);
 } catch (e) {
   fail(`electron-builder failed: ${e && e.message ? e.message : String(e)}`);
