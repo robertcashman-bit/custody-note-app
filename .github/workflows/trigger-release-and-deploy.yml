@@ -29,11 +29,11 @@ jobs:
 
       - name: Dispatch Release and deploy for package.json version tag
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN}" ]; then
-            echo "::error::Set GH_PAT in custody-note-app Actions secrets."
+            echo "::error::GITHUB_TOKEN unavailable."
             exit 1
           fi
           VERSION=$(node -p "require('./package.json').version")
