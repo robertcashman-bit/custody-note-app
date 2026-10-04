@@ -8,7 +8,7 @@ const {
   applyOnlineValidationResult,
 } = require('../main/licenceValidationPolicy');
 
-const ADMIN = 'robertdavidcashman@gmail.com';
+const ADMIN = 'owner@example.com';
 const ADMINS = [ADMIN];
 
 describe('licenceValidationPolicy', () => {

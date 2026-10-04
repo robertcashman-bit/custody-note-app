@@ -4,15 +4,25 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const {
   BUILTIN_ADMIN_EMAILS,
+  emailHash,
   resolveAdminEmails,
   isAdminEmail,
   isSyntheticLocalLicenceKey,
 } = require('../main/licenceAdminEmails');
 
 describe('licenceAdminEmails', () => {
-  it('includes product-owner built-in emails', () => {
-    assert.ok(BUILTIN_ADMIN_EMAILS.includes('robertdavidcashman@gmail.com'));
-    assert.ok(BUILTIN_ADMIN_EMAILS.includes('nerijus83@gmail.com'));
+  it('stores built-in admin emails only as hashes (no personal emails in source)', () => {
+    assert.ok(BUILTIN_ADMIN_EMAILS.length >= 1);
+    for (const e of BUILTIN_ADMIN_EMAILS) {
+      assert.match(e, /^sha256:[0-9a-f]{64}$/);
+      assert.ok(!e.includes('@'));
+    }
+  });
+
+  it('isAdminEmail matches hashed entries case-insensitively', () => {
+    const list = [emailHash('owner@example.com')];
+    assert.equal(isAdminEmail('Owner@Example.com', list), true);
+    assert.equal(isAdminEmail('other@example.com', list), false);
   });
 
   it('falls back to built-in list when env and config are empty', () => {
@@ -39,8 +49,8 @@ describe('licenceAdminEmails', () => {
   });
 
   it('isAdminEmail matches case-insensitively', () => {
-    const list = ['robertdavidcashman@gmail.com'];
-    assert.equal(isAdminEmail('RobertDavidCashman@gmail.com', list), true);
+    const list = ['owner@example.com'];
+    assert.equal(isAdminEmail('Owner@Example.com', list), true);
     assert.equal(isAdminEmail('other@example.com', list), false);
     assert.equal(isAdminEmail('', list), false);
   });

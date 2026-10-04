@@ -116,7 +116,7 @@ describe('computeLicenceStatus freemium free during beta', () => {
 });
 
 describe('computeLicenceStatus admin never revoked', () => {
-  const adminEmail = 'robertdavidcashman@gmail.com';
+  const adminEmail = 'owner@example.com';
   const adminOpts = { adminEmails: [adminEmail] };
 
   it('treats admin as active even when stored status is revoked', () => {
