@@ -5471,12 +5471,23 @@ function getAnalyticsLicenceTier() {
 }
 
 function buildTrialStartedPayload() {
-  return usageHeartbeat.buildHeartbeatPayload({
-    machineId: getMachineId(),
-    platform: process.platform,
-    appVersion: app.getVersion(),
-    tier: isFreeTierEnabled() ? 'free' : 'trial',
-  });
+  return usageHeartbeat.buildHeartbeatPayload(
+    {
+      machineId: getMachineId(),
+      platform: process.platform,
+      appVersion: app.getVersion(),
+      tier: isFreeTierEnabled() ? 'free' : 'trial',
+    },
+    {
+      platform: process.platform,
+      windowsStore: !!process.windowsStore,
+      mas: !!process.mas,
+      execPath: process.execPath,
+      isPackaged: app.isPackaged,
+      isMsixStore: IS_MSIX_STORE_BUILD,
+      distributionChannel: WINDOWS_PACKAGE_CHANNEL,
+    }
+  );
 }
 
 /** Ensure local FREE/TRIAL licences keep trialStartedPending until stats ack (not sent on write). */
