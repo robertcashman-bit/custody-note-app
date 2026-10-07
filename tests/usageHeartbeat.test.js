@@ -12,8 +12,10 @@ const {
   HEARTBEAT_STATE_FILE,
   TRIAL_STARTED_STATE_FILE,
   ALLOWED_PAYLOAD_KEYS,
+  ALLOWED_INSTALL_SOURCES,
   shouldSendHeartbeat,
   buildHeartbeatPayload,
+  resolveInstallSource,
   resolveAnalyticsTier,
   payloadIsPrivacySafe,
   readLastHeartbeatAt,
@@ -58,24 +60,60 @@ describe('usageHeartbeat gate', () => {
   });
 });
 
+describe('resolveInstallSource', () => {
+  it('maps Windows Store / MSIX to store and NSIS to direct', () => {
+    assert.equal(resolveInstallSource({ platform: 'win32', windowsStore: true }), 'store');
+    assert.equal(resolveInstallSource({ platform: 'win32', isMsixStore: true }), 'store');
+    assert.equal(
+      resolveInstallSource({
+        platform: 'win32',
+        execPath: 'C:\\Program Files\\WindowsApps\\CustodyNote\\app\\Custody Note.exe',
+      }),
+      'store'
+    );
+    assert.equal(resolveInstallSource({ platform: 'win32', windowsStore: false }), 'direct');
+    assert.equal(
+      resolveInstallSource({
+        platform: 'win32',
+        execPath: 'C:\\Users\\me\\AppData\\Local\\Programs\\custody-note\\Custody Note.exe',
+      }),
+      'direct'
+    );
+  });
+
+  it('maps macOS to dmg or mas', () => {
+    assert.equal(resolveInstallSource({ platform: 'darwin', mas: false }), 'dmg');
+    assert.equal(resolveInstallSource({ platform: 'darwin', mas: true }), 'mas');
+  });
+
+  it('returns unknown for other platforms', () => {
+    assert.equal(resolveInstallSource({ platform: 'linux' }), 'unknown');
+  });
+});
+
 describe('usageHeartbeat payload', () => {
-  it('builds only machineId, platform, appVersion, tier', () => {
+  it('builds machineId, platform, appVersion, tier, and installSource', () => {
     const machineId = crypto.createHash('sha256').update('host|linux|x64|cpu|mem').digest('hex').slice(0, 32);
-    const payload = buildHeartbeatPayload({
-      machineId,
-      platform: 'linux',
-      appVersion: '1.9.80',
-      tier: 'pro',
-      email: 'should-not-appear@example.com',
-      ufn: 'UFN123',
-      licenceKey: 'CN-AAAA-BBBB-CCCC-DDDD',
-      clientName: 'Secret Client',
-    });
+    const payload = buildHeartbeatPayload(
+      {
+        machineId,
+        platform: 'linux',
+        appVersion: '1.9.80',
+        tier: 'pro',
+        email: 'should-not-appear@example.com',
+        ufn: 'UFN123',
+        licenceKey: 'CN-AAAA-BBBB-CCCC-DDDD',
+        clientName: 'Secret Client',
+      },
+      { platform: 'linux' }
+    );
     assert.deepEqual(Object.keys(payload).sort(), [...ALLOWED_PAYLOAD_KEYS].sort());
     assert.equal(payload.machineId, machineId);
     assert.equal(payload.platform, 'linux');
     assert.equal(payload.appVersion, '1.9.80');
     assert.equal(payload.tier, 'pro');
+    assert.equal(payload.installSource, 'unknown');
+    assert.ok(ALLOWED_INSTALL_SOURCES.includes(payload.installSource));
     assert.equal(payload.email, undefined);
     assert.equal(payload.ufn, undefined);
     assert.equal(payload.licenceKey, undefined);
@@ -93,12 +131,16 @@ describe('usageHeartbeat payload', () => {
     assert.equal(payloadIsPrivacySafe(bad), false);
 
     const goodId = 'a'.repeat(32);
-    const good = buildHeartbeatPayload({
-      machineId: goodId,
-      platform: 'darwin',
-      appVersion: '1.9.80',
-      tier: 'free',
-    });
+    const good = buildHeartbeatPayload(
+      {
+        machineId: goodId,
+        platform: 'darwin',
+        appVersion: '1.9.80',
+        tier: 'free',
+        installSource: 'dmg',
+      },
+      { platform: 'darwin' }
+    );
     assert.equal(payloadIsPrivacySafe(good), true);
   });
 
@@ -184,7 +226,13 @@ describe('postStatsWithRetry', () => {
         return {};
       },
       url: 'https://custodynote.com/api/stats/heartbeat',
-      body: { machineId: 'c'.repeat(32), platform: 'win32', appVersion: '1.0.0', tier: 'free' },
+      body: {
+        machineId: 'c'.repeat(32),
+        platform: 'win32',
+        appVersion: '1.0.0',
+        tier: 'free',
+        installSource: 'direct',
+      },
       retryDelaysMs: [0, 0],
       onSuccess: () => {
         stamped = true;
