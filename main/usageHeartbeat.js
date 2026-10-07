@@ -2,7 +2,7 @@
 
 /**
  * Privacy-safe daily usage heartbeat helpers.
- * Payload is limited to hashed machineId, platform, appVersion, and licence tier.
+ * Payload is limited to hashed machineId, platform, appVersion, licence tier, and install channel.
  * Never includes case content, client names, UFNs, notes, emails, or licence keys.
  */
 
@@ -14,7 +14,16 @@ const HEARTBEAT_STATE_FILE = 'cn-usage-heartbeat.json';
 const TRIAL_STARTED_STATE_FILE = 'cn-trial-started-sent.json';
 const HEARTBEAT_POST_TIMEOUT_MS = 8000;
 const HEARTBEAT_RETRY_DELAYS_MS = Object.freeze([5000, 30_000, 120_000]);
-const ALLOWED_PAYLOAD_KEYS = Object.freeze(['machineId', 'platform', 'appVersion', 'tier']);
+const ALLOWED_PAYLOAD_KEYS = Object.freeze([
+  'machineId',
+  'platform',
+  'appVersion',
+  'tier',
+  'installSource',
+]);
+const ALLOWED_INSTALL_SOURCES = Object.freeze(['store', 'direct', 'dmg', 'mas', 'unknown']);
+
+const { isWindowsStoreBuild } = require('../lib/isWindowsStoreBuild');
 const ALLOWED_TIERS = Object.freeze(['free', 'pro', 'trial', 'none']);
 const MACHINE_ID_HEX_RE = /^[a-f0-9]{32}$/;
 const CLOUD_BACKUP_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -50,18 +59,77 @@ function shouldSendHeartbeat(lastHeartbeatAt, nowMs) {
 }
 
 /**
- * @param {{ machineId: string, platform: string, appVersion: string, tier: string }} fields
- * @returns {{ machineId: string, platform: string, appVersion: string, tier: string }}
+ * How the packaged app was installed (anonymous channel label for stats).
+ *
+ * @param {{
+ *   platform?: string,
+ *   windowsStore?: boolean,
+ *   mas?: boolean,
+ *   execPath?: string,
+ *   isPackaged?: boolean,
+ *   isMsixStore?: boolean,
+ *   distributionChannel?: string,
+ * }} [opts]
+ * @returns {'store'|'direct'|'dmg'|'mas'|'unknown'}
  */
-function buildHeartbeatPayload(fields) {
+function resolveInstallSource(opts) {
+  const o = opts && typeof opts === 'object' ? opts : {};
+  const platform = o.platform != null ? o.platform : process.platform;
+
+  if (platform === 'win32') {
+    if (
+      o.isMsixStore === true ||
+      isWindowsStoreBuild({
+        platform,
+        windowsStore: o.windowsStore,
+        distributionChannel: o.distributionChannel,
+        execPath: o.execPath,
+        isPackaged: o.isPackaged,
+      })
+    ) {
+      return 'store';
+    }
+    return 'direct';
+  }
+
+  if (platform === 'darwin') {
+    const mas =
+      o.mas != null ? !!o.mas : !!(typeof process !== 'undefined' && process.mas);
+    if (mas) return 'mas';
+    return 'dmg';
+  }
+
+  return 'unknown';
+}
+
+/**
+ * @param {string} raw
+ * @returns {'store'|'direct'|'dmg'|'mas'|'unknown'}
+ */
+function coerceInstallSource(raw) {
+  const s = String(raw || '').trim().toLowerCase();
+  return ALLOWED_INSTALL_SOURCES.includes(s) ? s : 'unknown';
+}
+
+/**
+ * @param {{ machineId: string, platform: string, appVersion: string, tier: string, installSource?: string }} fields
+ * @param {object} [installEnv] passed to resolveInstallSource when installSource is omitted
+ * @returns {{ machineId: string, platform: string, appVersion: string, tier: string, installSource: string }}
+ */
+function buildHeartbeatPayload(fields, installEnv) {
   const src = fields && typeof fields === 'object' ? fields : {};
   const tierRaw = String(src.tier || 'none');
   const tier = ALLOWED_TIERS.includes(tierRaw) ? tierRaw : 'none';
+  const installSource =
+    src.installSource != null && src.installSource !== ''
+      ? coerceInstallSource(src.installSource)
+      : resolveInstallSource(installEnv);
   return {
     machineId: String(src.machineId || ''),
     platform: String(src.platform || ''),
     appVersion: String(src.appVersion || ''),
     tier,
+    installSource,
   };
 }
 
@@ -102,6 +170,7 @@ function payloadIsPrivacySafe(payload) {
   }
   if (!MACHINE_ID_HEX_RE.test(String(payload.machineId || ''))) return false;
   if (!ALLOWED_TIERS.includes(String(payload.tier || ''))) return false;
+  if (!ALLOWED_INSTALL_SOURCES.includes(String(payload.installSource || ''))) return false;
   const blob = JSON.stringify(payload).toLowerCase();
   // Refuse obvious PII / case fields if they ever leak into values.
   if (
@@ -265,10 +334,13 @@ module.exports = {
   HEARTBEAT_POST_TIMEOUT_MS,
   HEARTBEAT_RETRY_DELAYS_MS,
   ALLOWED_PAYLOAD_KEYS,
+  ALLOWED_INSTALL_SOURCES,
   ALLOWED_TIERS,
   MACHINE_ID_HEX_RE,
   shouldSendHeartbeat,
   buildHeartbeatPayload,
+  resolveInstallSource,
+  coerceInstallSource,
   resolveAnalyticsTier,
   payloadIsPrivacySafe,
   readLastHeartbeatAt,

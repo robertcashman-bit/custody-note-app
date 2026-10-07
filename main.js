@@ -5565,12 +5565,23 @@ function reportUsageHeartbeatToServer() {
   if (!usageHeartbeat.shouldSendHeartbeat(lastAt)) return;
   if (_usageHeartbeatSendInFlight) return;
 
-  const payload = usageHeartbeat.buildHeartbeatPayload({
-    machineId: getMachineId(),
-    platform: process.platform,
-    appVersion: app.getVersion(),
-    tier: getAnalyticsLicenceTier(),
-  });
+  const payload = usageHeartbeat.buildHeartbeatPayload(
+    {
+      machineId: getMachineId(),
+      platform: process.platform,
+      appVersion: app.getVersion(),
+      tier: getAnalyticsLicenceTier(),
+    },
+    {
+      platform: process.platform,
+      windowsStore: !!process.windowsStore,
+      mas: !!process.mas,
+      execPath: process.execPath,
+      isPackaged: app.isPackaged,
+      isMsixStore: IS_MSIX_STORE_BUILD,
+      distributionChannel: WINDOWS_PACKAGE_CHANNEL,
+    }
+  );
   if (!usageHeartbeat.payloadIsPrivacySafe(payload)) return;
 
   _usageHeartbeatSendInFlight = true;

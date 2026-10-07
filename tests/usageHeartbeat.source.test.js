@@ -22,8 +22,10 @@ describe('usage heartbeat wiring (source)', () => {
     assert.match(mainJs, /function reportUsageHeartbeatToServer/);
     const fnStart = mainJs.indexOf('function reportUsageHeartbeatToServer');
     assert.ok(fnStart > 0);
-    const fnBody = mainJs.slice(fnStart, fnStart + 2200);
+    const fnBody = mainJs.slice(fnStart, fnStart + 2800);
     assert.match(fnBody, /app\.isPackaged/);
+    assert.match(fnBody, /IS_MSIX_STORE_BUILD/);
+    assert.match(fnBody, /buildHeartbeatPayload/);
     assert.match(fnBody, /postStatsWithRetry/);
     assert.match(fnBody, /getStatsNetPost\(\)/);
     assert.match(fnBody, /onSuccess:/);
@@ -64,6 +66,7 @@ describe('usage heartbeat wiring (source)', () => {
     assert.match(analyticsMd, /usage_heartbeat/);
     assert.match(analyticsMd, /\/api\/stats\/heartbeat/);
     assert.match(analyticsMd, /machineId/);
+    assert.match(analyticsMd, /installSource/);
     assert.match(analyticsMd, /unique machines/i);
     assert.match(analyticsMd, /Do \*\*not\*\* reuse `trial-started`/);
   });
