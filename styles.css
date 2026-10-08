@@ -647,7 +647,6 @@ body.form-active .app-footer { display: none; }
 }
 
 /* Phase 3: Calm header — hide secondary buttons when editing, show only autosave + gear */
-body.form-active #header-backup-now-btn,
 body.form-active #header-kb-help,
 body.form-active #header-laa-forms,
 body.form-active #header-sections-idx {
@@ -1810,6 +1809,46 @@ html:not(.dark) #view-list .list-sort-select option {
 }
 .autosave-indicator.visible { opacity: 1; }
 #footer-autosave { color: var(--accent-green); font-weight: 600; }
+
+/* Save & Sync — right end of the top bar, every screen. The button is the status. */
+.save-sync-btn {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0;
+  margin-left: 0.15rem;
+  padding: 0.28rem 0.7rem;
+  min-height: 2.1rem;
+  max-width: 16rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.35);
+  background: #1d4ed8;
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.save-sync-btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.save-sync-btn[data-tone="unsaved"] { background: #b45309; border-color: #fbbf24; }
+.save-sync-btn[data-tone="saving"] { background: #334155; border-color: #94a3b8; }
+.save-sync-btn[data-tone="synced"] { background: #047857; border-color: #6ee7b7; }
+.save-sync-btn[data-tone="pending"] { background: #1d4ed8; border-color: #93c5fd; }
+.save-sync-btn[data-tone="local"] { background: #0f766e; border-color: #99f6e4; }
+.save-sync-btn[data-tone="failed"] { background: #b91c1c; border-color: #fecaca; }
+.save-sync-btn .save-sync-hint {
+  font-size: 0.65rem;
+  font-weight: 600;
+  opacity: 0.92;
+}
+.save-sync-btn[aria-busy="true"] { cursor: progress; }
 
 .settings-saved-toast {
   font-size: 0.78rem; color: var(--accent-green); font-weight: 600;

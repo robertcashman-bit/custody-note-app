@@ -237,11 +237,21 @@ const {
 const {
   applyFreeSyncSubscription,
   subscriptionIsFreeSync,
+  applyStoredServerTier,
   deviceRevokedUserMessage,
   isDeviceRevokedHttpError,
+  isDeviceNotActivatedHttpError,
   isFreeQuotaHttpError,
 } = require('./lib/syncAccountState');
-const { bootstrapSyncAfterSignIn } = require('./lib/signedInSyncBootstrap');
+const { bootstrapSyncAfterSignIn, shouldRunFirstSignInMerge } = require('./lib/signedInSyncBootstrap');
+const {
+  mergeAttendanceRecords,
+  writeMergedAttendance,
+  markConflictsAutoMerged,
+  planDuplicateCollapse,
+  stampFieldUpdatedAt,
+  QUIET_MERGED_MESSAGE,
+} = require('./lib/syncFieldMerge');
 const {
   shouldSkipOnlineValidation,
   applyOnlineValidationResult,
@@ -3409,6 +3419,100 @@ function getLastPullStats() {
   return { ..._lastPullStats };
 }
 
+function ensureSyncMergeBaseTable() {
+  if (!db) return;
+  try {
+    db.run(`CREATE TABLE IF NOT EXISTS sync_merge_base (
+      attendance_id INTEGER PRIMARY KEY,
+      sync_id TEXT,
+      snapshot TEXT,
+      saved_at TEXT
+    )`);
+  } catch (_) {}
+}
+
+function readSyncMergeBase(attendanceId) {
+  if (!db || attendanceId == null) return null;
+  ensureSyncMergeBaseTable();
+  try {
+    const row = dbGet('SELECT snapshot FROM sync_merge_base WHERE attendance_id=?', [attendanceId]);
+    if (!row || !row.snapshot) return null;
+    const parsed = JSON.parse(row.snapshot);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveSyncMergeBase(attendanceId, syncId, snapshot) {
+  if (!db || attendanceId == null || !snapshot) return;
+  ensureSyncMergeBaseTable();
+  try {
+    dbRun(
+      'INSERT OR REPLACE INTO sync_merge_base (attendance_id, sync_id, snapshot, saved_at) VALUES (?,?,?,?)',
+      [attendanceId, syncId || null, JSON.stringify(snapshot), new Date().toISOString()]
+    );
+  } catch (_) {}
+}
+
+function saveSyncMergeBaseFromRow(attendanceId, syncId) {
+  const row = dbGet('SELECT * FROM attendances WHERE id=?', [attendanceId]);
+  if (!row) return;
+  saveSyncMergeBase(attendanceId, syncId || row.sync_id, {
+    data: row.data,
+    status: row.status,
+    clientName: row.client_name,
+    stationName: row.station_name,
+    dsccRef: row.dscc_ref,
+    attendanceDate: row.attendance_date,
+    supervisorApprovedAt: row.supervisor_approved_at,
+    supervisorNote: row.supervisor_note,
+    archivedAt: row.archived_at,
+    deletedAt: row.deleted_at,
+    deletionReason: row.deletion_reason,
+    updatedAt: row.updated_at,
+    version: row.sync_version,
+  });
+}
+
+function captureMergeBaseIfClean(attendanceId) {
+  if (!db || attendanceId == null) return;
+  const row = dbGet('SELECT sync_dirty FROM attendances WHERE id=?', [attendanceId]);
+  if (!row || row.sync_dirty === 1) return;
+  saveSyncMergeBaseFromRow(attendanceId);
+}
+
+/** Fold same-sync_id copies into the oldest row. Does not enqueue a delete. */
+function collapseDuplicateAttendanceSyncId(syncId) {
+  if (!db || !syncId) return;
+  const rows = dbAll('SELECT * FROM attendances WHERE sync_id=? ORDER BY id ASC', [syncId]) || [];
+  if (rows.length < 2) return;
+  const plan = planDuplicateCollapse(rows);
+  const keeper = plan.keeper;
+  if (!keeper || keeper.id == null) return;
+  writeMergedAttendance({ dbRun }, keeper.id, {
+    ok: true,
+    unchanged: false,
+    dataJson: typeof keeper.data === 'string' ? keeper.data : JSON.stringify(keeper.data || {}),
+    status: keeper.status || 'draft',
+    clientName: keeper.clientName || keeper.client_name || '',
+    stationName: keeper.stationName || keeper.station_name || '',
+    dsccRef: keeper.dsccRef || keeper.dscc_ref || '',
+    attendanceDate: keeper.attendanceDate || keeper.attendance_date || '',
+    supervisorApprovedAt: keeper.supervisorApprovedAt || keeper.supervisor_approved_at || null,
+    supervisorNote: keeper.supervisorNote || keeper.supervisor_note || '',
+    archivedAt: keeper.archivedAt || keeper.archived_at || null,
+    deletedAt: keeper.deletedAt || keeper.deleted_at || null,
+    deletionReason: keeper.deletionReason || keeper.deletion_reason || null,
+    updatedAt: keeper.updatedAt || keeper.updated_at || new Date().toISOString(),
+    syncDirty: keeper.sync_dirty ? 1 : 0,
+    version: keeper.sync_version || 1,
+  });
+  for (let i = 0; i < plan.removeIds.length; i++) {
+    dbRun('DELETE FROM attendances WHERE id=?', [plan.removeIds[i]]);
+  }
+}
+
 async function syncPull(opts) {
   const apiUrl = getSyncApiUrl();
   if (!apiUrl) {
@@ -3451,6 +3555,7 @@ async function syncPull(opts) {
   };
 
   let merged = 0;
+  let autoMerged = 0;
   let conflicts = 0;
   let decryptFailed = 0;
   let noMasterKeySkipped = 0;
@@ -3492,6 +3597,15 @@ async function syncPull(opts) {
           pulled: merged,
           received: receivedCount,
           freeQuotaExceeded: true,
+          skipped: true,
+        };
+      }
+      if (isDeviceNotActivatedHttpError(pullErr)) {
+        logSyncAttempt(opts && opts.correlationId, 'pull', receivedCount, false, 'device_not_activated');
+        return {
+          pulled: merged,
+          received: receivedCount,
+          deviceNotActivated: true,
           skipped: true,
         };
       }
@@ -3571,6 +3685,7 @@ async function syncPull(opts) {
       }))
     );
     let batchMerged = 0;
+    let batchAutoMerged = 0;
     let batchConflicts = 0;
     let batchDecryptFailed = 0;
     let batchNoMasterKeySkipped = 0;
@@ -3624,7 +3739,8 @@ async function syncPull(opts) {
         archivedAt: payload.archivedAt || null,
         version: shell.version,
       };
-      const local = dbGet('SELECT id, sync_version, updated_at, sync_dirty, deletion_reason FROM attendances WHERE sync_id=?', [remote.syncId]);
+      collapseDuplicateAttendanceSyncId(remote.syncId);
+      const local = dbGet('SELECT * FROM attendances WHERE sync_id=?', [remote.syncId]);
 
       if (!local) {
         dbRun(
@@ -3645,16 +3761,10 @@ async function syncPull(opts) {
       const localVersion = local.sync_version || 1;
       const remoteVersion = remote.version || 1;
 
-      const revGate = detectRevisionGoingBackwards({
-        localVersion,
-        remoteVersion,
-        localDirty: local.sync_dirty === 1,
-        applyingRemote: remoteVersion < localVersion,
-      });
-      if (revGate.triggered) {
-        console.warn('[SYNC-PULL] Refusing revision-backwards apply for', remote.syncId);
-        recordSyncConflict(local.id, local, remote, 'revision_backwards');
-        batchConflicts++;
+      // A clean local copy that is already newer than this remote is left as-is.
+      // Dirty locals still field-merge so neither side's edits are dropped.
+      if (local.sync_dirty !== 1 && remoteVersion < localVersion) {
+        markConflictsAutoMerged({ dbRun }, local.id);
         continue;
       }
 
@@ -3672,9 +3782,7 @@ async function syncPull(opts) {
         }
       }
 
-      // Sticky post_bill_purge BEFORE status protection gates. Purged rows are
-      // status=completed; a newer remote draft/finalised body must not skip
-      // tombstone retention via protect_finalised (catch-up can force-accept those).
+      // Sticky post_bill_purge: a legal content wipe is not restored by an older edit.
       if (shouldKeepLocalPostBillPurgeTombstone(local.deletion_reason, remote.deletionReason)) {
         console.warn('[SYNC-PULL] Sticky post_bill_purge tombstone retained for', remote.syncId);
         try {
@@ -3689,61 +3797,37 @@ async function syncPull(opts) {
         continue;
       }
 
-      const localStatus = (() => {
-        const s = dbGet('SELECT status FROM attendances WHERE id=?', [local.id]);
-        return s ? s.status : null;
-      })();
-      if (localStatus === 'finalised' && remote.status !== 'finalised') {
-        console.log('[SYNC-PULL] BLOCKED: refusing to overwrite finalised record id=' + local.id +
-          ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
-        recordSyncConflict(local.id, local, remote, 'protect_finalised');
-        batchConflicts++;
-        continue;
-      }
-      if (localStatus === 'completed' && remote.status !== 'completed') {
-        console.log('[SYNC-PULL] BLOCKED: refusing to overwrite office-completed record id=' + local.id +
-          ' with remote status=' + remote.status + ' (remote v' + remoteVersion + ', local v' + localVersion + ')');
-        recordSyncConflict(local.id, local, remote, 'protect_finalised');
-        batchConflicts++;
-        continue;
-      }
-
-      const remoteNewer = remoteVersion > localVersion ||
-        (remoteVersion === localVersion && remote.updatedAt > (local.updated_at || ''));
-
-      if (remoteNewer) {
-        if (local.sync_dirty === 1) {
-          recordSyncConflict(local.id, local, remote, 'preserve_local_dirty');
-          batchConflicts++;
-          continue;
+      const base = local.sync_dirty === 1 ? readSyncMergeBase(local.id) : local;
+      const mergedResult = mergeAttendanceRecords({
+        base: local.sync_dirty === 1 ? base : local,
+        local: local,
+        remote: remote,
+      });
+      markConflictsAutoMerged({ dbRun }, local.id);
+      if (!mergedResult.unchanged) {
+        writeMergedAttendance({ dbRun }, local.id, mergedResult);
+        if (mergedResult.syncDirty) {
+          enqueueSyncForRecord(local.id, 'upsert');
+        } else {
+          saveSyncMergeBaseFromRow(local.id, remote.syncId);
         }
-        clearOpenSyncConflicts(local.id, 'remote_applied');
-        dbRun(
-          `UPDATE attendances SET data=?, status=?, updated_at=?, deleted_at=?, deletion_reason=?,
-         client_name=?, station_name=?, dscc_ref=?, attendance_date=?,
-         supervisor_approved_at=?, supervisor_note=?, archived_at=?, sync_dirty=0, sync_version=?
-         WHERE id=?`,
-          [remote.data, remote.status, remote.updatedAt,
-           remote.deletedAt || null, remote.deletionReason || null,
-           remote.clientName || '', remote.stationName || '', remote.dsccRef || '', remote.attendanceDate || '',
-           remote.supervisorApprovedAt || null, remote.supervisorNote || '', remote.archivedAt || null,
-           remoteVersion, local.id]
-        );
         try {
           appendRecordRevision({ dbRun, dbGet, dbAll }, {
             id: local.id,
             sync_id: remote.syncId,
-            sync_version: remoteVersion,
-            status: remote.status,
-            data: remote.data,
-            deleted_at: remote.deletedAt || null,
+            sync_version: mergedResult.version,
+            status: mergedResult.status,
+            data: mergedResult.dataJson || JSON.stringify(mergedResult.data || {}),
+            deleted_at: mergedResult.deletedAt || null,
           }, { source: 'remote_pull' });
         } catch (_) {}
         batchMerged++;
+        if (mergedResult.quietMessage) batchAutoMerged++;
       }
     }
 
     merged += batchMerged;
+    autoMerged += batchAutoMerged;
     conflicts += batchConflicts;
     decryptFailed += batchDecryptFailed;
     noMasterKeySkipped += batchNoMasterKeySkipped;
@@ -3818,6 +3902,8 @@ async function syncPull(opts) {
   return {
     pulled: merged,
     conflicts,
+    autoMerged,
+    quietMessage: autoMerged > 0 ? QUIET_MERGED_MESSAGE : null,
     received: receivedCount,
     decryptFailed,
     noMasterKeySkipped,
@@ -3921,6 +4007,7 @@ function getSyncWorker() {
       httpGetWithTimeout,
       syncPull: () => syncPull({ correlationId: generateCorrelationId() }),
       ensureCanonicalKey: () => ensureCanonicalSyncKeyNow(),
+      activateDeviceForSync: () => activateThisComputerForSync(),
       logSyncAttempt,
       persistSyncCycle,
       maybeEmptyCloudAutoHeal,
@@ -3990,24 +4077,36 @@ function enqueueAllLocalAttendancesForSync() {
  */
 async function bootstrapSyncAfterSignInNow() {
   if (!db) return { ok: false, error: 'Database not ready' };
-  _suppressSyncSchedule += 1;
-  try {
-    return await bootstrapSyncAfterSignIn({
-      countLocalAttendances: () => {
-        const row = dbGet('SELECT COUNT(*) as c FROM attendances');
-        return row ? row.c : 0;
-      },
-      ensureCanonicalSyncKey: () => ensureCanonicalSyncKeyNow(),
-      enqueueAllLocalAttendances: () => enqueueAllLocalAttendancesForSync(),
-      pullAndMerge: () => syncPull({ correlationId: generateCorrelationId() }),
-      pushPending: () => {
-        scheduleSyncSoon({ immediate: true });
-      },
-      fullResyncFromCloud: () => runFullSyncFromCloud(),
-    });
-  } finally {
-    _suppressSyncSchedule -= 1;
-  }
+  const run = async () => {
+    _suppressSyncSchedule += 1;
+    try {
+      return await bootstrapSyncAfterSignIn({
+        countLocalAttendances: () => {
+          const row = dbGet('SELECT COUNT(*) as c FROM attendances');
+          return row ? row.c : 0;
+        },
+        ensureCanonicalSyncKey: () => ensureCanonicalSyncKeyNow(),
+        enqueueAllLocalAttendances: () => enqueueAllLocalAttendancesForSync(),
+        pullAndMerge: async () => {
+          let pull = await syncPull({ correlationId: generateCorrelationId() });
+          if (pull && pull.deviceNotActivated) {
+            await activateThisComputerForSync();
+            pull = await syncPull({ correlationId: generateCorrelationId() });
+          }
+          return pull;
+        },
+        pushPending: () => {
+          scheduleSyncSoon({ immediate: true });
+        },
+        fullResyncFromCloud: () => runFullSyncFromCloud(),
+      });
+    } finally {
+      _suppressSyncSchedule -= 1;
+    }
+  };
+  const w = getSyncWorker();
+  if (w && typeof w.runExclusive === 'function') return w.runExclusive(run, 90000);
+  return run();
 }
 
 function startSyncTimer() {
@@ -6166,6 +6265,8 @@ async function validateLicenceOnline(key, machineId, opts) {
       cloudBackup: !!resp.cloudBackup,
       deviceRevoked: !!(resp && resp.deviceRevoked),
       deviceRevokedBy: (resp && resp.deviceRevokedBy) || null,
+      tier: (resp && (resp.tier || (resp.subscription && resp.subscription.tier))) || null,
+      plan: (resp && (resp.plan || (resp.subscription && resp.subscription.plan))) || null,
     };
   } catch (e) {
     return { valid: null, offline: true, message: 'Could not reach validation server: ' + e.message, serverStatus: null };
@@ -6264,6 +6365,29 @@ ipcMain.handle('licence:status', () => {
   return result;
 });
 
+async function activateThisComputerForSync() {
+  const data = readLicenceData();
+  if (!data || !data.key || isSyntheticLocalLicenceKey(data.key)) {
+    return { ok: false, reason: 'synthetic_or_missing' };
+  }
+  const result = await validateLicenceOnline(String(data.key), getMachineId(), { intent: 'activate' });
+  applyStoredServerTier(data, result);
+  stampDeviceRevokeFromValidate(data, result);
+  if (result && result.valid === true) {
+    data.lastValidated = new Date().toISOString();
+    data.status = result.serverStatus || data.status || 'active';
+    if (result.expiresAt) data.expiresAt = result.expiresAt;
+    if (result.email) data.email = result.email;
+    if (result.entitlements !== undefined && data.tier !== 'free') data.entitlements = result.entitlements;
+  }
+  writeLicenceData(data);
+  return {
+    ok: !!(result && result.valid === true),
+    valid: result ? result.valid : null,
+    offline: !!(result && result.offline),
+  };
+}
+
 ipcMain.handle('licence:activate', async (_, { key, email }) => {
   const { mapLicenceActivateFailure } = require('./main/licenceActivateResult');
   // Same trim+uppercase as sync / escrow — preserve CN-ADMIN hyphens (never strip dashes).
@@ -6273,7 +6397,7 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
   }
   const machineId = getMachineId();
   const previous = readLicenceData();
-  const wasSynthetic = !previous || !previous.key || isSyntheticLocalLicenceKey(previous.key);
+  const previousKey = previous && previous.key ? previous.key : '';
   const result = await validateLicenceOnline(normalizedKey, machineId, { intent: 'activate' });
   if (result && result.deviceRevoked) {
     return {
@@ -6297,16 +6421,21 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     isTrial: result.isTrial === true,
     entitlements: result.entitlements || null,
   };
+  applyStoredServerTier(data, result);
+  if (!data.tier && result.isTrial === true) {
+    data.tier = 'trial';
+    data.isTrial = true;
+  }
   delete data.deviceRevoked;
   delete data.deviceRevokedBy;
   writeLicenceData(data);
   try {
     const w = getSyncWorker();
     if (w && typeof w.notifyAuthRecovered === 'function') {
-      w.notifyAuthRecovered(wasSynthetic ? { schedule: false } : undefined);
+      w.notifyAuthRecovered(shouldRunFirstSignInMerge(previousKey, normalizedKey) ? { schedule: false } : undefined);
     }
   } catch (_) {}
-  if (wasSynthetic) {
+  if (shouldRunFirstSignInMerge(previousKey, normalizedKey)) {
     await bootstrapSyncAfterSignInNow().catch((e) => {
       console.warn('[Sync] Sign-in bootstrap after activate failed:', e && e.message ? e.message : e);
     });
@@ -6494,6 +6623,7 @@ ipcMain.handle('auth:poll', async (_, { pollId }) => {
       });
       data.email = resp.user?.email || '';
       data.accountId = resp.user?.id || data.accountId || '';
+      const previousKey = data.key || '';
       if (resp.subscription && resp.subscription.licenceKey) {
         data.key = resp.subscription.licenceKey;
         data.status = resp.subscription.status || 'active';
@@ -6518,14 +6648,22 @@ ipcMain.handle('auth:poll', async (_, { pollId }) => {
       delete data.deviceRevokedBy;
       data.lastValidated = new Date().toISOString();
       writeLicenceData(data);
+      // Explicit sign-in: register this computer before the first sync so
+      // recovery/pull/push are not 403 DEVICE_NOT_ACTIVATED.
+      if (data.key && !isSyntheticLocalLicenceKey(data.key)) {
+        await activateThisComputerForSync();
+      }
       try {
         const w = getSyncWorker();
         if (w && typeof w.notifyAuthRecovered === 'function') w.notifyAuthRecovered({ schedule: false });
       } catch (_) {}
-      // Existing local notes are enqueued and merged; an empty computer full-resyncs.
-      bootstrapSyncAfterSignInNow().catch((e) => {
-        console.warn('[Sync] First sign-in bootstrap failed:', e && e.message ? e.message : e);
-      });
+      if (shouldRunFirstSignInMerge(previousKey, data.key)) {
+        bootstrapSyncAfterSignInNow().catch((e) => {
+          console.warn('[Sync] First sign-in bootstrap failed:', e && e.message ? e.message : e);
+        });
+      } else {
+        scheduleSyncSoon({ immediate: true });
+      }
     }
     return resp;
   } catch (e) {
@@ -7804,6 +7942,10 @@ ipcMain.handle('attendance-save', (_, { id, data, status, unlock }) => {
   if (parsed.ourFileNumber != null && parsed.ourFileNumber !== '') {
     parsed.fileReference = String(parsed.ourFileNumber);
   }
+  if (id) captureMergeBaseIfClean(id);
+  const stamped = stampFieldUpdatedAt(id ? (dbGet('SELECT data FROM attendances WHERE id=?', [id]) || {}).data : null, parsed, now);
+  Object.keys(parsed).forEach((k) => { delete parsed[k]; });
+  Object.assign(parsed, stamped);
   const dataToSave = JSON.stringify(parsed);
 
   /* Extract indexed fields from parsed data */
@@ -8173,7 +8315,7 @@ ipcMain.handle('attendance-purge-after-billed', async (_event, params) => {
     try {
       const lic = readLicenceData();
       const apiUrl = getSyncApiUrl();
-      if (lic && lic.key && apiUrl) {
+      if (lic && lic.key && apiUrl && !isSyntheticLocalLicenceKey(lic.key)) {
         cloud.attempted = true;
         const body = buildCloudPurgeRequest({
           licenceKey: normalizeLicenceKeyForSync(lic.key),
@@ -8199,6 +8341,8 @@ ipcMain.handle('attendance-purge-after-billed', async (_event, params) => {
           cloud.ok = false;
           cloud.reason = code === 404 ? 'api_not_deployed' : (apiErr && apiErr.message ? String(apiErr.message).slice(0, 80) : 'api_error');
         }
+      } else if (lic && lic.key && isSyntheticLocalLicenceKey(lic.key)) {
+        cloud.reason = 'synthetic_local_key';
       } else {
         cloud.reason = 'no_licence_or_api';
       }
@@ -8637,7 +8781,12 @@ ipcMain.handle('persist-and-backup', async () => {
   let authRequired = false;
   let lastCentralSyncAt = null;
   let syncing = false;
+  let localOnly = false;
+  let pullOk = null;
+  let pullError = null;
   try {
+    const licNow = readLicenceData();
+    if (!licNow || !licNow.key || isSyntheticLocalLicenceKey(licNow.key)) localOnly = true;
     migrateSyncDirtyToQueue();
     const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
     const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
@@ -8647,7 +8796,11 @@ ipcMain.handle('persist-and-backup', async () => {
     const conn = w && w.getConnectivity ? w.getConnectivity() : null;
     if (conn === 'offline') offline = true;
     if (conn === 'auth_required') authRequired = true;
-    if (pendingCount > 0 || dirtyCount > 0) {
+    if (conn === 'local_only') localOnly = true;
+    if (localOnly) {
+      centralConfirmed = false;
+      syncAttempted = false;
+    } else if (pendingCount > 0 || dirtyCount > 0) {
       syncAttempted = true;
       syncing = true;
       const { computeForceSaveMaxCycles, interpretForceSaveDrain, shouldPersistDrainContinuation } =
@@ -8710,6 +8863,31 @@ ipcMain.handle('persist-and-backup', async () => {
         }
       } catch (_) {}
     }
+    if (!localOnly && !offline && !authRequired) {
+      syncAttempted = true;
+      try {
+        const pull = await syncPull({ correlationId: generateCorrelationId() });
+        if (pull && pull.localOnly) {
+          localOnly = true;
+          centralConfirmed = false;
+          pullOk = null;
+        } else if (pull && (pull.deviceRevoked || pull.deviceNotActivated)) {
+          pullOk = false;
+          pullError = pull.deviceNotActivated
+            ? 'This computer is not activated for sync yet'
+            : 'This computer was deactivated for sync';
+        } else if (pull && pull.skipped && pull.reason && pull.reason !== 'ok') {
+          pullOk = false;
+          pullError = String(pull.reason);
+        } else {
+          pullOk = true;
+        }
+      } catch (pullErr) {
+        pullOk = false;
+        pullError = pullErr && pullErr.message ? pullErr.message : String(pullErr);
+        if (!syncError) syncError = pullError;
+      }
+    }
   } catch (syncErr) {
     syncAttempted = true;
     syncError = syncErr && syncErr.message ? syncErr.message : String(syncErr);
@@ -8740,6 +8918,10 @@ ipcMain.handle('persist-and-backup', async () => {
   result.dbPath = getDbPath();
   result.backupIntegrity = backupIntegrity;
   result.dirtyCount = dirtyCount;
+  result.localOnly = localOnly;
+  result.pullOk = pullOk;
+  result.pullError = pullError;
+  if (localOnly) result.centralConfirmed = false;
   if (backupError) result.backupError = backupError;
   result.userMessage = buildSaveNowUserMessage(result);
   console.info('[SAVE-NOW]', JSON.stringify({

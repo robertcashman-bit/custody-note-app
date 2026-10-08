@@ -75,13 +75,13 @@ describe('P0 backups — default folder created on init', () => {
 describe('P0 keyboard shortcuts — Ctrl or Meta', () => {
   it('initKeyboardShortcuts accepts ctrlKey or metaKey', () => {
     assert.match(appJs, /function modPressed\(e\)\s*\{\s*return !!\(e && \(e\.ctrlKey \|\| e\.metaKey\)\);\s*\}/);
-    assert.match(appJs, /modPressed\(e\) && e\.key === 's'/);
+    assert.match(appJs, /modPressed\(e\) && !e\.shiftKey && !e\.altKey && \(e\.key === 's' \|\| e\.key === 'S'\)/);
     assert.match(appJs, /modPressed\(e\) && e\.key === 'n'/);
   });
 
   it('shortcut labels use data-shortcut-mod and Force save (not Save & exit) for Cmd/Ctrl+S', () => {
     assert.match(indexHtml, /data-shortcut-mod/);
-    assert.match(indexHtml, /<kbd data-shortcut-mod>Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Force save/);
+    assert.match(indexHtml, /<kbd data-shortcut-mod>Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Save &amp; Sync/);
     assert.doesNotMatch(indexHtml, /Ctrl<\/kbd>\+<kbd>S<\/kbd><\/td><td>Save &amp; exit<\/td>/);
   });
 

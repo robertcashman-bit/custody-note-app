@@ -322,6 +322,18 @@ const MIGRATIONS = [
       );
     },
   },
+  {
+    version: 5,
+    name: 'sync-merge-base',
+    up(ctx) {
+      ctx.run(`CREATE TABLE IF NOT EXISTS sync_merge_base (
+        attendance_id INTEGER PRIMARY KEY,
+        sync_id TEXT,
+        snapshot TEXT,
+        saved_at TEXT
+      );`);
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS.length

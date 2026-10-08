@@ -26,11 +26,13 @@ describe('sync catch-up UX wiring', () => {
     assert.match(preloadJs, /onSyncCatchUpProgress/);
   });
 
-  it('conflict modal has bulk Accept all remote / Keep all local / Use cloud for all', () => {
-    assert.match(appJs, /cn-conflicts-accept-all/);
-    assert.match(appJs, /cn-conflicts-keep-all/);
-    assert.match(appJs, /Use cloud for all remaining/);
-    assert.match(appJs, /syncConflictsResolveBulk/);
+  it('conflict review does not open a blocking modal', () => {
+    const fnStart = appJs.indexOf('function openSyncConflictsView');
+    const fn = appJs.slice(fnStart, fnStart + 220);
+    assert.match(fn, /Merged changes from another computer/);
+    assert.doesNotMatch(fn, /createElement\('div'\)/);
+    assert.doesNotMatch(appJs, /cn-conflicts-accept-all/);
+    assert.doesNotMatch(appJs, /Use cloud for all remaining/);
     assert.match(appJs, /runFixSyncNow/);
   });
 

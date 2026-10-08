@@ -87,33 +87,32 @@ describe('staleSyncCatchUp triggers', () => {
 });
 
 describe('staleSyncCatchUp conflict classification', () => {
-  it('auto-accepts protect_finalised when remote is newer (force)', () => {
+  it('field-merges protect_finalised without a prompt', () => {
     const cls = classifyCatchUpConflict({
       reason: 'protect_finalised',
       localVersion: 2,
       remoteVersion: 9,
       currentLocalStatus: 'finalised',
     });
-    assert.strictEqual(cls.action, 'auto_accept_remote');
-    assert.strictEqual(cls.force, true);
+    assert.strictEqual(cls.action, 'auto_merge');
   });
 
-  it('pauses for human on preserve_local_dirty (true local edits)', () => {
+  it('field-merges preserve_local_dirty without a prompt', () => {
     const cls = classifyCatchUpConflict({
       reason: 'preserve_local_dirty',
       localVersion: 3,
       remoteVersion: 5,
     });
-    assert.strictEqual(cls.action, 'needs_human');
+    assert.strictEqual(cls.action, 'auto_merge');
   });
 
-  it('skips when remote is not newer', () => {
+  it('field-merges an older remote instead of leaving it open', () => {
     const cls = classifyCatchUpConflict({
       reason: 'revision_backwards',
       localVersion: 10,
       remoteVersion: 4,
     });
-    assert.strictEqual(cls.action, 'skip');
+    assert.strictEqual(cls.action, 'auto_merge');
   });
 
   it('partitions a Robsprgr-style mixed batch without auto keep_local', () => {
@@ -124,9 +123,9 @@ describe('staleSyncCatchUp conflict classification', () => {
       { id: 4, reason: 'preserve_local_dirty', localVersion: 2, remoteVersion: 6 },
       { id: 5, reason: 'remote_newer', localVersion: 1, remoteVersion: 2 },
     ]);
-    assert.strictEqual(parts.autoAccept.length, 3);
-    assert.strictEqual(parts.needsHuman.length, 2);
-    assert.ok(parts.autoAccept.every((x) => x.classify.action === 'auto_accept_remote'));
+    assert.strictEqual(parts.autoMerge.length, 5);
+    assert.strictEqual(parts.needsHuman.length, 0);
+    assert.ok(parts.autoMerge.every((x) => x.classify.action === 'auto_merge'));
     assert.ok(parts.needsHuman.every((x) => x.conflict.reason === 'preserve_local_dirty'));
   });
 

@@ -112,6 +112,9 @@ describe('computeLicenceStatus freemium free during beta', () => {
     assert.equal(resolveTier({ key: 'FREE-X' }), 'free');
     assert.equal(resolveTier({ key: 'TRIAL-X', isTrial: true }), 'trial');
     assert.equal(resolveTier({ key: 'CN-AAAA-BBBB-CCCC-DDDD' }), 'pro');
+    assert.equal(resolveTier({ key: 'CNF-AAAA-BBBB-CCCC-DDDD' }), 'free');
+    assert.equal(resolveTier({ key: 'CNF-AAAA-BBBB-CCCC-DDDD', tier: 'pro' }), 'pro');
+    assert.equal(resolveTier({ key: 'CN-AAAA-BBBB-CCCC-DDDD', plan: 'free_sync' }), 'free');
   });
 
   it('does not label a signed-in free_sync server key as Pro', () => {

@@ -6,6 +6,7 @@
 'use strict';
 
 const { isAdminEmail, isSyntheticLocalLicenceKey } = require('./licenceAdminEmails');
+const { applyStoredServerTier } = require('../lib/syncAccountState');
 
 /**
  * @param {object|null} data stored licence
@@ -56,6 +57,7 @@ function applyOnlineValidationResult(data, result, options) {
     if (result.serverStatus) data.status = result.serverStatus;
     else data.status = 'active';
     if (result.entitlements !== undefined) data.entitlements = result.entitlements;
+    applyStoredServerTier(data, result);
     if (data.status === 'revoked' || data.status === 'invalid') {
       // Server said valid — never keep a stale revoked stamp.
       data.status = 'active';

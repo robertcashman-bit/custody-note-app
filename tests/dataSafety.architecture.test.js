@@ -122,7 +122,7 @@ describe('Force Save status model — local vs central', () => {
   it('persist-and-backup attempts central drain and returns forceSaveState', () => {
     const idx = mainJs.indexOf("ipcMain.handle('persist-and-backup'");
     assert.ok(idx > 0);
-    const chunk = mainJs.slice(idx, idx + 9000);
+    const chunk = mainJs.slice(idx, idx + 20000);
     assert.match(chunk, /buildForceSaveResult/);
     assert.match(chunk, /drainPendingSyncUploads/);
     assert.match(chunk, /centralConfirmed/);

@@ -149,7 +149,7 @@ function resolveAnalyticsTier(status, licenceData) {
   if (st && ALLOWED_TIERS.includes(st.tier)) return st.tier;
   if (data && data.key) {
     const key = String(data.key).toUpperCase();
-    if (key.startsWith('FREE-')) return 'free';
+    if (key.startsWith('FREE-') || key.startsWith('CNF-')) return 'free';
     if (key.startsWith('TRIAL-') || data.isTrial) return 'trial';
     if (!key.startsWith('ACCOUNT-')) return 'pro';
   }

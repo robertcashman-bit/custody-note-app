@@ -17,7 +17,9 @@ const {
   LOCAL_ONLY_CHIP,
 } = require('../lib/syncAccountState');
 const { resolveTier, computeLicenceStatus } = require('../main/computeLicenceStatus');
-const { bootstrapSyncAfterSignIn } = require('../lib/signedInSyncBootstrap');
+const { bootstrapSyncAfterSignIn, shouldRunFirstSignInMerge } = require('../lib/signedInSyncBootstrap');
+const { countTowardFreeQuota } = require('../lib/freeSyncQuota');
+const { applyStoredServerTier, isDeviceNotActivatedHttpError } = require('../lib/syncAccountState');
 const { emptyCloudPullPolicy } = require('../lib/syncLocalPreserve');
 const { describeSkipReason, SYNC_SKIP_REASONS } = require('../lib/syncCycleAudit');
 
@@ -397,5 +399,184 @@ describe('explicit activate sends intent and copy is wired', () => {
     assert.match(mainJs, /enqueueAllLocalAttendancesForSync/);
     assert.equal(describeSkipReason(SYNC_SKIP_REASONS.DEVICE_REVOKED), DEVICE_DEACTIVATED_MESSAGE);
     assert.equal(deviceRevokedUserMessage({ deviceRevokedBy: 'administrator' }), ADMIN_DEVICE_REVOKED_MESSAGE);
+  });
+});
+
+describe('first sign-in activates this computer before bootstrap', () => {
+  it('auth:poll validates with machineId and intent activate before the merge', () => {
+    const poll = mainJs.slice(mainJs.indexOf("ipcMain.handle('auth:poll'"), mainJs.indexOf("ipcMain.handle('auth:logout'"));
+    const activateAt = poll.indexOf('activateThisComputerForSync()');
+    const bootstrapAt = poll.indexOf('bootstrapSyncAfterSignInNow()');
+    assert.ok(activateAt > 0 && bootstrapAt > activateAt);
+    const fn = mainJs.slice(mainJs.indexOf('async function activateThisComputerForSync'), mainJs.indexOf("ipcMain.handle('licence:activate'"));
+    assert.match(fn, /getMachineId\(\)/);
+    assert.match(fn, /intent:\s*'activate'/);
+    assert.match(fn, /applyStoredServerTier/);
+  });
+
+  it('runs the full enqueue only when the key is new or was local', () => {
+    assert.equal(shouldRunFirstSignInMerge('', 'CNF-AAAA-BBBB-CCCC-DDDD'), true);
+    assert.equal(shouldRunFirstSignInMerge('FREE-ABCDEF0123456789', 'CNF-AAAA-BBBB-CCCC-DDDD'), true);
+    assert.equal(shouldRunFirstSignInMerge('TRIAL-ABCDEF0123456789', 'CN-AAAA-BBBB-CCCC-DDDD'), true);
+    assert.equal(shouldRunFirstSignInMerge('CN-AAAA-BBBB-CCCC-DDDD', 'CN-AAAA-BBBB-CCCC-DDDD'), false);
+    assert.equal(shouldRunFirstSignInMerge('CN-AAAA-BBBB-CCCC-DDDD', 'CN-1111-2222-3333-4444'), true);
+  });
+
+  it('stores the server tier on activate, including a pasted CNF- key', () => {
+    const data = { key: 'CNF-AAAA-BBBB-CCCC-DDDD' };
+    assert.equal(applyStoredServerTier(data, {}).tier, 'free');
+    assert.equal(resolveTier(data), 'free');
+    const upgraded = { key: 'CNF-AAAA-BBBB-CCCC-DDDD', tier: 'free', entitlements: { quickfile: {} }, cloudBackup: true };
+    assert.equal(applyStoredServerTier(upgraded, { tier: 'pro' }).tier, 'pro');
+    assert.equal(upgraded.isFree, false);
+    assert.equal(resolveTier(upgraded), 'pro');
+    const activateSlice = mainJs.slice(
+      mainJs.indexOf("ipcMain.handle('licence:activate'"),
+      mainJs.indexOf("ipcMain.handle('licence:validate'")
+    );
+    assert.match(activateSlice, /applyStoredServerTier\(data, result\)/);
+  });
+});
+
+describe('DEVICE_NOT_ACTIVATED keeps the outbox and re-validates once', () => {
+  function notActivated() {
+    const err = new Error('DEVICE_NOT_ACTIVATED');
+    err.statusCode = 403;
+    err.bodyCode = 'DEVICE_NOT_ACTIVATED';
+    return err;
+  }
+
+  it('recognises the 403 code', () => {
+    assert.equal(isDeviceNotActivatedHttpError(notActivated()), true);
+    assert.equal(isDeviceNotActivatedHttpError(Object.assign(new Error('nope'), { statusCode: 403 })), false);
+  });
+
+  it('leaves the note pending and dirty, then backs off', async () => {
+    let activations = 0;
+    const mock = createMockCtx({
+      deviceNotActivatedBackoffMs: 60 * 60 * 1000,
+      activateDeviceForSync: async function () {
+        activations += 1;
+        return { ok: false, valid: false };
+      },
+      httpPost: async function () {
+        mock.calls.post.push('push');
+        throw notActivated();
+      },
+    });
+    mock.addAttendance(8);
+    const worker = createSyncWorker(mock.ctx);
+    worker.enqueue('8', 'upsert', {});
+    const first = await worker.runCycle();
+    assert.equal(first.reason, 'device_not_activated');
+    assert.equal(mock.tables.sync_queue[0].status, 'pending');
+    assert.equal(mock.tables.sync_queue[0].retry_count, 0);
+    assert.equal(mock.tables.attendances[0].sync_dirty, 1);
+    assert.equal(activations, 1);
+    const posts = mock.calls.post.length;
+    const second = await worker.runCycle();
+    assert.equal(second.reason, 'device_not_activated');
+    assert.equal(mock.calls.post.length, posts);
+    assert.equal(activations, 1);
+  });
+
+  it('retries the push after a successful re-validate', async () => {
+    let n = 0;
+    const mock = createMockCtx({
+      activateDeviceForSync: async function () { return { ok: true, valid: true }; },
+      httpPost: async function () {
+        n += 1;
+        mock.calls.post.push(n);
+        if (n === 1) throw notActivated();
+        return { ok: true, written: 1 };
+      },
+    });
+    mock.addAttendance(9);
+    const worker = createSyncWorker(mock.ctx);
+    worker.enqueue('9', 'upsert', {});
+    const result = await worker.runCycle();
+    assert.notEqual(result.reason, 'device_not_activated');
+    assert.equal(n, 2);
+    assert.equal(mock.tables.sync_queue[0].status, 'synced');
+  });
+});
+
+describe('first-sign-in lock, purge guard, and non-growing quota pushes', () => {
+  it('runExclusive makes a poll cycle skip without calling push', async () => {
+    const mock = createMockCtx();
+    mock.addAttendance(1);
+    const worker = createSyncWorker(mock.ctx);
+    worker.enqueue('1', 'upsert', {});
+    let release;
+    const held = worker.runExclusive(function () {
+      return new Promise(function (resolve) { release = resolve; });
+    });
+    const cycle = await worker.runCycle();
+    assert.equal(cycle.reason, 'in_progress');
+    assert.equal(mock.calls.post.length, 0);
+    assert.equal(mock.tables.sync_queue[0].status, 'pending');
+    release();
+    await held;
+  });
+
+  it('purge does not call the cloud for a synthetic key', () => {
+    const idx = mainJs.indexOf('/api/sync/purge');
+    assert.ok(idx > 0);
+    const slice = mainJs.slice(idx - 800, idx + 1400);
+    assert.match(slice, /isSyntheticLocalLicenceKey/);
+    assert.match(slice, /synthetic_local_key/);
+  });
+
+  it('tombstones do not count toward the free quota estimate', () => {
+    assert.equal(countTowardFreeQuota([
+      { id: 1 },
+      { id: 2, deleted_at: '2026-01-01T00:00:00.000Z' },
+      { id: 3, deletion_reason: 'user' },
+    ]), 1);
+  });
+
+  it('a free-quota batch still pushes an edit of a note the server already has', async () => {
+    const mock = createMockCtx({
+      getCloudPresenceProof: function () { return { cloudSyncIds: ['sid-known'] }; },
+      httpPost: async function (url, body) {
+        const ids = ((body && body.records) || []).map(function (r) { return r.syncId; });
+        mock.calls.post.push(ids.join(','));
+        if (ids.indexOf('sid-new') !== -1) {
+          const err = new Error('FREE_QUOTA_EXCEEDED');
+          err.statusCode = 409;
+          err.bodyCode = 'FREE_QUOTA_EXCEEDED';
+          throw err;
+        }
+        return { ok: true, written: ids };
+      },
+    });
+    mock.addAttendance('new');
+    mock.addAttendance('known');
+    mock.tables.attendances[0].sync_id = 'sid-new';
+    mock.tables.attendances[1].sync_id = 'sid-known';
+    const worker = createSyncWorker(mock.ctx);
+    worker.enqueue('new', 'upsert', {});
+    worker.enqueue('known', 'upsert', {});
+    const result = await worker.runCycle();
+    assert.equal(result.reason, 'free_quota_exceeded');
+    const known = mock.tables.sync_queue.find(function (r) { return r.record_id === 'known'; });
+    const fresh = mock.tables.sync_queue.find(function (r) { return r.record_id === 'new'; });
+    assert.equal(known.status, 'synced');
+    assert.equal(fresh.status, 'pending');
+    assert.equal(fresh.retry_count, 0);
+    assert.equal(mock.tables.attendances[0].sync_dirty, 1);
+  });
+});
+
+describe('duplicate sync rows are folded, not copied again', () => {
+  it('collapse does not enqueue a tombstone for the extra row', () => {
+    const fn = mainJs.slice(
+      mainJs.indexOf('function collapseDuplicateAttendanceSyncId'),
+      mainJs.indexOf('async function syncPull')
+    );
+    assert.match(fn, /DELETE FROM attendances WHERE id=/);
+    assert.doesNotMatch(fn, /enqueueSyncForRecord/);
+    assert.match(mainJs, /mergeAttendanceRecords/);
+    assert.doesNotMatch(mainJs, /recordSyncConflict\(local\.id, local, remote, 'preserve_local_dirty'\)/);
   });
 });

@@ -115,4 +115,34 @@ describe('licenceValidationPolicy', () => {
     assert.equal(data.expiresAt, '2099-01-01T00:00:00.000Z');
     assert.ok(data.lastValidated);
   });
+
+  it('a valid free tier clears entitlements and a later pro tier upgrades', () => {
+    const data = {
+      key: 'CNF-AAAA-BBBB-CCCC-DDDD',
+      status: 'active',
+      tier: 'free',
+      entitlements: { quickfile: { expiresAt: '2099-01-01' } },
+      cloudBackup: true,
+    };
+    applyOnlineValidationResult(data, {
+      valid: true,
+      tier: 'free',
+      plan: 'free_sync',
+      serverStatus: 'active',
+      entitlements: { quickfile: { expiresAt: '2099-01-01' } },
+    }, { adminEmails: ADMINS });
+    assert.equal(data.tier, 'free');
+    assert.equal(data.entitlements, null);
+    assert.equal(data.cloudBackup, false);
+
+    applyOnlineValidationResult(data, {
+      valid: true,
+      tier: 'pro',
+      serverStatus: 'active',
+      entitlements: { quickfile: { expiresAt: '2099-06-01' } },
+    }, { adminEmails: ADMINS });
+    assert.equal(data.tier, 'pro');
+    assert.equal(data.isFree, false);
+    assert.ok(data.entitlements && data.entitlements.quickfile);
+  });
 });

@@ -24,10 +24,17 @@ function keyLooksAccount(key) {
   return String(key || '').toUpperCase().startsWith('ACCOUNT-');
 }
 
+function keyLooksServerFree(key) {
+  return String(key || '').toUpperCase().startsWith('CNF-');
+}
+
 function resolveTier(data) {
   if (!data || !data.key) return 'none';
-  if (data.tier === 'free' || data.tier === 'pro' || data.tier === 'trial') return data.tier;
-  if (keyLooksFree(data.key)) return 'free';
+  const explicit = String(data.tier || '').toLowerCase();
+  const plan = String(data.plan || '').toLowerCase();
+  if (explicit === 'free' || plan === 'free_sync') return 'free';
+  if (explicit === 'pro' || explicit === 'trial') return explicit;
+  if (keyLooksFree(data.key) || keyLooksServerFree(data.key)) return 'free';
   if (keyLooksTrial(data.key) || data.isTrial) return 'trial';
   if (keyLooksAccount(data.key) && data.isTrial) return 'trial';
   return 'pro';

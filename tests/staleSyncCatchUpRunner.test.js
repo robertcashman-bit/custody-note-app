@@ -141,17 +141,20 @@ describe('resolveConflictsBulk', () => {
 describe('autoAcceptRemoteNewerConflicts', () => {
   beforeEach(async () => { await makeDb(); });
 
-  it('auto-accepts protect_finalised with force and leaves dirty conflicts for human', () => {
+  it('field-merges protected and dirty conflicts and leaves none open', () => {
     const a1 = seedAttendance({ status: 'finalised', version: 1 });
-    const a2 = seedAttendance({ status: 'draft', version: 2, dirty: 1 });
+    const a2 = seedAttendance({ status: 'draft', version: 2, dirty: 1, data: '{"note":"local only","x":1}' });
     seedConflict(a1, { reason: 'protect_finalised', remote: { status: 'draft' }, remoteVersion: 4 });
     seedConflict(a2, { reason: 'preserve_local_dirty', remoteVersion: 5 });
 
     const res = autoAcceptRemoteNewerConflicts(baseCtx());
-    assert.strictEqual(res.accepted, 1);
-    assert.strictEqual(res.needsHuman.length, 1);
-    assert.strictEqual(res.needsHuman[0].reason, 'preserve_local_dirty');
-    assert.strictEqual(listOpenConflicts({ dbAll, dbGet }).length, 1);
+    assert.strictEqual(res.needsHuman.length, 0);
+    assert.strictEqual(res.merged, 2);
+    assert.strictEqual(listOpenConflicts({ dbAll, dbGet }).length, 0);
+    const kept = dbGet('SELECT data, sync_dirty FROM attendances WHERE id=?', [a2]);
+    assert.ok(String(kept.data).includes('local only'), 'local-only field stays on the note');
+    assert.ok(String(kept.data).includes('_cnConflictHistory') || String(kept.data).includes('remote'));
+    assert.strictEqual(kept.sync_dirty, 1);
   });
 });
 
@@ -186,13 +189,12 @@ describe('runStaleDeviceCatchUp', () => {
     assert.strictEqual(result.ran, true);
     assert.strictEqual(pullCalled, 1);
     assert.strictEqual(drainCalled, 1);
-    assert.strictEqual(result.resolveResult.accepted, 1);
-    assert.strictEqual(result.needsHuman.length, 1);
+    assert.strictEqual(result.resolveResult.merged, 2);
+    assert.strictEqual(result.needsHuman.length, 0);
     assert.ok(progress.includes('pulling'));
     assert.ok(progress.includes('pushing'));
-    assert.ok(progress.includes('needs_human'));
-    // Never silently keep_local — dirty conflict still open.
-    assert.strictEqual(listOpenConflicts({ dbAll, dbGet }).length, 1);
+    assert.ok(progress.includes('done'));
+    assert.strictEqual(listOpenConflicts({ dbAll, dbGet }).length, 0);
     assert.strictEqual(
       dbGet('SELECT value FROM settings WHERE key=?', [SETTINGS_LAST_SEEN_APP_VERSION]).value,
       '1.9.100'

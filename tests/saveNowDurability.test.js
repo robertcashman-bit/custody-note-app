@@ -62,22 +62,24 @@ describe('Save now — durable disk + backup', () => {
     assert.match(ok.message, /Backup written to|Central confirmation/i);
   });
 
-  it('UI exposes Force save control and Ctrl+S routes to it', () => {
-    assert.match(indexHtml, /id="form-backup-now-btn"[^>]*>Force save</);
-    assert.match(indexHtml, /id="header-backup-now-btn"[^>]*>Force save</);
-    assert.match(indexHtml, /Force save \(disk \+ verified backup \+ central push\)/);
+  it('UI exposes Save & Sync on the top bar and Ctrl+S routes to it', () => {
+    assert.match(indexHtml, /id="header-backup-now-btn"/);
+    assert.match(indexHtml, /class="save-sync-btn"/);
+    assert.match(indexHtml, /Save &amp; Sync/);
+    assert.doesNotMatch(indexHtml, /id="form-backup-now-btn"/);
+    assert.match(indexHtml, /Save &amp; Sync \(disk \+ verified backup \+ push and pull\)/);
     assert.match(appJs, /handleSaveNowClick/);
     assert.match(appJs, /persistAndBackup/);
     assert.match(preloadJs, /persistAndBackup/);
-    const kbIdx = appJs.indexOf("modPressed(e) && e.key === 's'");
+    const kbIdx = appJs.indexOf("e.key === 's' || e.key === 'S'");
     assert.ok(kbIdx > 0);
-    assert.match(appJs.slice(kbIdx, kbIdx + 900), /handleSaveNowClick|persistAndBackup/);
+    assert.match(appJs.slice(kbIdx, kbIdx + 500), /handleSaveNowClick/);
   });
 
   it('dirty indicator clears only after successful disk write', () => {
     assert.match(appJs, /markFormDirtyForDiskIndicator/);
     assert.match(appJs, /Unsaved changes/);
-    assert.match(appJs, /Safe locally|Saved to disk/);
+    assert.match(appJs, /Saved on this computer|Saved to disk/);
     const showIdx = appJs.indexOf('function showAutoSaveIndicator');
     const showBody = appJs.slice(showIdx, showIdx + 2000);
     assert.match(showBody, /dirty/);

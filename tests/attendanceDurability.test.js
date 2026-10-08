@@ -133,7 +133,7 @@ describe('Durable pendingSync / honest Saved to disk vs Synced', () => {
     assert.match(appJs, /Safe locally/);
     assert.match(appJs, /pending (central )?sync/);
     assert.match(appJs, /normalizeAttendanceSaveResult/);
-    assert.match(appJs, /showAutoSaveIndicator\(\{ durable:/);
+    assert.match(appJs, /showAutoSaveIndicator\(\{[\s\S]{0,240}durable:/);
     assert.match(appJs, /Unsaved changes/);
   });
 });

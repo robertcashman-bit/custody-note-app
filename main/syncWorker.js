@@ -62,10 +62,14 @@ const {
 const { isSyntheticLocalLicenceKey } = require('../main/licenceAdminEmails');
 const {
   isDeviceRevokedHttpError,
+  isDeviceNotActivatedHttpError,
+  isStaleVersionHttpError,
   isFreeQuotaHttpError,
   deviceRevokedUserMessage,
+  DEVICE_NOT_ACTIVATED_MESSAGE,
   FREE_QUOTA_MESSAGE,
 } = require('../lib/syncAccountState');
+const { isNonGrowingOutboxItem } = require('../lib/freeSyncQuota');
 
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
@@ -85,6 +89,7 @@ const BLOCKED_RECOVERY_COOLDOWN_MS = 30 * 60_000;
 const MAX_BLOCKED_AUTO_RECOVERIES = 3;
 const RATE_LIMITED_SLOW_POLL_MS = 30_000;
 const DEVICE_REVOKED_BACKOFF_MS = 5 * 60 * 1000;
+const DEVICE_NOT_ACTIVATED_BACKOFF_MS = 5 * 60 * 1000;
 const FREE_QUOTA_BACKOFF_MS = 5 * 60 * 1000;
 
 /** Classify errors: retryable vs permanent */
@@ -156,7 +161,11 @@ function createSyncWorker(ctx) {
   let _slowPollActive = false;
   let _deviceRevokedUntil = 0;
   let _deviceRevokedBy = null;
+  let _deviceNotActivatedUntil = 0;
+  let _deviceActivationTriedAt = 0;
   let _freeQuotaUntil = 0;
+  let _exclusiveDepth = 0;
+  const _knownPushedSyncIds = new Set();
   const SKIP_ATTEMPT_LOG_COOLDOWN_MS = 60_000;
   const rateLimitGate = createRateLimitGate({
     cooldownMs: (ctx && ctx.rateLimitCooldownMs) || RATE_LIMIT_COOLDOWN_MS,
@@ -278,7 +287,7 @@ function createSyncWorker(ctx) {
     notifyRenderer({
       status: statusForSkipReason(reason),
       lastError: _lastError,
-      retryable: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.API_UNREACHABLE || reason === SYNC_SKIP_REASONS.DEVICE_REVOKED || reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
+      retryable: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.API_UNREACHABLE || reason === SYNC_SKIP_REASONS.DEVICE_REVOKED || reason === SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED || reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
       rateLimited: reason === SYNC_SKIP_REASONS.RATE_LIMITED,
       rateLimitRemainingMs: rateLimitGate.remainingMs(),
       authRequired: reason === SYNC_SKIP_REASONS.AUTH_REQUIRED,
@@ -290,7 +299,7 @@ function createSyncWorker(ctx) {
       lastSyncSkipReason: _lastSkipReason,
       connectivity: _connectivityState,
       localSafe: true,
-      waitingForSync: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.DEVICE_REVOKED || reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
+      waitingForSync: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.DEVICE_REVOKED || reason === SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED || reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
     });
     return heartbeat;
   }
@@ -299,6 +308,7 @@ function createSyncWorker(ctx) {
     if (reason === SYNC_SKIP_REASONS.RATE_LIMITED) return 'rate_limited';
     if (reason === SYNC_SKIP_REASONS.LOCAL_ONLY) return 'local_only';
     if (reason === SYNC_SKIP_REASONS.DEVICE_REVOKED) return 'device_revoked';
+    if (reason === SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED) return 'device_not_activated';
     if (reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED) return 'free_quota_exceeded';
     if (isHardSkipReason(reason)) return 'error';
     return 'synced';
@@ -315,6 +325,8 @@ function createSyncWorker(ctx) {
   function clearDeviceSyncBlocks() {
     _deviceRevokedUntil = 0;
     _deviceRevokedBy = null;
+    _deviceNotActivatedUntil = 0;
+    _deviceActivationTriedAt = 0;
     _freeQuotaUntil = 0;
     if (_blockWakeTimer) {
       clearTimeout(_blockWakeTimer);
@@ -327,6 +339,7 @@ function createSyncWorker(ctx) {
     const now = Date.now();
     const waits = [];
     if (_deviceRevokedUntil > now) waits.push(_deviceRevokedUntil - now);
+    if (_deviceNotActivatedUntil > now) waits.push(_deviceNotActivatedUntil - now);
     if (_freeQuotaUntil > now) waits.push(_freeQuotaUntil - now);
     if (!waits.length) return;
     const wait = Math.min.apply(null, waits);
@@ -343,6 +356,61 @@ function createSyncWorker(ctx) {
     _lastError = deviceRevokedUserMessage(err || {});
     setConnectivity('device_revoked');
     scheduleBlockWake();
+  }
+
+  function deviceNotActivatedBackoffMs() {
+    return ctx && ctx.deviceNotActivatedBackoffMs != null ? ctx.deviceNotActivatedBackoffMs : DEVICE_NOT_ACTIVATED_BACKOFF_MS;
+  }
+
+  function engageDeviceNotActivated() {
+    _deviceNotActivatedUntil = Date.now() + deviceNotActivatedBackoffMs();
+    _lastError = DEVICE_NOT_ACTIVATED_MESSAGE;
+    setConnectivity('device_not_activated');
+    scheduleBlockWake();
+  }
+
+  async function tryReactivateDeviceOnce() {
+    const windowMs = deviceNotActivatedBackoffMs();
+    if (_deviceActivationTriedAt && (Date.now() - _deviceActivationTriedAt) < windowMs) return false;
+    _deviceActivationTriedAt = Date.now();
+    if (typeof ctx.activateDeviceForSync !== 'function') return false;
+    try {
+      const res = await ctx.activateDeviceForSync();
+      return !!(res && (res.ok === true || res.valid === true));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function knownCloudSyncIdSet() {
+    const set = new Set(_knownPushedSyncIds);
+    if (typeof ctx.getCloudPresenceProof === 'function') {
+      try {
+        const proof = ctx.getCloudPresenceProof() || null;
+        const ids = proof && Array.isArray(proof.cloudSyncIds) ? proof.cloudSyncIds : [];
+        for (let i = 0; i < ids.length; i++) {
+          if (ids[i]) set.add(String(ids[i]));
+        }
+      } catch (_) {}
+    }
+    return set;
+  }
+
+  function queueItemIsNonGrowing(item) {
+    let row = null;
+    try {
+      row = ctx.dbGet(
+        'SELECT sync_id, deleted_at, deletion_reason FROM attendances WHERE id=?',
+        [item.record_id]
+      );
+    } catch (_) {}
+    return isNonGrowingOutboxItem({
+      operation: item.operation,
+      deletedAt: row && row.deleted_at,
+      deletionReason: row && row.deletion_reason,
+      syncId: row && row.sync_id,
+      knownCloudSyncIds: knownCloudSyncIdSet(),
+    });
   }
 
   function engageFreeQuota(err) {
@@ -460,7 +528,7 @@ function createSyncWorker(ctx) {
    *  are immediately due. LIMIT-before-due-filter left Fix sync with 0 pushes
    *  (Robsprgr 1.9.102: cloud ids present, written:0 path never reached).
    */
-  function getNextQueueItem() {
+  function getNextQueueItem(opts) {
     if (!ctx.db) return null;
     const now = Date.now();
     const rows = ctx.dbAll(
@@ -469,10 +537,13 @@ function createSyncWorker(ctx) {
        WHERE status = 'pending'
        ORDER BY created_at ASC LIMIT 500`
     );
+    const skipGrowing = !!(opts && opts.skipGrowing);
     for (const row of rows || []) {
       const nextMs = getNextAttemptMs(row.retry_count || 0);
       const lastAttempt = row.last_attempt || row.created_at || 0;
-      if (now - lastAttempt >= nextMs) return row;
+      if (now - lastAttempt < nextMs) continue;
+      if (skipGrowing && !queueItemIsNonGrowing(row)) continue;
+      return row;
     }
     return null;
   }
@@ -672,10 +743,11 @@ function createSyncWorker(ctx) {
    */
   async function processBatch() {
     let totalProcessed = 0;
+    let skipGrowing = Date.now() < _freeQuotaUntil;
     for (let round = 0; round < MAX_PUSH_ROUNDS_PER_CYCLE; round++) {
       const items = [];
       for (let i = 0; i < PUSH_HTTP_BATCH_SIZE; i++) {
-        const item = getNextQueueItem();
+        const item = getNextQueueItem({ skipGrowing: skipGrowing });
         if (!item) break;
         items.push(item);
         markSyncing(item.id);
@@ -721,7 +793,12 @@ function createSyncWorker(ctx) {
             payload.capturedVersion,
             ackMeta
           );
-          if (cleared !== false) totalProcessed++;
+          if (cleared !== false) {
+            totalProcessed++;
+            if (payload.record && payload.record.syncId) {
+              _knownPushedSyncIds.add(String(payload.record.syncId));
+            }
+          }
         }
         // Partial already-present: keep unproven ids pending for a real write.
         for (const payload of retainPayloads) {
@@ -788,16 +865,42 @@ function createSyncWorker(ctx) {
           setConnectivity('internet_available_api_unreachable');
           break;
         }
-        // 403 DEVICE_REVOKED and free-quota 409/413 keep the outbox pending.
-        // Do not mark items failed or blocked — they must push once unblocked.
-        if (isDeviceRevokedHttpError(e) || isFreeQuotaHttpError(e)) {
-          const revoked = isDeviceRevokedHttpError(e);
+        // 403 DEVICE_REVOKED / DEVICE_NOT_ACTIVATED and free-quota 409/413
+        // keep the outbox pending. Do not burn retries or mark notes failed.
+        if (isDeviceRevokedHttpError(e) || isDeviceNotActivatedHttpError(e) || isFreeQuotaHttpError(e) || isStaleVersionHttpError(e)) {
           for (const item of items) {
             restorePendingKeepRetries(item.id, e);
           }
           _lastSuccessfulPushAt = 0;
-          if (revoked) engageDeviceRevoked(e);
-          else engageFreeQuota(e);
+          if (isDeviceRevokedHttpError(e)) {
+            engageDeviceRevoked(e);
+          } else if (isDeviceNotActivatedHttpError(e)) {
+            const activated = await tryReactivateDeviceOnce();
+            if (activated) continue;
+            engageDeviceNotActivated();
+          } else if (isFreeQuotaHttpError(e)) {
+            engageFreeQuota(e);
+            if (!skipGrowing) {
+              skipGrowing = true;
+              _lastPushStats = {
+                attempted: items.length,
+                written: 0,
+                ok: false,
+                at: new Date().toISOString(),
+                error: _lastError,
+              };
+              notifyRenderer({
+                status: 'free_quota_exceeded',
+                lastError: _lastError,
+                retryable: true,
+                freeQuotaExceeded: true,
+                localSafe: true,
+                waitingForSync: true,
+                lastSyncSkipReason: SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
+              });
+              continue;
+            }
+          }
           _lastPushStats = {
             attempted: items.length,
             written: 0,
@@ -805,18 +908,26 @@ function createSyncWorker(ctx) {
             at: new Date().toISOString(),
             error: _lastError,
           };
-          const skipReason = revoked ? SYNC_SKIP_REASONS.DEVICE_REVOKED : SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED;
-          notifyRenderer({
-            status: revoked ? 'device_revoked' : 'free_quota_exceeded',
-            lastError: _lastError,
-            retryable: true,
-            deviceRevoked: revoked,
-            deviceRevokedBy: _deviceRevokedBy,
-            freeQuotaExceeded: !revoked,
-            localSafe: true,
-            waitingForSync: true,
-            lastSyncSkipReason: skipReason,
-          });
+          const skipReason = isDeviceRevokedHttpError(e)
+            ? SYNC_SKIP_REASONS.DEVICE_REVOKED
+            : (isDeviceNotActivatedHttpError(e)
+              ? SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED
+              : (isStaleVersionHttpError(e) ? SYNC_SKIP_REASONS.OK : SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED));
+          if (!isStaleVersionHttpError(e)) {
+            notifyRenderer({
+              status: isDeviceRevokedHttpError(e)
+                ? 'device_revoked'
+                : (isDeviceNotActivatedHttpError(e) ? 'device_not_activated' : 'free_quota_exceeded'),
+              lastError: _lastError,
+              retryable: true,
+              deviceRevoked: isDeviceRevokedHttpError(e),
+              deviceRevokedBy: _deviceRevokedBy,
+              freeQuotaExceeded: isFreeQuotaHttpError(e),
+              localSafe: true,
+              waitingForSync: true,
+              lastSyncSkipReason: skipReason,
+            });
+          }
           if (ctx.logSyncAttempt) {
             ctx.logSyncAttempt(generateCorrelationId(), 'push', items.length, false, _lastError);
           }
@@ -943,8 +1054,9 @@ function createSyncWorker(ctx) {
    * cycles can push (nested runCycle would no-op on _inProgress).
    */
   async function runCycle() {
-    if (_inProgress) {
+    if (_exclusiveDepth > 0 || _inProgress) {
       // Do not overwrite a live cycle's heartbeat with in_progress spam every 10s.
+      // Exclusive covers first-sign-in bootstrap so a poll cannot push before pull.
       return { skipped: true, reason: SYNC_SKIP_REASONS.IN_PROGRESS };
     }
     _inProgress = true;
@@ -974,9 +1086,9 @@ function createSyncWorker(ctx) {
         recordCycleOutcome(outcomeReason, outcomeDetail);
         return { skipped: true, reason: outcomeReason };
       }
-      if (Date.now() < _freeQuotaUntil) {
-        outcomeReason = SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED;
-        outcomeDetail = _lastError || FREE_QUOTA_MESSAGE;
+      if (Date.now() < _deviceNotActivatedUntil) {
+        outcomeReason = SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED;
+        outcomeDetail = _lastError || DEVICE_NOT_ACTIVATED_MESSAGE;
         scheduleBlockWake();
         recordCycleOutcome(outcomeReason, outcomeDetail);
         return { skipped: true, reason: outcomeReason };
@@ -1011,12 +1123,13 @@ function createSyncWorker(ctx) {
         recordCycleOutcome(outcomeReason, outcomeDetail);
         return { skipped: true, reason: outcomeReason, pushed };
       }
-      if (Date.now() < _freeQuotaUntil) {
-        outcomeReason = SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED;
-        outcomeDetail = _lastError || FREE_QUOTA_MESSAGE;
+      if (Date.now() < _deviceNotActivatedUntil) {
+        outcomeReason = SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED;
+        outcomeDetail = _lastError || DEVICE_NOT_ACTIVATED_MESSAGE;
         recordCycleOutcome(outcomeReason, outcomeDetail);
         return { skipped: true, reason: outcomeReason, pushed };
       }
+      const quotaBlocked = Date.now() < _freeQuotaUntil;
       if (rateLimitGate.isBlocked()) {
         // Do not spam /api/sync/pull into the same rate-limit budget after a 429.
         outcomeReason = SYNC_SKIP_REASONS.RATE_LIMITED;
@@ -1045,6 +1158,9 @@ function createSyncWorker(ctx) {
             engageDeviceRevoked(e);
             return { pulled: 0, received: 0, deviceRevoked: true, skipped: true };
           }
+          if (isDeviceNotActivatedHttpError(e)) {
+            return { pulled: 0, received: 0, deviceNotActivated: true, skipped: true };
+          }
           if (isFreeQuotaHttpError(e)) {
             engageFreeQuota(e);
             return { pulled: 0, received: 0, freeQuotaExceeded: true, skipped: true };
@@ -1069,8 +1185,11 @@ function createSyncWorker(ctx) {
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('records-updated-from-sync', { count: pullResult.pulled });
         }
-        if (pullResult && pullResult.conflicts > 0 && ctx.sendToRenderer) {
-          ctx.sendToRenderer('sync-conflicts-detected', { count: pullResult.conflicts });
+        if (pullResult && pullResult.autoMerged > 0 && ctx.sendToRenderer) {
+          ctx.sendToRenderer('sync-conflicts-detected', {
+            count: pullResult.autoMerged,
+            autoMerged: true,
+          });
           notifyRenderer({});
         }
         if (pullResult && (pullResult.decryptFailed > 0 || pullResult.noMasterKeySkipped > 0) && ctx.sendToRenderer) {
@@ -1095,7 +1214,27 @@ function createSyncWorker(ctx) {
             }
           } catch (_) {}
         }
-        if (pullResult && pullResult.deviceRevoked) {
+        if (pullResult && pullResult.deviceNotActivated) {
+          const activated = await tryReactivateDeviceOnce();
+          if (activated && ctx.syncPull) {
+            pullResult = await ctx.syncPull().catch((e2) => {
+              if (isDeviceNotActivatedHttpError(e2)) {
+                engageDeviceNotActivated();
+                return { pulled: 0, received: 0, deviceNotActivated: true, skipped: true };
+              }
+              return { pulled: 0, received: 0 };
+            });
+          } else if (!(Date.now() < _deviceNotActivatedUntil)) {
+            engageDeviceNotActivated();
+          }
+        }
+        if (pullResult && pullResult.deviceNotActivated) {
+          outcomeReason = SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED;
+          outcomeDetail = _lastError || DEVICE_NOT_ACTIVATED_MESSAGE;
+        } else if (quotaBlocked) {
+          outcomeReason = SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED;
+          outcomeDetail = _lastError || FREE_QUOTA_MESSAGE;
+        } else if (pullResult && pullResult.deviceRevoked) {
           if (!(Date.now() < _deviceRevokedUntil)) engageDeviceRevoked(pullResult);
           outcomeReason = SYNC_SKIP_REASONS.DEVICE_REVOKED;
           outcomeDetail = _lastError || deviceRevokedUserMessage(pullResult);
@@ -1134,6 +1273,9 @@ function createSyncWorker(ctx) {
           }
           considerHeal = true;
         }
+      } else if (quotaBlocked) {
+        outcomeReason = SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED;
+        outcomeDetail = _lastError || FREE_QUOTA_MESSAGE;
       } else if (pushed > 0) {
         outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
         considerHeal = true;
@@ -1316,7 +1458,7 @@ function createSyncWorker(ctx) {
   }
 
   function shouldDeferKick() {
-    return _inProgress || _publicCycleDepth > 0;
+    return _inProgress || _publicCycleDepth > 0 || _exclusiveDepth > 0;
   }
 
   function flushPendingKick() {
@@ -1493,6 +1635,7 @@ function createSyncWorker(ctx) {
     if (
       _connectivityState === 'auth_required' ||
       _connectivityState === 'device_revoked' ||
+      _connectivityState === 'device_not_activated' ||
       _connectivityState === 'local_only' ||
       _connectivityState === 'free_quota_exceeded'
     ) {
@@ -1508,18 +1651,46 @@ function createSyncWorker(ctx) {
     if (!(opts && opts.schedule === false)) scheduleSoon();
   }
 
+  /**
+   * Run fn while the poll loop cannot start another cycle.
+   * Re-entrant: a nested full re-sync inside bootstrap keeps the same lock.
+   */
+  async function runExclusive(fn, timeoutMs = 90000) {
+    if (_exclusiveDepth > 0) return fn();
+    const limit = Math.max(0, Number(timeoutMs) || 0);
+    const start = Date.now();
+    for (;;) {
+      if (!_inProgress && _exclusiveDepth === 0) {
+        _exclusiveDepth = 1;
+        break;
+      }
+      if (Date.now() - start >= limit) {
+        console.warn('[SyncWorker] runExclusive timed out after', limit, 'ms');
+        _exclusiveDepth += 1;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    try {
+      return await fn();
+    } finally {
+      _exclusiveDepth = Math.max(0, _exclusiveDepth - 1);
+      if (_exclusiveDepth === 0) flushPendingKick();
+    }
+  }
+
   /** Wait for an in-flight runCycle to finish (Full re-sync must not race cursor). */
   async function waitUntilIdle(timeoutMs = 60000) {
     const limit = Math.max(0, Number(timeoutMs) || 0);
     const start = Date.now();
-    while (_inProgress) {
+    while (_inProgress || _exclusiveDepth > 0) {
       if (Date.now() - start >= limit) {
         console.warn('[SyncWorker] waitUntilIdle timed out after', limit, 'ms');
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    return !_inProgress;
+    return !_inProgress && _exclusiveDepth === 0;
   }
 
   return {
@@ -1533,6 +1704,7 @@ function createSyncWorker(ctx) {
     resetRuntimeState,
     notifyAuthRecovered,
     waitUntilIdle,
+    runExclusive,
     getConnectivity: () => _connectivityState,
   };
 }
@@ -1557,6 +1729,7 @@ module.exports = {
   MAX_BLOCKED_AUTO_RECOVERIES,
   RATE_LIMIT_COOLDOWN_MS,
   DEVICE_REVOKED_BACKOFF_MS,
+  DEVICE_NOT_ACTIVATED_BACKOFF_MS,
   FREE_QUOTA_BACKOFF_MS,
   mayClearOutboxEntry,
   isAmbiguousPushAck,
