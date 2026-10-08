@@ -584,9 +584,43 @@ describe('duplicate sync rows are folded, not copied again', () => {
     assert.match(fn, /UPDATE sync_queue SET record_id=/);
     assert.match(fn, /enqueueSyncForRecord\(keeper\.id, 'upsert'/);
     assert.match(fn, /assignFreshSyncId/);
+    assert.match(fn, /encryptBuffer: encryptBuffer/);
+    assert.match(fn, /decryptBuffer: decryptBuffer/);
     assert.doesNotMatch(fn, /enqueueSyncForRecord\([^)]*'delete'/);
     assert.match(mainJs, /mergeAttendanceRecords/);
     assert.doesNotMatch(mainJs, /recordSyncConflict\(local\.id, local, remote, 'preserve_local_dirty'\)/);
+  });
+});
+
+describe('deleted rows push as content-free tombstones', () => {
+  it('sends tombstone:true and omits the note body for free and Pro', async () => {
+    let pushed = null;
+    const mock = createMockCtx({
+      httpPost: async function (url, body) {
+        pushed = body;
+        mock.calls.post.push(url);
+        return { ok: true, written: 1 };
+      },
+    });
+    mock.addAttendance(1);
+    mock.tables.attendances[0].deleted_at = '2026-04-01T00:00:00.000Z';
+    mock.tables.attendances[0].deletion_reason = 'user_delete';
+    mock.tables.attendances[0].client_name = 'Secret Client';
+    mock.tables.attendances[0].data = JSON.stringify({ surname: 'Secret' });
+    const worker = createSyncWorker(mock.ctx);
+    worker.enqueue('1', 'upsert', {});
+    const result = await worker.runCycle();
+    assert.notEqual(result.reason, 'local_only');
+    assert.ok(pushed && Array.isArray(pushed.records));
+    const rec = pushed.records[0];
+    assert.equal(rec.tombstone, true);
+    assert.equal(rec.syncId, 'sid-1');
+    assert.equal(rec.deletedAt, '2026-04-01T00:00:00.000Z');
+    assert.equal(rec.envelope, undefined);
+    assert.equal(rec.data, undefined);
+    assert.equal(rec.clientName, undefined);
+    assert.equal(JSON.stringify(rec).includes('Secret'), false);
+    assert.equal(mock.tables.sync_queue[0].status, 'synced');
   });
 });
 
@@ -596,11 +630,23 @@ describe('activation lock and background revoke', () => {
     const worker = createSyncWorker(mock.ctx);
     const start = Date.now();
     const idle = await worker.runExclusive(async function () {
-      return worker.waitUntilIdle(90000);
+      return worker.waitUntilIdle(90000, { insideExclusive: true });
     });
     const elapsed = Date.now() - start;
     assert.equal(idle, true);
     assert.ok(elapsed < 1000, 'elapsed ' + elapsed);
+  });
+
+  it('waitUntilIdle still waits for the lock unless insideExclusive is set', async () => {
+    const mock = createMockCtx();
+    const worker = createSyncWorker(mock.ctx);
+    const start = Date.now();
+    const idle = await worker.runExclusive(async function () {
+      return worker.waitUntilIdle(250);
+    });
+    assert.equal(idle, false);
+    assert.ok(Date.now() - start >= 200);
+    assert.match(mainJs, /runFullSyncFromCloud\(\{ insideExclusive: true \}\)/);
   });
 
   it('waitUntilIdle from outside still waits for the exclusive run', async () => {
@@ -632,6 +678,8 @@ describe('activation lock and background revoke', () => {
     const slice = licenceJs.slice(start, start + 1400);
     assert.match(slice, /resp && resp\.ok && resp\.accessToken/);
     assert.doesNotMatch(slice, /if \(resp\.ok\) \{/);
+    assert.match(slice, /resp\.status === 'failed'/);
+    assert.match(slice, /showError\(resp\.error/);
     assert.match(licenceJs, /Login link sent\. Open it and click Confirm sign-in in your browser\./);
   });
 });

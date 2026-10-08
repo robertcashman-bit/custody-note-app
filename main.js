@@ -3550,6 +3550,8 @@ function collapseDuplicateAttendanceSyncId(syncId) {
       keeperId: keeper.id,
       extraRow: extraRow,
       related: related,
+      encryptBuffer: encryptBuffer,
+      decryptBuffer: decryptBuffer,
     });
     if (!prepared || !prepared.ok) {
       if (prepared && prepared.conflict) assignFreshSyncId(extraId);
@@ -4026,7 +4028,7 @@ function resetSyncPullCursor() {
   dbRun("DELETE FROM settings WHERE key='lastSyncPullAt'");
 }
 
-async function runFullSyncFromCloud() {
+async function runFullSyncFromCloud(opts) {
   if (!db) throw new Error('Database not ready');
   // Full re-sync resets the pull cursor and merges remotes. It must never
   // destroy local-only rows (empty cloud is an alarm + re-upload path).
@@ -4038,7 +4040,8 @@ async function runFullSyncFromCloud() {
   // Wait out any in-flight poll cycle so we do not race the pull cursor, then
   // clear the 429 gate so an explicit Full re-sync is not a silent no-op.
   if (w && typeof w.waitUntilIdle === 'function') {
-    await w.waitUntilIdle(90000);
+    const idleOpts = opts && opts.insideExclusive ? { insideExclusive: true } : undefined;
+    await w.waitUntilIdle(90000, idleOpts);
   }
   if (w && typeof w.forceRetryAll === 'function') {
     w.forceRetryAll();
@@ -4208,7 +4211,7 @@ async function bootstrapSyncAfterSignInNow() {
         pushPending: () => {
           scheduleSyncSoon({ immediate: true });
         },
-        fullResyncFromCloud: () => runFullSyncFromCloud(),
+        fullResyncFromCloud: () => runFullSyncFromCloud({ insideExclusive: true }),
       });
     } finally {
       _suppressSyncSchedule -= 1;

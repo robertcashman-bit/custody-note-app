@@ -594,6 +594,25 @@ function createSyncWorker(ctx) {
     const row = ctx.dbGet('SELECT id, sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason, client_name, station_name, dscc_ref, attendance_date, supervisor_approved_at, supervisor_note, archived_at, sync_version FROM attendances WHERE id=?', [recordId]);
     if (!row) throw new Error('Record not found');
     const capturedVersion = row.sync_version || 1;
+    // Deleted rows are a content-free tombstone. The server free-quota counter
+    // recognises tombstone:true and does not store a note body. Pro uses the
+    // same shape so a delete still removes the record.
+    if (row.deleted_at) {
+      return {
+        queueId: queueItem.id,
+        recordId,
+        capturedVersion,
+        record: {
+          syncId: row.sync_id,
+          tombstone: true,
+          deletedAt: row.deleted_at,
+          deletionReason: row.deletion_reason || null,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          version: capturedVersion,
+        },
+      };
+    }
     const masterKeyHex = ctx.getMasterKeyHex && ctx.getMasterKeyHex();
     if (!masterKeyHex) throw new Error('No encryption key; cannot sync');
     const envelope = encryptSyncEnvelope(masterKeyHex, {
@@ -1681,22 +1700,21 @@ function createSyncWorker(ctx) {
 
   /**
    * Wait for an in-flight runCycle to finish (Full re-sync must not race cursor).
-   * Re-entrant: a caller that already holds runExclusive must not wait for its
-   * own lock. First sign-in on an empty database calls runFullSyncFromCloud
-   * from inside that lock; waiting here stalled activation for the full timeout.
+   * Pass { insideExclusive: true } only from the caller that already holds
+   * runExclusive (first-sign-in bootstrap). Other callers still wait for that lock.
    */
-  async function waitUntilIdle(timeoutMs = 60000) {
+  async function waitUntilIdle(timeoutMs = 60000, opts) {
     const limit = Math.max(0, Number(timeoutMs) || 0);
     const start = Date.now();
-    const ownExclusive = _exclusiveDepth > 0;
-    while (_inProgress || (!ownExclusive && _exclusiveDepth > 0)) {
+    const insideExclusive = !!(opts && opts.insideExclusive === true);
+    while (_inProgress || (!insideExclusive && _exclusiveDepth > 0)) {
       if (Date.now() - start >= limit) {
         console.warn('[SyncWorker] waitUntilIdle timed out after', limit, 'ms');
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    if (ownExclusive) return !_inProgress;
+    if (insideExclusive) return !_inProgress;
     return !_inProgress && _exclusiveDepth === 0;
   }
 

@@ -237,6 +237,9 @@
           stopPolling();
           showEmailForm();
           showError('Login link expired. Please send a new one.');
+        } else if (resp && (resp.status === 'failed' || resp.failed === true)) {
+          stopPolling();
+          showError(resp.error || 'Sign-in failed. Please try again.');
         }
       }).catch(function (e) { console.error('[auth-poll]', e); });
     }, POLL_INTERVAL_MS);

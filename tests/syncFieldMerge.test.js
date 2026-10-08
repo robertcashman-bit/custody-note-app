@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { encryptBuffer, decryptBuffer } = require('../lib/dbCrypto');
 const {
   mergeAttendanceRecords,
   planDuplicateCollapse,
@@ -14,6 +15,10 @@ const {
   backupThenMoveFoldFiles,
   parseTimestampMs,
 } = require('../lib/syncFieldMerge');
+
+const FOLD_KEY = 'ab'.repeat(32);
+function foldEncrypt(buf) { return encryptBuffer(buf, FOLD_KEY); }
+function foldDecrypt(buf) { return decryptBuffer(buf, FOLD_KEY); }
 
 function row(overrides) {
   return Object.assign({
@@ -270,7 +275,7 @@ describe('automatic field merge', () => {
     const photos = path.join(root, 'photos');
     fs.mkdirSync(path.join(photos, '9'), { recursive: true });
     fs.writeFileSync(path.join(photos, '9', 'p1.enc'), 'photo-bytes');
-    const extra = row({ id: 9, quickfile_invoice_id: 'INV-9', data: JSON.stringify({ note: 'full' }) });
+    const extra = row({ id: 9, quickfile_invoice_id: 'INV-9', data: JSON.stringify({ note: 'Client surname PRIVATE' }) });
     const prepared = backupThenMoveFoldFiles({
       fs: fs,
       path: path,
@@ -279,14 +284,40 @@ describe('automatic field merge', () => {
       keeperId: 4,
       extraRow: extra,
       related: { billingAudit: [{ attendance_id: 9, action: 'invoice' }] },
+      encryptBuffer: foldEncrypt,
+      decryptBuffer: foldDecrypt,
     });
     assert.equal(prepared.ok, true);
     assert.equal(fs.readFileSync(path.join(photos, '4', 'p1.enc'), 'utf8'), 'photo-bytes');
     assert.equal(fs.existsSync(path.join(photos, '9')), false);
-    const saved = JSON.parse(fs.readFileSync(prepared.backupPath, 'utf8'));
+    const onDisk = fs.readFileSync(prepared.backupPath);
+    assert.equal(onDisk.slice(0, 4).toString(), 'CNDB');
+    assert.equal(onDisk.toString('utf8').includes('PRIVATE'), false);
+    assert.equal(onDisk.toString('utf8').includes('INV-9'), false);
+    const saved = JSON.parse(foldDecrypt(onDisk).toString('utf8'));
     assert.equal(saved.attendance.quickfile_invoice_id, 'INV-9');
-    assert.equal(JSON.parse(saved.attendance.data).note, 'full');
+    assert.equal(JSON.parse(saved.attendance.data).note, 'Client surname PRIVATE');
     assert.equal(saved.related.billingAudit[0].action, 'invoice');
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('refuses the fold backup when encryption is not available', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-fold-plain-'));
+    const photos = path.join(root, 'photos');
+    fs.mkdirSync(path.join(photos, '9'), { recursive: true });
+    fs.writeFileSync(path.join(photos, '9', 'p1.enc'), 'stay');
+    const prepared = backupThenMoveFoldFiles({
+      fs: fs,
+      path: path,
+      photosRoot: photos,
+      backupDir: path.join(root, 'backup'),
+      keeperId: 4,
+      extraRow: row({ id: 9, data: JSON.stringify({ note: 'must not land in clear' }) }),
+    });
+    assert.equal(prepared.ok, false);
+    assert.equal(prepared.reason, 'no_encryption');
+    assert.equal(fs.existsSync(path.join(root, 'backup')), false);
+    assert.equal(fs.readFileSync(path.join(photos, '9', 'p1.enc'), 'utf8'), 'stay');
     fs.rmSync(root, { recursive: true, force: true });
   });
 
