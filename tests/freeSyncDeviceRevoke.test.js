@@ -569,14 +569,69 @@ describe('first-sign-in lock, purge guard, and non-growing quota pushes', () => 
 });
 
 describe('duplicate sync rows are folded, not copied again', () => {
-  it('collapse does not enqueue a tombstone for the extra row', () => {
+  it('collapse backs up and repoints before delete, and does not enqueue a tombstone', () => {
     const fn = mainJs.slice(
       mainJs.indexOf('function collapseDuplicateAttendanceSyncId'),
       mainJs.indexOf('async function syncPull')
     );
-    assert.match(fn, /DELETE FROM attendances WHERE id=/);
-    assert.doesNotMatch(fn, /enqueueSyncForRecord/);
+    const backupAt = fn.indexOf('backupThenMoveFoldFiles');
+    const deleteAt = fn.indexOf('DELETE FROM attendances WHERE id=');
+    assert.ok(backupAt > 0 && deleteAt > backupAt);
+    assert.match(fn, /repointFoldedAttendanceRows/);
+    assert.match(fn, /sync_merge_base/);
+    assert.match(fn, /record_revisions/);
+    assert.match(fn, /billing_audit_log/);
+    assert.match(fn, /UPDATE sync_queue SET record_id=/);
+    assert.match(fn, /enqueueSyncForRecord\(keeper\.id, 'upsert'/);
+    assert.match(fn, /assignFreshSyncId/);
+    assert.doesNotMatch(fn, /enqueueSyncForRecord\([^)]*'delete'/);
     assert.match(mainJs, /mergeAttendanceRecords/);
     assert.doesNotMatch(mainJs, /recordSyncConflict\(local\.id, local, remote, 'preserve_local_dirty'\)/);
+  });
+});
+
+describe('activation lock and background revoke', () => {
+  it('waitUntilIdle inside runExclusive returns without the 90s stall', async () => {
+    const mock = createMockCtx();
+    const worker = createSyncWorker(mock.ctx);
+    const start = Date.now();
+    const idle = await worker.runExclusive(async function () {
+      return worker.waitUntilIdle(90000);
+    });
+    const elapsed = Date.now() - start;
+    assert.equal(idle, true);
+    assert.ok(elapsed < 1000, 'elapsed ' + elapsed);
+  });
+
+  it('waitUntilIdle from outside still waits for the exclusive run', async () => {
+    const mock = createMockCtx();
+    const worker = createSyncWorker(mock.ctx);
+    let release;
+    const held = worker.runExclusive(function () {
+      return new Promise(function (resolve) { release = resolve; });
+    });
+    const start = Date.now();
+    const pending = worker.waitUntilIdle(2000);
+    await new Promise(function (resolve) { setTimeout(resolve, 120); });
+    release();
+    const idle = await pending;
+    await held;
+    assert.equal(idle, true);
+    assert.ok(Date.now() - start >= 100);
+  });
+
+  it('background validate does not retry the queue while the device is revoked', () => {
+    const start = mainJs.indexOf("ipcMain.handle('licence:validate'");
+    const slice = mainJs.slice(start, start + 2200);
+    assert.match(slice, /!result\.deviceRevoked && !\(data && data\.deviceRevoked\)/);
+    assert.match(slice, /retrySyncQueueAfterLicenceSuccess\(\)/);
+  });
+
+  it('auth poll stays pending until the server returns an access token', () => {
+    const start = licenceJs.indexOf('function startPolling');
+    const slice = licenceJs.slice(start, start + 1400);
+    assert.match(slice, /resp && resp\.ok && resp\.accessToken/);
+    assert.doesNotMatch(slice, /if \(resp\.ok\) \{/);
+    assert.match(licenceJs, /Login link sent\. Open it and click Confirm sign-in in your browser\./);
   });
 });

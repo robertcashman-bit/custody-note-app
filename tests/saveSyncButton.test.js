@@ -46,8 +46,9 @@ describe('Save & Sync button states', () => {
 
     const noBackup = deriveSaveSyncButton(Object.assign({}, baseOk, { backupOk: false, backupError: 'Backup folder is not writable' }));
     assert.equal(noBackup.state, STATES.FAILED);
-    assert.equal(noBackup.label, "Couldn't save");
+    assert.equal(noBackup.label, 'Saved, backup failed');
     assert.match(noBackup.hint, /not writable/);
+    assert.match(noBackup.title, /Saved, backup failed/);
     assert.doesNotMatch(noBackup.label, /synced/i);
 
     const noDisk = deriveSaveSyncButton(Object.assign({}, baseOk, { noteDurable: false, error: 'Disk flush failed' }));
@@ -97,5 +98,8 @@ describe('Save & Sync button states', () => {
     assert.match(chunk, /syncPull\(/);
     assert.match(chunk, /localOnly/);
     assert.match(chunk, /pullOk/);
+    const pullAt = chunk.indexOf('syncPull(');
+    const recountAt = chunk.indexOf('Recount after pull');
+    assert.ok(pullAt > 0 && recountAt > pullAt);
   });
 });

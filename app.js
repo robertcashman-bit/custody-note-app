@@ -5687,10 +5687,13 @@ var REQUIRED_FIELD_KEYS = [
     var dirty = !!(opts && opts.dirty);
     _autosaveIndicatorDirty = dirty;
     var txt;
+    var backupFailed = !!(opts && opts.backupOk === false);
     if (dirty) {
       txt = 'Unsaved changes';
-    } else if (!durable || (opts && opts.backupOk === false)) {
+    } else if (!durable) {
       txt = "Couldn't save";
+    } else if (backupFailed) {
+      txt = 'Saved, backup failed';
     } else if (durable && centralConfirmed && opts && opts.backupOk === true && opts.pullOk === true && !(opts && opts.localOnly)) {
       txt = '\u2713 Saved & synced ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
     } else if (opts && opts.localOnly) {
@@ -5702,19 +5705,21 @@ var REQUIRED_FIELD_KEYS = [
     }
     var title = dirty
       ? 'Edits are on screen only until the next successful disk write.'
-      : (durable
+      : (backupFailed
+        ? ('Saved, backup failed. ' + ((opts && (opts.backupError || opts.error)) || 'The local backup did not finish.'))
+        : (durable
         ? (centralConfirmed
           ? 'Durable on this computer and acknowledged by the central account store at ' + (_lastDbWrite || 'unknown') + '.'
           : (pendingSync
             ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Central account sync still pending.'
             : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.'))
-        : 'Save reached memory but disk flush did not complete — press Save & Sync.');
+        : 'Save reached memory but disk flush did not complete — press Save & Sync.'));
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.textContent = txt;
-      if (durable && !dirty) el.removeAttribute('data-autosave-error');
-      else if (!durable || dirty) el.setAttribute('data-autosave-error', '1');
+      if (durable && !dirty && !backupFailed) el.removeAttribute('data-autosave-error');
+      else if (!durable || dirty || backupFailed) el.setAttribute('data-autosave-error', '1');
       el.title = title;
       el.classList.add('visible');
     });
@@ -18043,9 +18048,15 @@ pdfAuditFooterHtml(d, settings) +
         backupError: res && res.backupError,
         syncError: res && (res.syncError || res.pullError),
       });
-      if (failedDisk || failedBackup) {
-        var why = (res && (res.backupError || res.error)) || (failedDisk ? 'The note did not finish writing to disk.' : 'The local backup did not finish.');
-        showToast("Couldn't save. " + why, 'error', 10000);
+      if (failedDisk) {
+        var diskWhy = (res && (res.error || res.backupError)) || 'The note did not finish writing to disk.';
+        showToast("Couldn't save. " + diskWhy, 'error', 10000);
+        try { updateBackupStatus(); } catch (_) {}
+        return;
+      }
+      if (failedBackup) {
+        var backupWhy = (res && (res.backupError || res.error)) || 'The local backup did not finish.';
+        showToast('Saved, backup failed. ' + backupWhy, 'error', 10000);
         try { updateBackupStatus(); } catch (_) {}
         return;
       }

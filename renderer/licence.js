@@ -227,13 +227,13 @@
       if (!activePollId) return;
       window.api.authPoll({ pollId: activePollId }).then(function (resp) {
         if (activePollId !== _currentPollId) return;
-        if (resp.ok) {
+        if (resp && resp.ok && resp.accessToken) {
           stopPolling();
           hideOverlay();
           markReady();
           handleValidationSuccess();
           startRevalidation();
-        } else if (resp.expired) {
+        } else if (resp && resp.expired) {
           stopPolling();
           showEmailForm();
           showError('Login link expired. Please send a new one.');
@@ -417,7 +417,7 @@
           freeSyncBtn.disabled = false;
           freeSyncBtn.textContent = 'Send login link';
           if (resp && resp.ok && resp.pollId) {
-            if (msgEl) msgEl.textContent = 'Login link sent.';
+            if (msgEl) msgEl.textContent = 'Login link sent. Open it and click Confirm sign-in in your browser.';
             if (waitingEl) waitingEl.style.display = '';
             startPolling(resp.pollId, email);
           } else if (msgEl) {

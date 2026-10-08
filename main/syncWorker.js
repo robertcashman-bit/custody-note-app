@@ -1679,17 +1679,24 @@ function createSyncWorker(ctx) {
     }
   }
 
-  /** Wait for an in-flight runCycle to finish (Full re-sync must not race cursor). */
+  /**
+   * Wait for an in-flight runCycle to finish (Full re-sync must not race cursor).
+   * Re-entrant: a caller that already holds runExclusive must not wait for its
+   * own lock. First sign-in on an empty database calls runFullSyncFromCloud
+   * from inside that lock; waiting here stalled activation for the full timeout.
+   */
   async function waitUntilIdle(timeoutMs = 60000) {
     const limit = Math.max(0, Number(timeoutMs) || 0);
     const start = Date.now();
-    while (_inProgress || _exclusiveDepth > 0) {
+    const ownExclusive = _exclusiveDepth > 0;
+    while (_inProgress || (!ownExclusive && _exclusiveDepth > 0)) {
       if (Date.now() - start >= limit) {
         console.warn('[SyncWorker] waitUntilIdle timed out after', limit, 'ms');
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
+    if (ownExclusive) return !_inProgress;
     return !_inProgress && _exclusiveDepth === 0;
   }
 

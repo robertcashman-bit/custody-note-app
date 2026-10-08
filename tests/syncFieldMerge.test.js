@@ -2,11 +2,17 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const {
   mergeAttendanceRecords,
   planDuplicateCollapse,
   HISTORY_KEY,
   stampFieldUpdatedAt,
+  capConflictHistory,
+  backupThenMoveFoldFiles,
+  parseTimestampMs,
 } = require('../lib/syncFieldMerge');
 
 function row(overrides) {
@@ -177,9 +183,10 @@ describe('automatic field merge', () => {
 
   it('folds duplicate sync_id rows into the keeper without dropping fields', () => {
     const plan = planDuplicateCollapse([
-      row({ id: 4, data: JSON.stringify({ note: 'older', extra: 'from first' }), updated_at: '2026-01-01T00:00:00.000Z' }),
-      row({ id: 9, data: JSON.stringify({ note: 'newer', other: 'from copy' }), updated_at: '2026-05-01T00:00:00.000Z', sync_version: 6 }),
+      row({ id: 4, created_at: '2026-01-01T08:00:00.000Z', data: JSON.stringify({ note: 'older', extra: 'from first' }), updated_at: '2026-01-01T00:00:00.000Z' }),
+      row({ id: 9, created_at: '2026-01-01 08:00:00', data: JSON.stringify({ note: 'newer', other: 'from copy' }), updated_at: '2026-05-01T00:00:00.000Z', sync_version: 6 }),
     ]);
+    assert.equal(plan.action, 'fold');
     assert.deepEqual(plan.removeIds, [9]);
     const data = JSON.parse(plan.keeper.data);
     assert.equal(data.note, 'newer');
@@ -188,10 +195,183 @@ describe('automatic field merge', () => {
     assert.ok(data[HISTORY_KEY].some((h) => h.field === 'note' && h.lost === 'older'));
   });
 
+  it('copies a lone invoice id onto the kept row and refuses the fold when both differ', () => {
+    const folded = planDuplicateCollapse([
+      row({ id: 4, created_at: '2026-01-01T08:00:00.000Z', quickfile_invoice_id: null, data: '{}' }),
+      row({ id: 9, created_at: '2026-01-01T08:00:00.000Z', quickfile_invoice_id: 'INV-9', data: '{}' }),
+    ]);
+    assert.equal(folded.collapse, true);
+    assert.equal(folded.keeper.quickfile_invoice_id, 'INV-9');
+    assert.deepEqual(folded.removeIds, [9]);
+
+    const clash = planDuplicateCollapse([
+      row({ id: 4, created_at: '2026-01-01T08:00:00.000Z', quickfile_invoice_id: 'INV-1', data: '{}' }),
+      row({ id: 9, created_at: '2026-01-01T08:00:00.000Z', quickfile_invoice_id: 'INV-2', data: '{}' }),
+    ]);
+    assert.equal(clash.collapse, false);
+    assert.deepEqual(clash.removeIds, []);
+    assert.deepEqual(clash.rekeyIds, [9]);
+  });
+
+  it('marks the keeper dirty and keeps the higher version when either row is unsynced', () => {
+    const plan = planDuplicateCollapse([
+      row({ id: 4, created_at: '2026-01-01T08:00:00.000Z', sync_dirty: 0, sync_version: 3, data: '{}' }),
+      row({ id: 9, created_at: '2026-01-01T08:00:00.000Z', sync_dirty: 1, sync_version: 8, data: '{}' }),
+    ]);
+    assert.equal(plan.keeper.sync_dirty, 1);
+    assert.ok(plan.keeper.sync_version >= 8);
+    assert.deepEqual(plan.removeIds, [9]);
+  });
+
+  it('keeps both notes when a shared sync_id is not the same attendance', () => {
+    const plan = planDuplicateCollapse([
+      row({
+        id: 4,
+        created_at: '2026-01-01T08:00:00.000Z',
+        client_name: 'Ada',
+        attendance_date: '2026-01-01',
+        dscc_ref: 'DSCC/1',
+        data: JSON.stringify({ note: 'one' }),
+      }),
+      row({
+        id: 9,
+        created_at: '2026-02-02T08:00:00.000Z',
+        client_name: 'Grace',
+        attendance_date: '2026-02-02',
+        dscc_ref: 'DSCC/9',
+        data: JSON.stringify({ note: 'two' }),
+      }),
+    ]);
+    assert.deepEqual(plan.removeIds, []);
+    assert.deepEqual(plan.rekeyIds, [9]);
+    assert.equal(plan.action, 'rekey');
+  });
+
+  it('folds a subset row and moves its photos only after a verified backup', () => {
+    const plan = planDuplicateCollapse([
+      row({
+        id: 4,
+        created_at: '2026-01-01T08:00:00.000Z',
+        data: JSON.stringify({ note: 'full', extra: 'kept' }),
+      }),
+      row({
+        id: 9,
+        created_at: '',
+        client_name: 'Ada',
+        dscc_ref: '',
+        attendance_date: '',
+        station_name: '',
+        data: JSON.stringify({ note: 'full' }),
+      }),
+    ]);
+    assert.deepEqual(plan.removeIds, [9]);
+
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-fold-'));
+    const photos = path.join(root, 'photos');
+    fs.mkdirSync(path.join(photos, '9'), { recursive: true });
+    fs.writeFileSync(path.join(photos, '9', 'p1.enc'), 'photo-bytes');
+    const extra = row({ id: 9, quickfile_invoice_id: 'INV-9', data: JSON.stringify({ note: 'full' }) });
+    const prepared = backupThenMoveFoldFiles({
+      fs: fs,
+      path: path,
+      photosRoot: photos,
+      backupDir: path.join(root, 'backup'),
+      keeperId: 4,
+      extraRow: extra,
+      related: { billingAudit: [{ attendance_id: 9, action: 'invoice' }] },
+    });
+    assert.equal(prepared.ok, true);
+    assert.equal(fs.readFileSync(path.join(photos, '4', 'p1.enc'), 'utf8'), 'photo-bytes');
+    assert.equal(fs.existsSync(path.join(photos, '9')), false);
+    const saved = JSON.parse(fs.readFileSync(prepared.backupPath, 'utf8'));
+    assert.equal(saved.attendance.quickfile_invoice_id, 'INV-9');
+    assert.equal(JSON.parse(saved.attendance.data).note, 'full');
+    assert.equal(saved.related.billingAudit[0].action, 'invoice');
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('does not move photos when the backup directory cannot be written', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-fold-nobackup-'));
+    const photos = path.join(root, 'photos');
+    fs.mkdirSync(path.join(photos, '9'), { recursive: true });
+    fs.writeFileSync(path.join(photos, '9', 'p1.enc'), 'stay');
+    const prepared = backupThenMoveFoldFiles({
+      fs: fs,
+      path: path,
+      photosRoot: photos,
+      backupDir: null,
+      keeperId: 4,
+      extraRow: row({ id: 9 }),
+    });
+    assert.equal(prepared.ok, false);
+    assert.equal(fs.readFileSync(path.join(photos, '9', 'p1.enc'), 'utf8'), 'stay');
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
   it('stamps a field time when that field changes and leaves unchanged fields', () => {
     const prev = { note: 'a', place: 'station', _cnFieldUpdatedAt: { note: '2026-01-01T00:00:00.000Z' } };
     const next = stampFieldUpdatedAt(prev, { note: 'b', place: 'station' }, '2026-08-08T08:08:00.000Z');
     assert.equal(next._cnFieldUpdatedAt.note, '2026-08-08T08:08:00.000Z');
     assert.equal(next._cnFieldUpdatedAt.place, undefined);
+  });
+
+  it('keeps background merge history when the open editor saves', () => {
+    const prev = {
+      note: 'merged',
+      _cnConflictHistory: [
+        { field: 'note', kept: 'merged', lost: 'background', keptFrom: 'remote', lostFrom: 'local', at: '2026-01-01T00:00:00.000Z' },
+      ],
+    };
+    const incoming = {
+      note: 'typed',
+      _cnConflictHistory: [
+        { field: 'note', kept: 'merged', lost: 'background', keptFrom: 'remote', lostFrom: 'local', at: '2026-01-01T00:00:00.000Z' },
+        { field: 'place', kept: 'A', lost: 'B', keptFrom: 'local', lostFrom: 'remote', at: '2026-02-01T00:00:00.000Z' },
+      ],
+    };
+    const next = stampFieldUpdatedAt(prev, incoming, '2026-08-01T00:00:00.000Z');
+    const fields = next._cnConflictHistory.map((h) => h.field).sort();
+    assert.deepEqual(fields, ['note', 'place']);
+    const again = stampFieldUpdatedAt(next, { note: 'typed', place: 'station' }, '2026-08-02T00:00:00.000Z');
+    assert.equal(again._cnConflictHistory.length, 2);
+  });
+
+  it('caps conflict history at 10 entries per field and about 50 KB', () => {
+    const list = [];
+    for (let i = 0; i < 12; i++) {
+      list.push({ field: 'note', kept: 'k' + i, lost: 'l' + i, at: '2026-01-0' + (i < 9 ? i + 1 : 9) });
+    }
+    list.push({ field: 'place', kept: 'p', lost: 'q', at: '2026-02-01T00:00:00.000Z' });
+    const capped = capConflictHistory(list);
+    assert.equal(capped.filter((h) => h.field === 'note').length, 10);
+    assert.equal(capped[0].lost, 'l2');
+    assert.equal(capped.filter((h) => h.field === 'place').length, 1);
+
+    const bulky = [];
+    for (let i = 0; i < 8; i++) {
+      bulky.push({ field: 'blob', kept: 'k', lost: 'x'.repeat(12000), at: String(i) });
+    }
+    const shrunk = capConflictHistory(bulky);
+    assert.ok(Buffer.byteLength(JSON.stringify(shrunk), 'utf8') <= 50 * 1024);
+    assert.ok(shrunk.length < bulky.length);
+    assert.equal(shrunk[shrunk.length - 1].at, '7');
+  });
+
+  it('compares SQLite datetime and ISO timestamps as the same UTC instant', () => {
+    const sqlite = '2026-06-02 12:00:00';
+    const iso = '2026-06-02T12:00:00.000Z';
+    assert.equal(parseTimestampMs(sqlite), parseTimestampMs(iso));
+    const newer = mergeAttendanceRecords({
+      base: null,
+      local: row({ data: JSON.stringify({ note: 'local' }), updated_at: '2026-06-02T11:00:00.000Z' }),
+      remote: row({ data: JSON.stringify({ note: 'remote' }), updated_at: sqlite, sync_dirty: 0 }),
+    });
+    assert.equal(newer.data.note, 'remote');
+    const tie = mergeAttendanceRecords({
+      base: null,
+      local: row({ data: JSON.stringify({ note: 'local' }), updated_at: iso }),
+      remote: row({ data: JSON.stringify({ note: 'remote' }), updated_at: sqlite, sync_dirty: 0 }),
+    });
+    assert.equal(tie.data.note, 'local');
   });
 });

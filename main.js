@@ -250,6 +250,7 @@ const {
   markConflictsAutoMerged,
   planDuplicateCollapse,
   stampFieldUpdatedAt,
+  backupThenMoveFoldFiles,
   QUIET_MERGED_MESSAGE,
 } = require('./lib/syncFieldMerge');
 const {
@@ -3482,14 +3483,92 @@ function captureMergeBaseIfClean(attendanceId) {
   saveSyncMergeBaseFromRow(attendanceId);
 }
 
-/** Fold same-sync_id copies into the oldest row. Does not enqueue a delete. */
+function repointFoldedAttendanceRows(fromId, toId) {
+  const keeperBase = dbGet('SELECT attendance_id FROM sync_merge_base WHERE attendance_id=?', [toId]);
+  const extraBase = dbGet('SELECT attendance_id FROM sync_merge_base WHERE attendance_id=?', [fromId]);
+  if (extraBase && !keeperBase) {
+    dbRun('UPDATE sync_merge_base SET attendance_id=? WHERE attendance_id=?', [toId, fromId]);
+  } else if (extraBase) {
+    dbRun('DELETE FROM sync_merge_base WHERE attendance_id=?', [fromId]);
+  }
+  dbRun('UPDATE record_revisions SET attendance_id=? WHERE attendance_id=?', [toId, fromId]);
+  dbRun('UPDATE billing_audit_log SET attendance_id=? WHERE attendance_id=?', [toId, fromId]);
+}
+
+function assignFreshSyncId(attendanceId) {
+  dbRun('UPDATE attendances SET sync_id=?, sync_dirty=1 WHERE id=?', [generateSyncId(), attendanceId]);
+  enqueueSyncForRecord(attendanceId, 'upsert', { schedule: false });
+}
+
+/**
+ * Fold same-sync_id copies into the oldest row only when they are the same note.
+ * Photos, invoice columns, merge base, revisions and billing audit move first.
+ * A different note gets a fresh sync_id and stays visible. Never enqueues a delete.
+ */
 function collapseDuplicateAttendanceSyncId(syncId) {
   if (!db || !syncId) return;
   const rows = dbAll('SELECT * FROM attendances WHERE sync_id=? ORDER BY id ASC', [syncId]) || [];
   if (rows.length < 2) return;
   const plan = planDuplicateCollapse(rows);
+  if (plan.rekeyIds && plan.rekeyIds.length) {
+    for (let i = 0; i < plan.rekeyIds.length; i++) assignFreshSyncId(plan.rekeyIds[i]);
+  }
   const keeper = plan.keeper;
-  if (!keeper || keeper.id == null) return;
+  if (!plan.collapse || !keeper || keeper.id == null || !plan.removeIds || !plan.removeIds.length) {
+    saveDb();
+    return;
+  }
+  const photosRoot = path.join(app.getPath('userData'), 'photos');
+  let backupDir = null;
+  try { backupDir = getBackupFolder(); } catch (_) {}
+  if (!backupDir) {
+    try { backupDir = path.join(app.getPath('userData'), 'backups'); } catch (_) { backupDir = null; }
+  }
+  const foldBackupDir = backupDir ? path.join(backupDir, 'fold-deleted-rows') : null;
+  const removed = [];
+  for (let i = 0; i < plan.removeIds.length; i++) {
+    const extraId = plan.removeIds[i];
+    let extraRow = null;
+    for (let r = 0; r < rows.length; r++) {
+      if (Number(rows[r].id) === Number(extraId)) extraRow = rows[r];
+    }
+    if (!extraRow) continue;
+    let related = null;
+    try {
+      related = {
+        mergeBase: dbGet('SELECT * FROM sync_merge_base WHERE attendance_id=?', [extraId]) || null,
+        revisions: dbAll('SELECT * FROM record_revisions WHERE attendance_id=?', [extraId]) || [],
+        billingAudit: dbAll('SELECT * FROM billing_audit_log WHERE attendance_id=?', [extraId]) || [],
+        queue: dbAll('SELECT * FROM sync_queue WHERE record_id=?', [String(extraId)]) || [],
+      };
+    } catch (_) {}
+    const prepared = backupThenMoveFoldFiles({
+      fs: fs,
+      path: path,
+      photosRoot: photosRoot,
+      backupDir: foldBackupDir,
+      keeperId: keeper.id,
+      extraRow: extraRow,
+      related: related,
+    });
+    if (!prepared || !prepared.ok) {
+      if (prepared && prepared.conflict) assignFreshSyncId(extraId);
+      else console.warn('[Sync] Refusing to delete duplicate row', extraId, prepared && prepared.reason);
+      continue;
+    }
+    try {
+      repointFoldedAttendanceRows(extraId, keeper.id);
+      dbRun('UPDATE sync_queue SET record_id=? WHERE record_id=?', [String(keeper.id), String(extraId)]);
+    } catch (err) {
+      console.warn('[Sync] Refusing to delete duplicate row; repoint failed', extraId, err && err.message ? err.message : err);
+      continue;
+    }
+    removed.push(extraId);
+  }
+  if (!removed.length) {
+    saveDb();
+    return;
+  }
   writeMergedAttendance({ dbRun }, keeper.id, {
     ok: true,
     unchanged: false,
@@ -3508,9 +3587,40 @@ function collapseDuplicateAttendanceSyncId(syncId) {
     syncDirty: keeper.sync_dirty ? 1 : 0,
     version: keeper.sync_version || 1,
   });
-  for (let i = 0; i < plan.removeIds.length; i++) {
-    dbRun('DELETE FROM attendances WHERE id=?', [plan.removeIds[i]]);
+  try {
+    dbRun(
+      `UPDATE attendances SET quickfile_invoice_id=?, quickfile_invoice_number=?, quickfile_invoice_url=?,
+        invoice_created_at=?, invoice_created_by=?, invoice_subtotal=?, invoice_vat=?, invoice_total=?,
+        invoice_narrative=?, invoice_mileage_miles=?, invoice_mileage_rate=?, invoice_parking_amount=?,
+        invoice_attendance_fee=?, invoice_vat_rate=?, work_type=?
+       WHERE id=?`,
+      [
+        keeper.quickfile_invoice_id || null,
+        keeper.quickfile_invoice_number || null,
+        keeper.quickfile_invoice_url || null,
+        keeper.invoice_created_at || null,
+        keeper.invoice_created_by || null,
+        keeper.invoice_subtotal == null ? null : keeper.invoice_subtotal,
+        keeper.invoice_vat == null ? null : keeper.invoice_vat,
+        keeper.invoice_total == null ? null : keeper.invoice_total,
+        keeper.invoice_narrative || null,
+        keeper.invoice_mileage_miles == null ? null : keeper.invoice_mileage_miles,
+        keeper.invoice_mileage_rate == null ? null : keeper.invoice_mileage_rate,
+        keeper.invoice_parking_amount == null ? null : keeper.invoice_parking_amount,
+        keeper.invoice_attendance_fee == null ? null : keeper.invoice_attendance_fee,
+        keeper.invoice_vat_rate == null ? null : keeper.invoice_vat_rate,
+        keeper.work_type || null,
+        keeper.id,
+      ]
+    );
+  } catch (err) {
+    console.warn('[Sync] Fold kept the row but invoice columns were not copied', err && err.message ? err.message : err);
   }
+  if (keeper.sync_dirty) enqueueSyncForRecord(keeper.id, 'upsert', { schedule: false });
+  for (let i = 0; i < removed.length; i++) {
+    dbRun('DELETE FROM attendances WHERE id=?', [removed[i]]);
+  }
+  saveDb();
 }
 
 async function syncPull(opts) {
@@ -6473,7 +6583,11 @@ ipcMain.handle('licence:validate', async () => {
   }
 
   if (result.valid === true) {
-    retrySyncQueueAfterLicenceSuccess();
+    // A revoked device stays backed off. Clearing the queue here would push
+    // again on the next background validate and undo the worker delay.
+    if (!result.deviceRevoked && !(data && data.deviceRevoked)) {
+      retrySyncQueueAfterLicenceSuccess();
+    }
     checkCloudBackupEntitlement().catch(() => {});
     ensureQuickFileSettingsFromServer({ reason: 'licence-validate' }).catch(function (e) {
       console.warn('[QuickFile] background settings pull after licence validate failed:', e && e.message);
@@ -8888,6 +9002,11 @@ ipcMain.handle('persist-and-backup', async () => {
         if (!syncError) syncError = pullError;
       }
     }
+    // Recount after pull so a merge that dirties a note cannot show as synced.
+    const pendingAfter = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')");
+    const dirtyAfter = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
+    pendingCount = pendingAfter ? (pendingAfter.c || 0) : 0;
+    dirtyCount = dirtyAfter ? (dirtyAfter.c || 0) : 0;
   } catch (syncErr) {
     syncAttempted = true;
     syncError = syncErr && syncErr.message ? syncErr.message : String(syncErr);
