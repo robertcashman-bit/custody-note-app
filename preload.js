@@ -270,6 +270,11 @@ contextBridge.exposeInMainWorld('api', {
     if (id != null && typeof id === 'object' && id.id != null) id = id.id;
     return ipcRenderer.invoke('attendance-get', id);
   },
+  /** Open-note central ack: sync_dirty + outbox for one attendance id. */
+  attendanceSyncAckState: (id) => {
+    if (id != null && typeof id === 'object' && id.id != null) id = id.id;
+    return ipcRenderer.invoke('attendance-sync-ack-state', id);
+  },
   /**
    * Backward-compatible save: resolves to numeric id on success (e2e + legacy
    * callers). Error shapes ({ error, message }) are returned as objects.

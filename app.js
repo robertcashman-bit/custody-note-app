@@ -50,6 +50,8 @@ var currentRecordArchived = false;
 var autoSaveTimer = null;
 var _draftSaveInFlight = false;
 var _draftSaveQueued = false;
+var _autosaveIndicatorDirty = false;
+var _openNoteSavedSyncVersion = null;
 var _finalising = false;
 var _lastFinaliseAttempt = null;
 var _lastFinaliseResult = null;
@@ -5761,7 +5763,7 @@ var REQUIRED_FIELD_KEYS = [
           try { window.OfficerEmailsPanel.attachToCustodyNote(currentAttendanceId); } catch (_) {}
         }
       }
-      showAutoSaveIndicator({ durable: normalized.durable, pendingSync: normalized.pendingSync });
+      noteSaveIndicatorFromNormalizedSave(normalized);
       if (normalized.durable === false) {
         showToast('Saved in memory but disk write may not have finished — press Force save', 'warning', 5000);
       }
@@ -5802,6 +5804,60 @@ var REQUIRED_FIELD_KEYS = [
     }
   }
 
+  function refreshOpenNoteCentralSyncIndicator() {
+    if (_autosaveIndicatorDirty) return;
+    if (!currentAttendanceId) return;
+    if (!window.api || typeof window.api.attendanceSyncAckState !== 'function') return;
+    var recordId = currentAttendanceId;
+    window.api.attendanceSyncAckState(recordId).then(function(st) {
+      if (!st || !st.ok) return;
+      if (String(st.recordId) !== String(recordId) || currentAttendanceId !== recordId) return;
+      if (_autosaveIndicatorDirty) return;
+      if (_openNoteSavedSyncVersion == null && st.syncVersion != null) {
+        _openNoteSavedSyncVersion = Number(st.syncVersion);
+      }
+      var derive = (typeof OpenNoteCentralSyncIndicator !== 'undefined' &&
+        OpenNoteCentralSyncIndicator.deriveOpenNoteCentralSyncState)
+        ? OpenNoteCentralSyncIndicator.deriveOpenNoteCentralSyncState
+        : null;
+      var derived = derive
+        ? derive({
+          durable: true,
+          dirty: false,
+          syncDirty: st.syncDirty,
+          queuePending: st.queuePending,
+          savedSyncVersion: _openNoteSavedSyncVersion,
+          currentSyncVersion: st.syncVersion,
+        })
+        : {
+          centralConfirmed: !st.syncDirty && !st.queuePending,
+          pendingSync: !!(st.syncDirty || st.queuePending),
+        };
+      showAutoSaveIndicator({
+        durable: true,
+        dirty: false,
+        pendingSync: derived.pendingSync,
+        centralConfirmed: derived.centralConfirmed,
+      });
+    }).catch(function(e) {
+      console.warn('[open-note-sync-indicator]', e && e.message ? e.message : e);
+    });
+  }
+
+  function noteSaveIndicatorFromNormalizedSave(normalized) {
+    if (!normalized) return;
+    if (normalized.syncVersion != null) {
+      _openNoteSavedSyncVersion = Number(normalized.syncVersion);
+    }
+    showAutoSaveIndicator({
+      durable: normalized.durable,
+      pendingSync: normalized.pendingSync,
+    });
+    if (normalized.durable && normalized.pendingSync) {
+      refreshOpenNoteCentralSyncIndicator();
+    }
+  }
+
   function showAutoSaveIndicator(opts) {
     var now = new Date();
     _lastQuietSaveDurationMs = _lastQuietSaveStart ? (now.getTime() - _lastQuietSaveStart) : null;
@@ -5810,6 +5866,7 @@ var REQUIRED_FIELD_KEYS = [
     var pendingSync = !!(opts && opts.pendingSync);
     var centralConfirmed = !!(opts && opts.centralConfirmed);
     var dirty = !!(opts && opts.dirty);
+    _autosaveIndicatorDirty = dirty;
     var txt;
     if (dirty) {
       txt = 'Unsaved changes…';
@@ -5874,6 +5931,7 @@ var REQUIRED_FIELD_KEYS = [
         id: result.id != null ? result.id : null,
         durable: result.durable === true,
         pendingSync: result.pendingSync !== false && !result.error,
+        syncVersion: result.syncVersion != null ? result.syncVersion : null,
         error: result.error || null,
         message: result.message || null,
       };
@@ -7676,6 +7734,8 @@ var REQUIRED_FIELD_KEYS = [
       if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.attachToCustodyNote === 'function') {
         try { window.OfficerEmailsPanel.attachToCustodyNote(id); } catch (_) {}
       }
+      _openNoteSavedSyncVersion = null;
+      refreshOpenNoteCentralSyncIndicator();
       return;
     }
     
@@ -7717,6 +7777,8 @@ var REQUIRED_FIELD_KEYS = [
       if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.attachToCustodyNote === 'function') {
         try { window.OfficerEmailsPanel.attachToCustodyNote(id); } catch (_) {}
       }
+      _openNoteSavedSyncVersion = null;
+      refreshOpenNoteCentralSyncIndicator();
     }).catch(function(err) {
       if (requestToken !== _openAttendanceToken || currentAttendanceId !== id) return;
       showToast('Could not open record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 5000);
@@ -13583,10 +13645,7 @@ var REQUIRED_FIELD_KEYS = [
           }
         }
         if (status !== 'finalised' && status !== 'completed') {
-          showAutoSaveIndicator({
-            durable: normalizedSave.durable,
-            pendingSync: normalizedSave.pendingSync,
-          });
+          noteSaveIndicatorFromNormalizedSave(normalizedSave);
         }
         if (status === 'finalised') {
           /* Verify the DB actually persisted the finalised status */
@@ -17170,6 +17229,9 @@ pdfAuditFooterHtml(d, settings) +
         updateSyncStatusIndicator(data);
         var syncWrap = document.getElementById('home-sync-now-wrap');
         if (syncWrap && _footerSyncSnapshot) syncWrap.style.display = _footerSyncSnapshot.enabled ? '' : 'none';
+        if (data && (data.status === 'synced' || data.status === 'syncing' || data.status === 'error')) {
+          try { refreshOpenNoteCentralSyncIndicator(); } catch (_) {}
+        }
       });
     }
 

@@ -7427,6 +7427,36 @@ function coerceAttendanceIdArg(id) {
   return null;
 }
 
+/** Per-record central ack state for open-note autosave indicator (metadata only). */
+ipcMain.handle('attendance-sync-ack-state', (_, id) => {
+  const coerced = coerceAttendanceIdArg(id);
+  if (coerced == null) return { ok: false, error: 'invalid_id' };
+  try {
+    const row = dbGet(
+      'SELECT id, sync_dirty, sync_version FROM attendances WHERE id=?',
+      [coerced]
+    );
+    if (!row) return { ok: false, error: 'not_found' };
+    const queueRow = dbGet(
+      "SELECT COUNT(*) as c FROM sync_queue WHERE record_id=? AND status IN ('pending','syncing','failed','blocked')",
+      [String(coerced)]
+    );
+    const queuePending = !!(queueRow && Number(queueRow.c) > 0);
+    return {
+      ok: true,
+      recordId: coerced,
+      syncDirty: row.sync_dirty === 1,
+      syncVersion: row.sync_version || 1,
+      queuePending,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e && e.message ? e.message : 'query_failed',
+    };
+  }
+});
+
 ipcMain.handle('attendance-get', (_, id) => {
   const coerced = coerceAttendanceIdArg(id);
   if (coerced == null) return null;
@@ -7526,11 +7556,19 @@ function finishAttendanceSaveResult(id, status, op) {
       op: op || 'attendance-save',
     })));
   } catch (_) {}
+  let syncVersion = null;
+  if (id != null) {
+    try {
+      const verRow = dbGet('SELECT sync_version FROM attendances WHERE id=?', [id]);
+      if (verRow) syncVersion = verRow.sync_version || 1;
+    } catch (_) {}
+  }
   return {
     id,
     durable,
     pendingSync,
     syncDirty,
+    syncVersion,
     status: status || 'draft',
   };
 }
