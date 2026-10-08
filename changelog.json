@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.112",
+      "date": "2026-10-08",
+      "latest": true,
+      "changes": [
+        "Sync your notes across up to 5 computers. Free during beta: sign in with your email and your notes follow you",
+        "If the same note was edited on two computers, Custody Note merges the changes itself and keeps the earlier version in the note's history",
+        "New Save & Sync button in the top bar (Ctrl+S, or Cmd+S on Mac). It shows Saved & synced only once the note is saved and has reached the cloud",
+        "If a computer was deactivated, signing in again or re-entering your licence key reconnects it straight away"
+      ]
+    },
+    {
       "version": "1.9.111",
       "date": "2026-10-04",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Updates and installers now come from a dedicated Custody Note releases download location — no action needed, automatic updates continue as normal",
         "Release notes are now written in plain, customer-focused language"
