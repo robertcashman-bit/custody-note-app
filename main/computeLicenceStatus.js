@@ -114,7 +114,7 @@ function computeLicenceStatus(data, options) {
 
   const now = Date.now();
 
-  // Non-expiring Free during beta
+  // Non-expiring Free during beta. Not Pro: no add-ons, no managed cloud backup.
   if (tier === 'free' || (freeTierEnabled && keyLooksFree(data.key))) {
     return {
       status: 'active',
@@ -127,8 +127,9 @@ function computeLicenceStatus(data, options) {
       isFree: true,
       tier: 'free',
       createAllowed: true,
-      addons,
-      entitlements: data.entitlements || null,
+      addons: noAddons,
+      entitlements: null,
+      cloudBackup: false,
       graceDays,
     };
   }

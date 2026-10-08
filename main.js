@@ -232,7 +232,16 @@ const {
 const {
   resolveAdminEmails,
   isAdminEmail,
+  isSyntheticLocalLicenceKey,
 } = require('./main/licenceAdminEmails');
+const {
+  applyFreeSyncSubscription,
+  subscriptionIsFreeSync,
+  deviceRevokedUserMessage,
+  isDeviceRevokedHttpError,
+  isFreeQuotaHttpError,
+} = require('./lib/syncAccountState');
+const { bootstrapSyncAfterSignIn } = require('./lib/signedInSyncBootstrap');
 const {
   shouldSkipOnlineValidation,
   applyOnlineValidationResult,
@@ -559,6 +568,10 @@ async function ensureCanonicalSyncKeyNow() {
   if (!apiUrl) return { ok: false, action: 'no_api' };
   const data = readLicenceData();
   const licenceKey = data && data.key ? normalizeLicenceKeyForSync(data.key) : null;
+  // Synthetic FREE-/TRIAL- keys must not call escrow or recovery.
+  if (!licenceKey || isSyntheticLocalLicenceKey(licenceKey)) {
+    return { ok: false, action: 'synthetic_local_key' };
+  }
   const result = await ensureCanonicalSyncKey({
     getLicenceKey: () => licenceKey,
     getLocalKeyHex: () => getOrCreateMasterKey({ allowCreate: false }),
@@ -592,6 +605,7 @@ async function uploadKeyEscrow() {
   if (!apiUrl) return false;
   const data = readLicenceData();
   if (!data || !data.key) return false;
+  if (isSyntheticLocalLicenceKey(data.key)) return false;
   const masterKeyHex = _masterKey || getOrCreateMasterKey({ allowCreate: false });
   if (!masterKeyHex) return false;
   try {
@@ -2345,12 +2359,20 @@ async function checkCloudBackupEntitlement() {
     emitCloudBackupStatus({ enabled: false, isTrial: false, lastError: null });
     return;
   }
-  // Free during beta and local trial do not include managed AWS cloud backup (Pro planned after beta).
-  if ((isFree || isTrial) && !hasAuth) {
+  // Free — including a signed-in free_sync account — never gets managed AWS backup.
+  if (isFree) {
     _cloudBackupEnabled = false;
     _lastManagedCloudError = null;
-    console.info('[CloudBackup] Skipping entitlement check — Free/trial licence. Cloud backup is Pro-only.');
-    emitCloudBackupStatus({ enabled: false, isTrial: !!isTrial, lastError: null });
+    console.info('[CloudBackup] Skipping entitlement check — Free licence. Managed cloud backup stays off.');
+    emitCloudBackupStatus({ enabled: false, isTrial: false, lastError: null });
+    return;
+  }
+  // Local trial without an account session does not include managed AWS cloud backup.
+  if (isTrial && !hasAuth) {
+    _cloudBackupEnabled = false;
+    _lastManagedCloudError = null;
+    console.info('[CloudBackup] Skipping entitlement check — trial licence. Cloud backup is Pro-only.');
+    emitCloudBackupStatus({ enabled: false, isTrial: true, lastError: null });
     return;
   }
   const apiUrl = getManagedCloudApiUrl();
@@ -3254,6 +3276,10 @@ function buildSyncRecoveryHints(statusBase) {
     rateLimited,
     rateLimitRemainingMs: rateLimited && diag.rateLimit ? diag.rateLimit.remainingMs : 0,
     authRequired: !!authRequired,
+    deviceRevoked: !!(diag.deviceRevoked || lastSyncSkipReason === 'device_revoked'),
+    deviceRevokedBy: diag.deviceRevokedBy || null,
+    freeQuotaExceeded: !!(diag.freeQuotaExceeded || lastSyncSkipReason === 'free_quota_exceeded'),
+    localOnly: !!(diag.localOnly || lastSyncSkipReason === 'local_only' || (statusBase && statusBase.connectivity === 'local_only')),
     emptyCloudHeal: healState,
     emptyCloudHealPending,
     lastSyncCycleAt,
@@ -3400,6 +3426,11 @@ async function syncPull(opts) {
     logSyncAttempt(opts && opts.correlationId, 'pull', 0, false, 'auth_required');
     return { pulled: 0 };
   }
+  // Local FREE-/TRIAL- keys never call /api/sync/pull (no 401 spam).
+  if (isSyntheticLocalLicenceKey(data.key) || isSyntheticLocalLicenceKey(licenceKey)) {
+    logSyncAttempt(opts && opts.correlationId, 'pull', 0, false, 'local_only');
+    return { pulled: 0, received: 0, skipped: true, reason: 'local_only', localOnly: true };
+  }
 
   const localCountRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const localCount = localCountRow ? localCountRow.c : 0;
@@ -3436,12 +3467,36 @@ async function syncPull(opts) {
   while (iterations < MAX_PULL_ITERATIONS) {
     iterations++;
     const since = getLastSyncTimestamp();
-    const resp = await httpPost(`${apiUrl}/api/sync/pull`, {
-      key: licenceKey,
-      machineId: getMachineId(),
-      since,
-      accountId: data.accountId || undefined,
-    }, syncOpts);
+    let resp;
+    try {
+      resp = await httpPost(`${apiUrl}/api/sync/pull`, {
+        key: licenceKey,
+        machineId: getMachineId(),
+        since,
+        accountId: data.accountId || undefined,
+      }, syncOpts);
+    } catch (pullErr) {
+      if (isDeviceRevokedHttpError(pullErr)) {
+        logSyncAttempt(opts && opts.correlationId, 'pull', receivedCount, false, 'device_revoked');
+        return {
+          pulled: merged,
+          received: receivedCount,
+          deviceRevoked: true,
+          deviceRevokedBy: pullErr.deviceRevokedBy || (pullErr.body && pullErr.body.deviceRevokedBy) || null,
+          skipped: true,
+        };
+      }
+      if (isFreeQuotaHttpError(pullErr)) {
+        logSyncAttempt(opts && opts.correlationId, 'pull', receivedCount, false, 'free_quota_exceeded');
+        return {
+          pulled: merged,
+          received: receivedCount,
+          freeQuotaExceeded: true,
+          skipped: true,
+        };
+      }
+      throw pullErr;
+    }
 
     // Hostile-cloud schema / cross-account gate before any merge.
     const validated = validatePullResponse(resp, {
@@ -3830,6 +3885,7 @@ function scheduleAutoFullResyncIfEmpty() {
   if (!db || !getSyncApiUrl()) return;
   const data = readLicenceData();
   if (!data || !data.key) return;
+  if (isSyntheticLocalLicenceKey(data.key)) return;
   const countRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE deleted_at IS NULL');
   const total = countRow ? countRow.c : 0;
   const emptyLarge = detectEmptyLargeDb({
@@ -3898,11 +3954,60 @@ function resetSyncWorkerAfterDbSwap(reason) {
   }
 }
 
+/** While > 0, enqueueSyncForRecord does not kick a cycle (bootstrap orders pull before push). */
+let _suppressSyncSchedule = 0;
+
 function enqueueSyncForRecord(recordId, operation = 'upsert', scheduleOpts) {
   const w = getSyncWorker();
   // Always pass scheduleOpts (default {}) so worker.enqueue kicks scheduleSoon.
   // Direct worker.enqueue(id, op, payload) in unit tests omits the 4th arg and does not kick.
-  if (w) w.enqueue(String(recordId), operation, {}, scheduleOpts || {});
+  const opts = Object.assign({}, scheduleOpts || {});
+  if (_suppressSyncSchedule > 0) opts.schedule = false;
+  if (w) w.enqueue(String(recordId), operation, {}, opts);
+}
+
+/**
+ * Queue every local attendance for upload. Does not delete or rewrite row bodies.
+ * Used when a computer that already has notes first receives a server key.
+ */
+function enqueueAllLocalAttendancesForSync() {
+  if (!db) return 0;
+  const rows = dbAll('SELECT id FROM attendances') || [];
+  for (const row of rows) {
+    dbRun('UPDATE attendances SET sync_dirty=1 WHERE id=?', [row.id]);
+    const w = getSyncWorker();
+    if (w) w.enqueue(String(row.id), 'upsert', {}, { schedule: false });
+  }
+  if (rows.length > 0) saveDb();
+  return rows.length;
+}
+
+/**
+ * First real server key on this computer.
+ * Existing notes: canonical key → enqueue all → pull/merge → push.
+ * Empty database: escrow download + full re-sync (same as Pro).
+ * Never deletes local rows because the cloud lacks them.
+ */
+async function bootstrapSyncAfterSignInNow() {
+  if (!db) return { ok: false, error: 'Database not ready' };
+  _suppressSyncSchedule += 1;
+  try {
+    return await bootstrapSyncAfterSignIn({
+      countLocalAttendances: () => {
+        const row = dbGet('SELECT COUNT(*) as c FROM attendances');
+        return row ? row.c : 0;
+      },
+      ensureCanonicalSyncKey: () => ensureCanonicalSyncKeyNow(),
+      enqueueAllLocalAttendances: () => enqueueAllLocalAttendancesForSync(),
+      pullAndMerge: () => syncPull({ correlationId: generateCorrelationId() }),
+      pushPending: () => {
+        scheduleSyncSoon({ immediate: true });
+      },
+      fullResyncFromCloud: () => runFullSyncFromCloud(),
+    });
+  } finally {
+    _suppressSyncSchedule -= 1;
+  }
 }
 
 function startSyncTimer() {
@@ -5911,6 +6016,10 @@ function httpPost(url, body, opts) {
           try { errBody = JSON.parse(data); if (errBody && errBody.error) errMsg = errBody.error; } catch (_) {}
           const err = new Error(errMsg);
           err.statusCode = res.statusCode;
+          if (errBody && errBody.code) err.bodyCode = String(errBody.code);
+          if (errBody && errBody.deviceRevokedBy) err.deviceRevokedBy = errBody.deviceRevokedBy;
+          if (errBody && errBody.deviceRevoked) err.deviceRevoked = true;
+          if (errBody) err.body = errBody;
           // Honour server back-off (Retry-After header or JSON retryAfterSeconds)
           // so the sync rate-limit gate waits exactly as long as the server asks;
           // the 5-minute fallback applies only when neither is present.
@@ -6016,16 +6125,35 @@ async function postLicenceValidateRequest(body) {
   }
 }
 
-async function validateLicenceOnline(key, machineId) {
+function stampDeviceRevokeFromValidate(data, result) {
+  if (!data || !result || result.offline || result.valid == null) return false;
+  if (result.deviceRevoked) {
+    data.deviceRevoked = true;
+    data.deviceRevokedBy = result.deviceRevokedBy || null;
+    return true;
+  }
+  if (result.valid === true && (data.deviceRevoked || data.deviceRevokedBy)) {
+    delete data.deviceRevoked;
+    delete data.deviceRevokedBy;
+    return true;
+  }
+  return false;
+}
+
+async function validateLicenceOnline(key, machineId, opts) {
   const url = getLicenceValidationUrl();
   if (!url) return { valid: true, offline: true };
   const normalizedKey = normalizeLicenceKeyForSync(key);
+  const body = {
+    key: normalizedKey,
+    machineId,
+    appVersion: app.getVersion() || '0.0.0',
+  };
+  // intent:"activate" is only for an explicit user activation. Background
+  // validates must not send it (that is what un-revokes a device).
+  if (opts && opts.intent === 'activate') body.intent = 'activate';
   try {
-    const resp = await postLicenceValidateRequest({
-      key: normalizedKey,
-      machineId,
-      appVersion: app.getVersion() || '0.0.0',
-    });
+    const resp = await postLicenceValidateRequest(body);
     return {
       valid: !!resp.valid,
       expiresAt: resp.expiresAt || null,
@@ -6036,6 +6164,8 @@ async function validateLicenceOnline(key, machineId) {
       serverStatus: resp.status || null,
       entitlements: resp.entitlements || null,
       cloudBackup: !!resp.cloudBackup,
+      deviceRevoked: !!(resp && resp.deviceRevoked),
+      deviceRevokedBy: (resp && resp.deviceRevokedBy) || null,
     };
   } catch (e) {
     return { valid: null, offline: true, message: 'Could not reach validation server: ' + e.message, serverStatus: null };
@@ -6125,6 +6255,12 @@ ipcMain.handle('licence:status', () => {
     result.accountEmail = data.email || '';
     result.syntheticLicenceKey = !!(data.key && String(data.key).toUpperCase().startsWith('ACCOUNT-'));
   }
+  if (data && data.deviceRevoked) {
+    result.deviceRevoked = true;
+    result.deviceRevokedBy = data.deviceRevokedBy || null;
+    result.deviceRevokedMessage = deviceRevokedUserMessage(data);
+  }
+  if (result.tier === 'free' || result.isFree) result.cloudBackup = false;
   return result;
 });
 
@@ -6136,7 +6272,17 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     return { success: false, message: 'Invalid licence key format' };
   }
   const machineId = getMachineId();
-  const result = await validateLicenceOnline(normalizedKey, machineId);
+  const previous = readLicenceData();
+  const wasSynthetic = !previous || !previous.key || isSyntheticLocalLicenceKey(previous.key);
+  const result = await validateLicenceOnline(normalizedKey, machineId, { intent: 'activate' });
+  if (result && result.deviceRevoked) {
+    return {
+      success: false,
+      message: deviceRevokedUserMessage(result),
+      deviceRevoked: true,
+      deviceRevokedBy: result.deviceRevokedBy || null,
+    };
+  }
   const activateFail = mapLicenceActivateFailure(result);
   if (activateFail) return activateFail;
   const now = new Date().toISOString();
@@ -6151,11 +6297,25 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     isTrial: result.isTrial === true,
     entitlements: result.entitlements || null,
   };
+  delete data.deviceRevoked;
+  delete data.deviceRevokedBy;
   writeLicenceData(data);
-  await ensureCanonicalSyncKeyNow().catch(() => {});
+  try {
+    const w = getSyncWorker();
+    if (w && typeof w.notifyAuthRecovered === 'function') {
+      w.notifyAuthRecovered(wasSynthetic ? { schedule: false } : undefined);
+    }
+  } catch (_) {}
+  if (wasSynthetic) {
+    await bootstrapSyncAfterSignInNow().catch((e) => {
+      console.warn('[Sync] Sign-in bootstrap after activate failed:', e && e.message ? e.message : e);
+    });
+  } else {
+    await ensureCanonicalSyncKeyNow().catch(() => {});
+    retrySyncQueueAfterLicenceSuccess();
+    scheduleSyncSoon({ immediate: true });
+  }
   checkCloudBackupEntitlement().catch(() => {});
-  retrySyncQueueAfterLicenceSuccess();
-  scheduleSyncSoon();
   return { success: true, status: computeLicenceStatus(data) };
 });
 
@@ -6174,10 +6334,12 @@ ipcMain.handle('licence:validate', async () => {
   }
 
   const machineId = getMachineId();
+  // Background re-check: do not send intent:"activate".
   const result = await validateLicenceOnline(String(data.key || ''), machineId);
+  const revokeStamped = stampDeviceRevokeFromValidate(data, result);
   const apply = applyOnlineValidationResult(data, result, { adminEmails });
 
-  if (apply.persisted) {
+  if (apply.persisted || revokeStamped) {
     writeLicenceData(data);
   }
 
@@ -6337,8 +6499,33 @@ ipcMain.handle('auth:poll', async (_, { pollId }) => {
         data.status = resp.subscription.status || 'active';
         data.expiresAt = resp.subscription.expiresAt || '';
       }
+      // free / free_sync must stay tier free so resolveTier does not call the server key Pro.
+      applyFreeSyncSubscription(data, resp.subscription);
+      if (resp.subscription && !subscriptionIsFreeSync(resp.subscription)) {
+        const serverTier = resp.subscription.tier ? String(resp.subscription.tier).toLowerCase() : '';
+        if (serverTier) {
+          data.tier = serverTier;
+          data.isFree = serverTier === 'free';
+          data.isTrial = serverTier === 'trial' || !!resp.subscription.isTrial;
+        } else if (data.isFree || data.tier === 'free') {
+          // Replacing a local FREE- licence with a paid server key that omitted tier.
+          data.tier = 'pro';
+          data.isFree = false;
+          data.isTrial = !!resp.subscription.isTrial;
+        }
+      }
+      delete data.deviceRevoked;
+      delete data.deviceRevokedBy;
       data.lastValidated = new Date().toISOString();
       writeLicenceData(data);
+      try {
+        const w = getSyncWorker();
+        if (w && typeof w.notifyAuthRecovered === 'function') w.notifyAuthRecovered({ schedule: false });
+      } catch (_) {}
+      // Existing local notes are enqueued and merged; an empty computer full-resyncs.
+      bootstrapSyncAfterSignInNow().catch((e) => {
+        console.warn('[Sync] First sign-in bootstrap failed:', e && e.message ? e.message : e);
+      });
     }
     return resp;
   } catch (e) {
@@ -9720,6 +9907,7 @@ ipcMain.handle('recover-key-from-cloud', async () => {
       no_key_no_escrow: 'No cloud recovery data found. Open Custody Note on a computer that has your records and ensure sync has run, or set a recovery password in Settings → Security.',
       escrow_undecryptable: 'Cloud recovery data exists but could not be decrypted with this licence key. Check that both computers use exactly the same licence key.',
       no_licence: 'No licence key activated on this computer.',
+      synthetic_local_key: 'Sign in with email to sync your computers before recovering a cloud key.',
     };
     return {
       ok: false,

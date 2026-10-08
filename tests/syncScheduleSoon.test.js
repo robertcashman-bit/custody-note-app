@@ -267,7 +267,8 @@ describe('main.js wiring source guards', () => {
       mainJs,
       /function enqueueSyncForRecord\(recordId, operation = 'upsert', scheduleOpts\)/
     );
-    assert.match(mainJs, /w\.enqueue\(String\(recordId\), operation, \{\}, scheduleOpts \|\| \{\}\)/);
+    assert.match(mainJs, /const opts = Object\.assign\(\{\}, scheduleOpts \|\| \{\}\)/);
+    assert.match(mainJs, /w\.enqueue\(String\(recordId\), operation, \{\}, opts\)/);
     assert.match(mainJs, /scheduleSyncSoon\(opts\)/);
     assert.match(mainJs, /enqueueSyncForRecord\(id, st === 'finalised' \? 'finalise' : 'upsert', syncKick\)/);
     assert.match(mainJs, /immediate: true/);

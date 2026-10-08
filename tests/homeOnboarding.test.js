@@ -23,6 +23,23 @@ describe('HomeOnboarding licence cards', () => {
     assert.equal(HomeOnboarding.hasValidatedCloudLicence(proSt), true);
     assert.equal(HomeOnboarding.shouldShowLicenceActivationHomeCard(true, proSt), false);
   });
+
+  it('treats a signed-in free account as sync-capable and still free', () => {
+    const signedFree = {
+      key: 'CN-FREE-SYNC-0001',
+      tier: 'free',
+      isFree: true,
+      status: 'active',
+      signInWithAccount: true,
+    };
+    assert.equal(HomeOnboarding.isSignedInFreeSyncAccount(signedFree), true);
+    assert.equal(HomeOnboarding.hasValidatedCloudLicence(signedFree), true);
+    assert.equal(HomeOnboarding.isFreeBetaLicence(signedFree), true);
+    assert.equal(HomeOnboarding.shouldShowFreeSyncSignInPrompt(signedFree, false), false);
+    assert.equal(HomeOnboarding.shouldShowFreeSyncSignInPrompt(freeSt, false), true);
+    assert.equal(HomeOnboarding.shouldShowFreeSyncSignInPrompt(freeSt, true), false);
+    assert.equal(HomeOnboarding.hasValidatedCloudLicence(freeSt), false);
+  });
 });
 
 describe('HomeOnboarding welcome wizard', () => {

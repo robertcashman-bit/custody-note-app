@@ -151,6 +151,18 @@
       <div id="view-home" class="view active">
         <div class="home-container">
           <!-- Packaged first-run: no validated cloud licence (trial, free, or invalid key) -->
+          <div id="home-free-sync-signin-prompt" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#f8fafc,#eff6ff);border:1px solid #bfdbfe;">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;padding:0.85rem 1rem;">
+              <div style="flex:1;min-width:200px;">
+                <p style="margin:0;font-weight:700;font-size:0.92rem;color:#1e3a8a;">Sign in with email to sync your computers</p>
+                <p style="margin:0.35rem 0 0 0;font-size:0.85rem;color:#334155;line-height:1.45;">Your notes stay on this computer either way. Signing in links your computers so attendance notes can sync. This does not block the app.</p>
+              </div>
+              <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+                <button type="button" id="home-free-sync-signin-btn" class="btn btn-secondary btn-small">Sign in with email</button>
+                <button type="button" id="home-free-sync-signin-dismiss" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#1e3a8a;padding:0;line-height:1;" title="Dismiss">&times;</button>
+              </div>
+            </div>
+          </div>
           <div id="home-free-beta-card" class="home-enter-licence-card" style="display:none;">
             <div style="padding:1.25rem 1.5rem;background:linear-gradient(135deg,#059669,#047857);border:2px solid #6ee7b7;border-radius:12px;box-shadow:0 4px 12px rgba(5,150,105,0.35);">
               <div style="display:flex;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
@@ -198,7 +210,7 @@
           <div id="home-sync-licence-auth-banner" class="home-cloud-backup-banner" style="display:none;margin:0 0 0.75rem 0;background:linear-gradient(135deg,#fef2f2,#fff7ed);border:1px solid #fca5a5;">
             <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;padding:0.85rem 1rem;">
               <div style="flex:1;min-width:200px;">
-                <p style="margin:0;font-weight:700;font-size:0.92rem;color:#991b1b;">Cloud sync needs your licence</p>
+                <p id="home-sync-licence-auth-banner-title" style="margin:0;font-weight:700;font-size:0.92rem;color:#991b1b;">Cloud sync needs your licence</p>
                 <p id="home-sync-licence-auth-banner-body" style="margin:0.35rem 0 0 0;font-size:0.85rem;color:#7f1d1d;line-height:1.45;">Use Email my licence key in Settings &rarr; Licence.</p>
               </div>
               <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
@@ -994,6 +1006,17 @@
           </div>
 
           <!-- Shown only when on a trial — direct paid key entry -->
+          <div id="licence-free-sync-signin" style="display:none;margin-top:1.25rem;padding:1rem 1.1rem;background:linear-gradient(135deg,#f8fafc,#eff6ff);border:2px solid #93c5fd;border-radius:10px;">
+            <p style="margin:0 0 0.35rem 0;font-weight:700;font-size:1rem;color:#1e3a8a;">Sign in with email to sync your computers</p>
+            <p class="settings-hint" style="margin:0 0 0.75rem 0;">Free accounts can sync attendance notes across computers after you sign in. Managed cloud backup stays a Pro feature. Your existing notes stay on this computer and are uploaded — nothing is deleted because the cloud is empty.</p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+              <input type="email" id="licence-free-sync-email" class="settings-input" placeholder="you@firm.co.uk" autocomplete="email" style="min-width:200px;flex:1;max-width:320px;font-size:0.9rem;">
+              <button type="button" id="licence-free-sync-send-btn" class="btn btn-primary">Send login link</button>
+            </div>
+            <p id="licence-free-sync-msg" class="settings-hint" style="margin:0.5rem 0 0 0;min-height:1.2em;" role="status"></p>
+            <p id="licence-free-sync-waiting" style="display:none;margin:0.35rem 0 0 0;font-size:0.85rem;color:#1e3a8a;">Check your email and click the login link. This screen updates when sign-in completes.</p>
+          </div>
+
           <div id="licence-trial-upgrade" style="display:none;margin-top:1.25rem;padding:1rem 1.1rem;background:linear-gradient(135deg,#eff6ff,#f0f9ff);border:2px solid #3b82f6;border-radius:10px;">
             <p style="margin:0 0 0.4rem 0;font-weight:700;font-size:1rem;color:#1e40af;">&#128273; Enter a licence key</p>
             <p style="margin:0 0 0.75rem 0;font-size:0.85rem;color:#1e3a8a;">Free during beta. No credit card. Paid Pro planned after beta. If you already have a licence key, paste it here. Managed cloud backup remains a Pro-planned feature.</p>
@@ -2327,6 +2350,7 @@
   <script src="lib/clientSignatureAttachment.js"></script>
   <script src="lib/officerEmailTemplateOptions.js"></script>
   <script src="lib/sessionBlankerPolicy.js"></script>
+  <script src="lib/syncAccountState.js"></script>
   <script src="lib/footerStatusChips.js"></script>
   <script src="lib/openNoteCentralSyncIndicator.js"></script>
   <script src="lib/homeOnboarding.js"></script>

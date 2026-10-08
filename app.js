@@ -3333,6 +3333,13 @@ var REQUIRED_FIELD_KEYS = [
     }
     if (!st || !st.key) return false;
     var keyStr = String(st.key || '');
+    if (st.signInWithAccount && (st.tier === 'free' || st.isFree)) {
+      var signedKey = String(st.key || '').toUpperCase();
+      if (signedKey && signedKey.indexOf('FREE-') !== 0 && signedKey.indexOf('TRIAL-') !== 0 && signedKey.indexOf('ACCOUNT-') !== 0 &&
+          st.status !== 'revoked' && st.status !== 'expired' && st.status !== 'error') {
+        return true;
+      }
+    }
     if (keyStr.indexOf('TRIAL-') === 0 || keyStr.indexOf('FREE-') === 0 || keyStr.indexOf('ACCOUNT-') === 0) return false;
     if (st.isTrial || st.tier === 'trial' || st.tier === 'free' || st.isFree) return false;
     if (st.status === 'revoked' || st.status === 'expired' || st.status === 'error') return false;
@@ -3367,13 +3374,47 @@ var REQUIRED_FIELD_KEYS = [
     return syncLicenceRecoveryHint(st);
   }
 
+  function deviceRevokedBannerMessage(st, licenceSt) {
+    var by = String((licenceSt && licenceSt.deviceRevokedBy) || (st && st.deviceRevokedBy) || '').toLowerCase();
+    if (by === 'admin' || by === 'administrator') {
+      return "This computer's sync access was revoked by the administrator";
+    }
+    if (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.deviceRevokedChipText) {
+      return FooterStatusChips.deviceRevokedChipText(Object.assign({}, st || {}, licenceSt || {}));
+    }
+    return 'This computer was deactivated for sync — re-enter your key or sign in again to restore.';
+  }
+
+  function isDeviceRevokedBanner(st, licenceSt) {
+    if (licenceSt && licenceSt.deviceRevoked) return true;
+    if (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.isDeviceRevokedSyncState) {
+      return FooterStatusChips.isDeviceRevokedSyncState(st);
+    }
+    return !!(st && (st.deviceRevoked || st.lastSyncSkipReason === 'device_revoked'));
+  }
+
   function refreshHomeSyncLicenceAuthBanner(st, licenceSt) {
     var el = document.getElementById('home-sync-licence-auth-banner');
     var body = document.getElementById('home-sync-licence-auth-banner-body');
+    var title = document.getElementById('home-sync-licence-auth-banner-title');
     if (!el) return;
+    if (isDeviceRevokedBanner(st, licenceSt)) {
+      el.style.display = '';
+      if (title) title.textContent = 'Sync paused on this computer';
+      if (body) body.textContent = deviceRevokedBannerMessage(st, licenceSt);
+      return;
+    }
+    var quota = !!(st && (st.freeQuotaExceeded || st.lastSyncSkipReason === 'free_quota_exceeded' || st.status === 'free_quota_exceeded'));
+    if (quota) {
+      el.style.display = '';
+      if (title) title.textContent = 'Free sync limit reached';
+      if (body) body.textContent = 'Free sync limit reached — your notes stay on this computer. Nothing was deleted.';
+      return;
+    }
     var packaged = !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isPackaged);
     if (licenceSt && isFreeBetaLicence(licenceSt)) {
       el.style.display = 'none';
+      if (title) title.textContent = 'Cloud sync needs your licence';
       return;
     }
     if (!packaged || !st || !st.enabled || !isSyncLicenceAuthFailure(st)) {
@@ -3381,6 +3422,7 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     el.style.display = '';
+    if (title) title.textContent = 'Cloud sync needs your licence';
     if (body) body.textContent = syncLicenceRecoveryHint(st);
   }
 
@@ -3412,6 +3454,8 @@ var REQUIRED_FIELD_KEYS = [
     if (chips) {
       setFooterIndicator(el, chips.text, chips.variant, chips.title || '');
       el.style.cursor = chips.cursor != null ? chips.cursor : '';
+      if (chips.action) el.setAttribute('data-chip-action', chips.action);
+      else el.removeAttribute('data-chip-action');
       return;
     }
     // Fallback if script failed to load (should not happen in packaged app).
@@ -3425,6 +3469,13 @@ var REQUIRED_FIELD_KEYS = [
     if (!data || !data.status) {
       if (_footerSyncSnapshot) applySyncSnapshot(_footerSyncSnapshot);
       else refreshSyncCounts();
+      return;
+    }
+    if (data.status === 'device_revoked' || data.status === 'local_only' || data.status === 'free_quota_exceeded' ||
+        data.deviceRevoked || data.localOnly || data.freeQuotaExceeded) {
+      var mergedSync = Object.assign({}, _footerSyncSnapshot || {}, data, { enabled: true });
+      applySyncSnapshot(mergedSync);
+      try { refreshHomeSyncLicenceAuthBanner(mergedSync, _lastLicenceStatusForHome); } catch (_) {}
       return;
     }
     el.style.display = '';
@@ -4263,6 +4314,7 @@ var REQUIRED_FIELD_KEYS = [
         : packaged && !hasValidatedCloudLicence(st) && !isFreeBetaLicence(st);
       if (freeCard) freeCard.style.display = showFree ? '' : 'none';
       if (licenceCard) licenceCard.style.display = showLicence ? '' : 'none';
+      updateHomeFreeSyncPrompt(st);
       if (showFree && _footerSyncSnapshot) refreshHomeSyncLicenceAuthBanner(_footerSyncSnapshot, st);
       var titleEl = document.getElementById('home-enter-licence-title');
       var subEl = document.getElementById('home-enter-licence-sub');
@@ -4284,6 +4336,22 @@ var REQUIRED_FIELD_KEYS = [
       var hintWrapErr = document.getElementById('home-subscription-features-hint');
       if (hintWrapErr) hintWrapErr.style.display = 'none';
     });
+  }
+
+  function freeSyncPromptDismissed() {
+    try { return localStorage.getItem('cn_free_sync_signin_dismissed') === '1'; } catch (_) { return false; }
+  }
+
+  function updateHomeFreeSyncPrompt(st) {
+    var el = document.getElementById('home-free-sync-signin-prompt');
+    if (!el) return;
+    var show = false;
+    if (typeof HomeOnboarding !== 'undefined' && HomeOnboarding.shouldShowFreeSyncSignInPrompt) {
+      show = HomeOnboarding.shouldShowFreeSyncSignInPrompt(st, freeSyncPromptDismissed());
+    } else if (st && (st.tier === 'free' || st.isFree) && !st.signInWithAccount && !freeSyncPromptDismissed()) {
+      show = true;
+    }
+    el.style.display = show ? '' : 'none';
   }
 
   function getReferralInviteCode() {
@@ -6264,6 +6332,12 @@ var REQUIRED_FIELD_KEYS = [
         }
         var isFreeLike = !!(st.tier === 'free' || st.isFree || st.isTrial || (st.key && String(st.key).indexOf('FREE-') === 0) || (st.key && String(st.key).indexOf('TRIAL-') === 0));
         if (trialUpgradeEl) trialUpgradeEl.style.display = isFreeLike ? '' : 'none';
+        var freeSyncEl = document.getElementById('licence-free-sync-signin');
+        var showFreeSync = !!(st.tier === 'free' || st.isFree || (st.key && String(st.key).indexOf('FREE-') === 0)) && !st.signInWithAccount;
+        if (freeSyncEl) freeSyncEl.style.display = showFreeSync ? '' : 'none';
+        if (timeEl && st.signInWithAccount && (st.tier === 'free' || st.isFree)) {
+          timeEl.textContent = 'Signed in — notes can sync across your computers. Managed cloud backup stays a Pro feature.';
+        }
       } else if (st && st.status === 'grace_expired' && graceEl) {
         activeEl.style.display = 'none';
         noneEl.style.display = 'none';
@@ -6271,10 +6345,14 @@ var REQUIRED_FIELD_KEYS = [
         if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = '';
         if (graceMsgEl) graceMsgEl.textContent = st.message || 'Connect to the internet to verify your subscription. Your licence is still active.';
         if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
+        var freeSyncGrace = document.getElementById('licence-free-sync-signin');
+        if (freeSyncGrace) freeSyncGrace.style.display = 'none';
       } else {
         activeEl.style.display = 'none';
         noneEl.style.display = '';
         if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
+        var freeSyncNone = document.getElementById('licence-free-sync-signin');
+        if (freeSyncNone) freeSyncNone.style.display = 'none';
       }
     });
   }
@@ -17169,6 +17247,7 @@ pdfAuditFooterHtml(d, settings) +
     document.addEventListener('licence-activated', function () {
       updateHomeLicenceCard();
       updateGearLicenceItem();
+      if (typeof loadLicenceSettingsUI === 'function') loadLicenceSettingsUI();
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     });
     updateGearLicenceItem();
@@ -17239,6 +17318,11 @@ pdfAuditFooterHtml(d, settings) +
     if (syncInd) {
       syncInd.addEventListener('click', function() {
         var txt = (syncInd.textContent || '');
+        var chipAction = syncInd.getAttribute('data-chip-action') || '';
+        if (chipAction === 'open_licence' || txt.indexOf('deactivated for sync') !== -1 || txt.indexOf('sign in to sync') !== -1 || txt.indexOf('Free sync limit') !== -1 || txt.indexOf('revoked by the administrator') !== -1) {
+          if (window.goToLicenceSettings) window.goToLicenceSettings();
+          return;
+        }
         if (txt.indexOf('conflict') !== -1) { openSyncConflictsView(); return; }
         if (txt.indexOf('Fix sync now') !== -1 || txt.indexOf('not confirmed') !== -1) {
           runFixSyncNow();
@@ -20127,6 +20211,33 @@ pdfAuditFooterHtml(d, settings) +
       } catch (_) {}
     }
     window.goToLicenceEmailKeySettings = goToLicenceEmailKeySettings;
+
+    function goToLicenceSettings() {
+      try {
+        if (typeof showView === 'function') showView('settings');
+        var tabBar = document.getElementById('settings-tab-bar');
+        var accountTab = tabBar && tabBar.querySelector('.settings-tab[data-stab="account"]');
+        if (accountTab) accountTab.click();
+        if (typeof loadLicenceSettingsUI === 'function') loadLicenceSettingsUI();
+        setTimeout(function() {
+          var target = document.getElementById('licence-free-sync-signin');
+          if (!target || target.style.display === 'none') target = document.getElementById('licence-settings-card');
+          if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          var emailInp = document.getElementById('licence-free-sync-email');
+          if (emailInp && emailInp.focus && emailInp.offsetParent) emailInp.focus();
+        }, 150);
+      } catch (_) {}
+    }
+    window.goToLicenceSettings = goToLicenceSettings;
+
+    document.getElementById('home-free-sync-signin-btn')?.addEventListener('click', function() {
+      goToLicenceSettings();
+    });
+    document.getElementById('home-free-sync-signin-dismiss')?.addEventListener('click', function() {
+      try { localStorage.setItem('cn_free_sync_signin_dismissed', '1'); } catch (_) {}
+      var prompt = document.getElementById('home-free-sync-signin-prompt');
+      if (prompt) prompt.style.display = 'none';
+    });
 
     document.getElementById('forgot-licence-goto-settings-btn')?.addEventListener('click', function() {
       goToLicenceEmailKeySettings();

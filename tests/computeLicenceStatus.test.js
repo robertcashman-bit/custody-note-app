@@ -113,6 +113,26 @@ describe('computeLicenceStatus freemium free during beta', () => {
     assert.equal(resolveTier({ key: 'TRIAL-X', isTrial: true }), 'trial');
     assert.equal(resolveTier({ key: 'CN-AAAA-BBBB-CCCC-DDDD' }), 'pro');
   });
+
+  it('does not label a signed-in free_sync server key as Pro', () => {
+    const data = {
+      key: 'CN-AAAA-BBBB-CCCC-DDDD',
+      tier: 'free',
+      isFree: true,
+      isTrial: false,
+      status: 'active',
+      cloudBackup: false,
+      entitlements: { quickfile: { expiresAt: new Date(Date.now() + 86400000).toISOString() } },
+    };
+    assert.equal(resolveTier(data), 'free');
+    const st = computeLicenceStatus(data);
+    assert.equal(st.tier, 'free');
+    assert.equal(st.isFree, true);
+    assert.equal(st.isTrial, false);
+    assert.equal(st.addons.quickfile, false);
+    assert.equal(st.addons.emailAddon, false);
+    assert.equal(st.cloudBackup, false);
+  });
 });
 
 describe('computeLicenceStatus admin never revoked', () => {
