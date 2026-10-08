@@ -3333,6 +3333,13 @@ var REQUIRED_FIELD_KEYS = [
     }
     if (!st || !st.key) return false;
     var keyStr = String(st.key || '');
+    if (st.signInWithAccount && (st.tier === 'free' || st.isFree)) {
+      var signedKey = String(st.key || '').toUpperCase();
+      if (signedKey && signedKey.indexOf('FREE-') !== 0 && signedKey.indexOf('TRIAL-') !== 0 && signedKey.indexOf('ACCOUNT-') !== 0 &&
+          st.status !== 'revoked' && st.status !== 'expired' && st.status !== 'error') {
+        return true;
+      }
+    }
     if (keyStr.indexOf('TRIAL-') === 0 || keyStr.indexOf('FREE-') === 0 || keyStr.indexOf('ACCOUNT-') === 0) return false;
     if (st.isTrial || st.tier === 'trial' || st.tier === 'free' || st.isFree) return false;
     if (st.status === 'revoked' || st.status === 'expired' || st.status === 'error') return false;
@@ -3367,13 +3374,47 @@ var REQUIRED_FIELD_KEYS = [
     return syncLicenceRecoveryHint(st);
   }
 
+  function deviceRevokedBannerMessage(st, licenceSt) {
+    var by = String((licenceSt && licenceSt.deviceRevokedBy) || (st && st.deviceRevokedBy) || '').toLowerCase();
+    if (by === 'admin' || by === 'administrator') {
+      return "This computer's sync access was revoked by the administrator";
+    }
+    if (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.deviceRevokedChipText) {
+      return FooterStatusChips.deviceRevokedChipText(Object.assign({}, st || {}, licenceSt || {}));
+    }
+    return 'This computer was deactivated for sync — re-enter your key or sign in again to restore.';
+  }
+
+  function isDeviceRevokedBanner(st, licenceSt) {
+    if (licenceSt && licenceSt.deviceRevoked) return true;
+    if (typeof FooterStatusChips !== 'undefined' && FooterStatusChips.isDeviceRevokedSyncState) {
+      return FooterStatusChips.isDeviceRevokedSyncState(st);
+    }
+    return !!(st && (st.deviceRevoked || st.lastSyncSkipReason === 'device_revoked'));
+  }
+
   function refreshHomeSyncLicenceAuthBanner(st, licenceSt) {
     var el = document.getElementById('home-sync-licence-auth-banner');
     var body = document.getElementById('home-sync-licence-auth-banner-body');
+    var title = document.getElementById('home-sync-licence-auth-banner-title');
     if (!el) return;
+    if (isDeviceRevokedBanner(st, licenceSt)) {
+      el.style.display = '';
+      if (title) title.textContent = 'Sync paused on this computer';
+      if (body) body.textContent = deviceRevokedBannerMessage(st, licenceSt);
+      return;
+    }
+    var quota = !!(st && (st.freeQuotaExceeded || st.lastSyncSkipReason === 'free_quota_exceeded' || st.status === 'free_quota_exceeded'));
+    if (quota) {
+      el.style.display = '';
+      if (title) title.textContent = 'Free sync limit reached';
+      if (body) body.textContent = 'Free sync limit reached — your notes stay on this computer. Nothing was deleted.';
+      return;
+    }
     var packaged = !!(window.custodyNoteBuildInfo && window.custodyNoteBuildInfo.isPackaged);
     if (licenceSt && isFreeBetaLicence(licenceSt)) {
       el.style.display = 'none';
+      if (title) title.textContent = 'Cloud sync needs your licence';
       return;
     }
     if (!packaged || !st || !st.enabled || !isSyncLicenceAuthFailure(st)) {
@@ -3381,6 +3422,7 @@ var REQUIRED_FIELD_KEYS = [
       return;
     }
     el.style.display = '';
+    if (title) title.textContent = 'Cloud sync needs your licence';
     if (body) body.textContent = syncLicenceRecoveryHint(st);
   }
 
@@ -3412,6 +3454,8 @@ var REQUIRED_FIELD_KEYS = [
     if (chips) {
       setFooterIndicator(el, chips.text, chips.variant, chips.title || '');
       el.style.cursor = chips.cursor != null ? chips.cursor : '';
+      if (chips.action) el.setAttribute('data-chip-action', chips.action);
+      else el.removeAttribute('data-chip-action');
       return;
     }
     // Fallback if script failed to load (should not happen in packaged app).
@@ -3425,6 +3469,13 @@ var REQUIRED_FIELD_KEYS = [
     if (!data || !data.status) {
       if (_footerSyncSnapshot) applySyncSnapshot(_footerSyncSnapshot);
       else refreshSyncCounts();
+      return;
+    }
+    if (data.status === 'device_revoked' || data.status === 'local_only' || data.status === 'free_quota_exceeded' ||
+        data.deviceRevoked || data.localOnly || data.freeQuotaExceeded) {
+      var mergedSync = Object.assign({}, _footerSyncSnapshot || {}, data, { enabled: true });
+      applySyncSnapshot(mergedSync);
+      try { refreshHomeSyncLicenceAuthBanner(mergedSync, _lastLicenceStatusForHome); } catch (_) {}
       return;
     }
     el.style.display = '';
@@ -3592,48 +3643,8 @@ var REQUIRED_FIELD_KEYS = [
     } catch (_) { return iso; }
   }
 
-  /* ─── Sync conflict resolution UI ─────────────────────────────────────────
-     Conflicts are parked in the sync_conflicts table when a pull found newer
-     remote data but couldn't safely apply it (local finalised/completed, or
-     local had unsynced edits). This modal lets the user inspect local vs
-     remote and choose Keep local / Accept remote / Open record. Resolution is
-     enforced in the main process (main/syncConflicts.js): accepting remote
-     over a finalised/completed local record requires explicit confirmation. */
-  function _conflictSnapshotFields(snap) {
-    if (!snap) return {};
-    var data = snap.data;
-    if (data && typeof data === 'string') { try { data = JSON.parse(data); } catch (_) { data = {}; } }
-    data = data || {};
-    function pick() {
-      for (var i = 0; i < arguments.length; i++) {
-        var v = arguments[i];
-        if (v !== undefined && v !== null && v !== '') return v;
-      }
-      return '';
-    }
-    var forename = pick(data.forename, data.firstName, '');
-    var surname = pick(data.surname, data.lastName, '');
-    var clientName = pick(snap.clientName, (forename || surname) ? (forename + ' ' + surname).trim() : '', data.clientName);
-    return {
-      clientName: clientName || '—',
-      station: pick(snap.stationName, data.policeStation, data.station, '—'),
-      dscc: pick(snap.dsccRef, data.dsccRef, data.dscc, '—'),
-      attendanceDate: pick(snap.attendanceDate, data.attendanceDate, data.date, '—'),
-      status: pick(snap.status, '—'),
-      updatedAt: pick(snap.updatedAt, '—'),
-    };
-  }
+  /* Sync conflicts merge automatically. This view only confirms that. */
 
-  function _conflictReasonLabel(reason) {
-    switch (reason) {
-      case 'protect_finalised': return 'Remote change blocked — local record is finalised/completed';
-      case 'preserve_local_dirty': return 'Remote change held — you have unsynced local edits';
-      case 'remote_newer': return 'Remote version is newer';
-      default: return reason || 'Conflict';
-    }
-  }
-
-  var _syncConflictsModalOpen = false;
   var _fixSyncNowInFlight = false;
 
   function showSyncCatchUpProgress(payload) {
@@ -3709,257 +3720,9 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function openSyncConflictsView() {
-    if (_syncConflictsModalOpen) return;
-    if (!window.api || !window.api.syncConflictsList) {
-      showToast('Conflict resolution is not available in this build.', 'error');
-      return;
-    }
-    _syncConflictsModalOpen = true;
-
-    var overlay = document.createElement('div');
-    overlay.className = 'cn-confirm-overlay';
-    var box = document.createElement('div');
-    box.className = 'cn-confirm-box';
-    box.style.maxWidth = '720px';
-    box.style.width = '92vw';
-    box.style.maxHeight = '86vh';
-    box.style.overflowY = 'auto';
-    box.setAttribute('role', 'dialog');
-    box.setAttribute('aria-label', 'Sync conflicts');
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-
-    function close() {
-      _syncConflictsModalOpen = false;
-      try { document.body.removeChild(overlay); } catch (_) {}
-    }
-    overlay.addEventListener('click', function(e) { if (e.target === overlay) close(); });
-    document.addEventListener('keydown', function escHandler(e) {
-      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', escHandler); }
-    });
-
-    function render(conflicts) {
-      var html = '' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;">' +
-        '<h3 style="margin:0;font-size:1.1rem;">Sync conflicts</h3>' +
-        '<button type="button" class="btn btn-secondary" id="cn-conflicts-close" aria-label="Close">Close</button>' +
-        '</div>' +
-        '<p style="margin:0 0 10px;font-size:13px;color:#64748b;">' +
-        'Another device sent changes that could not be applied automatically. Your local edits are safe. ' +
-        'Choose what to keep for each record, or use bulk actions below.</p>';
-
-      if (!conflicts || !conflicts.length) {
-        html += '<div style="padding:24px;text-align:center;color:#16a34a;font-size:14px;">' +
-          'No conflicts to resolve. Everything is in sync.</div>';
-        box.innerHTML = html;
-        box.querySelector('#cn-conflicts-close').addEventListener('click', close);
-        return;
-      }
-
-      var multi = conflicts.length > 1;
-      html += '' +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">' +
-          '<span style="font-size:12px;color:#475569;align-self:center;margin-right:4px;">' +
-            esc(String(conflicts.length)) + ' open</span>' +
-          '<button type="button" class="btn btn-secondary" id="cn-conflicts-accept-all">Accept all remote</button>' +
-          '<button type="button" class="btn btn-secondary" id="cn-conflicts-keep-all">Keep all local</button>' +
-          (multi
-            ? '<button type="button" class="btn btn-primary" id="cn-conflicts-use-cloud-all">Use cloud for all remaining</button>'
-            : '') +
-        '</div>';
-
-      conflicts.forEach(function(c, idx) {
-        var L = _conflictSnapshotFields(c.local);
-        var R = _conflictSnapshotFields(c.remote);
-        var protectedLocal = c.currentLocalStatus === 'finalised' || c.currentLocalStatus === 'completed';
-        var dirtyLocal = c.reason === 'preserve_local_dirty';
-        html += '' +
-          '<div class="cn-conflict-card" data-id="' + esc(String(c.id)) + '" style="border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-bottom:12px;background:#fff;">' +
-            '<div style="font-size:12px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:5px 8px;margin-bottom:10px;">' +
-              esc(_conflictReasonLabel(c.reason)) +
-            '</div>' +
-            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">' +
-              '<div>' +
-                '<div style="font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px;">This PC (local)</div>' +
-                _conflictColHtml(L, c.currentLocalStatus || L.status) +
-              '</div>' +
-              '<div>' +
-                '<div style="font-weight:600;font-size:12px;color:#0f172a;margin-bottom:4px;">Cloud (other devices)</div>' +
-                _conflictColHtml(R, R.status) +
-              '</div>' +
-            '</div>' +
-            (protectedLocal
-              ? '<div style="font-size:11.5px;color:#7c2d12;margin-top:8px;">This record is <strong>' + esc(c.currentLocalStatus) + '</strong> locally. Accepting remote will ask you to confirm.</div>'
-              : '') +
-            (dirtyLocal
-              ? '<div style="font-size:11.5px;color:#1e3a8a;margin-top:8px;">This PC has unsynced edits and the cloud also changed this record.</div>'
-              : '') +
-            '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap;">' +
-              '<button type="button" class="btn btn-secondary cn-conflict-open" data-att="' + esc(String(c.attendanceId)) + '">Open record</button>' +
-              '<button type="button" class="btn btn-secondary cn-conflict-accept" data-id="' + esc(String(c.id)) + '">Use cloud</button>' +
-              '<button type="button" class="btn btn-primary cn-conflict-keep" data-id="' + esc(String(c.id)) + '">Keep this PC</button>' +
-              (multi && idx === 0
-                ? '<button type="button" class="btn btn-secondary cn-conflict-use-cloud-remaining">Use cloud for all remaining</button>'
-                : '') +
-            '</div>' +
-          '</div>';
-      });
-
-      box.innerHTML = html;
-      box.querySelector('#cn-conflicts-close').addEventListener('click', close);
-
-      var acceptAllBtn = box.querySelector('#cn-conflicts-accept-all');
-      if (acceptAllBtn) {
-        acceptAllBtn.addEventListener('click', function() {
-          var ok = window.confirm(
-            'Accept the cloud version for all ' + conflicts.length +
-            ' conflict(s)?\n\nThis overwrites local copies where they differ, including finalised/completed records if the cloud version differs. This cannot be undone from this screen.'
-          );
-          if (!ok) return;
-          resolveBulk('accept_remote', true);
-        });
-      }
-      var keepAllBtn = box.querySelector('#cn-conflicts-keep-all');
-      if (keepAllBtn) {
-        keepAllBtn.addEventListener('click', function() {
-          var ok = window.confirm(
-            'Keep the local version for all ' + conflicts.length +
-            ' conflict(s)?\n\nLocal copies will re-sync to other devices and may overwrite newer cloud edits.'
-          );
-          if (!ok) return;
-          resolveBulk('keep_local', false);
-        });
-      }
-      function bindUseCloudAll(btn) {
-        if (!btn) return;
-        btn.addEventListener('click', function() {
-          var ok = window.confirm(
-            'Use the cloud version for all remaining conflicts?\n\nLocal unsynced edits on those records will be replaced by the cloud copy.'
-          );
-          if (!ok) return;
-          resolveBulk('accept_remote', true);
-        });
-      }
-      bindUseCloudAll(box.querySelector('#cn-conflicts-use-cloud-all'));
-      bindUseCloudAll(box.querySelector('.cn-conflict-use-cloud-remaining'));
-
-      Array.prototype.forEach.call(box.querySelectorAll('.cn-conflict-open'), function(btn) {
-        btn.addEventListener('click', function() {
-          var attId = parseInt(btn.getAttribute('data-att'), 10);
-          if (!attId) { showToast('That record is no longer available.', 'warning'); return; }
-          close();
-          try { openAttendance(attId); } catch (e) { console.error('[conflict-open]', e); }
-        });
-      });
-      Array.prototype.forEach.call(box.querySelectorAll('.cn-conflict-keep'), function(btn) {
-        btn.addEventListener('click', function() { resolve(parseInt(btn.getAttribute('data-id'), 10), 'keep_local', false); });
-      });
-      Array.prototype.forEach.call(box.querySelectorAll('.cn-conflict-accept'), function(btn) {
-        btn.addEventListener('click', function() { resolve(parseInt(btn.getAttribute('data-id'), 10), 'accept_remote', false); });
-      });
-    }
-
-    function resolveBulk(resolution, force) {
-      if (!window.api.syncConflictsResolveBulk) {
-        showToast('Bulk conflict resolve is not available in this build.', 'error');
-        return;
-      }
-      box.querySelectorAll('button').forEach(function(b) { b.disabled = true; });
-      window.api.syncConflictsResolveBulk({ resolution: resolution, force: !!force })
-        .then(function(res) {
-          if (!res) {
-            showToast('Could not resolve conflicts.', 'error');
-            load();
-            return;
-          }
-          if (res.blocked > 0 && resolution === 'accept_remote' && !force) {
-            var ok = window.confirm(
-              (res.blocked || 0) + ' protected record(s) need explicit confirmation to accept the cloud version. Continue and overwrite them?'
-            );
-            if (ok) return resolveBulk(resolution, true);
-          }
-          if (res.resolved > 0) {
-            showToast(
-              (resolution === 'accept_remote' ? 'Applied cloud version to ' : 'Kept local version for ') +
-              res.resolved + ' record(s).',
-              'success'
-            );
-            try { loadHomeRecent(); } catch (_) {}
-            try { refreshList(); } catch (_) {}
-          }
-          if (res.errors > 0) {
-            showToast('Some conflicts could not be resolved.', 'warning');
-          }
-          try { refreshSyncCounts(); } catch (_) {}
-          if (res.remaining === 0) close();
-          else load();
-        })
-        .catch(function(e) {
-          console.error('[conflict-resolve-bulk]', e);
-          showToast('Could not resolve conflicts.', 'error');
-          load();
-        });
-    }
-
-    function resolve(conflictId, resolution, force) {
-      if (!conflictId || !window.api.syncConflictResolve) return;
-      window.api.syncConflictResolve({ conflictId: conflictId, resolution: resolution, force: !!force })
-        .then(function(res) {
-          if (res && res.blocked && res.reason === 'protected_status') {
-            var ok = window.confirm((res.message || 'This will overwrite a protected record.') +
-              '\n\nAre you sure you want to overwrite your local record with the remote version?');
-            if (ok) return resolve(conflictId, resolution, true);
-            return;
-          }
-          if (!res || !res.ok) {
-            showToast((res && res.error) || 'Could not resolve conflict.', 'error');
-            return;
-          }
-          if (resolution === 'accept_remote') {
-            showToast('Cloud version applied.' + (res.forced ? ' (Protected record overwritten.)' : ''), 'success');
-            try { loadHomeRecent(); } catch (_) {}
-            try { refreshList(); } catch (_) {}
-          } else {
-            showToast('Local version kept; it will re-sync to other devices.', 'success');
-          }
-          try { refreshSyncCounts(); } catch (_) {}
-          load();
-        })
-        .catch(function(e) { console.error('[conflict-resolve]', e); showToast('Could not resolve conflict.', 'error'); });
-    }
-
-    function load() {
-      box.innerHTML = '<div style="padding:28px;text-align:center;color:#64748b;font-size:14px;">Loading conflicts…</div>';
-      window.api.syncConflictsList().then(function(res) {
-        if (!res || !res.ok) {
-          box.innerHTML = '<div style="padding:24px;color:#b91c1c;font-size:14px;">' +
-            esc((res && res.error) || 'Could not load conflicts.') + '</div>';
-          return;
-        }
-        render(res.conflicts || []);
-      }).catch(function(e) {
-        console.error('[conflicts-list]', e);
-        box.innerHTML = '<div style="padding:24px;color:#b91c1c;font-size:14px;">Could not load conflicts.</div>';
-      });
-    }
-
-    load();
+    showToast('Merged changes from another computer', 'info', 4000);
   }
 
-  function _conflictColHtml(f, status) {
-    function row(label, val) {
-      return '<div style="font-size:12px;color:#475569;margin:2px 0;"><span style="color:#94a3b8;">' +
-        esc(label) + ':</span> ' + esc(String(val == null || val === '' ? '—' : val)) + '</div>';
-    }
-    return '<div style="background:#f8fafc;border-radius:8px;padding:8px 10px;">' +
-      row('Client', f.clientName) +
-      row('Status', status) +
-      row('Station', f.station) +
-      row('DSCC', f.dscc) +
-      row('Date', f.attendanceDate) +
-      row('Updated', f.updatedAt) +
-      '</div>';
-  }
 
   var _currentView = null;
   var _showViewCooldown = 0;
@@ -4263,6 +4026,7 @@ var REQUIRED_FIELD_KEYS = [
         : packaged && !hasValidatedCloudLicence(st) && !isFreeBetaLicence(st);
       if (freeCard) freeCard.style.display = showFree ? '' : 'none';
       if (licenceCard) licenceCard.style.display = showLicence ? '' : 'none';
+      updateHomeFreeSyncPrompt(st);
       if (showFree && _footerSyncSnapshot) refreshHomeSyncLicenceAuthBanner(_footerSyncSnapshot, st);
       var titleEl = document.getElementById('home-enter-licence-title');
       var subEl = document.getElementById('home-enter-licence-sub');
@@ -4284,6 +4048,22 @@ var REQUIRED_FIELD_KEYS = [
       var hintWrapErr = document.getElementById('home-subscription-features-hint');
       if (hintWrapErr) hintWrapErr.style.display = 'none';
     });
+  }
+
+  function freeSyncPromptDismissed() {
+    try { return localStorage.getItem('cn_free_sync_signin_dismissed') === '1'; } catch (_) { return false; }
+  }
+
+  function updateHomeFreeSyncPrompt(st) {
+    var el = document.getElementById('home-free-sync-signin-prompt');
+    if (!el) return;
+    var show = false;
+    if (typeof HomeOnboarding !== 'undefined' && HomeOnboarding.shouldShowFreeSyncSignInPrompt) {
+      show = HomeOnboarding.shouldShowFreeSyncSignInPrompt(st, freeSyncPromptDismissed());
+    } else if (st && (st.tier === 'free' || st.isFree) && !st.signInWithAccount && !freeSyncPromptDismissed()) {
+      show = true;
+    }
+    el.style.display = show ? '' : 'none';
   }
 
   function getReferralInviteCode() {
@@ -5788,11 +5568,50 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  function saveSyncAccountFlags() {
+    var st = _footerSyncSnapshot || {};
+    var localOnly = !!(st.localOnly || st.connectivity === 'local_only' || st.lastSyncSkipReason === 'local_only');
+    var offline = !!(st.connectivity === 'offline');
+    return { localOnly: localOnly, offline: offline, canSync: !localOnly };
+  }
+
+  function applySaveSyncButton(input) {
+    var btn = document.getElementById('header-backup-now-btn');
+    if (!btn || typeof SaveSyncButton === 'undefined' || !SaveSyncButton.deriveSaveSyncButton) return;
+    var flags = saveSyncAccountFlags();
+    var merged = Object.assign({}, flags);
+    var src = input || {};
+    Object.keys(src).forEach(function(k) {
+      if (src[k] !== undefined) merged[k] = src[k];
+    });
+    var view = SaveSyncButton.deriveSaveSyncButton(merged);
+    var label = btn.querySelector('.save-sync-label');
+    var hint = btn.querySelector('.save-sync-hint');
+    if (label) label.textContent = view.label;
+    else btn.textContent = view.label;
+    if (hint) {
+      if (view.hint) {
+        hint.hidden = false;
+        hint.textContent = view.hint;
+      } else {
+        hint.hidden = true;
+        hint.textContent = '';
+      }
+    }
+    btn.setAttribute('data-tone', view.tone);
+    btn.setAttribute('data-state', view.state);
+    btn.title = view.title;
+    btn.setAttribute('aria-label', view.ariaLabel || view.label);
+    if (view.state === 'saving') btn.setAttribute('aria-busy', 'true');
+    else btn.removeAttribute('aria-busy');
+  }
+
   function showSavingIndicator() {
+    applySaveSyncButton({ phase: 'saving' });
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
-      el.textContent = 'Saving to this computer\u2026';
+      el.textContent = 'Saving\u2026';
       el.removeAttribute('data-autosave-error');
       el.classList.add('visible');
     });
@@ -5868,31 +5687,39 @@ var REQUIRED_FIELD_KEYS = [
     var dirty = !!(opts && opts.dirty);
     _autosaveIndicatorDirty = dirty;
     var txt;
+    var backupFailed = !!(opts && opts.backupOk === false);
     if (dirty) {
-      txt = 'Unsaved changes…';
-    } else if (durable && centralConfirmed) {
-      txt = '\u2713 Safe locally + central ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+      txt = 'Unsaved changes';
+    } else if (!durable) {
+      txt = "Couldn't save";
+    } else if (backupFailed) {
+      txt = 'Saved, backup failed';
+    } else if (durable && centralConfirmed && opts && opts.backupOk === true && opts.pullOk === true && !(opts && opts.localOnly)) {
+      txt = '\u2713 Saved & synced ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
+    } else if (opts && opts.localOnly) {
+      txt = 'Saved on this computer';
     } else if (durable) {
-      txt = '\u2713 Safe locally ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
-      if (pendingSync) txt += ' \u00b7 pending central sync';
+      txt = 'Saved on this computer, sync pending';
     } else {
-      txt = 'Not on disk yet — use Force save';
+      txt = 'Not on disk yet — use Save & Sync';
     }
     var title = dirty
       ? 'Edits are on screen only until the next successful disk write.'
-      : (durable
+      : (backupFailed
+        ? ('Saved, backup failed. ' + ((opts && (opts.backupError || opts.error)) || 'The local backup did not finish.'))
+        : (durable
         ? (centralConfirmed
           ? 'Durable on this computer and acknowledged by the central account store at ' + (_lastDbWrite || 'unknown') + '.'
           : (pendingSync
             ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Central account sync still pending.'
             : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.'))
-        : 'Save reached memory but disk flush did not complete — press Force save.');
+        : 'Save reached memory but disk flush did not complete — press Save & Sync.'));
     ['autosave-indicator', 'header-autosave'].forEach(function(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.textContent = txt;
-      if (durable && !dirty) el.removeAttribute('data-autosave-error');
-      else if (!durable || dirty) el.setAttribute('data-autosave-error', '1');
+      if (durable && !dirty && !backupFailed) el.removeAttribute('data-autosave-error');
+      else if (!durable || dirty || backupFailed) el.setAttribute('data-autosave-error', '1');
       el.title = title;
       el.classList.add('visible');
     });
@@ -5902,6 +5729,23 @@ var REQUIRED_FIELD_KEYS = [
       footerWrap.style.display = '';
       footerEl.textContent = txt;
     }
+    applySaveSyncButton({
+      phase: dirty ? 'result' : (opts && opts.phase) || 'result',
+      dirty: dirty,
+      noteDurable: durable,
+      backupOk: opts && Object.prototype.hasOwnProperty.call(opts, 'backupOk') ? opts.backupOk : undefined,
+      centralConfirmed: centralConfirmed,
+      pullOk: opts ? opts.pullOk : undefined,
+      pendingCount: pendingSync ? 1 : 0,
+      offline: opts ? opts.offline : undefined,
+      localOnly: opts ? opts.localOnly : undefined,
+      canSync: opts && opts.canSync === false ? false : undefined,
+      error: opts ? (opts.error || opts.message) : null,
+      backupError: opts ? opts.backupError : null,
+      syncError: opts ? opts.syncError : null,
+      at: _lastDbWrite,
+      timeLabel: pad2(now.getHours()) + ':' + pad2(now.getMinutes()),
+    });
     var savedEl = document.getElementById('form-last-saved');
     if (savedEl && durable && !dirty) {
       savedEl.textContent = centralConfirmed
@@ -6264,6 +6108,12 @@ var REQUIRED_FIELD_KEYS = [
         }
         var isFreeLike = !!(st.tier === 'free' || st.isFree || st.isTrial || (st.key && String(st.key).indexOf('FREE-') === 0) || (st.key && String(st.key).indexOf('TRIAL-') === 0));
         if (trialUpgradeEl) trialUpgradeEl.style.display = isFreeLike ? '' : 'none';
+        var freeSyncEl = document.getElementById('licence-free-sync-signin');
+        var showFreeSync = !!(st.tier === 'free' || st.isFree || (st.key && String(st.key).indexOf('FREE-') === 0)) && !st.signInWithAccount;
+        if (freeSyncEl) freeSyncEl.style.display = showFreeSync ? '' : 'none';
+        if (timeEl && st.signInWithAccount && (st.tier === 'free' || st.isFree)) {
+          timeEl.textContent = 'Signed in — notes can sync across your computers. Managed cloud backup stays a Pro feature.';
+        }
       } else if (st && st.status === 'grace_expired' && graceEl) {
         activeEl.style.display = 'none';
         noneEl.style.display = 'none';
@@ -6271,10 +6121,14 @@ var REQUIRED_FIELD_KEYS = [
         if (emailKeyRecoveryEl) emailKeyRecoveryEl.style.display = '';
         if (graceMsgEl) graceMsgEl.textContent = st.message || 'Connect to the internet to verify your subscription. Your licence is still active.';
         if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
+        var freeSyncGrace = document.getElementById('licence-free-sync-signin');
+        if (freeSyncGrace) freeSyncGrace.style.display = 'none';
       } else {
         activeEl.style.display = 'none';
         noneEl.style.display = '';
         if (trialUpgradeEl) trialUpgradeEl.style.display = 'none';
+        var freeSyncNone = document.getElementById('licence-free-sync-signin');
+        if (freeSyncNone) freeSyncNone.style.display = 'none';
       }
     });
   }
@@ -16591,6 +16445,13 @@ pdfAuditFooterHtml(d, settings) +
         window.api.backupNow().then(function(p) { showToast('Backup saved: ' + p, 'success'); }).catch(function(err) { showToast('Failed: ' + (err && err.message), 'error'); });
         return;
       }
+      /* Cmd/Ctrl+S = Save & Sync on every screen (disk + backup + push and pull). */
+      if (modPressed(e) && !e.shiftKey && !e.altKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        var saveBtn = document.getElementById('header-backup-now-btn');
+        if (typeof window.handleSaveNowClick === 'function' && saveBtn) window.handleSaveNowClick(saveBtn);
+        return;
+      }
       const formViewActive = document.getElementById('view-form')?.classList.contains('active');
       if (!formViewActive) return;
 
@@ -16611,33 +16472,6 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
 
-      /* Cmd/Ctrl+S = Force save (disk flush + verified backup + central push) */
-      if (modPressed(e) && e.key === 's') {
-        e.preventDefault();
-        var saveBtn = document.getElementById('form-backup-now-btn') || document.getElementById('header-backup-now-btn');
-        if (typeof window.handleSaveNowClick === 'function' && saveBtn) window.handleSaveNowClick(saveBtn);
-        else if (window.api && window.api.persistAndBackup) {
-          quietSave();
-          window.api.persistAndBackup().then(function(res) {
-            if (res && res.userMessage && res.userMessage.message) {
-              var lvl = res.userMessage.level || (res.noteDurable ? 'success' : 'error');
-              showToast(res.userMessage.message, lvl, 8000);
-            } else if (res && res.noteDurable && res.centralConfirmed) {
-              showToast('Safe locally + central copy confirmed', 'success', 7000);
-            } else if (res && res.noteDurable && res.backupOk) {
-              showToast('Safe locally. Backup written. Central confirmation pending.', 'success', 7000);
-            } else if (res && res.noteDurable) {
-              showToast('Safe locally; backup or sync not fully confirmed', 'warning', 9000);
-            } else {
-              showToast((res && res.userMessage && res.userMessage.message) || 'Force save failed', 'error', 9000);
-            }
-          }).catch(function(err) {
-            showToast('Force save failed: ' + (err && err.message), 'error');
-          });
-        } else {
-          quietSave();
-        }
-      }
       if (modPressed(e) && e.key === 'ArrowRight') {
         e.preventDefault();
         showSection(currentSectionIdx + 1);
@@ -17169,6 +17003,7 @@ pdfAuditFooterHtml(d, settings) +
     document.addEventListener('licence-activated', function () {
       updateHomeLicenceCard();
       updateGearLicenceItem();
+      if (typeof loadLicenceSettingsUI === 'function') loadLicenceSettingsUI();
       if (window.api && window.api.licenceStatus) window.api.licenceStatus().then(function(st) { if (st && st.addons) window._addons = st.addons; if (typeof updateAddonUIs === 'function') updateAddonUIs(st); }).catch(function(e) { console.error('[licence-status]', e); });
     });
     updateGearLicenceItem();
@@ -17205,9 +17040,11 @@ pdfAuditFooterHtml(d, settings) +
     }
     if (window.api.onSyncConflictsDetected) {
       window.api.onSyncConflictsDetected(function(info) {
-        var count = info && info.count || 0;
-        showToast((count || 'New') + ' sync conflict' + (count === 1 ? '' : 's') + ' detected. Local edits were kept — click the conflict indicator in the footer to review and resolve.', 'warning', 6500);
+        showToast('Merged changes from another computer', 'info', 4000);
         try { refreshSyncCounts(); } catch (_) {}
+        if (_recordCache && typeof _recordCache.clear === 'function') _recordCache.clear();
+        try { loadHomeRecent(); } catch (_) {}
+        try { refreshList(); } catch (_) {}
       });
     }
     if (window.api.onSyncPullWarning) {
@@ -17239,7 +17076,15 @@ pdfAuditFooterHtml(d, settings) +
     if (syncInd) {
       syncInd.addEventListener('click', function() {
         var txt = (syncInd.textContent || '');
-        if (txt.indexOf('conflict') !== -1) { openSyncConflictsView(); return; }
+        var chipAction = syncInd.getAttribute('data-chip-action') || '';
+        if (chipAction === 'open_licence' || txt.indexOf('deactivated for sync') !== -1 || txt.indexOf('sign in to sync') !== -1 || txt.indexOf('Free sync limit') !== -1 || txt.indexOf('revoked by the administrator') !== -1) {
+          if (window.goToLicenceSettings) window.goToLicenceSettings();
+          return;
+        }
+        if (txt.indexOf('Merged changes from another computer') !== -1 || txt.indexOf('conflict') !== -1) {
+          showToast('Merged changes from another computer', 'info', 4000);
+          return;
+        }
         if (txt.indexOf('Fix sync now') !== -1 || txt.indexOf('not confirmed') !== -1) {
           runFixSyncNow();
           return;
@@ -18174,139 +18019,179 @@ pdfAuditFooterHtml(d, settings) +
       });
     });
 
+    var _saveSyncInFlight = false;
+
+    function releaseSaveSync() {
+      _saveSyncInFlight = false;
+    }
+
+    function presentSaveSyncResult(res) {
+      if (_autosaveIndicatorDirty) {
+        showAutoSaveIndicator({ dirty: true, durable: false, pendingSync: false });
+        showToast('Newer edits are still on screen. Press Save & Sync again when you finish.', 'info', 5000);
+        return;
+      }
+      var failedDisk = !(res && res.noteDurable);
+      var failedBackup = !(res && res.backupOk);
+      showAutoSaveIndicator({
+        phase: 'result',
+        dirty: false,
+        durable: !failedDisk,
+        pendingSync: !(res && res.centralConfirmed && res.pullOk === true && res.backupOk && !res.localOnly),
+        centralConfirmed: !!(res && res.centralConfirmed),
+        backupOk: !!(res && res.backupOk),
+        pullOk: res ? res.pullOk : false,
+        offline: !!(res && res.offline),
+        localOnly: !!(res && res.localOnly),
+        canSync: res && res.localOnly ? false : undefined,
+        error: (res && (res.error || res.backupError)) || (failedDisk ? 'The note did not finish writing to disk.' : null),
+        backupError: res && res.backupError,
+        syncError: res && (res.syncError || res.pullError),
+      });
+      if (failedDisk) {
+        var diskWhy = (res && (res.error || res.backupError)) || 'The note did not finish writing to disk.';
+        showToast("Couldn't save. " + diskWhy, 'error', 10000);
+        try { updateBackupStatus(); } catch (_) {}
+        return;
+      }
+      if (failedBackup) {
+        var backupWhy = (res && (res.backupError || res.error)) || 'The local backup did not finish.';
+        showToast('Saved, backup failed. ' + backupWhy, 'error', 10000);
+        try { updateBackupStatus(); } catch (_) {}
+        return;
+      }
+      if (res && res.localOnly) {
+        showToast('Saved on this computer. Sign in to sync.', 'info', 7000);
+        return;
+      }
+      if (res && res.noteDurable && res.backupOk && res.centralConfirmed && res.pullOk === true && !(Number(res.pendingCount) > 0) && !res.offline) {
+        showToast('Saved & synced', 'success', 6000);
+        try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
+        return;
+      }
+      showToast('Saved on this computer, sync pending. Nothing was deleted.', 'info', 8000);
+      try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
+    }
+
     function handleSaveNowClick(btn) {
-      if (!btn || btn.classList.contains('backing-up') || btn.classList.contains('saving-now')) return;
+      if (_saveSyncInFlight) return;
+      _saveSyncInFlight = true;
       var formView = document.getElementById('view-form');
       var onForm = formView && formView.classList.contains('active');
-      btn.classList.add('saving-now');
-      btn.classList.add('backing-up');
-      var origText = btn.innerHTML;
-      btn.innerHTML = 'Saving\u2026';
-      btn.disabled = true;
+      if (btn) btn.classList.add('saving-now');
+      showSavingIndicator();
 
-      function finishBtn(label, keepMs) {
-        btn.innerHTML = label || origText;
-        setTimeout(function() {
-          btn.innerHTML = origText;
-          btn.classList.remove('backing-up');
-          btn.classList.remove('saving-now');
-          btn.disabled = false;
-        }, keepMs || 2200);
-      }
-
-      function runPersistBackup(afterNoteOk) {
+      function runPersistBackup() {
         var apiFn = (window.api && (window.api.persistAndBackup || window.api.flushAndBackup));
         if (!apiFn) {
-          showToast(afterNoteOk
-            ? 'Note saved to this computer, but backup API is unavailable'
-            : 'Force save unavailable', 'warning', 7000);
-          finishBtn(afterNoteOk ? 'Note saved' : origText, 2500);
+          showToast('Save & Sync is unavailable in this window.', 'error', 7000);
+          showAutoSaveIndicator({
+            phase: 'result',
+            durable: false,
+            backupOk: false,
+            pendingSync: false,
+            error: 'Save & Sync is unavailable in this window.',
+          });
+          releaseSaveSync();
           return;
         }
         Promise.resolve(apiFn()).then(function(res) {
           if (!res || typeof res === 'string') {
-            // Legacy flush-and-backup may still return a string path on older builds.
-            showToast('Safe locally. Backup written. Central confirmation pending.', 'success', 6000);
-            showAutoSaveIndicator({ durable: true, pendingSync: true });
-            finishBtn('Safe locally', 2500);
-            return;
-          }
-          var um = res.userMessage || null;
-          var headline = (um && um.headline) || null;
-          var state = (res.forceSaveState || (um && um.state) || '');
-          if (res.noteDurable && res.centralConfirmed && res.backupOk !== false) {
-            var okCentral = (um && um.message) || 'Safe locally + central copy confirmed';
-            showToast(okCentral, 'success', 8000);
-            showAutoSaveIndicator({ durable: true, pendingSync: false, centralConfirmed: true });
-            finishBtn(headline || 'Central OK', 2800);
-            try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
-            return;
-          }
-          if (res.noteDurable && res.backupOk) {
-            var okMsg = (um && um.message) || (
-              'Safe locally. Backup written to ' + (res.backupPath || res.effectiveBackupFolder || 'Backups')
-            );
-            var toastLevel = (um && um.level) || 'success';
-            if (state === 'waiting_for_internet' || state === 'syncing' || state === 'sync_problem_local_safe') {
-              toastLevel = state === 'sync_problem_local_safe' ? 'warning' : 'info';
-            }
-            showToast(okMsg, toastLevel, 8000);
-            showAutoSaveIndicator({
-              durable: true,
-              pendingSync: !res.centralConfirmed,
-              centralConfirmed: !!res.centralConfirmed,
+            presentSaveSyncResult({
+              noteDurable: true,
+              backupOk: true,
+              centralConfirmed: false,
+              pullOk: false,
+              pendingCount: 1,
+              backupPath: typeof res === 'string' ? res : null,
             });
-            finishBtn(headline || 'Safe locally', 2800);
-            try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
             return;
           }
-          if (res.noteDurable && !res.backupOk) {
-            var warnMsg = (um && um.message) || (
-              'Safe locally, but backup failed' + (res.error || res.backupError ? ': ' + (res.error || res.backupError) : '')
-            );
-            showToast(warnMsg, 'warning', 10000);
-            showAutoSaveIndicator({ durable: true, pendingSync: true });
-            finishBtn('Backup failed', 3500);
-            try { updateBackupStatus(); } catch (_) {}
-            return;
-          }
-          var errMsg = (um && um.message) || (res.error || 'Could not save note to disk');
-          showToast(errMsg, 'error', 10000);
-          showAutoSaveIndicator({ durable: false, pendingSync: false });
-          finishBtn('Attention', 3500);
+          presentSaveSyncResult(res);
         }).catch(function(err) {
-          showToast('Force save failed: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 8000);
-          finishBtn(origText, 500);
+          var msg = err && err.message ? err.message : 'Unknown error';
+          showToast("Couldn't save. " + msg, 'error', 8000);
+          showAutoSaveIndicator({
+            phase: 'result',
+            durable: false,
+            backupOk: false,
+            pendingSync: false,
+            error: msg,
+          });
+        }).finally(function() {
+          releaseSaveSync();
+          if (btn) btn.classList.remove('saving-now');
         });
       }
 
       if (!onForm || isNoteLockedForEditing()) {
-        // Global / settings Backup: still force disk flush + verified backup.
-        runPersistBackup(false);
+        runPersistBackup();
         return;
       }
 
       var data = getFormData();
       if (!hasMeaningfulData(data)) {
         showToast('Nothing to save — enter some details first, or use Backup from Settings for a DB snapshot', 'warning', 5000);
-        finishBtn(origText, 500);
+        applySaveSyncButton({ phase: 'idle' });
+        releaseSaveSync();
         return;
       }
       if (_finalising) {
-        showToast('Finalise in progress — wait, then try Force save', 'info', 4000);
-        finishBtn(origText, 500);
+        showToast('Finalise in progress — wait, then try Save & Sync', 'info', 4000);
+        applySaveSyncButton({ phase: 'idle' });
+        releaseSaveSync();
         return;
       }
 
       attendanceSaveDetailed({ id: currentAttendanceId, data: data, status: 'draft' }).then(function(result) {
         if (result && typeof result === 'object' && result.error === 'locked') {
           showToast('This record is finalised and cannot be modified', 'error', 6000);
-          finishBtn(origText, 500);
+          applySaveSyncButton({ phase: 'idle' });
+          releaseSaveSync();
           return;
         }
         var normalized = normalizeAttendanceSaveResult(result);
         if (normalized.error) {
-          showToast('Failed to save note: ' + (normalized.message || normalized.error), 'error', 7000);
-          finishBtn(origText, 500);
+          showToast("Couldn't save. " + (normalized.message || normalized.error), 'error', 7000);
+          showAutoSaveIndicator({
+            phase: 'result',
+            durable: false,
+            backupOk: false,
+            pendingSync: false,
+            error: normalized.message || normalized.error,
+          });
+          releaseSaveSync();
           return;
         }
         if (normalized.id != null) currentAttendanceId = normalized.id;
         if (!normalized.durable) {
-          showToast('Note did not finish writing to disk — backup not attempted. Try Force save again.', 'error', 9000);
-          showAutoSaveIndicator({ durable: false, pendingSync: true });
-          finishBtn('Disk failed', 3500);
+          showToast("Couldn't save. The note did not finish writing to disk.", 'error', 9000);
+          showAutoSaveIndicator({
+            phase: 'result',
+            durable: false,
+            backupOk: false,
+            pendingSync: false,
+            error: 'The note did not finish writing to disk.',
+          });
+          releaseSaveSync();
           return;
         }
-        showAutoSaveIndicator({ durable: true, pendingSync: true });
-        runPersistBackup(true);
+        runPersistBackup();
       }).catch(function(e) {
-        showToast('Failed to save note: ' + (e && e.message ? e.message : e), 'error', 7000);
-        finishBtn(origText, 500);
+        var msg = e && e.message ? e.message : String(e);
+        showToast("Couldn't save. " + msg, 'error', 7000);
+        showAutoSaveIndicator({
+          phase: 'result',
+          durable: false,
+          backupOk: false,
+          pendingSync: false,
+          error: msg,
+        });
+        releaseSaveSync();
       });
     }
 
     document.getElementById('backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
-    document.getElementById('form-backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
     document.getElementById('header-backup-now-btn')?.addEventListener('click', function() { handleSaveNowClick(this); });
     document.getElementById('settings-quick-backup')?.addEventListener('click', function() { handleSaveNowClick(this); });
     window.handleSaveNowClick = handleSaveNowClick;
@@ -20127,6 +20012,33 @@ pdfAuditFooterHtml(d, settings) +
       } catch (_) {}
     }
     window.goToLicenceEmailKeySettings = goToLicenceEmailKeySettings;
+
+    function goToLicenceSettings() {
+      try {
+        if (typeof showView === 'function') showView('settings');
+        var tabBar = document.getElementById('settings-tab-bar');
+        var accountTab = tabBar && tabBar.querySelector('.settings-tab[data-stab="account"]');
+        if (accountTab) accountTab.click();
+        if (typeof loadLicenceSettingsUI === 'function') loadLicenceSettingsUI();
+        setTimeout(function() {
+          var target = document.getElementById('licence-free-sync-signin');
+          if (!target || target.style.display === 'none') target = document.getElementById('licence-settings-card');
+          if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          var emailInp = document.getElementById('licence-free-sync-email');
+          if (emailInp && emailInp.focus && emailInp.offsetParent) emailInp.focus();
+        }, 150);
+      } catch (_) {}
+    }
+    window.goToLicenceSettings = goToLicenceSettings;
+
+    document.getElementById('home-free-sync-signin-btn')?.addEventListener('click', function() {
+      goToLicenceSettings();
+    });
+    document.getElementById('home-free-sync-signin-dismiss')?.addEventListener('click', function() {
+      try { localStorage.setItem('cn_free_sync_signin_dismissed', '1'); } catch (_) {}
+      var prompt = document.getElementById('home-free-sync-signin-prompt');
+      if (prompt) prompt.style.display = 'none';
+    });
 
     document.getElementById('forgot-licence-goto-settings-btn')?.addEventListener('click', function() {
       goToLicenceEmailKeySettings();

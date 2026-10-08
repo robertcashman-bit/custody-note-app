@@ -279,27 +279,25 @@ describe('Sync pull — finalise guard', () => {
   const pullStart = mainJsSource.indexOf('async function syncPull');
   const pullFn = mainJsSource.substring(pullStart, pullStart + 12000);
 
-  it('refuses to overwrite locally-finalised records with remote draft', () => {
-    assert.ok(pullFn.includes("localStatus === 'finalised'"),
-      'must check if local record is finalised');
-    assert.ok(pullFn.includes("remote.status !== 'finalised'"),
-      'must check if remote is not finalised');
-    assert.ok(pullFn.includes('continue'),
-      'must skip overwrite');
-    assert.ok(pullFn.includes('BLOCKED'),
-      'must log the block');
+  it('field-merges a remote status instead of blocking a finalised note', () => {
+    assert.ok(pullFn.includes('mergeAttendanceRecords'),
+      'sync pull must field-merge, including status');
+    assert.ok(!pullFn.includes("localStatus === 'finalised'"),
+      'a hard finalised skip would drop the newer edit');
+    assert.ok(pullFn.includes('shouldKeepLocalPostBillPurgeTombstone'),
+      'post-bill purge tombstones stay sticky');
   });
 
   it('does NOT reference undeclared ctx variable', () => {
-    const guardIdx = pullFn.indexOf("localStatus === 'finalised'");
-    const guardBlock = pullFn.substring(guardIdx, pullFn.indexOf('continue', guardIdx));
-    assert.ok(!guardBlock.includes('ctx'),
-      'sync pull guard must NOT reference ctx (causes ReferenceError)');
+    const mergeIdx = pullFn.indexOf('mergeAttendanceRecords');
+    const mergeBlock = pullFn.substring(mergeIdx, mergeIdx + 600);
+    assert.ok(!mergeBlock.includes('ctx.'),
+      'sync pull merge must NOT reference ctx (causes ReferenceError)');
   });
 
-  it('uses dbGet directly for status lookup', () => {
-    assert.ok(pullFn.includes("dbGet('SELECT status FROM attendances WHERE id=?', [local.id])"),
-      'must use dbGet directly for local status lookup');
+  it('uses dbGet directly for the local row', () => {
+    assert.ok(pullFn.includes("dbGet('SELECT * FROM attendances WHERE sync_id=?', [remote.syncId])"),
+      'must use dbGet directly for the local attendance');
   });
 });
 

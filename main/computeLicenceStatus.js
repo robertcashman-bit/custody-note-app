@@ -24,10 +24,17 @@ function keyLooksAccount(key) {
   return String(key || '').toUpperCase().startsWith('ACCOUNT-');
 }
 
+function keyLooksServerFree(key) {
+  return String(key || '').toUpperCase().startsWith('CNF-');
+}
+
 function resolveTier(data) {
   if (!data || !data.key) return 'none';
-  if (data.tier === 'free' || data.tier === 'pro' || data.tier === 'trial') return data.tier;
-  if (keyLooksFree(data.key)) return 'free';
+  const explicit = String(data.tier || '').toLowerCase();
+  const plan = String(data.plan || '').toLowerCase();
+  if (explicit === 'free' || plan === 'free_sync') return 'free';
+  if (explicit === 'pro' || explicit === 'trial') return explicit;
+  if (keyLooksFree(data.key) || keyLooksServerFree(data.key)) return 'free';
   if (keyLooksTrial(data.key) || data.isTrial) return 'trial';
   if (keyLooksAccount(data.key) && data.isTrial) return 'trial';
   return 'pro';
@@ -114,7 +121,7 @@ function computeLicenceStatus(data, options) {
 
   const now = Date.now();
 
-  // Non-expiring Free during beta
+  // Non-expiring Free during beta. Not Pro: no add-ons, no managed cloud backup.
   if (tier === 'free' || (freeTierEnabled && keyLooksFree(data.key))) {
     return {
       status: 'active',
@@ -127,8 +134,9 @@ function computeLicenceStatus(data, options) {
       isFree: true,
       tier: 'free',
       createAllowed: true,
-      addons,
-      entitlements: data.entitlements || null,
+      addons: noAddons,
+      entitlements: null,
+      cloudBackup: false,
       graceDays,
     };
   }

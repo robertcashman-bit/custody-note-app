@@ -198,7 +198,7 @@ describe('dbMigrations runner', () => {
     );
 
     const result = runMigrations(db);
-    assert.deepStrictEqual(result.applied, [2, 3, 4]);
+    assert.deepStrictEqual(result.applied, [2, 3, 4, 5]);
     assert.strictEqual(
       Number(scalar(db, "SELECT mileage_from_base FROM police_stations WHERE code = 'BG039'")),
       46

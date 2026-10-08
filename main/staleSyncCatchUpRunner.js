@@ -8,16 +8,22 @@
  *
  * Steps:
  *  1. Pull cloud
- *  2. Auto accept_remote (force when needed) for remote-newer non-dirty conflicts
+ *  2. Field-merge every open conflict (no prompt, no dropped local edit)
  *  3. Drain push until dirty→0 (honest rate-limit stop)
- *  4. Leave preserve_local_dirty conflicts for human + bulk "Use cloud"
+ *
+ * Does NOT auto keep_local. Losing values stay in hidden history on the same note.
  */
 
 const {
   shouldRunStaleCatchUp,
   partitionConflictsForCatchUp,
 } = require('../lib/staleSyncCatchUp');
-const { listOpenConflicts, resolveConflict } = require('./syncConflicts');
+const { listOpenConflicts } = require('./syncConflicts');
+const {
+  mergeAttendanceRecords,
+  writeMergedAttendance,
+  markConflictsAutoMerged,
+} = require('../lib/syncFieldMerge');
 
 const SETTINGS_LAST_SEEN_APP_VERSION = 'lastSeenAppVersion';
 const SETTINGS_CATCH_UP_BANNER = 'staleCatchUpBannerAt';
@@ -67,48 +73,42 @@ function emitProgress(ctx, payload) {
 }
 
 /**
- * Auto-resolve catch-up conflicts that are safe to accept remotely.
- * Does NOT auto keep_local. Does NOT auto-resolve preserve_local_dirty.
+ * Field-merge every open conflict. Losing values stay in hidden history.
+ * Does not open a prompt and does not delete the note.
  */
 function autoAcceptRemoteNewerConflicts(ctx) {
   const open = listOpenConflicts(ctx);
   const parts = partitionConflictsForCatchUp(open);
-  let accepted = 0;
-  let forced = 0;
+  let merged = 0;
   const failures = [];
+  const now = ctx.nowIso ? ctx.nowIso() : new Date().toISOString();
+  const targets = parts.autoMerge.concat(parts.autoAccept);
 
-  for (let i = 0; i < parts.autoAccept.length; i++) {
-    const { conflict, classify } = parts.autoAccept[i];
-    const res = resolveConflict(ctx, conflict.id, 'accept_remote', {
-      force: !!classify.force,
-    });
-    if (res && res.ok) {
-      accepted += 1;
-      if (res.forced || classify.force) forced += 1;
+  for (let i = 0; i < targets.length; i++) {
+    const conflict = targets[i].conflict;
+    try {
+      const local = conflict.attendanceId != null
+        ? ctx.dbGet('SELECT * FROM attendances WHERE id=?', [conflict.attendanceId])
+        : null;
+      if (local && conflict.remote) {
+        const result = mergeAttendanceRecords({ base: null, local: local, remote: conflict.remote });
+        writeMergedAttendance(ctx, conflict.attendanceId, result);
+      }
+      markConflictsAutoMerged(ctx, conflict.attendanceId, now);
+      merged += 1;
       if (typeof ctx.afterResolve === 'function') {
-        try { ctx.afterResolve(res); } catch (_) {}
+        try { ctx.afterResolve({ ok: true, resolution: 'auto_merged', attendanceId: conflict.attendanceId }); } catch (_) {}
       }
-    } else if (res && res.blocked) {
-      // Retry once with force for protected locals during catch-up (cloud SoT).
-      const forcedRes = resolveConflict(ctx, conflict.id, 'accept_remote', { force: true });
-      if (forcedRes && forcedRes.ok) {
-        accepted += 1;
-        forced += 1;
-        if (typeof ctx.afterResolve === 'function') {
-          try { ctx.afterResolve(forcedRes); } catch (_) {}
-        }
-      } else {
-        failures.push({ conflictId: conflict.id, error: (forcedRes && forcedRes.error) || 'blocked' });
-      }
-    } else {
-      failures.push({ conflictId: conflict.id, error: (res && res.error) || 'failed' });
+    } catch (e) {
+      failures.push({ conflictId: conflict.id, error: e && e.message ? e.message : 'merge_failed' });
     }
   }
 
   return {
-    accepted,
-    forced,
-    needsHuman: parts.needsHuman.map((x) => x.conflict),
+    accepted: merged,
+    merged: merged,
+    forced: 0,
+    needsHuman: [],
     skipped: parts.skipped.map((x) => x.conflict),
     failures,
     remainingOpen: listOpenConflicts(ctx).length,

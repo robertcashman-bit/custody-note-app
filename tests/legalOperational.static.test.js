@@ -32,11 +32,10 @@ describe('Legal record integrity (main process)', () => {
     );
   });
 
-  it('sync pull refuses to downgrade finalised to draft', () => {
-    assert.ok(
-      mainJs.includes("localStatus === 'finalised'") && mainJs.includes('protect_finalised'),
-      'sync must not overwrite local finalised with remote draft'
-    );
+  it('sync pull field-merges and does not park a conflict prompt', () => {
+    assert.ok(mainJs.includes('mergeAttendanceRecords'), 'sync pull must field-merge');
+    assert.ok(mainJs.includes('Merged changes from another computer') || mainJs.includes('QUIET_MERGED_MESSAGE'));
+    assert.ok(!mainJs.includes("recordSyncConflict(local.id, local, remote, 'preserve_local_dirty')"));
   });
 
   it('draft case-key merge prevents duplicate drafts for same DSCC', () => {

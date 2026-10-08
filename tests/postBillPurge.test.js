@@ -175,11 +175,9 @@ describe('postBillPurge Bugbot wiring (source)', () => {
   it('sticky purge runs before status protect gates and bumps version past remote', () => {
     const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
     const stickyIdx = main.indexOf('shouldKeepLocalPostBillPurgeTombstone(local.deletion_reason');
-    const protectIdx = main.indexOf("localStatus === 'finalised' && remote.status !== 'finalised'");
-    const completedIdx = main.indexOf("localStatus === 'completed' && remote.status !== 'completed'");
+    const mergeIdx = main.indexOf('const mergedResult = mergeAttendanceRecords({');
     assert.ok(stickyIdx > 0, 'sticky purge check present');
-    assert.ok(protectIdx > stickyIdx, 'sticky purge must run before finalised protect gate');
-    assert.ok(completedIdx > stickyIdx, 'sticky purge must run before completed protect gate');
+    assert.ok(mergeIdx > stickyIdx, 'sticky purge must run before field merge so a legal wipe is not restored');
     assert.ok(main.includes('nextTombstoneSyncVersion(localVersion, remoteVersion)'));
     assert.ok(main.includes('sync_dirty=1, sync_version=?, updated_at=?'));
   });

@@ -59,6 +59,17 @@ const {
   buildCycleHeartbeat,
   isHardSkipReason,
 } = require('../lib/syncCycleAudit');
+const { isSyntheticLocalLicenceKey } = require('../main/licenceAdminEmails');
+const {
+  isDeviceRevokedHttpError,
+  isDeviceNotActivatedHttpError,
+  isStaleVersionHttpError,
+  isFreeQuotaHttpError,
+  deviceRevokedUserMessage,
+  DEVICE_NOT_ACTIVATED_MESSAGE,
+  FREE_QUOTA_MESSAGE,
+} = require('../lib/syncAccountState');
+const { isNonGrowingOutboxItem } = require('../lib/freeSyncQuota');
 
 const SYNC_POLL_INTERVAL_MS = 10000;
 const SYNC_REQUEST_TIMEOUT_MS = 30000;
@@ -77,6 +88,9 @@ const HEALTH_CHECK_SKIP_WINDOW_MS = 60_000;
 const BLOCKED_RECOVERY_COOLDOWN_MS = 30 * 60_000;
 const MAX_BLOCKED_AUTO_RECOVERIES = 3;
 const RATE_LIMITED_SLOW_POLL_MS = 30_000;
+const DEVICE_REVOKED_BACKOFF_MS = 5 * 60 * 1000;
+const DEVICE_NOT_ACTIVATED_BACKOFF_MS = 5 * 60 * 1000;
+const FREE_QUOTA_BACKOFF_MS = 5 * 60 * 1000;
 
 /** Classify errors: retryable vs permanent */
 function isRetryableError(err) {
@@ -94,6 +108,20 @@ function isRetryableError(err) {
   if (status >= 500 || status === 429) return true;
   if ([400, 401, 403, 404, 422].includes(status)) return false;
   return true;
+}
+
+/**
+ * HTTP 400 rejects the entire push batch ("Missing sync envelope" and any
+ * other bad record). Status may arrive as statusCode or inside the message.
+ */
+function isPushHttp400(err) {
+  if (!err) return false;
+  const raw = err.statusCode != null ? err.statusCode : err.code;
+  const numeric = typeof raw === 'number' ? raw : parseInt(raw, 10);
+  if (numeric === 400) return true;
+  const msg = String(err.message || err);
+  const m = msg.match(/server error (\d+)/i);
+  return !!(m && parseInt(m[1], 10) === 400);
 }
 
 /** Exponential backoff: next attempt after RETRY_DELAYS_MS[retry_count] */
@@ -143,7 +171,15 @@ function createSyncWorker(ctx) {
   let _lastSkipLogReason = null;
   let _preferOutboxDrain = false;
   let _gateWakeTimer = null;
+  let _blockWakeTimer = null;
   let _slowPollActive = false;
+  let _deviceRevokedUntil = 0;
+  let _deviceRevokedBy = null;
+  let _deviceNotActivatedUntil = 0;
+  let _deviceActivationTriedAt = 0;
+  let _freeQuotaUntil = 0;
+  let _exclusiveDepth = 0;
+  const _knownPushedSyncIds = new Set();
   const SKIP_ATTEMPT_LOG_COOLDOWN_MS = 60_000;
   const rateLimitGate = createRateLimitGate({
     cooldownMs: (ctx && ctx.rateLimitCooldownMs) || RATE_LIMIT_COOLDOWN_MS,
@@ -220,7 +256,20 @@ function createSyncWorker(ctx) {
     _lastCycleAt = heartbeat.lastSyncCycleAt;
     _lastSkipReason = heartbeat.lastSyncSkipReason;
     _lastSkipDetail = heartbeat.lastSyncSkipDetail;
-    if (isHardSkipReason(reason) || reason === SYNC_SKIP_REASONS.ERROR) {
+    if (
+      reason === SYNC_SKIP_REASONS.OK ||
+      reason === SYNC_SKIP_REASONS.OK_PUSHED ||
+      reason === SYNC_SKIP_REASONS.OK_PULLED ||
+      reason === SYNC_SKIP_REASONS.OK_EMPTY_OUTBOX
+    ) {
+      _deviceRevokedUntil = 0;
+      _deviceRevokedBy = null;
+      _freeQuotaUntil = 0;
+    }
+    if (reason === SYNC_SKIP_REASONS.LOCAL_ONLY) {
+      // Quiet local-only state — must not look like an invalid licence.
+      _lastError = null;
+    } else if (isHardSkipReason(reason) || reason === SYNC_SKIP_REASONS.ERROR) {
       _lastError = detail || heartbeat.lastSyncSkipDetail || _lastError;
     }
     if (ctx.persistSyncCycle) {
@@ -250,33 +299,156 @@ function createSyncWorker(ctx) {
       }
     }
     notifyRenderer({
-      status: reason === SYNC_SKIP_REASONS.RATE_LIMITED
-        ? 'rate_limited'
-        : (isHardSkipReason(reason) ? 'error' : 'synced'),
+      status: statusForSkipReason(reason),
       lastError: _lastError,
-      retryable: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.API_UNREACHABLE,
+      retryable: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.API_UNREACHABLE || reason === SYNC_SKIP_REASONS.DEVICE_REVOKED || reason === SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED || reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
       rateLimited: reason === SYNC_SKIP_REASONS.RATE_LIMITED,
       rateLimitRemainingMs: rateLimitGate.remainingMs(),
       authRequired: reason === SYNC_SKIP_REASONS.AUTH_REQUIRED,
+      deviceRevoked: reason === SYNC_SKIP_REASONS.DEVICE_REVOKED || Date.now() < _deviceRevokedUntil,
+      deviceRevokedBy: _deviceRevokedBy,
+      freeQuotaExceeded: reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED || Date.now() < _freeQuotaUntil,
+      localOnly: reason === SYNC_SKIP_REASONS.LOCAL_ONLY,
       lastSyncCycleAt: _lastCycleAt,
       lastSyncSkipReason: _lastSkipReason,
       connectivity: _connectivityState,
       localSafe: true,
-      waitingForSync: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE,
+      waitingForSync: reason === SYNC_SKIP_REASONS.RATE_LIMITED || reason === SYNC_SKIP_REASONS.OFFLINE || reason === SYNC_SKIP_REASONS.DEVICE_REVOKED || reason === SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED || reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
     });
     return heartbeat;
   }
 
+  function statusForSkipReason(reason) {
+    if (reason === SYNC_SKIP_REASONS.RATE_LIMITED) return 'rate_limited';
+    if (reason === SYNC_SKIP_REASONS.LOCAL_ONLY) return 'local_only';
+    if (reason === SYNC_SKIP_REASONS.DEVICE_REVOKED) return 'device_revoked';
+    if (reason === SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED) return 'device_not_activated';
+    if (reason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED) return 'free_quota_exceeded';
+    if (isHardSkipReason(reason)) return 'error';
+    return 'synced';
+  }
+
+  function deviceRevokedBackoffMs() {
+    return ctx && ctx.deviceRevokedBackoffMs != null ? ctx.deviceRevokedBackoffMs : DEVICE_REVOKED_BACKOFF_MS;
+  }
+
+  function freeQuotaBackoffMs() {
+    return ctx && ctx.freeQuotaBackoffMs != null ? ctx.freeQuotaBackoffMs : FREE_QUOTA_BACKOFF_MS;
+  }
+
+  function clearDeviceSyncBlocks() {
+    _deviceRevokedUntil = 0;
+    _deviceRevokedBy = null;
+    _deviceNotActivatedUntil = 0;
+    _deviceActivationTriedAt = 0;
+    _freeQuotaUntil = 0;
+    if (_blockWakeTimer) {
+      clearTimeout(_blockWakeTimer);
+      _blockWakeTimer = null;
+    }
+  }
+
+  function scheduleBlockWake() {
+    if (_blockWakeTimer) return;
+    const now = Date.now();
+    const waits = [];
+    if (_deviceRevokedUntil > now) waits.push(_deviceRevokedUntil - now);
+    if (_deviceNotActivatedUntil > now) waits.push(_deviceNotActivatedUntil - now);
+    if (_freeQuotaUntil > now) waits.push(_freeQuotaUntil - now);
+    if (!waits.length) return;
+    const wait = Math.min.apply(null, waits);
+    _blockWakeTimer = setTimeout(() => {
+      _blockWakeTimer = null;
+      runCyclePublic().catch(() => {});
+    }, wait + 25);
+    if (_blockWakeTimer && typeof _blockWakeTimer.unref === 'function') _blockWakeTimer.unref();
+  }
+
+  function engageDeviceRevoked(err) {
+    _deviceRevokedUntil = Date.now() + deviceRevokedBackoffMs();
+    _deviceRevokedBy = (err && (err.deviceRevokedBy || (err.body && err.body.deviceRevokedBy))) || null;
+    _lastError = deviceRevokedUserMessage(err || {});
+    setConnectivity('device_revoked');
+    scheduleBlockWake();
+  }
+
+  function deviceNotActivatedBackoffMs() {
+    return ctx && ctx.deviceNotActivatedBackoffMs != null ? ctx.deviceNotActivatedBackoffMs : DEVICE_NOT_ACTIVATED_BACKOFF_MS;
+  }
+
+  function engageDeviceNotActivated() {
+    _deviceNotActivatedUntil = Date.now() + deviceNotActivatedBackoffMs();
+    _lastError = DEVICE_NOT_ACTIVATED_MESSAGE;
+    setConnectivity('device_not_activated');
+    scheduleBlockWake();
+  }
+
+  async function tryReactivateDeviceOnce() {
+    const windowMs = deviceNotActivatedBackoffMs();
+    if (_deviceActivationTriedAt && (Date.now() - _deviceActivationTriedAt) < windowMs) return false;
+    _deviceActivationTriedAt = Date.now();
+    if (typeof ctx.activateDeviceForSync !== 'function') return false;
+    try {
+      const res = await ctx.activateDeviceForSync();
+      return !!(res && (res.ok === true || res.valid === true));
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function knownCloudSyncIdSet() {
+    const set = new Set(_knownPushedSyncIds);
+    if (typeof ctx.getCloudPresenceProof === 'function') {
+      try {
+        const proof = ctx.getCloudPresenceProof() || null;
+        const ids = proof && Array.isArray(proof.cloudSyncIds) ? proof.cloudSyncIds : [];
+        for (let i = 0; i < ids.length; i++) {
+          if (ids[i]) set.add(String(ids[i]));
+        }
+      } catch (_) {}
+    }
+    return set;
+  }
+
+  function queueItemIsNonGrowing(item) {
+    let row = null;
+    try {
+      row = ctx.dbGet(
+        'SELECT sync_id, deleted_at, deletion_reason FROM attendances WHERE id=?',
+        [item.record_id]
+      );
+    } catch (_) {}
+    return isNonGrowingOutboxItem({
+      operation: item.operation,
+      deletedAt: row && row.deleted_at,
+      deletionReason: row && row.deletion_reason,
+      syncId: row && row.sync_id,
+      knownCloudSyncIds: knownCloudSyncIdSet(),
+    });
+  }
+
+  function engageFreeQuota(err) {
+    _freeQuotaUntil = Date.now() + freeQuotaBackoffMs();
+    _lastError = FREE_QUOTA_MESSAGE;
+    if (err && err.message) {
+      _lastError = FREE_QUOTA_MESSAGE;
+    }
+    setConnectivity('free_quota_exceeded');
+    scheduleBlockWake();
+  }
+
   /**
    * Advisory health check. Returns connectivity state but does NOT block
-   * sync processing on 'internet_available_api_unreachable'. Only 'offline'
-   * and 'auth_required' are hard stops.
+   * sync processing on 'internet_available_api_unreachable'. Only 'offline',
+   * 'auth_required', and 'local_only' (synthetic FREE-/TRIAL- keys) are hard stops.
+   * Synthetic keys must not hit /api/health, push, or pull.
    */
   async function checkConnectivity() {
     const apiUrl = ctx.getSyncApiUrl && ctx.getSyncApiUrl();
     if (!apiUrl) return 'offline';
     const data = ctx.readLicenceData && ctx.readLicenceData();
     if (!data || !data.key) return 'auth_required';
+    if (isSyntheticLocalLicenceKey(data.key)) return 'local_only';
     if (Date.now() - _lastSuccessfulPushAt < HEALTH_CHECK_SKIP_WINDOW_MS) {
       return 'api_available';
     }
@@ -354,7 +526,7 @@ function createSyncWorker(ctx) {
       ctx.flushDb && ctx.flushDb();
       // Kick only when caller opts in (enqueueSyncForRecord always passes scheduleOpts).
       // Direct enqueue(id, op, payload) from unit tests does not schedule a cycle.
-      if (scheduleOpts !== undefined) {
+      if (scheduleOpts !== undefined && scheduleOpts.schedule !== false) {
         try { scheduleSoon(scheduleOpts || {}); } catch (_) {}
       }
       return id;
@@ -370,7 +542,7 @@ function createSyncWorker(ctx) {
    *  are immediately due. LIMIT-before-due-filter left Fix sync with 0 pushes
    *  (Robsprgr 1.9.102: cloud ids present, written:0 path never reached).
    */
-  function getNextQueueItem() {
+  function getNextQueueItem(opts) {
     if (!ctx.db) return null;
     const now = Date.now();
     const rows = ctx.dbAll(
@@ -379,10 +551,13 @@ function createSyncWorker(ctx) {
        WHERE status = 'pending'
        ORDER BY created_at ASC LIMIT 500`
     );
+    const skipGrowing = !!(opts && opts.skipGrowing);
     for (const row of rows || []) {
       const nextMs = getNextAttemptMs(row.retry_count || 0);
       const lastAttempt = row.last_attempt || row.created_at || 0;
-      if (now - lastAttempt >= nextMs) return row;
+      if (now - lastAttempt < nextMs) continue;
+      if (skipGrowing && !queueItemIsNonGrowing(row)) continue;
+      return row;
     }
     return null;
   }
@@ -427,7 +602,13 @@ function createSyncWorker(ctx) {
     ctx.flushDb && ctx.flushDb();
   }
 
-  /** Build encrypted push payload for one queue item. */
+  /** Build encrypted push payload for one queue item.
+   *  Every record — live or deleted — carries an encrypted envelope. Other
+   *  computers read deletedAt from inside that envelope. The live server
+   *  rejects a record with no envelope as 400 and fails the whole batch.
+   *  A delete also sets top-level tombstone fields so free-quota accounting
+   *  can treat it as a deletion without a second body.
+   */
   function buildPushPayload(queueItem) {
     const recordId = queueItem.record_id;
     const row = ctx.dbGet('SELECT id, sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason, client_name, station_name, dscc_ref, attendance_date, supervisor_approved_at, supervisor_note, archived_at, sync_version FROM attendances WHERE id=?', [recordId]);
@@ -449,19 +630,20 @@ function createSyncWorker(ctx) {
       deletedAt: row.deleted_at || null,
       deletionReason: row.deletion_reason || null,
     });
-    return {
-      queueId: queueItem.id,
-      recordId,
-      capturedVersion,
-      record: {
-        syncId: row.sync_id,
-        envelope,
-        encrypted: true,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        version: capturedVersion,
-      },
+    const record = {
+      syncId: row.sync_id,
+      envelope,
+      encrypted: true,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      version: capturedVersion,
     };
+    if (row.deleted_at) {
+      record.tombstone = true;
+      record.deletedAt = row.deleted_at;
+      record.deletionReason = row.deletion_reason || null;
+    }
+    return { queueId: queueItem.id, recordId, capturedVersion, record };
   }
 
   /** Push up to PUSH_HTTP_BATCH_SIZE records in one HTTP request. */
@@ -576,16 +758,123 @@ function createSyncWorker(ctx) {
     }
   }
 
+  /** Apply a confirmed push result to the outbox. Returns how many rows cleared. */
+  function commitPushBatchResult(batchResult) {
+    const payloads = batchResult.payloads || batchResult;
+    const retainPayloads = Array.isArray(batchResult.retainPayloads)
+      ? batchResult.retainPayloads
+      : [];
+    const resp = batchResult.resp || { ok: true, written: payloads.length };
+    const alreadyPresent = !!batchResult.alreadyPresentConfirmed;
+    const writtenIds = Array.isArray(resp.written)
+      ? new Set(resp.written.map((v) => String(v)))
+      : null;
+    const writtenCount = alreadyPresent
+      ? payloads.length
+      : writtenIds
+        ? writtenIds.size
+        : Number(resp.written);
+    let processed = 0;
+    for (const payload of payloads) {
+      const syncId = payload && payload.record && payload.record.syncId
+        ? String(payload.record.syncId)
+        : null;
+      // When server returns per-id written list, only clear matching rows.
+      if (!alreadyPresent && writtenIds && syncId && !writtenIds.has(syncId)) {
+        markFailed(payload.queueId, new Error('Push ack omitted this syncId'), true);
+        continue;
+      }
+      const ackMeta = alreadyPresent
+        ? ackMetaForAlreadyPresent(payloads.length)
+        : {
+            confirmed: true,
+            ambiguous: false,
+            written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
+            sentCount: payloads.length,
+          };
+      const cleared = markSynced(
+        payload.queueId,
+        payload.recordId,
+        payload.capturedVersion,
+        ackMeta
+      );
+      if (cleared !== false) {
+        processed++;
+        if (payload.record && payload.record.syncId) {
+          _knownPushedSyncIds.add(String(payload.record.syncId));
+        }
+      }
+    }
+    // Partial already-present: keep unproven ids pending for a real write.
+    for (const payload of retainPayloads) {
+      if (!payload || !payload.queueId) continue;
+      markFailed(
+        payload.queueId,
+        new Error('Push empty-write: syncId not proven in cloud id set'),
+        true
+      );
+    }
+    _lastSyncAt = new Date().toISOString();
+    _lastSuccessfulPushAt = Date.now();
+    _lastVerifiedCloudPushAt = new Date().toISOString();
+    _lastPushStats = {
+      attempted: payloads.length,
+      written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
+      ok: true,
+      at: _lastVerifiedCloudPushAt,
+      error: null,
+      alreadyPresent: alreadyPresent || undefined,
+      reconcileReason: batchResult.reconcileReason || undefined,
+    };
+    _lastError = null;
+    rateLimitGate.clear();
+    setConnectivity('api_available');
+    if (ctx.logSyncAttempt) {
+      ctx.logSyncAttempt(
+        generateCorrelationId(),
+        'push',
+        payloads.length,
+        true,
+        alreadyPresent ? 'already_present_reconciled' : null
+      );
+    }
+    return processed;
+  }
+
+  /**
+   * A 400 rejects the whole HTTP batch. Replay each item alone so only the
+   * record the server still rejects is blocked. A later non-400 stops the
+   * split and returns the not-yet-acked remainder (including the failing item)
+   * for the normal error path.
+   */
+  async function retryRejectedBatchIndividually(items) {
+    let processed = 0;
+    for (let i = 0; i < items.length; i++) {
+      try {
+        const batchResult = await pushRecordBatch([items[i]]);
+        processed += commitPushBatchResult(batchResult);
+      } catch (oneErr) {
+        if (isPushHttp400(oneErr)) {
+          markFailed(items[i].id, oneErr, false);
+          continue;
+        }
+        return { processed, error: oneErr, remainder: items.slice(i) };
+      }
+    }
+    return { processed, error: null, remainder: [] };
+  }
+
   /**
    * Process up to MAX_RECORDS_PER_CYCLE queue items per cycle (batched HTTP).
    * Stops on first network error (no point continuing if connectivity is lost).
    */
   async function processBatch() {
     let totalProcessed = 0;
+    let skipGrowing = Date.now() < _freeQuotaUntil;
     for (let round = 0; round < MAX_PUSH_ROUNDS_PER_CYCLE; round++) {
       const items = [];
       for (let i = 0; i < PUSH_HTTP_BATCH_SIZE; i++) {
-        const item = getNextQueueItem();
+        const item = getNextQueueItem({ skipGrowing: skipGrowing });
         if (!item) break;
         items.push(item);
         markSyncing(item.id);
@@ -594,79 +883,17 @@ function createSyncWorker(ctx) {
       if (totalProcessed === 0) notifyRenderer({ status: 'syncing' });
       try {
         const batchResult = await pushRecordBatch(items);
-        const payloads = batchResult.payloads || batchResult;
-        const retainPayloads = Array.isArray(batchResult.retainPayloads)
-          ? batchResult.retainPayloads
-          : [];
-        const resp = batchResult.resp || { ok: true, written: payloads.length };
-        const alreadyPresent = !!batchResult.alreadyPresentConfirmed;
-        const writtenIds = Array.isArray(resp.written)
-          ? new Set(resp.written.map((v) => String(v)))
-          : null;
-        const writtenCount = alreadyPresent
-          ? payloads.length
-          : writtenIds
-            ? writtenIds.size
-            : Number(resp.written);
-        for (const payload of payloads) {
-          const syncId = payload && payload.record && payload.record.syncId
-            ? String(payload.record.syncId)
-            : null;
-          // When server returns per-id written list, only clear matching rows.
-          if (!alreadyPresent && writtenIds && syncId && !writtenIds.has(syncId)) {
-            markFailed(payload.queueId, new Error('Push ack omitted this syncId'), true);
-            continue;
-          }
-          const ackMeta = alreadyPresent
-            ? ackMetaForAlreadyPresent(payloads.length)
-            : {
-                confirmed: true,
-                ambiguous: false,
-                written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
-                sentCount: payloads.length,
-              };
-          const cleared = markSynced(
-            payload.queueId,
-            payload.recordId,
-            payload.capturedVersion,
-            ackMeta
-          );
-          if (cleared !== false) totalProcessed++;
-        }
-        // Partial already-present: keep unproven ids pending for a real write.
-        for (const payload of retainPayloads) {
-          if (!payload || !payload.queueId) continue;
-          markFailed(
-            payload.queueId,
-            new Error('Push empty-write: syncId not proven in cloud id set'),
-            true
-          );
-        }
-        _lastSyncAt = new Date().toISOString();
-        _lastSuccessfulPushAt = Date.now();
-        _lastVerifiedCloudPushAt = new Date().toISOString();
-        _lastPushStats = {
-          attempted: payloads.length,
-          written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
-          ok: true,
-          at: _lastVerifiedCloudPushAt,
-          error: null,
-          alreadyPresent: alreadyPresent || undefined,
-          reconcileReason: batchResult.reconcileReason || undefined,
-        };
-        _lastError = null;
-        rateLimitGate.clear();
-        setConnectivity('api_available');
-        if (ctx.logSyncAttempt) {
-          ctx.logSyncAttempt(
-            generateCorrelationId(),
-            'push',
-            payloads.length,
-            true,
-            alreadyPresent ? 'already_present_reconciled' : null
-          );
-        }
+        totalProcessed += commitPushBatchResult(batchResult);
       } catch (e) {
+        // A 400 fails every record in the HTTP body. Isolate it so a bad
+        // delete cannot permanently block ordinary edits in the same batch.
+        if (isPushHttp400(e) && items.length > 1) {
+          const split = await retryRejectedBatchIndividually(items);
+          totalProcessed += split.processed;
+          if (!split.error) continue;
+          e = split.error;
+          items.splice(0, items.length, ...split.remainder);
+        }
         if (isRateLimitError(e)) {
           // Keep outbox intact: do not burn retry_count on 429.
           for (const item of items) {
@@ -696,6 +923,74 @@ function createSyncWorker(ctx) {
             ctx.logSyncAttempt(generateCorrelationId(), 'push', items.length, false, _lastError);
           }
           setConnectivity('internet_available_api_unreachable');
+          break;
+        }
+        // 403 DEVICE_REVOKED / DEVICE_NOT_ACTIVATED and free-quota 409/413
+        // keep the outbox pending. Do not burn retries or mark notes failed.
+        if (isDeviceRevokedHttpError(e) || isDeviceNotActivatedHttpError(e) || isFreeQuotaHttpError(e) || isStaleVersionHttpError(e)) {
+          for (const item of items) {
+            restorePendingKeepRetries(item.id, e);
+          }
+          _lastSuccessfulPushAt = 0;
+          if (isDeviceRevokedHttpError(e)) {
+            engageDeviceRevoked(e);
+          } else if (isDeviceNotActivatedHttpError(e)) {
+            const activated = await tryReactivateDeviceOnce();
+            if (activated) continue;
+            engageDeviceNotActivated();
+          } else if (isFreeQuotaHttpError(e)) {
+            engageFreeQuota(e);
+            if (!skipGrowing) {
+              skipGrowing = true;
+              _lastPushStats = {
+                attempted: items.length,
+                written: 0,
+                ok: false,
+                at: new Date().toISOString(),
+                error: _lastError,
+              };
+              notifyRenderer({
+                status: 'free_quota_exceeded',
+                lastError: _lastError,
+                retryable: true,
+                freeQuotaExceeded: true,
+                localSafe: true,
+                waitingForSync: true,
+                lastSyncSkipReason: SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
+              });
+              continue;
+            }
+          }
+          _lastPushStats = {
+            attempted: items.length,
+            written: 0,
+            ok: false,
+            at: new Date().toISOString(),
+            error: _lastError,
+          };
+          const skipReason = isDeviceRevokedHttpError(e)
+            ? SYNC_SKIP_REASONS.DEVICE_REVOKED
+            : (isDeviceNotActivatedHttpError(e)
+              ? SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED
+              : (isStaleVersionHttpError(e) ? SYNC_SKIP_REASONS.OK : SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED));
+          if (!isStaleVersionHttpError(e)) {
+            notifyRenderer({
+              status: isDeviceRevokedHttpError(e)
+                ? 'device_revoked'
+                : (isDeviceNotActivatedHttpError(e) ? 'device_not_activated' : 'free_quota_exceeded'),
+              lastError: _lastError,
+              retryable: true,
+              deviceRevoked: isDeviceRevokedHttpError(e),
+              deviceRevokedBy: _deviceRevokedBy,
+              freeQuotaExceeded: isFreeQuotaHttpError(e),
+              localSafe: true,
+              waitingForSync: true,
+              lastSyncSkipReason: skipReason,
+            });
+          }
+          if (ctx.logSyncAttempt) {
+            ctx.logSyncAttempt(generateCorrelationId(), 'push', items.length, false, _lastError);
+          }
           break;
         }
         const retryable = isRetryableError(e);
@@ -819,8 +1114,9 @@ function createSyncWorker(ctx) {
    * cycles can push (nested runCycle would no-op on _inProgress).
    */
   async function runCycle() {
-    if (_inProgress) {
+    if (_exclusiveDepth > 0 || _inProgress) {
       // Do not overwrite a live cycle's heartbeat with in_progress spam every 10s.
+      // Exclusive covers first-sign-in bootstrap so a poll cannot push before pull.
       return { skipped: true, reason: SYNC_SKIP_REASONS.IN_PROGRESS };
     }
     _inProgress = true;
@@ -842,6 +1138,21 @@ function createSyncWorker(ctx) {
         _slowPollActive = false;
         ensurePollInterval();
       }
+      // Back off before any health/push/pull so a revoked device is not hammered.
+      if (Date.now() < _deviceRevokedUntil) {
+        outcomeReason = SYNC_SKIP_REASONS.DEVICE_REVOKED;
+        outcomeDetail = _lastError || deviceRevokedUserMessage({});
+        scheduleBlockWake();
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason };
+      }
+      if (Date.now() < _deviceNotActivatedUntil) {
+        outcomeReason = SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED;
+        outcomeDetail = _lastError || DEVICE_NOT_ACTIVATED_MESSAGE;
+        scheduleBlockWake();
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason };
+      }
       const conn = await checkConnectivity();
       setConnectivity(conn);
       if (conn === 'offline') {
@@ -856,10 +1167,29 @@ function createSyncWorker(ctx) {
         recordCycleOutcome(outcomeReason, outcomeDetail);
         return { skipped: true, reason: outcomeReason };
       }
+      if (conn === 'local_only') {
+        outcomeReason = SYNC_SKIP_REASONS.LOCAL_ONLY;
+        outcomeDetail = 'Local only — sign in to sync';
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason };
+      }
       await ensureCanonicalKeyOnce();
       recoverStuckItems();
       const batch = await processBatch();
       pushed = (batch && batch.processed) || 0;
+      if (Date.now() < _deviceRevokedUntil) {
+        outcomeReason = SYNC_SKIP_REASONS.DEVICE_REVOKED;
+        outcomeDetail = _lastError || deviceRevokedUserMessage({});
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason, pushed };
+      }
+      if (Date.now() < _deviceNotActivatedUntil) {
+        outcomeReason = SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED;
+        outcomeDetail = _lastError || DEVICE_NOT_ACTIVATED_MESSAGE;
+        recordCycleOutcome(outcomeReason, outcomeDetail);
+        return { skipped: true, reason: outcomeReason, pushed };
+      }
+      const quotaBlocked = Date.now() < _freeQuotaUntil;
       if (rateLimitGate.isBlocked()) {
         // Do not spam /api/sync/pull into the same rate-limit budget after a 429.
         outcomeReason = SYNC_SKIP_REASONS.RATE_LIMITED;
@@ -884,6 +1214,17 @@ function createSyncWorker(ctx) {
         let pullFailed = false;
         pullResult = await ctx.syncPull().catch((e) => {
           pullFailed = true;
+          if (isDeviceRevokedHttpError(e)) {
+            engageDeviceRevoked(e);
+            return { pulled: 0, received: 0, deviceRevoked: true, skipped: true };
+          }
+          if (isDeviceNotActivatedHttpError(e)) {
+            return { pulled: 0, received: 0, deviceNotActivated: true, skipped: true };
+          }
+          if (isFreeQuotaHttpError(e)) {
+            engageFreeQuota(e);
+            return { pulled: 0, received: 0, freeQuotaExceeded: true, skipped: true };
+          }
           _lastError = e && e.message ? e.message : String(e);
           if (engageRateLimitFromError(e)) {
             notifyRenderer({
@@ -904,8 +1245,11 @@ function createSyncWorker(ctx) {
         if (pullResult && pullResult.pulled > 0 && ctx.sendToRenderer) {
           ctx.sendToRenderer('records-updated-from-sync', { count: pullResult.pulled });
         }
-        if (pullResult && pullResult.conflicts > 0 && ctx.sendToRenderer) {
-          ctx.sendToRenderer('sync-conflicts-detected', { count: pullResult.conflicts });
+        if (pullResult && pullResult.autoMerged > 0 && ctx.sendToRenderer) {
+          ctx.sendToRenderer('sync-conflicts-detected', {
+            count: pullResult.autoMerged,
+            autoMerged: true,
+          });
           notifyRenderer({});
         }
         if (pullResult && (pullResult.decryptFailed > 0 || pullResult.noMasterKeySkipped > 0) && ctx.sendToRenderer) {
@@ -930,7 +1274,35 @@ function createSyncWorker(ctx) {
             }
           } catch (_) {}
         }
-        if (pullFailed) {
+        if (pullResult && pullResult.deviceNotActivated) {
+          const activated = await tryReactivateDeviceOnce();
+          if (activated && ctx.syncPull) {
+            pullResult = await ctx.syncPull().catch((e2) => {
+              if (isDeviceNotActivatedHttpError(e2)) {
+                engageDeviceNotActivated();
+                return { pulled: 0, received: 0, deviceNotActivated: true, skipped: true };
+              }
+              return { pulled: 0, received: 0 };
+            });
+          } else if (!(Date.now() < _deviceNotActivatedUntil)) {
+            engageDeviceNotActivated();
+          }
+        }
+        if (pullResult && pullResult.deviceNotActivated) {
+          outcomeReason = SYNC_SKIP_REASONS.DEVICE_NOT_ACTIVATED;
+          outcomeDetail = _lastError || DEVICE_NOT_ACTIVATED_MESSAGE;
+        } else if (quotaBlocked) {
+          outcomeReason = SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED;
+          outcomeDetail = _lastError || FREE_QUOTA_MESSAGE;
+        } else if (pullResult && pullResult.deviceRevoked) {
+          if (!(Date.now() < _deviceRevokedUntil)) engageDeviceRevoked(pullResult);
+          outcomeReason = SYNC_SKIP_REASONS.DEVICE_REVOKED;
+          outcomeDetail = _lastError || deviceRevokedUserMessage(pullResult);
+        } else if (pullResult && pullResult.freeQuotaExceeded) {
+          if (!(Date.now() < _freeQuotaUntil)) engageFreeQuota(pullResult);
+          outcomeReason = SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED;
+          outcomeDetail = _lastError || FREE_QUOTA_MESSAGE;
+        } else if (pullFailed) {
           outcomeReason = rateLimitGate.isBlocked()
             ? SYNC_SKIP_REASONS.RATE_LIMITED
             : SYNC_SKIP_REASONS.ERROR;
@@ -961,6 +1333,9 @@ function createSyncWorker(ctx) {
           }
           considerHeal = true;
         }
+      } else if (quotaBlocked) {
+        outcomeReason = SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED;
+        outcomeDetail = _lastError || FREE_QUOTA_MESSAGE;
       } else if (pushed > 0) {
         outcomeReason = SYNC_SKIP_REASONS.OK_PUSHED;
         considerHeal = true;
@@ -1143,7 +1518,7 @@ function createSyncWorker(ctx) {
   }
 
   function shouldDeferKick() {
-    return _inProgress || _publicCycleDepth > 0;
+    return _inProgress || _publicCycleDepth > 0 || _exclusiveDepth > 0;
   }
 
   function flushPendingKick() {
@@ -1260,6 +1635,10 @@ function createSyncWorker(ctx) {
       lastSyncCycleAt: _lastCycleAt,
       lastSyncSkipReason: _lastSkipReason,
       lastSyncSkipDetail: _lastSkipDetail,
+      deviceRevoked: Date.now() < _deviceRevokedUntil || _lastSkipReason === SYNC_SKIP_REASONS.DEVICE_REVOKED,
+      deviceRevokedBy: _deviceRevokedBy,
+      freeQuotaExceeded: Date.now() < _freeQuotaUntil || _lastSkipReason === SYNC_SKIP_REASONS.FREE_QUOTA_EXCEEDED,
+      localOnly: _connectivityState === 'local_only' || _lastSkipReason === SYNC_SKIP_REASONS.LOCAL_ONLY,
       preferOutboxDrain: _preferOutboxDrain,
       localSafe: true,
       waitingForSync: !!(rateLimitGate.isBlocked() || (pending.c || 0) > 0),
@@ -1306,34 +1685,78 @@ function createSyncWorker(ctx) {
     _lastSuccessfulPushAt = 0;
     _canonicalKeyDone = false;
     _canonicalKeyLastTry = 0;
+    clearDeviceSyncBlocks();
     rateLimitGate.clear();
     console.info('[SyncWorker] Runtime state reset:', reason || 'manual');
   }
 
-  /** After licence activation: clear auth sticky state and resume immediately. */
-  function notifyAuthRecovered() {
-    if (_connectivityState === 'auth_required') {
+  /** After licence activation or sign-in: clear auth / revoke sticky state and resume. */
+  function notifyAuthRecovered(opts) {
+    if (
+      _connectivityState === 'auth_required' ||
+      _connectivityState === 'device_revoked' ||
+      _connectivityState === 'device_not_activated' ||
+      _connectivityState === 'local_only' ||
+      _connectivityState === 'free_quota_exceeded'
+    ) {
       setConnectivity('unknown');
     }
+    clearDeviceSyncBlocks();
     rateLimitGate.clear();
     _lastError = null;
     _lastSkipReason = null;
     _lastSkipDetail = null;
-    scheduleSoon();
+    // Callers that are about to pull-then-push pass schedule:false so a
+    // debounce cycle cannot push before that pull.
+    if (!(opts && opts.schedule === false)) scheduleSoon();
   }
 
-  /** Wait for an in-flight runCycle to finish (Full re-sync must not race cursor). */
-  async function waitUntilIdle(timeoutMs = 60000) {
+  /**
+   * Run fn while the poll loop cannot start another cycle.
+   * Re-entrant: a nested full re-sync inside bootstrap keeps the same lock.
+   */
+  async function runExclusive(fn, timeoutMs = 90000) {
+    if (_exclusiveDepth > 0) return fn();
     const limit = Math.max(0, Number(timeoutMs) || 0);
     const start = Date.now();
-    while (_inProgress) {
+    for (;;) {
+      if (!_inProgress && _exclusiveDepth === 0) {
+        _exclusiveDepth = 1;
+        break;
+      }
+      if (Date.now() - start >= limit) {
+        console.warn('[SyncWorker] runExclusive timed out after', limit, 'ms');
+        _exclusiveDepth += 1;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    try {
+      return await fn();
+    } finally {
+      _exclusiveDepth = Math.max(0, _exclusiveDepth - 1);
+      if (_exclusiveDepth === 0) flushPendingKick();
+    }
+  }
+
+  /**
+   * Wait for an in-flight runCycle to finish (Full re-sync must not race cursor).
+   * Pass { insideExclusive: true } only from the caller that already holds
+   * runExclusive (first-sign-in bootstrap). Other callers still wait for that lock.
+   */
+  async function waitUntilIdle(timeoutMs = 60000, opts) {
+    const limit = Math.max(0, Number(timeoutMs) || 0);
+    const start = Date.now();
+    const insideExclusive = !!(opts && opts.insideExclusive === true);
+    while (_inProgress || (!insideExclusive && _exclusiveDepth > 0)) {
       if (Date.now() - start >= limit) {
         console.warn('[SyncWorker] waitUntilIdle timed out after', limit, 'ms');
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    return !_inProgress;
+    if (insideExclusive) return !_inProgress;
+    return !_inProgress && _exclusiveDepth === 0;
   }
 
   return {
@@ -1347,6 +1770,7 @@ function createSyncWorker(ctx) {
     resetRuntimeState,
     notifyAuthRecovered,
     waitUntilIdle,
+    runExclusive,
     getConnectivity: () => _connectivityState,
   };
 }
@@ -1370,6 +1794,9 @@ module.exports = {
   BLOCKED_RECOVERY_COOLDOWN_MS,
   MAX_BLOCKED_AUTO_RECOVERIES,
   RATE_LIMIT_COOLDOWN_MS,
+  DEVICE_REVOKED_BACKOFF_MS,
+  DEVICE_NOT_ACTIVATED_BACKOFF_MS,
+  FREE_QUOTA_BACKOFF_MS,
   mayClearOutboxEntry,
   isAmbiguousPushAck,
   buildMutationId,
