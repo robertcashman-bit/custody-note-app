@@ -110,6 +110,20 @@ function isRetryableError(err) {
   return true;
 }
 
+/**
+ * HTTP 400 rejects the entire push batch ("Missing sync envelope" and any
+ * other bad record). Status may arrive as statusCode or inside the message.
+ */
+function isPushHttp400(err) {
+  if (!err) return false;
+  const raw = err.statusCode != null ? err.statusCode : err.code;
+  const numeric = typeof raw === 'number' ? raw : parseInt(raw, 10);
+  if (numeric === 400) return true;
+  const msg = String(err.message || err);
+  const m = msg.match(/server error (\d+)/i);
+  return !!(m && parseInt(m[1], 10) === 400);
+}
+
 /** Exponential backoff: next attempt after RETRY_DELAYS_MS[retry_count] */
 function getNextAttemptMs(retryCount) {
   const idx = Math.min(retryCount, RETRY_DELAYS_MS.length - 1);
@@ -588,31 +602,18 @@ function createSyncWorker(ctx) {
     ctx.flushDb && ctx.flushDb();
   }
 
-  /** Build encrypted push payload for one queue item. */
+  /** Build encrypted push payload for one queue item.
+   *  Every record — live or deleted — carries an encrypted envelope. Other
+   *  computers read deletedAt from inside that envelope. The live server
+   *  rejects a record with no envelope as 400 and fails the whole batch.
+   *  A delete also sets top-level tombstone fields so free-quota accounting
+   *  can treat it as a deletion without a second body.
+   */
   function buildPushPayload(queueItem) {
     const recordId = queueItem.record_id;
     const row = ctx.dbGet('SELECT id, sync_id, data, status, created_at, updated_at, deleted_at, deletion_reason, client_name, station_name, dscc_ref, attendance_date, supervisor_approved_at, supervisor_note, archived_at, sync_version FROM attendances WHERE id=?', [recordId]);
     if (!row) throw new Error('Record not found');
     const capturedVersion = row.sync_version || 1;
-    // Deleted rows are a content-free tombstone. The server free-quota counter
-    // recognises tombstone:true and does not store a note body. Pro uses the
-    // same shape so a delete still removes the record.
-    if (row.deleted_at) {
-      return {
-        queueId: queueItem.id,
-        recordId,
-        capturedVersion,
-        record: {
-          syncId: row.sync_id,
-          tombstone: true,
-          deletedAt: row.deleted_at,
-          deletionReason: row.deletion_reason || null,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-          version: capturedVersion,
-        },
-      };
-    }
     const masterKeyHex = ctx.getMasterKeyHex && ctx.getMasterKeyHex();
     if (!masterKeyHex) throw new Error('No encryption key; cannot sync');
     const envelope = encryptSyncEnvelope(masterKeyHex, {
@@ -629,19 +630,20 @@ function createSyncWorker(ctx) {
       deletedAt: row.deleted_at || null,
       deletionReason: row.deletion_reason || null,
     });
-    return {
-      queueId: queueItem.id,
-      recordId,
-      capturedVersion,
-      record: {
-        syncId: row.sync_id,
-        envelope,
-        encrypted: true,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        version: capturedVersion,
-      },
+    const record = {
+      syncId: row.sync_id,
+      envelope,
+      encrypted: true,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      version: capturedVersion,
     };
+    if (row.deleted_at) {
+      record.tombstone = true;
+      record.deletedAt = row.deleted_at;
+      record.deletionReason = row.deletion_reason || null;
+    }
+    return { queueId: queueItem.id, recordId, capturedVersion, record };
   }
 
   /** Push up to PUSH_HTTP_BATCH_SIZE records in one HTTP request. */
@@ -756,6 +758,112 @@ function createSyncWorker(ctx) {
     }
   }
 
+  /** Apply a confirmed push result to the outbox. Returns how many rows cleared. */
+  function commitPushBatchResult(batchResult) {
+    const payloads = batchResult.payloads || batchResult;
+    const retainPayloads = Array.isArray(batchResult.retainPayloads)
+      ? batchResult.retainPayloads
+      : [];
+    const resp = batchResult.resp || { ok: true, written: payloads.length };
+    const alreadyPresent = !!batchResult.alreadyPresentConfirmed;
+    const writtenIds = Array.isArray(resp.written)
+      ? new Set(resp.written.map((v) => String(v)))
+      : null;
+    const writtenCount = alreadyPresent
+      ? payloads.length
+      : writtenIds
+        ? writtenIds.size
+        : Number(resp.written);
+    let processed = 0;
+    for (const payload of payloads) {
+      const syncId = payload && payload.record && payload.record.syncId
+        ? String(payload.record.syncId)
+        : null;
+      // When server returns per-id written list, only clear matching rows.
+      if (!alreadyPresent && writtenIds && syncId && !writtenIds.has(syncId)) {
+        markFailed(payload.queueId, new Error('Push ack omitted this syncId'), true);
+        continue;
+      }
+      const ackMeta = alreadyPresent
+        ? ackMetaForAlreadyPresent(payloads.length)
+        : {
+            confirmed: true,
+            ambiguous: false,
+            written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
+            sentCount: payloads.length,
+          };
+      const cleared = markSynced(
+        payload.queueId,
+        payload.recordId,
+        payload.capturedVersion,
+        ackMeta
+      );
+      if (cleared !== false) {
+        processed++;
+        if (payload.record && payload.record.syncId) {
+          _knownPushedSyncIds.add(String(payload.record.syncId));
+        }
+      }
+    }
+    // Partial already-present: keep unproven ids pending for a real write.
+    for (const payload of retainPayloads) {
+      if (!payload || !payload.queueId) continue;
+      markFailed(
+        payload.queueId,
+        new Error('Push empty-write: syncId not proven in cloud id set'),
+        true
+      );
+    }
+    _lastSyncAt = new Date().toISOString();
+    _lastSuccessfulPushAt = Date.now();
+    _lastVerifiedCloudPushAt = new Date().toISOString();
+    _lastPushStats = {
+      attempted: payloads.length,
+      written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
+      ok: true,
+      at: _lastVerifiedCloudPushAt,
+      error: null,
+      alreadyPresent: alreadyPresent || undefined,
+      reconcileReason: batchResult.reconcileReason || undefined,
+    };
+    _lastError = null;
+    rateLimitGate.clear();
+    setConnectivity('api_available');
+    if (ctx.logSyncAttempt) {
+      ctx.logSyncAttempt(
+        generateCorrelationId(),
+        'push',
+        payloads.length,
+        true,
+        alreadyPresent ? 'already_present_reconciled' : null
+      );
+    }
+    return processed;
+  }
+
+  /**
+   * A 400 rejects the whole HTTP batch. Replay each item alone so only the
+   * record the server still rejects is blocked. A later non-400 stops the
+   * split and returns the not-yet-acked remainder (including the failing item)
+   * for the normal error path.
+   */
+  async function retryRejectedBatchIndividually(items) {
+    let processed = 0;
+    for (let i = 0; i < items.length; i++) {
+      try {
+        const batchResult = await pushRecordBatch([items[i]]);
+        processed += commitPushBatchResult(batchResult);
+      } catch (oneErr) {
+        if (isPushHttp400(oneErr)) {
+          markFailed(items[i].id, oneErr, false);
+          continue;
+        }
+        return { processed, error: oneErr, remainder: items.slice(i) };
+      }
+    }
+    return { processed, error: null, remainder: [] };
+  }
+
   /**
    * Process up to MAX_RECORDS_PER_CYCLE queue items per cycle (batched HTTP).
    * Stops on first network error (no point continuing if connectivity is lost).
@@ -775,84 +883,17 @@ function createSyncWorker(ctx) {
       if (totalProcessed === 0) notifyRenderer({ status: 'syncing' });
       try {
         const batchResult = await pushRecordBatch(items);
-        const payloads = batchResult.payloads || batchResult;
-        const retainPayloads = Array.isArray(batchResult.retainPayloads)
-          ? batchResult.retainPayloads
-          : [];
-        const resp = batchResult.resp || { ok: true, written: payloads.length };
-        const alreadyPresent = !!batchResult.alreadyPresentConfirmed;
-        const writtenIds = Array.isArray(resp.written)
-          ? new Set(resp.written.map((v) => String(v)))
-          : null;
-        const writtenCount = alreadyPresent
-          ? payloads.length
-          : writtenIds
-            ? writtenIds.size
-            : Number(resp.written);
-        for (const payload of payloads) {
-          const syncId = payload && payload.record && payload.record.syncId
-            ? String(payload.record.syncId)
-            : null;
-          // When server returns per-id written list, only clear matching rows.
-          if (!alreadyPresent && writtenIds && syncId && !writtenIds.has(syncId)) {
-            markFailed(payload.queueId, new Error('Push ack omitted this syncId'), true);
-            continue;
-          }
-          const ackMeta = alreadyPresent
-            ? ackMetaForAlreadyPresent(payloads.length)
-            : {
-                confirmed: true,
-                ambiguous: false,
-                written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
-                sentCount: payloads.length,
-              };
-          const cleared = markSynced(
-            payload.queueId,
-            payload.recordId,
-            payload.capturedVersion,
-            ackMeta
-          );
-          if (cleared !== false) {
-            totalProcessed++;
-            if (payload.record && payload.record.syncId) {
-              _knownPushedSyncIds.add(String(payload.record.syncId));
-            }
-          }
-        }
-        // Partial already-present: keep unproven ids pending for a real write.
-        for (const payload of retainPayloads) {
-          if (!payload || !payload.queueId) continue;
-          markFailed(
-            payload.queueId,
-            new Error('Push empty-write: syncId not proven in cloud id set'),
-            true
-          );
-        }
-        _lastSyncAt = new Date().toISOString();
-        _lastSuccessfulPushAt = Date.now();
-        _lastVerifiedCloudPushAt = new Date().toISOString();
-        _lastPushStats = {
-          attempted: payloads.length,
-          written: Number.isFinite(writtenCount) ? writtenCount : payloads.length,
-          ok: true,
-          at: _lastVerifiedCloudPushAt,
-          error: null,
-          alreadyPresent: alreadyPresent || undefined,
-          reconcileReason: batchResult.reconcileReason || undefined,
-        };
-        _lastError = null;
-        rateLimitGate.clear();
-        setConnectivity('api_available');
-        if (ctx.logSyncAttempt) {
-          ctx.logSyncAttempt(
-            generateCorrelationId(),
-            'push',
-            payloads.length,
-            true,
-            alreadyPresent ? 'already_present_reconciled' : null
-          );
-        }
+        totalProcessed += commitPushBatchResult(batchResult);
       } catch (e) {
+        // A 400 fails every record in the HTTP body. Isolate it so a bad
+        // delete cannot permanently block ordinary edits in the same batch.
+        if (isPushHttp400(e) && items.length > 1) {
+          const split = await retryRejectedBatchIndividually(items);
+          totalProcessed += split.processed;
+          if (!split.error) continue;
+          e = split.error;
+          items.splice(0, items.length, ...split.remainder);
+        }
         if (isRateLimitError(e)) {
           // Keep outbox intact: do not burn retry_count on 429.
           for (const item of items) {

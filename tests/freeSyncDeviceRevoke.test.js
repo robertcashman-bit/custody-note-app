@@ -22,6 +22,7 @@ const { countTowardFreeQuota } = require('../lib/freeSyncQuota');
 const { applyStoredServerTier, isDeviceNotActivatedHttpError } = require('../lib/syncAccountState');
 const { emptyCloudPullPolicy } = require('../lib/syncLocalPreserve');
 const { describeSkipReason, SYNC_SKIP_REASONS } = require('../lib/syncCycleAudit');
+const { decryptSyncEnvelope } = require('../lib/syncRecordCrypto');
 
 const root = path.join(__dirname, '..');
 const mainJs = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
@@ -592,8 +593,10 @@ describe('duplicate sync rows are folded, not copied again', () => {
   });
 });
 
-describe('deleted rows push as content-free tombstones', () => {
-  it('sends tombstone:true and omits the note body for free and Pro', async () => {
+describe('deleted rows push an envelope plus a tombstone', () => {
+  const MASTER_KEY = 'ab'.repeat(32);
+
+  it('sends an encrypted envelope and tombstone:true for a deleted row', async () => {
     let pushed = null;
     const mock = createMockCtx({
       httpPost: async function (url, body) {
@@ -616,11 +619,107 @@ describe('deleted rows push as content-free tombstones', () => {
     assert.equal(rec.tombstone, true);
     assert.equal(rec.syncId, 'sid-1');
     assert.equal(rec.deletedAt, '2026-04-01T00:00:00.000Z');
-    assert.equal(rec.envelope, undefined);
+    assert.equal(rec.deletionReason, 'user_delete');
+    assert.equal(typeof rec.envelope, 'string');
+    assert.ok(rec.envelope.length > 0);
+    assert.equal(rec.encrypted, true);
     assert.equal(rec.data, undefined);
     assert.equal(rec.clientName, undefined);
     assert.equal(JSON.stringify(rec).includes('Secret'), false);
+    const plain = decryptSyncEnvelope(MASTER_KEY, rec.envelope);
+    assert.equal(plain.deletedAt, '2026-04-01T00:00:00.000Z');
+    assert.equal(plain.deletionReason, 'user_delete');
+    assert.equal(plain.clientName, 'Secret Client');
     assert.equal(mock.tables.sync_queue[0].status, 'synced');
+  });
+
+  it('every pushed record, live or deleted, has an envelope', async () => {
+    const bodies = [];
+    const mock = createMockCtx({
+      httpPost: async function (url, body) {
+        bodies.push(body);
+        mock.calls.post.push(url);
+        const ids = ((body && body.records) || []).map(function (r) { return r.syncId; });
+        return { ok: true, written: ids };
+      },
+    });
+    mock.addAttendance('live');
+    mock.addAttendance('gone');
+    mock.tables.attendances[0].client_name = 'Still Here';
+    mock.tables.attendances[1].deleted_at = '2026-04-02T00:00:00.000Z';
+    mock.tables.attendances[1].deletion_reason = 'user_delete';
+    mock.tables.attendances[1].client_name = 'Removed';
+    const worker = createSyncWorker(mock.ctx);
+    worker.enqueue('live', 'upsert', {});
+    worker.enqueue('gone', 'upsert', {});
+    mock.tables.sync_queue[0].created_at = 1;
+    mock.tables.sync_queue[1].created_at = 2;
+    await worker.runCycle();
+    assert.ok(bodies.length >= 1);
+    const records = bodies.reduce(function (acc, body) {
+      return acc.concat((body && body.records) || []);
+    }, []);
+    assert.equal(records.length, 2);
+    for (const rec of records) {
+      assert.equal(typeof rec.envelope, 'string', rec.syncId);
+      assert.ok(rec.envelope.length > 0, rec.syncId);
+      assert.equal(rec.encrypted, true);
+      const plain = decryptSyncEnvelope(MASTER_KEY, rec.envelope);
+      assert.ok(plain && plain.syncId === rec.syncId);
+    }
+    const live = records.find(function (r) { return r.syncId === 'sid-live'; });
+    const gone = records.find(function (r) { return r.syncId === 'sid-gone'; });
+    assert.equal(live.tombstone, undefined);
+    assert.equal(gone.tombstone, true);
+    assert.equal(gone.deletedAt, '2026-04-02T00:00:00.000Z');
+    assert.equal(decryptSyncEnvelope(MASTER_KEY, gone.envelope).deletedAt, '2026-04-02T00:00:00.000Z');
+    assert.equal(decryptSyncEnvelope(MASTER_KEY, live.envelope).clientName, 'Still Here');
+    assert.equal(decryptSyncEnvelope(MASTER_KEY, live.envelope).deletedAt, null);
+  });
+
+  it('a 400 on a mixed batch blocks only the offending record', async () => {
+    const posts = [];
+    const mock = createMockCtx({
+      httpPost: async function (url, body) {
+        const ids = ((body && body.records) || []).map(function (r) { return r.syncId; });
+        posts.push(ids.slice());
+        mock.calls.post.push(url);
+        if (ids.length > 1) {
+          const err = new Error('Missing sync envelope');
+          err.statusCode = 400;
+          throw err;
+        }
+        if (ids[0] === 'sid-bad') {
+          const err = new Error('Server error 400');
+          err.statusCode = 400;
+          throw err;
+        }
+        return { ok: true, written: ids };
+      },
+    });
+    mock.addAttendance('good');
+    mock.addAttendance('bad');
+    mock.addAttendance('also-good');
+    const worker = createSyncWorker(mock.ctx);
+    worker.enqueue('good', 'upsert', {});
+    worker.enqueue('bad', 'upsert', {});
+    worker.enqueue('also-good', 'upsert', {});
+    mock.tables.sync_queue[0].created_at = 1;
+    mock.tables.sync_queue[1].created_at = 2;
+    mock.tables.sync_queue[2].created_at = 3;
+    await worker.runCycle();
+    function row(id) {
+      return mock.tables.sync_queue.find(function (r) { return r.record_id === id; });
+    }
+    assert.equal(row('good').status, 'synced');
+    assert.equal(row('also-good').status, 'synced');
+    assert.equal(row('bad').status, 'blocked');
+    assert.equal(row('good').retry_count, 0);
+    assert.equal(row('also-good').retry_count, 0);
+    assert.ok(posts.some(function (ids) { return ids.length === 3; }));
+    assert.ok(posts.some(function (ids) { return ids.length === 1 && ids[0] === 'sid-good'; }));
+    assert.ok(posts.some(function (ids) { return ids.length === 1 && ids[0] === 'sid-bad'; }));
+    assert.ok(posts.some(function (ids) { return ids.length === 1 && ids[0] === 'sid-also-good'; }));
   });
 });
 
