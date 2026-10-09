@@ -62,7 +62,13 @@ function _wfRenderCompletionStepBody(body, footer, qfOn) {
     { key: 'data', label: 'Billing data complete', ok: billingDataOk, hint: !billingDataOk ? 'Missing: ' + hardWarnings.join(', ') + '.' : 'All required billing fields are present.' },
   ];
   if (qfOn) {
-    rows.push({ key: 'inv', label: 'QuickFile invoice linked', ok: invOk, hint: !invOk ? 'Create the invoice in the Billing review step (or use complete without invoice there).' : '' });
+    var invNum = String(d.quickfileInvoiceNumber || d.quickfile_invoice_number || '').trim().replace(/^#+/, '');
+    rows.push({
+      key: 'inv',
+      label: invOk ? ('Sent to QuickFile' + (invNum ? ': invoice #' + invNum : '')) : 'QuickFile invoice linked',
+      ok: invOk,
+      hint: !invOk ? 'Not sent to QuickFile yet. Create the invoice in the Billing review step (or use complete without invoice there).' : '',
+    });
   }
   rows.push(
     { key: 'att', label: 'Attachments named on file', ok: am.count === 0 || am.allNamed, hint: am.count && !am.allNamed ? 'Name every attachment (document type) on step 1 or the form.' : (am.count === 0 ? 'No attachments on this record \u2014 confirm if that is correct for this matter.' : '') }

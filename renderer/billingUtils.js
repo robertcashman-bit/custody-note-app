@@ -162,6 +162,12 @@ function formatBillingCreateFailureToast(reason, code) {
     return 'This record already has an invoice. Click Continue to Review & complete to move on.';
   }
   var msg = String(reason || 'Unknown error');
+  if (code === 'QF_UNCONFIRMED') {
+    return "QuickFile didn't confirm the invoice: " + msg + ' It may or may not have been created. On your own Wi-Fi or a hotspot, press Send again: the app links the existing invoice instead of making a duplicate.';
+  }
+  if (code === 'QF_TIMEOUT' || code === 'QF_NETWORK') {
+    return 'Not sent to QuickFile: ' + msg + ' Nothing was created. Connect to your own Wi-Fi or a hotspot, then press Send again.';
+  }
   var looksLikeConnection = /not configured|auth|credential|401|403|HTTP 5\d\d|timeout|ENOTFOUND|ECONN|network|parse error|empty response/i.test(msg);
   if (looksLikeConnection) {
     return 'Send to QuickFile failed: ' + msg + '. Check Settings \u2192 QuickFile and click "Test QuickFile connection", then press Send again.';
@@ -172,6 +178,9 @@ function formatBillingCreateFailureToast(reason, code) {
 function formatLegacyBillingCreateFailureToast(reason, code) {
   if (isAlreadyInvoicedError(reason, code)) {
     return 'This record already has an invoice. Use Continue to Review & complete in the Finish matter workflow to proceed.';
+  }
+  if (code === 'QF_UNCONFIRMED' || code === 'QF_TIMEOUT' || code === 'QF_NETWORK') {
+    return formatBillingCreateFailureToast(reason, code);
   }
   return 'Invoice creation failed: ' + String(reason || 'Unknown error');
 }

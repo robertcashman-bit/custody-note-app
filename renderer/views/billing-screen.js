@@ -703,6 +703,10 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
 
   var createBtn = document.getElementById('wf-bill-create');
   if (createBtn) { createBtn.disabled = true; createBtn.textContent = 'Sending to QuickFile...'; }
+  /* Visible progress if QuickFile is slow (main process now times out every call). */
+  var slowTimer = setTimeout(function () {
+    if (createBtn && createBtn.disabled) createBtn.textContent = 'Still waiting for QuickFile...';
+  }, 20000);
 
   var settings = window._appSettingsCache || {};
   var userName = settings.feeEarnerNameDefault || settings.feeEarnerName || '';
@@ -750,50 +754,91 @@ async function _wfHandleCreateInvoiceImpl(recordId, opts) {
       extraAttachments: opts.extraAttachments || [],
     });
 
-    if (result.ok) {
+    if (result && result.ok) {
       if (typeof formData === 'object' && formData) {
         formData.quickfile_invoice_id = result.invoiceId || '';
         formData.quickfileInvoiceNumber = result.invoiceNumber || '';
+        formData.quickfileInvoiceUrl = result.invoiceUrl || '';
       }
-      if (typeof quietSave === 'function') quietSave();
-      if (typeof refreshQuickFileInvoiceRefDisplay === 'function') refreshQuickFileInvoiceRefDisplay();
-
-      var attachSummary = '';
-      if (result.attachResults && result.attachResults.length) {
-        var okCount = result.attachResults.filter(function (r) { return r.ok; }).length;
-        var failCount = result.attachResults.filter(function (r) { return !r.ok; }).length;
-        attachSummary = ' | ' + okCount + ' attachment' + (okCount !== 1 ? 's' : '') + ' uploaded';
-        if (failCount > 0) attachSummary += ', ' + failCount + ' failed';
-      }
-
       console.log('[billing] Invoice created: #' + (result.invoiceNumber || result.invoiceId));
-      showToast('QuickFile invoice #' + (result.invoiceNumber || result.invoiceId) + ' sent successfully' + attachSummary, 'success', 6000);
-      showToast('Next: review and mark office work complete (step 3).', 'info', 5000);
-
-      if (typeof _wfAfterInvoiceCreatedGoToCompletion === 'function') {
-        _wfAfterInvoiceCreatedGoToCompletion();
-      } else {
-        _wfRenderCurrentStep();
+      /* The invoice now exists in QuickFile. Confirm it first, so a later UI
+       * error can never turn a sent invoice into a silent or "failed" result. */
+      _wfShowInvoiceSent(result, opts);
+      try {
+        if (typeof quietSave === 'function') quietSave();
+        if (typeof refreshQuickFileInvoiceRefDisplay === 'function') refreshQuickFileInvoiceRefDisplay();
+        if (typeof _wfAfterInvoiceCreatedGoToCompletion === 'function') {
+          _wfAfterInvoiceCreatedGoToCompletion();
+        } else {
+          _wfRenderCurrentStep();
+        }
+      } catch (uiErr) {
+        console.error('[billing] Invoice sent but screen refresh failed:', uiErr);
       }
     } else {
-      _wfShowInvoiceFailure(result.error || 'Unknown error', result.code);
+      result = result || {};
+      _wfShowInvoiceFailure(result.error || 'Unknown error', result.code, result);
     }
   } catch (err) {
     console.error('[billing] Invoice creation failed:', err);
     _wfShowInvoiceFailure(err && err.message ? err.message : String(err), err && err.code);
   } finally {
+    clearTimeout(slowTimer);
     if (createBtn) { createBtn.disabled = false; createBtn.textContent = opts.hasExistingInvoice ? '\u26A0 Send Another Invoice to QuickFile' : 'Send Bill to QuickFile'; }
+  }
+}
+
+function _wfInvoiceDialogHtml(level, rowsHtml, extraHtml) {
+  var cls = level === 'error' ? 'wf-invoice-result--error'
+    : level === 'warning' ? 'wf-invoice-result--warn' : 'wf-invoice-result--ok';
+  return '<div class="wf-invoice-result ' + cls + '" data-testid="qf-invoice-result">' + rowsHtml + (extraHtml || '') + '</div>';
+}
+
+/**
+ * Persistent success confirmation: QuickFile invoice number, total, attachments.
+ * A toast alone was easy to miss because the screen jumps to step 3 at once.
+ */
+function _wfShowInvoiceSent(result, opts) {
+  var R = (typeof window !== 'undefined' && window.QuickfileInvoiceResult) || null;
+  var conf = R ? R.buildInvoiceSentConfirmation(result, { firmName: (opts || {}).firmName })
+    : { level: 'success', title: 'Sent to QuickFile: invoice #' + (result.invoiceNumber || result.invoiceId), summary: '', rows: [], attachmentFailures: [], invoiceUrl: result.invoiceUrl || '' };
+  showToast(conf.summary || conf.title, conf.level === 'warning' ? 'warning' : 'success', 8000);
+  if (typeof showModal !== 'function') return;
+  var rowsHtml = conf.rows.map(function (r) {
+    return '<div class="wf-invoice-result-row"><span class="wf-label">' + _wfEsc(r.label) + '</span> <strong>' + _wfEsc(r.value) + '</strong></div>';
+  }).join('');
+  var extra = '';
+  if (conf.attachmentFailures.length) {
+    extra += '<p class="wf-invoice-result-warn">These attachments did not upload. Add them to the invoice in QuickFile:</p><ul>' +
+      conf.attachmentFailures.map(function (f) { return '<li>' + _wfEsc(f.name) + ': ' + _wfEsc(f.error) + '</li>'; }).join('') + '</ul>';
+  }
+  if (conf.invoiceUrl) {
+    extra += '<p><button type="button" class="btn btn-secondary btn-small" id="wf-invoice-result-view">View invoice in QuickFile</button></p>';
+  }
+  showModal(conf.title, _wfInvoiceDialogHtml(conf.level, rowsHtml, extra));
+  var viewBtn = document.getElementById('wf-invoice-result-view');
+  if (viewBtn && conf.invoiceUrl) {
+    viewBtn.addEventListener('click', function () {
+      if (window.api && window.api.openExternal) window.api.openExternal(conf.invoiceUrl);
+    });
   }
 }
 
 /**
  * Show a clear, actionable recovery message when sending to QuickFile fails.
+ * Never silent: a toast plus a dialog that stays until closed, with the reason.
  */
-function _wfShowInvoiceFailure(reason, code) {
+function _wfShowInvoiceFailure(reason, code, result) {
   var toast = (typeof formatBillingCreateFailureToast === 'function')
     ? formatBillingCreateFailureToast(reason, code)
     : ('Send to QuickFile failed: ' + String(reason || 'Unknown error'));
   showToast(toast, 'error', 9000);
+  var R = (typeof window !== 'undefined' && window.QuickfileInvoiceResult) || null;
+  if (!R || typeof showModal !== 'function') return;
+  var msg = R.buildInvoiceFailureMessage(Object.assign({}, result || {}, { error: reason, code: code }));
+  showModal(msg.title, _wfInvoiceDialogHtml('error',
+    '<p><strong>Reason:</strong> ' + _wfEsc(msg.reason) + '</p>',
+    '<p>' + _wfEsc(msg.advice) + '</p>'));
 }
 
 /**

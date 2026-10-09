@@ -11726,7 +11726,7 @@ function getQuickFileAuth() {
   });
 }
 
-function quickFileRequest(apiPath, bodyContent) {
+function quickFileRequest(apiPath, bodyContent, opts) {
   const auth = getQuickFileAuth();
   const postData = JSON.stringify({
     payload: {
@@ -11743,36 +11743,36 @@ function quickFileRequest(apiPath, bodyContent) {
     },
   });
 
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        hostname: 'api.quickfile.co.uk',
-        path: apiPath,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(postData, 'utf8'),
-        },
+  const timeoutMs = (opts && Number(opts.timeoutMs) > 0)
+    ? Number(opts.timeoutMs)
+    : quickfileClient.quickFileTimeoutForPath(apiPath);
+  return quickfileClient.postWithDeadline(
+    https,
+    {
+      hostname: 'api.quickfile.co.uk',
+      path: apiPath,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData, 'utf8'),
       },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
-        res.on('end', () => {
-          const raw = String(data || '');
-          try {
-            resolve(quickfileClient.parseQuickFileResponse(res.statusCode, raw));
-          } catch (parseErr) {
-            if (/parse error/i.test(parseErr.message)) {
-              console.error('[QuickFile] Response not valid JSON | HTTP:', res.statusCode, '| length:', raw.length, '| head:', raw.slice(0, 800));
-            }
-            reject(parseErr);
-          }
-        });
+    },
+    postData,
+    timeoutMs
+  ).then(({ statusCode, raw }) => {
+    try {
+      return quickfileClient.parseQuickFileResponse(statusCode, raw);
+    } catch (parseErr) {
+      if (/parse error/i.test(parseErr.message)) {
+        console.error('[QuickFile] Response not valid JSON | HTTP:', statusCode, '| length:', raw.length, '| head:', raw.slice(0, 800));
       }
-    );
-    req.on('error', reject);
-    req.write(postData, 'utf8');
-    req.end();
+      throw parseErr;
+    }
+  }, (err) => {
+    if (quickfileClient.isQuickFileTimeoutError(err)) {
+      console.warn('[QuickFile] ' + apiPath + ' timed out after ' + timeoutMs + 'ms');
+    }
+    throw err;
   });
 }
 
@@ -12294,7 +12294,12 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   if (!params || typeof params !== 'object') {
     return { ok: false, error: 'Invalid invoice parameters' };
   }
-  await ensureQuickFileSettingsFromServer({ reason: 'create-invoice', force: true });
+  try {
+    await ensureQuickFileSettingsFromServer({ reason: 'create-invoice', force: true });
+  } catch (settingsErr) {
+    /* Never let a settings-pull problem reject the IPC silently; fall back to local settings. */
+    console.warn('[QuickFile] settings pull before invoice failed:', settingsErr && settingsErr.message ? settingsErr.message : settingsErr);
+  }
   const {
     attendanceId,
     firmName,
@@ -12332,6 +12337,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     }
   }
 
+  /* True once an invoice/create call has gone out. If that call then fails at the
+     network level we cannot know whether QuickFile made the invoice. */
+  let createRequestSent = false;
   try {
     const clientId = await quickFileFindOrCreateClient(firmName.trim(), contactEmail);
     if (!clientId) throw new Error('Could not find or create QuickFile client for ' + firmName);
@@ -12434,6 +12442,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
           },
         };
         validateQuickFileInvoicePayload(invoicePayload);
+        createRequestSent = true;
         return quickFileRequest('/1_2/invoice/create', invoicePayload);
       },
     });
@@ -12601,7 +12610,10 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       );
       saveDb();
     }
-    return { ok: false, error: err.message || String(err) };
+    return quickfileInvoiceNumber.describeCreateInvoiceFailure(err, {
+      createRequestSent,
+      isNetworkError: quickfileClient.isQuickFileNetworkError,
+    });
   }
 });
 

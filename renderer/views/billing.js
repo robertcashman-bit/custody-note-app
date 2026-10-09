@@ -540,7 +540,7 @@ async function _handleCreateInvoice(recordId, opts) {
     });
   }).then(function (result) {
     _invoiceInFlight = false;
-    if (result.ok) {
+    if (result && result.ok) {
       if (typeof formData === 'object' && formData) {
         formData.quickfile_invoice_id = result.invoiceId || '';
         formData.quickfileInvoiceNumber = result.invoiceNumber || '';
@@ -552,15 +552,23 @@ async function _handleCreateInvoice(recordId, opts) {
       closeBillingPanel();
       _showInvoiceSuccessModal(result, opts);
     } else {
-      var failMsg = (typeof formatLegacyBillingCreateFailureToast === 'function')
-        ? formatLegacyBillingCreateFailureToast(result.error, result.code)
-        : ('Invoice creation failed: ' + (result.error || 'Unknown error'));
-      showToast(failMsg, 'error');
+      result = result || {};
+      if (typeof _wfShowInvoiceFailure === 'function') {
+        /* Shared, never-silent failure: toast + dialog with the reason. */
+        _wfShowInvoiceFailure(result.error || 'Unknown error', result.code, result);
+      } else {
+        var failMsg = (typeof formatLegacyBillingCreateFailureToast === 'function')
+          ? formatLegacyBillingCreateFailureToast(result.error, result.code)
+          : ('Invoice creation failed: ' + (result.error || 'Unknown error'));
+        showToast(failMsg, 'error', 9000);
+      }
       if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Send Bill to QuickFile'; }
     }
   }).catch(function (err) {
     _invoiceInFlight = false;
-    showToast('Invoice creation failed: ' + (err.message || String(err)), 'error');
+    var why = (err && err.message) || String(err);
+    if (typeof _wfShowInvoiceFailure === 'function') _wfShowInvoiceFailure(why, err && err.code);
+    else showToast('Invoice creation failed: ' + why, 'error', 9000);
     if (createBtn) { createBtn.disabled = false; createBtn.textContent = 'Send Bill to QuickFile'; }
   });
 }

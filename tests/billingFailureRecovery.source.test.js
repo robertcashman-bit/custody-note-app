@@ -28,7 +28,7 @@ describe('billing failed-export recovery', () => {
 
   it('does not set invoice ids on the failure path (avoids accidental duplicates)', () => {
     // The only assignment of quickfile_invoice_id must be inside the success (result.ok) branch.
-    const okIdx = BILLING_SCREEN.indexOf('if (result.ok)');
+    const okIdx = BILLING_SCREEN.indexOf('result.ok)');
     const assignIdx = BILLING_SCREEN.indexOf('formData.quickfile_invoice_id =');
     assert.ok(okIdx > -1 && assignIdx > okIdx, 'invoice id must only be set on success');
   });
