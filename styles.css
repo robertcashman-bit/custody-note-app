@@ -8172,3 +8172,10 @@ html.dark .officer-email-warning {
 .sync-wifi-banner-dismiss:focus-visible { outline: 2px solid #b45309; outline-offset: 2px; border-radius: 2px; }
 html.dark .sync-wifi-banner { background: #451a03; border-bottom-color: #b45309; color: #fde68a; }
 html.dark .sync-wifi-banner-dismiss { color: #fcd34d; }
+
+/* QuickFile send result dialog (success / warning / error) */
+.wf-invoice-result { border-left: 4px solid #059669; padding: 0.25rem 0 0.25rem 0.75rem; }
+.wf-invoice-result--warn { border-left-color: #d97706; }
+.wf-invoice-result--error { border-left-color: #dc2626; }
+.wf-invoice-result-row { margin: 0.25rem 0; }
+.wf-invoice-result-warn { color: #b45309; margin-top: 0.5rem; }

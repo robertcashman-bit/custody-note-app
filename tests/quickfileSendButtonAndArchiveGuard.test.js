@@ -59,9 +59,9 @@ describe('v1.5.3 — "Send Bill to QuickFile" button label', () => {
     assert.match(billingScreen, /Sending to QuickFile\.\.\./);
   });
 
-  it('billing-screen.js success toast mentions QuickFile explicitly', () => {
-    assert.match(billingScreen, /QuickFile invoice #'\s*\+/);
-    assert.match(billingScreen, /sent successfully/);
+  it('billing-screen.js success confirmation mentions QuickFile explicitly', () => {
+    assert.match(billingScreen, /Sent to QuickFile: invoice #/);
+    assert.match(billingScreen, /_wfShowInvoiceSent/);
   });
 
   it('billing.js standalone billing panel uses the new label too', () => {

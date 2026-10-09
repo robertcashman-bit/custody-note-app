@@ -640,12 +640,13 @@ describe('Step 2: Billing screen — invoice creation', () => {
     assert.ok(billingScreenJs.includes('createBtn.disabled = false'));
   });
 
-  it('on success: saves formData, quietSave, refreshes display, shows toast', () => {
+  it('on success: saves formData, quietSave, refreshes display, shows a persistent confirmation', () => {
     assert.ok(billingScreenJs.includes('formData.quickfile_invoice_id'));
     assert.ok(billingScreenJs.includes('formData.quickfileInvoiceNumber'));
     assert.ok(billingScreenJs.includes('quietSave'));
     assert.ok(billingScreenJs.includes('refreshQuickFileInvoiceRefDisplay'));
-    assert.ok(billingScreenJs.includes('sent successfully'));
+    assert.ok(billingScreenJs.includes('_wfShowInvoiceSent(result, opts)'));
+    assert.ok(billingScreenJs.includes('buildInvoiceSentConfirmation'));
   });
 
   it('on success: auto-advances to completion step', () => {
@@ -653,9 +654,12 @@ describe('Step 2: Billing screen — invoice creation', () => {
   });
 
   it('attachment results summary shows ok/fail counts', () => {
-    assert.ok(billingScreenJs.includes('attachResults'));
-    assert.ok(billingScreenJs.includes("' attachment'"));
-    assert.ok(billingScreenJs.includes("' failed'"));
+    const R = require('../renderer/lib/quickfileInvoiceResult.js');
+    const c = R.buildInvoiceSentConfirmation({
+      ok: true, invoiceNumber: '1001', attachResults: [{ name: 'a.pdf', ok: true }, { name: 'b.pdf', ok: false, error: 'x' }],
+    });
+    const att = c.rows.find((r) => r.label === 'Attachments');
+    assert.strictEqual(att.value, '1 uploaded, 1 failed');
   });
 
   it('on failure: shows a clear error with a recovery action (single handler)', () => {
