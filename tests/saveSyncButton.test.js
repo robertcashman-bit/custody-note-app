@@ -68,7 +68,7 @@ describe('Save & Sync button states', () => {
   it('uses the pending state when offline and the local-only hint when the user cannot sync', () => {
     const offline = deriveSaveSyncButton(Object.assign({}, baseOk, { offline: true, centralConfirmed: false, pullOk: false, pendingCount: 1 }));
     assert.equal(offline.state, STATES.PENDING);
-    assert.match(offline.title, /offline/i);
+    assert.match(offline.title, /Police station Wi-Fi often blocks sync/);
 
     const local = deriveSaveSyncButton(Object.assign({}, baseOk, { localOnly: true, centralConfirmed: true, pullOk: true }));
     assert.equal(local.state, STATES.LOCAL_ONLY);

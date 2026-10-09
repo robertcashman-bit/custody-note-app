@@ -8135,3 +8135,40 @@ html.dark .officer-email-warning {
   }
 }
 
+
+/* Police station Wi-Fi sync warning — slim amber bar under the top bar (lib/syncWifiBanner.js). */
+.sync-wifi-banner {
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.3rem 1.25rem;
+  background: #fef3c7;
+  border-bottom: 1px solid #f59e0b;
+  color: #78350f;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  z-index: 9;
+}
+.sync-wifi-banner[hidden] { display: none; }
+.sync-wifi-banner-text { margin: 0; }
+.sync-wifi-banner-text strong { font-weight: 700; }
+.sync-wifi-banner-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #92400e;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sync-wifi-banner-dismiss:hover { color: #78350f; }
+.sync-wifi-banner-dismiss:focus-visible { outline: 2px solid #b45309; outline-offset: 2px; border-radius: 2px; }
+html.dark .sync-wifi-banner { background: #451a03; border-bottom-color: #b45309; color: #fde68a; }
+html.dark .sync-wifi-banner-dismiss { color: #fcd34d; }
