@@ -3440,6 +3440,7 @@ var REQUIRED_FIELD_KEYS = [
     var homeSyncWrap = document.getElementById('home-sync-now-wrap');
     var el = document.getElementById('sync-status-indicator');
     _footerSyncSnapshot = st || null;
+    wifiSyncBannerNote(function(c) { c.setAccountSnapshot(st || null); });
     if (wrap) wrap.style.display = st && st.enabled ? '' : 'none';
     if (homeSyncWrap) homeSyncWrap.style.display = st && st.enabled ? '' : 'none';
     if (!el) return;
@@ -3471,6 +3472,7 @@ var REQUIRED_FIELD_KEYS = [
       else refreshSyncCounts();
       return;
     }
+    wifiSyncBannerNote(function(c) { c.noteSyncEvent(data); });
     if (data.status === 'device_revoked' || data.status === 'local_only' || data.status === 'free_quota_exceeded' ||
         data.deviceRevoked || data.localOnly || data.freeQuotaExceeded) {
       var mergedSync = Object.assign({}, _footerSyncSnapshot || {}, data, { enabled: true });
@@ -5471,8 +5473,6 @@ var REQUIRED_FIELD_KEYS = [
 
   function stopAutoSave() {
     if (autoSaveTimer) { clearInterval(autoSaveTimer); autoSaveTimer = null; }
-    var footerWrap = document.getElementById('footer-autosave-wrap');
-    if (footerWrap) footerWrap.style.display = 'none';
   }
 
   function hasMeaningfulData(d) {
@@ -5549,13 +5549,12 @@ var REQUIRED_FIELD_KEYS = [
       }
     }).catch(function(e) {
       console.error('[quietSave]', e); showToast('Auto-save failed — your changes may not be saved', 'warning', 5000);
-      ['autosave-indicator', 'header-autosave'].forEach(function(id) {
-        var el = document.getElementById(id);
-        if (!el) return;
-        el.textContent = 'Not saved';
-        el.title = 'Autosave failed. Check disk space, then use Save or try again. Your edits are still on screen until you close the record.';
-        el.setAttribute('data-autosave-error', '1');
-        el.classList.add('visible');
+      // The Save & Sync button is the single save/sync status: show the failure there.
+      applySaveSyncButton({
+        phase: 'result',
+        dirty: false,
+        noteDurable: false,
+        error: 'Autosave failed. Check disk space, then press Save & Sync. Your edits are still on screen until you close the record.',
       });
     }).finally(() => {
       _draftSaveInFlight = false;
@@ -5604,23 +5603,87 @@ var REQUIRED_FIELD_KEYS = [
     btn.setAttribute('aria-label', view.ariaLabel || view.label);
     if (view.state === 'saving') btn.setAttribute('aria-busy', 'true');
     else btn.removeAttribute('aria-busy');
+    if (view.state !== 'saving') {
+      // Saving is transient — keep the previous pending clock until the result lands.
+      wifiSyncBannerNote(function(c) { c.setNotePending(view.state === 'pending'); });
+    }
   }
 
-  function showSavingIndicator() {
-    applySaveSyncButton({ phase: 'saving' });
-    ['autosave-indicator', 'header-autosave'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.textContent = 'Saving\u2026';
-      el.removeAttribute('data-autosave-error');
-      el.classList.add('visible');
-    });
-    var footerEl = document.getElementById('footer-autosave');
-    var footerWrap = document.getElementById('footer-autosave-wrap');
-    if (footerWrap && footerEl) {
-      footerWrap.style.display = '';
-      footerEl.textContent = 'Saving\u2026';
+  /* ─── Police station Wi-Fi sync warning (lib/syncWifiBanner.js) ─── */
+  var _wifiSyncBanner = null;
+  var _wifiSyncBannerTimer = null;
+
+  function readWifiSyncBannerDismissed() {
+    try {
+      var key = (typeof SyncWifiBanner !== 'undefined' && SyncWifiBanner.DISMISS_STORAGE_KEY) || 'cn_wifi_sync_banner_dismissed';
+      return localStorage.getItem(key) === '1';
+    } catch (_) { return false; }
+  }
+
+  function writeWifiSyncBannerDismissed(dismissed) {
+    try {
+      var key = (typeof SyncWifiBanner !== 'undefined' && SyncWifiBanner.DISMISS_STORAGE_KEY) || 'cn_wifi_sync_banner_dismissed';
+      if (dismissed) localStorage.setItem(key, '1');
+      else localStorage.removeItem(key);
+    } catch (_) {}
+  }
+
+  function getWifiSyncBanner() {
+    if (_wifiSyncBanner) return _wifiSyncBanner;
+    if (typeof SyncWifiBanner === 'undefined' || !SyncWifiBanner.createController) return null;
+    _wifiSyncBanner = SyncWifiBanner.createController({ dismissed: readWifiSyncBannerDismissed() });
+    return _wifiSyncBanner;
+  }
+
+  function wifiSyncBannerNote(fn) {
+    var c = getWifiSyncBanner();
+    if (!c) return;
+    try { fn(c); } catch (e) { console.warn('[wifi-sync-banner]', e && e.message ? e.message : e); }
+    renderWifiSyncBanner();
+  }
+
+  function renderWifiSyncBanner() {
+    var c = getWifiSyncBanner();
+    var el = document.getElementById('sync-wifi-banner');
+    if (!c || !el) return;
+    c.setLicence(_lastLicenceStatusForHome);
+    var res = c.evaluate();
+    el.hidden = !res.show;
+    if (res.show) el.setAttribute('data-reason', res.reason || '');
+    else el.removeAttribute('data-reason');
+    clearTimeout(_wifiSyncBannerTimer);
+    _wifiSyncBannerTimer = null;
+    if (!res.show && res.msUntilShow != null) {
+      _wifiSyncBannerTimer = setTimeout(renderWifiSyncBanner, res.msUntilShow + 250);
     }
+  }
+
+  function setWifiSyncBannerDismissed(dismissed) {
+    writeWifiSyncBannerDismissed(dismissed);
+    var cb = document.getElementById('setting-show-wifi-sync-banner');
+    if (cb) cb.checked = !dismissed;
+    wifiSyncBannerNote(function(c) { c.setDismissed(dismissed); });
+  }
+
+  function initWifiSyncBanner() {
+    var dismissBtn = document.getElementById('sync-wifi-banner-dismiss');
+    if (dismissBtn && !dismissBtn._cnBound) {
+      dismissBtn._cnBound = true;
+      dismissBtn.addEventListener('click', function() { setWifiSyncBannerDismissed(true); });
+    }
+    var cb = document.getElementById('setting-show-wifi-sync-banner');
+    if (cb && !cb._cnBound) {
+      cb._cnBound = true;
+      cb.checked = !readWifiSyncBannerDismissed();
+      cb.addEventListener('change', function() { setWifiSyncBannerDismissed(!cb.checked); });
+    }
+    renderWifiSyncBanner();
+  }
+  window.__cnWifiSyncBanner = { render: renderWifiSyncBanner, setDismissed: setWifiSyncBannerDismissed };
+
+  function showSavingIndicator() {
+    // Single status place: the Save & Sync button at the right end of the top bar.
+    applySaveSyncButton({ phase: 'saving' });
   }
 
   function refreshOpenNoteCentralSyncIndicator() {
@@ -5686,49 +5749,9 @@ var REQUIRED_FIELD_KEYS = [
     var centralConfirmed = !!(opts && opts.centralConfirmed);
     var dirty = !!(opts && opts.dirty);
     _autosaveIndicatorDirty = dirty;
-    var txt;
-    var backupFailed = !!(opts && opts.backupOk === false);
-    if (dirty) {
-      txt = 'Unsaved changes';
-    } else if (!durable) {
-      txt = "Couldn't save";
-    } else if (backupFailed) {
-      txt = 'Saved, backup failed';
-    } else if (durable && centralConfirmed && opts && opts.backupOk === true && opts.pullOk === true && !(opts && opts.localOnly)) {
-      txt = '\u2713 Saved & synced ' + pad2(now.getHours()) + ':' + pad2(now.getMinutes());
-    } else if (opts && opts.localOnly) {
-      txt = 'Saved on this computer';
-    } else if (durable) {
-      txt = 'Saved on this computer, sync pending';
-    } else {
-      txt = 'Not on disk yet — use Save & Sync';
-    }
-    var title = dirty
-      ? 'Edits are on screen only until the next successful disk write.'
-      : (backupFailed
-        ? ('Saved, backup failed. ' + ((opts && (opts.backupError || opts.error)) || 'The local backup did not finish.'))
-        : (durable
-        ? (centralConfirmed
-          ? 'Durable on this computer and acknowledged by the central account store at ' + (_lastDbWrite || 'unknown') + '.'
-          : (pendingSync
-            ? 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '. Central account sync still pending.'
-            : 'Last successful disk write at ' + (_lastDbWrite || 'unknown') + '.'))
-        : 'Save reached memory but disk flush did not complete — press Save & Sync.'));
-    ['autosave-indicator', 'header-autosave'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (!el) return;
-      el.textContent = txt;
-      if (durable && !dirty && !backupFailed) el.removeAttribute('data-autosave-error');
-      else if (!durable || dirty || backupFailed) el.setAttribute('data-autosave-error', '1');
-      el.title = title;
-      el.classList.add('visible');
-    });
-    var footerWrap = document.getElementById('footer-autosave-wrap');
-    var footerEl = document.getElementById('footer-autosave');
-    if (footerWrap && footerEl) {
-      footerWrap.style.display = '';
-      footerEl.textContent = txt;
-    }
+    // The open note's saved/synced status renders in ONE place only: the Save & Sync
+    // button at the right end of the top bar (lib/saveSyncButton.js). The old
+    // header, form-header and footer copies repeated the same status and were removed.
     applySaveSyncButton({
       phase: dirty ? 'result' : (opts && opts.phase) || 'result',
       dirty: dirty,
@@ -5746,14 +5769,15 @@ var REQUIRED_FIELD_KEYS = [
       at: _lastDbWrite,
       timeLabel: pad2(now.getHours()) + ':' + pad2(now.getMinutes()),
     });
+    // Summary panel keeps the last local save time only (no sync wording, so the
+    // sync status is not repeated); sync state lives on the Save & Sync button.
     var savedEl = document.getElementById('form-last-saved');
     if (savedEl && durable && !dirty) {
-      savedEl.textContent = centralConfirmed
-        ? ('Safe locally + central ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
-        : ('Safe locally ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
-          (pendingSync ? ' · pending central sync' : ''));
+      savedEl.textContent = 'Saved on this computer ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     } else if (savedEl && dirty) {
       savedEl.textContent = 'Unsaved changes';
+    } else if (savedEl && !durable) {
+      savedEl.textContent = "Couldn't save";
     }
   }
 
@@ -20034,6 +20058,7 @@ pdfAuditFooterHtml(d, settings) +
     document.getElementById('home-free-sync-signin-btn')?.addEventListener('click', function() {
       goToLicenceSettings();
     });
+    initWifiSyncBanner();
     document.getElementById('home-free-sync-signin-dismiss')?.addEventListener('click', function() {
       try { localStorage.setItem('cn_free_sync_signin_dismissed', '1'); } catch (_) {}
       var prompt = document.getElementById('home-free-sync-signin-prompt');

@@ -129,9 +129,10 @@ describe('Durable pendingSync / honest Saved to disk vs Synced', () => {
     assert.match(appJs, /attendanceSaveDetailed\(\{/);
   });
 
-  it('renderer shows Safe locally with pending central sync, not false Synced', () => {
-    assert.match(appJs, /Safe locally/);
-    assert.match(appJs, /pending (central )?sync/);
+  it('renderer shows saved-on-this-computer with sync pending, not false Synced', () => {
+    const btnLib = fs.readFileSync(path.join(__dirname, '..', 'lib', 'saveSyncButton.js'), 'utf8');
+    assert.match(btnLib, /Saved on this computer, sync pending/);
+    assert.match(appJs, /applySaveSyncButton\(/);
     assert.match(appJs, /normalizeAttendanceSaveResult/);
     assert.match(appJs, /showAutoSaveIndicator\(\{[\s\S]{0,240}durable:/);
     assert.match(appJs, /Unsaved changes/);
