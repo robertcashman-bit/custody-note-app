@@ -2680,6 +2680,21 @@ async function drainPendingSyncUploads(options = {}) {
     const pending = pendingRow ? (pendingRow.c || 0) : 0;
     const dirty = dirtyRow ? (dirtyRow.c || 0) : 0;
     if (pending === 0 && dirty === 0) {
+      // A push the server rejected permanently (4xx) is parked as 'blocked'.
+      // It is NOT drained: report it with the server's reason instead of
+      // claiming drained (which left Save & Sync stuck on "sync pending").
+      const blockedRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status='blocked'");
+      const blocked = blockedRow ? (blockedRow.c || 0) : 0;
+      if (blocked > 0) {
+        const errRow = dbGet("SELECT error FROM sync_queue WHERE status='blocked' AND error IS NOT NULL ORDER BY last_attempt DESC LIMIT 1");
+        return {
+          cycles,
+          stoppedReason: 'blocked',
+          pending: blocked,
+          dirty: 0,
+          lastError: (errRow && errRow.error) || (w.getDiagnostics() || {}).lastError || 'The server rejected a note',
+        };
+      }
       return { cycles, stoppedReason: 'drained', pending: 0, dirty: 0 };
     }
     w.forceRetryAll();
@@ -8905,7 +8920,7 @@ ipcMain.handle('persist-and-backup', async () => {
     const licNow = readLicenceData();
     if (!licNow || !licNow.key || isSyntheticLocalLicenceKey(licNow.key)) localOnly = true;
     migrateSyncDirtyToQueue();
-    const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
+    const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')");
     const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
     pendingCount = pendingRow ? (pendingRow.c || 0) : 0;
     dirtyCount = dirtyRow ? (dirtyRow.c || 0) : 0;
