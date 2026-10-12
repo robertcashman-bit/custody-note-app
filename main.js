@@ -1786,7 +1786,9 @@ async function initDb() {
   }
 
   backfillSyncIds();
+  resetStuckSyncingQueueItems();
   migrateSyncDirtyToQueue();
+  syncDiagWrite('startup-queue', syncDiagQueueSnapshot());
 
   const existing = dbGet("SELECT 1 FROM settings WHERE key = 'backupFolder'");
   if (!existing) {
@@ -2593,6 +2595,49 @@ function backfillSyncIds() {
 }
 
 /** Migrate sync_dirty records into sync_queue for offline-first processing. */
+/* ─── Diagnostic sync log (logs/sync.log) ─── */
+let _syncDiagLog = null;
+function syncDiagWrite(event, data) {
+  try {
+    if (!_syncDiagLog) {
+      const { createSyncDiagLog } = require('./lib/syncDiagLog');
+      _syncDiagLog = createSyncDiagLog({ dir: path.join(app.getPath('userData'), 'logs') });
+    }
+    _syncDiagLog.write(event, data);
+  } catch (_) {}
+}
+function syncDiagQueueSnapshot() {
+  try {
+    const { summarizeQueue } = require('./lib/syncDiagLog');
+    const rows = dbAll("SELECT id, record_id, operation, status, retry_count, last_attempt, created_at, error FROM sync_queue WHERE status != 'synced' ORDER BY created_at ASC LIMIT 200") || [];
+    const all = dbAll('SELECT status, COUNT(*) as c FROM sync_queue GROUP BY status') || [];
+    const summary = summarizeQueue(rows);
+    summary.countsAll = {};
+    for (const r of all) summary.countsAll[String(r.status)] = r.c;
+    const dirty = dbAll('SELECT id, sync_version, deleted_at IS NOT NULL as deleted FROM attendances WHERE sync_dirty=1 LIMIT 200') || [];
+    summary.dirtyRecords = dirty.map((d) => ({ recordId: String(d.id), syncVersion: d.sync_version, deleted: !!d.deleted }));
+    return summary;
+  } catch (e) {
+    return { error: e && e.message ? e.message : String(e) };
+  }
+}
+/** Startup: rows left in 'syncing' (crash / hung request) older than 5 min go back to pending. */
+function resetStuckSyncingQueueItems() {
+  try {
+    const { findStuckSyncing } = require('./lib/syncDiagLog');
+    const rows = dbAll("SELECT id, status, last_attempt FROM sync_queue WHERE status='syncing'") || [];
+    const stuck = findStuckSyncing(rows);
+    for (const r of stuck) {
+      dbRun("UPDATE sync_queue SET status='pending', last_attempt=0 WHERE id=? AND status='syncing'", [r.id]);
+    }
+    syncDiagWrite('startup-reset-syncing', { syncingRows: rows.length, reset: stuck.map((r) => String(r.id)) });
+    return stuck.length;
+  } catch (e) {
+    syncDiagWrite('startup-reset-syncing-error', { error: e && e.message ? e.message : String(e) });
+    return 0;
+  }
+}
+
 function migrateSyncDirtyToQueue() {
   if (!db) return;
   try {
@@ -2671,8 +2716,15 @@ function markAllLocalRecordsForCloudReupload() {
 async function drainPendingSyncUploads(options = {}) {
   const maxCycles = options.maxCycles != null ? options.maxCycles : 40;
   const w = getSyncWorker();
-  if (!w) return { cycles: 0, stoppedReason: 'no_worker', pending: 0, dirty: 0 };
+  if (!w) {
+    syncDiagWrite('drain', { stoppedReason: 'no_worker' });
+    return { cycles: 0, stoppedReason: 'no_worker', skipReason: 'no_worker', pending: 0, dirty: 0 };
+  }
   let cycles = 0;
+  let ranCycles = 0;
+  let lastSkip = null;
+  let lastPending = null;
+  let noProgressCycles = 0;
   for (; cycles < maxCycles; cycles++) {
     migrateSyncDirtyToQueue();
     const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
@@ -2697,8 +2749,26 @@ async function drainPendingSyncUploads(options = {}) {
       }
       return { cycles, stoppedReason: 'drained', pending: 0, dirty: 0 };
     }
+    if (lastPending != null && pending + dirty >= lastPending) noProgressCycles++;
+    lastPending = pending + dirty;
     w.forceRetryAll();
-    await w.runCycle({ skipHeal: true });
+    const cycleRes = await w.runCycle({ skipHeal: true });
+    syncDiagWrite('drain-cycle', {
+      cycle: cycles + 1, pendingBefore: pending, dirtyBefore: dirty,
+      skipped: !!(cycleRes && cycleRes.skipped), reason: cycleRes ? cycleRes.reason : null,
+      pushed: cycleRes ? (cycleRes.pushed || 0) : 0, error: cycleRes && cycleRes.error ? String(cycleRes.error).slice(0, 300) : null,
+    });
+    if (cycleRes && cycleRes.skipped && !(cycleRes.pushed > 0)) {
+      lastSkip = cycleRes.reason || 'unknown';
+      if (lastSkip !== 'in_progress') {
+        return { cycles: cycles + 1, stoppedReason: 'skipped', skipReason: lastSkip, pending, dirty,
+          lastError: (w.getDiagnostics() || {}).lastError || null };
+      }
+      // Another cycle holds the lock: wait briefly instead of spinning.
+      await new Promise((r) => setTimeout(r, 500));
+    } else {
+      ranCycles++;
+    }
     const diag = w.getDiagnostics() || {};
     if (diag.rateLimit && diag.rateLimit.blocked) {
       return {
@@ -2712,13 +2782,21 @@ async function drainPendingSyncUploads(options = {}) {
   }
   const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed')");
   const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
-  return {
+  const out = {
     cycles,
     stoppedReason: 'max_cycles',
     pending: pendingRow ? (pendingRow.c || 0) : 0,
     dirty: dirtyRow ? (dirtyRow.c || 0) : 0,
     lastError: w.getDiagnostics().lastError || null,
   };
+  if (ranCycles === 0 && lastSkip) {
+    out.stoppedReason = 'skipped';
+    out.skipReason = lastSkip;
+  } else if (noProgressCycles >= Math.max(1, cycles - 1)) {
+    out.skipReason = 'no_progress';
+  }
+  syncDiagWrite('drain', out);
+  return out;
 }
 
 function getAttendanceDbFileBytes() {
@@ -4122,6 +4200,7 @@ let _syncWorker = null;
 function getSyncWorker() {
   if (!_syncWorker && db) {
     _syncWorker = createSyncWorker({
+      onItemResult: (info) => { syncDiagWrite('push-item', info); },
       db,
       dbRun,
       dbGet: (sql, params) => dbGet(sql, params ?? []),
@@ -8916,10 +8995,16 @@ ipcMain.handle('persist-and-backup', async () => {
   let localOnly = false;
   let pullOk = null;
   let pullError = null;
+  let skipReason = null;
   try {
     const licNow = readLicenceData();
     if (!licNow || !licNow.key || isSyntheticLocalLicenceKey(licNow.key)) localOnly = true;
     migrateSyncDirtyToQueue();
+    syncDiagWrite('save-sync-start', { localOnly, queue: syncDiagQueueSnapshot(),
+      worker: (() => { try { const d = getSyncWorker() && getSyncWorker().getDiagnostics(); return d ? {
+        connectivity: d.connectivity, inProgress: d.inProgress, lastError: d.lastError ? String(d.lastError).slice(0, 300) : null,
+        lastSyncSkipReason: d.lastSyncSkipReason, lastSyncSkipDetail: d.lastSyncSkipDetail,
+        lastVerifiedCloudPushAt: d.lastVerifiedCloudPushAt, rateLimit: d.rateLimit, lastPush: d.lastPush } : null; } catch (_) { return null; } })() });
     const pendingRow = dbGet("SELECT COUNT(*) as c FROM sync_queue WHERE status IN ('pending','syncing','failed','blocked')");
     const dirtyRow = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
     pendingCount = pendingRow ? (pendingRow.c || 0) : 0;
@@ -8942,6 +9027,7 @@ ipcMain.handle('persist-and-backup', async () => {
         dirtyCount,
       });
       const drain = await drainPendingSyncUploads({ maxCycles });
+      if (drain && drain.skipReason) skipReason = drain.skipReason;
       syncing = false;
       const interpreted = interpretForceSaveDrain(drain, {
         offline,
@@ -8987,10 +9073,14 @@ ipcMain.handle('persist-and-backup', async () => {
     } else {
       // Empty outbox is NOT a server written ack. Only claim central confirmed when
       // this process has a verified cloud push timestamp (real ack), otherwise stay safe-locally.
+      // Every queue row is 'synced' and no note is dirty: nothing local is
+      // waiting for the server, so this is confirmed (also right after a
+      // restart, when no push has run in this process). The pull below must
+      // still succeed before the button says "Saved & synced".
+      centralConfirmed = true;
       try {
         const diag = w && w.getDiagnostics ? w.getDiagnostics() : {};
         if (diag && diag.lastVerifiedCloudPushAt) {
-          centralConfirmed = true;
           lastCentralSyncAt = diag.lastVerifiedCloudPushAt;
         }
       } catch (_) {}
@@ -9025,6 +9115,12 @@ ipcMain.handle('persist-and-backup', async () => {
     const dirtyAfter = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
     pendingCount = pendingAfter ? (pendingAfter.c || 0) : 0;
     dirtyCount = dirtyAfter ? (dirtyAfter.c || 0) : 0;
+    if (pendingCount + dirtyCount > 0) centralConfirmed = false;
+    if (!skipReason && !localOnly) {
+      if (offline) skipReason = 'offline';
+      else if (authRequired) skipReason = 'auth_required';
+      else if (!centralConfirmed && pendingCount + dirtyCount > 0 && !syncError) skipReason = 'no_progress';
+    }
   } catch (syncErr) {
     syncAttempted = true;
     syncError = syncErr && syncErr.message ? syncErr.message : String(syncErr);
@@ -9059,6 +9155,16 @@ ipcMain.handle('persist-and-backup', async () => {
   result.pullOk = pullOk;
   result.pullError = pullError;
   if (localOnly) result.centralConfirmed = false;
+  if (skipReason && !result.centralConfirmed) {
+    const { skipReasonText } = require('./lib/syncDiagLog');
+    result.skipReason = skipReason;
+    result.skipReasonText = skipReasonText(skipReason);
+  }
+  syncDiagWrite('save-sync-end', {
+    centralConfirmed: result.centralConfirmed, pullOk, pullError, syncError, syncing, offline, authRequired,
+    rateLimited, localOnly, skipReason: result.skipReason || null, pendingCount: result.pendingCount,
+    queue: syncDiagQueueSnapshot(),
+  });
   if (backupError) result.backupError = backupError;
   result.userMessage = buildSaveNowUserMessage(result);
   console.info('[SAVE-NOW]', JSON.stringify({

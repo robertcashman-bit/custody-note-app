@@ -218,6 +218,18 @@ function createSyncWorker(ctx) {
       ['pending', errMsg, Date.now(), id]
     );
     ctx.flushDb && ctx.flushDb();
+    noteItemResult({ id, outcome: 'rate_limited_pending', error: errMsg, httpStatus: httpStatusOf(error) });
+  }
+
+  /** Diagnostic hook: report per-item push outcomes (metadata only). */
+  function httpStatusOf(err) {
+    if (!err) return null;
+    const s = err.status || err.statusCode || (err.response && err.response.status);
+    return Number.isFinite(Number(s)) ? Number(s) : null;
+  }
+  function noteItemResult(info) {
+    if (typeof ctx.onItemResult !== 'function') return;
+    try { ctx.onItemResult(info); } catch (_) {}
   }
 
   function engageRateLimitFromError(err) {
@@ -578,6 +590,14 @@ function createSyncWorker(ctx) {
     ctx.dbRun('UPDATE sync_queue SET status=?, error=NULL WHERE id=?', ['synced', id]);
     if (recordId && pushedVersion != null) {
       ctx.dbRun('UPDATE attendances SET sync_dirty=0 WHERE id=? AND sync_version=?', [recordId, pushedVersion]);
+      try {
+        const still = ctx.dbGet('SELECT sync_dirty, sync_version FROM attendances WHERE id=?', [recordId]);
+        noteItemResult({
+          id, recordId, outcome: 'synced', httpStatus: 200, pushedVersion,
+          localVersion: still ? still.sync_version : null,
+          stillDirty: !!(still && still.sync_dirty),
+        });
+      } catch (_) {}
     } else if (recordId) {
       ctx.dbRun('UPDATE attendances SET sync_dirty=0 WHERE id=?', [recordId]);
     }
@@ -600,6 +620,7 @@ function createSyncWorker(ctx) {
       [status, errMsg, nextCount, now, id]
     );
     ctx.flushDb && ctx.flushDb();
+    noteItemResult({ id, outcome: status, attempts: nextCount, retryable: !!retryable, error: errMsg, httpStatus: httpStatusOf(error) });
   }
 
   /** Build encrypted push payload for one queue item.
