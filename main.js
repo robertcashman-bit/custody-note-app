@@ -9073,10 +9073,14 @@ ipcMain.handle('persist-and-backup', async () => {
     } else {
       // Empty outbox is NOT a server written ack. Only claim central confirmed when
       // this process has a verified cloud push timestamp (real ack), otherwise stay safe-locally.
+      // Every queue row is 'synced' and no note is dirty: nothing local is
+      // waiting for the server, so this is confirmed (also right after a
+      // restart, when no push has run in this process). The pull below must
+      // still succeed before the button says "Saved & synced".
+      centralConfirmed = true;
       try {
         const diag = w && w.getDiagnostics ? w.getDiagnostics() : {};
         if (diag && diag.lastVerifiedCloudPushAt) {
-          centralConfirmed = true;
           lastCentralSyncAt = diag.lastVerifiedCloudPushAt;
         }
       } catch (_) {}
@@ -9111,10 +9115,10 @@ ipcMain.handle('persist-and-backup', async () => {
     const dirtyAfter = dbGet('SELECT COUNT(*) as c FROM attendances WHERE sync_dirty=1');
     pendingCount = pendingAfter ? (pendingAfter.c || 0) : 0;
     dirtyCount = dirtyAfter ? (dirtyAfter.c || 0) : 0;
+    if (pendingCount + dirtyCount > 0) centralConfirmed = false;
     if (!skipReason && !localOnly) {
       if (offline) skipReason = 'offline';
       else if (authRequired) skipReason = 'auth_required';
-      else if (!centralConfirmed && !syncError && !pullError && pendingCount + dirtyCount === 0) skipReason = 'no_verified_push';
       else if (!centralConfirmed && pendingCount + dirtyCount > 0 && !syncError) skipReason = 'no_progress';
     }
   } catch (syncErr) {
