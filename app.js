@@ -5766,6 +5766,7 @@ var REQUIRED_FIELD_KEYS = [
       error: opts ? (opts.error || opts.message) : null,
       backupError: opts ? opts.backupError : null,
       syncError: opts ? opts.syncError : null,
+      skipReason: opts ? opts.skipReason : null,
       at: _lastDbWrite,
       timeLabel: pad2(now.getHours()) + ':' + pad2(now.getMinutes()),
     });
@@ -18071,7 +18072,9 @@ pdfAuditFooterHtml(d, settings) +
         error: (res && (res.error || res.backupError)) || (failedDisk ? 'The note did not finish writing to disk.' : null),
         backupError: res && res.backupError,
         // Show a reason on the button only when sync really stopped (not while still pushing).
-        syncError: res && !res.syncing && !res.offline ? (res.syncError || res.pullError || null) : null,
+        syncError: res && res.skipReasonText ? res.skipReasonText
+          : (res && !res.syncing && !res.offline ? (res.syncError || res.pullError || null) : null),
+        skipReason: res && res.skipReason ? res.skipReason : null,
       });
       if (failedDisk) {
         var diskWhy = (res && (res.error || res.backupError)) || 'The note did not finish writing to disk.';
@@ -18094,7 +18097,8 @@ pdfAuditFooterHtml(d, settings) +
         try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
         return;
       }
-      var syncWhy = res && !res.syncing && !res.offline ? (res.syncError || res.pullError) : null;
+      var syncWhy = res && res.skipReasonText ? res.skipReasonText
+        : (res && !res.syncing && !res.offline ? (res.syncError || res.pullError) : null);
       showToast(syncWhy
         ? 'Saved on this computer, not synced. ' + String(syncWhy).slice(0, 180)
         : 'Saved on this computer, sync pending. Nothing was deleted.', syncWhy ? 'warning' : 'info', syncWhy ? 10000 : 8000);
