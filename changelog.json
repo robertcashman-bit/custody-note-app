@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.114",
+      "date": "2026-10-12",
+      "latest": true,
+      "changes": [
+        "Save & Sync now shows Saved & synced correctly when everything is already uploaded, and gives the reason if a note can't sync.",
+        "If a note can't sync, the Save & Sync button now says why and retries it each time you press it"
+      ]
+    },
+    {
       "version": "1.9.113",
       "date": "2026-10-09",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Sync pending now shows only once, on the Save & Sync button, instead of appearing twice",
         "New warning when police station or government Wi-Fi blocks sync. Your notes are still saved on your computer and will sync once you're on your own Wi-Fi or a phone hotspot",
