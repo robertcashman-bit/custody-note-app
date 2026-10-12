@@ -18070,7 +18070,8 @@ pdfAuditFooterHtml(d, settings) +
         canSync: res && res.localOnly ? false : undefined,
         error: (res && (res.error || res.backupError)) || (failedDisk ? 'The note did not finish writing to disk.' : null),
         backupError: res && res.backupError,
-        syncError: res && (res.syncError || res.pullError),
+        // Show a reason on the button only when sync really stopped (not while still pushing).
+        syncError: res && !res.syncing && !res.offline ? (res.syncError || res.pullError || null) : null,
       });
       if (failedDisk) {
         var diskWhy = (res && (res.error || res.backupError)) || 'The note did not finish writing to disk.';
@@ -18093,7 +18094,10 @@ pdfAuditFooterHtml(d, settings) +
         try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
         return;
       }
-      showToast('Saved on this computer, sync pending. Nothing was deleted.', 'info', 8000);
+      var syncWhy = res && !res.syncing && !res.offline ? (res.syncError || res.pullError) : null;
+      showToast(syncWhy
+        ? 'Saved on this computer, not synced. ' + String(syncWhy).slice(0, 180)
+        : 'Saved on this computer, sync pending. Nothing was deleted.', syncWhy ? 'warning' : 'info', syncWhy ? 10000 : 8000);
       try { if (typeof refreshBackupEffectivePaths === 'function') refreshBackupEffectivePaths(); } catch (_) {}
     }
 
