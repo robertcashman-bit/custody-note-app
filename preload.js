@@ -339,6 +339,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   flushAndBackup: () => ipcRenderer.invoke('flush-and-backup'),
   persistAndBackup: () => ipcRenderer.invoke('persist-and-backup'),
+  feedbackSubmit: (input) => ipcRenderer.invoke('feedback-submit', input),
+  feedbackQueueCount: () => ipcRenderer.invoke('feedback-queue-count'),
   backupStatus: () => ipcRenderer.invoke('backup-status'),
   backupOpenFolder: (which) => ipcRenderer.invoke('backup-open-folder', which),
   backupAcknowledgePathCorrection: () => ipcRenderer.invoke('backup-acknowledge-path-correction'),

@@ -8882,6 +8882,51 @@ ipcMain.handle('backup-now', async () => {
  * 4) return Force Save status distinguishing local vs central confirmation
  * Never claims ambiguous "Saved" / never claims backup success on silent skip.
  */
+/* ─── Help & feedback (lib/feedbackClient.js) ─── */
+let _feedbackClient = null;
+function getFeedbackClient() {
+  if (!_feedbackClient) {
+    const { createFeedbackClient } = require('./lib/feedbackClient');
+    _feedbackClient = createFeedbackClient({ userDataDir: app.getPath('userData') });
+  }
+  return _feedbackClient;
+}
+function feedbackTier() {
+  try {
+    const lic = readLicenceData();
+    if (!lic || !lic.key || isSyntheticLocalLicenceKey(lic.key)) return 'local';
+    return /^CNF-/i.test(String(lic.key)) ? 'free' : 'pro';
+  } catch (_) { return 'unknown'; }
+}
+ipcMain.handle('feedback-submit', async (_e, input) => {
+  try {
+    const { readSyncLogTail } = require('./lib/feedbackClient');
+    const os = require('os');
+    const includeLog = !(input && input.includeLog === false);
+    return await getFeedbackClient().submit(input || {}, {
+      appVersion: app.getVersion(),
+      os: `${process.platform} ${os.release()} ${process.arch}`,
+      tier: feedbackTier(),
+      includeLog,
+      diagnostics: includeLog ? readSyncLogTail(app.getPath('userData')) : '',
+    });
+  } catch (e) {
+    return { ok: false, queued: false, error: e && e.message ? e.message : String(e) };
+  }
+});
+ipcMain.handle('feedback-queue-count', async () => {
+  try { return getFeedbackClient().readQueue().length; } catch (_) { return 0; }
+});
+let _feedbackRetryTimer = null;
+function startFeedbackRetry() {
+  if (_feedbackRetryTimer) return;
+  const tick = () => { getFeedbackClient().flushQueue().catch(() => {}); };
+  setTimeout(tick, 60_000).unref?.();
+  _feedbackRetryTimer = setInterval(tick, 10 * 60_000);
+  if (_feedbackRetryTimer.unref) _feedbackRetryTimer.unref();
+}
+app.whenReady().then(() => { try { startFeedbackRetry(); } catch (_) {} });
+
 ipcMain.handle('persist-and-backup', async () => {
   const { buildSaveNowUserMessage } = require('./lib/saveNowResult');
   const { buildForceSaveResult } = require('./lib/forceSaveStatus');
