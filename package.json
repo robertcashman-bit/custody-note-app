@@ -59,7 +59,7 @@
   "author": "DEFENCELEGALSERVICES LIMITED",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.63.0",
     "electron": "^42.11.9",
     "electron-builder": "^26.16.1",
     "jsdom": "^29.0.0",
