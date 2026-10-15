@@ -8179,3 +8179,13 @@ html.dark .sync-wifi-banner-dismiss { color: #fcd34d; }
 .wf-invoice-result--error { border-left-color: #dc2626; }
 .wf-invoice-result-row { margin: 0.25rem 0; }
 .wf-invoice-result-warn { color: #b45309; margin-top: 0.5rem; }
+
+/* Help & feedback */
+.header-help-btn { font-weight: 700; }
+.help-feedback-dialog { max-width: 560px; }
+.help-feedback-types { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.help-feedback-dialog textarea, .help-feedback-dialog input[type="email"] { width: 100%; margin-bottom: 10px; }
+.help-feedback-status[data-tone="ok"] { color: #15803d; font-weight: 600; }
+.help-feedback-status[data-tone="error"] { color: #b45309; font-weight: 600; }
+html.dark .help-feedback-status[data-tone="ok"] { color: #4ade80; }
+html.dark .help-feedback-status[data-tone="error"] { color: #fbbf24; }

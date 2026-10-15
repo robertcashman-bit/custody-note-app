@@ -128,6 +128,7 @@
             </div>
           </div>
         </div>
+        <button type="button" id="help-feedback-btn" class="header-icon-btn header-help-btn" title="Help &amp; feedback: report a problem, ask a question or suggest an idea" aria-label="Help and feedback" aria-haspopup="dialog">?</button>
         <button type="button" id="dark-mode-toggle" class="header-icon-btn" title="Toggle dark mode">&#9790;</button>
         <button type="button" id="header-backup-now-btn" class="save-sync-btn" data-tone="idle" data-state="idle"
           title="Save this note to this computer, write a local backup, then sync if you are signed in. Ctrl+S or Cmd+S."
@@ -2398,6 +2399,7 @@
   <!-- deferred: renderer/templateSystem/templateStore.js -->
   <!-- deferred: renderer/templateSystem/templateManager.js -->
   <!-- Event wiring, service-worker cleanup, fallback splash timer, admin shortcut -->
+  <script src="renderer/help-feedback.js"></script>
   <script src="renderer/init-events.js"></script>
 
   <!-- Admin licence panel (hidden, Ctrl+Shift+A to toggle) -->
@@ -2502,6 +2504,39 @@
           <button type="button" id="ai-ask-close" class="btn btn-secondary">Close</button>
         </div>
         <p class="settings-hint ai-dialog-footer-hint">Cmd/Ctrl+Enter to send. Answers are not legal advice. Nothing is written into the note until you Copy or Append.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help & feedback (renderer/help-feedback.js) -->
+  <div id="help-feedback-modal" class="ai-dialog-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="help-feedback-title">
+    <div class="ai-dialog help-feedback-dialog" role="document">
+      <div class="ai-dialog-header">
+        <h2 id="help-feedback-title">Help &amp; feedback</h2>
+        <p class="settings-hint">Tell us about a problem, ask a question or suggest an idea. Please don't include client names or case details.</p>
+      </div>
+      <div class="ai-dialog-body">
+        <fieldset class="help-feedback-types">
+          <legend class="settings-hint">What kind of feedback?</legend>
+          <label class="checkbox-item"><input type="radio" name="help-feedback-type" value="problem"> Report a problem</label>
+          <label class="checkbox-item"><input type="radio" name="help-feedback-type" value="support"> Support question</label>
+          <label class="checkbox-item"><input type="radio" name="help-feedback-type" value="idea"> Idea or improvement</label>
+        </fieldset>
+        <label for="help-feedback-message" class="settings-hint">Message</label>
+        <textarea id="help-feedback-message" class="settings-input" rows="6" maxlength="5000" placeholder="What happened, or what would make Custody Note better?"></textarea>
+        <label for="help-feedback-email" class="settings-hint">Email (optional, so we can reply)</label>
+        <input id="help-feedback-email" type="email" class="settings-input" autocomplete="email" placeholder="you@firm.co.uk">
+        <label class="checkbox-item">
+          <input type="checkbox" id="help-feedback-include-log" checked> Include the sync log (status lines only, no note content) to help us fix sync problems
+        </label>
+        <p id="help-feedback-status" class="settings-hint help-feedback-status" role="status" aria-live="polite"></p>
+      </div>
+      <div class="ai-dialog-footer">
+        <div class="ai-dialog-actions">
+          <button type="button" id="help-feedback-send" class="btn btn-primary">Send feedback</button>
+          <button type="button" id="help-feedback-close" class="btn btn-secondary">Close</button>
+        </div>
+        <p class="settings-hint ai-dialog-footer-hint">You can also vote on ideas at custodynote.com/ideas.</p>
       </div>
     </div>
   </div>
