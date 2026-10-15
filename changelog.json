@@ -1,9 +1,17 @@
 {
   "releases": [
     {
+      "version": "1.9.115",
+      "date": "2026-10-15",
+      "latest": true,
+      "changes": [
+        "New Help & feedback button: report a problem, ask for help or suggest an idea from inside the app."
+      ]
+    },
+    {
       "version": "1.9.114",
       "date": "2026-10-12",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Save & Sync now shows Saved & synced correctly when everything is already uploaded, and gives the reason if a note can't sync.",
         "If a note can't sync, the Save & Sync button now says why and retries it each time you press it"
