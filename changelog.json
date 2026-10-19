@@ -1,9 +1,20 @@
 {
   "releases": [
     {
+      "version": "1.9.116",
+      "date": "2026-10-19",
+      "latest": true,
+      "changes": [
+        "Extra protection for your notes: Custody Note checks your saved notes for damage when it starts, and keeps a safety copy before an update changes how they are stored.",
+        "Saves are written in a way that a crash or power cut can't leave a half-saved note.",
+        "If a cloud backup fails, the app now tells you instead of failing quietly.",
+        "Installing an update no longer closes other programs, and no longer closes the Microsoft Store version of Custody Note."
+      ]
+    },
+    {
       "version": "1.9.115",
       "date": "2026-10-15",
-      "latest": true,
+      "latest": false,
       "changes": [
         "New Help & feedback button: report a problem, ask for help or suggest an idea from inside the app."
       ]
