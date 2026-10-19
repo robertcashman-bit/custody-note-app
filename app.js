@@ -14460,6 +14460,21 @@ var REQUIRED_FIELD_KEYS = [
     return L ? L.PRIVACY_ACK_LABEL : 'Privacy Notice acknowledged?';
   }
 
+  function pdfBodyFontStack() {
+    return '\'Segoe UI\',\'Helvetica Neue\',\'PingFang SC\',\'Hiragino Sans\',\'Microsoft YaHei\',\'Noto Sans CJK SC\',Arial,sans-serif';
+  }
+  function formatCheckboxGroupForPdf(value, separator) {
+    if (typeof window !== 'undefined' && window.PdfCheckboxFieldText && window.PdfCheckboxFieldText.formatCheckboxGroupForPdf) {
+      return window.PdfCheckboxFieldText.formatCheckboxGroupForPdf(value, separator);
+    }
+    var sep = separator != null ? String(separator) : ', ';
+    if (value == null || value === '') return '';
+    if (Array.isArray(value)) {
+      return value.map(function (item) { return item == null ? '' : String(item).trim(); }).filter(Boolean).join(sep);
+    }
+    return String(value).replace(/\|/g, sep);
+  }
+
   function buildPdfHtml(d, settings) {
     const h = esc;
     // H5 — allow explicit zero / false through (e.g. mileage 0, "Did you X" = false)
@@ -14501,7 +14516,7 @@ var REQUIRED_FIELD_KEYS = [
 
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | ' + h(myRefForTitle) + '</title><style>' +
 '@page{margin:12mm 14mm;size:A4;}' +
-'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:9.5px;padding:12px 16px 40px;color:#111;line-height:1.35;max-width:100%;}' +
+'body{font-family:' + pdfBodyFontStack() + ';font-size:9.5px;padding:12px 16px 40px;color:#111;line-height:1.35;max-width:100%;}' +
 '@media print{.pdf-section,.fee-box,.decl-box,.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.pdf-break-before{page-break-before:always;}.watermark{print-color-adjust:exact;}}' +
 '.pdf-break-before{page-break-before:always;}' +
 'h1{font-size:14px;font-weight:700;color:#2563eb;margin:0 0 5px;letter-spacing:-0.02em;}' +
@@ -14616,7 +14631,7 @@ row('Address', formatClientAddressForPdf(d)) +
 row('Custody record issues', d.custodyRecordIssues) +
 row('Arresting officer', d.arrestingOfficerName) + row('Arresting officer collar / badge no.', d.arrestingOfficerNumber) +
 row('Voluntary Interview', d.voluntaryInterview) +
-row('Grounds for arrest', (d.groundsForArrest || '').replace(/\|/g, ', ')) + row('Grounds for detention', (d.groundsForDetention || '').replace(/\|/g, ', ')) +
+row('Grounds for arrest', formatCheckboxGroupForPdf(d.groundsForArrest)) + row('Grounds for detention', formatCheckboxGroupForPdf(d.groundsForDetention)) +
 row('Date of arrest', fmtDate(d.dateOfArrest)) + row('Time of arrest', d.timeOfArrest) + row('Arrival at station', d.timeArrivalStation) +
 row('Relevant Time', d.relevantTime) + row('Detention authorised (time)', d.timeDetentionAuthorised) +
 row('First review due', d.firstReviewDue) + row('First review actual', d.firstReviewActual) + row('First review notes', d.firstReviewNotes) +
@@ -14668,7 +14683,7 @@ row('Caution/out-of-court offered?', d.cautionAvailable) + row('Clothing/shoes s
 row('Clothing/shoes — what was seized', d.clothingShoesSeizedWhat) + row('Clothing/shoes — seizure notes', d.clothingShoesSeizedNotes) +
 row('Electronic device(s) seized', d.deviceSeized) + row('Device type(s)', d.deviceType) + row('Device PIN requested', d.devicePinRequested) + row('Device PIN provided', d.devicePinProvided) +
 row('Device data extraction consent', d.deviceExtractionConsent) + row('Device RIPA / s.49', d.deviceRIPAAuthority) + row('Device seizure notes', d.deviceNotes) +
-row('Special warning given', d.specialWarningGiven) + row('Special warning type', (d.specialWarningType || '').replace(/\|/g, ', ')) + row('Special warning details', d.specialWarningDetails) + row('Special warning — advice to client', d.specialWarningAdvice) +
+row('Special warning given', d.specialWarningGiven) + row('Special warning type', formatCheckboxGroupForPdf(d.specialWarningType)) + row('Special warning details', d.specialWarningDetails) + row('Special warning — advice to client', d.specialWarningAdvice) +
 row('Injuries (disclosure)', d.disclosureReInjuries) +
 ((d.attendingContacts && d.attendingContacts.length) ? d.attendingContacts.filter(function(c) { return (c.contactType || c.time || c.outcome || c.notes); }).map(function(c, i) { return row('Contact ' + (i + 1) + ' (who)', c.contactType || '—') + row('Contact ' + (i + 1) + ' (time)', c.time || '—') + row('Contact ' + (i + 1) + ' (outcome)', c.outcome || '—') + (c.notes ? row('Contact ' + (i + 1) + ' (notes)', c.notes) : ''); }).join('') : (d.attendingContactType ? row('Who contacted', d.attendingContactType) + row('Time of contact', d.attendingContactTime) + row('Outcome', d.attendingContactOutcome) : '')) +
 '</table>' + (d.disclosureNarrative ? '<div class="nar">' + h(d.disclosureNarrative) + '</div>' : '') +
@@ -14695,7 +14710,7 @@ row('Passported Benefit', d.passportedBenefit) + row('Gross Income', d.grossInco
 row('Employment', d.employmentStatus) + row('Accommodation', d.accommodationStatus) + (d.accommodationDetails ? row('Accommodation notes', d.accommodationDetails) : '') + row('Marital status', d.maritalStatus) +
 row('Phone', d.clientPhone) + row('Email', d.clientEmail) +
 row('Ethnicity', codeLookup('ethnicCodes', d.ethnicOriginCode)) + row('Disability', codeLookup('disabilityCodes', d.disabilityCode)) + row('Risk', d.riskAssessment) +
-row('Sufficient Benefit Test (LAA)', (d.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ')) + row('Sufficient Benefit Test notes', d.sufficientBenefitNotes) + row('Gaps', d.gapsInEvidence) + row('Case assessment (police case)', d.caseAssessment) + row('Case assessment — reasoning', d.caseAssessmentWhy) + row('Sentence', d.likelySentence) +
+row('Sufficient Benefit Test (LAA)', formatCheckboxGroupForPdf(d.sufficientBenefitTest, '; ')) + row('Sufficient Benefit Test notes', d.sufficientBenefitNotes) + row('Gaps', d.gapsInEvidence) + row('Case assessment (police case)', d.caseAssessment) + row('Case assessment — reasoning', d.caseAssessmentWhy) + row('Sentence', d.likelySentence) +
 row('Dependants', d.dependants) + row('Capital (client) £', d.capitalClient) + row('Capital (partner) £', d.capitalPartner) + row('Capital (total) £', d.capitalTotal) + row('Consent to email', d.clientEmailConsent) + '</table>' +
 (d.lawElements ? '<div class="nar">' + h(d.lawElements) + '</div>' : '') +
     (d.clientInstructionsDetail ? '<p style="font-size:9px;font-weight:600;margin:8px 0 4px;">Client instructions</p><div class="nar">' + h(d.clientInstructionsDetail) + '</div>' : '') +
@@ -14873,7 +14888,7 @@ row('Invoice notes', d.invoiceNotes) +
     (d.laaHasPartner === 'Yes' ? row('Partner name', d.laaPartnerFullName) + row('Partner signature date', fmtDate(d.laaPartnerSignatureDate)) : '') +
     row('Fee Earner', laaFeeEarnerNameForPdf(d)) + row('Certification', d.feeEarnerCertification);
   return '<h2 class="pdf-break-before">11. LAA Declaration</h2>' +
-    ((d.workType === 'Police Station Telephone Attendance' || (d.sufficientBenefitTest && d.sufficientBenefitTest.split('|').indexOf('Telephone advice only') >= 0)) ? '<p style="font-size:10px;color:#64748b;margin-bottom:8px;"><em>For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.</em></p>' : '') +
+    ((d.workType === 'Police Station Telephone Attendance' || (formatCheckboxGroupForPdf(d.sufficientBenefitTest, '|').split('|').indexOf('Telephone advice only') >= 0)) ? '<p style="font-size:10px;color:#64748b;margin-bottom:8px;"><em>For telephone advice only: client may sign declaration later if not present; note on file if declaration is to follow.</em></p>' : '') +
     laaPrivacyNoticePdfHtml(h) +
     laaOnlineApplicantDeclarationPdfHtml(h) +
     '<table>' + laaRows + '</table>' +
@@ -14979,7 +14994,7 @@ pdfAuditFooterHtml(d, settings) +
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | ' + h(myRefForTitle) + '</title>' +
       '<style>' +
       '@page{margin:15mm;size:A4;}' +
-      'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 48px;color:#111;line-height:1.45;}' +
+      'body{font-family:' + pdfBodyFontStack() + ';font-size:11px;padding:20px 24px 48px;color:#111;line-height:1.45;}' +
       pdfAuditFooterCss() +
       pdfDefenceSummaryCss() +
       'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
@@ -15134,7 +15149,7 @@ pdfAuditFooterHtml(d, settings) +
     return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + h(clientNameForTitle) + ' | Voluntary | ' + h(myRefForTitle) + '</title>' +
       '<style>' +
       '@page{margin:15mm;size:A4;}' +
-      'body{font-family:\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif;font-size:11px;padding:20px 24px 56px;color:#111;line-height:1.45;max-width:100%;}' +
+      'body{font-family:' + pdfBodyFontStack() + ';font-size:11px;padding:20px 24px 56px;color:#111;line-height:1.45;max-width:100%;}' +
       pdfAuditFooterCss() +
       pdfDefenceSummaryCss() +
       '@media print{.pdf-section,.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.pdf-break-before{page-break-before:always;}.watermark{print-color-adjust:exact;}}' +
@@ -15196,7 +15211,7 @@ pdfAuditFooterHtml(d, settings) +
       '</table>' +
       (d.arrivalNotes ? '<div class="nar">' + h(d.arrivalNotes) + '</div>' : '') +
       '<table>' +
-      row('Sufficient Benefit Test (LAA)', (d.sufficientBenefitTest || '').split('|').filter(Boolean).join('; ')) +
+      row('Sufficient Benefit Test (LAA)', formatCheckboxGroupForPdf(d.sufficientBenefitTest, '; ')) +
       (d.sufficientBenefitNotes ? row('SBT notes', d.sufficientBenefitNotes) : '') +
       '</table>' +
 

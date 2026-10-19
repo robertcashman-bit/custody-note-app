@@ -27,6 +27,7 @@ const {
 
 const SETTINGS_LAST_SEEN_APP_VERSION = 'lastSeenAppVersion';
 const SETTINGS_CATCH_UP_BANNER = 'staleCatchUpBannerAt';
+const SETTINGS_CATCH_UP_PENDING = 'staleCatchUpPending';
 
 function getSetting(dbGet, key) {
   try {
@@ -52,13 +53,23 @@ function readCatchUpTrigger(ctx) {
   const lastSeenAppVersion = getSetting(ctx.dbGet, SETTINGS_LAST_SEEN_APP_VERSION);
   const currentAppVersion = ctx.currentAppVersion || null;
   const syncEnabled = ctx.syncEnabled != null ? !!ctx.syncEnabled : true;
+  const pendingCatchUp = getSetting(ctx.dbGet, SETTINGS_CATCH_UP_PENDING) === '1';
   return shouldRunStaleCatchUp({
     lastSuccessfulSyncAt,
     lastSeenAppVersion,
     currentAppVersion,
     now: ctx.now != null ? ctx.now : Date.now(),
     syncEnabled,
+    pendingCatchUp,
   });
+}
+
+function clearCatchUpPending(ctx) {
+  setSetting(ctx.dbRun, SETTINGS_CATCH_UP_PENDING, null);
+}
+
+function markCatchUpPending(ctx) {
+  setSetting(ctx.dbRun, SETTINGS_CATCH_UP_PENDING, '1');
 }
 
 function stampSeenAppVersion(ctx) {
@@ -91,7 +102,12 @@ function autoAcceptRemoteNewerConflicts(ctx) {
         ? ctx.dbGet('SELECT * FROM attendances WHERE id=?', [conflict.attendanceId])
         : null;
       if (local && conflict.remote) {
-        const result = mergeAttendanceRecords({ base: null, local: local, remote: conflict.remote });
+        const result = mergeAttendanceRecords({
+          base: null,
+          local: local,
+          remote: conflict.remote,
+          preferRemoteMetaWhenVersionHigher: true,
+        });
         writeMergedAttendance(ctx, conflict.attendanceId, result);
       }
       markConflictsAutoMerged(ctx, conflict.attendanceId, now);
@@ -135,6 +151,11 @@ async function runStaleDeviceCatchUp(ctx, opts) {
     return { ok: true, ran: false, reason: trigger.reason, trigger };
   }
 
+  markCatchUpPending(ctx);
+  if (typeof ctx.saveDb === 'function') {
+    try { ctx.saveDb(); } catch (_) {}
+  }
+
   emitProgress(ctx, {
     phase: 'starting',
     message: 'Catching up with other devices…',
@@ -151,7 +172,15 @@ async function runStaleDeviceCatchUp(ctx, opts) {
     const msg = e && e.message ? e.message : String(e);
     emitProgress(ctx, { phase: 'error', message: msg });
     stampSeenAppVersion(ctx);
-    return { ok: false, ran: true, reason: trigger.reason, trigger, error: msg, code: 'PULL_FAILED' };
+    return {
+      ok: false,
+      ran: true,
+      reason: trigger.reason,
+      trigger,
+      error: msg,
+      code: 'PULL_FAILED',
+      catchUpPending: true,
+    };
   }
 
   emitProgress(ctx, {
@@ -199,6 +228,7 @@ async function runStaleDeviceCatchUp(ctx, opts) {
       drain,
       needsHuman: resolveResult.needsHuman,
       banner: false,
+      catchUpPending: true,
     };
   }
 
@@ -208,6 +238,7 @@ async function runStaleDeviceCatchUp(ctx, opts) {
   const caughtUp = dirtyLeft === 0 && pendingLeft === 0;
 
   if (caughtUp && humanLeft === 0) {
+    clearCatchUpPending(ctx);
     setSetting(ctx.dbRun, SETTINGS_CATCH_UP_BANNER, new Date().toISOString());
     if (typeof ctx.saveDb === 'function') {
       try { ctx.saveDb(); } catch (_) {}
@@ -310,10 +341,13 @@ function consumeCatchUpBanner(ctx) {
 module.exports = {
   SETTINGS_LAST_SEEN_APP_VERSION,
   SETTINGS_CATCH_UP_BANNER,
+  SETTINGS_CATCH_UP_PENDING,
   getSetting,
   setSetting,
   readCatchUpTrigger,
   stampSeenAppVersion,
+  markCatchUpPending,
+  clearCatchUpPending,
   autoAcceptRemoteNewerConflicts,
   runStaleDeviceCatchUp,
   runFixSyncNow,
