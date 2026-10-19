@@ -14461,7 +14461,10 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function pdfBodyFontStack() {
-    return '\'Segoe UI\',\'Helvetica Neue\',\'PingFang SC\',\'Hiragino Sans\',\'Microsoft YaHei\',\'Noto Sans CJK SC\',Arial,sans-serif';
+    if (typeof window !== 'undefined' && window.PdfBundledCjkFont && window.PdfBundledCjkFont.pdfBodyFontStack) {
+      return window.PdfBundledCjkFont.pdfBodyFontStack();
+    }
+    return '\'Custody Note Noto SC\',\'Segoe UI\',\'Helvetica Neue\',Arial,sans-serif';
   }
   function formatCheckboxGroupForPdf(value, separator) {
     if (typeof window !== 'undefined' && window.PdfCheckboxFieldText && window.PdfCheckboxFieldText.formatCheckboxGroupForPdf) {

@@ -42,6 +42,7 @@
     "audit:app": "node --test tests/deepAudit.test.js && node -c main.js && node -c preload.js",
     "validate:msix": "node scripts/validate-msix-config.mjs",
     "build:msix:assets": "node scripts/build-msix-assets.mjs",
+    "build:pdf-cjk-font": "node scripts/build-pdf-cjk-font-subset.mjs",
     "prepare-trial": "node scripts/prepare-trial.js",
     "capture-screenshots": "node scripts/capture-screenshots.js",
     "capture:marketing-demo": "node scripts/capture-marketing-demo-screens.mjs",
@@ -82,6 +83,9 @@
   "build": {
     "appId": "com.custodynote.app",
     "productName": "Custody Note",
+    "asarUnpack": [
+      "resources/fonts/**"
+    ],
     "directories": {
       "output": "dist"
     },

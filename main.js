@@ -220,6 +220,7 @@ const {
 const syncConflicts = require('./main/syncConflicts');
 const staleSyncCatchUpRunner = require('./main/staleSyncCatchUpRunner');
 const openConflictAutoResolve = require('./main/openConflictAutoResolve');
+const pdfBundledCjkFont = require('./lib/pdfBundledCjkFont');
 const errorReporting = require('./main/errorReporting');
 const dbCrypto = require('./lib/dbCrypto');
 const { createBackupScheduler } = require('./main/backupScheduler');
@@ -10844,6 +10845,24 @@ ipcMain.handle('open-app-folder', async () => {
 // (multi-attachment cover bundles) while killing pathological renderer input.
 const RENDER_HTML_MAX_BYTES = 25 * 1024 * 1024;
 
+function getBundledPdfCjkFontFileUrl() {
+  try {
+    const fontPath = pdfBundledCjkFont.resolveBundledPdfCjkFontPath({
+      isPackaged: app.isPackaged,
+      appRoot: app.getAppPath(),
+      resourcesPath: process.resourcesPath,
+    });
+    if (!fontPath || !fs.existsSync(fontPath)) {
+      console.warn('[PDF] Bundled CJK font not found at', fontPath || '(no path)');
+      return null;
+    }
+    return require('url').pathToFileURL(fontPath).href;
+  } catch (e) {
+    console.warn('[PDF] Bundled CJK font resolve failed:', e && e.message ? e.message : e);
+    return null;
+  }
+}
+
 async function renderHtmlToPdfBuffer(html, options) {
   if (typeof html !== 'string' || html.length === 0) {
     throw new Error('renderHtmlToPdfBuffer: html is empty');
@@ -10853,6 +10872,10 @@ async function renderHtmlToPdfBuffer(html, options) {
     throw new Error('renderHtmlToPdfBuffer: html exceeds ' + RENDER_HTML_MAX_BYTES + ' bytes (got ' + byteLen + ')');
   }
   const brandingFooter = !(options && options.brandingFooter === false);
+  const cjkFontUrl = getBundledPdfCjkFontFileUrl();
+  if (cjkFontUrl) {
+    html = pdfBundledCjkFont.injectPdfCjkFontIntoHtml(html, cjkFontUrl);
+  }
   const tempDir = app.getPath('temp');
   const tempPath = path.join(tempDir, `cn-pdf-${process.pid}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.html`);
   fs.writeFileSync(tempPath, html, 'utf8');
@@ -10888,7 +10911,18 @@ async function renderHtmlToPdfBuffer(html, options) {
         () => finish(new Error('PDF HTML load timeout (60s) — temp file: ' + tempPath)),
         60000
       );
-      win.webContents.once('did-finish-load', () => finish());
+      win.webContents.once('did-finish-load', () => {
+        const waitFonts = cjkFontUrl
+          ? win.webContents.executeJavaScript(
+            '(async function(){if(document.fonts&&document.fonts.ready){await document.fonts.ready;}})();',
+            true
+          )
+          : Promise.resolve();
+        waitFonts.then(() => finish()).catch((fontErr) => {
+          console.warn('[PDF] document.fonts.ready wait failed:', fontErr && fontErr.message ? fontErr.message : fontErr);
+          finish();
+        });
+      });
       win.webContents.once('did-fail-load', (_e, errCode, errDesc, validatedURL) => {
         finish(new Error('PDF HTML failed to load: ' + errDesc + ' (' + errCode + ') url=' + validatedURL));
       });
@@ -10898,6 +10932,7 @@ async function renderHtmlToPdfBuffer(html, options) {
       win.loadFile(tempPath).catch((err) => finish(err));
     });
 
+    const pdfFooterFont = pdfBundledCjkFont.pdfBodyFontStack();
     const brandLine = brandingFooter
       ? '<div>Prepared with Custody Note</div>'
       : '<div></div>';
@@ -10909,7 +10944,7 @@ async function renderHtmlToPdfBuffer(html, options) {
       displayHeaderFooter: true,
       headerTemplate: '<div></div>',
       footerTemplate: `
-      <div style="width:100%; padding:0 12px; font-family:'Segoe UI','Helvetica Neue','PingFang SC','Hiragino Sans','Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif; font-size:8px; color:#475569; border-top:1px solid #e2e8f0; padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="width:100%; padding:0 12px; font-family:${pdfFooterFont}; font-size:8px; color:#475569; border-top:1px solid #e2e8f0; padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
         <div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
         ${brandLine}
         <div>Generated <span class="date"></span></div>

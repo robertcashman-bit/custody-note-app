@@ -4,15 +4,13 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { PDF_CJK_FONT_FAMILY, pdfBodyFontStack } = require('../lib/pdfBundledCjkFont');
 
 describe('PDF CJK font stack', () => {
-  it('custody PDF HTML and print footer include CJK fallbacks', () => {
-    const appJs = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
-    const mainJs = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
-    assert.match(appJs, /PingFang SC/);
-    assert.match(appJs, /Noto Sans CJK SC/);
-    assert.match(mainJs, /Noto Sans CJK SC/);
-    assert.match(appJs, /function pdfBodyFontStack\(/);
+  it('bundled Noto family is first in pdfBodyFontStack', () => {
+    const stack = pdfBodyFontStack();
+    assert.ok(stack.startsWith("'" + PDF_CJK_FONT_FAMILY + "'"));
+    assert.ok(!/PingFang SC/.test(stack), 'system CJK fonts must not precede bundled font');
   });
 
   it('pdfBodyFontStack is wired into custody, telephone, and voluntary PDF builders', () => {
