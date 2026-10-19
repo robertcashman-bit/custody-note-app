@@ -219,6 +219,7 @@ const {
 } = require('./lib/stationMileage');
 const syncConflicts = require('./main/syncConflicts');
 const staleSyncCatchUpRunner = require('./main/staleSyncCatchUpRunner');
+const openConflictAutoResolve = require('./main/openConflictAutoResolve');
 const errorReporting = require('./main/errorReporting');
 const dbCrypto = require('./lib/dbCrypto');
 const { createBackupScheduler } = require('./main/backupScheduler');
@@ -4072,6 +4073,23 @@ async function syncPull(opts) {
     // so lastVerifiedCloudInventory + lastVerifiedCloudSyncIds survive a crash.
     flushDbSync();
   }
+
+  if (decryptFailed === 0 && noMasterKeySkipped === 0) {
+    try {
+      const resolveRes = openConflictAutoResolve.resolveOpenSyncConflictsIfAny(
+        _openConflictResolveCtx(),
+        { source: 'post_pull' }
+      );
+      if (resolveRes && resolveRes.merged > 0 && mainWindow && !mainWindow.isDestroyed()) {
+        try {
+          mainWindow.webContents.send('records-updated-from-sync', { count: resolveRes.merged });
+        } catch (_) {}
+      }
+    } catch (resolveErr) {
+      console.warn('[SYNC-PULL] Open-conflict auto-resolve failed:', resolveErr && resolveErr.message ? resolveErr.message : resolveErr);
+    }
+  }
+
   return {
     pulled: merged,
     conflicts,
@@ -7291,6 +7309,12 @@ app.whenReady().then(async () => {
   setTimeout(() => {
     startSyncTimer();
     scheduleAutoFullResyncIfEmpty();
+    try {
+      openConflictAutoResolve.resolveOpenSyncConflictsIfAny(
+        _openConflictResolveCtx(),
+        { source: 'startup' }
+      );
+    } catch (_) {}
     // Stale-device / long-gap catch-up (cloud SoT after >7 days or large version jump).
     try { maybeRunStaleDeviceCatchUp({ reason: 'startup' }); } catch (_) {}
   }, 8000);
@@ -10006,6 +10030,18 @@ ipcMain.handle('sync-conflicts-resolve-bulk', (_event, params) => {
 
 let _staleCatchUpInFlight = false;
 
+function _openConflictResolveCtx() {
+  return {
+    dbGet,
+    dbRun,
+    dbAll,
+    appendAuditLog,
+    nowIso: () => new Date().toISOString(),
+    afterResolve: _afterConflictResolved,
+    saveDb,
+  };
+}
+
 function _buildCatchUpCtx() {
   return {
     dbGet,
@@ -10873,7 +10909,7 @@ async function renderHtmlToPdfBuffer(html, options) {
       displayHeaderFooter: true,
       headerTemplate: '<div></div>',
       footerTemplate: `
-      <div style="width:100%; padding:0 12px; font-family:Segoe UI, Arial, sans-serif; font-size:8px; color:#475569; border-top:1px solid #e2e8f0; padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="width:100%; padding:0 12px; font-family:'Segoe UI','Helvetica Neue','PingFang SC','Hiragino Sans','Microsoft YaHei','Noto Sans CJK SC',Arial,sans-serif; font-size:8px; color:#475569; border-top:1px solid #e2e8f0; padding-top:6px; display:flex; justify-content:space-between; align-items:center;">
         <div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
         ${brandLine}
         <div>Generated <span class="date"></span></div>

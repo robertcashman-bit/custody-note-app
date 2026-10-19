@@ -19,6 +19,18 @@ const {
 describe('staleSyncCatchUp triggers', () => {
   const now = Date.parse('2026-09-14T12:00:00.000Z');
 
+  it('runs when catch-up pending flag is set (interrupted prior run)', () => {
+    const res = shouldRunStaleCatchUp({
+      lastSuccessfulSyncAt: '2026-09-13T00:00:00.000Z',
+      lastSeenAppVersion: '1.9.116',
+      currentAppVersion: '1.9.116',
+      now,
+      pendingCatchUp: true,
+    });
+    assert.strictEqual(res.run, true);
+    assert.strictEqual(res.reason, 'pending_retry');
+  });
+
   it('runs when last successful sync is older than 7 days', () => {
     const res = shouldRunStaleCatchUp({
       lastSuccessfulSyncAt: '2026-06-01T00:00:00.000Z',

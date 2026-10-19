@@ -112,6 +112,34 @@ describe('automatic field merge', () => {
     assert.equal(merged.data[HISTORY_KEY][0].lost, 'remote older field');
   });
 
+  it('preferRemoteMetaWhenVersionHigher applies completed+archived from newer cloud version', () => {
+    const local = row({
+      status: 'finalised',
+      archived_at: null,
+      data: JSON.stringify({ caseNote: 'kept body' }),
+      updated_at: '2026-08-01T00:00:00.000Z',
+      sync_version: 655,
+    });
+    const remote = row({
+      status: 'completed',
+      archived_at: '2026-04-10T16:00:00.000Z',
+      data: JSON.stringify({ caseNote: 'kept body' }),
+      updated_at: '2026-04-10T15:00:00.000Z',
+      sync_version: 658,
+      sync_dirty: 0,
+    });
+    const merged = mergeAttendanceRecords({
+      base: null,
+      local,
+      remote,
+      preferRemoteMetaWhenVersionHigher: true,
+    });
+    assert.equal(merged.status, 'completed');
+    assert.equal(merged.archivedAt, '2026-04-10T16:00:00.000Z');
+    assert.equal(merged.data.caseNote, 'kept body');
+    assert.equal(merged.version, 658);
+  });
+
   it('a tie keeps the local unsynced edit', () => {
     const at = '2026-05-01T12:00:00.000Z';
     const merged = mergeAttendanceRecords({
