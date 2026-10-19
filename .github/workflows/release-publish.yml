@@ -71,7 +71,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
@@ -115,7 +115,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: custody-note-app
           ref: ${{ github.ref }}
@@ -238,7 +238,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: custody-note-app
           ref: ${{ github.ref }}
@@ -311,7 +311,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
@@ -395,7 +395,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
 
