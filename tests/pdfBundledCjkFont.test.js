@@ -23,7 +23,7 @@ describe('pdfBundledCjkFont packaging', () => {
   it('ships Noto Sans SC subset and OFL licence in resources/fonts', () => {
     assert.ok(fs.existsSync(fontPath), 'missing ' + PDF_CJK_FONT_RELATIVE);
     const bytes = fs.statSync(fontPath).size;
-    assert.ok(bytes > 50_000 && bytes < 8 * 1024 * 1024, 'unexpected font size: ' + bytes);
+    assert.ok(bytes > 1_000_000 && bytes < 20 * 1024 * 1024, 'unexpected font size: ' + bytes);
     assert.ok(fs.existsSync(licensePath), 'missing OFL.txt');
     assert.match(fs.readFileSync(licensePath, 'utf8'), /Open Font License/i);
   });

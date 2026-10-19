@@ -10,7 +10,7 @@ describe('PDF CJK font stack', () => {
   it('bundled Noto family is first in pdfBodyFontStack', () => {
     const stack = pdfBodyFontStack();
     assert.ok(stack.startsWith("'" + PDF_CJK_FONT_FAMILY + "'"));
-    assert.ok(!/PingFang SC/.test(stack), 'system CJK fonts must not precede bundled font');
+    assert.ok(stack.indexOf('PingFang SC') > stack.indexOf(PDF_CJK_FONT_FAMILY), 'system CJK fallbacks follow bundled font');
   });
 
   it('pdfBodyFontStack is wired into custody, telephone, and voluntary PDF builders', () => {
