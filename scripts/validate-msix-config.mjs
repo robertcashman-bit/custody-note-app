@@ -169,6 +169,19 @@ for (const name of requiredAssets) {
   }
 }
 
+const pdfFontPath = path.join(root, 'resources', 'fonts', 'NotoSansSC-Subset.woff2');
+const pdfLicensePath = path.join(root, 'resources', 'fonts', 'OFL.txt');
+if (!fs.existsSync(pdfFontPath) || fs.statSync(pdfFontPath).size < 50_000) {
+  fail('resources/fonts/NotoSansSC-Subset.woff2 must be present for PDF CJK (run npm run build:pdf-cjk-font)');
+}
+if (!fs.existsSync(pdfLicensePath) || fs.statSync(pdfLicensePath).size < 200) {
+  fail('resources/fonts/OFL.txt must ship with the bundled Noto subset');
+}
+const asarUnpack = (pkg.build || {}).asarUnpack;
+if (!Array.isArray(asarUnpack) || !asarUnpack.some((g) => /resources\/fonts/.test(String(g)))) {
+  fail('build.asarUnpack must include resources/fonts/** so PDF @font-face can load from disk');
+}
+
 const docPath = path.join(root, 'docs', 'MICROSOFT_STORE_RELEASE.md');
 if (!fs.existsSync(docPath)) fail('docs/MICROSOFT_STORE_RELEASE.md is required');
 

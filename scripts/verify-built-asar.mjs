@@ -171,6 +171,21 @@ function verifyAsar(asarPath) {
       info(`  OK ${spec.file} (${sz} bytes, parses, starts with expected line)`);
     }
 
+    /* PDF CJK font — must ship unpacked (Chromium @font-face from file://). */
+    const unpackedRoot = join(dirname(asarPath), 'app.asar.unpacked');
+    const pdfFont = join(unpackedRoot, 'resources', 'fonts', 'NotoSansSC-Subset.woff2');
+    const pdfLicense = join(unpackedRoot, 'resources', 'fonts', 'OFL.txt');
+    if (!existsSync(pdfFont) || statSync(pdfFont).size < 50_000) {
+      fail(
+        `asar unpacked PDF CJK font missing or too small at ${pdfFont} — ` +
+        'ensure resources/fonts/NotoSansSC-Subset.woff2 is listed in build.asarUnpack'
+      );
+    }
+    if (!existsSync(pdfLicense) || statSync(pdfLicense).size < 200) {
+      fail(`asar unpacked PDF CJK license missing at ${pdfLicense}`);
+    }
+    info(`  OK resources/fonts/NotoSansSC-Subset.woff2 (unpacked, ${statSync(pdfFont).size} bytes)`);
+
     /* magistrates court list — required for Section 8 court name typeahead */
     const courtsFile = extractFile(asarPath, 'data/magistrates-courts.json', tmp);
     let courtsList;
