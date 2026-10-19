@@ -2,228 +2,155 @@
 
 | Field | Value |
 |-------|--------|
-| **Candidate version** | 1.9.115 (not bumped in this audit — owner releases separately) |
-| **Git commit** | `2c43fa8eba1cd8ea88cd9f0080a6ee7813e5d4b7` |
+| **Candidate version** | 1.9.115 (unchanged) |
+| **Audit commit** | `cursor/production-readiness-28b6` (this PR) |
+| **Baseline** | `2c43fa8` (v1.9.115 on master) |
 | **Audit date (UTC)** | 2026-10-19 |
-| **Latest shipped reference** | v1.9.115 — Help & feedback button |
-| **Decision** | **AMBER** — data/sync/backup gates green in automation; full Windows/Mac packaged acceptance still requires owner hardware (see below) |
+| **Decision** | **AMBER** — automated scenario matrix largely **GREEN**; packaged Mac/Windows acceptance and gitleaks historical hits remain; **pre-migration safety copy on upgrade** in this PR needs **owner review before merge** |
 
 ---
 
-## Source-of-truth model (summary)
+## Scenario evidence (Priorities 1 & 2)
 
-Full diagram: [`docs/data-safety/ARCHITECTURE.md`](data-safety/ARCHITECTURE.md).
+RAG key: **G** = automated test names cited · **A** = partial/static only · **R** = no test (downgraded)
 
-| Layer | Location | Authority |
-|-------|----------|-----------|
-| Working copy | `%APPDATA%/custody-note/attendances.db` (encrypted CNDB) | Local durable copy; required before “Safe locally” |
-| Outbox | `sync_queue` + `sync_dirty` | Survives restart; cleared only after server ack |
-| Live account SoT | custodynote.com `/api/sync/*` (licence-scoped KV) | Cross-device truth for synced records |
-| Server PITR | Website `sot-pitr/{userId}/` | Independent snapshots; not live SoT |
-| Client PITR | `Backups/attendance-quick-*.db`, hourly, offsite folder | Generational; verified magic; restore gated |
-| Managed cloud backup | AWS (Pro entitlement) | Disaster recovery product; **not** sync SoT |
+### Priority 1 — Data integrity
 
-Conflict rule: per-record merge / newest version; no whole-DB LWW; empty cloud never wipes local; tombstones required for delete.
+| Scenario | Test file | Test name (suite › it) | RAG |
+|----------|-----------|------------------------|-----|
+| Complete record create + save | `tests/e2e/stress-journey.spec.ts` | `full lifecycle stress journey › B.1 incomplete draft saved` | G |
+| Close / reopen record | `tests/e2e/stress-journey.spec.ts` | `full lifecycle › H.0 record loaded into form view` | G |
+| Edit after save | `tests/e2e/stress-journey.spec.ts` | `full lifecycle › C.1 edit-after-save persisted` | G |
+| Rapid consecutive saves | `tests/syncStress.test.js` | `Stress: Concurrent save storm › syncs under concurrent save storm` | G |
+| Kill during save (atomic write) | `tests/killDuringAtomicWrite.test.js` | `Kill during atomic write › SIGKILL mid-write leaves previous on-disk CNDB intact` | G |
+| Crash / restart (outbox survives) | `tests/dataSafety.faultInjection.test.js` | `Offline + restart outbox survival › queue + dirty survive simulated restart` | G |
+| Upgrade from legacy schema (no schema_version) | `tests/dbMigrations.test.js` | `dbMigrations runner › upgrades a legacy DB (missing column…)` | G |
+| Upgrade from v1 → v2+ (stamped v1) | `tests/dbMigrations.test.js` | `dbMigrations runner › sets Tonbridge (BG039) mileage_from_base…` | G |
+| Interrupted migration (rollback) | `tests/interruptedMigration.test.js` | `Interrupted / failed schema migration › failed migration rolls back` | G |
+| Pre-migration safety copy | `tests/dbStartupIntegrity.test.js` | `dbStartupIntegrity › initDb takes pre-migration safety copy…` (+ `interruptedMigration › pre-migration safety copy pattern`) | G |
+| Invalid / partial data | `tests/e2e/stress-journey.spec.ts` | `B.2 missing fields persisted as empty` | G |
+| Duplicate protection (finalised DSCC) | `tests/e2e/stress-journey.spec.ts` | `D.2 draft dedupe` / `E.3 attendanceCheckDuplicate matches finalised DSCC` | G |
+| Null / empty fields | `tests/e2e/stress-journey.spec.ts` | `B.2 missing fields persisted as empty` | G |
+| Unicode / unusual characters | `tests/backupRestoreFieldParity.test.js` | `save → encrypted backup → corrupt live → restore preserves every field` | G |
+| Large records (~500KB) | `tests/syncStress.test.js` | `Stress: Large payload (500KB) › syncs record with 500KB data blob` | G |
+| Near-concurrent edits | `tests/syncFieldMerge.test.js` | merge / conflict suites | G |
+| No silent overwrite of newer data | `tests/dataSafety.faultInjection.test.js` | monitor / never-event suites; `tests/syncFieldMerge.test.js` | G |
+| Failed disk flush not shown as success | `tests/dataSafety.flushPolicy.test.js` | flush dirty policy suites | G |
+| User-facing save/sync failure copy | `tests/saveNowDurability.test.js` | `Save now fails loudly when backup path invalid` | G |
+| Empty outbox false “synced” | `tests/saveSyncEmptyOutbox.test.js` | (full file) | G |
+| Server-blocked sync surfaced | `tests/saveSyncBlocked.test.js` | (full file) | G |
 
----
+### Priority 2 — Local / cloud backup consistency
 
-## 1. Data integrity
+| Scenario | Test file | Test name | RAG |
+|----------|-----------|-----------|-----|
+| Local generational backup | `tests/backupPathAndGenerational.test.js` | `generational quick backups + visible degradation` | G |
+| Field-level local restore | `tests/backupRestoreFieldParity.test.js` | full suite (4 tests) | G |
+| Empty backup refused over live | `tests/backupRestoreFieldParity.test.js` | `refuses empty backup over live data` | G |
+| Corrupt / empty restore gate | `tests/dataSafety.greenCloseout.test.js` | `restore scoring refuses empty/corrupt over live` | G |
+| Missing backup (no files) | `lib/backupIntegrityGate` via `tests/dataSafety.architecture.test.js` | `evaluateBackupSeriesIntegrity` / empty series | G |
+| Offline (sync) | `tests/syncEngine.test.js` | `Sync Engine: Offline persistence` | G |
+| Cloud down / failed pull | `tests/silentSyncDeath.test.js`, `tests/emptySyncRecovery.test.js` | (suites) | G |
+| Interrupted local backup | `tests/backupScheduler.test.js` | `handles backup error gracefully` | G |
+| App hidden / close flush backup | `tests/backupScheduler.test.js` | `forces immediate backup on background flush` | G |
+| Conflicting edits (merge) | `tests/syncConflicts.test.js`, `tests/syncFieldMerge.test.js` | (suites) | G |
+| Central SoT amend vs PITR baseline | `tests/backupRestoreFieldParity.test.js` | `amend after backup → mock central SoT…` | G |
+| Managed cloud backup upload/list/restore | `tests/managedCloudBackupE2e.test.js` | `upload → amend → re-upload → restore…` | G |
+| Managed cloud auth failure | `tests/managedCloudBackupE2e.test.js` | `auth failure surfaces PERMISSION_DENIED` | G |
+| Managed cloud quota / 5xx mapping | `tests/managedCloudBackupE2e.test.js` | `quota and 5xx map to user-visible codes` | G |
+| Older vs newer cloud copy (PITR independence) | `tests/dataSafety.greenCloseout.test.js` | `PITR prefix independent from live SoT` | G |
+| Real AWS / Partner Center path | — | Manual Pro licence smoke | R |
 
-**Scope:** create/edit/save/reopen, rapid saves, kill mid-save, migrations, invalid data, Unicode, large payloads, concurrent edits, honest failure reporting.
-
-| Evidence | Result |
-|----------|--------|
-| `npm run test:unit` (191 files) | **2579 pass** / 2581 total, 2 skipped, 0 fail (VM 2026-10-19) |
-| `npm run test:data-safety` | **199 pass**, 0 fail (includes new `backupRestoreFieldParity.test.js`) |
-| `npm run test:deep` | **66 pass** |
-| Playwright `npm run test:e2e` | **56 pass** (incl. 33-step stress journey) |
-| Key suites | `attendanceDurability`, `saveNowDurability`, `dbMigrations`, `dataSafety.faultInjection`, `syncStress`, `emptySyncRecovery`, `saveSyncEmptyOutbox`, `silentSyncDeath` |
-
-**RAG: GREEN** for automated regression; **AMBER** for packaged kill-during-save on real OS (simulated via SIGKILL harness + flush policy tests).
-
----
-
-## 2. Local / cloud backup consistency
-
-| Evidence | Result |
-|----------|--------|
-| `backupRestoreFieldParity.test.js` | Encrypted generational backup → corrupt live → gate → full field compare; sibling row unchanged; empty-backup refused; mock central SoT after amend; primary-loss rebuild |
-| `backupPathAndGenerational.test.js` | Paths, scheduler, restore IPC wiring, degradation UI |
-| `backupIntegrityGate` + `dataSafety.greenCloseout` | Empty/corrupt restore over live refused |
-| Mock sync server | Push/pull envelope parity (`crossDeviceSync.test.js`) |
-
-**Managed AWS cloud backup** full round-trip is **not** automated (requires live Pro credentials); list/restore IPC error paths covered in `postBillPurge.test.js`.
-
-**RAG: GREEN** local PITR + central sync SoT (mocked); **AMBER** managed AWS backup E2E (manual / smoke script `smoke:licence-backup` when website repo present).
-
----
-
-## 3. Cross-platform
-
-See [`docs/CROSS_PLATFORM_TEST_MATRIX.md`](CROSS_PLATFORM_TEST_MATRIX.md).
-
-| Platform | Automated | Manual gap |
-|----------|-----------|------------|
-| Windows NSIS | CI unit + e2e + MSIX config/build job | SmartScreen, upgrade from 1.9.x, non-admin paths |
-| Windows Store | `validate:msix`, shared userData unit tests, CI MSIX artefact | Store install, update ring, rating prompt |
-| macOS | Shared JS tests; release workflow builds DMG | Notary, Gatekeeper, Apple Silicon vs Intel smoke |
-
-**RAG: AMBER** — code parity green; installer UX on real machines pending owner QA.
+**Source-of-truth model:** [`docs/data-safety/ARCHITECTURE.md`](data-safety/ARCHITECTURE.md)
 
 ---
 
-## 4. CI
+## Recovery safeguards (Priority 9)
 
-Workflow: [`.github/workflows/test.yml`](../.github/workflows/test.yml)
-
-| Step | On every PR/push to master |
-|------|----------------------------|
-| `npm run test:unit` | Yes |
-| `npm run validate:msix` | Yes |
-| `npm run test:data-safety` | Yes |
-| `npm run security:audit` | Yes |
-| `npm run test:e2e` | Yes |
-| `msix-package` job | Yes (unsigned build) |
-| Legacy `npm test` Electron smoke | **Skipped in CI** (documented flakiness); run locally via `npm run test:all` |
-
-**Recent CI:** Test workflow **success** on v1.9.115 merge (2026-10-15, ~4m). Cloud Agent could not read org billing/minutes via API (integration 403); workflows remain wired.
-
-**Totals (VM 2026-10-19):**
-
-| Suite | Pass | Fail | Skip |
-|-------|------|------|------|
-| Unit | 2579 | 0 | 2 |
-| Data-safety | 199 | 0 | 0 |
-| Deep audit | 66 | 0 | 0 |
-| Playwright e2e | 56 | 0 | 0 |
-| Security audit | pass | — | — |
-
-**RAG: GREEN** for PR gate; **AMBER** for macOS duplicate unit job (deferred for Actions minutes).
+| Safeguard | Evidence |
+|-----------|----------|
+| Startup encrypted-file integrity (`bad_magic`, empty file) | `lib/dbStartupIntegrity.js` + `tests/dbStartupIntegrity.test.js` |
+| Pre-migration safety copy (when schema behind & rows exist) | `main.js` `initDb` + tests above |
+| Versioned quick/hourly backups + retention | `tests/backupPathAndGenerational.test.js`, `tests/backupScheduler.test.js` |
+| Restore gate (empty over live) | `lib/backupIntegrityGate.js` + parity tests |
+| `sync-integrity-check` IPC | `main.js` handler + `tests/dataSafety.architecture.test.js` |
+| Atomic DB writes | `lib/dbAtomicWrite.js` + `tests/killDuringAtomicWrite.test.js` |
 
 ---
 
-## 5. Bugbot / recent release issues
+## Bugbot / PR audit (#90+)
 
-| Topic | Status | Version / test |
-|-------|--------|----------------|
-| Empty outbox → false “synced” | Fixed | 1.9.114 · `saveSyncEmptyOutbox.test.js` |
-| Stuck `syncing` rows on startup | Fixed | 1.9.114 · `staleOutboxReconcile` / sync reliability tests |
-| `sync.log` + skip reasons | Fixed | 1.9.114 |
-| Server-blocked sync silent success | Fixed | 1.9.113–114 · `saveSyncBlocked.test.js` |
-| Store vs direct `installSource` | Fixed | 1.9.x · `usageHeartbeat.test.js`, `windowsPackageChannel.test.js` |
-| Help & feedback | Shipped | 1.9.115 |
-
-No open medium/high Bugbot items identified on merged PRs #103–#107 from code/test review; re-run Bugbot on this PR before merge.
-
----
-
-## 6. Version consistency
-
-| Artefact | Value |
-|----------|--------|
-| `package.json` | 1.9.115 |
-| `changelog.json` latest | 1.9.115 (in sync) |
-| NSIS artefact | `Custody-Note-Setup-1.9.115.exe` (pattern) |
-| MSIX artefact | `Custody-Note-1.9.115.msix` |
-| Mac artefacts | `Custody-Note-1.9.115-${arch}.dmg/zip` |
-| `latest.yml` / `latest-mac.yml` | Produced at release (not in repo) |
-| Website `releases.json` | **Not verified** — `custody-note-website` not in Cloud Agent workspace; run `npm run verify:release` with `WEBSITE_ROOT` before deploy |
-
-**RAG: GREEN** in-repo; **AMBER** until website sync confirmed on deploy machine.
+| PR | Finding (severity) | Fixed? | Merged | First release | Regression test |
+|----|-------------------|--------|--------|---------------|-----------------|
+| 95 | Trial-started payload missing `installSource` (Medium) | Y | #95 | 1.9.112 area | `tests/usageHeartbeat.test.js` |
+| 96 | Dirty flag blocks note switch refresh (Medium) | Y (this PR) | pending | — | `tests/openNoteCentralSyncIndicator.test.js` (source wiring) |
+| 96 | Refresh overwrites failed disk flush (Low) | Y (this PR) | pending | — | `_openNoteLastDurableOnDisk` in `app.js` + test above |
+| 97 | Validate clears device revoke backoff (Medium) | Y | #97 | 1.9.112 | `tests/freeSyncDeviceRevoke.test.js` / licence validate paths |
+| 97 | Key activate drops free_sync tier (Medium) | Y | #97 | 1.9.112 | `tests/licenceActivateHonesty.test.js`, `applyStoredServerTier` |
+| 97 | Bootstrap races sync worker (Medium) | Y | #97 | 1.9.112 | sync bootstrap tests in PR 97 |
+| 103–107 | Bugbot usage limit (no scan) | n/a | merged | 1.9.113–115 | existing sync regression suites |
+| Store vs direct | — | Y | #95 | 1.9.112+ | `tests/windowsPackageChannel.test.js`, `tests/usageHeartbeat.test.js` |
+| Website links | — | Y | ongoing | — | `tests/websiteLinks.test.js` |
+| Release-note filtering | — | Y | — | — | `tests/publicReleaseNotes.test.js` |
+| Telemetry / heartbeat | — | Y | #95 | 1.9.112+ | `tests/usageHeartbeat.test.js` |
 
 ---
 
-## 7. Security / privacy
+## CI fail conditions
 
-| Check | Result |
-|-------|--------|
-| `npm run security:audit` | npm prod vulns 0; secret scan 0 high/medium |
-| Static guards | Outlook subject-only, window hardening, capturePage packaged guard |
-| Tests | Synthetic fixtures only (`sync-test@example.com`, generated DSCC) |
-| Git history | Not fully scanned for unreachable blobs; if past commits contained real client data, **GitHub Support history rewrite** may be required (external blocker) |
+| Workflow | Failing steps (non-zero exit) |
+|----------|--------------------------------|
+| `.github/workflows/test.yml` | `npm run test:unit`, `validate:msix`, `test:data-safety`, dedicated migration/kill/cloud backup steps, `security:audit`, `test:e2e` |
+| `.github/workflows/release-publish.yml` | `prepare-release-draft` job: `test:unit`, `test:data-safety`, `security:audit`, migration regression |
+| `msix-package` job | MSIX build artefact missing → fail |
 
-**RAG: GREEN** for current tree + audit script; **AMBER** for historical git objects not verified in this environment.
-
----
-
-## 8. Logging / error handling
-
-Coverage via static + unit tests: `safeLog`, `syncDiagLog`, `securityLog`, save/sync result normalization, backup degradation IPC, restore error strings (no success on gate failure). Logs must not include client PII — enforced by save log builders and audit script.
-
-**RAG: GREEN** for tested paths; ongoing discipline on new IPC.
+Evidence: local VM 2026-10-19 — `test:unit` **2590 pass / 2 skip**, `test:data-safety` **211 pass**, `test:e2e` **56 pass**, `test:deep` **66 pass**, `security:audit` pass.
 
 ---
 
-## 9. Recovery safeguards
+## Security scan (Priority 7)
 
-| Safeguard | Test / code evidence |
-|-----------|---------------------|
-| Versioned local quick/hourly backups | `backupScheduler`, generational tests |
-| Pre-restore safety copy | `createDbSafetyCopy` in restore handlers (static in architecture tests) |
-| Restore integrity gate | `mayRestoreBackupOverLive`, field parity test |
-| Pre-migration / schema | `dbMigrations.test.js` |
-| Failed upgrade retains prior DB | Atomic flush + tmp orphan tests in `dataSafety.greenCloseout` |
-| Startup stuck sync reset | 1.9.114 + stale outbox tests |
-
-**RAG: GREEN**
-
----
-
-## 10. Final acceptance (Cloud Agent environment)
-
-| Step | Result |
+| Scan | Result |
 |------|--------|
-| Synthetic full lifecycle (create → bill → archive) | **Pass** — Playwright stress-journey (56 e2e tests) |
-| Field-level backup/restore | **Pass** — `backupRestoreFieldParity.test.js` |
-| Packaged install on Windows | **Not run** — no signed installer in agent VM |
-| Packaged install on Mac | **Not run** |
-| Managed cloud backup UI | **Not run** |
-| Owner Windows laptop pass | **Pending** (explicitly separate) |
+| `npm run security:audit` | Pass (prod deps + static guards) |
+| gitleaks (794 commits, redacted) | **25 findings** — rules: generic-api-key (21), aws-access-token (2), jwt (1), curl-auth-header (1). Paths include **test fixtures**, `docs/SMOKE_TEST_LICENCE.md`, one workflow — **no values quoted here**. Treat as **AMBER** until owner confirms all are synthetic/rotated. |
+| Working-tree PII grep (tests/docs) | Synthetic emails (`example.com`, `sync-test@…`); no real client matter content in tests |
+
+**External blocker:** unreachable git objects not scanned; GitHub Support if historical real data ever committed.
 
 ---
 
-## Known issues
+## Error handling (Priority 8)
 
-| Severity | Issue | Workaround | Plan |
-|----------|-------|------------|------|
-| Low | CI skips legacy Electron smoke | Use Playwright e2e + local `npm run test:all` before release | Keep e2e parity with smoke |
-| Medium | Managed AWS backup not in automated E2E | Use local generational backup + sync SoT | Optional smoke with website repo |
-| Medium | macOS unit not on PR CI | Run `test:unit` on Mac before release | Re-enable mac job when minutes allow |
-| Low | Website `releases.json` not checked in agent | Set `WEBSITE_ROOT` on deploy | Standard deploy script |
-
----
-
-## Overall RAG summary
-
-| Dimension | RAG |
-|-----------|-----|
-| Data integrity | **GREEN** |
-| Local/cloud backup consistency | **GREEN** (AWS DR **AMBER**) |
-| Cross-platform reliability | **AMBER** |
-| Automated testing | **GREEN** |
-| Security/privacy | **GREEN** (history **AMBER**) |
-| Windows distribution (NSIS + Store) | **AMBER** (CI build green; real install manual) |
-| **Overall** | **AMBER** → promote to **GREEN** after owner Windows/Mac packaged acceptance + website version sync |
+| Area | Change / evidence |
+|------|-------------------|
+| Managed cloud upload | Errors mapped via `lib/backupErrorMap.js`; failures emit `cloud-backup-status-changed` with message (no silent `.catch(() => {})` on final failure path) |
+| Startup DB | Bad magic → `PersistenceStartupError` with user-facing restore guidance |
+| Migration failure | Transaction rollback (`tests/interruptedMigration.test.js`) |
+| Open-note sync UI | No central “safe locally” after known flush fail (`app.js`) |
 
 ---
 
-## Changes in this audit (PR branch)
+## Overall RAG (updated)
 
-- Added `tests/backupRestoreFieldParity.test.js` — local encrypted backup + mock central SoT field parity.
-- Added `docs/PRODUCTION_READINESS.md`, `docs/CROSS_PLATFORM_TEST_MATRIX.md`.
-- Wired new test into `npm run test:data-safety`.
+| Dimension | RAG | Notes |
+|-----------|-----|-------|
+| Data integrity scenarios | **GREEN** | Matrix above |
+| Local / cloud backup scenarios | **GREEN** | Managed AWS real bucket still manual |
+| Cross-platform | **AMBER** | [`CROSS_PLATFORM_TEST_MATRIX.md`](CROSS_PLATFORM_TEST_MATRIX.md) |
+| Automated testing / CI | **GREEN** | Release gates added |
+| Security / privacy | **AMBER** | gitleaks 25 hits to triage |
+| Windows distribution | **AMBER** | CI MSIX build green; real install manual |
+| **Overall** | **AMBER** | Owner packaged QA + **review pre-migration backup on upgrade** |
+
+---
+
+## Mac / Windows impact
+
+Shared logic: backup ops, migration safety, sync UI fixes, startup integrity. Windows/macOS install artefacts unchanged.
 
 ---
 
 ## Website / backend (separate repo)
 
-No code defects filed during this pass (website not cloned). Recommended owner checks on `custody-note-website`:
-
-- SoT/PITR API contract tests stay aligned with app `emptyOrFailedResponsePolicy` (503 `INCOMPLETE_SOT_READ`).
-- Release metadata sync when deploying app tags.
-
----
-
-## Mac impact / Windows impact
-
-Identical custody data paths and sync semantics. Windows-only: MSIX updater off, shared userData, Store install detection. macOS-only: DMG signing/notary in release workflow.
+No code defects filed (website not in workspace). Keep SoT/PITR 503 contract aligned with app pull guards.

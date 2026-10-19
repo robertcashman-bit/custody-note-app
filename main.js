@@ -195,6 +195,10 @@ const {
   assertPathInsideAllowedRoots,
   FILE_MODE_OWNER_RW,
 } = require('./lib/secureLocalFiles');
+const { getAtomicTempPath, writeFileAtomicSync: writeFileAtomicSyncImpl } = require('./lib/dbAtomicWrite');
+const { mapBackupError } = require('./lib/backupErrorMap');
+const { uploadManagedCloudBackupWithRetry } = require('./lib/managedCloudBackupOps');
+const { assessEncryptedDbFile } = require('./lib/dbStartupIntegrity');
 const cloudAuthSession = require('./lib/cloudAuthSession');
 const {
   CONFIRM_PHRASE: POST_BILL_PURGE_CONFIRM_PHRASE,
@@ -208,7 +212,7 @@ const {
   nextTombstoneSyncVersion,
   buildRedactedAuditSnapshotJson,
 } = require('./lib/postBillPurge');
-const { runMigrations: runDbMigrations } = require('./main/dbMigrations');
+const { runMigrations: runDbMigrations, getCurrentVersion, LATEST_VERSION } = require('./main/dbMigrations');
 const {
   normalizeMileageForStorage,
   mergeStationsPreservingMileage,
@@ -887,10 +891,6 @@ function getEncryptedDbExport() {
   }
 }
 
-function getAtomicTempPath(destPath) {
-  return `${destPath}.${process.pid}.${Date.now()}.${crypto.randomBytes(6).toString('hex')}.tmp`;
-}
-
 function writeFileAtomic(destPath, data, done) {
   const dir = path.dirname(destPath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -929,28 +929,7 @@ function writeFileAtomicAsync(destPath, data) {
 }
 
 function writeFileAtomicSync(destPath, data) {
-  const dir = path.dirname(destPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    restrictOwnerOnlyDir(dir);
-  }
-  const tmpPath = getAtomicTempPath(destPath);
-  try {
-    // Owner-only mode on Mac/Linux; best-effort on Windows (same call path).
-    fs.writeFileSync(tmpPath, data, { mode: FILE_MODE_OWNER_RW });
-    try {
-      fs.renameSync(tmpPath, destPath);
-    } catch (renameErr) {
-      if (!fs.existsSync(tmpPath)) throw renameErr;
-      fs.copyFileSync(tmpPath, destPath);
-      try { fs.unlinkSync(tmpPath); } catch (_) {}
-    }
-    restrictOwnerOnlyFile(destPath);
-  } finally {
-    try {
-      if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
-    } catch (_) {}
-  }
+  writeFileAtomicSyncImpl(destPath, data);
 }
 
 function saveDb() {
@@ -1727,6 +1706,13 @@ async function initDb() {
         buildDbPersistenceDetails({ dbSizeBytes: 0 })
       );
     }
+    const encIntegrity = assessEncryptedDbFile(rawBuf);
+    if (!encIntegrity.ok) {
+      throw new PersistenceStartupError(
+        'The attendance database file failed an integrity check (' + encIntegrity.reason + '). Restore from a backup in Settings instead of opening a blank database.',
+        buildDbPersistenceDetails({ dbSizeBytes: rawBuf.length, cause: encIntegrity.reason })
+      );
+    }
     try {
       const buf = await decryptBufferWithRecovery(rawBuf);
       if (!buf) throw new Error('No database bytes were returned during decryption');
@@ -1773,6 +1759,27 @@ async function initDb() {
    * schema is in place.
    * ─────────────────────────────────────────────────────────────────────── */
   try {
+    const schemaBefore = getCurrentVersion(db);
+    if (schemaBefore < LATEST_VERSION) {
+      try {
+        let attCount = 0;
+        try {
+          const attCountRow = dbGet('SELECT COUNT(*) AS c FROM attendances');
+          attCount = attCountRow ? Number(attCountRow.c) || 0 : 0;
+        } catch (_) {
+          attCount = 0;
+        }
+        if (attCount > 0) {
+          const safety = createDbSafetyCopy('pre-migration');
+          if (safety) console.info('[schema] Pre-migration safety copy:', safety);
+        }
+      } catch (preBkpErr) {
+        console.warn(
+          '[schema] Pre-migration safety copy failed (continuing with migration):',
+          preBkpErr && preBkpErr.message ? preBkpErr.message : preBkpErr
+        );
+      }
+    }
     const migrationResult = runDbMigrations(db, {
       logger: { error: (...a) => console.error(...a) },
     });
@@ -2456,89 +2463,50 @@ async function checkCloudBackupEntitlement() {
   emitCloudBackupStatus();
 }
 
-/** Map AWS/SDK errors to user-friendly codes; return { message, code, correlationId }. */
-function mapBackupError(err) {
-  const correlationId = 'cn-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-  const msg = err && err.message ? String(err.message) : String(err);
-  if (!msg) return { message: 'Backup failed: unknown error', code: 'UNKNOWN', correlationId };
-  if (/credentials|Credential|Unauthorized|AccessDenied|403|Forbidden/i.test(msg)) {
-    return { message: 'Backup failed: permission denied. Check your licence and try again.', code: 'PERMISSION_DENIED', correlationId };
-  }
-  if (/bucket|Bucket|NoSuchBucket|InvalidBucket|404/i.test(msg)) {
-    return { message: 'Backup failed: configuration missing (bucket). Contact support.', code: 'CONFIG_MISSING', correlationId };
-  }
-  if (/network|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|timeout/i.test(msg)) {
-    return { message: 'Backup failed: network issue. Check your connection and try again.', code: 'NETWORK_ERROR', correlationId };
-  }
-  if (/ObjectLock|object lock/i.test(msg)) {
-    return { message: 'Backup failed: storage configuration issue. Contact support.', code: 'CONFIG_ERROR', correlationId };
-  }
-  return { message: 'Backup failed: ' + msg.slice(0, 80), code: 'ERROR', correlationId };
-}
-
-const MANAGED_BACKUP_MAX_RETRIES = 3;
-const MANAGED_BACKUP_INITIAL_DELAY_MS = 1000;
-
 function uploadToManagedCloudIfEnabled(buffer, key) {
   if (!buffer || !Buffer.isBuffer(buffer) || !key) return;
   if (!_cloudBackupEnabled) return;
 
-  function doUpload(creds, attempt) {
-    return import('@aws-sdk/client-s3').then(({ S3Client, PutObjectCommand }) => {
-      const client = new S3Client({
-        region: creds.region,
-        credentials: {
-          accessKeyId: creds.accessKeyId,
-          secretAccessKey: creds.secretAccessKey,
-          sessionToken: creds.sessionToken,
-        },
-      });
-      const s3Key = `${creds.prefix}/${key}`;
-      // Do NOT use ObjectLockMode/ObjectLockRetainUntilDate unless bucket has Object Lock enabled
-      return client.send(new PutObjectCommand({
-        Bucket: creds.bucket,
-        Key: s3Key,
-        Body: buffer,
-        ContentType: 'application/octet-stream',
-      }));
-    });
-  }
-
-  function retryWithBackoff(creds, attempt) {
-    return doUpload(creds, attempt).catch(err => {
-      const mapped = mapBackupError(err);
-      console.error('[Backup] Managed cloud upload attempt', attempt, mapped.code, mapped.correlationId, err && err.message);
-      if (attempt < MANAGED_BACKUP_MAX_RETRIES) {
-        const delay = MANAGED_BACKUP_INITIAL_DELAY_MS * Math.pow(2, attempt - 1);
-        return new Promise((resolve) => setTimeout(resolve, delay)).then(() => retryWithBackoff(creds, attempt + 1));
-      }
-      _lastManagedCloudError = mapped.message + ' (Ref: ' + mapped.correlationId + ')';
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('cloud-backup-status-changed', {
-          enabled: _cloudBackupEnabled,
-          lastError: _lastManagedCloudError,
-          correlationId: mapped.correlationId,
-        });
-      }
-      throw err;
-    });
-  }
-
-  fetchManagedCloudCredentials().then(creds => {
+  fetchManagedCloudCredentials().then(async (creds) => {
     if (!creds) {
       _lastManagedCloudError = 'Backup failed: configuration missing. Check your licence.';
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('cloud-backup-status-changed', { enabled: false, lastError: _lastManagedCloudError });
-      }
+      emitCloudBackupStatus({ enabled: false, lastError: _lastManagedCloudError });
       return;
     }
-    return retryWithBackoff(creds, 1);
-  }).then(() => {
+    const { S3Client } = await import('@aws-sdk/client-s3');
+    const result = await uploadManagedCloudBackupWithRetry({
+      creds,
+      buffer,
+      key,
+      createClient: (c) =>
+        new S3Client({
+          region: c.region,
+          credentials: {
+            accessKeyId: c.accessKeyId,
+            secretAccessKey: c.secretAccessKey,
+            sessionToken: c.sessionToken,
+          },
+        }),
+    });
+    if (!result.ok) {
+      _lastManagedCloudError = result.error;
+      emitCloudBackupStatus({
+        enabled: _cloudBackupEnabled,
+        lastError: _lastManagedCloudError,
+        correlationId: result.correlationId,
+      });
+      return;
+    }
     _lastManagedCloudSuccess = Date.now();
     _lastManagedCloudError = null;
     console.log('[Backup] Managed cloud upload succeeded:', key);
-    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('cloud-backup-status-changed', { enabled: true, lastSuccess: _lastManagedCloudSuccess });
-  }).catch(() => {});
+    emitCloudBackupStatus({ enabled: true, lastSuccess: _lastManagedCloudSuccess });
+  }).catch((err) => {
+    const mapped = mapBackupError(err);
+    _lastManagedCloudError = mapped.message + ' (Ref: ' + mapped.correlationId + ')';
+    console.error('[Backup] Managed cloud upload failed:', mapped.code, _lastManagedCloudError);
+    emitCloudBackupStatus({ enabled: _cloudBackupEnabled, lastError: _lastManagedCloudError });
+  });
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

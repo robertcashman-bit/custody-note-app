@@ -79,6 +79,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Release quality gates (unit + data-safety + migrations)
+        run: |
+          npm run test:unit
+          npm run test:data-safety
+          npm run security:audit
+          node --test tests/dbMigrations.test.js tests/interruptedMigration.test.js
 
       - name: Ensure one draft GitHub release for this tag
         env:
