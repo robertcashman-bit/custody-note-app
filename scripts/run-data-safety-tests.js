@@ -16,6 +16,7 @@ const EXTRA = new Set([
   'attendanceDurability.test.js',
   'saveNowDurability.test.js',
   'emptySyncRecovery.test.js',
+  'backupRestoreFieldParity.test.js',
   'backupPathAndGenerational.test.js',
   'footerStatusChips.test.js',
   'silentSyncDeath.test.js',
