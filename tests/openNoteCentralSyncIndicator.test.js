@@ -78,6 +78,8 @@ describe('openNoteCentralSyncIndicator', () => {
     const appJs = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
     assert.match(appJs, /function refreshOpenNoteCentralSyncIndicator/);
     assert.match(appJs, /attendanceSyncAckState/);
+    assert.match(appJs, /_autosaveIndicatorDirty = false/);
+    assert.match(appJs, /_openNoteLastDurableOnDisk/);
     assert.match(appJs, /data\.status === 'synced'/);
     assert.match(appJs, /noteSaveIndicatorFromNormalizedSave/);
   });

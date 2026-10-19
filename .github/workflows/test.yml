@@ -33,6 +33,12 @@ jobs:
       - name: Data-safety gate
         run: npm run test:data-safety
 
+      - name: DB migration + kill-during-write regression
+        run: node --test tests/dbMigrations.test.js tests/interruptedMigration.test.js tests/killDuringAtomicWrite.test.js
+
+      - name: Managed cloud backup E2E (mock S3)
+        run: node --test tests/managedCloudBackupE2e.test.js tests/backupRestoreFieldParity.test.js
+
       - name: Security audit (production deps + secrets)
         run: npm run security:audit
 

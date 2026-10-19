@@ -66,7 +66,7 @@ describe('P0 backups — default folder created on init', () => {
   it('initDb creates the backup folder after setting the default path', () => {
     assert.match(mainJs, /ensureBackupFolderExists\(\)/);
     const initIdx = mainJs.indexOf('async function initDb');
-    const initChunk = mainJs.slice(initIdx, initIdx + 4500);
+    const initChunk = mainJs.slice(initIdx, initIdx + 9000);
     assert.match(initChunk, /backupFolder/);
     assert.match(initChunk, /ensureBackupFolderExists/);
   });

@@ -51,6 +51,8 @@ var autoSaveTimer = null;
 var _draftSaveInFlight = false;
 var _draftSaveQueued = false;
 var _autosaveIndicatorDirty = false;
+/** Last known disk-durable state for the open note (Bugbot: refresh must not claim Safe locally after flush fail). */
+var _openNoteLastDurableOnDisk = true;
 var _openNoteSavedSyncVersion = null;
 var _finalising = false;
 var _lastFinaliseAttempt = null;
@@ -5689,6 +5691,7 @@ var REQUIRED_FIELD_KEYS = [
   function refreshOpenNoteCentralSyncIndicator() {
     if (_autosaveIndicatorDirty) return;
     if (!currentAttendanceId) return;
+    if (!_openNoteLastDurableOnDisk) return;
     if (!window.api || typeof window.api.attendanceSyncAckState !== 'function') return;
     var recordId = currentAttendanceId;
     window.api.attendanceSyncAckState(recordId).then(function(st) {
@@ -5704,7 +5707,7 @@ var REQUIRED_FIELD_KEYS = [
         : null;
       var derived = derive
         ? derive({
-          durable: true,
+          durable: _openNoteLastDurableOnDisk,
           dirty: false,
           syncDirty: st.syncDirty,
           queuePending: st.queuePending,
@@ -5716,7 +5719,7 @@ var REQUIRED_FIELD_KEYS = [
           pendingSync: !!(st.syncDirty || st.queuePending),
         };
       showAutoSaveIndicator({
-        durable: true,
+        durable: _openNoteLastDurableOnDisk,
         dirty: false,
         pendingSync: derived.pendingSync,
         centralConfirmed: derived.centralConfirmed,
@@ -5731,6 +5734,8 @@ var REQUIRED_FIELD_KEYS = [
     if (normalized.syncVersion != null) {
       _openNoteSavedSyncVersion = Number(normalized.syncVersion);
     }
+    if (normalized.durable === false) _openNoteLastDurableOnDisk = false;
+    else if (normalized.durable === true) _openNoteLastDurableOnDisk = true;
     showAutoSaveIndicator({
       durable: normalized.durable,
       pendingSync: normalized.pendingSync,
@@ -7614,6 +7619,8 @@ var REQUIRED_FIELD_KEYS = [
         try { window.OfficerEmailsPanel.attachToCustodyNote(id); } catch (_) {}
       }
       _openNoteSavedSyncVersion = null;
+      _autosaveIndicatorDirty = false;
+      _openNoteLastDurableOnDisk = true;
       refreshOpenNoteCentralSyncIndicator();
       return;
     }
@@ -7657,6 +7664,8 @@ var REQUIRED_FIELD_KEYS = [
         try { window.OfficerEmailsPanel.attachToCustodyNote(id); } catch (_) {}
       }
       _openNoteSavedSyncVersion = null;
+      _autosaveIndicatorDirty = false;
+      _openNoteLastDurableOnDisk = true;
       refreshOpenNoteCentralSyncIndicator();
     }).catch(function(err) {
       if (requestToken !== _openAttendanceToken || currentAttendanceId !== id) return;

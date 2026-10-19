@@ -385,7 +385,10 @@ function runMigrations(db, opts) {
   const from = getCurrentVersion(db);
   const applied = [];
 
-  for (const migration of MIGRATIONS) {
+  const migrationList =
+    options._testMigrations && Array.isArray(options._testMigrations) ? options._testMigrations : MIGRATIONS;
+
+  for (const migration of migrationList) {
     if (migration.version <= from) continue;
 
     const ctx = {
