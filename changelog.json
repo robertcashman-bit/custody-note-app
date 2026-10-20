@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.117",
+      "version": "1.9.118",
       "date": "2026-10-20",
       "latest": true,
+      "changes": [
+        "Officer Emails: a new 'I am acting as duty solicitor' tick box adds 'as duty solicitor.' to the instruction line.",
+        "Officer Emails: you can send to more than one officer. Tick 'Send to another officer as well?' to add another address; every recipient goes into Outlook Web and the copy buttons, with a suitable greeting.",
+        "Officer Emails: a remembered 'My Outlook signature already includes my name' option ends the email at 'Kind regards,' so your name isn't printed twice.",
+        "Officer Emails: a tidier layout with Recipients, Options and Case details sections."
+      ]
+    },
+    {
+      "version": "1.9.117",
+      "date": "2026-10-20",
+      "latest": false,
       "changes": [
         "Sync changes that got stuck on older versions now clear on their own when you open the app, without losing any of your edits.",
         "PDFs now print Chinese and other CJK text properly instead of leaving it blank.",
