@@ -8285,9 +8285,15 @@ html.dark .officer-email-check-row {
   display: none;
 }
 .officer-email-multi-recipient-toggle {
-  margin-bottom: 0.15rem;
+  margin-top: 0.1rem;
+  margin-bottom: 0.05rem;
 }
-.officer-email-recipients-block:not(.officer-email-recipients-multi) .officer-email-recipient-row ~ .officer-email-recipient-row {
+.officer-email-recipients-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.officer-email-recipients-block:not(.officer-email-recipients-multi) .officer-email-recipients-extra {
   display: none;
 }
 html.dark .officer-email-link-btn {

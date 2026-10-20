@@ -93,9 +93,8 @@
     return row;
   }
 
-  function syncRemoveButtons(container, rowsHost) {
-    var host = rowsHost || container.querySelector('.officer-email-recipients-rows') || container;
-    var rows = host.querySelectorAll('.officer-email-recipient-row');
+  function syncRemoveButtons(container) {
+    var rows = container.querySelectorAll('.officer-email-recipient-row');
     var multi = container.classList.contains('officer-email-recipients-multi');
     rows.forEach(function (row) {
       var btn = row.querySelector('.officer-email-recipient-remove');
@@ -114,19 +113,21 @@
     var opts = options || {};
     var prefix = opts.prefix || 'oer';
     var multiCb = opts.multiOfficerCheckbox || null;
+    var multiToggleEl = multiCb ? (multiCb.closest('label') || multiCb) : null;
     var handlers = { onInput: opts.onInput, onRemoveRow: null };
-    var rowsHost;
+    var primaryHost;
+    var extraRowsHost;
     var addBtn;
 
     function rows() {
-      return rowsHost ? rowsHost.querySelectorAll('.officer-email-recipient-row') : [];
+      return container ? container.querySelectorAll('.officer-email-recipient-row') : [];
     }
 
     function appendRow(focusEmail) {
       var count = rows().length;
       var row = createRow(prefix, count, handlers);
-      rowsHost.appendChild(row);
-      syncRemoveButtons(container, rowsHost);
+      extraRowsHost.appendChild(row);
+      syncRemoveButtons(container);
       if (focusEmail) {
         var to = row.querySelector('.officer-email-recipient-to');
         if (to && typeof to.focus === 'function') to.focus();
@@ -139,7 +140,7 @@
       for (var i = list.length - 1; i >= 1; i--) {
         list[i].remove();
       }
-      syncRemoveButtons(container, rowsHost);
+      syncRemoveButtons(container);
     }
 
     function applyMultiMode(enabled, optsApply) {
@@ -152,24 +153,28 @@
       } else if (rows().length < 2) {
         appendRow(!!optionsApply.focusNew);
       }
-      syncRemoveButtons(container, rowsHost);
+      syncRemoveButtons(container);
     }
 
     handlers.onRemoveRow = function (row) {
-      if (!container || !row || !rowsHost) return;
+      if (!container || !row || !primaryHost || !extraRowsHost) return;
       if (!container.classList.contains('officer-email-recipients-multi')) return;
       var list = rows();
       if (list.length <= 1) return;
       row.remove();
-      syncRemoveButtons(container, rowsHost);
+      syncRemoveButtons(container);
       if (typeof handlers.onInput === 'function') handlers.onInput();
     };
 
     container.innerHTML = '';
-    rowsHost = document.createElement('div');
-    rowsHost.className = 'officer-email-recipients-rows';
-    container.appendChild(rowsHost);
-    rowsHost.appendChild(createRow(prefix, 0, handlers));
+    primaryHost = document.createElement('div');
+    primaryHost.className = 'officer-email-recipient-primary';
+    extraRowsHost = document.createElement('div');
+    extraRowsHost.className = 'officer-email-recipients-extra';
+    container.appendChild(primaryHost);
+    primaryHost.appendChild(createRow(prefix, 0, handlers));
+    if (multiToggleEl) container.appendChild(multiToggleEl);
+    container.appendChild(extraRowsHost);
 
     addBtn = document.createElement('button');
     addBtn.type = 'button';
@@ -205,33 +210,36 @@
         var names = parseList(recipientName);
         if (!emails.length && !names.length) {
           applyMultiMode(false);
-          rowsHost.querySelectorAll('.officer-email-recipient-row').forEach(function (r) { r.remove(); });
-          rowsHost.appendChild(createRow(prefix, 0, handlers));
-          syncRemoveButtons(container, rowsHost);
+          primaryHost.innerHTML = '';
+          extraRowsHost.innerHTML = '';
+          primaryHost.appendChild(createRow(prefix, 0, handlers));
+          syncRemoveButtons(container);
           return;
         }
         if (!emails.length) emails = [''];
         while (names.length < emails.length) names.push('');
         var multi = emails.length > 1 || names.length > 1;
         applyMultiMode(multi);
-        rowsHost.querySelectorAll('.officer-email-recipient-row').forEach(function (r) { r.remove(); });
+        primaryHost.innerHTML = '';
+        extraRowsHost.innerHTML = '';
         for (var i = 0; i < emails.length; i++) {
           var row = createRow(prefix, i, handlers);
           var toEl = row.querySelector('.officer-email-recipient-to');
           var nameEl = row.querySelector('.officer-email-recipient-name');
           if (toEl) toEl.value = emails[i] || '';
           if (nameEl) nameEl.value = names[i] || '';
-          rowsHost.appendChild(row);
+          if (i === 0) primaryHost.appendChild(row);
+          else extraRowsHost.appendChild(row);
         }
         if (multi && emails.length < 2) {
           appendRow(false);
         }
-        syncRemoveButtons(container, rowsHost);
+        syncRemoveButtons(container);
       },
       getValues: function () {
         var emails = [];
         var names = [];
-        rowsHost.querySelectorAll('.officer-email-recipient-row').forEach(function (row) {
+        container.querySelectorAll('.officer-email-recipient-row').forEach(function (row) {
           var toEl = row.querySelector('.officer-email-recipient-to');
           var nameEl = row.querySelector('.officer-email-recipient-name');
           var em = toEl ? String(toEl.value || '').trim() : '';

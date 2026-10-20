@@ -70,7 +70,8 @@ describe('Officer Emails standalone view', () => {
   it('uses compact link-style controls for recipient rows', () => {
     assert.ok(recipientRows.includes('officer-email-link-btn'));
     assert.ok(recipientRows.includes('+ Add another officer'));
-    assert.ok(recipientRows.includes('officer-email-recipients-rows'));
+    assert.ok(recipientRows.includes('officer-email-recipient-primary'));
+    assert.ok(recipientRows.includes('officer-email-recipients-extra'));
     assert.ok(recipientRows.includes('multiOfficerCheckbox'));
     assert.ok(recipientRows.includes('officer-email-recipients-multi'));
     assert.ok(recipientRows.includes('officer-email-add-recipient hidden'));

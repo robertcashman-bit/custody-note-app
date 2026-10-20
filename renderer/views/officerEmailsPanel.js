@@ -59,8 +59,8 @@
       '<div class="officer-email-form-section">' +
       '<h3 class="officer-email-section-heading">Recipients</h3>' +
       '<div class="officer-email-section-body officer-email-section-body--recipients">' +
-      '<label class="officer-email-check-row officer-email-multi-recipient-toggle"><input type="checkbox" id="oep-multi-officer" /><span>Send to another officer as well?</span></label>' +
       '<div id="oep-recipients" class="officer-email-recipients-block"></div>' +
+      '<label class="officer-email-check-row officer-email-multi-recipient-toggle"><input type="checkbox" id="oep-multi-officer" /><span>Send to another officer as well?</span></label>' +
       '</div></div>' +
       '<div class="officer-email-form-section">' +
       '<h3 class="officer-email-section-heading">Options</h3>' +

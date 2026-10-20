@@ -12,8 +12,8 @@ const RECIPIENT_ROWS_SRC = fs.readFileSync(path.join(ROOT, 'renderer/lib/officer
 function setupDom() {
   const dom = new JSDOM(
     '<!DOCTYPE html><html><body>' +
-      '<input type="checkbox" id="multi-cb" />' +
       '<div id="host" class="officer-email-recipients-block"></div>' +
+      '<label class="officer-email-multi-recipient-toggle"><input type="checkbox" id="multi-cb" /><span>Send to another officer as well?</span></label>' +
       '</body></html>',
     { url: 'http://localhost', runScripts: 'outside-only' }
   );
@@ -35,6 +35,9 @@ describe('officer email recipient rows — multi-officer toggle', () => {
     assert.ok(host.querySelector('.officer-email-add-recipient').classList.contains('hidden'));
     assert.strictEqual(multiCb.checked, false);
     assert.strictEqual(api.isMultiOfficerEnabled(), false);
+    const kids = Array.from(host.children).map((el) => el.className || el.tagName);
+    assert.ok(kids[0].includes('officer-email-recipient-primary'));
+    assert.ok(kids[1].includes('officer-email-multi-recipient-toggle'));
   });
 
   it('enabling multi shows add link and a second row; getValues uses both', () => {
