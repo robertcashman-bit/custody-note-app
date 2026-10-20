@@ -187,6 +187,10 @@ if (!fs.existsSync(docPath)) fail('docs/MICROSOFT_STORE_RELEASE.md is required')
 
 const channelLib = path.join(root, 'lib', 'windowsPackageChannel.js');
 if (!fs.existsSync(channelLib)) fail('lib/windowsPackageChannel.js is required');
+const channelSrc = fs.readFileSync(channelLib, 'utf8');
+if (!/isVirtualizedWindowsAppDataPath/.test(channelSrc) || !/useRealRoamingAppData/.test(channelSrc)) {
+  fail('lib/windowsPackageChannel.js must map MSIX virtual APPDATA to real Roaming for NSIS coexistence');
+}
 
 const updaterSrc = fs.readFileSync(path.join(root, 'updater.js'), 'utf8');
 if (!/isMsixStoreBuild/.test(updaterSrc) || !/reason === 'msix'/.test(updaterSrc)) {

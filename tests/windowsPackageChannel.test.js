@@ -142,6 +142,48 @@ describe('windowsPackageChannel — shared userData', () => {
     const p = channel.getClassicUserDataPath({ APPDATA: 'C:\\Users\\Ada\\AppData\\Roaming' }, 'win32');
     assert.equal(p, path.join('C:\\Users\\Ada\\AppData\\Roaming', 'custody-note'));
   });
+
+  it('detects MSIX-virtualized APPDATA and maps classic path to real Roaming', () => {
+    const virtual =
+      'C:\\Users\\Ada\\AppData\\Local\\Packages\\PoliceStationAgent.CustodyNoteforWindows_pmk3my2z6b2bj\\LocalCache\\Roaming';
+    assert.equal(channel.isVirtualizedWindowsAppDataPath(virtual), true);
+    const classic = channel.getClassicUserDataPath({ APPDATA: virtual }, 'win32');
+    assert.equal(classic, path.join(channel.getRealWindowsRoamingAppData(), 'custody-note'));
+    assert.notEqual(classic, path.join(virtual, 'custody-note'));
+  });
+
+  it('merges package-local profile into real classic when both paths differ (MSIX)', () => {
+    const classic = path.join(tmp, 'real-classic-d');
+    const pkgPath = path.join(tmp, 'virtual-package-d');
+    fs.mkdirSync(classic, { recursive: true });
+    fs.mkdirSync(pkgPath, { recursive: true });
+    fs.writeFileSync(path.join(classic, 'attendances.db'), Buffer.alloc(6000, 4));
+    fs.writeFileSync(path.join(pkgPath, 'licence.dat'), 'store-only-licence');
+
+    const resolved = channel.resolveSharedWindowsUserData({
+      classicPath: classic,
+      packagePath: pkgPath,
+      channel: 'msix',
+    });
+    assert.equal(resolved.userDataPath, classic);
+    assert.equal(resolved.migration && resolved.migration.mode, 'merge-non-destructive');
+
+    const result = channel.migrateUserDataCopy(pkgPath, classic);
+    assert.equal(result.verified, true);
+    assert.ok(fs.existsSync(path.join(classic, 'licence.dat')));
+    assert.equal(fs.readFileSync(path.join(classic, 'attendances.db')).length, 6000);
+  });
+
+  it('creates pre-merge safety backup before copying from package profile', () => {
+    const classic = path.join(tmp, 'classic-e');
+    fs.mkdirSync(classic, { recursive: true });
+    fs.writeFileSync(path.join(classic, 'attendances.db'), Buffer.alloc(1000, 9));
+    const backup = channel.backupProfileBeforeChannelMerge(classic);
+    assert.ok(backup.backupPath);
+    assert.equal(backup.skipped, false);
+    assert.ok(fs.existsSync(path.join(backup.backupPath, 'attendances.db')));
+    assert.equal(fs.readFileSync(path.join(classic, 'attendances.db')).length, 1000);
+  });
 });
 
 describe('windowsPackageChannel — wiring in app sources', () => {

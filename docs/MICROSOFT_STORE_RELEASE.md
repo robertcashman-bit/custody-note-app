@@ -150,7 +150,10 @@ Package family name and Store ID are Partner Center–derived metadata (document
 
 Both channels resolve to the **same** classic profile via `lib/windowsPackageChannel.js`:
 
-`%APPDATA%\custody-note\`
+`%USERPROFILE%\AppData\Roaming\custody-note\` (the real Roaming folder — same path NSIS uses as `%APPDATA%\custody-note` on a normal desktop install)
+
+**Root cause (Store empty app):** MSIX redirects process `%APPDATA%` into  
+`%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\`. Earlier shared-path logic that read `process.env.APPDATA` for the “classic” path therefore pointed at the **package-local** folder, identical to Electron’s default `userData`, so NSIS data under real Roaming was never opened. The app now always anchors Store builds on **real Roaming** (`useRealRoamingAppData`) and runs a **non-destructive merge** from the package-local folder when it still contains files.
 
 | Data | File / folder | Survives update | Survives uninstall (NSIS) | Migration |
 |------|---------------|-----------------|---------------------------|-----------|
@@ -166,7 +169,7 @@ Both channels resolve to the **same** classic profile via `lib/windowsPackageCha
 
 Code evidence: `lib/windowsPackageChannel.js` (`resolveSharedWindowsUserData`, `migrateUserDataCopy`), wired from `main.js` before DB open; updater no-op in `updater.js` when `isMsixStoreBuild`.
 
-If a Store package-local profile ever appears with data while classic is empty, the app **copies** into classic with hash verification and **never deletes** the source. If classic already has a same-or-larger `attendances.db`, it is **never overwritten**.
+If a Store package-local profile ever appears with data while classic is empty, the app **copies** into classic with hash verification and **never deletes** the source. If classic already has a same-or-larger `attendances.db`, it is **never overwritten**; a larger package DB is copied aside as `attendances.db.from-msix-package.<timestamp>.bak`. Before any merge when classic already has files, a full **pre-merge safety backup** is written next to the profile as `custody-note.pre-channel-merge.<timestamp>`. Resolution details are logged and persisted in `cn-windows-userdata-resolution.json`.
 
 ---
 
