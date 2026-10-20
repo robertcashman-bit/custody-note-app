@@ -2,7 +2,7 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { getRecipientNameOrDefault } = require('../lib/officerEmailDrafts');
+const { getRecipientNameOrDefault, buildDearRecipientLine } = require('../lib/officerEmailDrafts');
 
 describe('officerEmailDrafts — recipient defaulting', () => {
   it('uses Officer when blank (non-custody template)', () => {
@@ -17,5 +17,16 @@ describe('officerEmailDrafts — recipient defaulting', () => {
 
   it('preserves explicit name', () => {
     assert.strictEqual(getRecipientNameOrDefault('chase_disclosure', '  PC Smith  '), 'PC Smith');
+  });
+
+  it('joins multiple explicit names for legacy default helper', () => {
+    assert.strictEqual(getRecipientNameOrDefault('chase_disclosure', 'PC A; PC B'), 'PC A and PC B');
+  });
+
+  it('buildDearRecipientLine handles three officers', () => {
+    assert.strictEqual(
+      buildDearRecipientLine('chase_disclosure', 'PC A; PC B; PC C', 'a@x.police.uk'),
+      'Dear PC A, PC B and PC C,'
+    );
   });
 });

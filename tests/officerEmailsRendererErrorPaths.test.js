@@ -30,6 +30,7 @@ const { JSDOM } = require('jsdom');
 const ROOT = path.join(__dirname, '..');
 const PANEL_SRC = fs.readFileSync(path.join(ROOT, 'renderer/views/officerEmailsPanel.js'), 'utf8');
 const STANDALONE_SRC = fs.readFileSync(path.join(ROOT, 'renderer/views/officerEmailsStandalone.js'), 'utf8');
+const RECIPIENT_ROWS_SRC = fs.readFileSync(path.join(ROOT, 'renderer/lib/officerEmailRecipientRows.js'), 'utf8');
 
 describe('officerEmailsPanel — silent failure path instrumentation (source)', () => {
   it('wraps openOutlookDraft promise with a .catch so IPC rejections surface', () => {
@@ -199,6 +200,7 @@ function bootStandaloneDom(openOneOffOutlookImpl, opts) {
   win.showChoice = () => Promise.resolve('open');
 
   /* Install the IIFE into this window's global scope. */
+  win.eval(RECIPIENT_ROWS_SRC);
   win.eval(STANDALONE_SRC);
 
   /* Trigger init manually (the standalone view normally calls init when its
@@ -208,7 +210,9 @@ function bootStandaloneDom(openOneOffOutlookImpl, opts) {
   /* Fill in the form with values that pass openOutlookClicked validation
      (recipient, subject, body all non-empty). The professional-domain check
      just adds a warning; the click still proceeds. */
-  win.document.getElementById('oes-to').value = 'officer@example.police.uk';
+  const toInput = win.document.querySelector('.officer-email-recipient-to');
+  if (!toInput) throw new Error('missing .officer-email-recipient-to');
+  toInput.value = 'officer@example.police.uk';
   win.document.getElementById('oes-subject').value = options.subject != null ? options.subject : 'Test subject';
   win.document.getElementById('oes-body').value = options.body != null ? options.body : 'Test body line 1\nTest body line 2';
 

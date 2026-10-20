@@ -16,6 +16,7 @@ describe('Officer Emails standalone view', () => {
   const app = read('app.js');
   const main = read('main.js');
   const standalone = read('renderer/views/officerEmailsStandalone.js');
+  const recipientRows = read('renderer/lib/officerEmailRecipientRows.js');
 
   it('is reachable from Home and registered as a view', () => {
     assert.ok(html.includes('home-card-officer-emails'));
@@ -44,21 +45,20 @@ describe('Officer Emails standalone view', () => {
     assert.ok(standalone.includes('attendanceTime'));
   });
 
-  it('uses type=text (not type=email) for recipient so police domains are never browser-rejected', () => {
-    assert.match(
-      standalone,
-      /id="oes-to"[^>]*inputmode="email"|inputmode="email"[^>]*id="oes-to"/
-    );
-    assert.ok(
-      /<input type="text"[^>]*id="oes-to"/.test(standalone) ||
-        /id="oes-to"[^>]*type="text"/.test(standalone) ||
-        standalone.includes('<input type="text" id="oes-to" inputmode="email"'),
-      'oes-to must be type=text with inputmode=email'
-    );
-    assert.ok(
-      !standalone.includes('<input type="email" id="oes-to"'),
-      'oes-to must not use type=email (Chromium can reject valid .police.uk addresses)'
-    );
+  it('uses type=text recipient rows (not type=email) so police domains are never browser-rejected', () => {
+    assert.ok(standalone.includes('oes-recipients'));
+    assert.ok(standalone.includes('OfficerEmailRecipientRows'));
+    assert.ok(!standalone.includes('type="email" id="oes-to"'));
+    assert.ok(standalone.includes('oes-recipients'));
+    assert.ok(standalone.includes('oes-duty-solicitor'));
+    assert.ok(standalone.includes('oes-outlook-sig'));
+  });
+
+  it('persists Outlook signature preference via setSettings (not sessionStorage)', () => {
+    assert.ok(recipientRows.includes('officerEmailOutlookSignatureIncludesName'));
+    assert.ok(recipientRows.includes('setSettings'));
+    assert.ok(recipientRows.includes('cn-officer-email-duty-solicitor'));
+    assert.ok(!recipientRows.includes('sessionStorage.getItem(OUTLOOK_SIG'));
   });
 });
 
@@ -72,12 +72,11 @@ describe('Officer Emails custody-note panel', () => {
     assert.ok(panel.includes('timeArrival'));
   });
 
-  it('uses type=text for recipient email (parity with standalone)', () => {
-    assert.ok(
-      panel.includes('<input type="text" id="oep-to" inputmode="email"') ||
-        /<input type="text"[^>]*id="oep-to"/.test(panel),
-      'oep-to must be type=text with inputmode=email'
-    );
+  it('uses recipient rows and prefs checkboxes (parity with standalone)', () => {
+    assert.ok(panel.includes('oep-recipients'));
+    assert.ok(panel.includes('OfficerEmailRecipientRows'));
+    assert.ok(panel.includes('oep-duty-solicitor'));
+    assert.ok(panel.includes('oep-outlook-sig'));
     assert.ok(!panel.includes('<input type="email" id="oep-to"'));
   });
 });

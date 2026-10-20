@@ -194,13 +194,20 @@ async function setOfficerComposeFields(opts: {
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
-      if (toV != null) setVal('oes-to', toV);
+      if (toV != null) {
+        const toEl = document.querySelector('.officer-email-recipient-to') as HTMLInputElement | null;
+        if (!toEl) throw new Error('missing .officer-email-recipient-to');
+        toEl.focus();
+        toEl.value = toV;
+        toEl.dispatchEvent(new Event('input', { bubbles: true }));
+        toEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
       if (subV != null) setVal('oes-subject', subV);
       if (bodyV != null) setVal('oes-body', bodyV);
     },
     { toV: to ?? null, subV: subject ?? null, bodyV: body ?? null }
   );
-  if (to != null) await expect(page.locator('#oes-to')).toHaveValue(to, { timeout: 5000 });
+  if (to != null) await expect(page.locator('.officer-email-recipient-to').first()).toHaveValue(to, { timeout: 5000 });
   if (subject != null) await expect(page.locator('#oes-subject')).toHaveValue(subject, { timeout: 5000 });
   if (body != null) await expect(page.locator('#oes-body')).toHaveValue(body, { timeout: 5000 });
 }
@@ -284,7 +291,7 @@ async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
   const blanker = await page.locator('#cn-credentialfree-blanker').count().catch(() => -1);
   const overlay = await page.locator('.cn-confirm-overlay').count().catch(() => -1);
   const toastText = await page.locator('#cn-toast').textContent().catch(() => '');
-  const toAtFail = await page.locator('#oes-to').inputValue().catch(() => '');
+  const toAtFail = await page.locator('.officer-email-recipient-to').first().inputValue().catch(() => '');
   const exists = fs.existsSync(capturePath());
   throw new Error(
     `timed out waiting for last-outlook-launch.json` +
@@ -341,7 +348,7 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   await page.waitForTimeout(800);
   const generated = await page.locator('#oes-body').inputValue();
   expect(generated.length).toBeGreaterThan(20);
-  await expect(page.locator('#oes-to')).toHaveValue(RECIPIENT);
+  await expect(page.locator('.officer-email-recipient-to').first()).toHaveValue(RECIPIENT);
 
   /* A) unedited generated */
   cap = await clickOpenOutlook();

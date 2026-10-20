@@ -16,6 +16,16 @@ const STANDALONE_SRC = fs.readFileSync(
   path.join(__dirname, '..', 'renderer/views/officerEmailsStandalone.js'),
   'utf8'
 );
+const RECIPIENT_ROWS_SRC = fs.readFileSync(
+  path.join(__dirname, '..', 'renderer/lib/officerEmailRecipientRows.js'),
+  'utf8'
+);
+
+function setStandaloneRecipientEmail(win, email) {
+  const toInput = win.document.querySelector('.officer-email-recipient-to');
+  if (!toInput) throw new Error('missing .officer-email-recipient-to');
+  toInput.value = email;
+}
 
 const SPECIAL_BODY = [
   'Dear Officer,',
@@ -81,10 +91,11 @@ function bootStandalone(opts) {
   };
   win.showToast = (msg, kind) => { calls.showToast.push({ msg: String(msg), kind: String(kind || '') }); };
   win.showChoice = () => Promise.resolve('open');
+  win.eval(RECIPIENT_ROWS_SRC);
   win.eval(STANDALONE_SRC);
   win.OfficerEmailsStandalone.init();
 
-  win.document.getElementById('oes-to').value = 'officer@example.police.uk';
+  setStandaloneRecipientEmail(win, 'officer@example.police.uk');
   if (options.subject != null) win.document.getElementById('oes-subject').value = options.subject;
   if (options.body != null) {
     win.document.getElementById('oes-body').value = options.body;
