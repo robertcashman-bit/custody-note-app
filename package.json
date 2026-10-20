@@ -125,8 +125,10 @@
       "maxVersionTested": "10.0.22621.0",
       "capabilities": [
         "runFullTrust",
-        "internetClient"
-      ]
+        "internetClient",
+        "unvirtualizedResources"
+      ],
+      "customManifestPath": "appx/AppxManifest.xml"
     },
     "mac": {
       "icon": "build/custody-note.icns",

@@ -174,6 +174,27 @@ describe('windowsPackageChannel — shared userData', () => {
     assert.equal(fs.readFileSync(path.join(classic, 'attendances.db')).length, 6000);
   });
 
+  it('MSIX write probe rejects LocalCache redirection', () => {
+    const target = path.join(tmp, 'probe-target');
+    fs.mkdirSync(target, { recursive: true });
+    const fakeLocalCache =
+      'C:\\Users\\Ada\\AppData\\Local\\Packages\\PoliceStationAgent.CustodyNoteforWindows_pmk3my2z6b2bj\\LocalCache\\Roaming\\custody-note\\cn-msix-userdata-write-probe-deadbeef.tmp';
+    const probe = channel.verifyStoreUserDataWritesToRealLocation(target, {
+      realpathFn: () => fakeLocalCache,
+    });
+    assert.equal(probe.ok, false);
+    assert.equal(probe.reason, 'virtualized-to-localcache');
+    assert.equal(channel.isMsixPackageLocalCachePath(fakeLocalCache), true);
+  });
+
+  it('MSIX write probe passes when realpath stays outside Packages LocalCache', () => {
+    const target = path.join(tmp, 'probe-target-ok');
+    const probe = channel.verifyStoreUserDataWritesToRealLocation(target);
+    assert.equal(probe.ok, true);
+    assert.ok(probe.realPath);
+    assert.equal(channel.isMsixPackageLocalCachePath(probe.realPath), false);
+  });
+
   it('creates pre-merge safety backup before copying from package profile', () => {
     const classic = path.join(tmp, 'classic-e');
     fs.mkdirSync(classic, { recursive: true });

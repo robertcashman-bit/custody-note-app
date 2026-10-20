@@ -97,6 +97,23 @@ if (!Array.isArray(appx.capabilities) || !appx.capabilities.includes('runFullTru
     'build.appx.capabilities must include runFullTrust (required for Electron Desktop Bridge / full-trust MSIX)'
   );
 }
+if (!appx.capabilities.includes('unvirtualizedResources')) {
+  fail(
+    'build.appx.capabilities must include unvirtualizedResources (required to disable AppData write virtualization for shared NSIS/Store userData)'
+  );
+}
+const customManifest = path.join(root, 'build', 'appx', 'AppxManifest.xml');
+if (String(appx.customManifestPath || '') !== 'appx/AppxManifest.xml' || !fs.existsSync(customManifest)) {
+  fail('build.appx.customManifestPath must be appx/AppxManifest.xml with desktop6 FileSystemWriteVirtualization disabled');
+} else {
+  const manifestXml = fs.readFileSync(customManifest, 'utf8');
+  if (!/FileSystemWriteVirtualization/.test(manifestXml) || !/disabled/.test(manifestXml)) {
+    fail('build/appx/AppxManifest.xml must disable desktop6:FileSystemWriteVirtualization for shared AppData');
+  }
+  if (!/ExcludedDirectory/.test(manifestXml) || !/custody-note/.test(manifestXml)) {
+    fail('build/appx/AppxManifest.xml should exclude RoamingAppData\\custody-note from Win11+ flexible virtualization');
+  }
+}
 
 /** Partner Center Product identity (paste-exact — do not invent). */
 const EXPECTED_IDENTITY = {
@@ -218,4 +235,7 @@ console.log(`[validate:msix] TargetDeviceFamily MinVersion=${minVersion} MaxVers
 console.log(`[validate:msix] Partner Center identity: ${appx.identityName} / ${publisher}`);
 console.log(
   '[validate:msix] NOTE: runFullTrust is a restricted capability — Robert must provide approval/explanation in Partner Center Submission options if prompted (expected for Electron; do not remove).'
+);
+console.log(
+  '[validate:msix] NOTE: unvirtualizedResources is also restricted — explain shared NSIS/Store AppData profile in Submission options (see docs/MICROSOFT_STORE_RELEASE.md).'
 );

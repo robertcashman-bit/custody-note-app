@@ -117,8 +117,9 @@ Package family name and Store ID are Partner Center–derived metadata (document
 12. **Privacy policy URL:** `https://custodynote.com/privacy` (confirm it still resolves before submit).
 13. **Support contact:** email/URL users can reach (e.g. support or contact page on custodynote.com).
 14. **Properties / category:** Business or Productivity; Windows 10/11 desktop.
-15. Review **capabilities** (`runFullTrust`, `internetClient`) against your declaration — full-trust desktop bridge is expected for Electron.
+15. Review **capabilities** (`runFullTrust`, `internetClient`, `unvirtualizedResources`) against your declaration — full-trust desktop bridge is expected for Electron.
     - **Robert — `runFullTrust` approval (expected warning, do not remove):** Partner Center flags `runFullTrust` as a **restricted capability**. On **Submission options**, provide an explanation such as: *“Custody Note is an Electron desktop (Desktop Bridge) app packaged as full-trust MSIX. `runFullTrust` is required so the packaged Win32/Chromium process can run at medium IL and use normal desktop APIs (filesystem under AppData, Outlook Web via browser, printing/exports).”* Approval is requested in Partner Center; keep the capability in `build.appx.capabilities`.
+    - **Robert — `unvirtualizedResources` approval (expected warning):** Partner Center flags this restricted capability. Use an explanation such as: *“Custody Note shares one user profile between the Microsoft Store MSIX and the direct-download NSIS build at `%AppData%\Roaming\custody-note` (SQLite database, encrypted backups, licence). Without disabling AppData write virtualization, Windows 10+ redirects newly created files (SQLite WAL/SHM, journals, backup files) into the package LocalCache while an existing database file may open from real AppData — causing split state and data corruption. We declare `unvirtualizedResources` and disable filesystem write virtualization only so both install channels read/write the same Roaming folder; we do not broaden access beyond the existing NSIS behaviour.”* See [capability docs](https://learn.microsoft.com/windows/apps/package-and-deploy/app-capability-declarations#unvirtualized-resources).
 16. Confirm package **MinVersion** is `10.0.17763.0` (or newer) before upload — older packages are rejected.
 17. **Submit** for certification only after Windows smoke tests below. Fix any certification feedback (identity mismatch, missing screenshots, policy URL, MinVersion, etc.) and resubmit.
 
@@ -153,7 +154,18 @@ Both channels resolve to the **same** classic profile via `lib/windowsPackageCha
 `%USERPROFILE%\AppData\Roaming\custody-note\` (the real Roaming folder — same path NSIS uses as `%APPDATA%\custody-note` on a normal desktop install)
 
 **Root cause (Store empty app):** MSIX redirects process `%APPDATA%` into  
-`%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\`. Earlier shared-path logic that read `process.env.APPDATA` for the “classic” path therefore pointed at the **package-local** folder, identical to Electron’s default `userData`, so NSIS data under real Roaming was never opened. The app now always anchors Store builds on **real Roaming** (`useRealRoamingAppData`) and runs a **non-destructive merge** from the package-local folder when it still contains files.
+`%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\`. Earlier shared-path logic that read `process.env.APPDATA` for the “classic” path therefore pointed at the **package-local** folder, identical to Electron’s default `userData`, so NSIS data under real Roaming was never opened.
+
+**Root cause (split state / corruption risk):** Even after `app.setPath('userData', real Roaming\custody-note)`, Microsoft’s packaged-desktop AppData rules (Windows 10, version 1903+) still apply **per path**, not per the `APPDATA` environment variable:
+
+- [Desktop Bridge behind the scenes](https://learn.microsoft.com/windows/msix/desktop/desktop-to-uwp-behind-the-scenes): *“All newly created files and folders”* under the user’s AppData tree go to a per-package private location; *“Modifications to existing files”* under AppData may hit the real folder; on open, the OS tries the private location first, then real AppData.
+- Effect for Custody Note: an existing NSIS `attendances.db` may open from real Roaming while **new** SQLite `-wal`/`-shm`/`-journal` files, new `Backups\` files, and JSON state would be created under `Packages\...\LocalCache` — a split profile and corruption risk.
+
+**Mitigation in this repo:**
+
+1. MSIX manifest: restricted capability `unvirtualizedResources` plus `desktop6:FileSystemWriteVirtualization` **disabled**, and (Win11+) `virtualization:ExcludedDirectory` for `$(KnownFolder:RoamingAppData)\custody-note` — see `build/appx/AppxManifest.xml` and [Flexible virtualization](https://learn.microsoft.com/windows/msix/desktop/flexible-virtualization).
+2. Runtime: Store channel runs a **write probe** in the intended shared folder before `setPath`; if the probe file’s resolved path is under `Packages\...\LocalCache`, the app **refuses** to switch and keeps the package-local profile (logged + `cn-windows-userdata-resolution.json`).
+3. Non-destructive **merge** from package-local → real Roaming only when the probe passes.
 
 | Data | File / folder | Survives update | Survives uninstall (NSIS) | Migration |
 |------|---------------|-----------------|---------------------------|-----------|
@@ -189,7 +201,7 @@ The Linux cloud agent **cannot** produce or sideload an `.msix` (`AppX is suppor
 1. **NSIS still works:** install `Custody-Note-Setup-*.exe` → create a test attendance → confirm `%APPDATA%\custody-note\attendances.db` grows → restart → record still listed.
 2. **MSIX sideload / Store preview:** install the `.msix` on the **same Windows user profile**.
 3. **Coexistence:** open Store/MSIX build → the NSIS test attendance must still appear (same DB). Never accept an empty Home as “fresh install” if the classic folder has a multi‑KB DB.
-4. **Write from Store channel:** edit/save a note → confirm `attendances.db` mtime/size change under `%APPDATA%\custody-note` (not only under `Packages\...\LocalCache`).
+4. **Write from Store channel:** edit/save a note → confirm `attendances.db` mtime/size change under real `%APPDATA%\custody-note` (not only under `Packages\...\LocalCache`). Create a new backup → file must appear under real Roaming `Backups\`. Check `cn-windows-userdata-resolution.json`: `writeProbe.ok` is `true` and `blockedSharedPath` is `false`.
 5. **Updater messaging:** in-app update check on MSIX must say Store manages updates (not GitHub download).
 6. **Licence:** activated licence on NSIS still recognised on MSIX (same `licence.dat`).
 7. **Backup:** Settings shows backup folder under the shared profile; quick backup file appears in `Backups\`.

@@ -46,6 +46,11 @@ describe('Microsoft Store AppX/MSIX packaging config', () => {
       Array.isArray(pkg.build.appx.capabilities) && pkg.build.appx.capabilities.includes('runFullTrust'),
       'runFullTrust must remain declared for Electron full-trust MSIX'
     );
+    assert.ok(
+      pkg.build.appx.capabilities.includes('unvirtualizedResources'),
+      'unvirtualizedResources required for shared AppData with NSIS'
+    );
+    assert.equal(pkg.build.appx.customManifestPath, 'appx/AppxManifest.xml');
     const doc = fs.readFileSync(path.join(root, 'docs', 'MICROSOFT_STORE_RELEASE.md'), 'utf8');
     assert.match(doc, /10\.0\.17763\.0/);
     assert.match(doc, /runFullTrust/);
