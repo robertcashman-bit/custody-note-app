@@ -3,7 +3,8 @@
   'use strict';
 
   var DUTY_SESSION_KEY = 'cn-officer-email-duty-solicitor';
-  var OUTLOOK_SIG_SESSION_KEY = 'cn-officer-email-outlook-sig-has-name';
+  /** Persisted in SQLite settings (see window.api.setSettings). */
+  var OUTLOOK_SIG_SETTINGS_KEY = 'officerEmailOutlookSignatureIncludesName';
 
   function readDutySolicitorPreference() {
     try {
@@ -22,15 +23,24 @@
 
   function readOutlookSigPreference() {
     try {
-      if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(OUTLOOK_SIG_SESSION_KEY) === '1') return true;
+      var s = (typeof window !== 'undefined' && window._appSettingsCache) ? window._appSettingsCache : {};
+      var v = s[OUTLOOK_SIG_SETTINGS_KEY];
+      if (v === true || v === 1 || v === '1' || v === 'true') return true;
     } catch (_) {}
     return false;
   }
 
   function writeOutlookSigPreference(checked) {
+    var val = checked ? 'true' : 'false';
     try {
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.setItem(OUTLOOK_SIG_SESSION_KEY, checked ? '1' : '0');
+      if (typeof window !== 'undefined') {
+        window._appSettingsCache = window._appSettingsCache || {};
+        window._appSettingsCache[OUTLOOK_SIG_SETTINGS_KEY] = val;
+      }
+    } catch (_) {}
+    try {
+      if (typeof window !== 'undefined' && window.api && typeof window.api.setSettings === 'function') {
+        window.api.setSettings({ officerEmailOutlookSignatureIncludesName: val }).catch(function () {});
       }
     } catch (_) {}
   }
@@ -171,7 +181,7 @@
 
   global.OfficerEmailRecipientRows = {
     DUTY_SESSION_KEY: DUTY_SESSION_KEY,
-    OUTLOOK_SIG_SESSION_KEY: OUTLOOK_SIG_SESSION_KEY,
+    OUTLOOK_SIG_SETTINGS_KEY: OUTLOOK_SIG_SETTINGS_KEY,
     readDutySolicitorPreference: readDutySolicitorPreference,
     writeDutySolicitorPreference: writeDutySolicitorPreference,
     readOutlookSigPreference: readOutlookSigPreference,

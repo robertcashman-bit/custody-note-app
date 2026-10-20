@@ -16,6 +16,7 @@ describe('Officer Emails standalone view', () => {
   const app = read('app.js');
   const main = read('main.js');
   const standalone = read('renderer/views/officerEmailsStandalone.js');
+  const recipientRows = read('renderer/lib/officerEmailRecipientRows.js');
 
   it('is reachable from Home and registered as a view', () => {
     assert.ok(html.includes('home-card-officer-emails'));
@@ -51,6 +52,13 @@ describe('Officer Emails standalone view', () => {
     assert.ok(standalone.includes('oes-recipients'));
     assert.ok(standalone.includes('oes-duty-solicitor'));
     assert.ok(standalone.includes('oes-outlook-sig'));
+  });
+
+  it('persists Outlook signature preference via setSettings (not sessionStorage)', () => {
+    assert.ok(recipientRows.includes('officerEmailOutlookSignatureIncludesName'));
+    assert.ok(recipientRows.includes('setSettings'));
+    assert.ok(recipientRows.includes('cn-officer-email-duty-solicitor'));
+    assert.ok(!recipientRows.includes('sessionStorage.getItem(OUTLOOK_SIG'));
   });
 });
 
