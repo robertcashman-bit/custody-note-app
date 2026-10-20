@@ -7989,7 +7989,7 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   font-weight: 600;
   color: var(--on-surface-muted, #475569);
 }
-.officer-email-field input,
+.officer-email-field input:not([type="checkbox"]):not([type="radio"]),
 .officer-email-field select,
 .officer-email-field textarea {
   width: 100%;
@@ -8023,6 +8023,13 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
 .officer-email-actions-outlook {
   padding-top: 0.25rem;
   border-top: 1px solid var(--border, #e2e8f0);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem;
+  align-items: stretch;
+}
+.officer-email-actions-outlook .btn-primary {
+  grid-column: 1 / -1;
 }
 .officer-email-drafts-head {
   font-size: 0.76rem;
@@ -8109,12 +8116,33 @@ html.dark .officer-email-warning {
 }
 .officer-email-standalone-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 0.9fr) minmax(360px, 1.25fr);
+  grid-template-columns: minmax(320px, 1fr) minmax(380px, 1.15fr);
   gap: 1rem;
   align-items: start;
 }
 .officer-email-standalone-card {
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
+  min-height: 0;
+}
+.officer-email-standalone-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.officer-email-standalone-preview .officer-email-field {
+  flex: 0 0 auto;
+}
+.officer-email-standalone-preview .officer-email-field:has(#oes-body) {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 12rem;
+}
+.officer-email-standalone-preview #oes-body {
+  flex: 1 1 auto;
+  min-height: 14rem;
 }
 .officer-email-standalone-form {
   display: grid;
@@ -8123,11 +8151,89 @@ html.dark .officer-email-warning {
 }
 .officer-email-standalone-wide,
 .officer-email-standalone-form .officer-email-bail-fields,
-.officer-email-recipients-block,
-.officer-email-duty-check {
+.officer-email-form-section {
   grid-column: 1 / -1;
 }
+.officer-email-form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding-top: 0.75rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid color-mix(in srgb, var(--border, #e2e8f0) 85%, transparent);
+}
+.officer-email-form-section:first-of-type {
+  margin-top: 0;
+  padding-top: 0.5rem;
+}
+.officer-email-standalone-form > .officer-email-field:first-child,
+.officer-email-panel-compose-form > .officer-email-field:first-child {
+  grid-column: 1 / -1;
+  padding-bottom: 0.15rem;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+.officer-email-section-heading {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #64748b);
+}
+.officer-email-section-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  align-items: start;
+}
+.officer-email-section-body--single {
+  grid-template-columns: 1fr;
+}
+.officer-email-section-body--recipients {
+  grid-template-columns: 1fr;
+}
+.officer-email-options-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+.officer-email-check-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--on-surface, #334155);
+  cursor: pointer;
+  max-width: 36rem;
+}
+.officer-email-check-row input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  min-width: 1rem;
+  margin: 0.12rem 0 0;
+  flex-shrink: 0;
+  accent-color: var(--primary, #0369a1);
+  cursor: pointer;
+}
+.officer-email-check-row > span {
+  flex: 1;
+}
+html.dark .officer-email-check-row {
+  color: var(--on-surface, #e2e8f0);
+}
 .officer-email-recipients-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+}
+.officer-email-recipients-rows {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -8137,33 +8243,73 @@ html.dark .officer-email-warning {
   grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
   gap: 0.65rem;
   align-items: end;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border, #e2e8f0);
-}
-.officer-email-recipient-row:last-of-type {
-  border-bottom: none;
 }
 .officer-email-recipient-remove.hidden {
   visibility: hidden;
+  pointer-events: none;
 }
-.officer-email-duty-check {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.9rem;
-  margin: 0.25rem 0;
-}
-.officer-email-duty-check input {
-  width: auto;
+.officer-email-link-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
   margin: 0;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--primary, #0369a1);
+  cursor: pointer;
+  text-align: left;
+}
+.officer-email-link-btn:hover,
+.officer-email-link-btn:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+.officer-email-link-btn.officer-email-recipient-remove {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--on-surface-muted, #64748b);
+  padding-bottom: 0.45rem;
+  white-space: nowrap;
+}
+.officer-email-link-btn.officer-email-recipient-remove:hover {
+  color: var(--danger, #b91c1c);
 }
 .officer-email-add-recipient {
   align-self: flex-start;
-  margin-top: 0.25rem;
+  margin-top: 0.1rem;
+}
+.officer-email-add-recipient.hidden {
+  display: none;
+}
+.officer-email-multi-recipient-toggle {
+  margin-top: 0.1rem;
+  margin-bottom: 0.05rem;
+}
+.officer-email-recipients-extra {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.officer-email-recipients-block:not(.officer-email-recipients-multi) .officer-email-recipients-extra {
+  display: none;
+}
+html.dark .officer-email-link-btn {
+  color: var(--primary-light, #7dd3fc);
+}
+html.dark .officer-email-link-btn.officer-email-recipient-remove {
+  color: var(--on-surface-muted, #94a3b8);
 }
 @media (max-width: 700px) {
-  .officer-email-recipient-row {
+  .officer-email-recipient-row,
+  .officer-email-section-body {
     grid-template-columns: 1fr;
+  }
+  .officer-email-recipient-remove {
+    justify-self: start;
+    margin-bottom: 0;
   }
 }
 .officer-email-standalone-preview textarea {

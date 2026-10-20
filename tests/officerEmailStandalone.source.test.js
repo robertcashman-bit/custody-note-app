@@ -52,6 +52,12 @@ describe('Officer Emails standalone view', () => {
     assert.ok(standalone.includes('oes-recipients'));
     assert.ok(standalone.includes('oes-duty-solicitor'));
     assert.ok(standalone.includes('oes-outlook-sig'));
+    assert.ok(standalone.includes('officer-email-check-row'));
+    assert.ok(standalone.includes('officer-email-section-heading'));
+    assert.ok(standalone.includes('Case details'));
+    assert.ok(!standalone.includes('officer-email-duty-check'));
+    assert.ok(standalone.includes('oes-multi-officer'));
+    assert.ok(standalone.includes('Send to another officer as well?'));
   });
 
   it('persists Outlook signature preference via setSettings (not sessionStorage)', () => {
@@ -59,6 +65,23 @@ describe('Officer Emails standalone view', () => {
     assert.ok(recipientRows.includes('setSettings'));
     assert.ok(recipientRows.includes('cn-officer-email-duty-solicitor'));
     assert.ok(!recipientRows.includes('sessionStorage.getItem(OUTLOOK_SIG'));
+  });
+
+  it('uses compact link-style controls for recipient rows', () => {
+    assert.ok(recipientRows.includes('officer-email-link-btn'));
+    assert.ok(recipientRows.includes('+ Add another officer'));
+    assert.ok(recipientRows.includes('officer-email-recipient-primary'));
+    assert.ok(recipientRows.includes('officer-email-recipients-extra'));
+    assert.ok(recipientRows.includes('multiOfficerCheckbox'));
+    assert.ok(recipientRows.includes('officer-email-recipients-multi'));
+    assert.ok(recipientRows.includes('officer-email-add-recipient hidden'));
+  });
+
+  it('checkbox fields avoid full-width input rule in CSS', () => {
+    const css = read('styles.css');
+    assert.ok(css.includes('.officer-email-field input:not([type="checkbox"])'));
+    assert.ok(css.includes('.officer-email-check-row'));
+    assert.ok(css.includes('.officer-email-actions-outlook .btn-primary'));
   });
 });
 
@@ -77,6 +100,9 @@ describe('Officer Emails custody-note panel', () => {
     assert.ok(panel.includes('OfficerEmailRecipientRows'));
     assert.ok(panel.includes('oep-duty-solicitor'));
     assert.ok(panel.includes('oep-outlook-sig'));
+    assert.ok(panel.includes('officer-email-check-row'));
     assert.ok(!panel.includes('<input type="email" id="oep-to"'));
+    assert.ok(panel.includes('oep-multi-officer'));
+    assert.ok(panel.includes('Send to another officer as well?'));
   });
 });

@@ -54,11 +54,23 @@
       '<div class="form-panel-card-label">Officer Emails</div>' +
       '<p id="oep-locked" class="officer-email-panel-hint hidden">Save the custody note before creating email drafts.</p>' +
       '<div id="oep-main" class="officer-email-panel-inner">' +
-      '<div class="officer-email-form">' +
+      '<div class="officer-email-form officer-email-panel-compose-form">' +
       '<label class="officer-email-field"><span>Email type</span><select id="oep-template"></select></label>' +
+      '<div class="officer-email-form-section">' +
+      '<h3 class="officer-email-section-heading">Recipients</h3>' +
+      '<div class="officer-email-section-body officer-email-section-body--recipients">' +
       '<div id="oep-recipients" class="officer-email-recipients-block"></div>' +
-      '<label class="officer-email-field officer-email-duty-check"><input type="checkbox" id="oep-duty-solicitor" /><span>I am acting as duty solicitor</span></label>' +
-      '<label class="officer-email-field officer-email-duty-check"><input type="checkbox" id="oep-outlook-sig" /><span>My Outlook signature already includes my name</span></label>' +
+      '<label class="officer-email-check-row officer-email-multi-recipient-toggle"><input type="checkbox" id="oep-multi-officer" /><span>Send to another officer as well?</span></label>' +
+      '</div></div>' +
+      '<div class="officer-email-form-section">' +
+      '<h3 class="officer-email-section-heading">Options</h3>' +
+      '<div class="officer-email-options-stack">' +
+      '<label class="officer-email-check-row"><input type="checkbox" id="oep-duty-solicitor" /><span>I am acting as duty solicitor</span></label>' +
+      '<label class="officer-email-check-row"><input type="checkbox" id="oep-outlook-sig" /><span>My Outlook signature already includes my name</span></label>' +
+      '</div></div>' +
+      '<div class="officer-email-form-section">' +
+      '<h3 class="officer-email-section-heading">Case details</h3>' +
+      '<div class="officer-email-section-body officer-email-section-body--single">' +
       '<label class="officer-email-field"><span>Client name</span><input type="text" id="oep-client" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Police station</span><input type="text" id="oep-station" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Date</span><input type="text" id="oep-date" autocomplete="off" /></label>' +
@@ -70,8 +82,13 @@
       '</div>' +
       '<label class="officer-email-field"><span>Extra note (optional)</span><textarea id="oep-extra" rows="2"></textarea></label>' +
       '<label class="officer-email-field"><span>My email address (optional)</span><input type="email" id="oep-user-email" autocomplete="off" /></label>' +
+      '</div></div>' +
+      '<div class="officer-email-form-section">' +
+      '<h3 class="officer-email-section-heading">Message</h3>' +
+      '<div class="officer-email-section-body officer-email-section-body--single">' +
       '<label class="officer-email-field"><span>Subject</span><input type="text" id="oep-subject" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Email body</span><textarea id="oep-body" rows="10"></textarea></label>' +
+      '</div></div>' +
       '</div>' +
       '<div class="officer-email-actions">' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-new">New draft</button>' +
@@ -109,6 +126,7 @@
       main: host.querySelector('#oep-main'),
       template: host.querySelector('#oep-template'),
       recipientsHost: host.querySelector('#oep-recipients'),
+      multiOfficer: host.querySelector('#oep-multi-officer'),
       dutySolicitor: host.querySelector('#oep-duty-solicitor'),
       outlookSig: host.querySelector('#oep-outlook-sig'),
       client: host.querySelector('#oep-client'),
@@ -131,6 +149,7 @@
         prefix: 'oep',
         onInput: scheduleAutoGenerate,
         dutyCheckbox: els.dutySolicitor,
+        multiOfficerCheckbox: els.multiOfficer,
       });
       global.OfficerEmailRecipientRows.bindOutlookSigCheckbox(els.outlookSig, scheduleAutoGenerate);
     }

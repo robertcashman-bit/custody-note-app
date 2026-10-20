@@ -54,6 +54,16 @@
     });
   }
 
+  function parseList(str) {
+    return String(str || '').split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+
+  function countRecipients(toEmail, recipientName) {
+    var emails = parseList(toEmail);
+    var names = parseList(recipientName);
+    return Math.max(emails.length, names.length, emails.length ? emails.length : 0);
+  }
+
   function createRow(prefix, index, onChange) {
     var row = document.createElement('div');
     row.className = 'officer-email-recipient-row';
@@ -63,7 +73,7 @@
       '<input type="text" class="officer-email-recipient-to" inputmode="email" autocomplete="off" spellcheck="false" /></label>' +
       '<label class="officer-email-field"><span>Recipient name</span>' +
       '<input type="text" class="officer-email-recipient-name" autocomplete="off" /></label>' +
-      '<button type="button" class="btn btn-secondary btn-small officer-email-recipient-remove" title="Remove officer">Remove</button>';
+      '<button type="button" class="officer-email-link-btn officer-email-recipient-remove" title="Remove officer">Remove</button>';
     var toInput = row.querySelector('.officer-email-recipient-to');
     var nameInput = row.querySelector('.officer-email-recipient-name');
     var removeBtn = row.querySelector('.officer-email-recipient-remove');
@@ -85,48 +95,106 @@
 
   function syncRemoveButtons(container) {
     var rows = container.querySelectorAll('.officer-email-recipient-row');
-    rows.forEach(function (row, idx) {
+    var multi = container.classList.contains('officer-email-recipients-multi');
+    rows.forEach(function (row) {
       var btn = row.querySelector('.officer-email-recipient-remove');
       if (!btn) return;
-      btn.classList.toggle('hidden', rows.length <= 1);
-      btn.disabled = rows.length <= 1;
+      var hide = !multi || rows.length <= 1;
+      btn.classList.toggle('hidden', hide);
+      btn.disabled = hide;
     });
   }
 
   /**
    * @param {HTMLElement} container
-   * @param {{ prefix: string, onInput?: function, dutyCheckbox?: HTMLInputElement }} options
+   * @param {{ prefix: string, onInput?: function, dutyCheckbox?: HTMLInputElement, multiOfficerCheckbox?: HTMLInputElement }} options
    */
   function initRecipientBlock(container, options) {
     var opts = options || {};
     var prefix = opts.prefix || 'oer';
+    var multiCb = opts.multiOfficerCheckbox || null;
+    var multiToggleEl = multiCb ? (multiCb.closest('label') || multiCb) : null;
     var handlers = { onInput: opts.onInput, onRemoveRow: null };
+    var primaryHost;
+    var extraRowsHost;
+    var addBtn;
+
+    function rows() {
+      return container ? container.querySelectorAll('.officer-email-recipient-row') : [];
+    }
+
+    function appendRow(focusEmail) {
+      var count = rows().length;
+      var row = createRow(prefix, count, handlers);
+      extraRowsHost.appendChild(row);
+      syncRemoveButtons(container);
+      if (focusEmail) {
+        var to = row.querySelector('.officer-email-recipient-to');
+        if (to && typeof to.focus === 'function') to.focus();
+      }
+      return row;
+    }
+
+    function trimToSingleRow() {
+      var list = rows();
+      for (var i = list.length - 1; i >= 1; i--) {
+        list[i].remove();
+      }
+      syncRemoveButtons(container);
+    }
+
+    function applyMultiMode(enabled, optsApply) {
+      var optionsApply = optsApply || {};
+      if (multiCb) multiCb.checked = !!enabled;
+      container.classList.toggle('officer-email-recipients-multi', !!enabled);
+      if (addBtn) addBtn.classList.toggle('hidden', !enabled);
+      if (!enabled) {
+        trimToSingleRow();
+      } else if (rows().length < 2) {
+        appendRow(!!optionsApply.focusNew);
+      }
+      syncRemoveButtons(container);
+    }
 
     handlers.onRemoveRow = function (row) {
-      if (!container || !row) return;
-      var rows = container.querySelectorAll('.officer-email-recipient-row');
-      if (rows.length <= 1) return;
+      if (!container || !row || !primaryHost || !extraRowsHost) return;
+      if (!container.classList.contains('officer-email-recipients-multi')) return;
+      var list = rows();
+      if (list.length <= 1) return;
       row.remove();
       syncRemoveButtons(container);
       if (typeof handlers.onInput === 'function') handlers.onInput();
     };
 
     container.innerHTML = '';
-    container.appendChild(createRow(prefix, 0, handlers));
-    syncRemoveButtons(container);
+    primaryHost = document.createElement('div');
+    primaryHost.className = 'officer-email-recipient-primary';
+    extraRowsHost = document.createElement('div');
+    extraRowsHost.className = 'officer-email-recipients-extra';
+    container.appendChild(primaryHost);
+    primaryHost.appendChild(createRow(prefix, 0, handlers));
+    if (multiToggleEl) container.appendChild(multiToggleEl);
+    container.appendChild(extraRowsHost);
 
-    var addBtn = document.createElement('button');
+    addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'btn btn-secondary btn-small officer-email-add-recipient';
-    addBtn.textContent = 'Add another officer';
+    addBtn.className = 'officer-email-link-btn officer-email-add-recipient hidden';
+    addBtn.textContent = '+ Add another officer';
     addBtn.addEventListener('click', function () {
-      var count = container.querySelectorAll('.officer-email-recipient-row').length;
-      container.appendChild(createRow(prefix, count, handlers));
-      syncRemoveButtons(container);
-      var lastTo = container.querySelector('.officer-email-recipient-row:last-child .officer-email-recipient-to');
-      if (lastTo && typeof lastTo.focus === 'function') lastTo.focus();
+      if (!container.classList.contains('officer-email-recipients-multi')) return;
+      appendRow(true);
+      if (typeof handlers.onInput === 'function') handlers.onInput();
     });
     container.appendChild(addBtn);
+
+    applyMultiMode(false);
+
+    if (multiCb) {
+      multiCb.addEventListener('change', function () {
+        applyMultiMode(!!multiCb.checked, { focusNew: true });
+        if (typeof handlers.onInput === 'function') handlers.onInput();
+      });
+    }
 
     if (opts.dutyCheckbox) {
       opts.dutyCheckbox.checked = readDutySolicitorPreference();
@@ -138,20 +206,33 @@
 
     return {
       setValues: function (toEmail, recipientName) {
-        var emails = String(toEmail || '').split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
-        var names = String(recipientName || '').split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+        var emails = parseList(toEmail);
+        var names = parseList(recipientName);
+        if (!emails.length && !names.length) {
+          applyMultiMode(false);
+          primaryHost.innerHTML = '';
+          extraRowsHost.innerHTML = '';
+          primaryHost.appendChild(createRow(prefix, 0, handlers));
+          syncRemoveButtons(container);
+          return;
+        }
         if (!emails.length) emails = [''];
         while (names.length < emails.length) names.push('');
-        container.querySelectorAll('.officer-email-recipient-row').forEach(function (r) { r.remove(); });
-        var addBtnEl = container.querySelector('.officer-email-add-recipient');
+        var multi = emails.length > 1 || names.length > 1;
+        applyMultiMode(multi);
+        primaryHost.innerHTML = '';
+        extraRowsHost.innerHTML = '';
         for (var i = 0; i < emails.length; i++) {
           var row = createRow(prefix, i, handlers);
           var toEl = row.querySelector('.officer-email-recipient-to');
           var nameEl = row.querySelector('.officer-email-recipient-name');
-          if (toEl) toEl.value = emails[i];
+          if (toEl) toEl.value = emails[i] || '';
           if (nameEl) nameEl.value = names[i] || '';
-          if (addBtnEl) container.insertBefore(row, addBtnEl);
-          else container.appendChild(row);
+          if (i === 0) primaryHost.appendChild(row);
+          else extraRowsHost.appendChild(row);
+        }
+        if (multi && emails.length < 2) {
+          appendRow(false);
         }
         syncRemoveButtons(container);
       },
@@ -176,6 +257,12 @@
         var first = container.querySelector('.officer-email-recipient-to');
         if (first && typeof first.focus === 'function') first.focus();
       },
+      setMultiOfficerEnabled: function (enabled) {
+        applyMultiMode(!!enabled);
+      },
+      isMultiOfficerEnabled: function () {
+        return container.classList.contains('officer-email-recipients-multi');
+      },
     };
   }
 
@@ -187,6 +274,8 @@
     readOutlookSigPreference: readOutlookSigPreference,
     writeOutlookSigPreference: writeOutlookSigPreference,
     bindOutlookSigCheckbox: bindOutlookSigCheckbox,
+    parseRecipientList: parseList,
+    countStoredRecipients: countRecipients,
     initRecipientBlock: initRecipientBlock,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
