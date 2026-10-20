@@ -75,6 +75,7 @@ describe('Officer Emails standalone view', () => {
     const css = read('styles.css');
     assert.ok(css.includes('.officer-email-field input:not([type="checkbox"])'));
     assert.ok(css.includes('.officer-email-check-row'));
+    assert.ok(css.includes('.officer-email-actions-outlook .btn-primary'));
   });
 });
 
