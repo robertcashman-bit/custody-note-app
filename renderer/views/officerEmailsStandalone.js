@@ -8,6 +8,7 @@
 
   var host = null;
   var els = {};
+  var recipientApi = null;
   var dirtySubjectBody = false;
   var autoGenerateTimer = null;
 
@@ -20,8 +21,9 @@
       '<p class="officer-email-panel-hint">Use this when the email is not tied to a saved custody note. Nothing is sent until you review and send it in Outlook Web.</p>' +
       '<div class="officer-email-form officer-email-standalone-form">' +
       '<label class="officer-email-field"><span>Email type</span><select id="oes-template"></select></label>' +
-      '<label class="officer-email-field"><span>Recipient email</span><input type="text" id="oes-to" inputmode="email" autocomplete="off" spellcheck="false" /></label>' +
-      '<label class="officer-email-field"><span>Recipient name</span><input type="text" id="oes-recipient" autocomplete="off" /></label>' +
+      '<div id="oes-recipients" class="officer-email-recipients-block"></div>' +
+      '<label class="officer-email-field officer-email-duty-check"><input type="checkbox" id="oes-duty-solicitor" /><span>I am acting as duty solicitor</span></label>' +
+      '<label class="officer-email-field officer-email-duty-check"><input type="checkbox" id="oes-outlook-sig" /><span>My Outlook signature already includes my name</span></label>' +
       '<label class="officer-email-field"><span>Client name</span><input type="text" id="oes-client" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Police station</span><input type="text" id="oes-station" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Date</span><input type="text" id="oes-date" autocomplete="off" /></label>' +
@@ -65,8 +67,9 @@
 
     els = {
       template: sel,
-      to: host.querySelector('#oes-to'),
-      recipient: host.querySelector('#oes-recipient'),
+      recipientsHost: host.querySelector('#oes-recipients'),
+      dutySolicitor: host.querySelector('#oes-duty-solicitor'),
+      outlookSig: host.querySelector('#oes-outlook-sig'),
       client: host.querySelector('#oes-client'),
       station: host.querySelector('#oes-station'),
       date: host.querySelector('#oes-date'),
@@ -81,10 +84,19 @@
       body: host.querySelector('#oes-body'),
     };
 
+    if (global.OfficerEmailRecipientRows && els.recipientsHost) {
+      recipientApi = global.OfficerEmailRecipientRows.initRecipientBlock(els.recipientsHost, {
+        prefix: 'oes',
+        onInput: scheduleAutoGenerate,
+        dutyCheckbox: els.dutySolicitor,
+      });
+      global.OfficerEmailRecipientRows.bindOutlookSigCheckbox(els.outlookSig, scheduleAutoGenerate);
+    }
+
     els.template.addEventListener('change', onTemplateChange);
     els.subject.addEventListener('input', function () { dirtySubjectBody = true; });
     els.body.addEventListener('input', function () { dirtySubjectBody = true; });
-    ['recipient', 'client', 'station', 'date', 'time', 'offence', 'extra', 'userEmail', 'bailDate', 'bailCond'].forEach(function (key) {
+    ['client', 'station', 'date', 'time', 'offence', 'extra', 'userEmail', 'bailDate', 'bailCond'].forEach(function (key) {
       if (!els[key]) return;
       els[key].addEventListener('input', scheduleAutoGenerate);
     });
@@ -92,7 +104,10 @@
     host.querySelector('#oes-gen').addEventListener('click', function () { generateFromTemplate(true); });
     host.querySelector('#oes-open').addEventListener('click', openOutlookClicked);
     host.querySelector('#oes-copy-owa').addEventListener('click', copyOutlookLinkClicked);
-    host.querySelector('#oes-copy-to').addEventListener('click', function () { copyField(els.to.value, 'Recipient copied.'); });
+    host.querySelector('#oes-copy-to').addEventListener('click', function () {
+      var rec = recipientApi ? recipientApi.getValues() : { toEmail: '' };
+      copyField(rec.toEmail, 'Recipient copied.');
+    });
     host.querySelector('#oes-copy-sub').addEventListener('click', function () { copyField(els.subject.value, 'Subject copied.'); });
     host.querySelector('#oes-copy-body').addEventListener('click', function () { copyField(els.body.value, 'Body copied.'); });
   }
@@ -107,10 +122,13 @@
   }
 
   function collectFields() {
+    var rec = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
     return {
       templateType: els.template.value,
-      toEmail: els.to.value,
-      recipientName: els.recipient.value,
+      toEmail: rec.toEmail,
+      recipientName: rec.recipientName,
+      actingAsDutySolicitor: !!(els.dutySolicitor && els.dutySolicitor.checked),
+      outlookSignatureIncludesName: !!(els.outlookSig && els.outlookSig.checked),
       clientName: els.client.value,
       policeStation: els.station.value,
       attendanceDate: els.date.value,
@@ -195,15 +213,26 @@
   function clearForm() {
     Object.keys(els).forEach(function (key) {
       if (!els[key] || !('value' in els[key])) return;
-      if (key === 'template') return;
+      if (key === 'template' || key === 'recipientsHost' || key === 'dutySolicitor' || key === 'outlookSig') return;
+      if (els[key].type === 'checkbox') {
+        els[key].checked = false;
+        return;
+      }
       els[key].value = '';
     });
+    if (recipientApi) recipientApi.setValues('', '');
+    if (els.dutySolicitor && global.OfficerEmailRecipientRows) {
+      els.dutySolicitor.checked = global.OfficerEmailRecipientRows.readDutySolicitorPreference();
+    }
+    if (els.outlookSig && global.OfficerEmailRecipientRows) {
+      els.outlookSig.checked = global.OfficerEmailRecipientRows.readOutlookSigPreference();
+    }
     els.template.value = 'disclosure_confirm_attendance';
     els.template.dataset.oesLast = els.template.value;
     dirtySubjectBody = false;
     syncBailVisibility();
     generateFromTemplate(true);
-    if (els.to) els.to.focus();
+    if (recipientApi) recipientApi.focusFirstEmail();
   }
 
   function copyField(text, okMsg) {
@@ -254,7 +283,8 @@
     var to = String(f.toEmail || '').trim();
     var sub = String(f.subject || '').trim();
     var bod = String(f.body || '').trim();
-    if (!to) {
+    var emailList = to.split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
+    if (!emailList.length) {
       if (typeof showToast === 'function') showToast('Please enter a recipient email address.', 'error', 5000);
       return;
     }
@@ -267,8 +297,15 @@
       return;
     }
     var warnings = [];
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) warnings.push('The recipient email address does not look valid. Please check it carefully.');
-    else if (!isProfessionalDomain(to)) warnings.push('Warning: this recipient does not appear to be a recognised police, court, CPS, government, NHS, solicitor or professional email address. Please check carefully before proceeding.');
+    emailList.forEach(function (em, idx) {
+      var label = emailList.length > 1 ? 'Recipient ' + (idx + 1) : 'The recipient email address';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+        warnings.push(label + ' does not look valid. Please check it carefully.');
+      } else if (!isProfessionalDomain(em)) {
+        warnings.push('Warning: ' + (emailList.length > 1 ? 'recipient ' + (idx + 1) : 'this recipient') +
+          ' does not appear to be a recognised police, court, CPS, government, NHS, solicitor or professional email address. Please check carefully before proceeding.');
+      }
+    });
     var msg =
       'You are about to open this one-off email in Outlook Web.\n\nTo:\n' + to + '\n\nSubject:\n' + sub + '\n\n' +
       (warnings.length ? warnings.join('\n\n') + '\n\n' : '') +
@@ -422,7 +459,7 @@
   }
 
   function focusFirstField() {
-    if (els.to && typeof els.to.focus === 'function') els.to.focus();
+    if (recipientApi) recipientApi.focusFirstEmail();
   }
 
   function init() {

@@ -8122,8 +8122,49 @@ html.dark .officer-email-warning {
   gap: 0.65rem;
 }
 .officer-email-standalone-wide,
-.officer-email-standalone-form .officer-email-bail-fields {
+.officer-email-standalone-form .officer-email-bail-fields,
+.officer-email-recipients-block,
+.officer-email-duty-check {
   grid-column: 1 / -1;
+}
+.officer-email-recipients-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.officer-email-recipient-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+  gap: 0.65rem;
+  align-items: end;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border, #e2e8f0);
+}
+.officer-email-recipient-row:last-of-type {
+  border-bottom: none;
+}
+.officer-email-recipient-remove.hidden {
+  visibility: hidden;
+}
+.officer-email-duty-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  margin: 0.25rem 0;
+}
+.officer-email-duty-check input {
+  width: auto;
+  margin: 0;
+}
+.officer-email-add-recipient {
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+@media (max-width: 700px) {
+  .officer-email-recipient-row {
+    grid-template-columns: 1fr;
+  }
 }
 .officer-email-standalone-preview textarea {
   min-height: 22rem;
