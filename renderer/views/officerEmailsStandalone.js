@@ -20,21 +20,33 @@
       '<div class="form-panel-card-label">One-off officer email</div>' +
       '<p class="officer-email-panel-hint">Use this when the email is not tied to a saved custody note. Nothing is sent until you review and send it in Outlook Web.</p>' +
       '<div class="officer-email-form officer-email-standalone-form">' +
-      '<label class="officer-email-field"><span>Email type</span><select id="oes-template"></select></label>' +
+      '<label class="officer-email-field officer-email-standalone-wide"><span>Email type</span><select id="oes-template"></select></label>' +
+      '<div class="officer-email-form-section">' +
+      '<h3 class="officer-email-section-heading">Recipients</h3>' +
+      '<div class="officer-email-section-body officer-email-section-body--recipients">' +
       '<div id="oes-recipients" class="officer-email-recipients-block"></div>' +
-      '<label class="officer-email-field officer-email-duty-check"><input type="checkbox" id="oes-duty-solicitor" /><span>I am acting as duty solicitor</span></label>' +
-      '<label class="officer-email-field officer-email-duty-check"><input type="checkbox" id="oes-outlook-sig" /><span>My Outlook signature already includes my name</span></label>' +
+      '</div></div>' +
+      '<div class="officer-email-form-section">' +
+      '<h3 class="officer-email-section-heading">Options</h3>' +
+      '<div class="officer-email-options-stack">' +
+      '<label class="officer-email-check-row"><input type="checkbox" id="oes-duty-solicitor" /><span>I am acting as duty solicitor</span></label>' +
+      '<label class="officer-email-check-row"><input type="checkbox" id="oes-outlook-sig" /><span>My Outlook signature already includes my name</span></label>' +
+      '</div></div>' +
+      '<div class="officer-email-form-section">' +
+      '<h3 class="officer-email-section-heading">Case details</h3>' +
+      '<div class="officer-email-section-body">' +
       '<label class="officer-email-field"><span>Client name</span><input type="text" id="oes-client" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Police station</span><input type="text" id="oes-station" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Date</span><input type="text" id="oes-date" autocomplete="off" /></label>' +
       '<label class="officer-email-field"><span>Attendance time</span><input type="text" id="oes-time" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Offence / allegation</span><input type="text" id="oes-offence" autocomplete="off" /></label>' +
-      '<div id="oes-bail-fields" class="officer-email-bail-fields hidden">' +
+      '<label class="officer-email-field officer-email-standalone-wide"><span>Offence / allegation</span><input type="text" id="oes-offence" autocomplete="off" /></label>' +
+      '<div id="oes-bail-fields" class="officer-email-bail-fields hidden officer-email-standalone-wide">' +
       '<label class="officer-email-field"><span>Bail return date</span><input type="text" id="oes-bail-date" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Bail conditions</span><textarea id="oes-bail-cond" rows="3"></textarea></label>' +
+      '<label class="officer-email-field officer-email-standalone-wide"><span>Bail conditions</span><textarea id="oes-bail-cond" rows="3"></textarea></label>' +
       '</div>' +
       '<label class="officer-email-field officer-email-standalone-wide"><span>Extra note (optional)</span><textarea id="oes-extra" rows="2"></textarea></label>' +
-      '<label class="officer-email-field"><span>My email address (optional)</span><input type="email" id="oes-user-email" autocomplete="off" /></label>' +
+      '<label class="officer-email-field officer-email-standalone-wide"><span>My email address (optional)</span><input type="email" id="oes-user-email" autocomplete="off" /></label>' +
+      '</div></div>' +
       '</div>' +
       '<div class="officer-email-actions">' +
       '<button type="button" class="btn btn-secondary btn-small" id="oes-clear">Clear</button>' +

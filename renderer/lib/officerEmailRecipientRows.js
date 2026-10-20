@@ -63,7 +63,7 @@
       '<input type="text" class="officer-email-recipient-to" inputmode="email" autocomplete="off" spellcheck="false" /></label>' +
       '<label class="officer-email-field"><span>Recipient name</span>' +
       '<input type="text" class="officer-email-recipient-name" autocomplete="off" /></label>' +
-      '<button type="button" class="btn btn-secondary btn-small officer-email-recipient-remove" title="Remove officer">Remove</button>';
+      '<button type="button" class="officer-email-link-btn officer-email-recipient-remove" title="Remove officer">Remove</button>';
     var toInput = row.querySelector('.officer-email-recipient-to');
     var nameInput = row.querySelector('.officer-email-recipient-name');
     var removeBtn = row.querySelector('.officer-email-recipient-remove');
@@ -84,7 +84,8 @@
   }
 
   function syncRemoveButtons(container) {
-    var rows = container.querySelectorAll('.officer-email-recipient-row');
+    var rowsHost = container.querySelector('.officer-email-recipients-rows') || container;
+    var rows = rowsHost.querySelectorAll('.officer-email-recipient-row');
     rows.forEach(function (row, idx) {
       var btn = row.querySelector('.officer-email-recipient-remove');
       if (!btn) return;
@@ -104,7 +105,9 @@
 
     handlers.onRemoveRow = function (row) {
       if (!container || !row) return;
-      var rows = container.querySelectorAll('.officer-email-recipient-row');
+      var rowsHost = container.querySelector('.officer-email-recipients-rows');
+      if (!rowsHost) return;
+      var rows = rowsHost.querySelectorAll('.officer-email-recipient-row');
       if (rows.length <= 1) return;
       row.remove();
       syncRemoveButtons(container);
@@ -112,18 +115,21 @@
     };
 
     container.innerHTML = '';
-    container.appendChild(createRow(prefix, 0, handlers));
+    var rowsHost = document.createElement('div');
+    rowsHost.className = 'officer-email-recipients-rows';
+    container.appendChild(rowsHost);
+    rowsHost.appendChild(createRow(prefix, 0, handlers));
     syncRemoveButtons(container);
 
     var addBtn = document.createElement('button');
     addBtn.type = 'button';
-    addBtn.className = 'btn btn-secondary btn-small officer-email-add-recipient';
-    addBtn.textContent = 'Add another officer';
+    addBtn.className = 'officer-email-link-btn officer-email-add-recipient';
+    addBtn.textContent = '+ Add another officer';
     addBtn.addEventListener('click', function () {
-      var count = container.querySelectorAll('.officer-email-recipient-row').length;
-      container.appendChild(createRow(prefix, count, handlers));
+      var count = rowsHost.querySelectorAll('.officer-email-recipient-row').length;
+      rowsHost.appendChild(createRow(prefix, count, handlers));
       syncRemoveButtons(container);
-      var lastTo = container.querySelector('.officer-email-recipient-row:last-child .officer-email-recipient-to');
+      var lastTo = rowsHost.querySelector('.officer-email-recipient-row:last-child .officer-email-recipient-to');
       if (lastTo && typeof lastTo.focus === 'function') lastTo.focus();
     });
     container.appendChild(addBtn);
@@ -142,23 +148,24 @@
         var names = String(recipientName || '').split(/[;,]/).map(function (s) { return s.trim(); }).filter(Boolean);
         if (!emails.length) emails = [''];
         while (names.length < emails.length) names.push('');
-        container.querySelectorAll('.officer-email-recipient-row').forEach(function (r) { r.remove(); });
-        var addBtnEl = container.querySelector('.officer-email-add-recipient');
+        var rowsHost = container.querySelector('.officer-email-recipients-rows');
+        if (!rowsHost) return;
+        rowsHost.querySelectorAll('.officer-email-recipient-row').forEach(function (r) { r.remove(); });
         for (var i = 0; i < emails.length; i++) {
           var row = createRow(prefix, i, handlers);
           var toEl = row.querySelector('.officer-email-recipient-to');
           var nameEl = row.querySelector('.officer-email-recipient-name');
           if (toEl) toEl.value = emails[i];
           if (nameEl) nameEl.value = names[i] || '';
-          if (addBtnEl) container.insertBefore(row, addBtnEl);
-          else container.appendChild(row);
+          rowsHost.appendChild(row);
         }
         syncRemoveButtons(container);
       },
       getValues: function () {
         var emails = [];
         var names = [];
-        container.querySelectorAll('.officer-email-recipient-row').forEach(function (row) {
+        var rowsHostGet = container.querySelector('.officer-email-recipients-rows') || container;
+        rowsHostGet.querySelectorAll('.officer-email-recipient-row').forEach(function (row) {
           var toEl = row.querySelector('.officer-email-recipient-to');
           var nameEl = row.querySelector('.officer-email-recipient-name');
           var em = toEl ? String(toEl.value || '').trim() : '';

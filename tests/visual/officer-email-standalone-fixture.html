@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Officer email standalone fixture</title>
+  <link rel="stylesheet" href="../../styles.css" />
+  <style>
+    body { margin: 0; padding: 1rem; background: var(--bg, #f1f5f9); font-family: system-ui, sans-serif; }
+    html.dark body { background: #0f172a; }
+    .fixture-wrap { max-width: 520px; }
+  </style>
+</head>
+<body>
+  <div class="fixture-wrap officer-email-standalone">
+    <section class="form-panel-card officer-email-standalone-card">
+      <div class="form-panel-card-label">One-off officer email</div>
+      <div class="officer-email-form officer-email-standalone-form">
+        <label class="officer-email-field officer-email-standalone-wide"><span>Email type</span>
+          <select><option>Confirm attendance and request disclosure</option></select>
+        </label>
+        <div class="officer-email-form-section">
+          <h3 class="officer-email-section-heading">Recipients</h3>
+          <div class="officer-email-section-body officer-email-section-body--recipients">
+            <div class="officer-email-recipients-block">
+              <div class="officer-email-recipients-rows">
+                <div class="officer-email-recipient-row">
+                  <label class="officer-email-field"><span>Recipient email</span>
+                    <input type="text" value="officer.synthetic@example.police.uk" />
+                  </label>
+                  <label class="officer-email-field"><span>Recipient name</span>
+                    <input type="text" value="PC Synthetic" />
+                  </label>
+                  <button type="button" class="officer-email-link-btn officer-email-recipient-remove hidden">Remove</button>
+                </div>
+                <div class="officer-email-recipient-row">
+                  <label class="officer-email-field"><span>Recipient email</span>
+                    <input type="text" value="ddo.synthetic@example.police.uk" />
+                  </label>
+                  <label class="officer-email-field"><span>Recipient name</span>
+                    <input type="text" value="PC Second" />
+                  </label>
+                  <button type="button" class="officer-email-link-btn officer-email-recipient-remove">Remove</button>
+                </div>
+              </div>
+              <button type="button" class="officer-email-link-btn officer-email-add-recipient">+ Add another officer</button>
+            </div>
+          </div>
+        </div>
+        <div class="officer-email-form-section">
+          <h3 class="officer-email-section-heading">Options</h3>
+          <div class="officer-email-options-stack">
+            <label class="officer-email-check-row"><input type="checkbox" checked /><span>I am acting as duty solicitor</span></label>
+            <label class="officer-email-check-row"><input type="checkbox" /><span>My Outlook signature already includes my name</span></label>
+          </div>
+        </div>
+        <div class="officer-email-form-section">
+          <h3 class="officer-email-section-heading">Case details</h3>
+          <div class="officer-email-section-body">
+            <label class="officer-email-field"><span>Client name</span><input type="text" value="Synthetic Client" /></label>
+            <label class="officer-email-field"><span>Police station</span><input type="text" value="Synthetic Station" /></label>
+            <label class="officer-email-field"><span>Date</span><input type="text" value="1 Jan 2026" /></label>
+            <label class="officer-email-field"><span>Attendance time</span><input type="text" value="14:30" /></label>
+            <label class="officer-email-field officer-email-standalone-wide"><span>Offence / allegation</span><input type="text" value="Synthetic offence" /></label>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
