@@ -56,6 +56,8 @@ describe('Officer Emails standalone view', () => {
     assert.ok(standalone.includes('officer-email-section-heading'));
     assert.ok(standalone.includes('Case details'));
     assert.ok(!standalone.includes('officer-email-duty-check'));
+    assert.ok(standalone.includes('oes-multi-officer'));
+    assert.ok(standalone.includes('Send to another officer as well?'));
   });
 
   it('persists Outlook signature preference via setSettings (not sessionStorage)', () => {
@@ -69,6 +71,9 @@ describe('Officer Emails standalone view', () => {
     assert.ok(recipientRows.includes('officer-email-link-btn'));
     assert.ok(recipientRows.includes('+ Add another officer'));
     assert.ok(recipientRows.includes('officer-email-recipients-rows'));
+    assert.ok(recipientRows.includes('multiOfficerCheckbox'));
+    assert.ok(recipientRows.includes('officer-email-recipients-multi'));
+    assert.ok(recipientRows.includes('officer-email-add-recipient hidden'));
   });
 
   it('checkbox fields avoid full-width input rule in CSS', () => {
@@ -96,5 +101,7 @@ describe('Officer Emails custody-note panel', () => {
     assert.ok(panel.includes('oep-outlook-sig'));
     assert.ok(panel.includes('officer-email-check-row'));
     assert.ok(!panel.includes('<input type="email" id="oep-to"'));
+    assert.ok(panel.includes('oep-multi-officer'));
+    assert.ok(panel.includes('Send to another officer as well?'));
   });
 });

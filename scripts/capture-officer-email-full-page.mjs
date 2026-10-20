@@ -70,9 +70,55 @@ function officerView(page) {
   return page.locator('#view-officer-emails.active');
 }
 
-async function fillAndGenerate(page) {
+async function fillCaseDetails(view) {
+  await fillField(view.locator('#oes-client'), SYNTH.client);
+  await fillField(view.locator('#oes-station'), SYNTH.station);
+  await fillField(view.locator('#oes-date'), SYNTH.date);
+  await fillField(view.locator('#oes-time'), SYNTH.time);
+  await fillField(view.locator('#oes-offence'), SYNTH.offence);
+  await fillField(view.locator('#oes-extra'), SYNTH.extra);
+  await fillField(view.locator('#oes-user-email'), SYNTH.userEmail);
+}
+
+async function generateAndWait(page, view, bodyMustInclude) {
+  await view.locator('#oes-gen').click();
+  await page.waitForFunction(() => {
+    const sub = document.getElementById('oes-subject');
+    const body = document.getElementById('oes-body');
+    return sub && body && String(sub.value).trim().length > 5 && String(body.value).trim().length > 80;
+  }, { timeout: 30000 });
+  if (bodyMustInclude) {
+    await page.waitForFunction(
+      (needle) => {
+        const body = document.getElementById('oes-body');
+        return body && String(body.value).includes(needle);
+      },
+      bodyMustInclude,
+      { timeout: 10000 }
+    );
+  }
+  await page.waitForTimeout(400);
+}
+
+async function fillSingleOfficerAndGenerate(page) {
   const view = officerView(page);
-  await view.locator('.officer-email-add-recipient').click();
+  await expectAddLinkHidden(page, true);
+  await expectRowCount(page, 1);
+
+  const row = view.locator('.officer-email-recipient-row').first();
+  await fillField(row.locator('.officer-email-recipient-to'), SYNTH.officer1Email);
+  await fillField(row.locator('.officer-email-recipient-name'), SYNTH.officer1Name);
+
+  await view.locator('#oes-duty-solicitor').check();
+  await view.locator('#oes-outlook-sig').check();
+  await fillCaseDetails(view);
+  await generateAndWait(page, view, 'PC Alpha');
+}
+
+async function fillMultiOfficerAndGenerate(page) {
+  const view = officerView(page);
+  await view.locator('#oes-multi-officer').check();
+  await expectAddLinkHidden(page, false);
   await expectRowCount(page, 2);
 
   const rows = view.locator('.officer-email-recipient-row');
@@ -83,32 +129,26 @@ async function fillAndGenerate(page) {
 
   await view.locator('#oes-duty-solicitor').check();
   await view.locator('#oes-outlook-sig').check();
-
-  await fillField(view.locator('#oes-client'), SYNTH.client);
-  await fillField(view.locator('#oes-station'), SYNTH.station);
-  await fillField(view.locator('#oes-date'), SYNTH.date);
-  await fillField(view.locator('#oes-time'), SYNTH.time);
-  await fillField(view.locator('#oes-offence'), SYNTH.offence);
-  await fillField(view.locator('#oes-extra'), SYNTH.extra);
-  await fillField(view.locator('#oes-user-email'), SYNTH.userEmail);
-
-  await view.locator('#oes-gen').click();
-  await page.waitForFunction(() => {
-    const sub = document.getElementById('oes-subject');
-    const body = document.getElementById('oes-body');
-    return sub && body && String(sub.value).trim().length > 5 && String(body.value).trim().length > 80;
-  }, { timeout: 30000 });
-  await page.waitForFunction(() => {
-    const body = document.getElementById('oes-body');
-    return body && String(body.value).includes('PC Alpha');
-  }, { timeout: 10000 });
-  await page.waitForTimeout(400);
+  await fillCaseDetails(view);
+  await generateAndWait(page, view, 'PC Beta');
 }
 
 async function expectRowCount(page, n) {
   await page.waitForFunction(
-    (count) => document.querySelectorAll('#view-officer-emails.active .officer-email-recipient-row').length >= count,
+    (count) => document.querySelectorAll('#view-officer-emails.active .officer-email-recipient-row').length === count,
     n,
+    { timeout: 10000 }
+  );
+}
+
+async function expectAddLinkHidden(page, hidden) {
+  await page.waitForFunction(
+    (wantHidden) => {
+      const btn = document.querySelector('#view-officer-emails.active .officer-email-add-recipient');
+      if (!btn) return false;
+      return wantHidden ? btn.classList.contains('hidden') : !btn.classList.contains('hidden');
+    },
+    hidden,
     { timeout: 10000 }
   );
 }
@@ -128,6 +168,7 @@ async function screenshotSet(page, tag) {
 }
 
 async function main() {
+  fs.mkdirSync(OUT, { recursive: true });
   const testUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-officer-fullshot-'));
   const electronApp = await _electron.launch({
     args: [path.join(ROOT, 'main.js')],
@@ -149,12 +190,15 @@ async function main() {
 
     await setDarkMode(page, true);
     await openOfficerEmails(page);
-    await fillAndGenerate(page);
-    await screenshotSet(page, 'dark');
 
-    await setDarkMode(page, false);
+    await fillSingleOfficerAndGenerate(page);
+    await screenshotSet(page, 'dark-single-officer');
+
+    await page.locator('#oes-clear').click();
     await page.waitForTimeout(300);
-    await screenshotSet(page, 'light');
+
+    await fillMultiOfficerAndGenerate(page);
+    await screenshotSet(page, 'dark-multi-officer');
   } finally {
     await electronApp.close().catch(() => undefined);
     try {

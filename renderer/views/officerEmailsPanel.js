@@ -59,6 +59,7 @@
       '<div class="officer-email-form-section">' +
       '<h3 class="officer-email-section-heading">Recipients</h3>' +
       '<div class="officer-email-section-body officer-email-section-body--recipients">' +
+      '<label class="officer-email-check-row officer-email-multi-recipient-toggle"><input type="checkbox" id="oep-multi-officer" /><span>Send to another officer as well?</span></label>' +
       '<div id="oep-recipients" class="officer-email-recipients-block"></div>' +
       '</div></div>' +
       '<div class="officer-email-form-section">' +
@@ -125,6 +126,7 @@
       main: host.querySelector('#oep-main'),
       template: host.querySelector('#oep-template'),
       recipientsHost: host.querySelector('#oep-recipients'),
+      multiOfficer: host.querySelector('#oep-multi-officer'),
       dutySolicitor: host.querySelector('#oep-duty-solicitor'),
       outlookSig: host.querySelector('#oep-outlook-sig'),
       client: host.querySelector('#oep-client'),
@@ -147,6 +149,7 @@
         prefix: 'oep',
         onInput: scheduleAutoGenerate,
         dutyCheckbox: els.dutySolicitor,
+        multiOfficerCheckbox: els.multiOfficer,
       });
       global.OfficerEmailRecipientRows.bindOutlookSigCheckbox(els.outlookSig, scheduleAutoGenerate);
     }

@@ -8281,6 +8281,15 @@ html.dark .officer-email-check-row {
   align-self: flex-start;
   margin-top: 0.1rem;
 }
+.officer-email-add-recipient.hidden {
+  display: none;
+}
+.officer-email-multi-recipient-toggle {
+  margin-bottom: 0.15rem;
+}
+.officer-email-recipients-block:not(.officer-email-recipients-multi) .officer-email-recipient-row ~ .officer-email-recipient-row {
+  display: none;
+}
 html.dark .officer-email-link-btn {
   color: var(--primary-light, #7dd3fc);
 }
