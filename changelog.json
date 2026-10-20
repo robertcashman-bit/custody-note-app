@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.117",
+      "date": "2026-10-20",
+      "latest": true,
+      "changes": [
+        "Sync changes that got stuck on older versions now clear on their own when you open the app, without losing any of your edits.",
+        "PDFs now print Chinese and other CJK text properly instead of leaving it blank.",
+        "PDFs no longer fail to create for some notes that contain imported data."
+      ]
+    },
+    {
       "version": "1.9.116",
       "date": "2026-10-19",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Extra protection for your notes: Custody Note checks your saved notes for damage when it starts, and keeps a safety copy before an update changes how they are stored.",
         "Saves are written in a way that a crash or power cut can't leave a half-saved note.",
