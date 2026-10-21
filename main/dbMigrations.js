@@ -334,6 +334,51 @@ const MIGRATIONS = [
       );`);
     },
   },
+  {
+    version: 6,
+    name: 'firms-cloud-sync',
+    up(ctx) {
+      ctx.add('firms', "sync_id TEXT DEFAULT NULL");
+      ctx.add('firms', "quickfile_client_id TEXT DEFAULT ''");
+      ctx.add('firms', "updated_at TEXT DEFAULT ''");
+      ctx.add('firms', "sync_dirty INTEGER DEFAULT 0");
+      ctx.add('firms', "sync_version INTEGER DEFAULT 1");
+      ctx.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_firms_sync_id ON firms(sync_id) WHERE sync_id IS NOT NULL');
+      ctx.run("CREATE INDEX IF NOT EXISTS idx_firms_qf_client ON firms(quickfile_client_id) WHERE quickfile_client_id != ''");
+      // Drop legacy UNIQUE(name) so QuickFile / cloud merge can dedupe by sync_id.
+      ctx.run(`CREATE TABLE IF NOT EXISTS firms_cloud_v6 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sync_id TEXT,
+        name TEXT NOT NULL,
+        laa_account TEXT DEFAULT '',
+        contact_name TEXT DEFAULT '',
+        contact_email TEXT DEFAULT '',
+        contact_phone TEXT DEFAULT '',
+        address TEXT DEFAULT '',
+        source_of_referral TEXT DEFAULT '',
+        quickfile_client_id TEXT DEFAULT '',
+        is_default INTEGER DEFAULT 0,
+        updated_at TEXT DEFAULT '',
+        sync_dirty INTEGER DEFAULT 0,
+        sync_version INTEGER DEFAULT 1
+      );`);
+      ctx.run(`INSERT INTO firms_cloud_v6 (
+        id, sync_id, name, laa_account, contact_name, contact_email, contact_phone, address,
+        source_of_referral, quickfile_client_id, is_default, updated_at, sync_dirty, sync_version
+      )
+      SELECT
+        id, sync_id, name, laa_account, contact_name, contact_email, contact_phone, address,
+        source_of_referral, COALESCE(quickfile_client_id, ''), is_default,
+        COALESCE(NULLIF(updated_at, ''), datetime('now')),
+        COALESCE(sync_dirty, 0), COALESCE(sync_version, 1)
+      FROM firms`);
+      ctx.run('DROP TABLE firms');
+      ctx.run('ALTER TABLE firms_cloud_v6 RENAME TO firms');
+      ctx.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_firms_sync_id ON firms(sync_id) WHERE sync_id IS NOT NULL');
+      ctx.run("CREATE INDEX IF NOT EXISTS idx_firms_qf_client ON firms(quickfile_client_id) WHERE quickfile_client_id != ''");
+      ctx.run('CREATE INDEX IF NOT EXISTS idx_firms_name ON firms(name);');
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS.length

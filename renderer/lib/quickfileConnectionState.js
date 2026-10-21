@@ -57,6 +57,23 @@
 
     // 1. Not configured — sync may still be in progress or never saved to account.
     if (!configured) {
+      if (/credentials on your account could not be decrypted/i.test(syncError)
+        || /cannot load QuickFile credentials/i.test(syncError)
+        || /Activate this computer for sync/i.test(syncError)) {
+        return {
+          state: 'credentials_sync_blocked',
+          ok: false,
+          configured: false,
+          tone: 'error',
+          headline: 'QuickFile credentials have not loaded on this computer yet',
+          detail: syncError,
+          instructions: [
+            'Sign in with the same email as your other computer and ensure this device is activated for sync (Settings → Account / Sync).',
+            'If sync was revoked for this computer, re-activate it — removed devices cannot download stored QuickFile credentials.',
+            'You can always enter Account Number, API key and Application ID below once on this computer, then Save and test.',
+          ],
+        };
+      }
       if (isSyncUnavailableError(syncError)) {
         return {
           state: 'sync_unavailable',
