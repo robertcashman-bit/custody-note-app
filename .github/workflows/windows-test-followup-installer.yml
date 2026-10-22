@@ -60,7 +60,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create GitHub prerelease (optional)
-        if: inputs.create_prerelease
+        if: github.event_name == 'push' || inputs.create_prerelease != false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LABEL_SUFFIX: ${{ inputs.label_suffix || 'test-followup' }}
