@@ -474,6 +474,7 @@ contextBridge.exposeInMainWorld('api', {
   onSyncStatusChanged: (cb) => ipcRenderer.on('sync-status-changed', (_, data) => cb(data)),
   onSyncPullWarning: (cb) => ipcRenderer.on('sync-pull-warning', (_, data) => cb(data)),
   onRecordsUpdatedFromSync: (cb) => ipcRenderer.on('records-updated-from-sync', (_, data) => cb(data)),
+  onFirmsUpdatedFromSync: (cb) => ipcRenderer.on('firms-updated-from-sync', (_, data) => cb(data)),
   onSyncConflictsDetected: (cb) => ipcRenderer.on('sync-conflicts-detected', (_, data) => cb(data)),
   onSyncCatchUpProgress: (cb) => ipcRenderer.on('sync-catch-up-progress', (_, data) => cb(data)),
   /* Auto-update */
