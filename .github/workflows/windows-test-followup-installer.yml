@@ -6,6 +6,9 @@
 name: Windows test installer (follow-up)
 
 on:
+  push:
+    branches:
+      - 'cursor/follow-up-attendance-7371'
   workflow_dispatch:
     inputs:
       label_suffix:
