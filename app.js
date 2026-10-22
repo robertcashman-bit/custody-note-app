@@ -567,6 +567,7 @@ var LAA = {
             { key: 'middleName', label: 'Middle name(s)', placeholder: 'Middle' },
             { key: 'surname', label: 'Surname', placeholder: 'Surname' }
           ], cols: 2 },
+        { key: '_note_client_name_reuse', label: 'Start typing a past client\u2019s name to reuse their details.', type: 'sectionNote' },
         { key: 'offenceSummary', label: 'Offence (summary)', type: 'offenceSummary', placeholder: 'Type to search offences...', cols: 2 },
         { key: 'policeStationId', label: 'Police Station', type: 'station', cols: 2 },
         { key: 'schemeId', label: 'Police Station Scheme ID', type: 'text', placeholder: 'Auto-filled from station', readonly: true },
@@ -1421,6 +1422,7 @@ var LAA = {
             { key: 'middleName', label: 'Middle name(s)', placeholder: 'Middle' },
             { key: 'surname', label: 'Surname', placeholder: 'Surname' }
           ], cols: 2 },
+        { key: '_note_client_name_reuse', label: 'Start typing a past client\u2019s name to reuse their details.', type: 'sectionNote' },
         { key: 'offenceSummary', label: 'Offence (summary)', type: 'offenceSummary', placeholder: 'Type to search offences...', cols: 2 },
         { key: 'policeStationId', label: 'Police Station', type: 'station', cols: 2 },
         { key: 'schemeId', label: 'Police Station Scheme ID', type: 'text', placeholder: 'Auto-filled from station', readonly: true },
@@ -1915,6 +1917,9 @@ var REQUIRED_FIELD_KEYS = [
     setFieldValue('clientType', 'Existing');
     setFieldValue('caseStatus', 'Existing case');
     showClientImportedToast();
+    if (typeof window.maybeOfferFurtherVisitFromClientLookup === 'function') {
+      window.maybeOfferFurtherVisitFromClientLookup(d);
+    }
   }
 
   function showClientImportedToast() {
@@ -5500,6 +5505,37 @@ var REQUIRED_FIELD_KEYS = [
   var _editorActivityDebounceTimer = null;
   var EDITOR_ACTIVITY_DEBOUNCE_MS = 10000;
 
+  /** Flush debounced autosave for the open draft before reading the same row from disk (follow-up, etc.). */
+  window.flushOpenRecordAutosaveBeforeExternalRead = function () {
+    return new Promise(function (resolve) {
+      clearTimeout(_quietSaveDebounceTimer);
+      _quietSaveDebounceTimer = null;
+      function waitForSaveIdle() {
+        if (!_draftSaveInFlight && !_draftSaveQueued) {
+          resolve();
+          return;
+        }
+        var retries = 0;
+        var timer = setInterval(function () {
+          retries++;
+          if ((!_draftSaveInFlight && !_draftSaveQueued) || retries > 50) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 100);
+      }
+      var formView = document.getElementById('view-form');
+      var openDraft = formView && formView.classList.contains('active')
+        && currentAttendanceId != null
+        && !isNoteLockedForEditing()
+        && !_finalising;
+      if (openDraft) {
+        quietSave();
+      }
+      waitForSaveIdle();
+    });
+  };
+
   function scheduleQuietSave() {
     markFormDirtyForDiskIndicator();
     clearTimeout(_quietSaveDebounceTimer);
@@ -7310,6 +7346,10 @@ var REQUIRED_FIELD_KEYS = [
           case 'amend': amendAttendance(id, rec.status, title); break;
           case 'dup': duplicateAttendance(id); break;
           case 'newMatter': newMatterFromAttendance(id); break;
+          case 'followUp':
+            if (typeof followUpAttendance === 'function') followUpAttendance(id);
+            else showToast('Follow-up attendance is not available. Please refresh the app.', 'error');
+            break;
           case 'bill':
             if (actionBtn.disabled) return;
             billAttendanceFromList(id);
@@ -7373,6 +7413,7 @@ var REQUIRED_FIELD_KEYS = [
     return billHtml +
       '<button type="button" class="btn-list-action amend-btn" data-action="amend" data-id="' + idAttr + '" title="Open record to edit (amend)">Edit</button>' +
       '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for another client (same session)">Duplicate</button>' +
+      '<button type="button" class="btn-list-action" data-action="followUp" title="Same client — bail return, identification, or other further visit">Follow-up</button>' +
       '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
       archiveBtn +
       '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>';
@@ -7578,9 +7619,13 @@ var REQUIRED_FIELD_KEYS = [
     }).catch(function(e) { showToast('Failed to load record', 'error'); console.error('[newMatter]', e); });
   }
 
-  function openAttendance(id) {
+  function openAttendance(id, openOpts) {
     var requestToken = ++_openAttendanceToken;
-    currentStandaloneSectionId = null;
+    var pendingStandalone = (openOpts && openOpts.standaloneSectionId)
+      || (typeof window !== 'undefined' && window._pendingOpenStandaloneSectionId)
+      || null;
+    if (typeof window !== 'undefined') window._pendingOpenStandaloneSectionId = null;
+    currentStandaloneSectionId = pendingStandalone || null;
     currentAttendanceId = id;
     
     /* Check LRU cache first for instant loading */
@@ -8693,6 +8738,81 @@ var REQUIRED_FIELD_KEYS = [
     if (timeStr) result += ' \u2014 ' + timeStr;
     return result;
   }
+  function formatFollowUpRecordLabelFromData(d, id) {
+    var parts = [];
+    if (d && d.ufn) parts.push('UFN ' + String(d.ufn).trim());
+    if (d && d.date) parts.push(formatDateGB(d.date));
+    if (!parts.length && id != null) parts.push('#' + id);
+    return parts.join(' \u00b7 ') || 'Linked record';
+  }
+
+  var _followUpLinksBarRequest = 0;
+
+  function updateFollowUpLinksBar() {
+    var bar = document.getElementById('form-follow-up-links');
+    if (!bar || !window.api || !window.api.attendanceGet) return;
+    var requestId = ++_followUpLinksBarRequest;
+    var recordIdAtStart = currentAttendanceId;
+    var fromId = formData && formData._followUpFromAttendanceId;
+    var toIds = (formData && Array.isArray(formData._followUpAttendanceIds))
+      ? formData._followUpAttendanceIds.filter(function (x) { return x != null; })
+      : [];
+    if (!fromId && !toIds.length) {
+      bar.classList.add('hidden');
+      bar.innerHTML = '';
+      return;
+    }
+    bar.classList.remove('hidden');
+    var loadLabel = function (id) {
+      return window.api.attendanceGet(id).then(function (row) {
+        return formatFollowUpRecordLabelFromData(row && row.data ? safeJson(row.data) : {}, id);
+      }).catch(function () {
+        return '#' + id;
+      });
+    };
+    var fromPromise = fromId
+      ? loadLabel(fromId).then(function (label) {
+        return '<span><span class="follow-up-label">Follow-up to:</span> '
+          + '<button type="button" class="follow-up-link-btn" data-follow-up-open="' + esc(String(fromId)) + '">'
+          + esc(label) + '</button></span>';
+      })
+      : Promise.resolve('');
+    var toPromise = toIds.length
+      ? Promise.all(toIds.map(function (tid) {
+        return loadLabel(tid).then(function (label) {
+          return '<button type="button" class="follow-up-link-btn" data-follow-up-open="' + esc(String(tid)) + '">'
+            + esc(label) + '</button>';
+        });
+      })).then(function (links) {
+        return '<span><span class="follow-up-label">Follow-ups:</span> ' + links.join(', ') + '</span>';
+      })
+      : Promise.resolve('');
+    Promise.all([fromPromise, toPromise]).then(function (parts) {
+      if (requestId !== _followUpLinksBarRequest) return;
+      if (recordIdAtStart !== currentAttendanceId) return;
+      var html = parts.filter(Boolean).join(' ');
+      if (!html) {
+        bar.classList.add('hidden');
+        bar.innerHTML = '';
+        return;
+      }
+      bar.innerHTML = html;
+      bindFollowUpLinkButtons(bar);
+    });
+  }
+
+  function bindFollowUpLinkButtons(container) {
+    if (!container) return;
+    container.querySelectorAll('[data-follow-up-open]').forEach(function (btn) {
+      if (btn._followUpBound) return;
+      btn._followUpBound = true;
+      btn.addEventListener('click', function () {
+        var id = parseInt(btn.getAttribute('data-follow-up-open'), 10);
+        if (!isNaN(id)) openAttendance(id);
+      });
+    });
+  }
+
   function updateContextBar() {
     const bar = document.getElementById('form-context-bar');
     if (!bar) return;
@@ -8744,6 +8864,7 @@ var REQUIRED_FIELD_KEYS = [
     }
     const rightHtml = '<span class="context-right">' + outcomeChipHtml + esc(poshDateTime(dateStr, timeStr)) + '</span>';
     bar.innerHTML = '<span class="context-left">' + leftParts.join('') + '</span>' + rightHtml;
+    try { updateFollowUpLinksBar(); } catch (_) {}
   }
 
   function getAttendanceDuration() {
@@ -17045,11 +17166,16 @@ pdfAuditFooterHtml(d, settings) +
     }
 
     window.syncFormDuplicateButtonVisibility = function () {
-      var btn = document.getElementById('form-duplicate-btn');
-      if (!btn) return;
       var vf = document.getElementById('view-form');
       var onForm = vf && vf.classList.contains('active');
-      btn.style.display = onForm && currentAttendanceId ? '' : 'none';
+      var showActions = onForm && currentAttendanceId;
+      var dupBtn = document.getElementById('form-duplicate-btn');
+      if (dupBtn) dupBtn.style.display = showActions ? '' : 'none';
+      var followBtn = document.getElementById('form-follow-up-btn');
+      if (followBtn) {
+        var isTel = formData && formData._formType === 'telephone';
+        followBtn.style.display = showActions && !isTel ? '' : 'none';
+      }
     };
 
     document.addEventListener('licence-activated', function () {
@@ -17405,6 +17531,12 @@ pdfAuditFooterHtml(d, settings) +
             prefillDefaults();
             renderForm(formData);
             showView('new');
+            return;
+          case 'home-card-follow-up':
+            e.preventDefault();
+            if (window.__licenceExpired) { showLicenceGateToast(); return; }
+            if (typeof openFollowUpSearchPicker === 'function') openFollowUpSearchPicker();
+            else showToast('Follow-up attendance is not available. Please refresh the app.', 'error');
             return;
           case 'home-card-voluntary':
             e.preventDefault();
@@ -17998,6 +18130,14 @@ pdfAuditFooterHtml(d, settings) +
         return;
       }
       duplicateAttendance(currentAttendanceId);
+    });
+    document.getElementById('form-follow-up-btn')?.addEventListener('click', function() {
+      if (!currentAttendanceId) { showToast('Save the record first', 'info'); return; }
+      if (typeof followUpAttendance !== 'function') {
+        showToast('Follow-up attendance is not available. Please refresh the app.', 'error');
+        return;
+      }
+      followUpAttendance(currentAttendanceId);
     });
     document.getElementById('form-header-history-btn')?.addEventListener('click', function() {
       if (!currentAttendanceId) { showToast('Save the record first to view history', 'info'); return; }
