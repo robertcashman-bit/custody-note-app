@@ -714,6 +714,7 @@
           <div class="header-right-group">
             <span id="autosave-indicator" class="autosave-indicator"></span>
             <button type="button" id="form-duplicate-btn" class="btn btn-small" title="Duplicate for another client in the same session" style="display:none;">Duplicate</button>
+            <button type="button" id="form-follow-up-btn" class="btn btn-small" title="Same client — bail return, identification, or other further attendance" style="display:none;">Follow-up attendance</button>
             <button type="button" id="form-header-history-btn" class="btn btn-small" title="View change history for this record">&#128203; History</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
@@ -748,6 +749,7 @@
 
         <!-- Context bar: always-visible case summary -->
         <div id="form-context-bar" class="form-context-bar"></div>
+        <div id="form-follow-up-links" class="form-follow-up-links hidden" aria-live="polite"></div>
 
         <!-- Sections index popup -->
         <div id="sections-index" class="sections-index hidden">
@@ -2335,6 +2337,7 @@
     <button type="button" id="scratchpad-toggle" class="scratchpad-fab" title="Quick Notes">&#128221;</button>
   </div>
   <script src="renderer/lib/duplicate-attendance.js"></script>
+  <script src="renderer/lib/follow-up-attendance.js"></script>
   <script src="lib/stationMileage.js"></script>
   <script src="renderer/lib/station-visits.js"></script>
   <script src="renderer/lib/quickfileConnectionState.js"></script>

@@ -435,6 +435,7 @@
 
   /* Expose to browser (window) and Node (CommonJS for tests). */
   global.duplicateAttendanceData = duplicateAttendanceData;
+  global.duplicateAttendanceClearPolicy = { CLEAR: CLEAR, CLEAR_PATTERNS: CLEAR_PATTERNS };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { duplicateAttendanceData: duplicateAttendanceData, CLEAR: CLEAR, CLEAR_PATTERNS: CLEAR_PATTERNS };
   }

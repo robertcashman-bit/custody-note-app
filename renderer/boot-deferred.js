@@ -20,6 +20,7 @@
     'renderer/views/authorities.js',
     'renderer/views/settings.js',
     'renderer/views/list.js',
+    'renderer/views/follow-up.js',
     'renderer/csv-exporter.js',
     'renderer/laa-forms.js',
     'renderer/filenameUtils.js',

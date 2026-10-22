@@ -16,6 +16,7 @@
     "verify:built-asar": "node scripts/verify-built-asar.mjs",
     "build": "npm run verify:release && electron-builder && npm run verify:built-asar",
     "build:only": "npm run verify:release && electron-builder && npm run verify:built-asar",
+    "build:win:test-followup": "electron-builder --win nsis -c.nsis.artifactName=Custody-Note-Setup-${npm_package_version}-test-followup.${ext} -c.publish=null",
     "release": "node scripts/release.mjs",
     "release:patch": "node scripts/release.mjs patch",
     "release:minor": "node scripts/release.mjs minor",
