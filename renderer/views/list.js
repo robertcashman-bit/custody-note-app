@@ -145,17 +145,5 @@ function duplicateAttendance(id) {
   });
 }
 
-function openAttendance(id) {
-  currentAttendanceId = id;
-  window.api.attendanceGet(id).then(function(row) {
-    currentRecordStatus = row ? row.status : null;
-    currentRecordArchived = !!(row && row.archived_at);
-    formData = row && row.data ? safeJson(row.data) : {};
-    currentSectionIdx = 0;
-    renderForm(formData);
-    if (typeof navigateTo === 'function') navigateTo('new'); else showView('new');
-    if (typeof window.syncFormDuplicateButtonVisibility === 'function') window.syncFormDuplicateButtonVisibility();
-  }).catch(function() {
-    showToast('Failed to open record', 'error');
-  });
-}
+/* openAttendance is defined in app.js (cache, form sections, standalone sections).
+   Do not replace it here — list actions use the app.js implementation. */

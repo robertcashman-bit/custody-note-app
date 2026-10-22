@@ -175,7 +175,9 @@
   }
 
   function appendFollowUpIdToSourceData(sourceData, newAttendanceId) {
-    var src = sourceData && typeof sourceData === 'object' ? sourceData : {};
+    var src = sourceData && typeof sourceData === 'object'
+      ? JSON.parse(JSON.stringify(sourceData))
+      : {};
     var list = Array.isArray(src._followUpAttendanceIds)
       ? src._followUpAttendanceIds.slice()
       : [];
@@ -185,8 +187,40 @@
     return src;
   }
 
+  /** Whether a back-link write to the source row is allowed (status unchanged). */
+  function canWriteFollowUpBackLink(sourceStatus) {
+    return sourceStatus === 'draft' || sourceStatus === 'finalised' || sourceStatus === 'completed';
+  }
+
+  /**
+   * Build payload for source save from fresh disk data + one new follow-up id only.
+   * @returns {{ write: boolean, status: string, data: object }}
+   */
+  function planFollowUpBackLinkSave(freshSourceRow, newAttendanceId) {
+    if (!freshSourceRow || freshSourceRow.data == null) {
+      return { write: false, status: '', data: {} };
+    }
+    var status = freshSourceRow.status || 'draft';
+    if (!canWriteFollowUpBackLink(status)) {
+      return { write: false, status: status, data: {} };
+    }
+    var freshData = typeof freshSourceRow.data === 'object'
+      ? JSON.parse(JSON.stringify(freshSourceRow.data))
+      : JSON.parse(String(freshSourceRow.data || '{}'));
+    var data = appendFollowUpIdToSourceData(freshData, newAttendanceId);
+    return { write: true, status: status, data: data };
+  }
+
+  function syncFollowUpIdsOntoOpenFormData(formDataObj, linkedData) {
+    if (!formDataObj || !linkedData || !Array.isArray(linkedData._followUpAttendanceIds)) return;
+    formDataObj._followUpAttendanceIds = linkedData._followUpAttendanceIds.slice();
+  }
+
   global.followUpAttendanceData = followUpAttendanceData;
   global.appendFollowUpIdToSourceData = appendFollowUpIdToSourceData;
+  global.canWriteFollowUpBackLink = canWriteFollowUpBackLink;
+  global.planFollowUpBackLinkSave = planFollowUpBackLinkSave;
+  global.syncFollowUpIdsOntoOpenFormData = syncFollowUpIdsOntoOpenFormData;
   global.FOLLOW_UP_REASON_CODES = REASON_CODES;
   global.FOLLOW_UP_CLIENT_PERSONAL_KEYS = CLIENT_PERSONAL_KEYS;
 
@@ -194,6 +228,9 @@
     module.exports = {
       followUpAttendanceData: followUpAttendanceData,
       appendFollowUpIdToSourceData: appendFollowUpIdToSourceData,
+      canWriteFollowUpBackLink: canWriteFollowUpBackLink,
+      planFollowUpBackLinkSave: planFollowUpBackLinkSave,
+      syncFollowUpIdsOntoOpenFormData: syncFollowUpIdsOntoOpenFormData,
       FOLLOW_UP_REASON_CODES: REASON_CODES,
       FOLLOW_UP_CLIENT_PERSONAL_KEYS: CLIENT_PERSONAL_KEYS,
     };

@@ -55,6 +55,49 @@ function parseAttendanceSaveId(result) {
   return null;
 }
 
+function flushSourceIfOpenOnForm(sourceId) {
+  if (String(typeof currentAttendanceId !== 'undefined' ? currentAttendanceId : '') !== String(sourceId)) {
+    return Promise.resolve();
+  }
+  if (typeof window.flushOpenRecordAutosaveBeforeExternalRead === 'function') {
+    return window.flushOpenRecordAutosaveBeforeExternalRead();
+  }
+  return Promise.resolve();
+}
+
+function writeFollowUpBackLink(sourceId, newId) {
+  return flushSourceIfOpenOnForm(sourceId).then(function () {
+    return window.api.attendanceGet(sourceId);
+  }).then(function (freshRow) {
+    if (!freshRow) return;
+    var plan = typeof planFollowUpBackLinkSave === 'function'
+      ? planFollowUpBackLinkSave(freshRow, newId)
+      : null;
+    if (!plan || !plan.write) {
+      console.log('[FOLLOW-UP] back-link skipped for source id=' + sourceId);
+      return;
+    }
+    if (String(typeof currentAttendanceId !== 'undefined' ? currentAttendanceId : '') === String(sourceId)
+      && typeof formData !== 'undefined'
+      && typeof syncFollowUpIdsOntoOpenFormData === 'function') {
+      syncFollowUpIdsOntoOpenFormData(formData, plan.data);
+    }
+    return window.api.attendanceSave({
+      id: sourceId,
+      data: plan.data,
+      status: plan.status,
+    }).then(function (res) {
+      if (res && typeof res === 'object' && res.error) {
+        console.warn('[FOLLOW-UP] source link save rejected id=' + sourceId, res.error);
+        return;
+      }
+      console.log('[FOLLOW-UP] linked source id=' + sourceId + ' -> new id=' + newId);
+    });
+  }).catch(function (err) {
+    console.warn('[FOLLOW-UP] source link save failed id=' + sourceId, err && err.message);
+  });
+}
+
 function followUpAttendance(sourceId) {
   if (!window.api || !window.api.attendanceGet || !window.api.attendanceSave) return;
   if (typeof followUpAttendanceData !== 'function') {
@@ -63,7 +106,9 @@ function followUpAttendance(sourceId) {
   }
   showFollowUpReasonChooser().then(function (reasonCode) {
     if (!reasonCode) return;
-    window.api.attendanceGet(sourceId).then(function (row) {
+    flushSourceIfOpenOnForm(sourceId).then(function () {
+      return window.api.attendanceGet(sourceId);
+    }).then(function (row) {
       if (!row || !row.data) {
         showToast('Could not load record for follow-up', 'error');
         return;
@@ -75,7 +120,7 @@ function followUpAttendance(sourceId) {
       }
       var newData = followUpAttendanceData(src, sourceId, reasonCode);
       console.log('[FOLLOW-UP] creating draft from attendance id=' + sourceId + ' reason=' + reasonCode);
-      window.api.attendanceSave({ id: null, data: newData, status: 'draft' }).then(function (saveResult) {
+      return window.api.attendanceSave({ id: null, data: newData, status: 'draft' }).then(function (saveResult) {
         if (saveResult && typeof saveResult === 'object' && saveResult.error) {
           showToast((saveResult.message || saveResult.error) ? String(saveResult.message || saveResult.error) : 'Could not save follow-up', 'error');
           return;
@@ -85,41 +130,23 @@ function followUpAttendance(sourceId) {
           showToast('Could not create follow-up record', 'error');
           return;
         }
-        var updatedSource = typeof appendFollowUpIdToSourceData === 'function'
-          ? appendFollowUpIdToSourceData(src, newId)
-          : (function () {
-            var s = JSON.parse(JSON.stringify(src));
-            s._followUpAttendanceIds = s._followUpAttendanceIds || [];
-            if (s._followUpAttendanceIds.indexOf(newId) === -1) s._followUpAttendanceIds.push(newId);
-            return s;
-          })();
-        window.api.attendanceSave({
-          id: sourceId,
-          data: updatedSource,
-          status: row.status || 'draft',
-        }).then(function () {
-          console.log('[FOLLOW-UP] linked source id=' + sourceId + ' -> new id=' + newId);
-        }).catch(function (err) {
-          console.warn('[FOLLOW-UP] source link save failed id=' + sourceId, err && err.message);
-        });
+        return writeFollowUpBackLink(sourceId, newId).then(function () {
+          try {
+            if (typeof window._recordCache !== 'undefined' && window._recordCache) {
+              window._recordCache.delete(newId);
+              window._recordCache.delete(sourceId);
+            }
+          } catch (_) {}
 
-        try {
-          if (typeof window._recordCache !== 'undefined' && window._recordCache) {
-            window._recordCache.delete(newId);
-            window._recordCache.delete(sourceId);
+          hideFurtherVisitLookupPrompt();
+          if (reasonCode === 'identification') {
+            openFollowUpAttendanceRecord(newId, 'videoIdParadeStandalone');
+          } else {
+            openFollowUpAttendanceRecord(newId, null);
           }
-        } catch (_) {}
-
-        hideFurtherVisitLookupPrompt();
-        if (reasonCode === 'identification') {
-          openFollowUpAttendanceRecord(newId, 'videoIdParadeStandalone');
-        } else {
-          openFollowUpAttendanceRecord(newId, null);
-        }
-        showToast('Follow-up draft created — complete this visit\'s details.', 'success');
-        if (typeof window.refreshList === 'function') window.refreshList();
-      }).catch(function () {
-        showToast('Failed to create follow-up record', 'error');
+          showToast('Follow-up draft created — complete this visit\'s details.', 'success');
+          if (typeof window.refreshList === 'function') window.refreshList();
+        });
       });
     }).catch(function () {
       showToast('Failed to load record for follow-up', 'error');

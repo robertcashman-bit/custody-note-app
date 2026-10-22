@@ -5505,6 +5505,37 @@ var REQUIRED_FIELD_KEYS = [
   var _editorActivityDebounceTimer = null;
   var EDITOR_ACTIVITY_DEBOUNCE_MS = 10000;
 
+  /** Flush debounced autosave for the open draft before reading the same row from disk (follow-up, etc.). */
+  window.flushOpenRecordAutosaveBeforeExternalRead = function () {
+    return new Promise(function (resolve) {
+      clearTimeout(_quietSaveDebounceTimer);
+      _quietSaveDebounceTimer = null;
+      function waitForSaveIdle() {
+        if (!_draftSaveInFlight && !_draftSaveQueued) {
+          resolve();
+          return;
+        }
+        var retries = 0;
+        var timer = setInterval(function () {
+          retries++;
+          if ((!_draftSaveInFlight && !_draftSaveQueued) || retries > 50) {
+            clearInterval(timer);
+            resolve();
+          }
+        }, 100);
+      }
+      var formView = document.getElementById('view-form');
+      var openDraft = formView && formView.classList.contains('active')
+        && currentAttendanceId != null
+        && !isNoteLockedForEditing()
+        && !_finalising;
+      if (openDraft) {
+        quietSave();
+      }
+      waitForSaveIdle();
+    });
+  };
+
   function scheduleQuietSave() {
     markFormDirtyForDiskIndicator();
     clearTimeout(_quietSaveDebounceTimer);
@@ -8715,9 +8746,13 @@ var REQUIRED_FIELD_KEYS = [
     return parts.join(' \u00b7 ') || 'Linked record';
   }
 
+  var _followUpLinksBarRequest = 0;
+
   function updateFollowUpLinksBar() {
     var bar = document.getElementById('form-follow-up-links');
     if (!bar || !window.api || !window.api.attendanceGet) return;
+    var requestId = ++_followUpLinksBarRequest;
+    var recordIdAtStart = currentAttendanceId;
     var fromId = formData && formData._followUpFromAttendanceId;
     var toIds = (formData && Array.isArray(formData._followUpAttendanceIds))
       ? formData._followUpAttendanceIds.filter(function (x) { return x != null; })
@@ -8753,6 +8788,8 @@ var REQUIRED_FIELD_KEYS = [
       })
       : Promise.resolve('');
     Promise.all([fromPromise, toPromise]).then(function (parts) {
+      if (requestId !== _followUpLinksBarRequest) return;
+      if (recordIdAtStart !== currentAttendanceId) return;
       var html = parts.filter(Boolean).join(' ');
       if (!html) {
         bar.classList.add('hidden');

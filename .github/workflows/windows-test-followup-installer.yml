@@ -14,7 +14,7 @@ on:
       label_suffix:
         description: 'Installer filename suffix (default test-followup2)'
         required: false
-        default: 'test-followup2'
+        default: 'test-followup3'
       create_prerelease:
         description: 'Also attach to a GitHub prerelease (tag test-win-*; not v*)'
         type: boolean
@@ -46,7 +46,7 @@ jobs:
       - name: Build Windows NSIS (test artifact name)
         shell: bash
         env:
-          LABEL_SUFFIX: ${{ inputs.label_suffix || 'test-followup2' }}
+          LABEL_SUFFIX: ${{ inputs.label_suffix || 'test-followup3' }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           npx electron-builder --win nsis --publish never \
@@ -55,15 +55,15 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: custody-note-setup-test-followup2
-          path: dist/Custody-Note-Setup-*-test-followup2.exe
+          name: custody-note-setup-test-followup3
+          path: dist/Custody-Note-Setup-*-test-followup3.exe
           if-no-files-found: error
 
       - name: Create GitHub prerelease (optional)
         if: github.event_name == 'push' || inputs.create_prerelease != false
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LABEL_SUFFIX: ${{ inputs.label_suffix || 'test-followup2' }}
+          LABEL_SUFFIX: ${{ inputs.label_suffix || 'test-followup3' }}
         shell: bash
         run: |
           VERSION=$(node -p "require('./package.json').version")
