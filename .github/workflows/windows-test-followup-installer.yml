@@ -49,9 +49,8 @@ jobs:
           LABEL_SUFFIX: ${{ inputs.label_suffix || 'test-followup' }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          npx electron-builder --win nsis \
-            -c.nsis.artifactName="Custody-Note-Setup-${VERSION}-${LABEL_SUFFIX}.\${ext}" \
-            -c.publish=null
+          npx electron-builder --win nsis --publish never \
+            -c.nsis.artifactName="Custody-Note-Setup-${VERSION}-${LABEL_SUFFIX}.\${ext}"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
