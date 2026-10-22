@@ -1917,6 +1917,9 @@ var REQUIRED_FIELD_KEYS = [
     setFieldValue('clientType', 'Existing');
     setFieldValue('caseStatus', 'Existing case');
     showClientImportedToast();
+    if (typeof window.maybeOfferFurtherVisitFromClientLookup === 'function') {
+      window.maybeOfferFurtherVisitFromClientLookup(d);
+    }
   }
 
   function showClientImportedToast() {
@@ -17491,6 +17494,12 @@ pdfAuditFooterHtml(d, settings) +
             prefillDefaults();
             renderForm(formData);
             showView('new');
+            return;
+          case 'home-card-follow-up':
+            e.preventDefault();
+            if (window.__licenceExpired) { showLicenceGateToast(); return; }
+            if (typeof openFollowUpSearchPicker === 'function') openFollowUpSearchPicker();
+            else showToast('Follow-up attendance is not available. Please refresh the app.', 'error');
             return;
           case 'home-card-voluntary':
             e.preventDefault();

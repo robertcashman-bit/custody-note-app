@@ -110,6 +110,7 @@ function followUpAttendance(sourceId) {
           }
         } catch (_) {}
 
+        hideFurtherVisitLookupPrompt();
         if (reasonCode === 'identification') {
           openFollowUpAttendanceRecord(newId, 'videoIdParadeStandalone');
         } else {
@@ -148,4 +149,224 @@ function openFollowUpAttendanceRecord(id, standaloneSectionId) {
   });
 }
 
+var _followUpSearchRowsCache = null;
+var _followUpSearchDebounce = null;
+
+function loadAttendanceRowsForFollowUp() {
+  if (_followUpSearchRowsCache) return Promise.resolve(_followUpSearchRowsCache);
+  var listFn = window.api && (window.api.attendanceListFull || window.api.attendanceList);
+  if (!listFn) return Promise.resolve([]);
+  return listFn().then(function (rows) {
+    _followUpSearchRowsCache = rows || [];
+    return _followUpSearchRowsCache;
+  });
+}
+
+function renderFollowUpSearchList(listEl, hits, onPick) {
+  if (!listEl) return;
+  if (!hits.length) {
+    listEl.innerHTML = '<li class="home-recent-empty">No matching station attendances. Try another spelling, UFN, or DOB.</li>';
+    return;
+  }
+  listEl.innerHTML = hits.map(function (hit) {
+    var r = hit.row;
+    var d = hit.data;
+    var primary = typeof formatFollowUpPickerPrimary === 'function'
+      ? formatFollowUpPickerPrimary(d)
+      : ((d.surname || '') + ', ' + (d.forename || '')).replace(/^,\s*|,\s*$/g, '');
+    var meta = typeof formatFollowUpPickerMeta === 'function'
+      ? formatFollowUpPickerMeta(d, r)
+      : '';
+    return '<li class="attendance-picker-item" data-id="' + esc(String(r.id)) + '">'
+      + '<span class="picker-item-name">' + esc(primary) + '</span>'
+      + '<span class="picker-item-meta">' + esc(meta) + '</span></li>';
+  }).join('');
+  listEl.querySelectorAll('.attendance-picker-item').forEach(function (li) {
+    li.addEventListener('click', function () {
+      var id = parseInt(li.getAttribute('data-id'), 10);
+      if (!isNaN(id) && onPick) onPick(id);
+    });
+  });
+}
+
+function openFollowUpPickFromMatches(matches) {
+  if (!matches || !matches.length) return;
+  var overlay = document.createElement('div');
+  overlay.className = 'attendance-picker-overlay';
+  overlay.innerHTML =
+    '<div class="sections-index-content attendance-picker-content" style="max-width:480px;">' +
+      '<h3 style="margin-top:0;">Choose attendance</h3>' +
+      '<p class="attendance-picker-hint">Select which previous visit to copy case details from.</p>' +
+      '<ul class="attendance-picker-list" data-role="list"></ul>' +
+      '<button type="button" class="btn btn-secondary attendance-picker-cancel" style="margin-top:0.75rem;width:100%;">Cancel</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  var listEl = overlay.querySelector('[data-role="list"]');
+  function close() { try { overlay.remove(); } catch (_) {} }
+  renderFollowUpSearchList(listEl, matches, function (id) {
+    close();
+    followUpAttendance(id);
+  });
+  overlay.querySelector('.attendance-picker-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+}
+
+function openFollowUpSearchPicker(opts) {
+  opts = opts || {};
+  if (!window.api) {
+    showToast('Follow-up search is not available', 'error');
+    return;
+  }
+  if (typeof filterAttendanceRowsForFollowUpSearch !== 'function') {
+    showToast('Follow-up attendance is not available. Please refresh the app.', 'error');
+    return;
+  }
+  var minLen = (typeof FOLLOW_UP_SEARCH_MIN_LEN === 'number') ? FOLLOW_UP_SEARCH_MIN_LEN : 2;
+  var overlay = document.createElement('div');
+  overlay.className = 'attendance-picker-overlay';
+  overlay.setAttribute('aria-label', 'Find client for follow-up');
+  overlay.innerHTML =
+    '<div class="sections-index-content attendance-picker-content" style="max-width:480px;">' +
+      '<h3 style="margin-top:0;">Bail return / follow-up</h3>' +
+      '<p class="attendance-picker-hint">Search past <strong>station</strong> attendances by client name, date of birth, or UFN (at least ' + minLen + ' characters). Pick a record, then choose why they are returning.</p>' +
+      '<input type="search" class="follow-up-search-input" id="follow-up-search-input" placeholder="e.g. Smith, 1990-01-15, or 010125/001" autocomplete="off" />' +
+      '<ul class="attendance-picker-list" data-role="list"></ul>' +
+      '<p class="attendance-picker-hint" data-role="empty-hint">Type to search. If this is a brand-new client, use <strong>Custody Attendance</strong> on Home instead.</p>' +
+      '<button type="button" class="btn btn-secondary attendance-picker-cancel" style="margin-top:0.75rem;width:100%;">Cancel</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  var listEl = overlay.querySelector('[data-role="list"]');
+  var inputEl = overlay.querySelector('#follow-up-search-input');
+  var emptyHint = overlay.querySelector('[data-role="empty-hint"]');
+  listEl.innerHTML = '<li class="home-recent-empty">Loading records\u2026</li>';
+
+  function close() {
+    try { overlay.remove(); } catch (_) {}
+  }
+
+  function pick(id) {
+    close();
+    if (typeof followUpAttendance === 'function') followUpAttendance(id);
+    else if (opts.onSelect) opts.onSelect(id);
+  }
+
+  overlay.querySelector('.attendance-picker-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+
+  function runSearch(q) {
+    loadAttendanceRowsForFollowUp().then(function (rows) {
+      var hits = filterAttendanceRowsForFollowUpSearch(rows, q, safeJson);
+      if (!q || q.length < minLen) {
+        listEl.innerHTML = '<li class="home-recent-empty">Enter at least ' + minLen + ' characters to search.</li>';
+        if (emptyHint) emptyHint.style.display = '';
+        return;
+      }
+      if (emptyHint) emptyHint.style.display = hits.length ? 'none' : '';
+      renderFollowUpSearchList(listEl, hits, pick);
+    }).catch(function () {
+      listEl.innerHTML = '<li class="home-recent-empty">Could not load attendances.</li>';
+    });
+  }
+
+  inputEl.addEventListener('input', function () {
+    clearTimeout(_followUpSearchDebounce);
+    var val = inputEl.value;
+    _followUpSearchDebounce = setTimeout(function () { runSearch(val); }, 250);
+  });
+  inputEl.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') close();
+  });
+
+  loadAttendanceRowsForFollowUp().then(function () {
+    listEl.innerHTML = '<li class="home-recent-empty">Enter at least ' + minLen + ' characters to search.</li>';
+    inputEl.focus();
+    if (opts.initialQuery && String(opts.initialQuery).length >= minLen) {
+      inputEl.value = opts.initialQuery;
+      runSearch(opts.initialQuery);
+    }
+  });
+}
+
+var _furtherVisitPromptEl = null;
+
+function hideFurtherVisitLookupPrompt() {
+  if (_furtherVisitPromptEl && _furtherVisitPromptEl.parentNode) {
+    try { _furtherVisitPromptEl.remove(); } catch (_) {}
+  }
+  _furtherVisitPromptEl = null;
+}
+
+function showFurtherVisitLookupPrompt(matches) {
+  hideFurtherVisitLookupPrompt();
+  if (!matches || !matches.length) return;
+  var anchor = document.querySelector('.name-row-group');
+  if (!anchor || !anchor.parentNode) return;
+
+  var box = document.createElement('div');
+  box.className = 'follow-up-lookup-prompt';
+  box.setAttribute('role', 'note');
+  var msg = document.createElement('p');
+  msg.textContent = 'Is this a further visit on an existing case? Copy case details from their last attendance.';
+  box.appendChild(msg);
+
+  var actions = document.createElement('div');
+  actions.className = 'follow-up-lookup-prompt-actions';
+
+  function startFromId(id) {
+    hideFurtherVisitLookupPrompt();
+    followUpAttendance(id);
+  }
+
+  if (matches.length === 1) {
+    var btnOne = document.createElement('button');
+    btnOne.type = 'button';
+    btnOne.className = 'btn btn-small';
+    btnOne.textContent = 'Start follow-up from last attendance';
+    btnOne.addEventListener('click', function () { startFromId(matches[0].row.id); });
+    actions.appendChild(btnOne);
+  } else {
+    var btnChoose = document.createElement('button');
+    btnChoose.type = 'button';
+    btnChoose.className = 'btn btn-small';
+    btnChoose.textContent = 'Choose which attendance to copy from (' + matches.length + ')';
+    btnChoose.addEventListener('click', function () {
+      hideFurtherVisitLookupPrompt();
+      openFollowUpPickFromMatches(matches);
+    });
+    actions.appendChild(btnChoose);
+  }
+
+  var dismiss = document.createElement('button');
+  dismiss.type = 'button';
+  dismiss.className = 'btn btn-secondary btn-small';
+  dismiss.textContent = 'Not now';
+  dismiss.addEventListener('click', hideFurtherVisitLookupPrompt);
+  actions.appendChild(dismiss);
+
+  box.appendChild(actions);
+  anchor.parentNode.insertBefore(box, anchor.nextSibling);
+  _furtherVisitPromptEl = box;
+}
+
+function maybeOfferFurtherVisitFromClientLookup(clientData) {
+  if (!clientData || typeof filterStationAttendancesForClientIdentity !== 'function') return;
+  if (formData && formData._formType === 'telephone') return;
+  var excludeId = (typeof currentAttendanceId !== 'undefined') ? currentAttendanceId : null;
+  loadAttendanceRowsForFollowUp().then(function (rows) {
+    var matches = filterStationAttendancesForClientIdentity(rows, clientData, safeJson, excludeId);
+    if (matches.length < 1) return;
+    showFurtherVisitLookupPrompt(matches);
+  }).catch(function () { /* ignore */ });
+}
+
 window.followUpAttendance = followUpAttendance;
+window.openFollowUpSearchPicker = openFollowUpSearchPicker;
+window.maybeOfferFurtherVisitFromClientLookup = maybeOfferFurtherVisitFromClientLookup;
+window.hideFurtherVisitLookupPrompt = hideFurtherVisitLookupPrompt;
+
+if (window.api && window.api.onRecordsUpdatedFromSync) {
+  window.api.onRecordsUpdatedFromSync(function () {
+    _followUpSearchRowsCache = null;
+  });
+}

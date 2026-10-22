@@ -962,7 +962,7 @@ html.theme-light .app-footer {
 /* Action cards -- PSR glass-pill style on gradient; stretch across bar, spaced out */
 /* ═══ PRIMARY ACTION CARDS (Custody / Voluntary) ═══ */
 .home-primary-actions {
-  display: flex; gap: 1.25rem; padding: 0 2rem 1rem;
+  display: flex; flex-wrap: wrap; gap: 1.25rem; padding: 0 2rem 1rem;
   width: 100%; box-sizing: border-box;
 }
 .home-primary-card {
@@ -989,6 +989,13 @@ html.theme-light .app-footer {
   border-color: rgba(134,239,172,0.4);
 }
 .home-primary-voluntary:hover { border-color: rgba(134,239,172,0.7); }
+.home-primary-followup {
+  background: linear-gradient(135deg, #9a3412 0%, #ea580c 100%);
+  border-color: rgba(253,186,116,0.45);
+  flex: 1.15 1 0;
+}
+.home-primary-followup:hover { border-color: rgba(253,186,116,0.75); }
+.home-primary-custody { flex: 1.15 1 0; }
 .home-primary-icon {
   width: 56px; height: 56px; border-radius: 14px;
   display: flex; align-items: center; justify-content: center;
@@ -1910,6 +1917,20 @@ html:not(.dark) #view-list .list-sort-select option {
 }
 .form-follow-up-links .follow-up-link-btn:hover { opacity: 0.85; }
 .form-follow-up-links .follow-up-label { color: var(--on-surface-muted); font-weight: 500; }
+.follow-up-search-input {
+  width: 100%; box-sizing: border-box; margin-bottom: 0.75rem;
+  padding: 0.55rem 0.65rem; font-size: 0.95rem;
+  border: 1px solid var(--border); border-radius: 8px;
+}
+.follow-up-lookup-prompt {
+  grid-column: 1 / -1;
+  margin-top: 0.35rem; padding: 0.65rem 0.85rem;
+  border-radius: 8px; border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  font-size: 0.88rem; line-height: 1.45;
+}
+.follow-up-lookup-prompt p { margin: 0 0 0.5rem; }
+.follow-up-lookup-prompt-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .outcome-chip--rui    { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
 html.dark .outcome-chip { background: color-mix(in srgb, var(--primary) 22%, transparent); color: #e0e7ff; border-color: color-mix(in srgb, var(--primary) 35%, transparent); }
 html.dark .outcome-chip--charge { background: rgba(220,38,38,0.18); color: #fecaca; border-color: rgba(220,38,38,0.45); }
