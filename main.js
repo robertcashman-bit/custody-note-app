@@ -221,6 +221,7 @@ const syncConflicts = require('./main/syncConflicts');
 const staleSyncCatchUpRunner = require('./main/staleSyncCatchUpRunner');
 const openConflictAutoResolve = require('./main/openConflictAutoResolve');
 const pdfBundledCjkFont = require('./lib/pdfBundledCjkFont');
+const pdfViewer = require('./lib/pdfViewer');
 const errorReporting = require('./main/errorReporting');
 const dbCrypto = require('./lib/dbCrypto');
 const { createBackupScheduler } = require('./main/backupScheduler');
@@ -7004,6 +7005,12 @@ app.whenReady().then(async () => {
   }
   try { _securityLog.init(app.getPath('userData')); _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }); }
   catch (_) {}
+  try {
+    pdfViewer.registerPdfViewerIpc(function () { return mainWindow; });
+    pdfViewer.cleanupStalePreviewPdfsOnStartup();
+  } catch (e) {
+    console.warn('[pdf-viewer] init failed:', e && e.message ? e.message : e);
+  }
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
@@ -10983,39 +10990,118 @@ ipcMain.handle('print-to-pdf', async (_, { html, filename, brandingFooter }) => 
   }
 });
 
-/** Save a base64 PDF to temp and open in system PDF viewer */
+/** Save a base64 PDF to temp and open in the in-app PDF viewer (never OS default handler). */
 // H16 — cap base64 input. 50 MB base64 ≈ 37 MB binary, more than any
 // realistic generated PDF; anything bigger is treated as a DoS attempt.
 const PREVIEW_PDF_MAX_BASE64_BYTES = 50 * 1024 * 1024;
-ipcMain.handle('preview-pdf-base64', async (_, { base64, filename }) => {
+ipcMain.handle('preview-pdf-base64', async (_, params) => {
   try {
+    const p = params || {};
+    const base64 = p.base64;
     if (typeof base64 !== 'string' || !base64) return { ok: false, error: 'No PDF data provided' };
     if (base64.length > PREVIEW_PDF_MAX_BASE64_BYTES) {
       return { ok: false, error: 'PDF too large to preview (max ' + Math.round(PREVIEW_PDF_MAX_BASE64_BYTES / (1024 * 1024)) + ' MB base64)' };
     }
-    const tempDir = app.getPath('temp');
-    const safeName = (filename || `preview-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
-    if (path.extname(safeName).toLowerCase() !== '.pdf') {
-      return { ok: false, error: 'Only .pdf preview filenames are accepted' };
+    const safeName = pdfViewer.sanitizePdfFilename(p.filename || 'preview.pdf');
+    const buf = Buffer.from(base64, 'base64');
+    const deleteOnClose = p.deleteOnClose !== false;
+    const openViewer = p.openViewer !== false;
+    let filePath;
+    if (p.persist === 'mail-attachment') {
+      filePath = pdfViewer.writePdfToMailAttachments(buf, safeName);
+    } else if (p.persist === 'desktop') {
+      filePath = pdfViewer.writePdfToDesktop(buf, safeName);
+    } else {
+      filePath = pdfViewer.writeTempPreviewPdf(buf, safeName);
     }
-    const filePath = path.join(tempDir, safeName);
-    fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
-    await shell.openPath(filePath);
-    return { ok: true, path: filePath };
+    let viewerOpened = false;
+    if (openViewer) {
+      const opened = await pdfViewer.openPdfViewer({
+        filePath: filePath,
+        suggestedFilename: safeName,
+        deleteOnClose: deleteOnClose,
+        emailCompose: p.emailCompose,
+        getParentWindow: function () { return mainWindow; },
+      });
+      viewerOpened = !!opened.viewerOpened;
+    }
+    return { ok: true, path: filePath, viewerOpened: viewerOpened };
   } catch (err) {
     console.error('[preview-pdf-base64]', err);
     return { ok: false, error: err.message || String(err) };
   }
 });
 
-/** Returns PDF as base64 for in-app preview (renderer); work stays in main process. */
-ipcMain.handle('preview-pdf-from-html', async (_, { html }) => {
+ipcMain.handle('save-pdf-base64', async (_, params) => {
   try {
-    const buf = await renderHtmlToPdfBuffer(html);
-    return { ok: true, base64: Buffer.from(buf).toString('base64') };
+    const p = params || {};
+    const base64 = p.base64;
+    if (typeof base64 !== 'string' || !base64) return { ok: false, error: 'No PDF data provided' };
+    if (base64.length > PREVIEW_PDF_MAX_BASE64_BYTES) {
+      return { ok: false, error: 'PDF too large (max ' + Math.round(PREVIEW_PDF_MAX_BASE64_BYTES / (1024 * 1024)) + ' MB base64)' };
+    }
+    const safeName = pdfViewer.sanitizePdfFilename(p.filename || 'document.pdf');
+    const buf = Buffer.from(base64, 'base64');
+    const target = p.target || 'desktop';
+    let filePath;
+    if (target === 'mail-attachment') {
+      filePath = pdfViewer.writePdfToMailAttachments(buf, safeName);
+    } else if (target === 'desktop') {
+      filePath = pdfViewer.writePdfToDesktop(buf, safeName);
+    } else {
+      return { ok: false, error: 'Invalid save target' };
+    }
+    let viewerOpened = false;
+    if (p.openViewer) {
+      const opened = await pdfViewer.openPdfViewer({
+        filePath: filePath,
+        suggestedFilename: safeName,
+        deleteOnClose: false,
+        emailCompose: p.emailCompose,
+        getParentWindow: function () { return mainWindow; },
+      });
+      viewerOpened = !!opened.viewerOpened;
+    }
+    return { ok: true, path: filePath, viewerOpened: viewerOpened };
+  } catch (err) {
+    console.error('[save-pdf-base64]', err);
+    return { ok: false, error: err.message || String(err) };
+  }
+});
+
+/** Render HTML to PDF in main process and open in the in-app viewer. */
+ipcMain.handle('preview-pdf-from-html', async (_, { html, filename, brandingFooter, emailCompose }) => {
+  try {
+    const buf = await renderHtmlToPdfBuffer(html, { brandingFooter: brandingFooter !== false });
+    const safeName = pdfViewer.sanitizePdfFilename(filename || 'document.pdf');
+    const filePath = pdfViewer.writeTempPreviewPdf(Buffer.from(buf), safeName);
+    await pdfViewer.openPdfViewer({
+      filePath: filePath,
+      suggestedFilename: safeName,
+      deleteOnClose: true,
+      emailCompose: emailCompose,
+      getParentWindow: function () { return mainWindow; },
+    });
+    return { ok: true, path: filePath, viewerOpened: true };
   } catch (err) {
     console.error('[preview-pdf-from-html]', err && err.message ? err.message : err);
     return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('open-pdf-viewer', async (_, { filePath, filename, title, deleteOnClose, emailCompose }) => {
+  try {
+    const opened = await pdfViewer.openPdfViewer({
+      filePath: filePath,
+      suggestedFilename: filename,
+      title: title,
+      deleteOnClose: deleteOnClose === true,
+      emailCompose: emailCompose,
+      getParentWindow: function () { return mainWindow; },
+    });
+    return opened;
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : err };
   }
 });
 

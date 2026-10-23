@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+  <title>PDF preview</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; overflow: hidden; font-family: "Segoe UI", system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+    .toolbar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      height: 52px; padding: 8px 12px; border-bottom: 1px solid #334155; background: #1e293b;
+    }
+    .toolbar .title {
+      flex: 1 1 120px; min-width: 0; font-size: 13px; font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #f1f5f9;
+    }
+    button {
+      font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 6px; border: 1px solid #475569;
+      background: #334155; color: #f8fafc; cursor: pointer;
+    }
+    button:hover { background: #475569; }
+    button.primary { background: #2563eb; border-color: #1d4ed8; }
+    button.primary:hover { background: #1d4ed8; }
+    button.ghost { background: transparent; }
+    .spacer { flex: 0 0 auto; }
+  </style>
+</head>
+<body>
+  <header class="toolbar" role="toolbar" aria-label="PDF actions">
+    <span class="title" id="doc-title">PDF preview</span>
+    <span class="spacer"></span>
+    <button type="button" id="btn-print" class="primary">Print</button>
+    <button type="button" id="btn-save">Save as…</button>
+    <button type="button" id="btn-email">Email</button>
+    <button type="button" id="btn-external" class="ghost">Open in another app</button>
+    <button type="button" id="btn-close">Close</button>
+  </header>
+  <script src="pdf-viewer-shell.js"></script>
+</body>
+</html>
