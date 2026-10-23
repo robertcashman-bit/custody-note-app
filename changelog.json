@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.120",
+      "date": "2026-10-23",
+      "latest": true,
+      "changes": [
+        "Officer Emails redesigned: tap-through date and time counters, clearer step-by-step layout and a live preview.",
+        "Fixed bail fields showing on every email type and dates appearing as 2026-10-23."
+      ]
+    },
+    {
       "version": "1.9.119",
       "date": "2026-10-22",
-      "latest": true,
+      "latest": false,
       "changes": [
         "New 'Bail return / follow-up' card on Home: search for a client by name, date of birth or UFN and start a further attendance with their details already filled in.",
         "New Follow-up attendance button in Records and on an open attendance note: choose bail return, RUI return, identification procedure or another further attendance, and the client and matter details are copied into a new draft. Billing starts fresh for the new visit.",
