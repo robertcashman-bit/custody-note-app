@@ -5,6 +5,9 @@
   var TEMPLATE_OPTIONS = (typeof OFFICER_EMAIL_TEMPLATE_OPTIONS !== 'undefined')
     ? OFFICER_EMAIL_TEMPLATE_OPTIONS
     : [];
+  var Layout = global.OfficerEmailComposeLayout;
+  var DT = global.OfficerEmailDateTime;
+  var PREFIX = 'oep';
 
   var STATUS_LABELS = {
     draft: 'Draft',
@@ -23,6 +26,7 @@
   var autoGenerateTimer = null;
   var els = {};
   var recipientApi = null;
+  var whenPicker = null;
 
   function esc(s) {
     return String(s == null ? '' : s)
@@ -49,100 +53,64 @@
   }
 
   function buildShell() {
-    if (!host) return;
+    if (!host || !Layout) return;
     host.innerHTML =
       '<div class="form-panel-card-label">Officer Emails</div>' +
       '<p id="oep-locked" class="officer-email-panel-hint hidden">Save the custody note before creating email drafts.</p>' +
       '<div id="oep-main" class="officer-email-panel-inner">' +
-      '<div class="officer-email-form officer-email-panel-compose-form">' +
-      '<label class="officer-email-field"><span>Email type</span><select id="oep-template"></select></label>' +
-      '<div class="officer-email-form-section">' +
-      '<h3 class="officer-email-section-heading">Recipients</h3>' +
-      '<div class="officer-email-section-body officer-email-section-body--recipients">' +
-      '<div id="oep-recipients" class="officer-email-recipients-block"></div>' +
-      '<label class="officer-email-check-row officer-email-multi-recipient-toggle"><input type="checkbox" id="oep-multi-officer" /><span>Send to another officer as well?</span></label>' +
-      '</div></div>' +
-      '<div class="officer-email-form-section">' +
-      '<h3 class="officer-email-section-heading">Options</h3>' +
-      '<div class="officer-email-options-stack">' +
-      '<label class="officer-email-check-row"><input type="checkbox" id="oep-duty-solicitor" /><span>I am acting as duty solicitor</span></label>' +
-      '<label class="officer-email-check-row"><input type="checkbox" id="oep-outlook-sig" /><span>My Outlook signature already includes my name</span></label>' +
-      '</div></div>' +
-      '<div class="officer-email-form-section">' +
-      '<h3 class="officer-email-section-heading">Case details</h3>' +
-      '<div class="officer-email-section-body officer-email-section-body--single">' +
-      '<label class="officer-email-field"><span>Client name</span><input type="text" id="oep-client" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Police station</span><input type="text" id="oep-station" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Date</span><input type="text" id="oep-date" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Attendance time</span><input type="text" id="oep-time" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Offence / allegation</span><input type="text" id="oep-offence" autocomplete="off" /></label>' +
-      '<div id="oep-bail-fields" class="officer-email-bail-fields hidden">' +
-      '<label class="officer-email-field"><span>Bail return date</span><input type="text" id="oep-bail-date" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Bail conditions</span><textarea id="oep-bail-cond" rows="3"></textarea></label>' +
-      '</div>' +
-      '<label class="officer-email-field"><span>Extra note (optional)</span><textarea id="oep-extra" rows="2"></textarea></label>' +
-      '<label class="officer-email-field"><span>My email address (optional)</span><input type="email" id="oep-user-email" autocomplete="off" /></label>' +
-      '</div></div>' +
-      '<div class="officer-email-form-section">' +
-      '<h3 class="officer-email-section-heading">Message</h3>' +
-      '<div class="officer-email-section-body officer-email-section-body--single">' +
-      '<label class="officer-email-field"><span>Subject</span><input type="text" id="oep-subject" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Email body</span><textarea id="oep-body" rows="10"></textarea></label>' +
-      '</div></div>' +
-      '</div>' +
-      '<div class="officer-email-actions">' +
+      '<div class="officer-email-compose-grid officer-email-panel-compose-grid">' +
+      '<section class="officer-email-compose-form-card">' +
+      '<div class="officer-email-compose-form">' + Layout.buildFormStepsHtml(PREFIX, { showFilledBadge: true }) + '</div>' +
+      '<div class="officer-email-panel-draft-toolbar">' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-new">New draft</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-clear">Clear fields</button>' +
-      '<button type="button" class="btn btn-primary btn-small" id="oep-gen">Generate / Refresh</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-save">Save draft</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-dup">Duplicate</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-cancel">Cancel draft</button>' +
       '<button type="button" class="btn btn-secondary btn-small" id="oep-del">Delete</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" id="oep-sent">Mark as sent</button>' +
+      '</div></section>' +
+      '<section class="officer-email-compose-preview-card">' + Layout.buildPreviewHtml(PREFIX) + '</section>' +
       '</div>' +
-      '<div class="officer-email-actions officer-email-actions-outlook">' +
-      '<button type="button" class="btn btn-primary btn-small" id="oep-open">Open in Outlook Web</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oep-copy-link">Copy Outlook link</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oep-copy-to">Copy Recipient</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oep-copy-sub">Copy Subject</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oep-copy-body">Copy Body</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oep-sent">Mark as Sent Manually</button>' +
-      '</div>' +
-      '<p class="officer-email-panel-hint">If Outlook login or Authenticator causes the message not to appear, use the copy buttons.</p>' +
       '<div class="officer-email-drafts-head">Saved drafts for this custody note</div>' +
       '<div id="oep-drafts" class="officer-email-draft-list"></div>' +
       '</div>';
 
-    var sel = host.querySelector('#oep-template');
-    TEMPLATE_OPTIONS.forEach(function (o) {
-      var opt = document.createElement('option');
-      opt.value = o.value;
-      opt.textContent = o.label;
-      sel.appendChild(opt);
-    });
+    var sel = host.querySelector('#' + PREFIX + '-template');
+    sel.innerHTML = Layout.templateOptionsHtml();
     sel.dataset.oepLast = sel.value;
 
     els = {
       locked: host.querySelector('#oep-locked'),
       main: host.querySelector('#oep-main'),
-      template: host.querySelector('#oep-template'),
-      recipientsHost: host.querySelector('#oep-recipients'),
-      multiOfficer: host.querySelector('#oep-multi-officer'),
-      dutySolicitor: host.querySelector('#oep-duty-solicitor'),
-      outlookSig: host.querySelector('#oep-outlook-sig'),
-      client: host.querySelector('#oep-client'),
-      station: host.querySelector('#oep-station'),
-      date: host.querySelector('#oep-date'),
-      time: host.querySelector('#oep-time'),
-      offence: host.querySelector('#oep-offence'),
-      bailWrap: host.querySelector('#oep-bail-fields'),
-      bailDate: host.querySelector('#oep-bail-date'),
-      bailCond: host.querySelector('#oep-bail-cond'),
-      extra: host.querySelector('#oep-extra'),
-      userEmail: host.querySelector('#oep-user-email'),
-      subject: host.querySelector('#oep-subject'),
-      body: host.querySelector('#oep-body'),
+      template: sel,
+      templateChips: host.querySelector('[data-role="template-chips"]'),
+      whenTitle: host.querySelector('#' + PREFIX + '-when-title'),
+      whenMount: host.querySelector('#' + PREFIX + '-when-mount'),
+      bailExtra: host.querySelector('#' + PREFIX + '-bail-extra'),
+      recipientsHost: host.querySelector('#' + PREFIX + '-recipients'),
+      multiOfficer: host.querySelector('#' + PREFIX + '-multi-officer'),
+      dutySolicitor: host.querySelector('#' + PREFIX + '-duty-solicitor'),
+      outlookSig: host.querySelector('#' + PREFIX + '-outlook-sig'),
+      client: host.querySelector('#' + PREFIX + '-client'),
+      station: host.querySelector('#' + PREFIX + '-station'),
+      offence: host.querySelector('#' + PREFIX + '-offence'),
+      bailCond: host.querySelector('#' + PREFIX + '-bail-cond'),
+      extra: host.querySelector('#' + PREFIX + '-extra'),
+      userEmail: host.querySelector('#' + PREFIX + '-user-email'),
+      previewTo: host.querySelector('#' + PREFIX + '-preview-to'),
+      subject: host.querySelector('#' + PREFIX + '-subject'),
+      body: host.querySelector('#' + PREFIX + '-body'),
+      refreshBtn: host.querySelector('#' + PREFIX + '-refresh'),
       drafts: host.querySelector('#oep-drafts'),
     };
+
+    if (global.OfficerEmailDateTimePicker && els.whenMount) {
+      whenPicker = global.OfficerEmailDateTimePicker.init(els.whenMount, {
+        prefix: PREFIX,
+        onChange: scheduleAutoGenerate,
+      });
+    }
 
     if (global.OfficerEmailRecipientRows && els.recipientsHost) {
       recipientApi = global.OfficerEmailRecipientRows.initRecipientBlock(els.recipientsHost, {
@@ -154,47 +122,72 @@
       global.OfficerEmailRecipientRows.bindOutlookSigCheckbox(els.outlookSig, scheduleAutoGenerate);
     }
 
-    els.template.addEventListener('change', onTemplateChange);
-    ['subject', 'body'].forEach(function (id) {
-      var el = els[id === 'subject' ? 'subject' : 'body'];
-      if (!el) return;
-      el.addEventListener('input', function () {
-        dirtySubjectBody = true;
+    if (els.templateChips) {
+      els.templateChips.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-template]');
+        if (!btn) return;
+        els.template.value = btn.getAttribute('data-template');
+        els.template.dispatchEvent(new Event('change'));
       });
+    }
+
+    els.template.addEventListener('change', onTemplateChange);
+    els.subject.addEventListener('input', function () { dirtySubjectBody = true; updateRefreshVisibility(); });
+    els.body.addEventListener('input', function () { dirtySubjectBody = true; updateRefreshVisibility(); });
+    [els.client, els.station, els.offence, els.extra, els.userEmail, els.bailCond].forEach(function (el) {
+      if (!el) return;
+      el.addEventListener('input', scheduleAutoGenerate);
     });
-    ['client', 'station', 'date', 'time', 'offence', 'extra', 'userEmail', 'bailDate', 'bailCond'].forEach(function (key) {
-      if (!els[key]) return;
-      els[key].addEventListener('input', scheduleAutoGenerate);
-    });
+    if (els.refreshBtn) {
+      els.refreshBtn.addEventListener('click', function () {
+        dirtySubjectBody = false;
+        generateFromTemplate(true);
+      });
+    }
 
     host.querySelector('#oep-new').addEventListener('click', newDraft);
     host.querySelector('#oep-clear').addEventListener('click', clearForm);
-    host.querySelector('#oep-gen').addEventListener('click', function () { generateFromTemplate(false); });
     host.querySelector('#oep-save').addEventListener('click', saveDraft);
     host.querySelector('#oep-dup').addEventListener('click', duplicateDraft);
     host.querySelector('#oep-cancel').addEventListener('click', cancelDraft);
     host.querySelector('#oep-del').addEventListener('click', deleteDraft);
-    host.querySelector('#oep-open').addEventListener('click', openOutlookClicked);
-    host.querySelector('#oep-copy-link').addEventListener('click', copyOutlookLinkClicked);
-    host.querySelector('#oep-copy-to').addEventListener('click', function () {
+    host.querySelector('#' + PREFIX + '-open').addEventListener('click', openOutlookClicked);
+    host.querySelector('#' + PREFIX + '-copy-owa').addEventListener('click', copyOutlookLinkClicked);
+    host.querySelector('#' + PREFIX + '-copy-to').addEventListener('click', function () {
       var rec = recipientApi ? recipientApi.getValues() : { toEmail: '' };
       copyField(rec.toEmail, 'Copied.');
     });
-    host.querySelector('#oep-copy-sub').addEventListener('click', function () { copyField(els.subject.value, 'Copied.'); });
-    host.querySelector('#oep-copy-body').addEventListener('click', function () { copyField(els.body.value, 'Copied.'); });
+    host.querySelector('#' + PREFIX + '-copy-sub').addEventListener('click', function () { copyField(els.subject.value, 'Copied.'); });
+    host.querySelector('#' + PREFIX + '-copy-body').addEventListener('click', function () { copyField(els.body.value, 'Copied.'); });
     host.querySelector('#oep-sent').addEventListener('click', markSentClicked);
   }
 
+  function updateRefreshVisibility() {
+    if (els.refreshBtn) els.refreshBtn.classList.toggle('hidden', !dirtySubjectBody);
+  }
+
+  function updatePreviewTo() {
+    if (!els.previewTo) return;
+    var rec = recipientApi ? recipientApi.getValues() : { toEmail: '' };
+    els.previewTo.textContent = rec.toEmail || '—';
+  }
+
+  function syncTemplateUi() {
+    var tt = els.template.value;
+    Layout.syncTemplateChipSelection(els.templateChips, tt);
+    Layout.updateWhenTitle(els.whenTitle, tt);
+    Layout.syncBailExtraVisibility(els.bailExtra, tt);
+  }
+
   function syncBailVisibility() {
-    var tt = els.template && els.template.value;
-    var show = tt === 'bail_details_request' || tt === 'chase_bail_details_follow_up';
-    if (els.bailWrap) els.bailWrap.classList.toggle('hidden', !show);
+    syncTemplateUi();
   }
 
   function onTemplateChange() {
     var sel = els.template;
     var prev = sel && sel.dataset && sel.dataset.oepLast != null ? sel.dataset.oepLast : '';
     var next = sel ? sel.value : '';
+    if (whenPicker) whenPicker.applyBailDefaultIfNeeded(next);
     syncBailVisibility();
     if (!dirtySubjectBody) {
       generateFromTemplate(false);
@@ -250,6 +243,8 @@
 
   function collectFields() {
     var rec = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
+    var when = whenPicker ? whenPicker.getValues() : { attendanceDate: '', attendanceTime: '' };
+    var isBail = DT && DT.isBailTemplate(els.template.value);
     return {
       templateType: els.template.value,
       toEmail: rec.toEmail,
@@ -258,17 +253,21 @@
       outlookSignatureIncludesName: !!(els.outlookSig && els.outlookSig.checked),
       clientName: els.client.value,
       policeStation: els.station.value,
-      attendanceDate: els.date.value,
-      attendanceTime: els.time ? els.time.value : '',
+      attendanceDate: when.attendanceDate,
+      attendanceTime: when.attendanceTime,
       offence: els.offence.value,
       extraNote: els.extra.value,
-      bailReturnDate: els.bailDate ? els.bailDate.value : '',
-      bailConditions: els.bailCond ? els.bailCond.value : '',
+      bailReturnDate: isBail ? when.attendanceDate : '',
+      bailConditions: isBail && els.bailCond ? els.bailCond.value : '',
       userEmailAddress: els.userEmail.value,
       signOffName: getSignOffNameSafe(),
       subject: els.subject.value,
       body: els.body.value,
     };
+  }
+
+  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate) {
+    if (whenPicker) whenPicker.setValues(attendanceDate, attendanceTime, bailReturnDate);
   }
 
   function scheduleAutoGenerate() {
@@ -277,6 +276,7 @@
     autoGenerateTimer = setTimeout(function () {
       autoGenerateTimer = null;
       generateFromTemplate(false);
+      updatePreviewTo();
     }, 120);
   }
 
@@ -285,10 +285,13 @@
     var name = [fd.forename, fd.surname].filter(Boolean).join(' ').trim();
     if (!els.client.value.trim() && name) els.client.value = name;
     if (!els.station.value.trim() && fd.policeStationName) els.station.value = fd.policeStationName;
-    if (!els.date.value.trim() && fd.date) els.date.value = fd.date;
-    if (els.time && !els.time.value.trim()) {
+    var whenVals = whenPicker ? whenPicker.getValues() : { attendanceDate: '', attendanceTime: '' };
+    if (!whenVals.attendanceDate && fd.date) {
+      applyWhenValues(fd.date, whenVals.attendanceTime, '');
+    }
+    if (!whenVals.attendanceTime) {
       var arrivalTime = fd.timeArrival || fd.timeArrivalStation || '';
-      if (arrivalTime) els.time.value = String(arrivalTime).trim();
+      if (arrivalTime) applyWhenValues(whenVals.attendanceDate || fd.date || '', String(arrivalTime).trim(), '');
     }
     if (!els.offence.value.trim() && fd.offenceSummary) els.offence.value = fd.offenceSummary;
     var recVals = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
@@ -341,6 +344,7 @@
     if (!window.api || !window.api.officerEmails || !window.api.officerEmails.buildPreview) {
       return Promise.resolve({ ok: false, error: 'Officer email preview is not available.' });
     }
+    updatePreviewTo();
     var f = collectFields();
     f.extraNote = f.extraNote;
     return window.api.officerEmails.buildPreview(f).then(function (res) {
@@ -352,11 +356,12 @@
         els.subject.value = res.subject || '';
         els.body.value = res.body || '';
         dirtySubjectBody = false;
+        updateRefreshVisibility();
         lastGenSig = (res.subject || '') + '\n' + (res.body || '');
       }
       return res;
     }).catch(function (err) {
-      if (typeof showToast === 'function') showToast('Could not build preview. Please try Generate / Refresh.', 'error', 7000);
+      if (typeof showToast === 'function') showToast('Could not build preview.', 'error', 7000);
       try { console.error('[officerEmailsPanel] buildPreview failed', err); } catch (_) {}
       return { ok: false, error: (err && err.message) || String(err) };
     });
@@ -367,8 +372,7 @@
     if (recipientApi) recipientApi.setValues('', '');
     els.extra.value = '';
     els.userEmail.value = '';
-    els.bailDate.value = '';
-    els.bailCond.value = '';
+    if (els.bailCond) els.bailCond.value = '';
     dirtySubjectBody = false;
     applyPrefillFromMatter();
     generateFromTemplate(true);
@@ -776,12 +780,11 @@
     if (recipientApi) recipientApi.setValues(d.toEmail || '', d.recipientName || '');
     els.client.value = d.clientName || '';
     els.station.value = d.policeStation || '';
-    els.date.value = d.attendanceDate || '';
-    if (els.time) els.time.value = d.attendanceTime || '';
+    var migrated = DT ? DT.migrateDraftDateTimeFields(d) : d;
+    applyWhenValues(migrated.attendanceDate, migrated.attendanceTime, migrated.bailReturnDate);
     els.offence.value = d.offence || '';
     els.extra.value = d.extraNote || '';
-    els.bailDate.value = d.bailReturnDate || '';
-    els.bailCond.value = d.bailConditions || '';
+    if (els.bailCond) els.bailCond.value = d.bailConditions || '';
     els.userEmail.value = d.userEmailAddress || '';
     els.subject.value = d.subject || '';
     els.body.value = d.body || '';

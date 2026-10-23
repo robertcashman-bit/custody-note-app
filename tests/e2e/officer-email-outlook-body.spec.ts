@@ -342,10 +342,12 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   /* A/B) generate then amend */
   await page.locator('#oes-client').fill('Joe Bloggs');
   await page.locator('#oes-station').fill('Tonbridge');
-  await page.locator('#oes-date').fill('15.05.26');
+  await page.evaluate(() => {
+    const el = document.getElementById('oes-attendance-date-store') as HTMLInputElement | null;
+    if (el) el.value = '2026-05-15';
+  });
   await page.locator('#oes-offence').fill('Theft');
-  await page.locator('#oes-gen').click();
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(900);
   const generated = await page.locator('#oes-body').inputValue();
   expect(generated.length).toBeGreaterThan(20);
   await expect(page.locator('.officer-email-recipient-to').first()).toHaveValue(RECIPIENT);

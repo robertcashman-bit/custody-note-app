@@ -36,12 +36,12 @@ describe('officerEmailDrafts — template bodies', () => {
     const withTime = generateOfficerEmailBody(
       Object.assign({}, base, { templateType: 'disclosure_confirm_attendance', attendanceTime: '14:30' })
     );
-    assert.ok(withTime.includes('2025-01-01 at 14:30'), withTime);
+    assert.ok(withTime.includes('Wed 1 Jan 2025 at 14:30'), withTime);
 
     const withoutTime = generateOfficerEmailBody(
       Object.assign({}, base, { templateType: 'disclosure_confirm_attendance', attendanceTime: '' })
     );
-    assert.ok(withoutTime.includes('on 2025-01-01 in relation'), withoutTime);
+    assert.ok(withoutTime.includes('on Wed 1 Jan 2025 in relation'), withoutTime);
     assert.ok(!withoutTime.includes(' at 14:30'), withoutTime);
   });
 
@@ -49,7 +49,7 @@ describe('officerEmailDrafts — template bodies', () => {
     const b = generateOfficerEmailBody(
       Object.assign({}, base, { templateType: 'custody_log_request', attendanceTime: '09:15' })
     );
-    assert.ok(b.includes('Date: 2025-01-01'), b);
+    assert.ok(b.includes('Date: Wed 1 Jan 2025'), b);
     assert.ok(b.includes('Time: 09:15'), b);
   });
 
@@ -63,42 +63,33 @@ describe('officerEmailDrafts — template bodies', () => {
     const b = generateOfficerEmailBody(
       Object.assign({}, base, { templateType: 'chase_disclosure', attendanceTime: '10:00' })
     );
-    assert.ok(b.includes('The attendance is listed for 2025-01-01 at 10:00'), b);
+    assert.ok(b.includes('The attendance is listed for Wed 1 Jan 2025 at 10:00'), b);
   });
 
-  it('bail_details_request has four shape variants and mentions return station', () => {
-    const none = generateOfficerEmailBody(
-      Object.assign({}, base, { templateType: 'bail_details_request', bailReturnDate: '', bailConditions: '' })
+  it('bail_details_request mentions return station and conditions when set', () => {
+    const plain = generateOfficerEmailBody(
+      Object.assign({}, base, { templateType: 'bail_details_request', bailConditions: '' })
     );
-    assert.ok(none.includes('police station(s) for return'), none.toLowerCase());
+    assert.ok(plain.includes('return station'), plain.toLowerCase());
+    assert.ok(plain.includes('Wed 1 Jan 2025'), plain);
 
-    const both = generateOfficerEmailBody(
+    const withCond = generateOfficerEmailBody(
       Object.assign({}, base, {
         templateType: 'bail_details_request',
-        bailReturnDate: '2025-02-01',
+        attendanceDate: '2025-02-01',
         bailConditions: 'Curfew 9pm',
       })
     );
-    assert.ok(both.includes('2025-02-01'), both);
-    assert.ok(both.includes('Curfew'), both);
-
-    const dateOnly = generateOfficerEmailBody(
-      Object.assign({}, base, { templateType: 'bail_details_request', bailReturnDate: '2025-03-01', bailConditions: '' })
-    );
-    assert.ok(dateOnly.includes('2025-03-01'), dateOnly);
-
-    const condOnly = generateOfficerEmailBody(
-      Object.assign({}, base, { templateType: 'bail_details_request', bailReturnDate: '', bailConditions: 'Report weekly' })
-    );
-    assert.ok(condOnly.includes('Report weekly'), condOnly);
+    assert.ok(withCond.includes('Sat 1 Feb 2025'), withCond);
+    assert.ok(withCond.includes('Curfew 9pm'), withCond);
   });
 
   it('chase_bail_details_follow_up references prior email', () => {
     const b = generateOfficerEmailBody(
-      Object.assign({}, base, { templateType: 'chase_bail_details_follow_up', bailReturnDate: '', bailConditions: '' })
+      Object.assign({}, base, { templateType: 'chase_bail_details_follow_up', bailConditions: '' })
     );
     assert.ok(b.includes('emailed previously'), b);
-    assert.ok(b.includes('police station(s) for return'), b.toLowerCase());
+    assert.ok(b.includes('return station'), b.toLowerCase());
   });
 
   it('custody_record_detention_log_request asks for detention log', () => {

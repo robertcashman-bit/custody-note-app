@@ -13,6 +13,8 @@
   var DEFERRED_SCRIPTS = [
     'renderer/aiLawElements.js',
     'renderer/widgets/wheelDateTimePicker.js',
+    'renderer/lib/officerEmailDateTimePicker.js',
+    'renderer/lib/officerEmailComposeLayout.js',
     'renderer/lib/officerEmailRecipientRows.js',
     'renderer/views/officerEmailsPanel.js',
     'renderer/views/officerEmailsStandalone.js',

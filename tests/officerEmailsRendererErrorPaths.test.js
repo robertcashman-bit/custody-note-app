@@ -31,6 +31,10 @@ const ROOT = path.join(__dirname, '..');
 const PANEL_SRC = fs.readFileSync(path.join(ROOT, 'renderer/views/officerEmailsPanel.js'), 'utf8');
 const STANDALONE_SRC = fs.readFileSync(path.join(ROOT, 'renderer/views/officerEmailsStandalone.js'), 'utf8');
 const RECIPIENT_ROWS_SRC = fs.readFileSync(path.join(ROOT, 'renderer/lib/officerEmailRecipientRows.js'), 'utf8');
+const DATE_TIME_SRC = fs.readFileSync(path.join(ROOT, 'lib/officerEmailDateTime.js'), 'utf8');
+const DATE_PICKER_SRC = fs.readFileSync(path.join(ROOT, 'renderer/lib/officerEmailDateTimePicker.js'), 'utf8');
+const COMPOSE_LAYOUT_SRC = fs.readFileSync(path.join(ROOT, 'renderer/lib/officerEmailComposeLayout.js'), 'utf8');
+const TEMPLATE_OPTIONS_SRC = fs.readFileSync(path.join(ROOT, 'lib/officerEmailTemplateOptions.js'), 'utf8');
 
 describe('officerEmailsPanel — silent failure path instrumentation (source)', () => {
   it('wraps openOutlookDraft promise with a .catch so IPC rejections surface', () => {
@@ -200,6 +204,10 @@ function bootStandaloneDom(openOneOffOutlookImpl, opts) {
   win.showChoice = () => Promise.resolve('open');
 
   /* Install the IIFE into this window's global scope. */
+  win.eval(TEMPLATE_OPTIONS_SRC);
+  win.eval(DATE_TIME_SRC);
+  win.eval(COMPOSE_LAYOUT_SRC);
+  win.eval(DATE_PICKER_SRC);
   win.eval(RECIPIENT_ROWS_SRC);
   win.eval(STANDALONE_SRC);
 
@@ -278,7 +286,7 @@ describe('officerEmailsStandalone — behavioural error surfacing (jsdom)', () =
     );
     win.document.getElementById('oes-client').value = 'Joe Bloggs';
     win.document.getElementById('oes-station').value = 'Tonbridge';
-    win.document.getElementById('oes-date').value = '15.05.26';
+    win.document.getElementById('oes-attendance-date-store').value = '15.05.26';
     win.document.getElementById('oes-offence').value = 'Theft';
 
     win.document.getElementById('oes-open').click();
@@ -289,7 +297,7 @@ describe('officerEmailsStandalone — behavioural error surfacing (jsdom)', () =
     assert.strictEqual(fields.subject, 'Joe Bloggs - Tonbridge - Theft - Confirm attendance — disclosure');
     assert.ok(fields.body.includes('Joe Bloggs'), fields.body);
     assert.ok(fields.body.includes('Tonbridge'), fields.body);
-    assert.ok(fields.body.includes('15.05.26'), fields.body);
+    assert.ok(fields.body.includes('15 May 2026') || fields.body.includes('15.05.26'), fields.body);
     assert.ok(fields.body.includes('Theft'), fields.body);
     assert.ok(!fields.subject.includes('[Client Name]'), fields.subject);
     assert.ok(!fields.body.includes('[Client Name]'), fields.body);

@@ -20,6 +20,10 @@ const RECIPIENT_ROWS_SRC = fs.readFileSync(
   path.join(__dirname, '..', 'renderer/lib/officerEmailRecipientRows.js'),
   'utf8'
 );
+const TEMPLATE_OPTIONS_SRC = fs.readFileSync(path.join(__dirname, '..', 'lib/officerEmailTemplateOptions.js'), 'utf8');
+const DATE_TIME_SRC = fs.readFileSync(path.join(__dirname, '..', 'lib/officerEmailDateTime.js'), 'utf8');
+const DATE_PICKER_SRC = fs.readFileSync(path.join(__dirname, '..', 'renderer/lib/officerEmailDateTimePicker.js'), 'utf8');
+const COMPOSE_LAYOUT_SRC = fs.readFileSync(path.join(__dirname, '..', 'renderer/lib/officerEmailComposeLayout.js'), 'utf8');
 
 function setStandaloneRecipientEmail(win, email) {
   const toInput = win.document.querySelector('.officer-email-recipient-to');
@@ -91,6 +95,10 @@ function bootStandalone(opts) {
   };
   win.showToast = (msg, kind) => { calls.showToast.push({ msg: String(msg), kind: String(kind || '') }); };
   win.showChoice = () => Promise.resolve('open');
+  win.eval(TEMPLATE_OPTIONS_SRC);
+  win.eval(DATE_TIME_SRC);
+  win.eval(COMPOSE_LAYOUT_SRC);
+  win.eval(DATE_PICKER_SRC);
   win.eval(RECIPIENT_ROWS_SRC);
   win.eval(STANDALONE_SRC);
   win.OfficerEmailsStandalone.init();

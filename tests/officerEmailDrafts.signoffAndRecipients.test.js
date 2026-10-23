@@ -29,7 +29,7 @@ describe('officerEmailDrafts — duty solicitor instruction sentence', () => {
     const b = generateOfficerEmailBody(Object.assign({}, base, { actingAsDutySolicitor: true }));
     assert.ok(
       b.includes(
-        'I have been instructed to represent Synthetic Client at Synthetic Station on 1 Jan 2026 at 09:00 in relation to an allegation of Synthetic Offence as duty solicitor.'
+        'I have been instructed to represent Synthetic Client at Synthetic Station on Thu 1 Jan 2026 at 09:00 in relation to an allegation of Synthetic Offence as duty solicitor.'
       ),
       b
     );
