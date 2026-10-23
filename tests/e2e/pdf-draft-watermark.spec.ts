@@ -76,6 +76,22 @@ test('finalised record status removes draft watermark from custody PDF', async (
   expect(html).not.toContain('class="watermark"');
 });
 
+test('draft record with Finalised certification still shows DRAFT watermark (inconsistent state guard)', async () => {
+  const html = await page.evaluate((base) => {
+    const w = window as unknown as {
+      enrichDataForPdf: (d: Record<string, unknown>, st?: string) => Record<string, unknown>;
+      buildPdfHtml: (d: Record<string, unknown>, s: Record<string, unknown>) => string;
+    };
+    const enriched = w.enrichDataForPdf(
+      { ...base, feeEarnerCertification: 'Finalised' },
+      'draft',
+    );
+    return w.buildPdfHtml(enriched, {});
+  }, syntheticBase);
+
+  expect(html).toContain('class="watermark">DRAFT</div>');
+});
+
 test('draft record still shows DRAFT watermark', async () => {
   const html = await page.evaluate((base) => {
     const w = window as unknown as {

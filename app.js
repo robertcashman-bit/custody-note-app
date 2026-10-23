@@ -7581,7 +7581,9 @@ var REQUIRED_FIELD_KEYS = [
           }
           var patched = resetFeeEarnerCertificationForAmendment(parsed);
           if (patched === parsed) return;
-          return window.api.attendanceSave({ id: id, data: patched, status: 'draft' });
+          return window.api.attendanceSave({ id: id, data: patched, status: 'draft' }).catch(function(err) {
+            console.error('[amendAttendance] certification reset save failed — will reconcile on open', err);
+          });
         }).then(function() {
           openAttendance(id);
         }).catch(function(e) { showToast('Failed to re-open record', 'error'); console.error('[amendAttendance]', e); });
@@ -7672,6 +7674,7 @@ var REQUIRED_FIELD_KEYS = [
       currentSectionIdx = 0;
       renderForm(formData);
       showView('new');
+      reconcileFeeEarnerCertificationWithDraftStatus(currentRecordStatus);
       if (typeof window.syncFormDuplicateButtonVisibility === 'function') window.syncFormDuplicateButtonVisibility();
       maybeDepartureNudge();
       if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.attachToCustodyNote === 'function') {
@@ -7717,6 +7720,7 @@ var REQUIRED_FIELD_KEYS = [
       currentSectionIdx = 0;
       renderForm(formData);
       showView('new');
+      reconcileFeeEarnerCertificationWithDraftStatus(currentRecordStatus);
       if (typeof window.syncFormDuplicateButtonVisibility === 'function') window.syncFormDuplicateButtonVisibility();
       maybeDepartureNudge();
       if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.attachToCustodyNote === 'function') {
@@ -13594,7 +13598,6 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function saveForm(status) {
-    if (status === 'finalised') ensureFeeEarnerCertificationMatchesFinalise();
     const data = getFormData();
     if (status === 'finalised') _lastFinaliseAttempt = new Date().toISOString();
     if (!hasMeaningfulData(data)) {
@@ -13605,6 +13608,7 @@ var REQUIRED_FIELD_KEYS = [
       showToast('Nothing to save — please enter some data first', 'warning');
       return;
     }
+    var savePayload = status === 'finalised' ? buildFinaliseSavePayload(data) : data;
     if (status === 'finalised') {
       console.log('[FINALISE] saveForm called: id=' + currentAttendanceId + ', _draftSaveInFlight=' + _draftSaveInFlight);
       stopAutoSave();
@@ -13620,7 +13624,7 @@ var REQUIRED_FIELD_KEYS = [
       if (status === 'finalised') {
         console.log('[FINALISE] IPC attempt #' + attemptNum + ': id=' + currentAttendanceId);
       }
-      attendanceSaveDetailed({ id: currentAttendanceId, data: data, status: status || 'draft' }).then(result => {
+      attendanceSaveDetailed({ id: currentAttendanceId, data: savePayload, status: status || 'draft' }).then(result => {
         /* Invalidate cache on save */
         if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
           _recordCache.delete(currentAttendanceId);
@@ -13636,6 +13640,7 @@ var REQUIRED_FIELD_KEYS = [
               console.log('[FINALISE] Record already finalised (locked) — treating as success');
               _finalising = false;
               currentRecordStatus = 'finalised';
+              commitFeeEarnerCertificationAfterFinaliseSuccess();
               updateFormBarVisibility();
               showToast('Record finalised and saved', 'success');
               setListFilterAndShowList('finalised');
@@ -13655,7 +13660,10 @@ var REQUIRED_FIELD_KEYS = [
               return;
             }
             _finalising = false;
-            if (status === 'finalised') currentRecordStatus = 'draft';
+            if (status === 'finalised') {
+              currentRecordStatus = 'draft';
+              revertFeeEarnerCertificationAfterFailedFinalise();
+            }
             startAutoSave();
             showToast('Failed to save: ' + (result.message || result.error), 'error', 6000);
             return;
@@ -13682,6 +13690,7 @@ var REQUIRED_FIELD_KEYS = [
                 _lastFinaliseResult = 'success';
                 _lastDbWrite = new Date().toISOString();
                 currentRecordStatus = 'finalised';
+                commitFeeEarnerCertificationAfterFinaliseSuccess();
                 updateFormBarVisibility();
                 showToast('Record finalised and saved', 'success');
                 setListFilterAndShowList('finalised');
@@ -13697,6 +13706,7 @@ var REQUIRED_FIELD_KEYS = [
                       console.log('[FINALISE] FORCE-STATUS succeeded for id=' + verifyId);
                       _finalising = false;
                       currentRecordStatus = 'finalised';
+                      commitFeeEarnerCertificationAfterFinaliseSuccess();
                       updateFormBarVisibility();
                       showToast('Record finalised and saved', 'success');
                       setListFilterAndShowList('finalised');
@@ -13705,18 +13715,21 @@ var REQUIRED_FIELD_KEYS = [
                       console.error('[FINALISE] FORCE-STATUS failed:', r);
                       _finalising = false;
                       currentRecordStatus = 'draft';
+                      revertFeeEarnerCertificationAfterFailedFinalise();
                       startAutoSave();
                       showToast('Finalise may not have saved — please try again', 'error', 6000);
                     }
                   }).catch(function() {
                     _finalising = false;
                     currentRecordStatus = 'draft';
+                    revertFeeEarnerCertificationAfterFailedFinalise();
                     startAutoSave();
                     showToast('Finalise may not have saved — please try again', 'error', 6000);
                   });
                 } else {
                   _finalising = false;
                   currentRecordStatus = 'draft';
+                  revertFeeEarnerCertificationAfterFailedFinalise();
                   startAutoSave();
                   showToast('Finalise may not have saved — please try again', 'error', 6000);
                 }
@@ -13724,12 +13737,14 @@ var REQUIRED_FIELD_KEYS = [
             }).catch(function() {
               _finalising = false;
               currentRecordStatus = 'draft';
+              revertFeeEarnerCertificationAfterFailedFinalise();
               startAutoSave();
               showToast('Finalise could not be verified from storage. The record stays open so you can retry safely.', 'error', 7000);
             });
           } else {
             _finalising = false;
             currentRecordStatus = 'finalised';
+            commitFeeEarnerCertificationAfterFinaliseSuccess();
             updateFormBarVisibility();
             showToast('Record finalised and saved', 'success');
             setListFilterAndShowList('finalised');
@@ -13746,7 +13761,10 @@ var REQUIRED_FIELD_KEYS = [
           return;
         }
         _finalising = false;
-        if (status === 'finalised') currentRecordStatus = 'draft';
+        if (status === 'finalised') {
+          currentRecordStatus = 'draft';
+          revertFeeEarnerCertificationAfterFailedFinalise();
+        }
         startAutoSave();
         showToast('Failed to save record: ' + (err && err.message ? err.message : 'Unknown error'), 'error', 6000);
       });
@@ -14618,10 +14636,9 @@ var REQUIRED_FIELD_KEYS = [
     if (typeof window !== 'undefined' && window.PdfDraftWatermark && window.PdfDraftWatermark.pdfDraftWatermarkHtml) {
       return window.PdfDraftWatermark.pdfDraftWatermarkHtml(d);
     }
-    var cert = d && String(d.feeEarnerCertification || '').trim() === 'Finalised';
-    var st = d && String(d._recordStatus || d.recordStatus || '').trim().toLowerCase();
-    var rec = st === 'finalised' || st === 'completed';
-    if (cert || rec) return '';
+    if (typeof window !== 'undefined' && window.PdfDraftWatermark && window.PdfDraftWatermark.shouldShowPdfDraftWatermark) {
+      if (!window.PdfDraftWatermark.shouldShowPdfDraftWatermark(d)) return '';
+    }
     return '<div class="watermark">DRAFT</div>';
   }
 
@@ -14646,6 +14663,50 @@ var REQUIRED_FIELD_KEYS = [
     if (!data || typeof data !== 'object') return data;
     if (data.feeEarnerCertification === 'Draft') return data;
     return Object.assign({}, data, { feeEarnerCertification: 'Draft' });
+  }
+
+  function buildFinaliseSavePayload(data) {
+    if (typeof window !== 'undefined' && window.PdfDraftWatermark && window.PdfDraftWatermark.buildFinaliseAttendanceSavePayload) {
+      return window.PdfDraftWatermark.buildFinaliseAttendanceSavePayload(data);
+    }
+    var out = Object.assign({}, data || {});
+    if (out.feeEarnerCertification !== 'Finalised') out.feeEarnerCertification = 'Finalised';
+    return out;
+  }
+
+  function commitFeeEarnerCertificationAfterFinaliseSuccess() {
+    ensureFeeEarnerCertificationMatchesFinalise();
+  }
+
+  function revertFeeEarnerCertificationAfterFailedFinalise() {
+    var st = currentRecordStatus;
+    if (st === 'finalised' || st === 'completed') return;
+    if (formData.feeEarnerCertification === 'Finalised') {
+      setFieldValueSilent('feeEarnerCertification', 'Draft');
+    }
+  }
+
+  function reconcileFeeEarnerCertificationWithDraftStatus(recordStatus) {
+    var needsReset = false;
+    if (typeof window !== 'undefined' && window.PdfDraftWatermark && window.PdfDraftWatermark.shouldResetCertificationForDraftRecord) {
+      needsReset = window.PdfDraftWatermark.shouldResetCertificationForDraftRecord(recordStatus, formData.feeEarnerCertification);
+    } else {
+      needsReset = (recordStatus || 'draft') === 'draft' && formData.feeEarnerCertification === 'Finalised';
+    }
+    if (!needsReset) return Promise.resolve();
+    setFieldValueSilent('feeEarnerCertification', 'Draft');
+    if (!currentAttendanceId || !window.api || !window.api.attendanceSave) return Promise.resolve();
+    return window.api.attendanceSave({
+      id: currentAttendanceId,
+      data: getFormData(),
+      status: 'draft',
+    }).then(function() {
+      if (currentAttendanceId && _recordCache.has(currentAttendanceId)) {
+        _recordCache.delete(currentAttendanceId);
+      }
+    }).catch(function(e) {
+      console.error('[reconcileFeeEarnerCertificationWithDraftStatus]', e);
+    });
   }
 
   function buildPdfHtml(d, settings) {
