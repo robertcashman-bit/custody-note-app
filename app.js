@@ -6289,6 +6289,22 @@ var REQUIRED_FIELD_KEYS = [
       if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
       const oaiKey = document.getElementById('setting-openai-apikey');
       if (oaiKey) oaiKey.value = s.openaiApiKey || '';
+      const oaiUnreadable = document.getElementById('openai-apikey-unreadable-hint');
+      if (oaiUnreadable) {
+        var oaiWarn = '';
+        if (s.openaiApiKeyUnreadable) {
+          oaiWarn = 'A saved OpenAI API key is on this computer but could not be read (for example after a reinstall). Paste your key again to restore AI fill.';
+        } else if (s.openaiApiKeySyncError && !s.openaiApiKey) {
+          oaiWarn = String(s.openaiApiKeySyncError);
+        }
+        if (oaiWarn) {
+          oaiUnreadable.textContent = oaiWarn;
+          oaiUnreadable.style.display = '';
+        } else {
+          oaiUnreadable.textContent = '';
+          oaiUnreadable.style.display = 'none';
+        }
+      }
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
       const opc = document.getElementById('setting-office-postcode');

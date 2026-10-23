@@ -1206,7 +1206,8 @@
             <p class="settings-hint">Optional. Paste your own OpenAI API key to fill <strong>The Law / Elements of offence</strong> from the Case Assessment checkbox. Only offence name and statute are sent when you confirm. Billed to your OpenAI account.</p>
             <label for="setting-openai-apikey">OpenAI API key</label>
             <input type="password" id="setting-openai-apikey" class="settings-input" placeholder="sk-…" autocomplete="off" spellcheck="false">
-            <p class="settings-hint" style="margin-top:0.5rem;">Saved on this device and synced (encrypted) with your other Custody Note settings to your licence account.</p>
+            <p id="openai-apikey-unreadable-hint" class="settings-hint settings-hint-warning" style="margin-top:0.5rem;display:none;" role="alert"></p>
+            <p class="settings-hint" style="margin-top:0.5rem;">Encrypted on this device and synced to your <strong>Custody Note account</strong> (same protection as QuickFile credentials — not stored in the licence-key settings blob). Sign in and activate sync on each computer.</p>
           </div>
         </div>
 

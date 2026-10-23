@@ -14,4 +14,11 @@ Enter credentials once in **Settings → Integrations → QuickFile** on any act
 
 **Firms** imported from QuickFile (and firms you add manually) sync via `/api/sync/firms/push` and `/api/sync/firms/pull` with automatic merge on the same account.
 
+**OpenAI API key** (Law / Elements fill) uses the same per-account wrap key and device gate:
+
+1. Encrypted locally with OS storage (`safeStorage`) under user data (Store and direct builds share the same path when not virtualised).
+2. Ciphertext syncs at `POST /api/settings/openai-api-key` — never in `/api/settings/quickfile`.
+
+Enter the key once on any activated computer; it is pulled on startup and when you open Settings.
+
 Diagnostic logs (counts and error classes only, no secrets): `logs/quickfile.log` in app user data.

@@ -37,7 +37,21 @@ Deploy from **custody-note-website** (Vercel). Client changes in this app repo s
 
 **Storage:** Per-account firm record store keyed by `syncId` (parallel to attendance sync, separate collection/table).
 
-## 4. Preferences blob (unchanged)
+## 4. OpenAI API key blob
+
+**Route:** `POST /api/settings/openai-api-key`
+
+**Auth:** Same device gate as QuickFile credentials (wrap key + active device).
+
+**Push body:** `{ key, machineId, accountId?, blob, clear?: boolean }` → `{ ok: true, updatedAt }`
+
+When `clear` is true or the decrypted client payload is empty, delete the stored blob.
+
+**Pull body:** `{ key, machineId, accountId? }` → `{ ok: true, blob, updatedAt }` or `{ ok: false, error }` when empty.
+
+**Storage:** One opaque `blob` per `accountId`. Server never decrypts. Uses the same per-account `wrapKeyHex` as QuickFile credentials (`/api/account/quickfile-wrap-key`).
+
+## 5. Preferences blob (unchanged)
 
 `POST /api/settings/quickfile` remains **licence-key-scoped preferences only** (no API secrets). Optionally also index by `accountId` when Bearer auth is present so Store vs direct licence strings on one account see the same preferences — client still decrypts with licence key.
 

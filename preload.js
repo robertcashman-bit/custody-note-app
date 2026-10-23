@@ -380,7 +380,7 @@ contextBridge.exposeInMainWorld('api', {
   quickfileSettingsStatus: () => ipcRenderer.invoke('quickfile-settings-status'),
   quickfileConnectionState: () => ipcRenderer.invoke('quickfile-connection-state'),
   quickfileSettingsPush: () => ipcRenderer.invoke('quickfile-settings-push'),
-  quickfileSettingsEnsure: () => ipcRenderer.invoke('quickfile-settings-ensure'),
+  quickfileSettingsEnsure: (opts) => ipcRenderer.invoke('quickfile-settings-ensure', opts || {}),
   quickfileSuggestNextInvoiceNumber: () => ipcRenderer.invoke('quickfile-suggest-next-invoice-number'),
   quickfileCreateInvoice: (params) => ipcRenderer.invoke('quickfile-create-invoice', params),
   /* Postcode lookup */

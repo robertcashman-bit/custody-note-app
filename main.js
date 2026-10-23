@@ -6470,6 +6470,7 @@ async function validateLicenceOnline(key, machineId, opts) {
       deviceRevokedBy: (resp && resp.deviceRevokedBy) || null,
       tier: (resp && (resp.tier || (resp.subscription && resp.subscription.tier))) || null,
       plan: (resp && (resp.plan || (resp.subscription && resp.subscription.plan))) || null,
+      accountId: (resp && (resp.accountId || resp.userId || (resp.user && resp.user.id))) || null,
     };
   } catch (e) {
     return { valid: null, offline: true, message: 'Could not reach validation server: ' + e.message, serverStatus: null };
@@ -6581,6 +6582,7 @@ async function activateThisComputerForSync() {
     data.status = result.serverStatus || data.status || 'active';
     if (result.expiresAt) data.expiresAt = result.expiresAt;
     if (result.email) data.email = result.email;
+    if (result.accountId) data.accountId = String(result.accountId);
     if (result.entitlements !== undefined && data.tier !== 'free') data.entitlements = result.entitlements;
   }
   writeLicenceData(data);
@@ -6629,6 +6631,7 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     data.tier = 'trial';
     data.isTrial = true;
   }
+  if (result.accountId) data.accountId = String(result.accountId);
   delete data.deviceRevoked;
   delete data.deviceRevokedBy;
   writeLicenceData(data);
@@ -7403,6 +7406,9 @@ ipcMain.handle('get-settings', () => {
   try {
     const sealed = resolveOpenAiApiKey();
     if (sealed) settings.openaiApiKey = sealed;
+    settings.openaiApiKeyUnreadable = !sealed && isOpenAiApiKeySealedFileUnreadable();
+    const syncErrRow = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKeySyncError'");
+    settings.openaiApiKeySyncError = syncErrRow && syncErrRow.value ? String(syncErrRow.value) : '';
   } catch (_) {}
   settings.effectiveBackupFolder = getBackupFolder();
   settings.effectiveOffsiteBackupFolder = getOffsiteBackupFolder();
@@ -7444,6 +7450,27 @@ function loadOpenAiKeyFromEnvLocal() {
     }
   } catch (_) {}
   return '';
+}
+
+function isOpenAiApiKeySealedFileUnreadable() {
+  try {
+    const sealedPath = path.join(app.getPath('userData'), 'openai-api-key.dat');
+    if (!fs.existsSync(sealedPath)) return false;
+    const raw = fs.readFileSync(sealedPath);
+    if (!raw || !raw.length) return false;
+    if (safeStorage.isEncryptionAvailable()) {
+      try {
+        const v = String(safeStorage.decryptString(raw) || '').trim();
+        return !v;
+      } catch (_) {
+        return true;
+      }
+    }
+    const v = String(raw.toString('utf8') || '').trim();
+    return !v;
+  } catch (_) {
+    return false;
+  }
 }
 
 function resolveOpenAiApiKey() {
@@ -7789,6 +7816,10 @@ ipcMain.handle('set-settings', (_, settings) => {
           if (sealedOk) {
             // Persist sealed only — never keep the raw key in SQLite settings.
             dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
+            dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', '']);
+            if (typeof scheduleOpenAiApiKeyCloudPush === 'function') {
+              scheduleOpenAiApiKeyCloudPush('openai-save');
+            }
           } else {
             // Seal failed: keep the working plaintext copy until seal succeeds.
             dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', incoming]);
@@ -7798,6 +7829,10 @@ ipcMain.handle('set-settings', (_, settings) => {
         // Explicit clear (empty incoming, no plaintext to preserve): delete sealed file too.
         persistOpenAiApiKeySecure('');
         dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
+        dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', '']);
+        if (typeof scheduleOpenAiApiKeyCloudPush === 'function') {
+          scheduleOpenAiApiKeyCloudPush('openai-clear');
+        }
         continue;
       }
     }
@@ -11289,6 +11324,7 @@ const laaFormsManifest = require('./lib/laaFormsManifest');
 const quickfileClient = require('./lib/quickfileClient');
 const quickfileSettingsSync = require('./lib/quickfileSettingsSync');
 const quickfileCredentialSync = require('./lib/quickfileCredentialSync');
+const openaiApiKeySync = require('./lib/openaiApiKeySync');
 const quickfileInvoiceNumber = require('./lib/quickfileInvoiceNumber');
 const firmCloudSync = require('./lib/firmCloudSync');
 const { createQuickFileActivityLog, sanitizeClass: qfLogSanitizeClass } = require('./lib/quickfileActivityLog');
@@ -12059,6 +12095,244 @@ function scheduleQuickFileCredentialsCloudPush(reason) {
   }, 2000);
 }
 
+function applyOpenAiApiKeyFromCloud(apiKey, serverUpdatedAt) {
+  const trimmed = apiKey != null ? String(apiKey).trim() : '';
+  if (trimmed) {
+    persistOpenAiApiKeySecure(trimmed);
+  } else {
+    persistOpenAiApiKeySecure('');
+  }
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
+  if (serverUpdatedAt) {
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeyServerUpdatedAt', serverUpdatedAt]);
+  }
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', '']);
+  dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncedAt', new Date().toISOString()]);
+  markDbDirty();
+  if (typeof flushDbSync === 'function') {
+    try { flushDbSync(); } catch (_) {}
+  }
+  return true;
+}
+
+async function ensureOpenAiApiKeyFromServer(opts) {
+  const reason = (opts && opts.reason) || 'unknown';
+  const force = !!(opts && opts.force);
+  const localKey = resolveOpenAiApiKey();
+  const localHasKey = !!String(localKey || '').trim();
+  const rows = dbAll('SELECT key, value FROM settings');
+  const localMeta = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const localServerUpdatedAt = String(localMeta.openaiApiKeyServerUpdatedAt || '').trim();
+
+  const apiUrl = getManagedCloudApiUrl();
+  const data = readLicenceData();
+  if (!apiUrl || !data || !data.key) {
+    return { ok: localHasKey, usedLocal: true, reason: reason, skipped: 'no-licence-or-api' };
+  }
+
+  if (localHasKey && !force) {
+    const syncedAt = Date.parse(localMeta.openaiApiKeySyncedAt || '');
+    if (syncedAt && (Date.now() - syncedAt) < 15 * 60 * 1000) {
+      return { ok: true, usedLocal: true, reason: reason, skipped: 'recent-local-cache' };
+    }
+  }
+
+  const accountCtx = getQuickFileAccountContext();
+  if (!accountCtx.accountId) {
+    if (localHasKey && !localServerUpdatedAt) {
+      scheduleOpenAiApiKeyCloudPush('local-only-migrate');
+    }
+    return { ok: localHasKey, usedLocal: true, reason: reason, skipped: 'no-account-id' };
+  }
+
+  const wrap = await openaiApiKeySync.fetchAccountWrapKey(
+    httpPost,
+    apiUrl,
+    data.key,
+    getMachineId(),
+    { headers: _getAuthHeaders(), timeout: 15000, accountId: accountCtx.accountId }
+  );
+  if (!wrap.ok) {
+    const msg = wrap.code === 'DEVICE_REVOKED' || /device.*revoked/i.test(String(wrap.error || ''))
+      ? 'This computer cannot load your saved OpenAI API key — sign in again or re-activate sync in Settings.'
+      : (/device_not_activated/i.test(String(wrap.error || ''))
+        ? 'Activate this computer for sync in Settings before your OpenAI API key can load from your account.'
+        : (wrap.error || 'Could not obtain account encryption key'));
+    if (!localHasKey) {
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', String(msg).slice(0, 500)]);
+      markDbDirty();
+    }
+    console.warn('[OpenAiKeySync] wrap key failed (' + reason + '):', wrap.error || wrap.code || 'unknown');
+    return { ok: localHasKey, usedLocal: true, reason: reason, error: wrap.error || 'wrap_key_failed', userMessage: msg };
+  }
+
+  const pull = await openaiApiKeySync.pullOpenAiApiKeyFromServer(
+    httpPost,
+    apiUrl,
+    data.key,
+    getMachineId(),
+    wrap.wrapKeyHex,
+    { headers: _getAuthHeaders(), timeout: 15000, accountId: accountCtx.accountId }
+  );
+  if (!pull.ok) {
+    if (localHasKey && !localServerUpdatedAt) {
+      scheduleOpenAiApiKeyCloudPush('bootstrap-push');
+    }
+    console.warn('[OpenAiKeySync] pull failed (' + reason + '):', pull.error || 'unknown');
+    return { ok: localHasKey, usedLocal: true, reason: reason, error: pull.error || 'pull failed' };
+  }
+
+  const serverUpdatedAt = String(pull.updatedAt || '').trim();
+  if (pull.empty) {
+    if (localHasKey && serverUpdatedAt && localServerUpdatedAt && serverUpdatedAt <= localServerUpdatedAt && !force) {
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncedAt', new Date().toISOString()]);
+      markDbDirty();
+      return { ok: true, usedLocal: true, reason: reason, skipped: 'server-not-newer' };
+    }
+    if (localHasKey || localServerUpdatedAt) {
+      applyOpenAiApiKeyFromCloud('', serverUpdatedAt);
+      console.info('[OpenAiKeySync] key cleared from account (' + reason + ')');
+      return { ok: true, usedLocal: false, reason: reason, updatedAt: serverUpdatedAt, cleared: true };
+    }
+    return { ok: true, usedLocal: true, reason: reason, skipped: 'server-empty' };
+  }
+
+  const decrypted = openaiApiKeySync.decryptOpenAiApiKeyBlob(wrap.wrapKeyHex, pull.blob);
+  if (!decrypted) {
+    const userMsg = 'Your saved OpenAI API key could not be read on this computer. Re-enter it in Settings (Integrations → OpenAI).';
+    console.warn('[OpenAiKeySync] undecryptable blob (' + reason + ')');
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', userMsg.slice(0, 500)]);
+    markDbDirty();
+    return { ok: localHasKey, usedLocal: true, reason: reason, error: 'decrypt_failed', userMessage: userMsg };
+  }
+
+  const remoteKey = String(decrypted.openaiApiKey || '').trim();
+  const resolved = openaiApiKeySync.resolveNewestOpenAiKey(
+    localKey,
+    localServerUpdatedAt,
+    remoteKey,
+    serverUpdatedAt
+  );
+
+  if (localHasKey && serverUpdatedAt && localServerUpdatedAt
+    && serverUpdatedAt <= localServerUpdatedAt && resolved.winner === 'local' && !force) {
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncedAt', new Date().toISOString()]);
+    markDbDirty();
+    return { ok: true, usedLocal: true, reason: reason, skipped: 'server-not-newer' };
+  }
+
+  if (resolved.winner === 'local' && localHasKey && (!remoteKey || !serverUpdatedAt || !localServerUpdatedAt)) {
+    scheduleOpenAiApiKeyCloudPush('local-newer');
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncedAt', new Date().toISOString()]);
+    markDbDirty();
+    return { ok: true, usedLocal: true, reason: reason, skipped: 'local-push-scheduled' };
+  }
+
+  applyOpenAiApiKeyFromCloud(resolved.key, serverUpdatedAt);
+  console.info('[OpenAiKeySync] key pulled (' + reason + ') updatedAt=' + (serverUpdatedAt || '?'));
+  return { ok: true, usedLocal: false, reason: reason, updatedAt: serverUpdatedAt, hadKey: !!resolved.key };
+}
+
+async function pushOpenAiApiKeyToCloud(reason) {
+  const apiUrl = getManagedCloudApiUrl();
+  const data = readLicenceData();
+  if (!apiUrl || !data || !data.key) {
+    return { ok: false, error: 'Licence server not available' };
+  }
+  const accountCtx = getQuickFileAccountContext();
+  if (!accountCtx.accountId) {
+    return { ok: false, error: 'Sign in to sync OpenAI API key across computers' };
+  }
+  const localKey = resolveOpenAiApiKey();
+  let keyToPush = String(localKey || '').trim();
+  const isExplicitClear = /(?:^|-)clear$/i.test(String(reason || '')) || /openai-clear/i.test(String(reason || ''));
+  const rows = dbAll('SELECT key, value FROM settings');
+  const localMeta = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  const localServerUpdatedAt = String(localMeta.openaiApiKeyServerUpdatedAt || '').trim();
+
+  const wrap = await openaiApiKeySync.fetchAccountWrapKey(
+    httpPost,
+    apiUrl,
+    data.key,
+    getMachineId(),
+    { headers: _getAuthHeaders(), timeout: 15000, accountId: accountCtx.accountId }
+  );
+  if (!wrap.ok) {
+    return { ok: false, error: wrap.error || 'Wrap key unavailable' };
+  }
+
+  if (!isExplicitClear) {
+    try {
+      const pull = await openaiApiKeySync.pullOpenAiApiKeyFromServer(
+        httpPost,
+        apiUrl,
+        data.key,
+        getMachineId(),
+        wrap.wrapKeyHex,
+        { headers: _getAuthHeaders(), timeout: 15000, accountId: accountCtx.accountId },
+      );
+      if (pull && pull.ok && pull.empty) {
+        if (keyToPush && pull.updatedAt && localServerUpdatedAt && pull.updatedAt > localServerUpdatedAt) {
+          applyOpenAiApiKeyFromCloud('', pull.updatedAt || '');
+          return { ok: true, skipped: 'applied-remote-clear' };
+        }
+      }
+      if (pull && pull.ok && pull.blob) {
+        const existing = openaiApiKeySync.decryptOpenAiApiKeyBlob(wrap.wrapKeyHex, pull.blob);
+        const remoteKey = existing ? String(existing.openaiApiKey || '').trim() : '';
+        const resolved = openaiApiKeySync.resolveNewestOpenAiKey(
+          keyToPush,
+          localServerUpdatedAt,
+          remoteKey,
+          pull.updatedAt || ''
+        );
+        if (resolved.winner === 'remote' && resolved.key !== keyToPush) {
+          applyOpenAiApiKeyFromCloud(resolved.key, pull.updatedAt || '');
+          return { ok: true, skipped: 'applied-remote-newer' };
+        }
+      }
+    } catch (mergeErr) {
+      console.warn('[OpenAiKeySync] merge-before-push failed:', mergeErr && mergeErr.message);
+    }
+  } else {
+    keyToPush = '';
+  }
+
+  const push = await openaiApiKeySync.pushOpenAiApiKeyToServer(
+    httpPost,
+    apiUrl,
+    data.key,
+    getMachineId(),
+    wrap.wrapKeyHex,
+    keyToPush,
+    { headers: _getAuthHeaders(), timeout: 20000, accountId: accountCtx.accountId }
+  );
+  if (push.ok && push.updatedAt) {
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeyServerUpdatedAt', push.updatedAt]);
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncedAt', new Date().toISOString()]);
+    dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', '']);
+    markDbDirty();
+    if (typeof flushDbSync === 'function') {
+      try { flushDbSync(); } catch (_) {}
+    }
+    console.info('[OpenAiKeySync] key pushed (' + (reason || 'save') + ') cleared=' + (!!push.cleared));
+  } else if (!push.ok) {
+    console.warn('[OpenAiKeySync] push failed:', push.error || 'unknown');
+  }
+  return push;
+}
+
+let _openAiKeySyncPushTimer = null;
+function scheduleOpenAiApiKeyCloudPush(reason) {
+  if (_openAiKeySyncPushTimer) clearTimeout(_openAiKeySyncPushTimer);
+  _openAiKeySyncPushTimer = setTimeout(function () {
+    _openAiKeySyncPushTimer = null;
+    pushOpenAiApiKeyToCloud(reason || 'openai-change').catch(function (err) {
+      console.warn('[OpenAiKeySync] debounced push failed:', err && err.message);
+    });
+  }, 2000);
+}
+
 async function ensureQuickFileSettingsFromServer(opts) {
   const reason = (opts && opts.reason) || 'unknown';
   const force = !!(opts && opts.force);
@@ -12118,6 +12392,10 @@ async function ensureQuickFileSettingsFromServer(opts) {
     reason: reason + '+credentials',
     force: force || status.missing.length > 0,
   });
+  const openAiResult = await ensureOpenAiApiKeyFromServer({
+    reason: reason + '+openai',
+    force: force,
+  });
   syncFirmsWithCloud().catch(function (e) {
     console.warn('[FirmSync] after settings pull failed:', e && e.message);
   });
@@ -12130,8 +12408,10 @@ async function ensureQuickFileSettingsFromServer(opts) {
     reason: reason,
     updatedAt: credResult.updatedAt,
     error: credResult.error || null,
-    userMessage: credResult.userMessage || null,
+    userMessage: credResult.userMessage || openAiResult.userMessage || null,
     credentialsPulled: credResult.usedLocal === false,
+    openAiKeyPulled: openAiResult.usedLocal === false,
+    openAiKeySyncError: openAiResult.error || null,
   };
 }
 
@@ -12476,12 +12756,12 @@ ipcMain.handle('quickfile-settings-push', async () => {
   }
 });
 
-ipcMain.handle('quickfile-settings-ensure', async () => {
+ipcMain.handle('quickfile-settings-ensure', async (_, opts) => {
   try {
     const before = getQuickFileSettingsStatus();
     const result = await ensureQuickFileSettingsFromServer({
       reason: 'ensure',
-      force: before.missing.length > 0,
+      force: !!(opts && opts.force) || before.missing.length > 0,
     });
     const after = getQuickFileSettingsStatus();
     return {

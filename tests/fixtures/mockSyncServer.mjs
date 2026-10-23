@@ -14,7 +14,7 @@ const TEST_USER_ID = 'user-sync-test-001';
 
 /** @type {Map<string, { timeline: Map<number, string>, records: Map<string, object>, escrow: string | null, settingsBlob: string|null, settingsUpdatedAt: string|null, firms: Map<string, object>, firmTimeline: Map<number, string> }>} */
 const stores = new Map();
-/** @type {Map<string, { wrapKeyHex: string, credBlob: string|null, credUpdatedAt: string|null }>} */
+/** @type {Map<string, { wrapKeyHex: string, credBlob: string|null, credUpdatedAt: string|null, openaiBlob: string|null, openaiUpdatedAt: string|null }>} */
 const accountQuickfile = new Map();
 
 function storeForKey(licenceKey) {
@@ -45,9 +45,20 @@ function accountRow(accountId) {
       wrapKeyHex: crypto.randomBytes(32).toString('hex'),
       credBlob: null,
       credUpdatedAt: null,
+      openaiBlob: null,
+      openaiUpdatedAt: null,
     });
   }
   return accountQuickfile.get(id);
+}
+
+/** Hermetic tests: map test licence to a stable account when accountId is omitted. */
+function resolveMockAccountId(body) {
+  const acct = accountKey(body.accountId);
+  if (acct) return acct;
+  const key = String(body.key || '').trim().toUpperCase();
+  if (key === TEST_LICENCE_KEY) return TEST_USER_ID;
+  return '';
 }
 
 function readJson(req) {
@@ -106,6 +117,8 @@ export function createMockSyncServer() {
           email: 'sync-test@example.com',
           status: 'active',
           entitlements: { cloudBackup: true },
+          accountId: TEST_USER_ID,
+          userId: TEST_USER_ID,
         });
       }
 
@@ -150,7 +163,7 @@ export function createMockSyncServer() {
       }
 
       if (url.pathname === '/api/account/quickfile-wrap-key') {
-        const acct = accountKey(body.accountId);
+        const acct = resolveMockAccountId(body);
         if (!acct) {
           return sendJson(res, 401, { ok: false, error: 'Authentication required' });
         }
@@ -162,7 +175,7 @@ export function createMockSyncServer() {
       }
 
       if (url.pathname === '/api/settings/quickfile-credentials') {
-        const acct = accountKey(body.accountId);
+        const acct = resolveMockAccountId(body);
         if (!acct) {
           return sendJson(res, 401, { ok: false, error: 'Authentication required' });
         }
@@ -179,6 +192,34 @@ export function createMockSyncServer() {
           return sendJson(res, 200, { ok: false, error: 'No QuickFile credentials saved for this account yet' });
         }
         return sendJson(res, 200, { ok: true, blob: row.credBlob, updatedAt: row.credUpdatedAt || '' });
+      }
+
+      if (url.pathname === '/api/settings/openai-api-key') {
+        const acct = resolveMockAccountId(body);
+        if (!acct) {
+          return sendJson(res, 401, { ok: false, error: 'Authentication required' });
+        }
+        if (String(body.machineId || '') === 'revoked-test-machine') {
+          return sendJson(res, 403, { ok: false, error: 'This device has been revoked', code: 'DEVICE_REVOKED' });
+        }
+        const row = accountRow(acct);
+        if (body.blob !== undefined) {
+          if (body.clear === true || !body.blob) {
+            row.openaiBlob = null;
+          } else {
+            row.openaiBlob = body.blob;
+          }
+          row.openaiUpdatedAt = new Date().toISOString();
+          return sendJson(res, 200, { ok: true, updatedAt: row.openaiUpdatedAt });
+        }
+        if (!row.openaiBlob) {
+          return sendJson(res, 200, {
+            ok: true,
+            empty: true,
+            updatedAt: row.openaiUpdatedAt || '',
+          });
+        }
+        return sendJson(res, 200, { ok: true, blob: row.openaiBlob, updatedAt: row.openaiUpdatedAt || '' });
       }
 
       if (url.pathname === '/api/settings/quickfile') {
