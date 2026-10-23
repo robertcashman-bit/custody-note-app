@@ -172,8 +172,16 @@
     els.previewTo.textContent = rec.toEmail || '—';
   }
 
+  function cancelPendingAutoGenerate() {
+    if (autoGenerateTimer) {
+      clearTimeout(autoGenerateTimer);
+      autoGenerateTimer = null;
+    }
+  }
+
   function syncTemplateUi() {
     var tt = els.template.value;
+    if (whenPicker && whenPicker.setTemplateType) whenPicker.setTemplateType(tt);
     Layout.syncTemplateChipSelection(els.templateChips, tt);
     Layout.updateWhenTitle(els.whenTitle, tt);
     Layout.syncBailExtraVisibility(els.bailExtra, tt);
@@ -243,7 +251,7 @@
 
   function collectFields() {
     var rec = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
-    var when = whenPicker ? whenPicker.getValues() : { attendanceDate: '', attendanceTime: '' };
+    var when = whenPicker ? whenPicker.getValues(els.template.value) : { attendanceDate: '', attendanceTime: '', bailReturnDate: '' };
     var isBail = DT && DT.isBailTemplate(els.template.value);
     return {
       templateType: els.template.value,
@@ -257,7 +265,7 @@
       attendanceTime: when.attendanceTime,
       offence: els.offence.value,
       extraNote: els.extra.value,
-      bailReturnDate: isBail ? when.attendanceDate : '',
+      bailReturnDate: isBail ? when.bailReturnDate : '',
       bailConditions: isBail && els.bailCond ? els.bailCond.value : '',
       userEmailAddress: els.userEmail.value,
       signOffName: getSignOffNameSafe(),
@@ -266,8 +274,14 @@
     };
   }
 
-  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate) {
-    if (whenPicker) whenPicker.setValues(attendanceDate, attendanceTime, bailReturnDate);
+  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate, optionsApply) {
+    if (!whenPicker) return;
+    whenPicker.setValues({
+      templateType: els.template.value,
+      attendanceDate: attendanceDate,
+      attendanceTime: attendanceTime,
+      bailReturnDate: bailReturnDate,
+    }, optionsApply || {});
   }
 
   function scheduleAutoGenerate() {
@@ -285,13 +299,33 @@
     var name = [fd.forename, fd.surname].filter(Boolean).join(' ').trim();
     if (!els.client.value.trim() && name) els.client.value = name;
     if (!els.station.value.trim() && fd.policeStationName) els.station.value = fd.policeStationName;
-    var whenVals = whenPicker ? whenPicker.getValues() : { attendanceDate: '', attendanceTime: '' };
-    if (!whenVals.attendanceDate && fd.date) {
-      applyWhenValues(fd.date, whenVals.attendanceTime, '');
-    }
-    if (!whenVals.attendanceTime) {
-      var arrivalTime = fd.timeArrival || fd.timeArrivalStation || '';
-      if (arrivalTime) applyWhenValues(whenVals.attendanceDate || fd.date || '', String(arrivalTime).trim(), '');
+    var isBail = DT && DT.isBailTemplate(els.template.value);
+    var whenVals = whenPicker ? whenPicker.getValues(els.template.value) : { attendanceDate: '', attendanceTime: '', bailReturnDate: '' };
+    if (isBail) {
+      if (!whenVals.attendanceDate && fd.date) {
+        whenPicker.setAttendanceDateOnly(fd.date, { silent: true });
+      }
+      if (!whenVals.bailReturnDate && fd.bailDate) {
+        applyWhenValues(whenVals.attendanceDate || fd.date || '', whenVals.attendanceTime, String(fd.bailDate).trim(), { silent: true });
+      }
+      if (!whenVals.attendanceTime && fd.bailReturnTime) {
+        applyWhenValues(
+          whenVals.attendanceDate || fd.date || '',
+          String(fd.bailReturnTime).trim(),
+          whenVals.bailReturnDate || (fd.bailDate ? String(fd.bailDate).trim() : ''),
+          { silent: true }
+        );
+      }
+    } else {
+      if (!whenVals.attendanceDate && fd.date) {
+        applyWhenValues(fd.date, whenVals.attendanceTime, '', { silent: true });
+      }
+      if (!whenVals.attendanceTime) {
+        var arrivalTime = fd.timeArrival || fd.timeArrivalStation || '';
+        if (arrivalTime) {
+          applyWhenValues(whenVals.attendanceDate || fd.date || '', String(arrivalTime).trim(), '', { silent: true });
+        }
+      }
     }
     if (!els.offence.value.trim() && fd.offenceSummary) els.offence.value = fd.offenceSummary;
     var recVals = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
@@ -334,6 +368,7 @@
     }
     selectedDraftId = null;
     dirtySubjectBody = false;
+    if (whenPicker) whenPicker.clear({ silent: true });
     syncBailVisibility();
     applyPrefillFromMatter();
     generateFromTemplate(true);
@@ -368,12 +403,14 @@
   }
 
   function newDraft() {
+    cancelPendingAutoGenerate();
     selectedDraftId = null;
     if (recipientApi) recipientApi.setValues('', '');
     els.extra.value = '';
     els.userEmail.value = '';
     if (els.bailCond) els.bailCond.value = '';
     dirtySubjectBody = false;
+    if (whenPicker) whenPicker.clear({ silent: true });
     applyPrefillFromMatter();
     generateFromTemplate(true);
   }
@@ -775,13 +812,14 @@
 
   function loadDraftIntoForm(d) {
     if (!d) return;
+    cancelPendingAutoGenerate();
     selectedDraftId = d.id;
     els.template.value = d.templateType || 'disclosure_confirm_attendance';
     if (recipientApi) recipientApi.setValues(d.toEmail || '', d.recipientName || '');
     els.client.value = d.clientName || '';
     els.station.value = d.policeStation || '';
     var migrated = DT ? DT.migrateDraftDateTimeFields(d) : d;
-    applyWhenValues(migrated.attendanceDate, migrated.attendanceTime, migrated.bailReturnDate);
+    applyWhenValues(migrated.attendanceDate, migrated.attendanceTime, migrated.bailReturnDate, { silent: true });
     els.offence.value = d.offence || '';
     els.extra.value = d.extraNote || '';
     if (els.bailCond) els.bailCond.value = d.bailConditions || '';
@@ -790,6 +828,7 @@
     els.body.value = d.body || '';
     dirtySubjectBody = false;
     syncBailVisibility();
+    updatePreviewTo();
     if (els.template) els.template.dataset.oepLast = els.template.value;
   }
 

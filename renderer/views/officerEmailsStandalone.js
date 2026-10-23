@@ -109,6 +109,7 @@
 
   function syncTemplateUi() {
     var tt = els.template.value;
+    if (whenPicker && whenPicker.setTemplateType) whenPicker.setTemplateType(tt);
     Layout.syncTemplateChipSelection(els.templateChips, tt);
     Layout.updateWhenTitle(els.whenTitle, tt);
     Layout.syncBailExtraVisibility(els.bailExtra, tt);
@@ -125,7 +126,7 @@
 
   function collectFields() {
     var rec = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
-    var when = whenPicker ? whenPicker.getValues() : { attendanceDate: '', attendanceTime: '' };
+    var when = whenPicker ? whenPicker.getValues(els.template.value) : { attendanceDate: '', attendanceTime: '', bailReturnDate: '' };
     var isBail = DT && DT.isBailTemplate(els.template.value);
     return {
       templateType: els.template.value,
@@ -139,7 +140,7 @@
       attendanceTime: when.attendanceTime,
       offence: els.offence.value,
       extraNote: els.extra.value,
-      bailReturnDate: isBail ? when.attendanceDate : '',
+      bailReturnDate: isBail ? when.bailReturnDate : '',
       bailConditions: isBail && els.bailCond ? els.bailCond.value : '',
       userEmailAddress: els.userEmail.value,
       signOffName: getSignOffNameSafe(),
@@ -148,8 +149,14 @@
     };
   }
 
-  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate) {
-    if (whenPicker) whenPicker.setValues(attendanceDate, attendanceTime, bailReturnDate);
+  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate, optionsApply) {
+    if (!whenPicker) return;
+    whenPicker.setValues({
+      templateType: els.template.value,
+      attendanceDate: attendanceDate,
+      attendanceTime: attendanceTime,
+      bailReturnDate: bailReturnDate,
+    }, optionsApply || {});
   }
 
   function syncBailVisibility() {
@@ -258,7 +265,7 @@
     }
     els.template.value = 'disclosure_confirm_attendance';
     els.template.dataset.oesLast = els.template.value;
-    applyWhenValues('', '', '');
+    if (whenPicker) whenPicker.clear({ silent: true });
     dirtySubjectBody = false;
     syncBailVisibility();
     generateFromTemplate(true);
@@ -455,7 +462,24 @@
         return;
       }
       var url = res.url != null ? String(res.url) : '';
-      copyField(url, 'Link copied.');
+      var truncated = !!res.truncated;
+      var method = res.method || '';
+      function onCopied() {
+        var msg = 'Outlook compose link copied to clipboard.';
+        if (method === 'outlook-desktop-eml' || truncated) {
+          msg += ' This link is recipient/subject only because the message is long — use Open in Outlook to open a full draft with the body.';
+        } else {
+          msg += ' The link includes your message body.';
+        }
+        if (typeof showToast === 'function') showToast(msg, 'success', truncated ? 9000 : 4000);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(onCopied).catch(function () {
+          copyField(url, 'Link copied.');
+        });
+      } else {
+        copyField(url, 'Link copied.');
+      }
     });
   }
 

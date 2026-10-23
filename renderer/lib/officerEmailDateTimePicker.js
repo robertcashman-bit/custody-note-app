@@ -10,27 +10,42 @@
 
   function bindRepeatButton(btn, fn) {
     if (!btn) return;
-    var t1 = null;
-    var t2 = null;
-    function stop() {
-      if (t1) clearTimeout(t1);
-      if (t2) clearInterval(t2);
-      t1 = null;
-      t2 = null;
+    var holdTimer = null;
+    var holdInterval = null;
+    var didHoldStep = false;
+
+    function stopHold() {
+      if (holdTimer) clearTimeout(holdTimer);
+      if (holdInterval) clearInterval(holdInterval);
+      holdTimer = null;
+      holdInterval = null;
     }
-    btn.addEventListener('click', function (e) {
-      e.preventDefault();
-      fn();
-    });
+
     btn.addEventListener('pointerdown', function (e) {
       if (e.button !== 0) return;
-      stop();
-      t1 = setTimeout(function () {
-        t2 = setInterval(fn, 120);
+      didHoldStep = false;
+      stopHold();
+      holdTimer = setTimeout(function () {
+        didHoldStep = true;
+        fn();
+        holdInterval = setInterval(fn, 120);
       }, 450);
     });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) {
-      btn.addEventListener(ev, stop);
+
+    btn.addEventListener('pointerup', function () {
+      var wasHold = didHoldStep;
+      stopHold();
+      if (!wasHold) fn();
+      didHoldStep = false;
+    });
+
+    btn.addEventListener('pointerleave', function () {
+      stopHold();
+      didHoldStep = false;
+    });
+    btn.addEventListener('pointercancel', function () {
+      stopHold();
+      didHoldStep = false;
     });
   }
 
@@ -52,15 +67,12 @@
     }, { passive: false });
   }
 
-  /**
-   * @param {HTMLElement} mount
-   * @param {{ prefix: string, onChange?: function, getToday?: function }} options
-   */
   function init(mount, options) {
     var opts = options || {};
     var prefix = opts.prefix || 'oe';
     var onChange = typeof opts.onChange === 'function' ? opts.onChange : function () {};
     var getToday = typeof opts.getToday === 'function' ? opts.getToday : function () { return new Date(); };
+    var silentChange = false;
 
     mount.innerHTML =
       '<div class="officer-email-when">' +
@@ -102,83 +114,120 @@
       '<span>Email will say:</span><strong data-role="when-text"></strong></div>' +
       '</div>' +
       '<input type="hidden" id="' + prefix + '-attendance-date-store" />' +
-      '<input type="hidden" id="' + prefix + '-attendance-time-store" />';
+      '<input type="hidden" id="' + prefix + '-attendance-time-store" />' +
+      '<input type="hidden" id="' + prefix + '-bail-return-date-store" />';
 
     var els = {
       dVal: mount.querySelector('[data-role="d-val"]'),
       hVal: mount.querySelector('[data-role="h-val"]'),
       mVal: mount.querySelector('[data-role="m-val"]'),
       whenText: mount.querySelector('[data-role="when-text"]'),
-      dateStore: mount.querySelector('#' + prefix + '-attendance-date-store'),
-      timeStore: mount.querySelector('#' + prefix + '-attendance-time-store'),
+      attendanceDateStore: mount.querySelector('#' + prefix + '-attendance-date-store'),
+      attendanceTimeStore: mount.querySelector('#' + prefix + '-attendance-time-store'),
+      bailReturnDateStore: mount.querySelector('#' + prefix + '-bail-return-date-store'),
     };
 
     var state = {
-      dateParsed: parseFlexibleDateSafe(''),
-      time: { mode: 'parsed', h: 14, m: 30 },
-      hasTime: true,
+      templateType: 'disclosure_confirm_attendance',
+      attendanceDate: { kind: 'empty' },
+      bailReturnDate: { kind: 'empty' },
+      displayDate: { kind: 'empty' },
+      time: { mode: 'none' },
     };
 
-    function parseFlexibleDateSafe(str) {
+    function isBailMode() {
+      return DT.isBailTemplate(state.templateType);
+    }
+
+    function syncDisplayFromStores() {
+      state.displayDate = isBailMode() ? state.bailReturnDate : state.attendanceDate;
+    }
+
+    function writeStoresFromState() {
+      var attDateOut = serialise(state.attendanceDate);
+      var bailDateOut = serialise(state.bailReturnDate);
+      var timeOut = DT.serialiseTimeForStorage(state.time);
+      if (els.attendanceDateStore) els.attendanceDateStore.value = attDateOut;
+      if (els.bailReturnDateStore) els.bailReturnDateStore.value = bailDateOut;
+      if (els.attendanceTimeStore) els.attendanceTimeStore.value = timeOut;
+    }
+
+    function serialise(d) {
+      if (d.kind === 'empty') return '';
+      return DT.serialiseDateForStorage(d);
+    }
+
+    function parseDate(str) {
       return DT.parseFlexibleDate(str);
     }
 
     function renderStores() {
-      var dateOut;
-      if (state.dateParsed.kind === 'verbatim') {
-        dateOut = state.dateParsed.text;
-      } else {
-        dateOut = DT.serialiseDateForStorage(state.dateParsed);
-      }
-      var timeOut;
-      if (!state.hasTime) timeOut = '';
-      else if (state.time.mode === 'verbatim') timeOut = state.time.text;
-      else timeOut = DT.serialiseTimeForStorage(state.time);
-      if (els.dateStore) els.dateStore.value = dateOut;
-      if (els.timeStore) els.timeStore.value = timeOut;
+      syncDisplayFromStores();
+      writeStoresFromState();
+      var d = state.displayDate;
       if (els.dVal) {
-        if (state.dateParsed.kind === 'verbatim') els.dVal.textContent = state.dateParsed.text;
-        else els.dVal.textContent = DT.relativeDayLabel(state.dateParsed.date, getToday());
+        if (d.kind === 'empty') els.dVal.textContent = '—';
+        else if (d.kind === 'verbatim') els.dVal.textContent = d.text;
+        else els.dVal.textContent = DT.relativeDayLabel(d.date, getToday());
       }
-      if (els.hVal) els.hVal.textContent = state.hasTime && state.time.mode === 'parsed' ? DT.pad2(state.time.h) : (state.hasTime ? '--' : '--');
-      if (els.mVal) els.mVal.textContent = state.hasTime && state.time.mode === 'parsed' ? DT.pad2(state.time.m) : (state.hasTime ? '--' : '--');
+      if (els.hVal) {
+        els.hVal.textContent = state.time.mode === 'parsed' ? DT.pad2(state.time.h) : '—';
+      }
+      if (els.mVal) {
+        els.mVal.textContent = state.time.mode === 'parsed' ? DT.pad2(state.time.m) : '—';
+      }
       if (els.whenText) {
-        els.whenText.textContent = DT.formatForEmailWhen(
-          els.dateStore ? els.dateStore.value : '',
-          els.timeStore ? els.timeStore.value : ''
-        );
+        var dateForPhrase = isBailMode() ? serialise(state.bailReturnDate) : serialise(state.attendanceDate);
+        var phrase = DT.formatForEmailWhen(dateForPhrase, DT.serialiseTimeForStorage(state.time));
+        els.whenText.textContent = phrase || '—';
       }
-      onChange();
+      if (!silentChange) onChange();
     }
 
-    function ensureParsedDate() {
-      if (state.dateParsed.kind === 'verbatim') return;
+    function ensureDisplayDateForStep() {
+      if (state.displayDate.kind !== 'empty') return;
+      state.displayDate = { kind: 'parsed', date: DT.startOfCalendarDay(getToday()) };
+      if (isBailMode()) state.bailReturnDate = state.displayDate;
+      else state.attendanceDate = state.displayDate;
+    }
+
+    function ensureTimeForStep() {
+      if (state.time.mode === 'parsed') return;
+      var n = new Date();
+      state.time = { mode: 'parsed', h: n.getHours(), m: n.getMinutes() };
     }
 
     function stepDay(n) {
-      if (state.dateParsed.kind === 'verbatim') {
-        var p = DT.parseFlexibleDate(state.dateParsed.text);
-        state.dateParsed = p;
+      ensureDisplayDateForStep();
+      if (state.displayDate.kind === 'verbatim') {
+        var reparsed = parseDate(state.displayDate.text);
+        state.displayDate = reparsed;
       }
-      if (state.dateParsed.kind === 'verbatim') return;
-      state.dateParsed = { kind: 'parsed', date: DT.stepCalendarDay(state.dateParsed.date, n) };
+      if (state.displayDate.kind === 'empty' || state.displayDate.kind === 'verbatim') return;
+      var next = { kind: 'parsed', date: DT.stepCalendarDay(state.displayDate.date, n) };
+      state.displayDate = next;
+      if (isBailMode()) state.bailReturnDate = next;
+      else state.attendanceDate = next;
       renderStores();
     }
 
     function setDayOffset(offset) {
-      state.dateParsed = { kind: 'parsed', date: DT.addDaysFromToday(Number(offset) || 0, getToday()) };
+      var next = { kind: 'parsed', date: DT.addDaysFromToday(Number(offset) || 0, getToday()) };
+      state.displayDate = next;
+      if (isBailMode()) state.bailReturnDate = next;
+      else state.attendanceDate = next;
       renderStores();
     }
 
     function stepH(n) {
-      state.hasTime = true;
+      ensureTimeForStep();
       if (state.time.mode === 'verbatim') state.time = { mode: 'parsed', h: 12, m: 0 };
       state.time.h = DT.stepHour(state.time.h, n);
       renderStores();
     }
 
     function stepM(n) {
-      state.hasTime = true;
+      ensureTimeForStep();
       if (state.time.mode === 'verbatim') state.time = { mode: 'parsed', h: 12, m: 0 };
       var next = DT.stepMinute(state.time.h, state.time.m, n);
       state.time.h = next.h;
@@ -203,7 +252,6 @@
     mount.querySelectorAll('[data-tm]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var parts = String(btn.getAttribute('data-tm') || '').split(':');
-        state.hasTime = true;
         state.time = { mode: 'parsed', h: Number(parts[0]) || 0, m: Number(parts[1]) || 0 };
         renderStores();
       });
@@ -212,8 +260,10 @@
     if (nowBtn) {
       nowBtn.addEventListener('click', function () {
         var n = new Date();
-        state.dateParsed = { kind: 'parsed', date: DT.startOfCalendarDay(getToday()) };
-        state.hasTime = true;
+        var day = { kind: 'parsed', date: DT.startOfCalendarDay(getToday()) };
+        state.displayDate = day;
+        if (isBailMode()) state.bailReturnDate = day;
+        else state.attendanceDate = day;
         state.time = { mode: 'parsed', h: n.getHours(), m: n.getMinutes() };
         renderStores();
       });
@@ -221,32 +271,49 @@
     var noTimeBtn = mount.querySelector('[data-act="no-time"]');
     if (noTimeBtn) {
       noTimeBtn.addEventListener('click', function () {
-        state.hasTime = false;
+        state.time = { mode: 'none' };
         renderStores();
       });
     }
 
+    renderStores();
+
     return {
-      setValues: function (attendanceDate, attendanceTime, bailReturnDate) {
-        var dateStr = attendanceDate || bailReturnDate || '';
-        state.dateParsed = parseFlexibleDateSafe(dateStr);
-        var t = DT.parseFlexibleTime(attendanceTime);
-        if (t.mode === 'none') {
-          state.hasTime = false;
-          state.time = { mode: 'parsed', h: 14, m: 30 };
-        } else if (t.mode === 'verbatim') {
-          state.hasTime = true;
-          state.time = t;
-        } else {
-          state.hasTime = true;
-          state.time = t;
-        }
+      setTemplateType: function (templateType) {
+        state.templateType = templateType || state.templateType;
+        syncDisplayFromStores();
         renderStores();
       },
-      getValues: function () {
+      setValues: function (payload, optionsSet) {
+        var o = optionsSet || {};
+        silentChange = !!o.silent;
+        var p = payload || {};
+        if (p.templateType) state.templateType = p.templateType;
+        state.attendanceDate = parseDate(p.attendanceDate != null ? p.attendanceDate : '');
+        state.bailReturnDate = parseDate(p.bailReturnDate != null ? p.bailReturnDate : '');
+        var t = DT.parseFlexibleTime(p.attendanceTime);
+        state.time = t.mode === 'none' ? { mode: 'none' } : t;
+        syncDisplayFromStores();
+        renderStores();
+        silentChange = false;
+      },
+      clear: function (optionsClear) {
+        var o = optionsClear || {};
+        silentChange = !!o.silent;
+        state.attendanceDate = { kind: 'empty' };
+        state.bailReturnDate = { kind: 'empty' };
+        state.displayDate = { kind: 'empty' };
+        state.time = { mode: 'none' };
+        renderStores();
+        silentChange = false;
+      },
+      getValues: function (templateType) {
+        if (templateType) state.templateType = templateType;
+        writeStoresFromState();
         return {
-          attendanceDate: els.dateStore ? els.dateStore.value : '',
-          attendanceTime: els.timeStore ? els.timeStore.value : '',
+          attendanceDate: els.attendanceDateStore ? els.attendanceDateStore.value : '',
+          attendanceTime: els.attendanceTimeStore ? els.attendanceTimeStore.value : '',
+          bailReturnDate: els.bailReturnDateStore ? els.bailReturnDateStore.value : '',
         };
       },
       getWhenPhrase: function () {
@@ -254,16 +321,19 @@
       },
       applyBailDefaultIfNeeded: function (templateType) {
         if (!DT.isBailTemplate(templateType)) return;
-        var today = getToday();
-        var cur = state.dateParsed.kind === 'parsed' ? state.dateParsed.date : today;
-        if (cur <= DT.startOfCalendarDay(today)) {
-          state.dateParsed = { kind: 'parsed', date: DT.addDaysFromToday(28, today) };
-          renderStores();
-        }
-      },
-      setParsedDate: function (date) {
-        state.dateParsed = { kind: 'parsed', date: date };
+        state.templateType = templateType;
+        if (serialise(state.bailReturnDate)) return;
+        state.bailReturnDate = { kind: 'parsed', date: DT.addDaysFromToday(28, getToday()) };
+        syncDisplayFromStores();
         renderStores();
+      },
+      setAttendanceDateOnly: function (dateStr, optionsAtt) {
+        var o = optionsAtt || {};
+        silentChange = !!o.silent;
+        state.attendanceDate = parseDate(dateStr);
+        syncDisplayFromStores();
+        renderStores();
+        silentChange = false;
       },
     };
   }

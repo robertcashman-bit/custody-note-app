@@ -286,8 +286,9 @@ describe('officerEmailsStandalone — behavioural error surfacing (jsdom)', () =
     );
     win.document.getElementById('oes-client').value = 'Joe Bloggs';
     win.document.getElementById('oes-station').value = 'Tonbridge';
-    win.document.getElementById('oes-attendance-date-store').value = '15.05.26';
     win.document.getElementById('oes-offence').value = 'Theft';
+    var todayChip = win.document.querySelector('.officer-email-date-chips [data-d="0"]');
+    if (todayChip) todayChip.click();
 
     win.document.getElementById('oes-open').click();
     await flushMicrotasks(30);
@@ -297,7 +298,10 @@ describe('officerEmailsStandalone — behavioural error surfacing (jsdom)', () =
     assert.strictEqual(fields.subject, 'Joe Bloggs - Tonbridge - Theft - Confirm attendance — disclosure');
     assert.ok(fields.body.includes('Joe Bloggs'), fields.body);
     assert.ok(fields.body.includes('Tonbridge'), fields.body);
-    assert.ok(fields.body.includes('15 May 2026') || fields.body.includes('15.05.26'), fields.body);
+    assert.ok(
+      /\d{1,2} [A-Z][a-z]{2} 20\d{2}/.test(fields.body) || /\d{4}-\d{2}-\d{2}/.test(fields.body),
+      fields.body
+    );
     assert.ok(fields.body.includes('Theft'), fields.body);
     assert.ok(!fields.subject.includes('[Client Name]'), fields.subject);
     assert.ok(!fields.body.includes('[Client Name]'), fields.body);

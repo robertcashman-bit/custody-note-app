@@ -66,22 +66,49 @@ describe('officerEmailDrafts — template bodies', () => {
     assert.ok(b.includes('The attendance is listed for Wed 1 Jan 2025 at 10:00'), b);
   });
 
-  it('bail_details_request mentions return station and conditions when set', () => {
-    const plain = generateOfficerEmailBody(
-      Object.assign({}, base, { templateType: 'bail_details_request', bailConditions: '' })
-    );
-    assert.ok(plain.includes('return station'), plain.toLowerCase());
-    assert.ok(plain.includes('Wed 1 Jan 2025'), plain);
-
-    const withCond = generateOfficerEmailBody(
+  it('bail_details_request has shape variants and uses bail return date, not attendance date', () => {
+    const none = generateOfficerEmailBody(
       Object.assign({}, base, {
         templateType: 'bail_details_request',
-        attendanceDate: '2025-02-01',
+        attendanceDate: '2025-01-01',
+        bailReturnDate: '',
+        bailConditions: '',
+      })
+    );
+    assert.ok(none.includes('return station'), none.toLowerCase());
+    assert.ok(!none.includes('Wed 1 Jan 2025'), 'attendance date must not appear as bail return when bail return empty');
+
+    const both = generateOfficerEmailBody(
+      Object.assign({}, base, {
+        templateType: 'bail_details_request',
+        attendanceDate: '2025-01-01',
+        bailReturnDate: '2025-02-01',
         bailConditions: 'Curfew 9pm',
       })
     );
-    assert.ok(withCond.includes('Sat 1 Feb 2025'), withCond);
-    assert.ok(withCond.includes('Curfew 9pm'), withCond);
+    assert.ok(both.includes('Sat 1 Feb 2025'), both);
+    assert.ok(!both.includes('Wed 1 Jan 2025'), both);
+    assert.ok(both.includes('Curfew 9pm'), both);
+
+    const dateOnly = generateOfficerEmailBody(
+      Object.assign({}, base, {
+        templateType: 'bail_details_request',
+        attendanceDate: '2025-01-01',
+        bailReturnDate: '2025-03-01',
+        bailConditions: '',
+      })
+    );
+    assert.ok(dateOnly.includes('Sat 1 Mar 2025'), dateOnly);
+
+    const condOnly = generateOfficerEmailBody(
+      Object.assign({}, base, {
+        templateType: 'bail_details_request',
+        attendanceDate: '2025-01-01',
+        bailReturnDate: '',
+        bailConditions: 'Report weekly',
+      })
+    );
+    assert.ok(condOnly.includes('Report weekly'), condOnly);
   });
 
   it('chase_bail_details_follow_up references prior email', () => {
