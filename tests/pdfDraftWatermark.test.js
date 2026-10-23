@@ -10,6 +10,8 @@ const {
   shouldShowPdfDraftWatermark,
   pdfDraftWatermarkHtml,
   WATERMARK_LABEL,
+  buildFinaliseAttendanceSavePayload,
+  shouldResetCertificationForDraftRecord,
 } = require('../lib/pdfDraftWatermark');
 
 describe('pdfDraftWatermark', () => {
@@ -36,8 +38,14 @@ describe('pdfDraftWatermark', () => {
     assert.equal(pdfDraftWatermarkHtml(d), '');
   });
 
-  it('suppresses watermark when fee earner certification is Finalised (legacy path)', () => {
+  it('shows watermark when certification is Finalised but record status is still draft (failed finalise / amend gap)', () => {
     const d = { feeEarnerCertification: 'Finalised', _recordStatus: 'draft' };
+    assert.equal(isAttendanceNoteFinalisedForPdf(d), false);
+    assert.match(pdfDraftWatermarkHtml(d), /class="watermark">DRAFT/);
+  });
+
+  it('suppresses watermark when certification is Finalised and record status is absent (legacy export path)', () => {
+    const d = { feeEarnerCertification: 'Finalised' };
     assert.equal(pdfDraftWatermarkHtml(d), '');
   });
 
@@ -47,6 +55,22 @@ describe('pdfDraftWatermark', () => {
     assert.ok(html.includes('DRAFT'));
     assert.ok(!html.includes('CUSTODY NOTE'));
     assert.ok(!html.includes('TELEPHONE ADVICE'));
+  });
+});
+
+describe('finalise certification timing (synthetic)', () => {
+  it('buildFinaliseAttendanceSavePayload sets Finalised without mutating source data', () => {
+    const source = { forename: 'Test', feeEarnerCertification: 'Draft' };
+    const payload = buildFinaliseAttendanceSavePayload(source);
+    assert.equal(source.feeEarnerCertification, 'Draft');
+    assert.equal(payload.feeEarnerCertification, 'Finalised');
+    assert.equal(payload.forename, 'Test');
+  });
+
+  it('shouldResetCertificationForDraftRecord detects inconsistent draft + Finalised cert', () => {
+    assert.equal(shouldResetCertificationForDraftRecord('draft', 'Finalised'), true);
+    assert.equal(shouldResetCertificationForDraftRecord('finalised', 'Finalised'), false);
+    assert.equal(shouldResetCertificationForDraftRecord('draft', 'Draft'), false);
   });
 });
 
@@ -72,8 +96,26 @@ describe('app.js PDF builders use shared draft watermark helper', () => {
     assert.doesNotMatch(volBody, /<div class="watermark">VOLUNTARY<\/div>/);
   });
 
-  it('sets certification to Finalised when saveForm finalises', () => {
-    assert.match(appJs, /if \(status === 'finalised'\) ensureFeeEarnerCertificationMatchesFinalise\(\)/);
+  it('does not set certification before hasMeaningfulData when finalising', () => {
+    const saveStart = appJs.indexOf('function saveForm(status)');
+    const meaningfulIdx = appJs.indexOf('hasMeaningfulData(data)', saveStart);
+    const saveFormChunk = appJs.slice(saveStart, saveStart + 2500);
+    assert.ok(meaningfulIdx > saveStart);
+    assert.doesNotMatch(
+      saveFormChunk.slice(0, meaningfulIdx - saveStart),
+      /ensureFeeEarnerCertificationMatchesFinalise\(\)/
+    );
+  });
+
+  it('builds finalise IPC payload with certification without early UI commit', () => {
+    assert.match(appJs, /var savePayload = status === 'finalised' \? buildFinaliseSavePayload\(data\) : data/);
+    assert.match(appJs, /commitFeeEarnerCertificationAfterFinaliseSuccess\(\)/);
+    assert.match(appJs, /revertFeeEarnerCertificationAfterFailedFinalise\(\)/);
+  });
+
+  it('reconciles draft records with Finalised certification on open', () => {
+    assert.match(appJs, /reconcileFeeEarnerCertificationWithDraftStatus\(currentRecordStatus\)/);
+    assert.match(appJs, /certification reset save failed — will reconcile on open/);
   });
 
   it('enriches PDF export data with record status', () => {
