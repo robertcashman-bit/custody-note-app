@@ -15725,7 +15725,13 @@ pdfAuditFooterHtml(d, settings) +
     window.api.getSettings().then(settings => {
       const builder = getActivePdfBuilder();
       const html = builder(data, settings);
-      printGeneratedDoc(html);
+      const label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
+      const n = [data.surname, data.forename].filter(Boolean).join('_') || label;
+      const fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
+      printGeneratedDoc(html, {
+        filename: fn,
+        brandingFooter: pdfBrandingEnabled(settings),
+      });
     });
   }
 
@@ -16236,13 +16242,20 @@ pdfAuditFooterHtml(d, settings) +
      POLICE STATION DOCUMENT GENERATORS
      ═══════════════════════════════════════════════ */
 
-  function printGeneratedDoc(html) {
-    // H2 — route through the main process's preview-pdf-from-html channel,
-    // which uses BrowserWindow.loadFile() on a temp HTML file. Avoids the
-    // window.open() + document.write() data-URL/size pitfalls and works for
-    // large cover letters / authority letters / generated forms.
+  function printGeneratedDoc(html, opts) {
+    opts = opts || {};
+    // Main process renders HTML → PDF and opens the in-app viewer (never OS default handler).
     if (window.api && typeof window.api.previewPdfFromHtml === 'function') {
-      window.api.previewPdfFromHtml({ html: html }).catch(function(err) {
+      window.api.previewPdfFromHtml({
+        html: html,
+        filename: opts.filename,
+        brandingFooter: opts.brandingFooter,
+      }).then(function(res) {
+        if (res && !res.ok) {
+          showToast('PDF preview failed: ' + (res.error || 'unknown error'), 'error');
+          _printGeneratedDocPopupFallback(html);
+        }
+      }).catch(function(err) {
         console.warn('[printGeneratedDoc] preview-pdf-from-html failed, falling back to popup', err);
         _printGeneratedDocPopupFallback(html);
       });
@@ -21230,7 +21243,7 @@ pdfAuditFooterHtml(d, settings) +
         '<iframe class="laa-preview-frame"></iframe>' +
         '<div class="laa-output-bar">' +
           '<button type="button" class="btn btn-secondary laa-btn-resign" title="Re-sign and regenerate the form">Re-sign</button>' +
-          '<button type="button" class="btn btn-secondary laa-btn-preview" title="Open in default PDF viewer">Print Preview</button>' +
+          '<button type="button" class="btn btn-secondary laa-btn-preview" title="Open in your default PDF app (optional)">Open in another app</button>' +
           '<button type="button" class="btn btn-primary laa-btn-pdf" title="PDF already saved to Desktop">Save as PDF</button>' +
           '<button type="button" class="btn btn-secondary laa-btn-email" title="Open email with form details">Email</button>' +
           '<button type="button" class="btn btn-secondary laa-btn-print" title="Send to printer">Print</button>' +
