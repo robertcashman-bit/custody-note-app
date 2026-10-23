@@ -490,7 +490,10 @@ function _wfBuildFormHtml(formId, data, meta) {
         builder = buildPdfHtml;
       }
       if (!builder) return '';
-      return builder(data, settings);
+      var pdfData = (typeof window !== 'undefined' && typeof window.enrichDataForPdf === 'function')
+        ? window.enrichDataForPdf(data)
+        : data;
+      return builder(pdfData, settings);
     }
 
     case 'conflict_cert': {
