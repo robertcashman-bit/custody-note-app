@@ -16,6 +16,7 @@ describe('Officer Emails standalone view', () => {
   const app = read('app.js');
   const main = read('main.js');
   const standalone = read('renderer/views/officerEmailsStandalone.js');
+  const composeLayout = read('renderer/lib/officerEmailComposeLayout.js');
   const recipientRows = read('renderer/lib/officerEmailRecipientRows.js');
 
   it('is reachable from Home and registered as a view', () => {
@@ -40,24 +41,27 @@ describe('Officer Emails standalone view', () => {
     );
   });
 
-  it('includes attendance time field in standalone form', () => {
-    assert.ok(standalone.includes('id="oes-time"'));
+  it('includes shared date/time picker in standalone form', () => {
+    assert.ok(standalone.includes('oes-when-mount') || standalone.includes('-when-mount'));
+    assert.ok(standalone.includes('OfficerEmailDateTimePicker'));
     assert.ok(standalone.includes('attendanceTime'));
   });
 
   it('uses type=text recipient rows (not type=email) so police domains are never browser-rejected', () => {
-    assert.ok(standalone.includes('oes-recipients'));
+    assert.ok(standalone.includes("PREFIX + '-recipients'") || standalone.includes('-recipients'));
     assert.ok(standalone.includes('OfficerEmailRecipientRows'));
     assert.ok(!standalone.includes('type="email" id="oes-to"'));
-    assert.ok(standalone.includes('oes-recipients'));
-    assert.ok(standalone.includes('oes-duty-solicitor'));
-    assert.ok(standalone.includes('oes-outlook-sig'));
-    assert.ok(standalone.includes('officer-email-check-row'));
-    assert.ok(standalone.includes('officer-email-section-heading'));
-    assert.ok(standalone.includes('Case details'));
+    assert.ok(standalone.includes("PREFIX + '-recipients'") || standalone.includes('-recipients'));
+    assert.ok(standalone.includes('-duty-solicitor'));
+    assert.ok(standalone.includes('-outlook-sig'));
+    assert.ok(composeLayout.includes('officer-email-check-row'));
+    assert.ok(composeLayout.includes('officer-email-step-title'));
+    assert.ok(composeLayout.includes('Case details'));
+    assert.ok(composeLayout.includes('What is the email for?'));
+    assert.ok(standalone.includes('OfficerEmailComposeLayout'));
     assert.ok(!standalone.includes('officer-email-duty-check'));
-    assert.ok(standalone.includes('oes-multi-officer'));
-    assert.ok(standalone.includes('Send to another officer as well?'));
+    assert.ok(standalone.includes('-multi-officer'));
+    assert.ok(composeLayout.includes('Send to another officer as well?'));
   });
 
   it('persists Outlook signature preference via setSettings (not sessionStorage)', () => {
@@ -87,22 +91,23 @@ describe('Officer Emails standalone view', () => {
 
 describe('Officer Emails custody-note panel', () => {
   const panel = read('renderer/views/officerEmailsPanel.js');
+  const composeLayout = read('renderer/lib/officerEmailComposeLayout.js');
 
-  it('includes attendance time and clear fields controls', () => {
-    assert.ok(panel.includes('id="oep-time"'));
+  it('includes date/time picker and clear fields controls', () => {
+    assert.ok(panel.includes('OfficerEmailDateTimePicker'));
     assert.ok(panel.includes('id="oep-clear"'));
     assert.ok(panel.includes('attendanceTime'));
     assert.ok(panel.includes('timeArrival'));
   });
 
   it('uses recipient rows and prefs checkboxes (parity with standalone)', () => {
-    assert.ok(panel.includes('oep-recipients'));
+    assert.ok(panel.includes("PREFIX + '-recipients'") || panel.includes('-recipients'));
     assert.ok(panel.includes('OfficerEmailRecipientRows'));
-    assert.ok(panel.includes('oep-duty-solicitor'));
-    assert.ok(panel.includes('oep-outlook-sig'));
-    assert.ok(panel.includes('officer-email-check-row'));
+    assert.ok(panel.includes('-duty-solicitor'));
+    assert.ok(panel.includes('-outlook-sig'));
+    assert.ok(composeLayout.includes('officer-email-check-row'));
     assert.ok(!panel.includes('<input type="email" id="oep-to"'));
-    assert.ok(panel.includes('oep-multi-officer'));
-    assert.ok(panel.includes('Send to another officer as well?'));
+    assert.ok(panel.includes('-multi-officer'));
+    assert.ok(composeLayout.includes('Send to another officer as well?'));
   });
 });

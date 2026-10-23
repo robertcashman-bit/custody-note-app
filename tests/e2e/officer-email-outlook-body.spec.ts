@@ -195,8 +195,9 @@ async function setOfficerComposeFields(opts: {
         el.dispatchEvent(new Event('change', { bubbles: true }));
       }
       if (toV != null) {
-        const toEl = document.querySelector('.officer-email-recipient-to') as HTMLInputElement | null;
-        if (!toEl) throw new Error('missing .officer-email-recipient-to');
+        /* Panel (oep-*) and standalone (oes-*) both mount recipient rows; scope to standalone view. */
+        const toEl = document.querySelector('#oes-recipients .officer-email-recipient-to') as HTMLInputElement | null;
+        if (!toEl) throw new Error('missing #oes-recipients .officer-email-recipient-to');
         toEl.focus();
         toEl.value = toV;
         toEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -207,7 +208,7 @@ async function setOfficerComposeFields(opts: {
     },
     { toV: to ?? null, subV: subject ?? null, bodyV: body ?? null }
   );
-  if (to != null) await expect(page.locator('.officer-email-recipient-to').first()).toHaveValue(to, { timeout: 5000 });
+  if (to != null) await expect(page.locator('#oes-recipients .officer-email-recipient-to')).toHaveValue(to, { timeout: 5000 });
   if (subject != null) await expect(page.locator('#oes-subject')).toHaveValue(subject, { timeout: 5000 });
   if (body != null) await expect(page.locator('#oes-body')).toHaveValue(body, { timeout: 5000 });
 }
@@ -291,7 +292,7 @@ async function clickOpenOutlookOnce(): Promise<LaunchCapture> {
   const blanker = await page.locator('#cn-credentialfree-blanker').count().catch(() => -1);
   const overlay = await page.locator('.cn-confirm-overlay').count().catch(() => -1);
   const toastText = await page.locator('#cn-toast').textContent().catch(() => '');
-  const toAtFail = await page.locator('.officer-email-recipient-to').first().inputValue().catch(() => '');
+  const toAtFail = await page.locator('#oes-recipients .officer-email-recipient-to').inputValue().catch(() => '');
   const exists = fs.existsSync(capturePath());
   throw new Error(
     `timed out waiting for last-outlook-launch.json` +
@@ -342,13 +343,18 @@ test('A/B/C/D/E/F officer-email Open Outlook uses live box text in launch payloa
   /* A/B) generate then amend */
   await page.locator('#oes-client').fill('Joe Bloggs');
   await page.locator('#oes-station').fill('Tonbridge');
-  await page.locator('#oes-date').fill('15.05.26');
+  await page.evaluate(() => {
+    const el = document.getElementById('oes-attendance-date-store') as HTMLInputElement | null;
+    if (el) el.value = '2026-05-15';
+  });
   await page.locator('#oes-offence').fill('Theft');
-  await page.locator('#oes-gen').click();
-  await page.waitForTimeout(800);
+  /* Prior step left a hand-edited body (dirty); refresh regenerates from case fields. */
+  await page.locator('#oes-refresh').click();
+  await page.waitForTimeout(900);
   const generated = await page.locator('#oes-body').inputValue();
   expect(generated.length).toBeGreaterThan(20);
-  await expect(page.locator('.officer-email-recipient-to').first()).toHaveValue(RECIPIENT);
+  expect(generated).toContain('Joe Bloggs');
+  await expect(page.locator('#oes-recipients .officer-email-recipient-to')).toHaveValue(RECIPIENT);
 
   /* A) unedited generated */
   cap = await clickOpenOutlook();

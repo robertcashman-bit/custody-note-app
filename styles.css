@@ -8058,6 +8058,285 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   border-top: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
   border-bottom: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
 }
+.officer-email-bail-fields.hidden,
+.officer-email-bail-extra.hidden,
+.officer-email-refresh-link.hidden {
+  display: none !important;
+}
+.officer-email-compose-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+.officer-email-panel-compose-grid {
+  margin-bottom: 0.75rem;
+}
+.officer-email-compose-form-card,
+.officer-email-compose-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-width: 0;
+}
+.officer-email-compose-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.officer-email-step {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--border, #e2e8f0) 85%, transparent);
+}
+.officer-email-step:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.officer-email-step-title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #64748b);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+.officer-email-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--primary, #1e40af);
+  color: #fff;
+  font-size: 0.68rem;
+  letter-spacing: 0;
+}
+.officer-email-filled-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  background: #dcfce7;
+  color: #065f46;
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+}
+.officer-email-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.officer-email-chip {
+  border: 1px solid var(--border, #cbd5e1);
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: var(--on-surface, #1e293b);
+}
+.officer-email-chip.on {
+  background: var(--primary, #1e40af);
+  border-color: var(--primary, #1e40af);
+  color: #fff;
+}
+.officer-email-field--full {
+  grid-column: 1 / -1;
+}
+.officer-email-case-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+.officer-email-when {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr;
+  gap: 0.75rem;
+  background: var(--surface-alt, #f1f5f9);
+  border: 1px solid color-mix(in srgb, var(--border, #cbd5e1) 90%, transparent);
+  border-radius: 12px;
+  padding: 0.65rem;
+}
+.officer-email-wlabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted, #64748b);
+  margin-bottom: 0.35rem;
+}
+.officer-email-stepper {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+.officer-email-stepper--time {
+  flex-direction: column;
+}
+.officer-email-step-btn {
+  border: 0;
+  background: #eef2ff;
+  color: var(--primary, #1e40af);
+  font-weight: 700;
+  cursor: pointer;
+  min-width: 2.5rem;
+  font-size: 1.1rem;
+}
+.officer-email-stepper--day .officer-email-step-btn {
+  min-height: 2.75rem;
+}
+.officer-email-stepper--time .officer-email-step-btn {
+  min-height: 2rem;
+  font-size: 0.95rem;
+}
+.officer-email-step-val {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+  padding: 0.35rem;
+  text-align: center;
+  outline: none;
+  cursor: ns-resize;
+}
+.officer-email-stepper--time .officer-email-step-val {
+  font-size: 1.35rem;
+}
+.officer-email-timebox {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+.officer-email-time-colon {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+.officer-email-step-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted, #64748b);
+  text-align: center;
+  margin-top: 0.25rem;
+}
+.officer-email-when-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--text-muted, #64748b);
+  border-top: 1px dashed var(--border, #cbd5e1);
+  padding-top: 0.45rem;
+}
+.officer-email-when-summary strong {
+  color: var(--on-surface, #1e293b);
+  font-size: 0.88rem;
+  text-align: right;
+}
+.officer-email-more-options summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--primary, #1e40af);
+}
+.officer-email-more-options-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+}
+.officer-email-preview-heading {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #64748b);
+}
+.officer-email-preview-tag {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #b45309;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.officer-email-preview-to {
+  font-size: 0.82rem;
+  color: var(--text-muted, #64748b);
+}
+.officer-email-preview-subject {
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+.officer-email-preview-body {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 16rem;
+  resize: vertical;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid var(--border, #e2e8f0);
+  background: var(--input-bg, #f8fafc);
+  font-family: inherit;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+.officer-email-preview-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.officer-email-open-outlook {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.95rem;
+}
+.officer-email-copy-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+.officer-email-panel-draft-toolbar,
+.officer-email-standalone-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.officer-email-refresh-link {
+  align-self: flex-start;
+  border: 0;
+  background: none;
+  color: var(--primary, #1e40af);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+@media (max-width: 960px) {
+  .officer-email-compose-grid,
+  .officer-email-when,
+  .officer-email-case-grid {
+    grid-template-columns: 1fr;
+  }
+  .officer-email-copy-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
 .officer-email-actions {
   display: flex;
   flex-wrap: wrap;

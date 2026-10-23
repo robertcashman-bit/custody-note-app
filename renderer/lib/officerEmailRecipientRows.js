@@ -69,9 +69,9 @@
     row.className = 'officer-email-recipient-row';
     row.dataset.index = String(index);
     row.innerHTML =
-      '<label class="officer-email-field"><span>Recipient email</span>' +
+      '<label class="officer-email-field"><span>Officer email</span>' +
       '<input type="text" class="officer-email-recipient-to" inputmode="email" autocomplete="off" spellcheck="false" /></label>' +
-      '<label class="officer-email-field"><span>Recipient name</span>' +
+      '<label class="officer-email-field"><span>Officer name</span>' +
       '<input type="text" class="officer-email-recipient-name" autocomplete="off" /></label>' +
       '<button type="button" class="officer-email-link-btn officer-email-recipient-remove" title="Remove officer">Remove</button>';
     var toInput = row.querySelector('.officer-email-recipient-to');

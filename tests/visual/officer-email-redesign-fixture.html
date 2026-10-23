@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <title>Officer email redesign fixture</title>
+  <link rel="stylesheet" href="../../styles.css" />
+  <script src="../../lib/officerEmailTemplateOptions.js"></script>
+  <script src="../../lib/officerEmailDateTime.js"></script>
+  <style>
+    body { margin: 0; padding: 1rem; background: #0f172a; font-family: system-ui, sans-serif; }
+    .fixture-title { color: #94a3b8; font-size: 0.85rem; margin: 0 0 0.5rem; }
+  </style>
+</head>
+<body>
+  <p class="fixture-title">Standalone (synthetic)</p>
+  <div id="officer-emails-standalone-host" class="officer-email-standalone"></div>
+  <p class="fixture-title" style="margin-top:1.5rem">In-note panel (synthetic)</p>
+  <div id="officer-emails-panel-host" class="form-panel-card officer-email-panel-host"></div>
+  <script src="../../renderer/lib/officerEmailDateTimePicker.js"></script>
+  <script src="../../renderer/lib/officerEmailComposeLayout.js"></script>
+  <script src="../../renderer/lib/officerEmailRecipientRows.js"></script>
+  <script src="../../renderer/views/officerEmailsStandalone.js"></script>
+  <script src="../../renderer/views/officerEmailsPanel.js"></script>
+  <script>
+    window.api = {
+      officerEmails: {
+        buildPreview: function (fields) {
+          return Promise.resolve({
+            ok: true,
+            subject: fields.clientName + ' - ' + fields.policeStation + ' - ' + fields.offence + ' - Preview',
+            body: 'Dear PC Alpha,\n\nSynthetic preview for ' + fields.clientName + ' at ' + fields.policeStation + ' on ' + fields.attendanceDate + '.\n\nKind regards,',
+          });
+        },
+        listDrafts: function () { return Promise.resolve([]); },
+      },
+    };
+    window._appSettingsCache = { feeEarnerNameDefault: 'Synthetic Rep' };
+    OfficerEmailsStandalone.init();
+    OfficerEmailsPanel.init();
+    document.getElementById('oes-client').value = 'Sam Example';
+    document.getElementById('oes-station').value = 'Synthetic Police Station';
+    document.getElementById('oes-offence').value = 'theft (synthetic)';
+    document.querySelector('#oes-recipients .officer-email-recipient-to').value = 'officer.alpha@example.police.uk';
+    document.querySelector('#oes-recipients .officer-email-recipient-name').value = 'PC Alpha';
+    document.getElementById('oep-client').value = 'Sam Example';
+    document.getElementById('oep-station').value = 'Synthetic Police Station';
+    document.getElementById('oep-offence').value = 'theft (synthetic)';
+    document.querySelector('#oep-recipients .officer-email-recipient-to').value = 'officer.alpha@example.police.uk';
+    document.querySelector('#oep-recipients .officer-email-recipient-name').value = 'PC Alpha';
+  </script>
+</body>
+</html>

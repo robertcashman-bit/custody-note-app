@@ -2,105 +2,66 @@
 (function (global) {
   'use strict';
 
-  var TEMPLATE_OPTIONS = (typeof OFFICER_EMAIL_TEMPLATE_OPTIONS !== 'undefined')
-    ? OFFICER_EMAIL_TEMPLATE_OPTIONS
-    : [];
+  var Layout = global.OfficerEmailComposeLayout;
+  var DT = global.OfficerEmailDateTime;
 
   var host = null;
   var els = {};
   var recipientApi = null;
+  var whenPicker = null;
   var dirtySubjectBody = false;
   var autoGenerateTimer = null;
+  var PREFIX = 'oes';
 
   function buildShell() {
-    if (!host) return;
+    if (!host || !Layout) return;
     host.innerHTML =
-      '<div class="officer-email-standalone-grid">' +
-      '<section class="form-panel-card officer-email-standalone-card">' +
-      '<div class="form-panel-card-label">One-off officer email</div>' +
-      '<p class="officer-email-panel-hint">Use this when the email is not tied to a saved custody note. Nothing is sent until you review and send it in Outlook Web.</p>' +
-      '<div class="officer-email-form officer-email-standalone-form">' +
-      '<label class="officer-email-field officer-email-standalone-wide"><span>Email type</span><select id="oes-template"></select></label>' +
-      '<div class="officer-email-form-section">' +
-      '<h3 class="officer-email-section-heading">Recipients</h3>' +
-      '<div class="officer-email-section-body officer-email-section-body--recipients">' +
-      '<div id="oes-recipients" class="officer-email-recipients-block"></div>' +
-      '<label class="officer-email-check-row officer-email-multi-recipient-toggle"><input type="checkbox" id="oes-multi-officer" /><span>Send to another officer as well?</span></label>' +
-      '</div></div>' +
-      '<div class="officer-email-form-section">' +
-      '<h3 class="officer-email-section-heading">Options</h3>' +
-      '<div class="officer-email-options-stack">' +
-      '<label class="officer-email-check-row"><input type="checkbox" id="oes-duty-solicitor" /><span>I am acting as duty solicitor</span></label>' +
-      '<label class="officer-email-check-row"><input type="checkbox" id="oes-outlook-sig" /><span>My Outlook signature already includes my name</span></label>' +
-      '</div></div>' +
-      '<div class="officer-email-form-section">' +
-      '<h3 class="officer-email-section-heading">Case details</h3>' +
-      '<div class="officer-email-section-body">' +
-      '<label class="officer-email-field"><span>Client name</span><input type="text" id="oes-client" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Police station</span><input type="text" id="oes-station" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Date</span><input type="text" id="oes-date" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Attendance time</span><input type="text" id="oes-time" autocomplete="off" /></label>' +
-      '<label class="officer-email-field officer-email-standalone-wide"><span>Offence / allegation</span><input type="text" id="oes-offence" autocomplete="off" /></label>' +
-      '<div id="oes-bail-fields" class="officer-email-bail-fields hidden officer-email-standalone-wide">' +
-      '<label class="officer-email-field"><span>Bail return date</span><input type="text" id="oes-bail-date" autocomplete="off" /></label>' +
-      '<label class="officer-email-field officer-email-standalone-wide"><span>Bail conditions</span><textarea id="oes-bail-cond" rows="3"></textarea></label>' +
-      '</div>' +
-      '<label class="officer-email-field officer-email-standalone-wide"><span>Extra note (optional)</span><textarea id="oes-extra" rows="2"></textarea></label>' +
-      '<label class="officer-email-field officer-email-standalone-wide"><span>My email address (optional)</span><input type="email" id="oes-user-email" autocomplete="off" /></label>' +
-      '</div></div>' +
-      '</div>' +
-      '<div class="officer-email-actions">' +
+      '<div class="officer-email-compose-grid">' +
+      '<section class="form-panel-card officer-email-compose-form-card">' +
+      '<div class="officer-email-compose-form">' + Layout.buildFormStepsHtml(PREFIX, { showFilledBadge: false }) + '</div>' +
+      '<div class="officer-email-standalone-toolbar">' +
       '<button type="button" class="btn btn-secondary btn-small" id="oes-clear">Clear</button>' +
-      '<button type="button" class="btn btn-primary btn-small" id="oes-gen">Generate / Refresh</button>' +
-      '</div>' +
-      '</section>' +
-      '<section class="form-panel-card officer-email-standalone-card officer-email-standalone-preview">' +
-      '<div class="form-panel-card-label">Preview and send manually</div>' +
-      '<label class="officer-email-field"><span>Subject</span><input type="text" id="oes-subject" autocomplete="off" /></label>' +
-      '<label class="officer-email-field"><span>Email body</span><textarea id="oes-body" rows="18"></textarea></label>' +
-      '<div class="officer-email-actions officer-email-actions-outlook">' +
-      '<button type="button" class="btn btn-primary btn-small" id="oes-open">Open in Outlook Web</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oes-copy-owa">Copy Outlook link</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oes-copy-to">Copy Recipient</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oes-copy-sub">Copy Subject</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" id="oes-copy-body">Copy Body</button>' +
-      '</div>' +
-      '<p class="officer-email-panel-hint">If Outlook login or Authenticator interrupts the compose window, use the copy buttons.</p>' +
-      '</section>' +
-      '</div>';
+      '</div></section>' +
+      '<section class="form-panel-card officer-email-compose-preview-card">' +
+      Layout.buildPreviewHtml(PREFIX) +
+      '</section></div>';
 
-    var sel = host.querySelector('#oes-template');
-    TEMPLATE_OPTIONS.forEach(function (o) {
-      var opt = document.createElement('option');
-      opt.value = o.value;
-      opt.textContent = o.label;
-      sel.appendChild(opt);
-    });
+    var sel = host.querySelector('#' + PREFIX + '-template');
+    sel.innerHTML = Layout.templateOptionsHtml();
     sel.dataset.oesLast = sel.value;
 
     els = {
       template: sel,
-      recipientsHost: host.querySelector('#oes-recipients'),
-      multiOfficer: host.querySelector('#oes-multi-officer'),
-      dutySolicitor: host.querySelector('#oes-duty-solicitor'),
-      outlookSig: host.querySelector('#oes-outlook-sig'),
-      client: host.querySelector('#oes-client'),
-      station: host.querySelector('#oes-station'),
-      date: host.querySelector('#oes-date'),
-      time: host.querySelector('#oes-time'),
-      offence: host.querySelector('#oes-offence'),
-      bailWrap: host.querySelector('#oes-bail-fields'),
-      bailDate: host.querySelector('#oes-bail-date'),
-      bailCond: host.querySelector('#oes-bail-cond'),
-      extra: host.querySelector('#oes-extra'),
-      userEmail: host.querySelector('#oes-user-email'),
-      subject: host.querySelector('#oes-subject'),
-      body: host.querySelector('#oes-body'),
+      templateChips: host.querySelector('[data-role="template-chips"]'),
+      whenTitle: host.querySelector('#' + PREFIX + '-when-title'),
+      whenMount: host.querySelector('#' + PREFIX + '-when-mount'),
+      bailExtra: host.querySelector('#' + PREFIX + '-bail-extra'),
+      recipientsHost: host.querySelector('#' + PREFIX + '-recipients'),
+      multiOfficer: host.querySelector('#' + PREFIX + '-multi-officer'),
+      dutySolicitor: host.querySelector('#' + PREFIX + '-duty-solicitor'),
+      outlookSig: host.querySelector('#' + PREFIX + '-outlook-sig'),
+      client: host.querySelector('#' + PREFIX + '-client'),
+      station: host.querySelector('#' + PREFIX + '-station'),
+      offence: host.querySelector('#' + PREFIX + '-offence'),
+      bailCond: host.querySelector('#' + PREFIX + '-bail-cond'),
+      extra: host.querySelector('#' + PREFIX + '-extra'),
+      userEmail: host.querySelector('#' + PREFIX + '-user-email'),
+      previewTo: host.querySelector('#' + PREFIX + '-preview-to'),
+      subject: host.querySelector('#' + PREFIX + '-subject'),
+      body: host.querySelector('#' + PREFIX + '-body'),
+      refreshBtn: host.querySelector('#' + PREFIX + '-refresh'),
     };
+
+    if (global.OfficerEmailDateTimePicker && els.whenMount) {
+      whenPicker = global.OfficerEmailDateTimePicker.init(els.whenMount, {
+        prefix: PREFIX,
+        onChange: scheduleAutoGenerate,
+      });
+    }
 
     if (global.OfficerEmailRecipientRows && els.recipientsHost) {
       recipientApi = global.OfficerEmailRecipientRows.initRecipientBlock(els.recipientsHost, {
-        prefix: 'oes',
+        prefix: PREFIX,
         onInput: scheduleAutoGenerate,
         dutyCheckbox: els.dutySolicitor,
         multiOfficerCheckbox: els.multiOfficer,
@@ -108,23 +69,53 @@
       global.OfficerEmailRecipientRows.bindOutlookSigCheckbox(els.outlookSig, scheduleAutoGenerate);
     }
 
+    if (els.templateChips) {
+      els.templateChips.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-template]');
+        if (!btn) return;
+        els.template.value = btn.getAttribute('data-template');
+        els.template.dispatchEvent(new Event('change'));
+      });
+    }
+
     els.template.addEventListener('change', onTemplateChange);
-    els.subject.addEventListener('input', function () { dirtySubjectBody = true; });
-    els.body.addEventListener('input', function () { dirtySubjectBody = true; });
-    ['client', 'station', 'date', 'time', 'offence', 'extra', 'userEmail', 'bailDate', 'bailCond'].forEach(function (key) {
-      if (!els[key]) return;
-      els[key].addEventListener('input', scheduleAutoGenerate);
+    els.subject.addEventListener('input', function () { dirtySubjectBody = true; updateRefreshVisibility(); });
+    els.body.addEventListener('input', function () { dirtySubjectBody = true; updateRefreshVisibility(); });
+    [els.client, els.station, els.offence, els.extra, els.userEmail, els.bailCond].forEach(function (el) {
+      if (!el) return;
+      el.addEventListener('input', scheduleAutoGenerate);
     });
+
     host.querySelector('#oes-clear').addEventListener('click', clearForm);
-    host.querySelector('#oes-gen').addEventListener('click', function () { generateFromTemplate(true); });
-    host.querySelector('#oes-open').addEventListener('click', openOutlookClicked);
-    host.querySelector('#oes-copy-owa').addEventListener('click', copyOutlookLinkClicked);
-    host.querySelector('#oes-copy-to').addEventListener('click', function () {
+    if (els.refreshBtn) {
+      els.refreshBtn.addEventListener('click', function () {
+        dirtySubjectBody = false;
+        generateFromTemplate(true);
+      });
+    }
+    host.querySelector('#' + PREFIX + '-open').addEventListener('click', openOutlookClicked);
+    host.querySelector('#' + PREFIX + '-copy-owa').addEventListener('click', copyOutlookLinkClicked);
+    host.querySelector('#' + PREFIX + '-copy-to').addEventListener('click', function () {
       var rec = recipientApi ? recipientApi.getValues() : { toEmail: '' };
       copyField(rec.toEmail, 'Recipient copied.');
     });
-    host.querySelector('#oes-copy-sub').addEventListener('click', function () { copyField(els.subject.value, 'Subject copied.'); });
-    host.querySelector('#oes-copy-body').addEventListener('click', function () { copyField(els.body.value, 'Body copied.'); });
+    host.querySelector('#' + PREFIX + '-copy-sub').addEventListener('click', function () { copyField(els.subject.value, 'Subject copied.'); });
+    host.querySelector('#' + PREFIX + '-copy-body').addEventListener('click', function () { copyField(els.body.value, 'Body copied.'); });
+  }
+
+  function updateRefreshVisibility() {
+    if (els.refreshBtn) els.refreshBtn.classList.toggle('hidden', !dirtySubjectBody);
+  }
+
+  function syncTemplateUi(optionsSync) {
+    var o = optionsSync || {};
+    var tt = els.template.value;
+    if (whenPicker && whenPicker.setTemplateType) {
+      whenPicker.setTemplateType(tt, { silent: !!o.silent });
+    }
+    Layout.syncTemplateChipSelection(els.templateChips, tt);
+    Layout.updateWhenTitle(els.whenTitle, tt);
+    Layout.syncBailExtraVisibility(els.bailExtra, tt);
   }
 
   function getSignOffNameSafe() {
@@ -138,6 +129,9 @@
 
   function collectFields() {
     var rec = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
+    var when = whenPicker ? whenPicker.getValues(els.template.value) : {
+      attendanceDate: '', attendanceTime: '', bailReturnDate: '', bailReturnTime: '',
+    };
     return {
       templateType: els.template.value,
       toEmail: rec.toEmail,
@@ -146,11 +140,12 @@
       outlookSignatureIncludesName: !!(els.outlookSig && els.outlookSig.checked),
       clientName: els.client.value,
       policeStation: els.station.value,
-      attendanceDate: els.date.value,
-      attendanceTime: els.time ? els.time.value : '',
+      attendanceDate: when.attendanceDate,
+      attendanceTime: when.attendanceTime,
       offence: els.offence.value,
       extraNote: els.extra.value,
-      bailReturnDate: els.bailDate ? els.bailDate.value : '',
+      bailReturnDate: when.bailReturnDate,
+      bailReturnTime: when.bailReturnTime,
       bailConditions: els.bailCond ? els.bailCond.value : '',
       userEmailAddress: els.userEmail.value,
       signOffName: getSignOffNameSafe(),
@@ -159,10 +154,27 @@
     };
   }
 
-  function syncBailVisibility() {
-    var tt = els.template && els.template.value;
-    var show = tt === 'bail_details_request' || tt === 'chase_bail_details_follow_up';
-    if (els.bailWrap) els.bailWrap.classList.toggle('hidden', !show);
+  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate, bailReturnTimeOrOpts, maybeOpts) {
+    if (!whenPicker) return;
+    var bailReturnTime = '';
+    var o = {};
+    if (typeof bailReturnTimeOrOpts === 'object' && bailReturnTimeOrOpts != null) {
+      o = bailReturnTimeOrOpts;
+    } else {
+      bailReturnTime = bailReturnTimeOrOpts || '';
+      o = maybeOpts || {};
+    }
+    whenPicker.setValues({
+      templateType: els.template.value,
+      attendanceDate: attendanceDate,
+      attendanceTime: attendanceTime,
+      bailReturnDate: bailReturnDate,
+      bailReturnTime: bailReturnTime,
+    }, o);
+  }
+
+  function syncBailVisibility(optionsSync) {
+    syncTemplateUi(optionsSync);
   }
 
   function onTemplateChange() {
@@ -186,7 +198,7 @@
     ).then(function (choice) {
       if (choice !== 'apply') {
         if (els.template) els.template.value = els.template.dataset.oesLast || 'disclosure_confirm_attendance';
-        syncBailVisibility();
+        syncBailVisibility({ silent: true });
         return;
       }
       generateFromTemplate(true);
@@ -200,13 +212,32 @@
     autoGenerateTimer = setTimeout(function () {
       autoGenerateTimer = null;
       generateFromTemplate(false);
+      updatePreviewTo();
     }, 120);
+  }
+
+  function updatePreviewTo() {
+    if (!els.previewTo) return;
+    var rec = recipientApi ? recipientApi.getValues() : { toEmail: '' };
+    els.previewTo.textContent = rec.toEmail || '—';
+  }
+
+  function highlightWhenInBody(bodyText) {
+    if (!whenPicker || !bodyText) return bodyText;
+    var phrase = whenPicker.getWhenPhrase();
+    if (!phrase || bodyText.indexOf(phrase) < 0) return bodyText;
+    return bodyText.split(phrase).join('⟦' + phrase + '⟧');
+  }
+
+  function stripHighlightMarkers(text) {
+    return String(text || '').replace(/⟦/g, '').replace(/⟧/g, '');
   }
 
   function generateFromTemplate(forceApply) {
     if (!window.api || !window.api.officerEmails || !window.api.officerEmails.buildPreview) {
       return Promise.resolve({ ok: false, error: 'Officer email preview is not available.' });
     }
+    updatePreviewTo();
     return window.api.officerEmails.buildPreview(collectFields()).then(function (res) {
       if (!res || !res.ok) {
         if (typeof showToast === 'function') showToast((res && res.error) || 'Could not build preview', 'error');
@@ -214,12 +245,14 @@
       }
       if (forceApply || !dirtySubjectBody) {
         els.subject.value = res.subject || '';
-        els.body.value = res.body || '';
+        var body = res.body || '';
+        els.body.value = body;
         dirtySubjectBody = false;
+        updateRefreshVisibility();
       }
       return res;
     }).catch(function (err) {
-      if (typeof showToast === 'function') showToast('Could not build preview. Please try Generate / Refresh.', 'error', 7000);
+      if (typeof showToast === 'function') showToast('Could not build preview.', 'error', 7000);
       try { console.error('[officerEmailsStandalone] buildPreview failed', err); } catch (_) {}
       return { ok: false, error: (err && err.message) || String(err) };
     });
@@ -227,13 +260,14 @@
 
   function clearForm() {
     Object.keys(els).forEach(function (key) {
-      if (!els[key] || !('value' in els[key])) return;
+      var el = els[key];
+      if (!el || !('value' in el)) return;
       if (key === 'template' || key === 'recipientsHost' || key === 'dutySolicitor' || key === 'outlookSig') return;
-      if (els[key].type === 'checkbox') {
-        els[key].checked = false;
+      if (el.type === 'checkbox') {
+        el.checked = false;
         return;
       }
-      els[key].value = '';
+      el.value = '';
     });
     if (recipientApi) recipientApi.setValues('', '');
     if (els.dutySolicitor && global.OfficerEmailRecipientRows) {
@@ -244,6 +278,7 @@
     }
     els.template.value = 'disclosure_confirm_attendance';
     els.template.dataset.oesLast = els.template.value;
+    if (whenPicker) whenPicker.clear({ silent: true });
     dirtySubjectBody = false;
     syncBailVisibility();
     generateFromTemplate(true);
@@ -284,6 +319,8 @@
   }
 
   function openOutlookClicked() {
+    var f = collectFields();
+    f.body = stripHighlightMarkers(f.body);
     if (!dirtySubjectBody) {
       generateFromTemplate(true).then(function (res) {
         if (res && res.ok) openOutlookClickedAfterPreview();
@@ -295,6 +332,7 @@
 
   function openOutlookClickedAfterPreview() {
     var f = collectFields();
+    f.body = stripHighlightMarkers(f.body);
     var to = String(f.toEmail || '').trim();
     var sub = String(f.subject || '').trim();
     var bod = String(f.body || '').trim();
@@ -327,7 +365,7 @@
       'Custody Note will not send the email. You must review and send it manually in Outlook Web.';
 
     function reportFatal(label, detail) {
-      var fallback = 'Outlook Web could not be opened. The email content is still in the form — try Copy Outlook link.';
+      var fallback = 'Outlook Web could not be opened. The email content is still in the form — try Copy link.';
       if (detail) fallback = fallback + ' (' + detail + ')';
       if (typeof showToast === 'function') showToast(fallback, 'error', 9000);
       else if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert(fallback);
@@ -361,8 +399,6 @@
             ? 'Opened Outlook draft with your message — review and send'
             : 'Opened in Outlook Web with your message — review and send';
           showToast(openedMsg, 'success', 5000);
-        } else {
-          try { console.warn('[officerEmailsStandalone] openOneOffOutlook ok but showToast undefined'); } catch (_) {}
         }
       }).catch(function (err) {
         try { console.error('[officerEmailsStandalone] openOneOffOutlook rejected', err); } catch (_) {}
@@ -371,7 +407,6 @@
     }
 
     if (typeof window.showChoice === 'function') {
-      /* Primary Open first so stacked layout + focus + Enter all agree; Cancel second. */
       window.showChoice(msg, 'Open Outlook Web', [
         { id: 'open', label: 'Open Outlook Web', variant: 'primary' },
         { id: 'abort', label: 'Cancel', variant: 'secondary' },
@@ -385,12 +420,9 @@
     }
     if (typeof showConfirm !== 'function') {
       try { console.warn('[officerEmailsStandalone] showChoice and showConfirm both undefined; using window.confirm fallback'); } catch (_) {}
-      var ok = false;
-      try {
-        ok = (typeof window !== 'undefined' && typeof window.confirm === 'function')
-          ? window.confirm(msg)
-          : true;
-      } catch (_) { ok = true; }
+      var ok = (typeof window !== 'undefined' && typeof window.confirm === 'function')
+        ? window.confirm(msg)
+        : true;
       if (ok) go();
       return;
     }
@@ -414,30 +446,22 @@
 
   function copyOutlookLinkClickedAfterPreview() {
     var f = collectFields();
+    f.body = stripHighlightMarkers(f.body);
     var to = String(f.toEmail || '').trim();
     var sub = String(f.subject || '').trim();
     var bod = String(f.body || '').trim();
-    if (!to) {
-      if (typeof showToast === 'function') showToast('Please enter a recipient email address.', 'error', 5000);
-      return;
-    }
-    if (!sub) {
-      if (typeof showToast === 'function') showToast('Please enter a subject before copying the link.', 'error', 5000);
-      return;
-    }
-    if (!bod) {
-      if (typeof showToast === 'function') showToast('Please enter an email body before copying the link.', 'error', 5000);
+    if (!to || !sub || !bod) {
+      if (typeof showToast === 'function') showToast('Complete recipient, subject and body before copying the link.', 'error', 5000);
       return;
     }
     if (!window.api || !window.api.officerEmails || !window.api.officerEmails.getComposeUrl) {
-      if (typeof showToast === 'function') showToast('Copy Outlook link is not available.', 'error');
+      if (typeof showToast === 'function') showToast('Copy link is not available.', 'error');
       return;
     }
     function onCopied(truncated, method) {
       var msg = 'Outlook compose link copied to clipboard.';
       if (method === 'outlook-desktop-eml' || truncated) {
-        msg +=
-          ' This link is recipient/subject only because the message is long — use Open Outlook to open a full draft with the body.';
+        msg += ' This link is recipient/subject only because the message is long — use Open in Outlook to open a full draft with the body.';
       } else {
         msg += ' The link includes your message body.';
       }
@@ -453,22 +477,21 @@
       var url = res.url != null ? String(res.url) : '';
       var truncated = !!res.truncated;
       var method = res.method || '';
+      function onCopied() {
+        var msg = 'Outlook compose link copied to clipboard.';
+        if (method === 'outlook-desktop-eml' || truncated) {
+          msg += ' This link is recipient/subject only because the message is long — use Open in Outlook to open a full draft with the body.';
+        } else {
+          msg += ' The link includes your message body.';
+        }
+        if (typeof showToast === 'function') showToast(msg, 'success', truncated ? 9000 : 4000);
+      }
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(function () {
-          onCopied(truncated, method);
-        }).catch(function () {
-          if (window.api.officerEmails.copyText) {
-            window.api.officerEmails.copyText(url).then(function (r) {
-              if (r && r.ok) onCopied(truncated, method);
-              else if (typeof showToast === 'function') showToast('Could not copy link.', 'error');
-            });
-          }
+        navigator.clipboard.writeText(url).then(onCopied).catch(function () {
+          copyField(url, 'Link copied.');
         });
-      } else if (window.api.officerEmails.copyText) {
-        window.api.officerEmails.copyText(url).then(function (r) {
-          if (r && r.ok) onCopied(truncated, method);
-          else if (typeof showToast === 'function') showToast('Could not copy link.', 'error');
-        });
+      } else {
+        copyField(url, 'Link copied.');
       }
     });
   }
