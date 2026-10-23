@@ -33,6 +33,13 @@ describe('pdfViewer module', () => {
     assert.strictEqual(sanitizePdfFilename('noext'), 'noext.pdf');
     assert.strictEqual(sanitizePdfFilename(''), 'document.pdf');
   });
+
+  it('isManagedEphemeralPreviewPath only matches cn-pdf-preview temp files', () => {
+    const { isManagedEphemeralPreviewPath, PREVIEW_FILE_PREFIX } = require(LIB);
+    assert.ok(PREVIEW_FILE_PREFIX.startsWith('cn-pdf-preview-'));
+    assert.strictEqual(isManagedEphemeralPreviewPath('/etc/passwd.pdf'), false);
+    assert.strictEqual(isManagedEphemeralPreviewPath(''), false);
+  });
 });
 
 describe('Generated PDF preview IPC (source)', () => {
@@ -53,6 +60,13 @@ describe('Generated PDF preview IPC (source)', () => {
   it('preload exposes openPdfViewer API', () => {
     const preload = fs.readFileSync(PRELOAD, 'utf8');
     assert.ok(preload.includes("invoke('open-pdf-viewer'"), 'preload must expose openPdfViewer');
+    assert.ok(preload.includes("invoke('save-pdf-base64'"), 'preload must expose savePdfBase64');
+  });
+
+  it('open-pdf-viewer only deletes when deleteOnClose is explicitly true', () => {
+    const src = fs.readFileSync(MAIN, 'utf8');
+    const block = extractHandlerBlock(src, 'open-pdf-viewer');
+    assert.ok(block.includes('deleteOnClose: deleteOnClose === true'), 'deleteOnClose must default false');
   });
 
   it('viewer shell assets exist', () => {
