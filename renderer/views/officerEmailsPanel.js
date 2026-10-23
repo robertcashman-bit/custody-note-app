@@ -179,23 +179,25 @@
     }
   }
 
-  function syncTemplateUi() {
+  function syncTemplateUi(optionsSync) {
+    var o = optionsSync || {};
     var tt = els.template.value;
-    if (whenPicker && whenPicker.setTemplateType) whenPicker.setTemplateType(tt);
+    if (whenPicker && whenPicker.setTemplateType) {
+      whenPicker.setTemplateType(tt, { silent: !!o.silent });
+    }
     Layout.syncTemplateChipSelection(els.templateChips, tt);
     Layout.updateWhenTitle(els.whenTitle, tt);
     Layout.syncBailExtraVisibility(els.bailExtra, tt);
   }
 
-  function syncBailVisibility() {
-    syncTemplateUi();
+  function syncBailVisibility(optionsSync) {
+    syncTemplateUi(optionsSync);
   }
 
   function onTemplateChange() {
     var sel = els.template;
     var prev = sel && sel.dataset && sel.dataset.oepLast != null ? sel.dataset.oepLast : '';
     var next = sel ? sel.value : '';
-    if (whenPicker) whenPicker.applyBailDefaultIfNeeded(next);
     syncBailVisibility();
     if (!dirtySubjectBody) {
       generateFromTemplate(false);
@@ -214,7 +216,7 @@
       ).then(function (ok) {
         if (!ok) {
           if (sel) sel.value = prev || 'disclosure_confirm_attendance';
-          syncBailVisibility();
+          syncBailVisibility({ silent: true });
           return;
         }
         generateFromTemplate(true);
@@ -232,7 +234,7 @@
     ).then(function (choice) {
       if (choice !== 'apply') {
         if (sel) sel.value = prev || 'disclosure_confirm_attendance';
-        syncBailVisibility();
+        syncBailVisibility({ silent: true });
         return;
       }
       generateFromTemplate(true);
@@ -251,8 +253,9 @@
 
   function collectFields() {
     var rec = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
-    var when = whenPicker ? whenPicker.getValues(els.template.value) : { attendanceDate: '', attendanceTime: '', bailReturnDate: '' };
-    var isBail = DT && DT.isBailTemplate(els.template.value);
+    var when = whenPicker ? whenPicker.getValues(els.template.value) : {
+      attendanceDate: '', attendanceTime: '', bailReturnDate: '', bailReturnTime: '',
+    };
     return {
       templateType: els.template.value,
       toEmail: rec.toEmail,
@@ -265,8 +268,9 @@
       attendanceTime: when.attendanceTime,
       offence: els.offence.value,
       extraNote: els.extra.value,
-      bailReturnDate: isBail ? when.bailReturnDate : '',
-      bailConditions: isBail && els.bailCond ? els.bailCond.value : '',
+      bailReturnDate: when.bailReturnDate,
+      bailReturnTime: when.bailReturnTime,
+      bailConditions: els.bailCond ? els.bailCond.value : '',
       userEmailAddress: els.userEmail.value,
       signOffName: getSignOffNameSafe(),
       subject: els.subject.value,
@@ -274,14 +278,23 @@
     };
   }
 
-  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate, optionsApply) {
+  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate, bailReturnTimeOrOpts, maybeOpts) {
     if (!whenPicker) return;
+    var bailReturnTime = '';
+    var o = {};
+    if (typeof bailReturnTimeOrOpts === 'object' && bailReturnTimeOrOpts != null) {
+      o = bailReturnTimeOrOpts;
+    } else {
+      bailReturnTime = bailReturnTimeOrOpts || '';
+      o = maybeOpts || {};
+    }
     whenPicker.setValues({
       templateType: els.template.value,
       attendanceDate: attendanceDate,
       attendanceTime: attendanceTime,
       bailReturnDate: bailReturnDate,
-    }, optionsApply || {});
+      bailReturnTime: bailReturnTime,
+    }, o);
   }
 
   function scheduleAutoGenerate() {
@@ -306,13 +319,20 @@
         whenPicker.setAttendanceDateOnly(fd.date, { silent: true });
       }
       if (!whenVals.bailReturnDate && fd.bailDate) {
-        applyWhenValues(whenVals.attendanceDate || fd.date || '', whenVals.attendanceTime, String(fd.bailDate).trim(), { silent: true });
-      }
-      if (!whenVals.attendanceTime && fd.bailReturnTime) {
         applyWhenValues(
           whenVals.attendanceDate || fd.date || '',
-          String(fd.bailReturnTime).trim(),
+          whenVals.attendanceTime,
+          String(fd.bailDate).trim(),
+          whenVals.bailReturnTime,
+          { silent: true }
+        );
+      }
+      if (!whenVals.bailReturnTime && fd.bailReturnTime) {
+        applyWhenValues(
+          whenVals.attendanceDate || fd.date || '',
+          whenVals.attendanceTime,
           whenVals.bailReturnDate || (fd.bailDate ? String(fd.bailDate).trim() : ''),
+          String(fd.bailReturnTime).trim(),
           { silent: true }
         );
       }
@@ -369,7 +389,7 @@
     selectedDraftId = null;
     dirtySubjectBody = false;
     if (whenPicker) whenPicker.clear({ silent: true });
-    syncBailVisibility();
+    syncBailVisibility({ silent: true });
     applyPrefillFromMatter();
     generateFromTemplate(true);
     if (recipientApi) recipientApi.focusFirstEmail();
@@ -813,21 +833,31 @@
   function loadDraftIntoForm(d) {
     if (!d) return;
     cancelPendingAutoGenerate();
+    dirtySubjectBody = !!(String(d.subject || '').trim() || String(d.body || '').trim());
+    updateRefreshVisibility();
     selectedDraftId = d.id;
     els.template.value = d.templateType || 'disclosure_confirm_attendance';
     if (recipientApi) recipientApi.setValues(d.toEmail || '', d.recipientName || '');
     els.client.value = d.clientName || '';
     els.station.value = d.policeStation || '';
     var migrated = DT ? DT.migrateDraftDateTimeFields(d) : d;
-    applyWhenValues(migrated.attendanceDate, migrated.attendanceTime, migrated.bailReturnDate, { silent: true });
+    applyWhenValues(
+      migrated.attendanceDate,
+      migrated.attendanceTime,
+      migrated.bailReturnDate,
+      migrated.bailReturnTime,
+      { silent: true }
+    );
     els.offence.value = d.offence || '';
     els.extra.value = d.extraNote || '';
     if (els.bailCond) els.bailCond.value = d.bailConditions || '';
     els.userEmail.value = d.userEmailAddress || '';
     els.subject.value = d.subject || '';
     els.body.value = d.body || '';
-    dirtySubjectBody = false;
-    syncBailVisibility();
+    dirtySubjectBody = !!(String(d.subject || '').trim() || String(d.body || '').trim());
+    updateRefreshVisibility();
+    syncBailVisibility({ silent: true });
+    cancelPendingAutoGenerate();
     updatePreviewTo();
     if (els.template) els.template.dataset.oepLast = els.template.value;
   }

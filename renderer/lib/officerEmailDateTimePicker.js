@@ -115,7 +115,8 @@
       '</div>' +
       '<input type="hidden" id="' + prefix + '-attendance-date-store" />' +
       '<input type="hidden" id="' + prefix + '-attendance-time-store" />' +
-      '<input type="hidden" id="' + prefix + '-bail-return-date-store" />';
+      '<input type="hidden" id="' + prefix + '-bail-return-date-store" />' +
+      '<input type="hidden" id="' + prefix + '-bail-return-time-store" />';
 
     var els = {
       dVal: mount.querySelector('[data-role="d-val"]'),
@@ -125,6 +126,7 @@
       attendanceDateStore: mount.querySelector('#' + prefix + '-attendance-date-store'),
       attendanceTimeStore: mount.querySelector('#' + prefix + '-attendance-time-store'),
       bailReturnDateStore: mount.querySelector('#' + prefix + '-bail-return-date-store'),
+      bailReturnTimeStore: mount.querySelector('#' + prefix + '-bail-return-time-store'),
     };
 
     var state = {
@@ -132,8 +134,18 @@
       attendanceDate: { kind: 'empty' },
       bailReturnDate: { kind: 'empty' },
       displayDate: { kind: 'empty' },
-      time: { mode: 'none' },
+      attendanceTime: { mode: 'none' },
+      bailReturnTime: { mode: 'none' },
     };
+
+    function activeTime() {
+      return isBailMode() ? state.bailReturnTime : state.attendanceTime;
+    }
+
+    function setActiveTime(t) {
+      if (isBailMode()) state.bailReturnTime = t;
+      else state.attendanceTime = t;
+    }
 
     function isBailMode() {
       return DT.isBailTemplate(state.templateType);
@@ -146,10 +158,12 @@
     function writeStoresFromState() {
       var attDateOut = serialise(state.attendanceDate);
       var bailDateOut = serialise(state.bailReturnDate);
-      var timeOut = DT.serialiseTimeForStorage(state.time);
+      var timeOut = DT.serialiseTimeForStorage(state.attendanceTime);
       if (els.attendanceDateStore) els.attendanceDateStore.value = attDateOut;
       if (els.bailReturnDateStore) els.bailReturnDateStore.value = bailDateOut;
+      var bailTimeOut = DT.serialiseTimeForStorage(state.bailReturnTime);
       if (els.attendanceTimeStore) els.attendanceTimeStore.value = timeOut;
+      if (els.bailReturnTimeStore) els.bailReturnTimeStore.value = bailTimeOut;
     }
 
     function serialise(d) {
@@ -170,15 +184,16 @@
         else if (d.kind === 'verbatim') els.dVal.textContent = d.text;
         else els.dVal.textContent = DT.relativeDayLabel(d.date, getToday());
       }
+      var tShow = activeTime();
       if (els.hVal) {
-        els.hVal.textContent = state.time.mode === 'parsed' ? DT.pad2(state.time.h) : '—';
+        els.hVal.textContent = tShow.mode === 'parsed' ? DT.pad2(tShow.h) : '—';
       }
       if (els.mVal) {
-        els.mVal.textContent = state.time.mode === 'parsed' ? DT.pad2(state.time.m) : '—';
+        els.mVal.textContent = tShow.mode === 'parsed' ? DT.pad2(tShow.m) : '—';
       }
       if (els.whenText) {
         var dateForPhrase = isBailMode() ? serialise(state.bailReturnDate) : serialise(state.attendanceDate);
-        var phrase = DT.formatForEmailWhen(dateForPhrase, DT.serialiseTimeForStorage(state.time));
+        var phrase = DT.formatForEmailWhen(dateForPhrase, DT.serialiseTimeForStorage(tShow));
         els.whenText.textContent = phrase || '—';
       }
       if (!silentChange) onChange();
@@ -192,9 +207,10 @@
     }
 
     function ensureTimeForStep() {
-      if (state.time.mode === 'parsed') return;
+      var t = activeTime();
+      if (t.mode === 'parsed') return;
       var n = new Date();
-      state.time = { mode: 'parsed', h: n.getHours(), m: n.getMinutes() };
+      setActiveTime({ mode: 'parsed', h: n.getHours(), m: n.getMinutes() });
     }
 
     function stepDay(n) {
@@ -221,17 +237,21 @@
 
     function stepH(n) {
       ensureTimeForStep();
-      if (state.time.mode === 'verbatim') state.time = { mode: 'parsed', h: 12, m: 0 };
-      state.time.h = DT.stepHour(state.time.h, n);
+      var t = activeTime();
+      if (t.mode === 'verbatim') t = { mode: 'parsed', h: 12, m: 0 };
+      t.h = DT.stepHour(t.h, n);
+      setActiveTime(t);
       renderStores();
     }
 
     function stepM(n) {
       ensureTimeForStep();
-      if (state.time.mode === 'verbatim') state.time = { mode: 'parsed', h: 12, m: 0 };
-      var next = DT.stepMinute(state.time.h, state.time.m, n);
-      state.time.h = next.h;
-      state.time.m = next.m;
+      var t = activeTime();
+      if (t.mode === 'verbatim') t = { mode: 'parsed', h: 12, m: 0 };
+      var next = DT.stepMinute(t.h, t.m, n);
+      t.h = next.h;
+      t.m = next.m;
+      setActiveTime(t);
       renderStores();
     }
 
@@ -252,7 +272,7 @@
     mount.querySelectorAll('[data-tm]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var parts = String(btn.getAttribute('data-tm') || '').split(':');
-        state.time = { mode: 'parsed', h: Number(parts[0]) || 0, m: Number(parts[1]) || 0 };
+        setActiveTime({ mode: 'parsed', h: Number(parts[0]) || 0, m: Number(parts[1]) || 0 });
         renderStores();
       });
     });
@@ -264,25 +284,28 @@
         state.displayDate = day;
         if (isBailMode()) state.bailReturnDate = day;
         else state.attendanceDate = day;
-        state.time = { mode: 'parsed', h: n.getHours(), m: n.getMinutes() };
+        setActiveTime({ mode: 'parsed', h: n.getHours(), m: n.getMinutes() });
         renderStores();
       });
     }
     var noTimeBtn = mount.querySelector('[data-act="no-time"]');
     if (noTimeBtn) {
       noTimeBtn.addEventListener('click', function () {
-        state.time = { mode: 'none' };
+        setActiveTime({ mode: 'none' });
         renderStores();
       });
     }
 
     renderStores();
 
-    return {
-      setTemplateType: function (templateType) {
+    var api = {
+      setTemplateType: function (templateType, optionsSet) {
+        var o = optionsSet || {};
+        silentChange = !!o.silent;
         state.templateType = templateType || state.templateType;
         syncDisplayFromStores();
         renderStores();
+        silentChange = false;
       },
       setValues: function (payload, optionsSet) {
         var o = optionsSet || {};
@@ -291,8 +314,10 @@
         if (p.templateType) state.templateType = p.templateType;
         state.attendanceDate = parseDate(p.attendanceDate != null ? p.attendanceDate : '');
         state.bailReturnDate = parseDate(p.bailReturnDate != null ? p.bailReturnDate : '');
-        var t = DT.parseFlexibleTime(p.attendanceTime);
-        state.time = t.mode === 'none' ? { mode: 'none' } : t;
+        var attT = DT.parseFlexibleTime(p.attendanceTime);
+        state.attendanceTime = attT.mode === 'none' ? { mode: 'none' } : attT;
+        var bailT = DT.parseFlexibleTime(p.bailReturnTime);
+        state.bailReturnTime = bailT.mode === 'none' ? { mode: 'none' } : bailT;
         syncDisplayFromStores();
         renderStores();
         silentChange = false;
@@ -303,7 +328,8 @@
         state.attendanceDate = { kind: 'empty' };
         state.bailReturnDate = { kind: 'empty' };
         state.displayDate = { kind: 'empty' };
-        state.time = { mode: 'none' };
+        state.attendanceTime = { mode: 'none' };
+        state.bailReturnTime = { mode: 'none' };
         renderStores();
         silentChange = false;
       },
@@ -314,18 +340,11 @@
           attendanceDate: els.attendanceDateStore ? els.attendanceDateStore.value : '',
           attendanceTime: els.attendanceTimeStore ? els.attendanceTimeStore.value : '',
           bailReturnDate: els.bailReturnDateStore ? els.bailReturnDateStore.value : '',
+          bailReturnTime: els.bailReturnTimeStore ? els.bailReturnTimeStore.value : '',
         };
       },
       getWhenPhrase: function () {
         return els.whenText ? els.whenText.textContent : '';
-      },
-      applyBailDefaultIfNeeded: function (templateType) {
-        if (!DT.isBailTemplate(templateType)) return;
-        state.templateType = templateType;
-        if (serialise(state.bailReturnDate)) return;
-        state.bailReturnDate = { kind: 'parsed', date: DT.addDaysFromToday(28, getToday()) };
-        syncDisplayFromStores();
-        renderStores();
       },
       setAttendanceDateOnly: function (dateStr, optionsAtt) {
         var o = optionsAtt || {};
@@ -336,6 +355,8 @@
         silentChange = false;
       },
     };
+    mount.__officerEmailWhenPicker = api;
+    return api;
   }
 
   global.OfficerEmailDateTimePicker = { init: init };

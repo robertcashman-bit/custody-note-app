@@ -45,6 +45,11 @@ describe('officerEmailDateTime', () => {
     assert.strictEqual(dt.formatForEmailWhen('2026-10-24', ''), 'Sat 24 Oct 2026');
   });
 
+  it('does not emit bare time without a date in when phrases', () => {
+    assert.strictEqual(dt.formatForEmailWhen('', '10:00'), '');
+    assert.strictEqual(dt.formatForEmailWhen('', '14:30'), '');
+  });
+
   it('steps calendar days and minutes', () => {
     const d = new Date(2026, 9, 23);
     const next = dt.stepCalendarDay(d, 1);

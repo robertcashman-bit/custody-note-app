@@ -75,8 +75,10 @@ describe('officerEmailDrafts — template bodies', () => {
         bailConditions: '',
       })
     );
-    assert.ok(none.includes('return station'), none.toLowerCase());
-    assert.ok(!none.includes('Wed 1 Jan 2025'), 'attendance date must not appear as bail return when bail return empty');
+    assert.ok(none.toLowerCase().includes('return to the station'), none);
+    assert.ok(!none.includes(' on 10:00'), none);
+    assert.ok(!/bail return date is Wed 1 Jan 2025/i.test(none), 'attendance date must not be labelled as bail return when bail return empty');
+    assert.ok(none.includes('who attended Norwich on Wed 1 Jan 2025'), none);
 
     const both = generateOfficerEmailBody(
       Object.assign({}, base, {
@@ -87,7 +89,8 @@ describe('officerEmailDrafts — template bodies', () => {
       })
     );
     assert.ok(both.includes('Sat 1 Feb 2025'), both);
-    assert.ok(!both.includes('Wed 1 Jan 2025'), both);
+    assert.ok(both.includes('who attended Norwich on Wed 1 Jan 2025'), both);
+    assert.ok(!/bail return date is Wed 1 Jan 2025/i.test(both), both);
     assert.ok(both.includes('Curfew 9pm'), both);
 
     const dateOnly = generateOfficerEmailBody(
@@ -116,7 +119,7 @@ describe('officerEmailDrafts — template bodies', () => {
       Object.assign({}, base, { templateType: 'chase_bail_details_follow_up', bailConditions: '' })
     );
     assert.ok(b.includes('emailed previously'), b);
-    assert.ok(b.includes('return station'), b.toLowerCase());
+    assert.ok(b.toLowerCase().includes('police station'), b);
   });
 
   it('custody_record_detention_log_request asks for detention log', () => {

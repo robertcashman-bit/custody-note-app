@@ -107,9 +107,12 @@
     if (els.refreshBtn) els.refreshBtn.classList.toggle('hidden', !dirtySubjectBody);
   }
 
-  function syncTemplateUi() {
+  function syncTemplateUi(optionsSync) {
+    var o = optionsSync || {};
     var tt = els.template.value;
-    if (whenPicker && whenPicker.setTemplateType) whenPicker.setTemplateType(tt);
+    if (whenPicker && whenPicker.setTemplateType) {
+      whenPicker.setTemplateType(tt, { silent: !!o.silent });
+    }
     Layout.syncTemplateChipSelection(els.templateChips, tt);
     Layout.updateWhenTitle(els.whenTitle, tt);
     Layout.syncBailExtraVisibility(els.bailExtra, tt);
@@ -126,8 +129,9 @@
 
   function collectFields() {
     var rec = recipientApi ? recipientApi.getValues() : { toEmail: '', recipientName: '' };
-    var when = whenPicker ? whenPicker.getValues(els.template.value) : { attendanceDate: '', attendanceTime: '', bailReturnDate: '' };
-    var isBail = DT && DT.isBailTemplate(els.template.value);
+    var when = whenPicker ? whenPicker.getValues(els.template.value) : {
+      attendanceDate: '', attendanceTime: '', bailReturnDate: '', bailReturnTime: '',
+    };
     return {
       templateType: els.template.value,
       toEmail: rec.toEmail,
@@ -140,8 +144,9 @@
       attendanceTime: when.attendanceTime,
       offence: els.offence.value,
       extraNote: els.extra.value,
-      bailReturnDate: isBail ? when.bailReturnDate : '',
-      bailConditions: isBail && els.bailCond ? els.bailCond.value : '',
+      bailReturnDate: when.bailReturnDate,
+      bailReturnTime: when.bailReturnTime,
+      bailConditions: els.bailCond ? els.bailCond.value : '',
       userEmailAddress: els.userEmail.value,
       signOffName: getSignOffNameSafe(),
       subject: els.subject.value,
@@ -149,22 +154,30 @@
     };
   }
 
-  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate, optionsApply) {
+  function applyWhenValues(attendanceDate, attendanceTime, bailReturnDate, bailReturnTimeOrOpts, maybeOpts) {
     if (!whenPicker) return;
+    var bailReturnTime = '';
+    var o = {};
+    if (typeof bailReturnTimeOrOpts === 'object' && bailReturnTimeOrOpts != null) {
+      o = bailReturnTimeOrOpts;
+    } else {
+      bailReturnTime = bailReturnTimeOrOpts || '';
+      o = maybeOpts || {};
+    }
     whenPicker.setValues({
       templateType: els.template.value,
       attendanceDate: attendanceDate,
       attendanceTime: attendanceTime,
       bailReturnDate: bailReturnDate,
-    }, optionsApply || {});
+      bailReturnTime: bailReturnTime,
+    }, o);
   }
 
-  function syncBailVisibility() {
-    syncTemplateUi();
+  function syncBailVisibility(optionsSync) {
+    syncTemplateUi(optionsSync);
   }
 
   function onTemplateChange() {
-    if (whenPicker) whenPicker.applyBailDefaultIfNeeded(els.template.value);
     syncBailVisibility();
     if (!dirtySubjectBody) {
       generateFromTemplate(true);
@@ -185,7 +198,7 @@
     ).then(function (choice) {
       if (choice !== 'apply') {
         if (els.template) els.template.value = els.template.dataset.oesLast || 'disclosure_confirm_attendance';
-        syncBailVisibility();
+        syncBailVisibility({ silent: true });
         return;
       }
       generateFromTemplate(true);

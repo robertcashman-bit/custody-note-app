@@ -334,6 +334,13 @@ const MIGRATIONS = [
       );`);
     },
   },
+  {
+    version: 6,
+    name: 'officer-email-draft-bail-return-time',
+    up(ctx) {
+      ctx.add('officer_email_drafts', "bail_return_time TEXT DEFAULT ''");
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS.length

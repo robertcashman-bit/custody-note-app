@@ -12987,6 +12987,7 @@ function _officerDraftRowToApi(r) {
     attendanceTime: r.attendance_time,
     extraNote: r.extra_note,
     bailReturnDate: r.bail_return_date,
+    bailReturnTime: r.bail_return_time != null ? r.bail_return_time : '',
     bailConditions: r.bail_conditions,
     userEmailAddress: r.user_email_address,
     subject: r.subject,
@@ -13038,13 +13039,13 @@ ipcMain.handle('officer-email-drafts-create', (_, payload) => {
   dbRun(
     `INSERT INTO officer_email_drafts (
       id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, offence,
-      attendance_date, attendance_time, extra_note, bail_return_date, bail_conditions, user_email_address, subject, body,
+      attendance_date, attendance_time, extra_note, bail_return_date, bail_return_time, bail_conditions, user_email_address, subject, body,
       created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, n.custodyNoteId, st, n.templateType || 'disclosure_confirm_attendance',
       n.toEmail, n.recipientName, n.clientName, n.policeStation, n.offence,
-      n.attendanceDate, n.attendanceTime, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
+      n.attendanceDate, n.attendanceTime, n.extraNote, n.bailReturnDate, n.bailReturnTime, n.bailConditions, n.userEmailAddress,
       n.subject, n.body, now, now,
     ]
   );
@@ -13072,12 +13073,12 @@ ipcMain.handle('officer-email-drafts-update', (_, draftId, payload) => {
   dbRun(
     `UPDATE officer_email_drafts SET
       template_type=?, to_email=?, recipient_name=?, client_name=?, police_station=?, offence=?,
-      attendance_date=?, attendance_time=?, extra_note=?, bail_return_date=?, bail_conditions=?, user_email_address=?,
+      attendance_date=?, attendance_time=?, extra_note=?, bail_return_date=?, bail_return_time=?, bail_conditions=?, user_email_address=?,
       subject=?, body=?, status=?, updated_at=?
      WHERE id=?`,
     [
       n.templateType, n.toEmail, n.recipientName, n.clientName, n.policeStation, n.offence,
-      n.attendanceDate, n.attendanceTime, n.extraNote, n.bailReturnDate, n.bailConditions, n.userEmailAddress,
+      n.attendanceDate, n.attendanceTime, n.extraNote, n.bailReturnDate, n.bailReturnTime, n.bailConditions, n.userEmailAddress,
       n.subject, n.body, st, now, String(draftId),
     ]
   );
@@ -13099,13 +13100,14 @@ ipcMain.handle('officer-email-drafts-duplicate', (_, draftId) => {
   dbRun(
     `INSERT INTO officer_email_drafts (
       id, custody_note_id, status, template_type, to_email, recipient_name, client_name, police_station, offence,
-      attendance_date, attendance_time, extra_note, bail_return_date, bail_conditions, user_email_address, subject, body,
+      attendance_date, attendance_time, extra_note, bail_return_date, bail_return_time, bail_conditions, user_email_address, subject, body,
       created_at, updated_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
       id, src.custody_note_id, dupSt, src.template_type,
       src.to_email, src.recipient_name, src.client_name, src.police_station, src.offence,
-      src.attendance_date, src.attendance_time, src.extra_note, src.bail_return_date, src.bail_conditions, src.user_email_address,
+      src.attendance_date, src.attendance_time, src.extra_note, src.bail_return_date,
+      src.bail_return_time != null ? src.bail_return_time : '', src.bail_conditions, src.user_email_address,
       src.subject, src.body, now, now,
     ]
   );
