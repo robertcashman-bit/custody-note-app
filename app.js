@@ -15775,7 +15775,13 @@ pdfAuditFooterHtml(d, settings) +
         var pdfData = enrichDataForPdf(data, row.status);
         var builder = getPdfBuilderForData(pdfData);
         var html = builder(pdfData, settings);
-        printGeneratedDoc(html);
+        var label = data._formType === 'telephone' ? 'tel-advice' : (data.attendanceMode === 'voluntary' ? 'voluntary' : 'attendance');
+        var n = [data.surname, data.forename].filter(Boolean).join('_') || label;
+        var fn = n + '-' + (data.ufn ? data.ufn.replace('/', '-') : '') + '-' + ((data.date || '').replace(/-/g, '') || Date.now()) + '.pdf';
+        printGeneratedDoc(html, {
+          filename: fn,
+          brandingFooter: pdfBrandingEnabled(settings),
+        });
       });
     }).catch(function() { showToast('Could not load record', 'error'); });
   };

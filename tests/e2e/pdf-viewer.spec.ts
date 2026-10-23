@@ -14,6 +14,17 @@ const SYNTHETIC_HTML =
   '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Synthetic</title></head>' +
   '<body><h1>Synthetic custody note PDF test</h1><p>No real client data.</p></body></html>';
 
+const ARTIFACT_DIR = process.env.CN_E2E_ARTIFACT_DIR || path.join(os.tmpdir(), 'cn-e2e-artifacts');
+
+function artifactPath(name: string): string | undefined {
+  try {
+    fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
+    return path.join(ARTIFACT_DIR, name);
+  } catch {
+    return undefined;
+  }
+}
+
 test.beforeAll(async () => {
   testUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-pdf-viewer-e2e-'));
   electronApp = await _electron.launch({
@@ -86,10 +97,12 @@ test('previewPdfFromHtml opens viewer window with toolbar actions', async () => 
   await viewer.waitForLoadState('domcontentloaded');
   await expect(viewer.locator('#btn-print')).toBeVisible({ timeout: 15000 });
   await expect(viewer.locator('#btn-save')).toBeVisible();
+  await expect(viewer.locator('#btn-email')).toBeVisible();
   await expect(viewer.locator('#btn-external')).toBeVisible();
   await expect(viewer.locator('#btn-close')).toBeVisible();
   await expect(viewer.locator('#doc-title')).toContainText('synthetic-viewer-test.pdf');
-  await viewer.screenshot({ path: '/opt/cursor/artifacts/pdf-viewer-window.png' });
+  const shot = artifactPath('pdf-viewer-window.png');
+  if (shot) await viewer.screenshot({ path: shot });
 
   const tempPath = preview.path!;
   await viewer.locator('#btn-close').click();
@@ -121,4 +134,74 @@ test('previewPdfBase64 uses in-app viewer (returns viewerOpened)', async () => {
   const viewer = await viewerPromise;
   await viewer.waitForLoadState('domcontentloaded');
   await viewer.locator('#btn-close').click();
+});
+
+test('mail-attachment PDF survives after viewer closes', async () => {
+  const minimalPdfBase64 = Buffer.from(
+    '%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF',
+    'utf8'
+  ).toString('base64');
+
+  const viewerPromise = waitForPdfViewerShellWindow(electronApp);
+
+  const saved = await page.evaluate(async (b64) => {
+    const w = window as unknown as {
+      api: {
+        savePdfBase64: (p: {
+          base64: string;
+          filename: string;
+          target: string;
+          openViewer: boolean;
+        }) => Promise<{ ok?: boolean; path?: string }>;
+      };
+    };
+    return w.api.savePdfBase64({
+      base64: b64,
+      filename: 'synthetic-mail-attach.pdf',
+      target: 'mail-attachment',
+      openViewer: true,
+    });
+  }, minimalPdfBase64);
+
+  expect(saved.ok).toBe(true);
+  expect(saved.path).toBeTruthy();
+  expect(fs.existsSync(saved.path!)).toBe(true);
+  expect(saved.path).toMatch(/cn-pdf-mail-attachments/);
+
+  const viewer = await viewerPromise;
+  await viewer.locator('#btn-close').click();
+  await expect.poll(() => fs.existsSync(saved.path!), { timeout: 10000 }).toBe(true);
+});
+
+test('viewer Email action records Outlook launch in test userdata', async () => {
+  const minimalPdfBase64 = Buffer.from(
+    '%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF',
+    'utf8'
+  ).toString('base64');
+
+  const viewerPromise = waitForPdfViewerShellWindow(electronApp);
+
+  await page.evaluate(async (b64) => {
+    const w = window as unknown as {
+      api: {
+        savePdfBase64: (p: { base64: string; filename: string; target: string; openViewer: boolean; emailCompose: object }) => Promise<unknown>;
+      };
+    };
+    await w.api.savePdfBase64({
+      base64: b64,
+      filename: 'synthetic-email-btn.pdf',
+      target: 'mail-attachment',
+      openViewer: true,
+      emailCompose: { subject: 'Synthetic subject', body: 'Synthetic body', to: '' },
+    });
+  }, minimalPdfBase64);
+
+  const viewer = await viewerPromise;
+  await viewer.locator('#btn-email').click();
+  await expect.poll(() => fs.existsSync(path.join(testUserData, 'last-pdf-email-launch.json')), {
+    timeout: 10000,
+  }).toBe(true);
+  if (!viewer.isClosed()) {
+    await viewer.locator('#btn-close').click().catch(() => undefined);
+  }
 });
