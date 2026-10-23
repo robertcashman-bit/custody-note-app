@@ -372,6 +372,7 @@ contextBridge.exposeInMainWorld('api', {
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),
   previewPdfFromHtml: (options) => ipcRenderer.invoke('preview-pdf-from-html', options),
   previewPdfBase64: (params) => ipcRenderer.invoke('preview-pdf-base64', params),
+  openPdfViewer: (params) => ipcRenderer.invoke('open-pdf-viewer', params),
   exportDocx: (options) => ipcRenderer.invoke('export-docx', options),
   printPdfFile: (filePath) => ipcRenderer.invoke('print-pdf-file', filePath),
   quickfileFetchClients: () => ipcRenderer.invoke('quickfile-fetch-clients'),

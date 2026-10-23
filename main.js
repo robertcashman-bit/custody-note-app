@@ -221,6 +221,7 @@ const syncConflicts = require('./main/syncConflicts');
 const staleSyncCatchUpRunner = require('./main/staleSyncCatchUpRunner');
 const openConflictAutoResolve = require('./main/openConflictAutoResolve');
 const pdfBundledCjkFont = require('./lib/pdfBundledCjkFont');
+const pdfViewer = require('./lib/pdfViewer');
 const errorReporting = require('./main/errorReporting');
 const dbCrypto = require('./lib/dbCrypto');
 const { createBackupScheduler } = require('./main/backupScheduler');
@@ -7015,6 +7016,12 @@ app.whenReady().then(async () => {
     _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged });
   }
   catch (_) {}
+  try {
+    pdfViewer.registerPdfViewerIpc(function () { return mainWindow; });
+    pdfViewer.cleanupStalePreviewPdfsOnStartup();
+  } catch (e) {
+    console.warn('[pdf-viewer] init failed:', e && e.message ? e.message : e);
+  }
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
@@ -10994,7 +11001,7 @@ ipcMain.handle('print-to-pdf', async (_, { html, filename, brandingFooter }) => 
   }
 });
 
-/** Save a base64 PDF to temp and open in system PDF viewer */
+/** Save a base64 PDF to temp and open in the in-app PDF viewer (never OS default handler). */
 // H16 — cap base64 input. 50 MB base64 ≈ 37 MB binary, more than any
 // realistic generated PDF; anything bigger is treated as a DoS attempt.
 const PREVIEW_PDF_MAX_BASE64_BYTES = 50 * 1024 * 1024;
@@ -11004,29 +11011,52 @@ ipcMain.handle('preview-pdf-base64', async (_, { base64, filename }) => {
     if (base64.length > PREVIEW_PDF_MAX_BASE64_BYTES) {
       return { ok: false, error: 'PDF too large to preview (max ' + Math.round(PREVIEW_PDF_MAX_BASE64_BYTES / (1024 * 1024)) + ' MB base64)' };
     }
-    const tempDir = app.getPath('temp');
-    const safeName = (filename || `preview-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
-    if (path.extname(safeName).toLowerCase() !== '.pdf') {
-      return { ok: false, error: 'Only .pdf preview filenames are accepted' };
-    }
-    const filePath = path.join(tempDir, safeName);
-    fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
-    await shell.openPath(filePath);
-    return { ok: true, path: filePath };
+    const safeName = pdfViewer.sanitizePdfFilename(filename || 'preview.pdf');
+    const filePath = pdfViewer.writeTempPreviewPdf(Buffer.from(base64, 'base64'), safeName);
+    const opened = await pdfViewer.openPdfViewer({
+      filePath: filePath,
+      suggestedFilename: safeName,
+      deleteOnClose: true,
+      getParentWindow: function () { return mainWindow; },
+    });
+    return { ok: true, path: filePath, viewerOpened: !!opened.viewerOpened };
   } catch (err) {
     console.error('[preview-pdf-base64]', err);
     return { ok: false, error: err.message || String(err) };
   }
 });
 
-/** Returns PDF as base64 for in-app preview (renderer); work stays in main process. */
-ipcMain.handle('preview-pdf-from-html', async (_, { html }) => {
+/** Render HTML to PDF in main process and open in the in-app viewer. */
+ipcMain.handle('preview-pdf-from-html', async (_, { html, filename, brandingFooter }) => {
   try {
-    const buf = await renderHtmlToPdfBuffer(html);
-    return { ok: true, base64: Buffer.from(buf).toString('base64') };
+    const buf = await renderHtmlToPdfBuffer(html, { brandingFooter: brandingFooter !== false });
+    const safeName = pdfViewer.sanitizePdfFilename(filename || 'document.pdf');
+    const filePath = pdfViewer.writeTempPreviewPdf(Buffer.from(buf), safeName);
+    await pdfViewer.openPdfViewer({
+      filePath: filePath,
+      suggestedFilename: safeName,
+      deleteOnClose: true,
+      getParentWindow: function () { return mainWindow; },
+    });
+    return { ok: true, path: filePath, viewerOpened: true };
   } catch (err) {
     console.error('[preview-pdf-from-html]', err && err.message ? err.message : err);
     return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('open-pdf-viewer', async (_, { filePath, filename, title, deleteOnClose }) => {
+  try {
+    const opened = await pdfViewer.openPdfViewer({
+      filePath: filePath,
+      suggestedFilename: filename,
+      title: title,
+      deleteOnClose: deleteOnClose !== false,
+      getParentWindow: function () { return mainWindow; },
+    });
+    return opened;
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : err };
   }
 });
 
