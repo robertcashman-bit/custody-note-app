@@ -23,6 +23,11 @@
   bind('btn-save', function () {
     api.saveAs().catch(function () { /* main shows errors */ });
   });
+  bind('btn-email', function () {
+    api.email().then(function (res) {
+      if (res && res.error) window.alert('Email failed: ' + res.error);
+    }).catch(function () { /* ignore */ });
+  });
   bind('btn-external', function () {
     api.openExternal().catch(function () { /* main shows errors */ });
   });

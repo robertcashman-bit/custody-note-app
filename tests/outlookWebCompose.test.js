@@ -13,6 +13,7 @@ const {
 const {
   buildOutlookComposeEmlContent,
   extractEmlPlainBody,
+  buildOutlookComposeEmlWithPdfAttachment,
 } = require('../lib/outlookComposeEml');
 
 const SPECIAL_BODY = [
@@ -220,6 +221,23 @@ describe('outlookWebCompose.prepareOutlookComposeForOpen — body in Outlook', (
     assert.strictEqual(a.method, b.method);
     assert.strictEqual(a.url, b.url);
     assert.strictEqual(a.body, b.body);
+  });
+});
+
+describe('outlookComposeEml — PDF attachment draft', () => {
+  it('builds multipart/mixed .eml with base64 PDF part', () => {
+    const eml = buildOutlookComposeEmlWithPdfAttachment({
+      to: 'client@example.com',
+      subject: 'Synthetic PDF',
+      body: 'Please see attached.',
+      attachmentFilename: 'synthetic.pdf',
+      attachmentBuffer: Buffer.from('%PDF-1.4 test'),
+    });
+    assert.ok(eml.includes('multipart/mixed'));
+    assert.ok(eml.includes('Content-Type: application/pdf'));
+    assert.ok(eml.includes('Content-Disposition: attachment'));
+    assert.ok(eml.includes('X-Unsent: 1'));
+    assert.ok(eml.includes('Please see attached.'));
   });
 });
 
