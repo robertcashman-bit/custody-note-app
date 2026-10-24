@@ -1,4 +1,4 @@
-# THROWAWAY: Windows NSIS TEST build 1.9.121-test.quickfile3 (master@7a7cf6c + PR #124 e0eee49 + PR #125 750a854 + PR #126 0c80a19 + PR #127 76a7909 + version bump only).
+# THROWAWAY: Windows NSIS TEST build 1.9.121-test.quickfile3 (master@7a7cf6c + PR #124 e0eee49 + PR #125 750a854 + PR #126 0c80a19 + PR #127 a69299e + version bump only).
 # Builds only; never publishes (--publish never; GH_TOKEN not provided to the build).
 # Artefacts are uploaded to this workflow run only. Delete this branch after download.
 name: win-test-build (throwaway)
