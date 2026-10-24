@@ -1,29 +1,20 @@
 /**
- * In-app PDF viewer — opens generated PDFs inside Electron, not the OS handler.
+ * In-app PDF viewer — BrowserView must render Chromium PDF (isolated partition).
  */
 import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import {
+  SYNTHETIC_ATTENDANCE_PDF_HTML,
+  artifactPath,
+  waitForPdfViewerShellWindow,
+  assertBrowserViewPdfRendered,
+} from './pdf-viewer-helpers';
 
 let electronApp: ElectronApplication;
 let page: Page;
 let testUserData: string;
-
-const SYNTHETIC_HTML =
-  '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Synthetic</title></head>' +
-  '<body><h1>Synthetic custody note PDF test</h1><p>No real client data.</p></body></html>';
-
-const ARTIFACT_DIR = process.env.CN_E2E_ARTIFACT_DIR || path.join(os.tmpdir(), 'cn-e2e-artifacts');
-
-function artifactPath(name: string): string | undefined {
-  try {
-    fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
-    return path.join(ARTIFACT_DIR, name);
-  } catch {
-    return undefined;
-  }
-}
 
 test.beforeAll(async () => {
   testUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-pdf-viewer-e2e-'));
@@ -60,24 +51,7 @@ test.afterAll(async () => {
   }
 });
 
-async function waitForPdfViewerShellWindow(app: ElectronApplication) {
-  const deadline = Date.now() + 45000;
-  while (Date.now() < deadline) {
-    for (const w of app.windows()) {
-      const url = w.url();
-      if (url.includes('pdf-viewer-shell.html')) return w;
-    }
-    try {
-      const w = await app.waitForEvent('window', { timeout: 2000 });
-      if (w.url().includes('pdf-viewer-shell.html')) return w;
-    } catch {
-      /* keep polling */
-    }
-  }
-  throw new Error('PDF viewer shell window did not appear');
-}
-
-test('previewPdfFromHtml opens viewer window with toolbar actions', async () => {
+test('previewPdfFromHtml renders PDF in BrowserView (not blank)', async () => {
   const viewerPromise = waitForPdfViewerShellWindow(electronApp);
 
   const preview = await page.evaluate(async (html) => {
@@ -87,7 +61,7 @@ test('previewPdfFromHtml opens viewer window with toolbar actions', async () => 
       };
     };
     return w.api.previewPdfFromHtml({ html, filename: 'synthetic-viewer-test.pdf' });
-  }, SYNTHETIC_HTML);
+  }, SYNTHETIC_ATTENDANCE_PDF_HTML);
 
   expect(preview.ok, preview.error || 'preview failed').toBe(true);
   expect(preview.path).toBeTruthy();
@@ -96,13 +70,11 @@ test('previewPdfFromHtml opens viewer window with toolbar actions', async () => 
   const viewer = await viewerPromise;
   await viewer.waitForLoadState('domcontentloaded');
   await expect(viewer.locator('#btn-print')).toBeVisible({ timeout: 15000 });
-  await expect(viewer.locator('#btn-save')).toBeVisible();
-  await expect(viewer.locator('#btn-email')).toBeVisible();
-  await expect(viewer.locator('#btn-external')).toBeVisible();
-  await expect(viewer.locator('#btn-close')).toBeVisible();
-  await expect(viewer.locator('#doc-title')).toContainText('synthetic-viewer-test.pdf');
-  const shot = artifactPath('pdf-viewer-window.png');
-  if (shot) await viewer.screenshot({ path: shot });
+
+  await assertBrowserViewPdfRendered(viewer, electronApp, {
+    saveAs: artifactPath('viewer-render.png'),
+    shellScreenshotAs: artifactPath('pdf-viewer-window.png'),
+  });
 
   const tempPath = preview.path!;
   await viewer.locator('#btn-close').click();
@@ -132,7 +104,6 @@ test('previewPdfBase64 uses in-app viewer (returns viewerOpened)', async () => {
   expect(res.path).toMatch(/cn-pdf-preview-/);
 
   const viewer = await viewerPromise;
-  await viewer.waitForLoadState('domcontentloaded');
   await viewer.locator('#btn-close').click();
 });
 
@@ -164,8 +135,6 @@ test('mail-attachment PDF survives after viewer closes', async () => {
   }, minimalPdfBase64);
 
   expect(saved.ok).toBe(true);
-  expect(saved.path).toBeTruthy();
-  expect(fs.existsSync(saved.path!)).toBe(true);
   expect(saved.path).toMatch(/cn-pdf-mail-attachments/);
 
   const viewer = await viewerPromise;

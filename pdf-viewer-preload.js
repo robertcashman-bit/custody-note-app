@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('pdfViewerApi', {
   email: () => ipcRenderer.invoke('pdf-viewer-email'),
   openExternal: () => ipcRenderer.invoke('pdf-viewer-open-external'),
   close: () => ipcRenderer.invoke('pdf-viewer-close'),
+  testMetrics: () => ipcRenderer.invoke('pdf-viewer-test-metrics'),
+  e2eInspectPane: () => ipcRenderer.invoke('pdf-viewer-e2e-inspect-pane'),
 });

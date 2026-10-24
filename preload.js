@@ -515,12 +515,20 @@ contextBridge.exposeInMainWorld('custodyNoteBuildInfo', {
 contextBridge.exposeInMainWorld('CustodyEmailCompose', custodyEmailComposeDraft);
 
 /* Playwright / automated tests: fresh userData has no licence — allow skipping the sign-in overlay when env is set.
-   H27 — never expose the E2E hook in packaged installers, even if a user
-   sets the env var. Main.js sets CUSTODYNOTE_PACKAGED='1' when app.isPackaged. */
-if (process.env.CUSTODYNOTE_PACKAGED !== '1') {
+   H27 — never expose the E2E hook in packaged installers, except the isolated
+   packaged Playwright job (temp userData + NODE_ENV=test + explicit skip gate). */
+const cnPackagedPlaywrightE2e =
+  process.env.CUSTODYNOTE_PACKAGED === '1' &&
+  process.env.NODE_ENV === 'test' &&
+  String(process.env.CUSTODYNOTE_TEST_USERDATA || '').trim() !== '' &&
+  process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1';
+
+if (process.env.CUSTODYNOTE_PACKAGED !== '1' || cnPackagedPlaywrightE2e) {
   contextBridge.exposeInMainWorld('__CUSTODYNOTE_E2E__', {
     skipLicenceGate: process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1',
   });
+}
+if (process.env.CUSTODYNOTE_PACKAGED !== '1') {
   contextBridge.exposeInMainWorld('__cnSyncDiag', async () => {
     const status = await ipcRenderer.invoke('sync-status');
     const diag = await ipcRenderer.invoke('sync-get-diagnostics');
