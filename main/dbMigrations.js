@@ -341,6 +341,16 @@ const MIGRATIONS = [
       ctx.add('officer_email_drafts', "bail_return_time TEXT DEFAULT ''");
     },
   },
+  {
+    version: 7,
+    name: 'quickfile-send-status',
+    up(ctx) {
+      ctx.add('attendances', "quickfile_send_status TEXT DEFAULT 'not_sent'");
+      ctx.add('attendances', "quickfile_send_error TEXT DEFAULT ''");
+      ctx.add('attendances', "quickfile_send_error_code TEXT DEFAULT ''");
+      ctx.add('attendances', "quickfile_send_ref TEXT DEFAULT ''");
+    },
+  },
 ];
 
 const LATEST_VERSION = MIGRATIONS.length

@@ -147,10 +147,11 @@ describe('QuickFile invoice number — ledger sync and sequential allocate', () 
     assert.ok(mainJs.includes('MAX_INVOICE_NUMBER_ATTEMPTS'));
   });
 
-  it('uses peek-only allocation (does not pre-advance the counter)', () => {
-    assert.ok(mainJs.includes('allocateNextNumber: peekNextSequentialInvoiceNumber'));
-    assert.ok(!mainJs.includes('function getNextSequentialInvoiceNumber'));
+  it('re-reads QuickFile ledger before each allocate (not per-machine counter alone)', () => {
+    assert.ok(mainJs.includes('resolveNextInvoiceNumberFromQuickFileLedger'));
+    assert.ok(mainJs.includes('allocateNextNumber: async'));
     assert.ok(mainJs.includes('bumpPastNumber: bumpNextInvoiceNumberPast'));
+    assert.ok(mainJs.includes('onDuplicateConflict:'));
   });
 
   it('includes deleted invoices when syncing max ledger number', () => {

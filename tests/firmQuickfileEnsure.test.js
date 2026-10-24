@@ -71,7 +71,7 @@ describe('QuickFile Client_Create payload', () => {
     assert.match(mainJs, /buildQuickFileClientCreateBody/);
     const start = mainJs.indexOf('async function quickFileFindOrCreateClient');
     assert.ok(start > 0);
-    const body = mainJs.slice(start, start + 1200);
+    const body = mainJs.slice(start, start + 2800);
     assert.match(body, /quickfileClient\.buildQuickFileClientCreateBody/);
     assert.doesNotMatch(body, /ClientType:\s*'Company'/);
     assert.doesNotMatch(body, /ClientDetails:\s*\{[\s\S]*Email:/);

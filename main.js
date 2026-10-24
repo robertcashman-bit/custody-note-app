@@ -227,6 +227,12 @@ const { createBackupScheduler } = require('./main/backupScheduler');
 const { hardenWindow, hardenSession, isSafeExternalUrl } = require('./main/windowHardening');
 const _securityLog = require('./main/securityLog');
 const _safeLog = require('./lib/safeLog');
+const quickfileDiagnosticLog = require('./lib/quickfileDiagnosticLog');
+const quickfileRetry = require('./lib/quickfileRetry');
+const quickfileUserError = require('./lib/quickfileUserError');
+const quickfilePreflight = require('./lib/quickfilePreflight');
+const quickfileVerify = require('./lib/quickfileVerify');
+const quickfileClientMatch = require('./lib/quickfileClientMatch');
 const officerEmailDrafts = require('./lib/officerEmailDrafts');
 const outlookWebCompose = require('./lib/outlookWebCompose');
 const openExternalUrlModule = require('./lib/openExternalUrl');
@@ -7002,7 +7008,12 @@ app.whenReady().then(async () => {
   } catch (e) {
     console.warn('[Startup] Diagnostics gather failed:', e && e.message);
   }
-  try { _securityLog.init(app.getPath('userData')); _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged }); }
+  try {
+    const ud = app.getPath('userData');
+    _securityLog.init(ud);
+    quickfileDiagnosticLog.init(ud);
+    _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged });
+  }
   catch (_) {}
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
@@ -7824,7 +7835,7 @@ ipcMain.handle('attendance-list', () => {
 ipcMain.handle('attendance-list-full', () => {
   /* Full rows including data blob â€” used by CSV export, reports, and records list. */
   return dbAll(
-    'SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, data, quickfile_invoice_id, quickfile_invoice_number FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC'
+    'SELECT id, created_at, updated_at, client_name, station_name, dscc_ref, attendance_date, status, data, quickfile_invoice_id, quickfile_invoice_number, quickfile_send_status, quickfile_send_error FROM attendances WHERE deleted_at IS NULL AND archived_at IS NULL ORDER BY updated_at DESC'
   );
 });
 
@@ -11264,6 +11275,7 @@ const laaFormsManifest = require('./lib/laaFormsManifest');
 const quickfileClient = require('./lib/quickfileClient');
 const quickfileSettingsSync = require('./lib/quickfileSettingsSync');
 const quickfileInvoiceNumber = require('./lib/quickfileInvoiceNumber');
+const quickfileInvoiceLedger = require('./lib/quickfileInvoiceLedger');
 
 const QUICKFILE_CREDENTIAL_KEYS = new Set(['quickfileAccountNumber', 'quickfileApiKey', 'quickfileAppId']);
 
@@ -11931,7 +11943,38 @@ function getQuickFileAuth() {
   });
 }
 
-function quickFileRequest(apiPath, bodyContent, opts) {
+const QF_PING_CACHE_MS = 10 * 60 * 1000;
+let _qfAuthPingCache = { ok: false, checkedAt: 0, error: '' };
+
+function updateQuickFileSendStatus(attendanceId, patch) {
+  const id = attendanceId == null ? '' : String(attendanceId).trim();
+  if (!id) return;
+  const p = patch || {};
+  db.run(
+    `UPDATE attendances SET
+      quickfile_send_status = ?,
+      quickfile_send_error = ?,
+      quickfile_send_error_code = ?,
+      quickfile_send_ref = ?,
+      updated_at = datetime('now')
+     WHERE id = ?`,
+    [
+      p.status != null ? String(p.status) : 'not_sent',
+      p.error != null ? String(p.error).slice(0, 500) : '',
+      p.errorCode != null ? String(p.errorCode).slice(0, 64) : '',
+      p.referenceCode != null ? String(p.referenceCode).slice(0, 32) : '',
+      id,
+    ]
+  );
+  markDbDirty();
+}
+
+function _quickFileLogEntry(base, extra) {
+  return Object.assign({}, base || {}, extra || {});
+}
+
+async function quickFileRequestOnce(apiPath, bodyContent, opts) {
+  const o = opts || {};
   const auth = getQuickFileAuth();
   const postData = JSON.stringify({
     payload: {
@@ -11948,36 +11991,113 @@ function quickFileRequest(apiPath, bodyContent, opts) {
     },
   });
 
-  const timeoutMs = (opts && Number(opts.timeoutMs) > 0)
-    ? Number(opts.timeoutMs)
+  const timeoutMs = Number(o.timeoutMs) > 0
+    ? Number(o.timeoutMs)
     : quickfileClient.quickFileTimeoutForPath(apiPath);
-  return quickfileClient.postWithDeadline(
-    https,
-    {
-      hostname: 'api.quickfile.co.uk',
-      path: apiPath,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData, 'utf8'),
+  const attempt = Number.isFinite(Number(o.retryAttempt)) ? Number(o.retryAttempt) : 0;
+  const logBase = {
+    apiPath: String(apiPath || ''),
+    retryAttempt: attempt,
+    createRequestSent: o.createRequestSent === true,
+    attendanceId: o.attendanceId != null ? String(o.attendanceId) : undefined,
+    invoiceNumberTried: o.invoiceNumberTried != null ? String(o.invoiceNumberTried) : undefined,
+  };
+
+  try {
+    const { statusCode, raw } = await quickfileClient.postWithDeadline(
+      https,
+      {
+        hostname: 'api.quickfile.co.uk',
+        path: apiPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData, 'utf8'),
+        },
       },
-    },
-    postData,
-    timeoutMs
-  ).then(({ statusCode, raw }) => {
+      postData,
+      timeoutMs
+    );
     try {
-      return quickfileClient.parseQuickFileResponse(statusCode, raw);
+      const body = quickfileClient.parseQuickFileResponse(statusCode, raw);
+      quickfileDiagnosticLog.append(_quickFileLogEntry(logBase, {
+        event: o.logEvent || 'request_ok',
+        httpStatus: statusCode,
+        outcome: 'ok',
+      }));
+      return body;
     } catch (parseErr) {
       if (/parse error/i.test(parseErr.message)) {
-        console.error('[QuickFile] Response not valid JSON | HTTP:', statusCode, '| length:', raw.length, '| head:', raw.slice(0, 800));
+        console.error('[QuickFile] Response not valid JSON | HTTP:', statusCode, '| length:', raw.length);
       }
+      quickfileDiagnosticLog.append(_quickFileLogEntry(logBase, {
+        event: 'request_error',
+        httpStatus: statusCode,
+        outcome: 'error',
+        qfErrorMessage: parseErr && parseErr.message ? String(parseErr.message).slice(0, 300) : undefined,
+      }));
       throw parseErr;
     }
-  }, (err) => {
+  } catch (err) {
     if (quickfileClient.isQuickFileTimeoutError(err)) {
       console.warn('[QuickFile] ' + apiPath + ' timed out after ' + timeoutMs + 'ms');
     }
+    quickfileDiagnosticLog.append(_quickFileLogEntry(logBase, {
+      event: 'request_error',
+      outcome: 'error',
+      networkCode: err && err.code ? String(err.code) : undefined,
+      qfErrorMessage: err && err.message ? String(err.message).slice(0, 300) : undefined,
+    }));
     throw err;
+  }
+}
+
+function quickFileRequest(apiPath, bodyContent, opts) {
+  const o = opts || {};
+  const maxAttempts = o.skipRetry ? 1 : (Number(o.maxAttempts) > 0 ? Number(o.maxAttempts) : quickfileRetry.DEFAULT_MAX_ATTEMPTS);
+  return quickfileRetry.runWithQuickFileRetries({
+    maxAttempts,
+    delaysMs: o.delaysMs || quickfileRetry.DEFAULT_DELAYS_MS,
+    beforeRetry: async (attempt, err) => {
+      if (typeof o.relinkBeforeRetry === 'function') {
+        const relinked = await o.relinkBeforeRetry(attempt, err);
+        if (relinked !== undefined && relinked !== null) return relinked;
+      }
+      return null;
+    },
+    run: async ({ attempt }) => quickFileRequestOnce(apiPath, bodyContent, Object.assign({}, o, { retryAttempt: attempt })),
+  });
+}
+
+async function quickFilePingAuthenticated(force) {
+  const now = Date.now();
+  if (!force && _qfAuthPingCache.checkedAt && (now - _qfAuthPingCache.checkedAt) < QF_PING_CACHE_MS) {
+    return { ok: _qfAuthPingCache.ok, cached: true, error: _qfAuthPingCache.error || '' };
+  }
+  try {
+    await quickFileRequest('/1_2/client/search', {
+      SearchParameters: {
+        ReturnCount: 1,
+        Offset: 0,
+        OrderResultsBy: 'CompanyName',
+        OrderDirection: 'ASC',
+      },
+    }, { logEvent: 'ping', skipRetry: false });
+    _qfAuthPingCache = { ok: true, checkedAt: now, error: '' };
+    return { ok: true, cached: false, error: '' };
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    _qfAuthPingCache = { ok: false, checkedAt: now, error: msg };
+    return { ok: false, cached: false, error: msg };
+  }
+}
+
+async function quickFileGetInvoiceById(invoiceId) {
+  const id = parseInt(String(invoiceId || '').trim(), 10);
+  if (!Number.isFinite(id)) throw new Error('Invalid QuickFile InvoiceID');
+  return quickFileRequest('/1_2/invoice/get', {
+    InvoiceID: id,
+    ReturnFullInvoice: true,
   });
 }
 
@@ -12089,6 +12209,7 @@ ipcMain.handle('quickfile-ensure-client', async (_, params) => {
  * failed/timed-out API call can never corrupt saved QuickFile credentials. */
 function recordQuickFileConnectionResult(ok, errorMessage) {
   const nowIso = new Date().toISOString();
+  _qfAuthPingCache = { ok: !!ok, checkedAt: Date.now(), error: ok ? '' : String(errorMessage || '') };
   try {
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['quickfileLastConnectionCheckedAt', nowIso]);
     if (ok) {
@@ -12102,6 +12223,19 @@ function recordQuickFileConnectionResult(ok, errorMessage) {
     console.warn('[QuickFile] could not persist connection result:', e && e.message);
   }
 }
+
+ipcMain.handle('quickfile-open-log-folder', async () => {
+  const dir = quickfileDiagnosticLog.getLogsDir();
+  if (!dir) return { ok: false, error: 'Log folder is not available.' };
+  try {
+    const { shell } = require('electron');
+    const err = await shell.openPath(dir);
+    if (err) return { ok: false, error: err };
+    return { ok: true, path: dir };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
+});
 
 ipcMain.handle('quickfile-test-connection', async () => {
   await ensureQuickFileSettingsFromServer({ reason: 'test-connection', force: true });
@@ -12233,27 +12367,68 @@ ipcMain.handle('postcode-lookup', async (_, postcode) => {
    QUICKFILE INVOICE CREATION
    â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-async function quickFileFindOrCreateClient(firmName, contactEmail) {
+async function quickFileFindOrCreateClient(firmName, contactEmail, opts) {
+  const o = opts || {};
+  const name = String(firmName || '').trim();
+  if (!name) return null;
+
+  const knownId = o.knownClientId != null ? parseInt(String(o.knownClientId), 10) : NaN;
+  if (Number.isFinite(knownId) && knownId > 0) {
+    try {
+      const getBody = await quickFileRequest('/1_2/client/get', {
+        ClientID: knownId,
+        ReturnData: { Address: false, ClientContacts: false },
+      });
+      const getName = quickfileClientMatch.clientRecordName(getBody)
+        || quickfileClientMatch.clientRecordName(getBody && getBody.ClientDetails);
+      if (!getName || quickfileClientMatch.clientRecordMatchesFirmName({ CompanyName: getName }, name)) {
+        return knownId;
+      }
+      console.warn('[QuickFile] known ClientID ' + knownId + ' name mismatch; falling back to search');
+    } catch (e) {
+      console.warn('[QuickFile] client/get for known ClientID failed:', e && e.message ? e.message : e);
+    }
+  }
+
   const searchBody = await quickFileRequest('/1_2/client/search', {
     SearchParameters: {
-      CompanyName: firmName,
-      ReturnCount: 10,
+      CompanyName: name,
+      ReturnCount: 25,
       Offset: 0,
       OrderResultsBy: 'CompanyName',
       OrderDirection: 'ASC',
     },
-  });
+  }, { logEvent: 'client_search', skipRetry: false });
   const records = quickFileExtractRecords(searchBody);
-  const match = records.find(r => {
-    const name = (r.ClientName || r.CompanyName || r.Name || '').toLowerCase();
-    return name === firmName.toLowerCase();
-  });
-  if (match) return match.ClientID || match.ClientId;
+  const match = quickfileClientMatch.findClientByExactName(records, name);
+  if (match) {
+    return match.ClientID || match.ClientId;
+  }
 
   /* Client_Create: CompanyName only under ClientDetails (no ClientType / Email). */
-  const createPayload = quickfileClient.buildQuickFileClientCreateBody(firmName, contactEmail);
-  const createBody = await quickFileRequest('/1_2/client/create', createPayload);
-  return createBody.ClientID || createBody.ClientId || createBody.RecordID || null;
+  const createPayload = quickfileClient.buildQuickFileClientCreateBody(name, contactEmail);
+  try {
+    const createBody = await quickFileRequest('/1_2/client/create', createPayload, { logEvent: 'client_create' });
+    return createBody.ClientID || createBody.ClientId || createBody.RecordID || null;
+  } catch (createErr) {
+    if (quickfileClientMatch.isQuickFileClientAlreadyExistsError(createErr)) {
+      const retrySearch = await quickFileRequest('/1_2/client/search', {
+        SearchParameters: {
+          CompanyName: name,
+          ReturnCount: 50,
+          Offset: 0,
+          OrderResultsBy: 'CompanyName',
+          OrderDirection: 'ASC',
+        },
+      }, { logEvent: 'client_search_after_exists' });
+      const retryRecords = quickFileExtractRecords(retrySearch);
+      const retryMatch = quickfileClientMatch.findClientByExactName(retryRecords, name);
+      if (retryMatch) {
+        return retryMatch.ClientID || retryMatch.ClientId;
+      }
+    }
+    throw createErr;
+  }
 }
 
 function sanitizeQuickFileInvoiceNumber(raw) {
@@ -12298,39 +12473,77 @@ function bumpNextInvoiceNumberPast(rawOccupied) {
   }
 }
 
-async function quickFileGetMaxInvoiceNumberNumeric() {
-  /* Include deleted invoices: QuickFile still reserves their numbers (community-confirmed). */
-  const body = await quickFileRequest('/1_2/invoice/search', {
+function readLocalNextInvoiceNumeric() {
+  const row = dbAll("SELECT value FROM settings WHERE key = 'nextInvoiceNumber'");
+  let next = row.length ? parseInt(row[0].value, 10) : NaN;
+  if (!Number.isFinite(next) || next < 1) next = quickfileInvoiceNumber.DEFAULT_START;
+  return next;
+}
+
+function _quickFileInvoiceSearchPage(orderResultsBy, offset, pageSize) {
+  return quickFileRequest('/1_2/invoice/search', {
     SearchParameters: {
-      ReturnCount: 50,
-      Offset: 0,
-      OrderResultsBy: 'InvoiceNumber',
+      ReturnCount: pageSize,
+      Offset: offset,
+      OrderResultsBy: orderResultsBy,
       OrderDirection: 'DESC',
       InvoiceType: 'INVOICE',
       ShowDeleted: true,
     },
-  });
-  const records = quickFileExtractInvoiceSearchRecords(body);
-  if (!records.length) return null;
-  let max = null;
-  for (let i = 0; i < records.length; i++) {
-    const inv = records[i];
-    const invNum = inv.InvoiceNumber || inv.Invoice_No || inv.InvoiceNo || inv.InvoiceNum || '';
-    const n = parseInvoiceNumberNumericPart(invNum);
-    if (Number.isFinite(n) && (max === null || n > max)) max = n;
-  }
-  return max;
+  }, { logEvent: 'invoice_search_ledger', skipRetry: false });
 }
 
-/** Align local nextInvoiceNumber so the next issued number is above QuickFile's highest (handles invoices created outside the app). */
+/** Scan QuickFile (multiple sort orders) and return the highest numeric invoice suffix. */
+async function quickFileFetchLedgerMaxInvoiceNumeric() {
+  const pageSize = quickfileInvoiceLedger.DEFAULT_PAGE_SIZE;
+  const maxPages = quickfileInvoiceLedger.DEFAULT_MAX_PAGES;
+  const byIssueDate = await quickfileInvoiceLedger.fetchLedgerMaxInvoiceNumeric(
+    (offset, size) => _quickFileInvoiceSearchPage('IssueDate', offset, size || pageSize),
+    { pageSize, maxPages }
+  );
+  let byInvoiceId = null;
+  try {
+    byInvoiceId = await quickfileInvoiceLedger.fetchLedgerMaxInvoiceNumeric(
+      (offset, size) => _quickFileInvoiceSearchPage('InvoiceID', offset, size || pageSize),
+      { pageSize, maxPages }
+    );
+  } catch (e) {
+    console.warn('[QuickFile] ledger scan by InvoiceID failed:', e && e.message ? e.message : e);
+  }
+  return quickfileInvoiceLedger.mergeLedgerMaxNumeric(byIssueDate, byInvoiceId);
+}
+
+async function resolveNextInvoiceNumberFromQuickFileLedger() {
+  const sync = await syncNextInvoiceNumberFromQuickFileLedger();
+  if (!sync.ok) {
+    throw new Error('Could not read invoice numbers from QuickFile: ' + (sync.error || 'sync failed'));
+  }
+  return {
+    sync,
+    number: peekNextInvoiceNumberAfterLedgerSync(sync.ledgerMax),
+    ledgerMax: sync.ledgerMax,
+  };
+}
+
+/** Align local nextInvoiceNumber so the next issued number is above QuickFile's ledger (handles QF-only / other machines). */
 async function syncNextInvoiceNumberFromQuickFileLedger() {
   try {
-    const max = await quickFileGetMaxInvoiceNumberNumeric();
-    if (max === null || !Number.isFinite(max)) return;
+    const max = await quickFileFetchLedgerMaxInvoiceNumeric();
+    if (max === null || !Number.isFinite(max)) return { ok: true, ledgerMax: null };
     bumpNextInvoiceNumberPast(String(max));
+    return { ok: true, ledgerMax: max };
   } catch (e) {
     console.warn('[QuickFile] syncNextInvoiceNumberFromQuickFileLedger:', e && e.message ? e.message : e);
+    return { ok: false, error: e && e.message ? e.message : String(e) };
   }
+}
+
+function peekNextInvoiceNumberAfterLedgerSync(ledgerMax) {
+  return quickfileInvoiceLedger.computeNextInvoiceNumberAfterSync({
+    ledgerMax: ledgerMax != null ? ledgerMax : null,
+    localNext: readLocalNextInvoiceNumeric(),
+    defaultStart: quickfileInvoiceNumber.DEFAULT_START,
+  });
 }
 
 async function quickFileFindInvoiceByNumber(invoiceNumber) {
@@ -12382,8 +12595,12 @@ async function quickFileFindInvoiceByAttendanceRef(attendanceId) {
 }
 
 ipcMain.handle('quickfile-suggest-next-invoice-number', async () => {
-  await syncNextInvoiceNumberFromQuickFileLedger();
-  return { ok: true, number: peekNextSequentialInvoiceNumber() };
+  try {
+    const resolved = await resolveNextInvoiceNumberFromQuickFileLedger();
+    return { ok: true, number: resolved.number, ledgerMax: resolved.ledgerMax };
+  } catch (e) {
+    return { ok: false, error: e && e.message ? e.message : String(e) };
+  }
 });
 
 function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) {
@@ -12499,11 +12716,14 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   if (!params || typeof params !== 'object') {
     return { ok: false, error: 'Invalid invoice parameters' };
   }
+  let settingsPullError = '';
   try {
-    await ensureQuickFileSettingsFromServer({ reason: 'create-invoice', force: true });
+    const ensureRes = await ensureQuickFileSettingsFromServer({ reason: 'create-invoice', force: true });
+    if (ensureRes && ensureRes.error) settingsPullError = String(ensureRes.error);
   } catch (settingsErr) {
     /* Never let a settings-pull problem reject the IPC silently; fall back to local settings. */
-    console.warn('[QuickFile] settings pull before invoice failed:', settingsErr && settingsErr.message ? settingsErr.message : settingsErr);
+    settingsPullError = settingsErr && settingsErr.message ? settingsErr.message : String(settingsErr);
+    console.warn('[QuickFile] settings pull before invoice failed:', settingsPullError);
   }
   const {
     attendanceId,
@@ -12526,6 +12746,47 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
 
   const normalizedMileageMiles = normalizeMileageForStorage(mileageMiles);
   const milesForInvoice = normalizedMileageMiles != null ? normalizedMileageMiles : (parseFloat(mileageMiles) || 0);
+  const vrPreflight = Number.isFinite(Number(vatRate)) ? Number(vatRate) : 0.2;
+  const mileageCostPreflight = (milesForInvoice || 0) * (mileageRate || 0.45);
+  const subtotalPreflight = (parseFloat(attendanceFee) || 0) + mileageCostPreflight + (parseFloat(parkingAmount) || 0);
+  const totalPreflight = subtotalPreflight + subtotalPreflight * vrPreflight;
+  let lineItemCountPreflight = 0;
+  if ((parseFloat(attendanceFee) || 0) > 0) lineItemCountPreflight += 1;
+  if (mileageCostPreflight > 0) lineItemCountPreflight += 1;
+  if ((parseFloat(parkingAmount) || 0) > 0) lineItemCountPreflight += 1;
+
+  const qfSettings = getQuickFileSettingsStatus();
+  const ping = await quickFilePingAuthenticated(false);
+  const preflight = quickfilePreflight.runQuickFileSendPreflight({
+    settingsMissing: qfSettings.missing,
+    settingsPullFailed: !!settingsPullError,
+    pingRequired: true,
+    pingOk: ping.ok,
+    pingError: ping.error,
+    firmName,
+    billableTotal: totalPreflight,
+    lineItemCount: lineItemCountPreflight,
+    vatRate: vrPreflight,
+  });
+  if (!preflight.ok) {
+    const preRef = quickfileUserError.makeReferenceCode('preflight|' + (attendanceId || '') + '|' + Date.now());
+    if (attendanceId) {
+      updateQuickFileSendStatus(attendanceId, {
+        status: 'failed',
+        error: preflight.errors.join(' '),
+        errorCode: 'QF_PREFLIGHT',
+        referenceCode: preRef,
+      });
+      saveDb();
+    }
+    return quickfileUserError.enrichQuickFileFailure({
+      code: 'QF_PREFLIGHT',
+      error: preflight.errors.join(' '),
+      fieldMessage: preflight.errors.join(' '),
+      referenceCode: preRef,
+      attendanceId,
+    });
+  }
 
   if (!firmName || typeof firmName !== 'string' || !firmName.trim()) {
     return { ok: false, error: 'Firm name is required to create an invoice' };
@@ -12545,8 +12806,23 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   /* True once an invoice/create call has gone out. If that call then fails at the
      network level we cannot know whether QuickFile made the invoice. */
   let createRequestSent = false;
+  let lastInvoiceNumberTried = '';
+  const customInvoiceNumber = sanitizeQuickFileInvoiceNumber(billingInvoiceNumber);
+  const hasCustomInvoiceNumber = !!customInvoiceNumber;
+  let lastLedgerMax = null;
+  if (attendanceId) {
+    updateQuickFileSendStatus(attendanceId, {
+      status: 'sending',
+      error: '',
+      errorCode: '',
+      referenceCode: '',
+    });
+    saveDb();
+  }
   try {
-    const clientId = await quickFileFindOrCreateClient(firmName.trim(), contactEmail);
+    const clientId = await quickFileFindOrCreateClient(firmName.trim(), contactEmail, {
+      knownClientId: params.quickFileClientId,
+    });
     if (!clientId) throw new Error('Could not find or create QuickFile client for ' + firmName);
 
     const clientIdNum = parseInt(String(clientId), 10);
@@ -12594,7 +12870,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
 
     const invDate = invoiceDate || new Date().toISOString().slice(0, 10);
 
-    await syncNextInvoiceNumberFromQuickFileLedger();
+    let ledgerSync = await syncNextInvoiceNumberFromQuickFileLedger();
+    lastLedgerMax = ledgerSync && ledgerSync.ledgerMax != null ? ledgerSync.ledgerMax : null;
+    let autoAssignAttempted = false;
 
     const purchaseRef = quickfileInvoiceNumber.attendancePurchaseReference(attendanceId);
     const notesWithMarker = quickfileInvoiceNumber.appendAttendanceNotesMarker(
@@ -12609,12 +12887,47 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       /* Confirmed second invoice: skip same-attendance QuickFile reuse. */
       allowDuplicate: !!params.allowDuplicate,
       maxAttempts: quickfileInvoiceNumber.MAX_INVOICE_NUMBER_ATTEMPTS,
-      allocateNextNumber: peekNextSequentialInvoiceNumber,
+      allocateNextNumber: async (attempt) => {
+        const resolved = await resolveNextInvoiceNumberFromQuickFileLedger();
+        ledgerSync = resolved.sync;
+        lastLedgerMax = resolved.ledgerMax != null ? resolved.ledgerMax : lastLedgerMax;
+        if (attempt === 0 && !hasCustomInvoiceNumber && !autoAssignAttempted) {
+          return quickfileInvoiceLedger.AUTO_INVOICE_NUMBER;
+        }
+        if (attempt === 0 && hasCustomInvoiceNumber) {
+          return customInvoiceNumber;
+        }
+        return resolved.number;
+      },
       bumpPastNumber: bumpNextInvoiceNumberPast,
       findByAttendanceRef: attendanceId
         ? () => quickFileFindInvoiceByAttendanceRef(attendanceId)
         : undefined,
       findByInvoiceNumber: (invNum) => quickFileFindInvoiceByNumber(invNum),
+      stopRetryOnDuplicate: async (invNum) => {
+        if (hasCustomInvoiceNumber && String(invNum) === customInvoiceNumber) {
+          return true;
+        }
+        return false;
+      },
+      onDuplicateConflict: async (invNum, dupErr) => {
+        quickfileDiagnosticLog.append({
+          event: 'invoice_number_duplicate',
+          apiPath: '/1_2/invoice/create',
+          outcome: 'duplicate',
+          invoiceNumberTried: invNum,
+          attendanceId,
+          qfErrorMessage: dupErr && dupErr.message ? String(dupErr.message).slice(0, 300) : undefined,
+        });
+        ledgerSync = await syncNextInvoiceNumberFromQuickFileLedger();
+        if (ledgerSync && ledgerSync.ledgerMax != null) {
+          lastLedgerMax = ledgerSync.ledgerMax;
+          bumpNextInvoiceNumberPast(String(ledgerSync.ledgerMax));
+          return true;
+        }
+        bumpNextInvoiceNumberPast(invNum);
+        return true;
+      },
       onConflictWarn: (e, invNum) => {
         console.warn(
           '[QuickFile] Invoice number conflict on ' + invNum + ', trying next:',
@@ -12622,10 +12935,12 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
         );
       },
       createWithNumber: async (invNum) => {
+        const isAuto = invNum === quickfileInvoiceLedger.AUTO_INVOICE_NUMBER;
+        lastInvoiceNumberTried = isAuto ? '(auto)' : String(invNum || '').trim();
         const singleInvoiceData = {
           IssueDate: invDate,
-          InvoiceNumber: invNum,
         };
+        if (!isAuto && invNum) singleInvoiceData.InvoiceNumber = invNum;
         if (purchaseRef) singleInvoiceData.PurchaseReference = purchaseRef;
 
         const invoicePayload = {
@@ -12648,7 +12963,43 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
         };
         validateQuickFileInvoicePayload(invoicePayload);
         createRequestSent = true;
-        return quickFileRequest('/1_2/invoice/create', invoicePayload);
+        const postCreate = () => quickFileRequest('/1_2/invoice/create', invoicePayload, {
+          logEvent: 'invoice_create',
+          createRequestSent: true,
+          attendanceId,
+          invoiceNumberTried: isAuto ? 'auto' : invNum,
+          relinkBeforeRetry: attendanceId
+            ? async () => {
+              const existing = await quickFileFindInvoiceByAttendanceRef(attendanceId);
+              if (existing && quickfileInvoiceNumber.invoiceBelongsToAttendance(existing, attendanceId)) {
+                return existing;
+              }
+              return null;
+            }
+            : undefined,
+        });
+        try {
+          if (isAuto) autoAssignAttempted = true;
+          return await postCreate();
+        } catch (createErr) {
+          quickfileDiagnosticLog.append({
+            event: 'invoice_create_attempt',
+            apiPath: '/1_2/invoice/create',
+            outcome: 'error',
+            invoiceNumberTried: isAuto ? 'auto' : invNum,
+            attendanceId,
+            qfErrorMessage: createErr && createErr.message ? String(createErr.message).slice(0, 300) : undefined,
+            networkCode: createErr && createErr.code ? String(createErr.code) : undefined,
+          });
+          if (isAuto && /invoice.?number|invoicenumber|number.?required|must.*number/i.test(String(createErr.message || ''))) {
+            await syncNextInvoiceNumberFromQuickFileLedger();
+            const fallbackNum = peekNextInvoiceNumberAfterLedgerSync(lastLedgerMax);
+            singleInvoiceData.InvoiceNumber = fallbackNum;
+            lastInvoiceNumberTried = fallbackNum;
+            return postCreate();
+          }
+          throw createErr;
+        }
       },
     });
 
@@ -12680,6 +13031,56 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       ? 'https://app.quickfile.co.uk/invoice/view/' + invoiceId
       : '';
 
+    let verifyReason = '';
+    try {
+      const fetched = await quickFileGetInvoiceById(invoiceId);
+      const verified = quickfileVerify.verifyQuickFileInvoice({
+        expectedNumber: invoiceNumber,
+        expectedTotal: total,
+        expectedClientId: clientIdNum,
+        fetchedBody: fetched,
+      });
+      if (!verified.ok) verifyReason = verified.reason || 'Verification failed';
+    } catch (verifyErr) {
+      verifyReason = verifyErr && verifyErr.message ? verifyErr.message : String(verifyErr);
+    }
+    if (verifyReason) {
+      const verifyRef = quickfileUserError.makeReferenceCode('verify|' + invoiceId + '|' + attendanceId);
+      if (attendanceId) {
+        db.run(
+          `UPDATE attendances SET
+            quickfile_invoice_id = ?,
+            quickfile_invoice_number = ?,
+            quickfile_invoice_url = ?,
+            quickfile_send_status = ?,
+            quickfile_send_error = ?,
+            quickfile_send_error_code = ?,
+            quickfile_send_ref = ?,
+            updated_at = datetime('now')
+          WHERE id = ?`,
+          [
+            String(invoiceId), invoiceNumber, invoiceUrl,
+            'check_quickfile', verifyReason.slice(0, 500), 'QF_VERIFY', verifyRef,
+            attendanceId,
+          ]
+        );
+        db.run(
+          `INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)`,
+          [attendanceId, 'invoice_verify_failed', JSON.stringify({ invoiceId, invoiceNumber, reason: verifyReason }), userName || '']
+        );
+        saveDb();
+      }
+      return quickfileUserError.enrichQuickFileFailure({
+        code: 'QF_VERIFY',
+        error: verifyReason,
+        attendanceId,
+        invoiceNumberTried: invoiceNumber || lastInvoiceNumberTried,
+        createRequestSent: true,
+        referenceCode: verifyRef,
+        mayHaveBeenCreated: true,
+      });
+    }
+
     let attachmentOk = false;
     let attachmentError = '';
 
@@ -12689,6 +13090,10 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
           quickfile_invoice_id = ?,
           quickfile_invoice_number = ?,
           quickfile_invoice_url = ?,
+          quickfile_send_status = ?,
+          quickfile_send_error = ?,
+          quickfile_send_error_code = ?,
+          quickfile_send_ref = ?,
           invoice_created_at = datetime('now'),
           invoice_created_by = ?,
           invoice_subtotal = ?,
@@ -12704,6 +13109,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
         WHERE id = ?`,
         [
           String(invoiceId), invoiceNumber, invoiceUrl,
+          'sent', '', '', '',
           userName || '',
           subtotal, vat, total,
           narrative || '',
@@ -12808,16 +13214,216 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       attachResults,
     };
   } catch (err) {
+    const shaped = quickfileInvoiceNumber.describeCreateInvoiceFailure(err, {
+      createRequestSent,
+      isNetworkError: quickfileClient.isQuickFileNetworkError,
+    });
+    const failRef = quickfileUserError.makeReferenceCode(
+      'fail|' + (attendanceId || '') + '|' + (shaped.code || '') + '|' + Date.now()
+    );
     if (attendanceId) {
+      updateQuickFileSendStatus(attendanceId, {
+        status: 'failed',
+        error: shaped.error || String(err.message || err),
+        errorCode: shaped.code || 'QF_ERROR',
+        referenceCode: failRef,
+      });
       db.run(
         `INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)`,
-        [attendanceId, 'invoice_failed', String(err.message || err), userName || '']
+        [attendanceId, 'invoice_failed', String(shaped.error || err.message || err), userName || '']
       );
       saveDb();
     }
-    return quickfileInvoiceNumber.describeCreateInvoiceFailure(err, {
+    const enriched = quickfileUserError.enrichQuickFileFailure(Object.assign({}, shaped, {
+      attendanceId,
+      invoiceNumberTried: lastInvoiceNumberTried,
       createRequestSent,
-      isNetworkError: quickfileClient.isQuickFileNetworkError,
+      httpStatus: err && err.httpStatus,
+      referenceCode: failRef,
+    }));
+    if (
+      hasCustomInvoiceNumber
+      && isQuickFileInvoiceNumberDuplicateError(err)
+      && String(lastInvoiceNumberTried) === customInvoiceNumber
+    ) {
+      try {
+        await syncNextInvoiceNumberFromQuickFileLedger();
+      } catch (_) { /* ignore */ }
+      enriched.code = 'QF_CUSTOM_NUMBER_TAKEN';
+      enriched.userTitle = 'That invoice number is already used in QuickFile';
+      enriched.userMessage = 'Invoice number ' + customInvoiceNumber + ' is already used in QuickFile.';
+      enriched.suggestedNextInvoiceNumber = peekNextInvoiceNumberAfterLedgerSync(lastLedgerMax);
+      enriched.advice = 'Use the next free number (' + enriched.suggestedNextInvoiceNumber
+        + ') or choose a different number, then press Send again.';
+      enriched.copyDetails = quickfileUserError.buildRedactedCopyDetails(Object.assign({}, enriched, {
+        technicalReason: enriched.error,
+      }));
+    }
+    return enriched;
+  }
+});
+
+ipcMain.handle('quickfile-link-invoice', async (_, params) => {
+  const p = params && typeof params === 'object' ? params : {};
+  const attendanceId = p.attendanceId != null ? String(p.attendanceId).trim() : '';
+  const firmName = String(p.firmName || '').trim();
+  const invoiceNumberRaw = sanitizeQuickFileInvoiceNumber(p.invoiceNumber);
+  const userName = String(p.userName || '').trim();
+
+  if (!attendanceId) {
+    return { ok: false, error: 'Record id is required to link an invoice.' };
+  }
+  if (!firmName) {
+    return { ok: false, error: 'Select the instructing firm on this record before linking an invoice.' };
+  }
+  if (!invoiceNumberRaw) {
+    return { ok: false, error: 'Enter the QuickFile invoice number to link.' };
+  }
+
+  const existingInv = dbGet(
+    'SELECT quickfile_invoice_id, quickfile_invoice_number FROM attendances WHERE id = ?',
+    [attendanceId]
+  );
+  if (existingInv && existingInv.quickfile_invoice_id && !p.forceReplace) {
+    return {
+      ok: false,
+      code: 'ALREADY_INVOICED',
+      error: 'This record already has invoice #'
+        + (existingInv.quickfile_invoice_number || existingInv.quickfile_invoice_id)
+        + '. Linking again would overwrite it.',
+    };
+  }
+
+  const qfSettings = getQuickFileSettingsStatus();
+  const ping = await quickFilePingAuthenticated(false);
+  const preflight = quickfilePreflight.runQuickFileSendPreflight({
+    settingsMissing: qfSettings.missing,
+    pingRequired: true,
+    pingOk: ping.ok,
+    pingError: ping.error,
+    firmName,
+  });
+  if (!preflight.ok) {
+    return quickfileUserError.enrichQuickFileFailure({
+      code: 'QF_PREFLIGHT',
+      error: preflight.errors.join(' '),
+      attendanceId,
+    });
+  }
+
+  updateQuickFileSendStatus(attendanceId, { status: 'sending', error: '', errorCode: '', referenceCode: '' });
+  saveDb();
+
+  try {
+    const expectedClientId = await quickFileFindOrCreateClient(firmName, p.contactEmail || '', {
+      knownClientId: p.quickFileClientId,
+    });
+    if (!expectedClientId) {
+      throw new Error('Could not resolve QuickFile client for ' + firmName);
+    }
+    const expectedClientNum = parseInt(String(expectedClientId), 10);
+
+    const searchHit = await quickFileFindInvoiceByNumber(invoiceNumberRaw);
+    if (!searchHit) {
+      throw new Error('QuickFile has no invoice with number ' + invoiceNumberRaw + '. Check the number and try again.');
+    }
+    const invoiceId = String(
+      searchHit.InvoiceID || searchHit.InvoiceId || searchHit.RecordID || ''
+    ).trim();
+    if (!invoiceId) {
+      throw new Error('QuickFile returned an invoice row but no InvoiceID for number ' + invoiceNumberRaw);
+    }
+
+    const fetched = await quickFileGetInvoiceById(invoiceId);
+    const invClientId = quickfileClientMatch.extractClientIdFromInvoiceBody(fetched)
+      || quickfileClientMatch.extractClientIdFromRecord(searchHit);
+    const invClientName = quickfileClientMatch.extractClientNameFromInvoiceBody(fetched)
+      || quickfileClientMatch.clientRecordName(searchHit);
+    const clientCheck = quickfileClientMatch.invoiceClientMatchesFirm(
+      invClientId,
+      expectedClientNum,
+      invClientName,
+      firmName
+    );
+    if (!clientCheck.ok) {
+      throw new Error(clientCheck.reason || 'Invoice client does not match this record’s firm.');
+    }
+
+    const invoiceNumber = String(
+      searchHit.InvoiceNumber || searchHit.Invoice_No || invoiceNumberRaw
+    ).trim();
+    const invoiceUrl = 'https://app.quickfile.co.uk/invoice/view/' + invoiceId;
+    const total = quickfileVerify.extractInvoiceTotal(fetched || searchHit);
+
+    db.run(
+      `UPDATE attendances SET
+        quickfile_invoice_id = ?,
+        quickfile_invoice_number = ?,
+        quickfile_invoice_url = ?,
+        quickfile_send_status = ?,
+        quickfile_send_error = ?,
+        quickfile_send_error_code = ?,
+        quickfile_send_ref = ?,
+        invoice_created_at = COALESCE(invoice_created_at, datetime('now')),
+        invoice_created_by = COALESCE(invoice_created_by, ?),
+        invoice_total = CASE WHEN ? > 0 THEN ? ELSE invoice_total END,
+        updated_at = datetime('now')
+      WHERE id = ?`,
+      [
+        invoiceId,
+        invoiceNumber,
+        invoiceUrl,
+        'sent',
+        '',
+        '',
+        '',
+        userName,
+        Number.isFinite(total) ? total : 0,
+        Number.isFinite(total) ? total : 0,
+        attendanceId,
+      ]
+    );
+    db.run(
+      `INSERT INTO billing_audit_log (attendance_id, action, details, user_name) VALUES (?, ?, ?, ?)`,
+      [
+        attendanceId,
+        'invoice_linked_manual',
+        JSON.stringify({ invoiceId, invoiceNumber, linkedBy: 'user', firmName }),
+        userName,
+      ]
+    );
+    saveDb();
+
+    quickfileDiagnosticLog.append({
+      event: 'invoice_linked_manual',
+      outcome: 'ok',
+      attendanceId,
+      invoiceNumberTried: invoiceNumber,
+    });
+
+    return {
+      ok: true,
+      linked: true,
+      invoiceId,
+      invoiceNumber,
+      invoiceUrl,
+      total: Number.isFinite(total) ? total : undefined,
+    };
+  } catch (err) {
+    const msg = err && err.message ? err.message : String(err);
+    const failRef = quickfileUserError.makeReferenceCode('link|' + attendanceId + '|' + Date.now());
+    updateQuickFileSendStatus(attendanceId, {
+      status: 'failed',
+      error: msg,
+      errorCode: 'QF_LINK',
+      referenceCode: failRef,
+    });
+    saveDb();
+    return quickfileUserError.enrichQuickFileFailure({
+      code: 'QF_LINK',
+      error: msg,
+      attendanceId,
+      referenceCode: failRef,
     });
   }
 });
@@ -12927,6 +13533,7 @@ ipcMain.handle('billing-view-records', () => {
 ipcMain.handle('attendance-invoice-status', (_, attendanceId) => {
   const row = dbGet(
     `SELECT quickfile_invoice_id, quickfile_invoice_number, quickfile_invoice_url,
+            quickfile_send_status, quickfile_send_error, quickfile_send_error_code, quickfile_send_ref,
             invoice_created_at, invoice_created_by,
             invoice_subtotal, invoice_vat, invoice_total,
             invoice_narrative, invoice_mileage_miles, invoice_mileage_rate,

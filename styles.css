@@ -7793,6 +7793,17 @@ html.dark .wf-doc-sel-group-label { color: #94a3b8; }
   color: #065f46;
   border-color: #10b981;
 }
+.wf-link-qf-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+.wf-link-qf-row .wf-link-invoice-input {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+  max-width: 14rem;
+}
 .wf-review-confirmation-card {
   border: 2px solid #f59e0b !important;
   background: linear-gradient(135deg, #fffbeb, #fff) !important;
@@ -7912,6 +7923,15 @@ html.dark .bv-summary-revenue .bv-summary-num { color: #6ee7b7; }
 .record-billing-badge--invoice { background: #dbeafe; color: #1e40af; }
 .record-billing-badge--invoiced { background: #d1fae5; color: #065f46; }
 .record-billing-badge--sent { background: #e0e7ff; color: #3730a3; }
+.record-billing-badge--qf-failed { background: #fee2e2; color: #991b1b; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-billing-badge--qf-check { background: #ffedd5; color: #9a3412; }
+.record-billing-badge--qf-sending { background: #e0f2fe; color: #0369a1; }
+.qf-send-status--failed { background: #fee2e2; color: #991b1b; }
+.qf-send-status--check { background: #ffedd5; color: #9a3412; }
+.qf-send-status--sending { background: #e0f2fe; color: #0369a1; }
+.qf-send-status--sent { background: #d1fae5; color: #065f46; }
+.qf-send-status--not-sent { background: #f3f4f6; color: #374151; }
+.wf-qf-send-error { color: #991b1b; font-size: 0.9rem; margin: 0.35rem 0 0; }
 
 /* Home dashboard billing widget */
 .home-billing-widget {
