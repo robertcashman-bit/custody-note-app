@@ -52,7 +52,7 @@
     var title = r.reused
       ? 'Already in QuickFile: invoice ' + label + ' linked'
       : 'Sent to QuickFile: invoice ' + label;
-    var level = failures.length ? 'warning' : 'success';
+    var level = (failures.length || r.verifyWarning) ? 'warning' : 'success';
 
     var rows = [{ label: 'QuickFile invoice', value: label || '(number not returned)' }];
     if (o.firmName) rows.push({ label: 'Firm', value: String(o.firmName) });
@@ -63,9 +63,11 @@
     else if (!failures.length) attachText = okCount + ' uploaded';
     else attachText = okCount + ' uploaded, ' + failures.length + ' failed';
     rows.push({ label: 'Attachments', value: attachText });
+    if (r.verifyWarning) rows.push({ label: 'Check in QuickFile', value: String(r.verifyWarning) });
 
     var summary = title;
     if (r.reused) summary += '. No duplicate was created.';
+    if (r.verifyWarning) summary += '. Please check it in QuickFile: ' + String(r.verifyWarning);
     if (failures.length) {
       summary += '. ' + failures.length + ' attachment' + (failures.length === 1 ? '' : 's')
         + ' failed to upload \u2014 add ' + (failures.length === 1 ? 'it' : 'them') + ' in QuickFile.';

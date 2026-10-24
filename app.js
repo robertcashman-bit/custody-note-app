@@ -7533,7 +7533,8 @@ var REQUIRED_FIELD_KEYS = [
           data: d
         }, 2, 'list-health-badge');
         var billingBadge = '';
-        if (r.status === 'finalised' || r.status === 'completed' || r.quickfile_invoice_id || r.quickfile_send_status) {
+        if (r.status === 'finalised' || r.status === 'completed' || r.quickfile_invoice_id
+          || (r.quickfile_send_status && r.quickfile_send_status !== 'not_sent')) {
           var _sendSt = String(r.quickfile_send_status || '').trim();
           var _hasInv = !!r.quickfile_invoice_id;
           var _hasAtt = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
