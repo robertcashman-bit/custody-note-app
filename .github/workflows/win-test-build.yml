@@ -1,4 +1,4 @@
-# THROWAWAY: Windows NSIS TEST build 1.9.121-test.quickfile3 (master@7a7cf6c + PR #124 e0eee49 + PR #125 750a854 + PR #126 0c80a19 + PR #127 a69299e + version bump only).
+# THROWAWAY: Windows NSIS TEST build 1.9.121-test.quickfile4 (master@7a7cf6c + PR #124 e0eee49 + PR #125 750a854 + PR #126 0c80a19 + PR #127 d17afb5 + version bump only).
 # Builds only; never publishes (--publish never; GH_TOKEN not provided to the build).
 # Artefacts are uploaded to this workflow run only. Delete this branch after download.
 name: win-test-build (throwaway)
@@ -81,7 +81,7 @@ jobs:
           Get-ChildItem dist\*.exe | Get-FileHash -Algorithm SHA256 | ForEach-Object { "{0}  {1}" -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Tee-Object dist\SHA256SUMS-test.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: custody-note-1.9.121-test-quickfile3-win-x64
+          name: custody-note-1.9.121-test-quickfile4-win-x64
           retention-days: 7
           if-no-files-found: error
           path: |
