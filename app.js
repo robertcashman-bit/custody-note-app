@@ -8860,6 +8860,194 @@ var REQUIRED_FIELD_KEYS = [
     });
   }
 
+  var _visitTypeBarHandlersBound = false;
+
+  function _syncVisitTypeManagedFieldsToForm() {
+    ['workType', 'caseStatus', 'clientType', 'attendanceMode'].forEach(function (k) {
+      if (typeof setFieldValueSilent === 'function') setFieldValueSilent(k, formData[k] || '');
+    });
+    if (typeof setFieldValueSilent === 'function') {
+      setFieldValueSilent('_followUpReason', formData._followUpReason || '');
+    }
+  }
+
+  function openLinkEarlierAttendancePicker() {
+    if (typeof loadAttendanceRowsForFollowUp !== 'function' || typeof filterStationAttendancesForClientIdentity !== 'function') {
+      showToast('Link to earlier attendance is not available. Please refresh the app.', 'error');
+      return;
+    }
+    loadAttendanceRowsForFollowUp().then(function (rows) {
+      var matches = filterStationAttendancesForClientIdentity(rows, formData, safeJson, currentAttendanceId);
+      if (!matches.length) {
+        showToast('No earlier station attendances found for this client on file.', 'info', 5000);
+        return;
+      }
+      var overlay = document.createElement('div');
+      overlay.className = 'attendance-picker-overlay';
+      overlay.innerHTML =
+        '<div class="sections-index-content attendance-picker-content" style="max-width:480px;">' +
+          '<h3 style="margin-top:0;">Link earlier attendance</h3>' +
+          '<p class="attendance-picker-hint">Choose the previous visit this bail return or further attendance relates to.</p>' +
+          '<ul class="attendance-picker-list" data-role="list"></ul>' +
+          '<button type="button" class="btn btn-secondary attendance-picker-cancel" style="margin-top:0.75rem;width:100%;">Cancel</button>' +
+        '</div>';
+      document.body.appendChild(overlay);
+      var listEl = overlay.querySelector('[data-role="list"]');
+      function close() { try { overlay.remove(); } catch (_) {} }
+      listEl.innerHTML = matches.map(function (hit) {
+        var r = hit.row;
+        var d = hit.data;
+        var primary = typeof formatFollowUpPickerPrimary === 'function'
+          ? formatFollowUpPickerPrimary(d)
+          : ((d.surname || '') + ', ' + (d.forename || '')).replace(/^,\s*|,\s*$/g, '');
+        var meta = typeof formatFollowUpPickerMeta === 'function'
+          ? formatFollowUpPickerMeta(d, r)
+          : (r.attendance_date || d.date || '');
+        return '<li class="attendance-picker-item" data-id="' + esc(String(r.id)) + '">'
+          + '<span class="picker-item-name">' + esc(primary) + '</span>'
+          + '<span class="picker-item-meta">' + esc(meta) + '</span></li>';
+      }).join('');
+      listEl.querySelectorAll('.attendance-picker-item').forEach(function (li) {
+        li.addEventListener('click', function () {
+          var id = parseInt(li.getAttribute('data-id'), 10);
+          if (isNaN(id)) return;
+          formData._followUpFromAttendanceId = id;
+          close();
+          updateVisitTypeBar();
+          _syncVisitTypeManagedFieldsToForm();
+          scheduleQuietSave();
+          showToast('Linked to earlier attendance #' + id, 'success');
+        });
+      });
+      overlay.querySelector('.attendance-picker-cancel').addEventListener('click', close);
+      overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    }).catch(function () {
+      showToast('Could not load attendances to link', 'error');
+    });
+  }
+
+  function handleAttendanceVisitTypeChange(targetType) {
+    if (typeof applyAttendanceVisitType !== 'function') return;
+    if (isNoteLockedForEditing()) {
+      showToast('Re-open this record for amendment before changing visit type.', 'info', 6000);
+      return;
+    }
+    var wasVoluntary = formData.attendanceMode === 'voluntary';
+    var result = applyAttendanceVisitType(formData, targetType);
+    if (result.blocked) {
+      showToast(result.message || 'Visit type cannot be changed on this record.', 'info', 6500);
+      return;
+    }
+    if (!result.changed) return;
+    var needsFullRender = wasVoluntary && formData.attendanceMode === 'custody';
+    if (formData.attendanceMode === 'voluntary') {
+      activeFormSections = voluntaryFormSections;
+    } else {
+      activeFormSections = formSections;
+    }
+    if (needsFullRender) {
+      currentSectionIdx = 0;
+      _progressBarBuilt = false;
+      renderForm(formData);
+      showView('new');
+      scheduleQuietSave();
+      return;
+    }
+    _syncVisitTypeManagedFieldsToForm();
+    updateVisitTypeBar();
+    updateContextBar();
+    applyConditionalVisibility();
+    scheduleQuietSave();
+  }
+
+  function handleVisitTypeBarModeChange(mode) {
+    if (isNoteLockedForEditing()) {
+      showToast('Re-open this record for amendment before changing attendance type.', 'info', 6000);
+      return;
+    }
+    if (formData.attendanceMode === mode) return;
+    formData.attendanceMode = mode;
+    var isVol = mode === 'voluntary';
+    activeFormSections = isVol ? voluntaryFormSections : formSections;
+    if (isVol) {
+      formData.workType = 'Voluntary Police Station Attendance';
+      if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
+    } else {
+      formData.workType = formData.workType === 'Voluntary Police Station Attendance'
+        ? 'First Police Station Attendance'
+        : (formData.workType || 'First Police Station Attendance');
+      if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
+    }
+    currentSectionIdx = 0;
+    _progressBarBuilt = false;
+    renderForm(formData);
+    showView('new');
+  }
+
+  function updateVisitTypeBar() {
+    var bar = document.getElementById('form-visit-type-bar');
+    if (!bar) return;
+    if (formData._formType === 'telephone' || activeFormSections === telFormSections) {
+      bar.classList.add('hidden');
+      bar.innerHTML = '';
+      return;
+    }
+    bar.classList.remove('hidden');
+    var locked = isNoteLockedForEditing();
+    if (locked) bar.classList.add('is-locked');
+    else bar.classList.remove('is-locked');
+
+    var visitTypes = (typeof ATTENDANCE_VISIT_TYPES === 'object' && ATTENDANCE_VISIT_TYPES)
+      ? ATTENDANCE_VISIT_TYPES
+      : { first: 'first', bail_return: 'bail_return', further: 'further' };
+    var currentVisit = typeof resolveAttendanceVisitType === 'function'
+      ? resolveAttendanceVisitType(formData)
+      : visitTypes.first;
+    var mode = formData.attendanceMode === 'voluntary' ? 'voluntary' : 'custody';
+    var linkId = formData._followUpFromAttendanceId;
+    var linkHint = linkId
+      ? ('Linked to attendance #' + esc(String(linkId)))
+      : 'Optional: link to the earlier attendance this visit relates to.';
+
+    var seg = [visitTypes.first, visitTypes.bail_return, visitTypes.further].map(function (code) {
+      var label = typeof visitTypeLabelForCode === 'function' ? visitTypeLabelForCode(code) : code;
+      var active = currentVisit === code ? ' is-active' : '';
+      return '<button type="button" class="visit-type-choice' + active + '" data-visit-type="' + esc(code) + '"'
+        + (locked ? ' disabled' : '') + '>' + esc(label) + '</button>';
+    }).join('');
+
+    bar.innerHTML =
+      '<span class="visit-type-bar-label">Attendance</span>' +
+      '<select class="visit-type-mode-select" id="visit-type-mode-select"' + (locked ? ' disabled' : '') + '>' +
+        '<option value="custody"' + (mode === 'custody' ? ' selected' : '') + '>Custody</option>' +
+        '<option value="voluntary"' + (mode === 'voluntary' ? ' selected' : '') + '>Voluntary</option>' +
+      '</select>' +
+      '<span class="visit-type-bar-label">Visit</span>' +
+      '<div class="visit-type-segmented" role="group" aria-label="Visit type">' + seg + '</div>' +
+      '<button type="button" class="btn btn-secondary btn-small visit-type-link-btn" id="visit-type-link-btn"'
+        + (locked || currentVisit === visitTypes.first ? ' disabled' : '') + '>Link earlier visit</button>' +
+      '<span class="visit-type-bar-hint">' + linkHint + '</span>';
+
+    if (!_visitTypeBarHandlersBound) {
+      _visitTypeBarHandlersBound = true;
+      bar.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('[data-visit-type]') : null;
+        if (!btn || btn.disabled) return;
+        handleAttendanceVisitTypeChange(btn.getAttribute('data-visit-type'));
+      });
+      bar.addEventListener('change', function (e) {
+        if (e.target && e.target.id === 'visit-type-mode-select') {
+          handleVisitTypeBarModeChange(e.target.value);
+        }
+      });
+      bar.addEventListener('click', function (e) {
+        if (e.target && e.target.id === 'visit-type-link-btn' && !e.target.disabled) {
+          openLinkEarlierAttendancePicker();
+        }
+      });
+    }
+  }
+
   function updateContextBar() {
     const bar = document.getElementById('form-context-bar');
     if (!bar) return;
@@ -8873,6 +9061,8 @@ var REQUIRED_FIELD_KEYS = [
     const leftParts = [];
     if (formData._formType === 'telephone') leftParts.push('<span class="context-invb-badge">INVB Tel</span>');
     else if (formData.attendanceMode === 'voluntary') leftParts.push('<span class="context-vol-badge">Voluntary</span>');
+    else if (formData._followUpReason === 'bail_return') leftParts.push('<span class="context-vol-badge" title="Visit type">Bail return</span>');
+    else if (formData.workType === 'Further Police Station Attendance') leftParts.push('<span class="context-invb-badge" style="background:#7c3aed;">Further</span>');
     leftParts.push('<span><span class="context-label">Client:</span>' + esc(clientName) + '</span>');
     leftParts.push('<span><span class="context-label">Station:</span>' + esc(station) + '</span>');
     if (formData.custodyNumber && formData.attendanceMode !== 'voluntary') leftParts.push('<span><span class="context-label">Custody:</span>' + esc(formData.custodyNumber) + '</span>');
@@ -9542,6 +9732,7 @@ var REQUIRED_FIELD_KEYS = [
       _uiRefreshDebounce = setTimeout(function() {
         applyConditionalVisibility();
         updateContextBar();
+        updateVisitTypeBar();
         updateProgressBar();
         updateBillingReadinessPanel();
       }, UI_REFRESH_DEBOUNCE_MS);
@@ -9614,12 +9805,17 @@ var REQUIRED_FIELD_KEYS = [
             var isVol = formData.attendanceMode === 'voluntary';
             activeFormSections = isVol ? voluntaryFormSections : formSections;
             formData.workType = isVol ? 'Voluntary Police Station Attendance' : (formData.workType || 'First Police Station Attendance');
+            if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
             currentSectionIdx = 0;
             _renderedSections = {};
             _progressBarBuilt = false;
             renderForm(formData);
             showView('new');
             return;
+          }
+          if (field === 'workType' && typeof syncVisitTypeFromWorkType === 'function') {
+            syncVisitTypeFromWorkType(formData);
+            updateVisitTypeBar();
           }
           if (timeAndCalcFields.includes(field)) { autoCalcTimes(); }
           else if (['travelSocial','travelUnsocial','waitingSocial','waitingUnsocial','adviceSocial','adviceUnsocial','milesClaimable'].includes(field)) recalcTotal();
@@ -9924,6 +10120,7 @@ var REQUIRED_FIELD_KEYS = [
     buildSectionsIndex();
     applyConditionalVisibility();
     updateContextBar();
+    updateVisitTypeBar();
     updateFormBarVisibility();
 
     calcReviewTimes();
@@ -10212,6 +10409,7 @@ var REQUIRED_FIELD_KEYS = [
   }
 
   function renderField(f, data, grid) {
+    if (f.key === 'attendanceMode' && formData._formType !== 'telephone') return;
     if (f.type === 'sectionHeading') {
       const h = document.createElement('h3');
       h.className = 'section-heading section-heading--static';
