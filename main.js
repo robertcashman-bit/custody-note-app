@@ -11973,6 +11973,18 @@ function _quickFileLogEntry(base, extra) {
   return Object.assign({}, base || {}, extra || {});
 }
 
+function scrubQuickFileSecrets(text, auth) {
+  let out = String(text == null ? '' : text);
+  const a = auth || {};
+  const secrets = [a.accountNumber, a.apiKey, a.applicationId, a.md5Value]
+    .map((v) => String(v == null ? '' : v).trim())
+    .filter((v) => v.length >= 4);
+  for (const sec of secrets) {
+    out = out.split(sec).join('<redacted>');
+  }
+  return out;
+}
+
 async function quickFileRequestOnce(apiPath, bodyContent, opts) {
   const o = opts || {};
   const auth = getQuickFileAuth();
@@ -12039,6 +12051,14 @@ async function quickFileRequestOnce(apiPath, bodyContent, opts) {
       throw parseErr;
     }
   } catch (err) {
+    /* QuickFile error text can echo request values; never let credentials ride
+       along into logs, saved record status, the UI or "Copy details". */
+    if (err && typeof err.message === 'string') {
+      const scrubbed = scrubQuickFileSecrets(err.message, auth);
+      if (scrubbed !== err.message) {
+        try { err.message = scrubbed; } catch (_) { /* read-only message */ }
+      }
+    }
     if (quickfileClient.isQuickFileTimeoutError(err)) {
       console.warn('[QuickFile] ' + apiPath + ' timed out after ' + timeoutMs + 'ms');
     }
@@ -12052,9 +12072,19 @@ async function quickFileRequestOnce(apiPath, bodyContent, opts) {
   }
 }
 
+/* Only read-only QuickFile calls are safe to repeat blindly. A create/upload that
+   timed out may already have succeeded, so it is retried only when the caller
+   supplies relinkBeforeRetry (which looks the record up before re-posting). */
+function isQuickFileReadOnlyPath(apiPath) {
+  return /\/(search|get)$/i.test(String(apiPath || ''));
+}
+
 function quickFileRequest(apiPath, bodyContent, opts) {
   const o = opts || {};
-  const maxAttempts = o.skipRetry ? 1 : (Number(o.maxAttempts) > 0 ? Number(o.maxAttempts) : quickfileRetry.DEFAULT_MAX_ATTEMPTS);
+  const unsafeToRepeat = !isQuickFileReadOnlyPath(apiPath) && typeof o.relinkBeforeRetry !== 'function';
+  const maxAttempts = (o.skipRetry || unsafeToRepeat)
+    ? 1
+    : (Number(o.maxAttempts) > 0 ? Number(o.maxAttempts) : quickfileRetry.DEFAULT_MAX_ATTEMPTS);
   return quickfileRetry.runWithQuickFileRetries({
     maxAttempts,
     delaysMs: o.delaysMs || quickfileRetry.DEFAULT_DELAYS_MS,
@@ -12381,7 +12411,7 @@ async function quickFileFindOrCreateClient(firmName, contactEmail, opts) {
       });
       const getName = quickfileClientMatch.clientRecordName(getBody)
         || quickfileClientMatch.clientRecordName(getBody && getBody.ClientDetails);
-      if (!getName || quickfileClientMatch.clientRecordMatchesFirmName({ CompanyName: getName }, name)) {
+      if (getName && quickfileClientMatch.clientRecordMatchesFirmName({ CompanyName: getName }, name)) {
         return knownId;
       }
       console.warn('[QuickFile] known ClientID ' + knownId + ' name mismatch; falling back to search');
@@ -12406,12 +12436,18 @@ async function quickFileFindOrCreateClient(firmName, contactEmail, opts) {
   }
 
   /* Client_Create: CompanyName only under ClientDetails (no ClientType / Email). */
+  if (o.noCreate) return null;
   const createPayload = quickfileClient.buildQuickFileClientCreateBody(name, contactEmail);
   try {
-    const createBody = await quickFileRequest('/1_2/client/create', createPayload, { logEvent: 'client_create' });
+    /* Never auto-retry client/create: a timed-out create may have succeeded. */
+    const createBody = await quickFileRequest('/1_2/client/create', createPayload, { logEvent: 'client_create', skipRetry: true });
     return createBody.ClientID || createBody.ClientId || createBody.RecordID || null;
   } catch (createErr) {
-    if (quickfileClientMatch.isQuickFileClientAlreadyExistsError(createErr)) {
+    if (
+      quickfileClientMatch.isQuickFileClientAlreadyExistsError(createErr)
+      || quickfileClient.isQuickFileNetworkError(createErr)
+      || quickfileRetry.isRetryableQuickFileError(createErr)
+    ) {
       const retrySearch = await quickFileRequest('/1_2/client/search', {
         SearchParameters: {
           CompanyName: name,
@@ -12562,12 +12598,22 @@ async function quickFileFindInvoiceByNumber(invoiceNumber) {
     },
   });
   const records = quickFileExtractInvoiceSearchRecords(body);
-  const want = num.toLowerCase();
-  const exact = records.find((r) => {
-    const n = String(r.InvoiceNumber || r.Invoice_No || r.InvoiceNo || '').trim().toLowerCase();
-    return n === want;
-  });
-  return exact || records[0] || null;
+  /* Exact number only (leading zeros ignored for all-digit numbers). Never fall
+     back to "first row": QuickFile's number filter can be a partial match, and
+     Link would then attach the wrong invoice. */
+  const exact = records.find((r) => quickfileInvoiceNumbersEqual(
+    r.InvoiceNumber || r.Invoice_No || r.InvoiceNo || '', num
+  ));
+  return exact || null;
+}
+
+function quickfileInvoiceNumbersEqual(a, b) {
+  const x = String(a || '').trim().replace(/^#+/, '').toLowerCase();
+  const y = String(b || '').trim().replace(/^#+/, '').toLowerCase();
+  if (!x || !y) return false;
+  if (x === y) return true;
+  if (/^\d+$/.test(x) && /^\d+$/.test(y)) return parseInt(x, 10) === parseInt(y, 10);
+  return false;
 }
 
 async function quickFileFindInvoiceByAttendanceRef(attendanceId) {
@@ -12744,6 +12790,19 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     attachPdfFileName,
   } = params;
 
+  /* Before preflight: a failed preflight must never overwrite an invoiced
+     record's status with "failed". */
+  if (attendanceId) {
+    const existingInv = dbGet('SELECT quickfile_invoice_id, quickfile_invoice_number FROM attendances WHERE id = ?', [attendanceId]);
+    if (existingInv && existingInv.quickfile_invoice_id && !params.allowDuplicate) {
+      return {
+        ok: false,
+        code: 'ALREADY_INVOICED',
+        error: 'This record already has invoice #' + (existingInv.quickfile_invoice_number || existingInv.quickfile_invoice_id) + '.',
+      };
+    }
+  }
+
   const normalizedMileageMiles = normalizeMileageForStorage(mileageMiles);
   const milesForInvoice = normalizedMileageMiles != null ? normalizedMileageMiles : (parseFloat(mileageMiles) || 0);
   const vrPreflight = Number.isFinite(Number(vatRate)) ? Number(vatRate) : 0.2;
@@ -12790,17 +12849,6 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
 
   if (!firmName || typeof firmName !== 'string' || !firmName.trim()) {
     return { ok: false, error: 'Firm name is required to create an invoice' };
-  }
-
-  if (attendanceId) {
-    const existingInv = dbGet('SELECT quickfile_invoice_id, quickfile_invoice_number FROM attendances WHERE id = ?', [attendanceId]);
-    if (existingInv && existingInv.quickfile_invoice_id && !params.allowDuplicate) {
-      return {
-        ok: false,
-        code: 'ALREADY_INVOICED',
-        error: 'This record already has invoice #' + (existingInv.quickfile_invoice_number || existingInv.quickfile_invoice_id) + '.',
-      };
-    }
   }
 
   /* True once an invoice/create call has gone out. If that call then fails at the
@@ -12888,15 +12936,18 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       allowDuplicate: !!params.allowDuplicate,
       maxAttempts: quickfileInvoiceNumber.MAX_INVOICE_NUMBER_ATTEMPTS,
       allocateNextNumber: async (attempt) => {
-        const resolved = await resolveNextInvoiceNumberFromQuickFileLedger();
-        ledgerSync = resolved.sync;
-        lastLedgerMax = resolved.ledgerMax != null ? resolved.ledgerMax : lastLedgerMax;
+        /* First attempt needs no ledger scan: QuickFile auto-assigns, or the user
+           typed a number. Scanning here doubled API calls and let a slow/failed
+           ledger read block an otherwise-valid send. */
         if (attempt === 0 && !hasCustomInvoiceNumber && !autoAssignAttempted) {
           return quickfileInvoiceLedger.AUTO_INVOICE_NUMBER;
         }
         if (attempt === 0 && hasCustomInvoiceNumber) {
           return customInvoiceNumber;
         }
+        const resolved = await resolveNextInvoiceNumberFromQuickFileLedger();
+        ledgerSync = resolved.sync;
+        lastLedgerMax = resolved.ledgerMax != null ? resolved.ledgerMax : lastLedgerMax;
         return resolved.number;
       },
       bumpPastNumber: bumpNextInvoiceNumberPast,
@@ -12968,7 +13019,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
           createRequestSent: true,
           attendanceId,
           invoiceNumberTried: isAuto ? 'auto' : invNum,
-          relinkBeforeRetry: attendanceId
+          /* Retry only when we can first look the invoice up by its CN-ATT ref.
+             No attendance id, or a deliberate second invoice → single attempt. */
+          relinkBeforeRetry: (attendanceId && !params.allowDuplicate)
             ? async () => {
               const existing = await quickFileFindInvoiceByAttendanceRef(attendanceId);
               if (existing && quickfileInvoiceNumber.invoiceBelongsToAttendance(existing, attendanceId)) {
@@ -12991,7 +13044,14 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
             qfErrorMessage: createErr && createErr.message ? String(createErr.message).slice(0, 300) : undefined,
             networkCode: createErr && createErr.code ? String(createErr.code) : undefined,
           });
-          if (isAuto && /invoice.?number|invoicenumber|number.?required|must.*number/i.test(String(createErr.message || ''))) {
+          /* Only a clean QuickFile rejection proves nothing was created; never
+             re-post after a timeout / dropped connection / 5xx. */
+          if (
+            isAuto
+            && !quickfileClient.isQuickFileNetworkError(createErr)
+            && !quickfileRetry.isRetryableQuickFileError(createErr)
+            && /invoice.?number|invoicenumber|number.?required|must.*number/i.test(String(createErr.message || ''))
+          ) {
             await syncNextInvoiceNumberFromQuickFileLedger();
             const fallbackNum = peekNextInvoiceNumberAfterLedgerSync(lastLedgerMax);
             singleInvoiceData.InvoiceNumber = fallbackNum;
@@ -13006,8 +13066,10 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     const invoiceBody = createResult.invoiceBody || {};
     const invoiceId = createResult.invoiceId
       || String(invoiceBody.InvoiceID || invoiceBody.InvoiceId || invoiceBody.RecordID || '');
-    const invoiceNumber = createResult.invoiceNumber
+    let invoiceNumber = createResult.invoiceNumber
       || String(invoiceBody.InvoiceNumber || '');
+    /* Never store the internal auto-number placeholder as a real number. */
+    if (invoiceNumber === quickfileInvoiceLedger.AUTO_INVOICE_NUMBER) invoiceNumber = '';
 
     if (!invoiceId) {
       throw new Error(
@@ -13041,6 +13103,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
         fetchedBody: fetched,
       });
       if (!verified.ok) verifyReason = verified.reason || 'Verification failed';
+      else if (!invoiceNumber && verified.invoiceNumber) invoiceNumber = String(verified.invoiceNumber);
     } catch (verifyErr) {
       verifyReason = verifyErr && verifyErr.message ? verifyErr.message : String(verifyErr);
     }
@@ -13315,13 +13378,13 @@ ipcMain.handle('quickfile-link-invoice', async (_, params) => {
   saveDb();
 
   try {
+    /* Linking must never create anything in QuickFile — look the firm up only.
+       If it is not found by exact name, the invoice's own client name must match. */
     const expectedClientId = await quickFileFindOrCreateClient(firmName, p.contactEmail || '', {
       knownClientId: p.quickFileClientId,
+      noCreate: true,
     });
-    if (!expectedClientId) {
-      throw new Error('Could not resolve QuickFile client for ' + firmName);
-    }
-    const expectedClientNum = parseInt(String(expectedClientId), 10);
+    const expectedClientNum = expectedClientId != null ? parseInt(String(expectedClientId), 10) : NaN;
 
     const searchHit = await quickFileFindInvoiceByNumber(invoiceNumberRaw);
     if (!searchHit) {
@@ -13347,6 +13410,32 @@ ipcMain.handle('quickfile-link-invoice', async (_, params) => {
     );
     if (!clientCheck.ok) {
       throw new Error(clientCheck.reason || 'Invoice client does not match this record’s firm.');
+    }
+
+    /* The fetched invoice must really be the number the user typed. */
+    const fetchedIdentity = quickfileInvoiceNumber.pickInvoiceIdentity(fetched);
+    if (fetchedIdentity.invoiceNumber && !quickfileInvoiceNumbersEqual(fetchedIdentity.invoiceNumber, invoiceNumberRaw)) {
+      throw new Error('QuickFile returned invoice #' + fetchedIdentity.invoiceNumber
+        + ', not #' + invoiceNumberRaw + '. Nothing was linked.');
+    }
+
+    /* Refuse an invoice the app created for a different record (CN-ATT tag). */
+    const fetchedInv = quickfileInvoiceNumber.unwrapInvoiceBody(fetched);
+    const fetchedRef = String(
+      (fetchedInv && typeof fetchedInv.PurchaseReference === 'string' ? fetchedInv.PurchaseReference : '')
+      || (typeof searchHit.PurchaseReference === 'string' ? searchHit.PurchaseReference : '')
+    ).trim();
+    if (/^CN-ATT-/i.test(fetchedRef) && fetchedRef !== quickfileInvoiceNumber.attendancePurchaseReference(attendanceId)) {
+      throw new Error('Invoice #' + invoiceNumberRaw + ' was created by Custody Note for a different record. Nothing was linked.');
+    }
+
+    /* Refuse an invoice already linked to another record in this app. */
+    const otherLink = dbGet(
+      'SELECT id FROM attendances WHERE quickfile_invoice_id = ? AND id != ? AND deleted_at IS NULL',
+      [invoiceId, attendanceId]
+    );
+    if (otherLink && otherLink.id) {
+      throw new Error('Invoice #' + invoiceNumberRaw + ' is already linked to another record. Nothing was linked.');
     }
 
     const invoiceNumber = String(
