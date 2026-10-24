@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'lib/pdfViewer.js'
+      - 'lib/automatedTestBuild.js'
       - 'pdf-viewer-*'
       - 'main/windowHardening.js'
       - 'tests/e2e/pdf-viewer*.ts'
@@ -35,7 +36,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           set -euo pipefail
-          npx electron-builder --win --dir --publish never
+          npx electron-builder --win --dir --publish never --config.extraMetadata.cnPackagedTestHooks=true
           EXE=""
           for f in dist/win-unpacked/*.exe; do
             if [[ "$(basename "$f")" == "Custody Note.exe" ]] || [[ "$(basename "$f")" == Custody*.exe ]]; then
