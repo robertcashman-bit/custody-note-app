@@ -48,8 +48,12 @@ jobs:
             ls -la dist/win-unpacked || true
             exit 1
           fi
-          echo "CUSTODYNOTE_PACKAGED_EXE=$EXE" >> "$GITHUB_ENV"
-          echo "Built executable: $EXE"
+          # Playwright on Windows merges argv into one shell command; paths with spaces
+          # can prevent --remote-debugging-port from reaching Electron (launch timeout).
+          E2E_EXE="dist/win-unpacked/CustodyNote-packaged-e2e.exe"
+          cp "$EXE" "$E2E_EXE"
+          echo "CUSTODYNOTE_PACKAGED_EXE=$E2E_EXE" >> "$GITHUB_ENV"
+          echo "Built executable: $EXE (e2e copy: $E2E_EXE)"
 
       - name: Packaged PDF viewer e2e
         shell: bash

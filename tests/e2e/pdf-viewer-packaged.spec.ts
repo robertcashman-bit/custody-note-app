@@ -18,8 +18,38 @@ import { dismissFirstLaunchModalIfPresent } from './e2e-helpers';
 
 const packagedExe = process.env.CUSTODYNOTE_PACKAGED_EXE;
 
+async function launchPackagedApp(exePath: string, testUserData: string): Promise<ElectronApplication> {
+  const exeDir = path.dirname(exePath);
+  const launchEnv = {
+    ...process.env,
+    NODE_ENV: 'test',
+    CUSTODYNOTE_TEST_USERDATA: testUserData,
+    CUSTODYNOTE_E2E_SKIP_LICENCE_GATE: '1',
+    CUSTODYNOTE_PDF_VIEWER_STUB_PRINT: '1',
+    CUSTODYNOTE_PDF_VIEWER_STUB_EMAIL: '1',
+  };
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await _electron.launch({
+        executablePath: exePath,
+        cwd: exeDir,
+        timeout: 120_000,
+        args: ['--enable-logging=stderr'],
+        env: launchEnv,
+      });
+    } catch (e) {
+      lastErr = e;
+      const msg = e instanceof Error ? e.message : String(e);
+      console.log(`[pdf-viewer-packaged] electron launch attempt ${attempt} failed: ${msg.slice(0, 160)}`);
+      await new Promise((r) => setTimeout(r, 2500 * attempt));
+    }
+  }
+  throw lastErr;
+}
+
 test.describe('Packaged PDF viewer (Windows)', () => {
-  test.describe.configure({ timeout: 180_000 });
+  test.describe.configure({ timeout: 300_000 });
 
   test.skip(!packagedExe || !fs.existsSync(packagedExe!), 'Requires CUSTODYNOTE_PACKAGED_EXE');
 
@@ -28,21 +58,16 @@ test.describe('Packaged PDF viewer (Windows)', () => {
   let testUserData: string;
 
   test.beforeAll(async () => {
-    test.setTimeout(180_000);
+    test.setTimeout(300_000);
     testUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-pdf-packaged-'));
-    electronApp = await _electron.launch({
-      executablePath: packagedExe!,
-      env: {
-        ...process.env,
-        NODE_ENV: 'test',
-        CUSTODYNOTE_TEST_USERDATA: testUserData,
-        CUSTODYNOTE_E2E_SKIP_LICENCE_GATE: '1',
-        CUSTODYNOTE_PDF_VIEWER_STUB_PRINT: '1',
-        CUSTODYNOTE_PDF_VIEWER_STUB_EMAIL: '1',
-      },
-    });
+    const exePath = path.resolve(packagedExe!);
+    electronApp = await launchPackagedApp(exePath, testUserData);
     page = await electronApp.firstWindow();
     await page.waitForLoadState('domcontentloaded');
+    const splash = page.locator('#splash');
+    await splash.waitFor({ state: 'hidden', timeout: 90_000 }).catch(async () => {
+      await page.waitForSelector('.app-header, #header-app-title', { timeout: 30_000 });
+    });
     await page.waitForFunction(() => typeof (window as unknown as { api?: unknown }).api !== 'undefined', {
       timeout: 120_000,
     });
