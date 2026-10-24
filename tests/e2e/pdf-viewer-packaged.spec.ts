@@ -14,10 +14,13 @@ import {
   sha256File,
   extractPdfAttachmentSha256FromEml,
 } from './pdf-viewer-helpers';
+import { dismissFirstLaunchModalIfPresent } from './e2e-helpers';
 
 const packagedExe = process.env.CUSTODYNOTE_PACKAGED_EXE;
 
 test.describe('Packaged PDF viewer (Windows)', () => {
+  test.describe.configure({ timeout: 180_000 });
+
   test.skip(!packagedExe || !fs.existsSync(packagedExe!), 'Requires CUSTODYNOTE_PACKAGED_EXE');
 
   let electronApp: ElectronApplication;
@@ -25,6 +28,7 @@ test.describe('Packaged PDF viewer (Windows)', () => {
   let testUserData: string;
 
   test.beforeAll(async () => {
+    test.setTimeout(180_000);
     testUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-pdf-packaged-'));
     electronApp = await _electron.launch({
       executablePath: packagedExe!,
@@ -32,6 +36,7 @@ test.describe('Packaged PDF viewer (Windows)', () => {
         ...process.env,
         NODE_ENV: 'test',
         CUSTODYNOTE_TEST_USERDATA: testUserData,
+        CUSTODYNOTE_E2E_SKIP_LICENCE_GATE: '1',
         CUSTODYNOTE_PDF_VIEWER_STUB_PRINT: '1',
         CUSTODYNOTE_PDF_VIEWER_STUB_EMAIL: '1',
       },
@@ -41,6 +46,7 @@ test.describe('Packaged PDF viewer (Windows)', () => {
     await page.waitForFunction(() => typeof (window as unknown as { api?: unknown }).api !== 'undefined', {
       timeout: 120_000,
     });
+    await dismissFirstLaunchModalIfPresent(page);
   });
 
   test.afterAll(async () => {
