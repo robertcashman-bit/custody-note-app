@@ -8136,7 +8136,7 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
 }
 .officer-email-chip {
   border: 1px solid var(--border, #cbd5e1);
-  background: #fff;
+  background: var(--input-bg, #fff);
   border-radius: 999px;
   padding: 0.35rem 0.65rem;
   font: inherit;
@@ -8177,7 +8177,7 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   align-items: stretch;
   border: 1px solid var(--border, #cbd5e1);
   border-radius: 10px;
-  background: #fff;
+  background: var(--input-bg, #fff);
   overflow: hidden;
 }
 .officer-email-stepper--time {
@@ -8185,7 +8185,7 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
 }
 .officer-email-step-btn {
   border: 0;
-  background: #eef2ff;
+  background: color-mix(in srgb, var(--primary) 12%, var(--input-bg, #fff));
   color: var(--primary, #1e40af);
   font-weight: 700;
   cursor: pointer;
@@ -8211,6 +8211,7 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
   text-align: center;
   outline: none;
   cursor: ns-resize;
+  color: var(--on-surface, #1e293b);
 }
 .officer-email-stepper--time .officer-email-step-val {
   font-size: 1.35rem;
@@ -8223,6 +8224,7 @@ html.dark .home-card-green .home-card-icon { color: #6ee7b7; }
 .officer-email-time-colon {
   font-size: 1.35rem;
   font-weight: 700;
+  color: var(--on-surface, #1e293b);
 }
 .officer-email-step-hint {
   font-size: 0.68rem;
