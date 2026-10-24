@@ -66,6 +66,44 @@ describe('pdfViewer partition isolation (source)', () => {
     assert.ok(!/hardenSession\s*\(/.test(src), 'pdfViewer must not call hardenSession (CSP breaks PDF extension)');
     assert.ok(!/onHeadersReceived\s*\(/.test(src), 'pdfViewer must not inject CSP headers on viewer session');
   });
+
+  it('registers webRequest filter on cn-pdf-viewer partition', () => {
+    const src = fs.readFileSync(LIB, 'utf8');
+    assert.ok(src.includes('webRequest.onBeforeRequest'));
+    assert.ok(src.includes('isAllowedPdfViewerRequestUrl'));
+  });
+});
+
+describe('pdfViewer request URL policy', () => {
+  const { isAllowedPdfViewerRequestUrl, CHROMIUM_PDF_EXTENSION_ID } = require(LIB);
+
+  it('allows file, extension, data, blob, devtools, and Chromium internals', () => {
+    assert.strictEqual(isAllowedPdfViewerRequestUrl('file:///C:/tmp/x.pdf'), true);
+    assert.strictEqual(
+      isAllowedPdfViewerRequestUrl('chrome-extension://' + CHROMIUM_PDF_EXTENSION_ID + '/index.html'),
+      true
+    );
+    assert.strictEqual(isAllowedPdfViewerRequestUrl('data:application/pdf;base64,abc'), true);
+    assert.strictEqual(isAllowedPdfViewerRequestUrl('blob:file:///guid'), true);
+    assert.strictEqual(isAllowedPdfViewerRequestUrl('devtools://devtools/bundled/inspector.html'), true);
+    assert.strictEqual(isAllowedPdfViewerRequestUrl('chrome://resources/pdf.js'), true);
+  });
+
+  it('blocks http(s) and other schemes', () => {
+    assert.strictEqual(isAllowedPdfViewerRequestUrl('https://evil.example/x'), false);
+    assert.strictEqual(isAllowedPdfViewerRequestUrl('http://127.0.0.1/'), false);
+    assert.strictEqual(isAllowedPdfViewerRequestUrl('chrome-extension://otherid/page.html'), false);
+  });
+});
+
+describe('pdfViewer test IPC gates (source)', () => {
+  it('e2e inspect and test-metrics IPC use isAutomatedTestEnvActive', () => {
+    const src = fs.readFileSync(LIB, 'utf8');
+    const inspect = extractHandlerBlock(src, 'pdf-viewer-e2e-inspect-pane');
+    const metrics = extractHandlerBlock(src, 'pdf-viewer-test-metrics');
+    assert.ok(inspect.includes('isAutomatedTestEnvActive()'));
+    assert.ok(metrics.includes('isAutomatedTestEnvActive()'));
+  });
 });
 
 describe('Generated PDF preview IPC (source)', () => {

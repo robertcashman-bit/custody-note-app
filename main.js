@@ -1,12 +1,18 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu, powerMonitor, clipboard, net } = require('electron');
 const os = require('os');
 const path = require('path');
-/* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use). */
+const { mayHonorAutomatedTestEnv, isAutomatedTestEnvActive } = require('./lib/automatedTestBuild');
+/* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use).
+   Packaged release installers ignore this env (H27); only CI test-hook builds honor it. */
 if (process.env.CUSTODYNOTE_TEST_USERDATA && String(process.env.CUSTODYNOTE_TEST_USERDATA).trim()) {
-  try {
-    app.setPath('userData', path.resolve(String(process.env.CUSTODYNOTE_TEST_USERDATA).trim()));
-  } catch (e) {
-    console.warn('[CUSTODYNOTE_TEST_USERDATA] setPath failed:', e && e.message);
+  if (mayHonorAutomatedTestEnv()) {
+    try {
+      app.setPath('userData', path.resolve(String(process.env.CUSTODYNOTE_TEST_USERDATA).trim()));
+    } catch (e) {
+      console.warn('[CUSTODYNOTE_TEST_USERDATA] setPath failed:', e && e.message);
+    }
+  } else {
+    console.warn('[security] Ignoring CUSTODYNOTE_TEST_USERDATA on packaged release build');
   }
 }
 const fs = require('fs');
@@ -18,6 +24,9 @@ const { initUpdater } = require('./updater');
 // the renderer and can't import `app`) can refuse to expose the E2E test
 // hooks (skipLicenceGate, etc.) in shipped installers.
 process.env.CUSTODYNOTE_PACKAGED = app.isPackaged ? '1' : '0';
+process.env.CUSTODYNOTE_PACKAGED_TEST_HOOKS = (
+  app.isPackaged && require('./package.json').cnPackagedTestHooks === true
+) ? '1' : '0';
 
 /* â”€â”€â”€ Single-instance lock â”€â”€â”€ */
 const gotTheLock = app.requestSingleInstanceLock();
@@ -4460,7 +4469,7 @@ function createWindow() {
   mainWindow.on('close', (e) => {
     if (!mainWindow || mainWindow._forceClose) return;
     /* Automated tests (isolated userData): allow window to close so Playwright/e2e can exit */
-    if (process.env.CUSTODYNOTE_TEST_USERDATA) return;
+    if (isAutomatedTestEnvActive()) return;
     /* App is quitting (Cmd+Q / Quit menu / app-quit) — never block close. */
     if (_appIsQuitting) return;
     e.preventDefault();
@@ -10333,7 +10342,7 @@ function _broadcastForceLock(reason) {
   /* Playwright / isolated-userdata runs: OS lock-screen events on CI runners
      (esp. Windows) must not raise the credential-free blanker — it blocks
      Open Outlook and other UI clicks and flakes e2e. Production unchanged. */
-  if (process.env.CUSTODYNOTE_TEST_USERDATA) return;
+  if (isAutomatedTestEnvActive()) return;
   try {
     const sendLock = () => {
       const wins = BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
@@ -13353,7 +13362,7 @@ async function _openOfficerEmailInOutlook(toT, subT, bodyT, logTag) {
   /* E2E / isolated-userdata test hook: record the launch payload without
      opening a real Outlook GUI (unavailable in CI). Enabled only when
      CUSTODYNOTE_TEST_USERDATA is set (Playwright Electron specs). */
-  if (process.env.CUSTODYNOTE_TEST_USERDATA) {
+  if (isAutomatedTestEnvActive()) {
     try {
       const capturePath = path.join(String(process.env.CUSTODYNOTE_TEST_USERDATA), 'last-outlook-launch.json');
       fs.writeFileSync(
