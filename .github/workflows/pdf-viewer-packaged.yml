@@ -1,6 +1,9 @@
 name: pdf-viewer-packaged
 
 on:
+  # TEST-BRANCH ONLY: also run on pushes to the throwaway test branch (do not merge this line).
+  push:
+    branches: [test/pdf-viewer-watermark]
   pull_request:
     paths:
       - 'lib/pdfViewer.js'
