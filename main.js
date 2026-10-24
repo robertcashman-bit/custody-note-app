@@ -1,12 +1,18 @@
 const { app, BrowserWindow, ipcMain, shell, dialog, safeStorage, Menu, powerMonitor, clipboard, net } = require('electron');
 const os = require('os');
 const path = require('path');
-/* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use). */
+const { mayHonorAutomatedTestEnv, isAutomatedTestEnvActive } = require('./lib/automatedTestBuild');
+/* Automated tests: isolated DB and photos dir (must run before any app.getPath('userData') use).
+   Packaged release installers ignore this env (H27); only CI test-hook builds honor it. */
 if (process.env.CUSTODYNOTE_TEST_USERDATA && String(process.env.CUSTODYNOTE_TEST_USERDATA).trim()) {
-  try {
-    app.setPath('userData', path.resolve(String(process.env.CUSTODYNOTE_TEST_USERDATA).trim()));
-  } catch (e) {
-    console.warn('[CUSTODYNOTE_TEST_USERDATA] setPath failed:', e && e.message);
+  if (mayHonorAutomatedTestEnv()) {
+    try {
+      app.setPath('userData', path.resolve(String(process.env.CUSTODYNOTE_TEST_USERDATA).trim()));
+    } catch (e) {
+      console.warn('[CUSTODYNOTE_TEST_USERDATA] setPath failed:', e && e.message);
+    }
+  } else {
+    console.warn('[security] Ignoring CUSTODYNOTE_TEST_USERDATA on packaged release build');
   }
 }
 const fs = require('fs');
@@ -18,6 +24,9 @@ const { initUpdater } = require('./updater');
 // the renderer and can't import `app`) can refuse to expose the E2E test
 // hooks (skipLicenceGate, etc.) in shipped installers.
 process.env.CUSTODYNOTE_PACKAGED = app.isPackaged ? '1' : '0';
+process.env.CUSTODYNOTE_PACKAGED_TEST_HOOKS = (
+  app.isPackaged && require('./package.json').cnPackagedTestHooks === true
+) ? '1' : '0';
 
 /* â”€â”€â”€ Single-instance lock â”€â”€â”€ */
 const gotTheLock = app.requestSingleInstanceLock();
@@ -221,6 +230,7 @@ const syncConflicts = require('./main/syncConflicts');
 const staleSyncCatchUpRunner = require('./main/staleSyncCatchUpRunner');
 const openConflictAutoResolve = require('./main/openConflictAutoResolve');
 const pdfBundledCjkFont = require('./lib/pdfBundledCjkFont');
+const pdfViewer = require('./lib/pdfViewer');
 const errorReporting = require('./main/errorReporting');
 const dbCrypto = require('./lib/dbCrypto');
 const { createBackupScheduler } = require('./main/backupScheduler');
@@ -4465,7 +4475,7 @@ function createWindow() {
   mainWindow.on('close', (e) => {
     if (!mainWindow || mainWindow._forceClose) return;
     /* Automated tests (isolated userData): allow window to close so Playwright/e2e can exit */
-    if (process.env.CUSTODYNOTE_TEST_USERDATA) return;
+    if (isAutomatedTestEnvActive()) return;
     /* App is quitting (Cmd+Q / Quit menu / app-quit) — never block close. */
     if (_appIsQuitting) return;
     e.preventDefault();
@@ -7015,6 +7025,12 @@ app.whenReady().then(async () => {
     _securityLog.record('app_started', { version: app.getVersion(), platform: process.platform, packaged: app.isPackaged });
   }
   catch (_) {}
+  try {
+    pdfViewer.registerPdfViewerIpc(function () { return mainWindow; });
+    pdfViewer.cleanupStalePreviewPdfsOnStartup();
+  } catch (e) {
+    console.warn('[pdf-viewer] init failed:', e && e.message ? e.message : e);
+  }
   if (process.platform === 'win32') {
     app.setAppUserModelId('com.policestationagent.custodynote');
   }
@@ -10337,7 +10353,7 @@ function _broadcastForceLock(reason) {
   /* Playwright / isolated-userdata runs: OS lock-screen events on CI runners
      (esp. Windows) must not raise the credential-free blanker — it blocks
      Open Outlook and other UI clicks and flakes e2e. Production unchanged. */
-  if (process.env.CUSTODYNOTE_TEST_USERDATA) return;
+  if (isAutomatedTestEnvActive()) return;
   try {
     const sendLock = () => {
       const wins = BrowserWindow.getAllWindows ? BrowserWindow.getAllWindows() : [];
@@ -10994,39 +11010,118 @@ ipcMain.handle('print-to-pdf', async (_, { html, filename, brandingFooter }) => 
   }
 });
 
-/** Save a base64 PDF to temp and open in system PDF viewer */
+/** Save a base64 PDF to temp and open in the in-app PDF viewer (never OS default handler). */
 // H16 — cap base64 input. 50 MB base64 ≈ 37 MB binary, more than any
 // realistic generated PDF; anything bigger is treated as a DoS attempt.
 const PREVIEW_PDF_MAX_BASE64_BYTES = 50 * 1024 * 1024;
-ipcMain.handle('preview-pdf-base64', async (_, { base64, filename }) => {
+ipcMain.handle('preview-pdf-base64', async (_, params) => {
   try {
+    const p = params || {};
+    const base64 = p.base64;
     if (typeof base64 !== 'string' || !base64) return { ok: false, error: 'No PDF data provided' };
     if (base64.length > PREVIEW_PDF_MAX_BASE64_BYTES) {
       return { ok: false, error: 'PDF too large to preview (max ' + Math.round(PREVIEW_PDF_MAX_BASE64_BYTES / (1024 * 1024)) + ' MB base64)' };
     }
-    const tempDir = app.getPath('temp');
-    const safeName = (filename || `preview-${Date.now()}.pdf`).replace(/[<>:"/\\|?*]/g, '_');
-    if (path.extname(safeName).toLowerCase() !== '.pdf') {
-      return { ok: false, error: 'Only .pdf preview filenames are accepted' };
+    const safeName = pdfViewer.sanitizePdfFilename(p.filename || 'preview.pdf');
+    const buf = Buffer.from(base64, 'base64');
+    const deleteOnClose = p.deleteOnClose !== false;
+    const openViewer = p.openViewer !== false;
+    let filePath;
+    if (p.persist === 'mail-attachment') {
+      filePath = pdfViewer.writePdfToMailAttachments(buf, safeName);
+    } else if (p.persist === 'desktop') {
+      filePath = pdfViewer.writePdfToDesktop(buf, safeName);
+    } else {
+      filePath = pdfViewer.writeTempPreviewPdf(buf, safeName);
     }
-    const filePath = path.join(tempDir, safeName);
-    fs.writeFileSync(filePath, Buffer.from(base64, 'base64'));
-    await shell.openPath(filePath);
-    return { ok: true, path: filePath };
+    let viewerOpened = false;
+    if (openViewer) {
+      const opened = await pdfViewer.openPdfViewer({
+        filePath: filePath,
+        suggestedFilename: safeName,
+        deleteOnClose: deleteOnClose,
+        emailCompose: p.emailCompose,
+        getParentWindow: function () { return mainWindow; },
+      });
+      viewerOpened = !!opened.viewerOpened;
+    }
+    return { ok: true, path: filePath, viewerOpened: viewerOpened };
   } catch (err) {
     console.error('[preview-pdf-base64]', err);
     return { ok: false, error: err.message || String(err) };
   }
 });
 
-/** Returns PDF as base64 for in-app preview (renderer); work stays in main process. */
-ipcMain.handle('preview-pdf-from-html', async (_, { html }) => {
+ipcMain.handle('save-pdf-base64', async (_, params) => {
   try {
-    const buf = await renderHtmlToPdfBuffer(html);
-    return { ok: true, base64: Buffer.from(buf).toString('base64') };
+    const p = params || {};
+    const base64 = p.base64;
+    if (typeof base64 !== 'string' || !base64) return { ok: false, error: 'No PDF data provided' };
+    if (base64.length > PREVIEW_PDF_MAX_BASE64_BYTES) {
+      return { ok: false, error: 'PDF too large (max ' + Math.round(PREVIEW_PDF_MAX_BASE64_BYTES / (1024 * 1024)) + ' MB base64)' };
+    }
+    const safeName = pdfViewer.sanitizePdfFilename(p.filename || 'document.pdf');
+    const buf = Buffer.from(base64, 'base64');
+    const target = p.target || 'desktop';
+    let filePath;
+    if (target === 'mail-attachment') {
+      filePath = pdfViewer.writePdfToMailAttachments(buf, safeName);
+    } else if (target === 'desktop') {
+      filePath = pdfViewer.writePdfToDesktop(buf, safeName);
+    } else {
+      return { ok: false, error: 'Invalid save target' };
+    }
+    let viewerOpened = false;
+    if (p.openViewer) {
+      const opened = await pdfViewer.openPdfViewer({
+        filePath: filePath,
+        suggestedFilename: safeName,
+        deleteOnClose: false,
+        emailCompose: p.emailCompose,
+        getParentWindow: function () { return mainWindow; },
+      });
+      viewerOpened = !!opened.viewerOpened;
+    }
+    return { ok: true, path: filePath, viewerOpened: viewerOpened };
+  } catch (err) {
+    console.error('[save-pdf-base64]', err);
+    return { ok: false, error: err.message || String(err) };
+  }
+});
+
+/** Render HTML to PDF in main process and open in the in-app viewer. */
+ipcMain.handle('preview-pdf-from-html', async (_, { html, filename, brandingFooter, emailCompose }) => {
+  try {
+    const buf = await renderHtmlToPdfBuffer(html, { brandingFooter: brandingFooter !== false });
+    const safeName = pdfViewer.sanitizePdfFilename(filename || 'document.pdf');
+    const filePath = pdfViewer.writeTempPreviewPdf(Buffer.from(buf), safeName);
+    await pdfViewer.openPdfViewer({
+      filePath: filePath,
+      suggestedFilename: safeName,
+      deleteOnClose: true,
+      emailCompose: emailCompose,
+      getParentWindow: function () { return mainWindow; },
+    });
+    return { ok: true, path: filePath, viewerOpened: true };
   } catch (err) {
     console.error('[preview-pdf-from-html]', err && err.message ? err.message : err);
     return { ok: false, error: err && err.message ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle('open-pdf-viewer', async (_, { filePath, filename, title, deleteOnClose, emailCompose }) => {
+  try {
+    const opened = await pdfViewer.openPdfViewer({
+      filePath: filePath,
+      suggestedFilename: filename,
+      title: title,
+      deleteOnClose: deleteOnClose === true,
+      emailCompose: emailCompose,
+      getParentWindow: function () { return mainWindow; },
+    });
+    return opened;
+  } catch (err) {
+    return { ok: false, error: err && err.message ? err.message : err };
   }
 });
 
@@ -13966,7 +14061,7 @@ async function _openOfficerEmailInOutlook(toT, subT, bodyT, logTag) {
   /* E2E / isolated-userdata test hook: record the launch payload without
      opening a real Outlook GUI (unavailable in CI). Enabled only when
      CUSTODYNOTE_TEST_USERDATA is set (Playwright Electron specs). */
-  if (process.env.CUSTODYNOTE_TEST_USERDATA) {
+  if (isAutomatedTestEnvActive()) {
     try {
       const capturePath = path.join(String(process.env.CUSTODYNOTE_TEST_USERDATA), 'last-outlook-launch.json');
       fs.writeFileSync(

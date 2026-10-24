@@ -116,6 +116,12 @@ describe('3 · IPC Surface Completeness', () => {
         parts.push(fs.readFileSync(path.join(mainDir, f), 'utf8'));
       });
     }
+    const libDir = path.join(ROOT, 'lib');
+    if (fs.existsSync(libDir)) {
+      fs.readdirSync(libDir).filter(f => f.endsWith('.js')).forEach(f => {
+        parts.push(fs.readFileSync(path.join(libDir, f), 'utf8'));
+      });
+    }
     return parts.join('\n');
   }
   const allMainSrc = collectMainProcessSources();
@@ -126,7 +132,8 @@ describe('3 · IPC Surface Completeness', () => {
   const onChannels = [...allMainSrc.matchAll(/ipcMain\.on\(['"]([^'"]+)['"]/g)].map(m => m[1]);
   const onceChannels = [...allMainSrc.matchAll(/ipcMain\.once\(['"]([^'"]+)['"]/g)].map(m => m[1]);
 
-  const KNOWN_INTERNAL = /^recovery-pw-/;
+  const KNOWN_INTERNAL = /^(recovery-pw-|pdf-viewer-)/;
+  /* pdf-viewer-test-metrics is viewer-preload test hook only */
 
   it('preload exposes at least 20 invoke channels', () => {
     assert.ok(invokeChannels.length >= 20, `only ${invokeChannels.length} invoke channels found`);

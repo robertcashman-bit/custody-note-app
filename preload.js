@@ -372,6 +372,9 @@ contextBridge.exposeInMainWorld('api', {
   printToPdf: (options) => ipcRenderer.invoke('print-to-pdf', options),
   previewPdfFromHtml: (options) => ipcRenderer.invoke('preview-pdf-from-html', options),
   previewPdfBase64: (params) => ipcRenderer.invoke('preview-pdf-base64', params),
+  savePdfBase64: (params) => ipcRenderer.invoke('save-pdf-base64', params),
+  openPdfViewer: (params) => ipcRenderer.invoke('open-pdf-viewer', params),
+  openOutlookWithPdfAttachment: (params) => ipcRenderer.invoke('open-outlook-with-pdf-attachment', params),
   exportDocx: (options) => ipcRenderer.invoke('export-docx', options),
   printPdfFile: (filePath) => ipcRenderer.invoke('print-pdf-file', filePath),
   quickfileFetchClients: () => ipcRenderer.invoke('quickfile-fetch-clients'),
@@ -514,12 +517,21 @@ contextBridge.exposeInMainWorld('custodyNoteBuildInfo', {
 contextBridge.exposeInMainWorld('CustodyEmailCompose', custodyEmailComposeDraft);
 
 /* Playwright / automated tests: fresh userData has no licence — allow skipping the sign-in overlay when env is set.
-   H27 — never expose the E2E hook in packaged installers, even if a user
-   sets the env var. Main.js sets CUSTODYNOTE_PACKAGED='1' when app.isPackaged. */
-if (process.env.CUSTODYNOTE_PACKAGED !== '1') {
+   H27 — never expose the E2E hook in packaged release installers. Only builds with
+   cnPackagedTestHooks baked in at compile time (CI pdf-viewer-packaged --dir) may expose it. */
+const exposeE2eBridge =
+  process.env.CUSTODYNOTE_PACKAGED !== '1' ||
+  process.env.CUSTODYNOTE_PACKAGED_TEST_HOOKS === '1';
+
+if (exposeE2eBridge) {
+  const skipLicenceGate =
+    process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1' &&
+    (process.env.CUSTODYNOTE_PACKAGED !== '1' || process.env.CUSTODYNOTE_PACKAGED_TEST_HOOKS === '1');
   contextBridge.exposeInMainWorld('__CUSTODYNOTE_E2E__', {
-    skipLicenceGate: process.env.CUSTODYNOTE_E2E_SKIP_LICENCE_GATE === '1',
+    skipLicenceGate: skipLicenceGate,
   });
+}
+if (process.env.CUSTODYNOTE_PACKAGED !== '1') {
   contextBridge.exposeInMainWorld('__cnSyncDiag', async () => {
     const status = await ipcRenderer.invoke('sync-status');
     const diag = await ipcRenderer.invoke('sync-get-diagnostics');

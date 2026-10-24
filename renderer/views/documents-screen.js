@@ -617,14 +617,22 @@ function _wfSaveFormToDesktop(formId) {
   var doc = _wfGeneratedDocs[formId];
   if (!doc || !doc.base64) { showToast('Generate the form first', 'info'); return; }
 
-  if (window.api && window.api.getDesktopPath) {
-    window.api.getDesktopPath().then(function (desktop) {
-      var filename = doc.filename || formId + '.pdf';
-      if (window.api.previewPdfBase64) {
-        window.api.previewPdfBase64({ base64: doc.base64, filename: filename }).then(function () {
-          showToast(doc.label + ' saved and opened', 'success');
-        });
+  var filename = doc.filename || formId + '.pdf';
+  if (window.api && window.api.savePdfBase64) {
+    window.api.savePdfBase64({
+      base64: doc.base64,
+      filename: filename,
+      target: 'desktop',
+      openViewer: true,
+    }).then(function (result) {
+      if (result && result.error) {
+        showToast('Save failed: ' + result.error, 'error');
+        return;
       }
+      var leaf = (result.path || filename).replace(/\\/g, '/').split('/').pop();
+      showToast(doc.label + ' saved to Desktop: ' + leaf, 'success');
+    }).catch(function (err) {
+      showToast('Save error: ' + (err && err.message || err), 'error');
     });
   } else {
     showToast('Save not available', 'error');
@@ -638,36 +646,48 @@ function _wfEmailForm(formId, meta) {
   var subject = (doc.label || formId) + ' — ' + (meta.clientName || 'Client');
   var body = 'Please find attached: ' + (doc.label || formId) + '\n\nClient: ' + (meta.clientName || '') + '\nStation: ' + (meta.stationName || '') + '\nDate: ' + (meta.attendanceDate || '');
 
-  if (window.api && window.api.previewPdfBase64) {
-    window.api.previewPdfBase64({ base64: doc.base64, filename: doc.filename || formId + '.pdf' }).then(function (result) {
-      if (result && result.path) {
-        var clip =
-          'Subject: ' + subject + '\n\n' +
-          body + '\n\n' +
-          'Attach this file: ' + result.path;
-        function copyOk() {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            return navigator.clipboard.writeText(clip);
+  var filename = doc.filename || formId + '.pdf';
+  if (window.api && window.api.savePdfBase64) {
+    window.api.savePdfBase64({
+      base64: doc.base64,
+      filename: filename,
+      target: 'mail-attachment',
+      openViewer: true,
+      emailCompose: { subject: subject, body: body, to: '' },
+    }).then(function (result) {
+      if (result && result.error) {
+        showToast('Email prep failed: ' + result.error, 'error');
+        return;
+      }
+      if (window.api.openOutlookWithPdfAttachment && result.path) {
+        window.api.openOutlookWithPdfAttachment({
+          pdfPath: result.path,
+          filename: filename,
+          subject: subject,
+          body: body,
+        }).then(function (launch) {
+          if (launch && launch.ok) {
+            showToast(doc.label + ': Outlook draft opened with PDF attached.', 'success', 7000);
+          } else {
+            showToast('Could not open Outlook — use Email in the PDF viewer.', 'error', 7000);
           }
-          try {
-            var ta = document.createElement('textarea');
-            ta.value = clip;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            return Promise.resolve();
-          } catch (_) {
-            return Promise.reject(new Error('copy'));
-          }
-        }
-        copyOk().then(function () {
-          showToast(doc.label + ': subject, body and attachment path copied. Paste into Outlook and attach the file.', 'success', 7000);
-        }).catch(function () {
-          showToast(doc.label + ' saved to: ' + result.path + ' — attach manually in your mail client.', 'info', 8000);
         });
+      } else {
+        showToast(doc.label + ' ready — use Email in the PDF viewer.', 'info', 6000);
+      }
+    }).catch(function (err) {
+      showToast('Email error: ' + (err && err.message || err), 'error');
+    });
+  } else if (window.api && window.api.previewPdfBase64) {
+    window.api.previewPdfBase64({
+      base64: doc.base64,
+      filename: filename,
+      persist: 'mail-attachment',
+      deleteOnClose: false,
+      emailCompose: { subject: subject, body: body, to: '' },
+    }).then(function (result) {
+      if (result && result.path) {
+        showToast(doc.label + ' saved for attachment — use Email in the PDF viewer.', 'success', 7000);
       }
     });
   } else {
