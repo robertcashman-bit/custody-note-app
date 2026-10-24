@@ -571,12 +571,12 @@ describe('Billing panel (no firm email pack)', () => {
 
 describe('QuickFile client search — required fields', () => {
   it('all quickFileRequest client/search calls include OrderResultsBy and OrderDirection', () => {
-    const re = /quickFileRequest\s*\(\s*'\/1_2\/client\/search'\s*,\s*\{[\s\S]*?\}\s*\)/g;
+    const re = /quickFileRequest\s*\(\s*'\/1_2\/client\/search'\s*,\s*quickfileRequestBodies\.clientSearchBody\(\{[\s\S]*?\}\)/g;
     const matches = mainJs.match(re) || [];
     assert.ok(matches.length >= 2, 'Expected at least 2 client/search calls, found ' + matches.length);
     for (let i = 0; i < matches.length; i++) {
-      assert.ok(matches[i].includes('OrderResultsBy'), 'client/search call ' + i + ' missing OrderResultsBy');
-      assert.ok(matches[i].includes('OrderDirection'), 'client/search call ' + i + ' missing OrderDirection');
+      assert.ok(matches[i].includes('orderResultsBy'), 'client/search call ' + i + ' missing OrderResultsBy');
+      assert.ok(matches[i].includes('orderDirection'), 'client/search call ' + i + ' missing OrderDirection');
     }
   });
 });

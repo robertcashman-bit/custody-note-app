@@ -343,7 +343,7 @@ describe('Voluntary form and outcome statuses', () => {
 
   it('QuickFile import maps address into firms', () => {
     assert.ok(mainJsSource.includes('function quickFileFetchAllClients()'), 'main process should page through QuickFile client results');
-    assert.ok(mainJsSource.includes('ReturnCount: pageSize'), 'main process should request a supported QuickFile page size');
+    assert.ok(mainJsSource.includes('returnCount: pageSize'), 'main process should request a supported QuickFile page size');
     assert.ok(mainJsSource.includes("'/1_2/client/get'"), 'main process should enrich clients via Client_Get');
     assert.ok(mainJsSource.includes('ClientContacts: true'), 'Client_Get should request ClientContacts');
     assert.ok(mainJsSource.includes('Address: true'), 'Client_Get should request Address');

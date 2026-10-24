@@ -11276,6 +11276,7 @@ const quickfileClient = require('./lib/quickfileClient');
 const quickfileSettingsSync = require('./lib/quickfileSettingsSync');
 const quickfileInvoiceNumber = require('./lib/quickfileInvoiceNumber');
 const quickfileInvoiceLedger = require('./lib/quickfileInvoiceLedger');
+const quickfileRequestBodies = require('./lib/quickfileRequestBodies');
 
 const QUICKFILE_CREDENTIAL_KEYS = new Set(['quickfileAccountNumber', 'quickfileApiKey', 'quickfileAppId']);
 
@@ -12105,14 +12106,12 @@ async function quickFilePingAuthenticated(force) {
     return { ok: _qfAuthPingCache.ok, cached: true, error: _qfAuthPingCache.error || '' };
   }
   try {
-    await quickFileRequest('/1_2/client/search', {
-      SearchParameters: {
-        ReturnCount: 1,
-        Offset: 0,
-        OrderResultsBy: 'CompanyName',
-        OrderDirection: 'ASC',
-      },
-    }, { logEvent: 'ping', skipRetry: false });
+    await quickFileRequest('/1_2/client/search', quickfileRequestBodies.clientSearchBody({
+      returnCount: 1,
+      offset: 0,
+      orderResultsBy: 'CompanyName',
+      orderDirection: 'ASC',
+    }), { logEvent: 'ping', skipRetry: false });
     _qfAuthPingCache = { ok: true, checkedAt: now, error: '' };
     return { ok: true, cached: false, error: '' };
   } catch (e) {
@@ -12123,12 +12122,9 @@ async function quickFilePingAuthenticated(force) {
 }
 
 async function quickFileGetInvoiceById(invoiceId) {
-  const id = parseInt(String(invoiceId || '').trim(), 10);
-  if (!Number.isFinite(id)) throw new Error('Invalid QuickFile InvoiceID');
-  return quickFileRequest('/1_2/invoice/get', {
-    InvoiceID: id,
-    ReturnFullInvoice: true,
-  });
+  /* Invoice_Get Body is InvoiceID only; QuickFile rejects any other element
+     (e.g. ReturnFullInvoice) as an invalid child of Body. */
+  return quickFileRequest('/1_2/invoice/get', quickfileRequestBodies.invoiceGetBody(invoiceId));
 }
 
 function quickFileExtractRecords(body) {
@@ -12141,14 +12137,12 @@ async function quickFileFetchAllClients() {
   let offset = 0;
   const clients = [];
   while (true) {
-    const body = await quickFileRequest('/1_2/client/search', {
-      SearchParameters: {
-        ReturnCount: pageSize,
-        Offset: offset,
-        OrderResultsBy: 'CompanyName',
-        OrderDirection: 'ASC',
-      },
-    });
+    const body = await quickFileRequest('/1_2/client/search', quickfileRequestBodies.clientSearchBody({
+      returnCount: pageSize,
+      offset: offset,
+      orderResultsBy: 'CompanyName',
+      orderDirection: 'ASC',
+    }));
     const records = quickFileExtractRecords(body);
     clients.push(...records);
     if (records.length < pageSize) break;
@@ -12162,13 +12156,10 @@ async function quickFileFetchAllClients() {
 async function quickFileGetClientDetails(clientId) {
   const id = String(clientId || '').trim();
   if (!id) return null;
-  return quickFileRequest('/1_2/client/get', {
-    ClientID: id,
-    ReturnData: {
-      Address: true,
-      ClientContacts: true,
-    },
-  });
+  return quickFileRequest('/1_2/client/get', quickfileRequestBodies.clientGetBody(id, {
+    Address: true,
+    ClientContacts: true,
+  }));
 }
 
 const QUICKFILE_GET_CONCURRENCY = 5;
@@ -12270,14 +12261,12 @@ ipcMain.handle('quickfile-open-log-folder', async () => {
 ipcMain.handle('quickfile-test-connection', async () => {
   await ensureQuickFileSettingsFromServer({ reason: 'test-connection', force: true });
   try {
-    const body = await quickFileRequest('/1_2/client/search', {
-      SearchParameters: {
-        ReturnCount: 1,
-        Offset: 0,
-        OrderResultsBy: 'CompanyName',
-        OrderDirection: 'ASC',
-      },
-    });
+    const body = await quickFileRequest('/1_2/client/search', quickfileRequestBodies.clientSearchBody({
+      returnCount: 1,
+      offset: 0,
+      orderResultsBy: 'CompanyName',
+      orderDirection: 'ASC',
+    }));
     const records = quickFileExtractRecords(body);
     recordQuickFileConnectionResult(true, '');
     return {
@@ -12405,10 +12394,10 @@ async function quickFileFindOrCreateClient(firmName, contactEmail, opts) {
   const knownId = o.knownClientId != null ? parseInt(String(o.knownClientId), 10) : NaN;
   if (Number.isFinite(knownId) && knownId > 0) {
     try {
-      const getBody = await quickFileRequest('/1_2/client/get', {
-        ClientID: knownId,
-        ReturnData: { Address: false, ClientContacts: false },
-      });
+      const getBody = await quickFileRequest('/1_2/client/get', quickfileRequestBodies.clientGetBody(knownId, {
+        Address: false,
+        ClientContacts: false,
+      }));
       const getName = quickfileClientMatch.clientRecordName(getBody)
         || quickfileClientMatch.clientRecordName(getBody && getBody.ClientDetails);
       if (getName && quickfileClientMatch.clientRecordMatchesFirmName({ CompanyName: getName }, name)) {
@@ -12420,15 +12409,13 @@ async function quickFileFindOrCreateClient(firmName, contactEmail, opts) {
     }
   }
 
-  const searchBody = await quickFileRequest('/1_2/client/search', {
-    SearchParameters: {
-      CompanyName: name,
-      ReturnCount: 25,
-      Offset: 0,
-      OrderResultsBy: 'CompanyName',
-      OrderDirection: 'ASC',
-    },
-  }, { logEvent: 'client_search', skipRetry: false });
+  const searchBody = await quickFileRequest('/1_2/client/search', quickfileRequestBodies.clientSearchBody({
+    companyName: name,
+    returnCount: 25,
+    offset: 0,
+    orderResultsBy: 'CompanyName',
+    orderDirection: 'ASC',
+  }), { logEvent: 'client_search', skipRetry: false });
   const records = quickFileExtractRecords(searchBody);
   const match = quickfileClientMatch.findClientByExactName(records, name);
   if (match) {
@@ -12448,15 +12435,13 @@ async function quickFileFindOrCreateClient(firmName, contactEmail, opts) {
       || quickfileClient.isQuickFileNetworkError(createErr)
       || quickfileRetry.isRetryableQuickFileError(createErr)
     ) {
-      const retrySearch = await quickFileRequest('/1_2/client/search', {
-        SearchParameters: {
-          CompanyName: name,
-          ReturnCount: 50,
-          Offset: 0,
-          OrderResultsBy: 'CompanyName',
-          OrderDirection: 'ASC',
-        },
-      }, { logEvent: 'client_search_after_exists' });
+      const retrySearch = await quickFileRequest('/1_2/client/search', quickfileRequestBodies.clientSearchBody({
+        companyName: name,
+        returnCount: 50,
+        offset: 0,
+        orderResultsBy: 'CompanyName',
+        orderDirection: 'ASC',
+      }), { logEvent: 'client_search_after_exists' });
       const retryRecords = quickFileExtractRecords(retrySearch);
       const retryMatch = quickfileClientMatch.findClientByExactName(retryRecords, name);
       if (retryMatch) {
@@ -12517,16 +12502,14 @@ function readLocalNextInvoiceNumeric() {
 }
 
 function _quickFileInvoiceSearchPage(orderResultsBy, offset, pageSize) {
-  return quickFileRequest('/1_2/invoice/search', {
-    SearchParameters: {
-      ReturnCount: pageSize,
-      Offset: offset,
-      OrderResultsBy: orderResultsBy,
-      OrderDirection: 'DESC',
-      InvoiceType: 'INVOICE',
-      ShowDeleted: true,
-    },
-  }, { logEvent: 'invoice_search_ledger', skipRetry: false });
+  return quickFileRequest('/1_2/invoice/search', quickfileRequestBodies.invoiceSearchBody({
+    returnCount: pageSize,
+    offset: offset,
+    orderResultsBy: orderResultsBy,
+    orderDirection: 'DESC',
+    invoiceType: 'INVOICE',
+    showDeleted: true,
+  }), { logEvent: 'invoice_search_ledger', skipRetry: false });
 }
 
 /** Scan QuickFile (multiple sort orders) and return the highest numeric invoice suffix. */
@@ -12585,18 +12568,16 @@ function peekNextInvoiceNumberAfterLedgerSync(ledgerMax) {
 async function quickFileFindInvoiceByNumber(invoiceNumber) {
   const num = String(invoiceNumber || '').trim();
   if (!num) return null;
-  const body = await quickFileRequest('/1_2/invoice/search', {
-    SearchParameters: {
-      ReturnCount: 5,
-      Offset: 0,
-      OrderResultsBy: 'InvoiceNumber',
-      OrderDirection: 'DESC',
-      InvoiceType: 'INVOICE',
-      InvoiceNumber: num,
-      ShowDeleted: false,
-      AdditionalParameters: { ShowPurchaseRef: true },
-    },
-  });
+  const body = await quickFileRequest('/1_2/invoice/search', quickfileRequestBodies.invoiceSearchBody({
+    returnCount: 5,
+    offset: 0,
+    orderResultsBy: 'InvoiceNumber',
+    orderDirection: 'DESC',
+    invoiceType: 'INVOICE',
+    invoiceNumber: num,
+    showDeleted: false,
+    showPurchaseRef: true,
+  }));
   const records = quickFileExtractInvoiceSearchRecords(body);
   /* Exact number only (leading zeros ignored for all-digit numbers). Never fall
      back to "first row": QuickFile's number filter can be a partial match, and
@@ -12619,18 +12600,16 @@ function quickfileInvoiceNumbersEqual(a, b) {
 async function quickFileFindInvoiceByAttendanceRef(attendanceId) {
   const ref = quickfileInvoiceNumber.attendancePurchaseReference(attendanceId);
   if (!ref) return null;
-  const body = await quickFileRequest('/1_2/invoice/search', {
-    SearchParameters: {
-      ReturnCount: 5,
-      Offset: 0,
-      OrderResultsBy: 'IssueDate',
-      OrderDirection: 'DESC',
-      InvoiceType: 'INVOICE',
-      PurchaseReference: ref,
-      ShowDeleted: false,
-      AdditionalParameters: { ShowPurchaseRef: true },
-    },
-  });
+  const body = await quickFileRequest('/1_2/invoice/search', quickfileRequestBodies.invoiceSearchBody({
+    returnCount: 5,
+    offset: 0,
+    orderResultsBy: 'IssueDate',
+    orderDirection: 'DESC',
+    invoiceType: 'INVOICE',
+    purchaseReference: ref,
+    showDeleted: false,
+    showPurchaseRef: true,
+  }));
   const records = quickFileExtractInvoiceSearchRecords(body);
   for (let i = 0; i < records.length; i++) {
     if (quickfileInvoiceNumber.invoiceBelongsToAttendance(records[i], attendanceId)) {
@@ -12992,11 +12971,12 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       createWithNumber: async (invNum) => {
         const isAuto = invNum === quickfileInvoiceLedger.AUTO_INVOICE_NUMBER;
         lastInvoiceNumberTried = isAuto ? '(auto)' : String(invNum || '').trim();
-        const singleInvoiceData = {
-          IssueDate: invDate,
-        };
-        if (!isAuto && invNum) singleInvoiceData.InvoiceNumber = invNum;
-        if (purchaseRef) singleInvoiceData.PurchaseReference = purchaseRef;
+        /* Documented order: InvoiceNumber, PurchaseReference, IssueDate. */
+        const singleInvoiceData = quickfileRequestBodies.singleInvoiceData({
+          invoiceNumber: (!isAuto && invNum) ? invNum : undefined,
+          purchaseReference: purchaseRef || undefined,
+          issueDate: invDate,
+        });
 
         const invoicePayload = {
           InvoiceData: {
@@ -13058,7 +13038,11 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
           ) {
             await syncNextInvoiceNumberFromQuickFileLedger();
             const fallbackNum = peekNextInvoiceNumberAfterLedgerSync(lastLedgerMax);
-            singleInvoiceData.InvoiceNumber = fallbackNum;
+            invoicePayload.InvoiceData.Scheduling.SingleInvoiceData = quickfileRequestBodies.singleInvoiceData({
+              invoiceNumber: fallbackNum,
+              purchaseReference: purchaseRef || undefined,
+              issueDate: invDate,
+            });
             lastInvoiceNumberTried = fallbackNum;
             return postCreate();
           }
