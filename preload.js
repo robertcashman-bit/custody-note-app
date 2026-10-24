@@ -386,6 +386,8 @@ contextBridge.exposeInMainWorld('api', {
   quickfileSettingsEnsure: () => ipcRenderer.invoke('quickfile-settings-ensure'),
   quickfileSuggestNextInvoiceNumber: () => ipcRenderer.invoke('quickfile-suggest-next-invoice-number'),
   quickfileCreateInvoice: (params) => ipcRenderer.invoke('quickfile-create-invoice', params),
+  quickfileLinkInvoice: (params) => ipcRenderer.invoke('quickfile-link-invoice', params || {}),
+  quickfileOpenLogFolder: () => ipcRenderer.invoke('quickfile-open-log-folder'),
   /* Postcode lookup */
   postcodeLookup: (postcode) => ipcRenderer.invoke('postcode-lookup', postcode),
   /* Station mileage */

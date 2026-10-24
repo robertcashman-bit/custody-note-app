@@ -78,9 +78,10 @@ describe('QuickFile request deadline (postWithDeadline)', () => {
   });
 
   it('main.js quickFileRequest goes through the deadline helper', () => {
-    const start = MAIN.indexOf('function quickFileRequest(');
-    const body = MAIN.slice(start, MAIN.indexOf('function quickFileExtractRecords', start));
-    assert.ok(body.includes('quickfileClient.postWithDeadline('), 'quickFileRequest must use postWithDeadline');
+    const start = MAIN.indexOf('async function quickFileRequestOnce(');
+    assert.ok(start > -1, 'quickFileRequestOnce must exist');
+    const body = MAIN.slice(start, MAIN.indexOf('function quickFileRequest(', start));
+    assert.ok(body.includes('quickfileClient.postWithDeadline('), 'QuickFile HTTP must use postWithDeadline');
     assert.ok(!body.includes('https.request('), 'no raw https.request without a timeout');
   });
 });
@@ -122,8 +123,10 @@ describe('create-invoice failure result', () => {
     const body = MAIN.slice(start, MAIN.indexOf('STATION MILEAGE', start));
     assert.ok(body.indexOf('createRequestSent = true') > -1);
     assert.ok(body.indexOf('createRequestSent = true') < body.indexOf("quickFileRequest('/1_2/invoice/create'"));
-    assert.ok(body.includes('describeCreateInvoiceFailure(err'));
-    assert.match(body, /try \{\s*await ensureQuickFileSettingsFromServer\(\{ reason: 'create-invoice'/);
+    assert.ok(body.includes('describeCreateInvoiceFailure(err') || body.includes('describeCreateInvoiceFailure(err,'));
+    assert.ok(body.includes('enrichQuickFileFailure'));
+    assert.match(body, /ensureQuickFileSettingsFromServer\(\{ reason: 'create-invoice'/);
+    assert.ok(body.includes('resolveNextInvoiceNumberFromQuickFileLedger'));
   });
 });
 
@@ -191,9 +194,14 @@ describe('failure message copy', () => {
 
 describe('renderer wiring', () => {
   it('workflow success shows the persistent confirmation before leaving step 2', () => {
-    const okIdx = BILLING_SCREEN.indexOf('if (result && result.ok)');
-    const showIdx = BILLING_SCREEN.indexOf('_wfShowInvoiceSent(result, opts)', okIdx);
-    const navIdx = BILLING_SCREEN.indexOf('_wfAfterInvoiceCreatedGoToCompletion()', okIdx);
+    const implStart = BILLING_SCREEN.indexOf('async function _wfHandleCreateInvoiceImpl');
+    assert.ok(implStart > -1);
+    const createCallIdx = BILLING_SCREEN.indexOf('quickfileCreateInvoice({', implStart);
+    assert.ok(createCallIdx > implStart);
+    const implBlock = BILLING_SCREEN.slice(createCallIdx, createCallIdx + 2500);
+    const okIdx = implBlock.indexOf('if (result && result.ok)');
+    const showIdx = implBlock.indexOf('_wfShowInvoiceSent(result, opts)', okIdx);
+    const navIdx = implBlock.indexOf('_wfAfterInvoiceCreatedGoToCompletion()', okIdx);
     assert.ok(okIdx > -1 && showIdx > okIdx && navIdx > showIdx, 'confirm first, then navigate');
     assert.ok(BILLING_SCREEN.includes("showModal(conf.title"), 'confirmation must be a dialog, not only a toast');
   });

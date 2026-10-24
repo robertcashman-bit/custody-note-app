@@ -6956,6 +6956,20 @@ var REQUIRED_FIELD_KEYS = [
       if (dotEl) dotEl.className = 'qf-status-dot qf-status-dot--' + s.tone;
       if (headlineEl) headlineEl.textContent = s.headline;
       if (detailEl) detailEl.textContent = s.detail || '';
+      var lastErrEl = document.getElementById('qf-last-test-error');
+      if (lastErrEl && facts) {
+        var errTxt = String(facts.lastError || '').trim();
+        var checked = String(facts.lastCheckedAt || '').trim();
+        if (errTxt) {
+          lastErrEl.textContent = 'Last connection test failed'
+            + (checked ? ' (' + checked + '): ' : ': ')
+            + errTxt;
+        } else if (facts.lastOkAt) {
+          lastErrEl.textContent = 'Last successful connection test: ' + facts.lastOkAt;
+        } else {
+          lastErrEl.textContent = '';
+        }
+      }
       if (instrEl) {
         instrEl.innerHTML = '';
         (s.instructions || []).forEach(function (line) {
@@ -7519,11 +7533,25 @@ var REQUIRED_FIELD_KEYS = [
           data: d
         }, 2, 'list-health-badge');
         var billingBadge = '';
-        if (r.status === 'finalised' || r.status === 'completed' || r.quickfile_invoice_id) {
+        if (r.status === 'finalised' || r.status === 'completed' || r.quickfile_invoice_id || r.quickfile_send_status) {
+          var _sendSt = String(r.quickfile_send_status || '').trim();
           var _hasInv = !!r.quickfile_invoice_id;
           var _hasAtt = !!(d.photos && d.photos.attachments && d.photos.attachments.length);
-          if (_hasInv) billingBadge = '<span class="record-billing-badge record-billing-badge--invoiced">Invoiced</span>';
-          else if (!_hasAtt) billingBadge = '<span class="record-billing-badge record-billing-badge--docs">Needs docs</span>';
+          if (_sendSt === 'failed') {
+            var _failLbl = typeof formatQuickFileSendStatusLabel === 'function'
+              ? formatQuickFileSendStatusLabel(r)
+              : 'Send failed';
+            billingBadge = '<span class="record-billing-badge record-billing-badge--qf-failed" title="' + esc(String(r.quickfile_send_error || '')) + '">' + esc(_failLbl) + '</span>';
+          } else if (_sendSt === 'check_quickfile') {
+            billingBadge = '<span class="record-billing-badge record-billing-badge--qf-check">Check QuickFile</span>';
+          } else if (_sendSt === 'sending') {
+            billingBadge = '<span class="record-billing-badge record-billing-badge--qf-sending">Sending…</span>';
+          } else if (_hasInv || _sendSt === 'sent') {
+            var _sentLbl = typeof formatQuickFileSendStatusLabel === 'function'
+              ? formatQuickFileSendStatusLabel(r)
+              : 'Invoiced';
+            billingBadge = '<span class="record-billing-badge record-billing-badge--invoiced">' + esc(_sentLbl) + '</span>';
+          } else if (!_hasAtt) billingBadge = '<span class="record-billing-badge record-billing-badge--docs">Needs docs</span>';
           else billingBadge = '<span class="record-billing-badge record-billing-badge--invoice">Needs invoice</span>';
         }
         const li = document.createElement('li');
@@ -20220,6 +20248,18 @@ pdfAuditFooterHtml(d, settings) +
     });
     document.getElementById('btn-save-test-qf')?.addEventListener('click', function() {
       saveAndTestQuickFile();
+    });
+    document.getElementById('btn-open-qf-log-folder')?.addEventListener('click', function() {
+      if (!window.api || typeof window.api.quickfileOpenLogFolder !== 'function') {
+        showToast('Open log folder is not available', 'error');
+        return;
+      }
+      window.api.quickfileOpenLogFolder().then(function(r) {
+        if (r && r.ok) showToast('Opened QuickFile log folder', 'success', 3000);
+        else showToast((r && r.error) || 'Could not open log folder', 'error', 6000);
+      }).catch(function(err) {
+        showToast((err && err.message) || 'Could not open log folder', 'error');
+      });
     });
     document.getElementById('btn-save-import-qf')?.addEventListener('click', function() {
       saveAndImportQuickFile();
