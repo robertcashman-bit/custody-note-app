@@ -143,13 +143,20 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
   });
 
   var statusBadge = '';
-  if (opts.hasExistingInvoice) {
+  var sendSt = String((opts.invoiceStatus && opts.invoiceStatus.quickfile_send_status) || '').trim() || 'not_sent';
+  if (typeof formatQuickFileSendStatusLabel === 'function') {
+    statusBadge = '<span class="wf-status-badge ' + (typeof quickFileSendStatusClass === 'function' ? quickFileSendStatusClass(sendSt) : '') + '" data-testid="qf-send-status">' +
+      _wfEsc(formatQuickFileSendStatusLabel(opts.invoiceStatus || {})) + '</span>';
+  } else if (opts.hasExistingInvoice) {
     statusBadge = '<span class="wf-status-badge wf-status--invoiced">Invoiced</span>';
     if (opts.invoiceStatus.quickfile_invoice_number) {
       statusBadge += ' <span class="wf-invoice-num">#' + _wfEsc(opts.invoiceStatus.quickfile_invoice_number) + '</span>';
     }
   } else {
     statusBadge = '<span class="wf-status-badge wf-status--draft">Draft</span>';
+  }
+  if (sendSt === 'failed' && opts.invoiceStatus && opts.invoiceStatus.quickfile_send_error) {
+    statusBadge += '<p class="wf-qf-send-error" data-testid="qf-send-error">' + _wfEsc(opts.invoiceStatus.quickfile_send_error) + '</p>';
   }
 
   var firmMissing = !((opts.firmName || '').trim());
@@ -285,6 +292,15 @@ function _wfRenderBillingBody(body, footer, meta, opts) {
               '<label class="wf-check-item"><input type="checkbox" id="wf-check-billing"> Billing details confirmed</label>' +
             '</div>' +
             '<p class="wf-review-confirm-status" id="wf-review-status">&#128274; Send Bill to QuickFile is locked &mdash; tick all 3 boxes above.</p>' +
+          '</div>' +
+          '<div class="wf-card wf-link-qf-card" data-testid="qf-link-existing-card">' +
+            '<h4 class="wf-card-title">Already invoiced in QuickFile?</h4>' +
+            '<p class="settings-hint" style="margin:0 0 0.5rem;">If you raised the invoice manually in QuickFile, link it here so this record cannot be sent again by mistake.</p>' +
+            '<div class="wf-link-qf-row">' +
+              '<label class="wf-label" for="wf-link-invoice-number">Invoice number</label>' +
+              '<input type="text" id="wf-link-invoice-number" class="form-input wf-link-invoice-input" placeholder="e.g. 328681" autocomplete="off" />' +
+              '<button type="button" id="wf-bill-link-qf" class="btn btn-secondary btn-small" data-testid="qf-link-existing-btn">Link existing QuickFile invoice</button>' +
+            '</div>' +
           '</div>'
         )
         : ''
@@ -415,7 +431,12 @@ function _wfBuildBillingFooter(footer, meta, opts) {
    * strictly linear. Skip-invoice and next-complete were redundant
    * variations of the same forward action and have been merged. */
   var qfConfigured = opts.qfConfigured === true;
+  var sendSt = String((opts.invoiceStatus && opts.invoiceStatus.quickfile_send_status) || '').trim();
+  var needsRetry = sendSt === 'failed' || sendSt === 'check_quickfile';
   var primaryBtnHtml = '';
+  var retryBtnHtml = needsRetry
+    ? ('<button type="button" id="wf-bill-retry-qf" class="btn btn-secondary wf-btn-retry-qf" data-testid="qf-retry-send">Retry send to QuickFile</button>')
+    : '';
   if (!qfConfigured) {
     primaryBtnHtml =
       '<button type="button" id="wf-bill-next-complete" class="btn btn-primary wf-btn-next-action" data-mode="skip">' +
@@ -436,11 +457,26 @@ function _wfBuildBillingFooter(footer, meta, opts) {
   footer.innerHTML =
     '<button type="button" id="wf-bill-back" class="btn btn-secondary btn-small">&#9664; Back</button>' +
     '<span class="wf-footer-spacer"></span>' +
+    retryBtnHtml +
     primaryBtnHtml +
     '<button type="button" id="wf-bill-close" class="btn btn-secondary btn-small">Close</button>';
 
   document.getElementById('wf-bill-back').addEventListener('click', _wfGoBack);
   document.getElementById('wf-bill-close').addEventListener('click', closeWorkflow);
+
+  var retryBtn = document.getElementById('wf-bill-retry-qf');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', function () {
+      _wfHandleCreateInvoice(meta, opts);
+    });
+  }
+
+  var linkBtn = document.getElementById('wf-bill-link-qf');
+  if (linkBtn) {
+    linkBtn.addEventListener('click', function () {
+      _wfHandleLinkQuickFileInvoice(meta, opts);
+    });
+  }
 
   var createBtn = document.getElementById('wf-bill-create') || document.getElementById('wf-bill-next-complete');
   if (createBtn) {
@@ -663,6 +699,80 @@ function _wfHandleCreateInvoice(meta, opts) {
   _wfHandleCreateInvoiceImpl(recordId, mergedOpts);
 }
 
+async function _wfHandleLinkQuickFileInvoice(meta, opts) {
+  var recordId = meta && meta.recordId;
+  if (!recordId) {
+    showToast('Save the record first before linking an invoice', 'error');
+    return;
+  }
+  if (!window.api || !window.api.quickfileLinkInvoice) {
+    showToast('Link invoice is not available in this environment', 'error');
+    return;
+  }
+  var numEl = document.getElementById('wf-link-invoice-number');
+  var invoiceNumber = numEl ? String(numEl.value || '').trim() : '';
+  if (!invoiceNumber) {
+    showToast('Enter the QuickFile invoice number to link.', 'warning', 5000);
+    if (numEl) numEl.focus();
+    return;
+  }
+  if (!(opts.firmName || '').trim()) {
+    var liveForGuard = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+    if (typeof _wfResolveFirmDisplayName === 'function') {
+      opts.firmName = _wfResolveFirmDisplayName(liveForGuard) || '';
+    }
+  }
+  if (!(opts.firmName || '').trim()) {
+    showToast('Select the instructing firm on the record before linking an invoice.', 'error', 6500);
+    return;
+  }
+  var linkBtn = document.getElementById('wf-bill-link-qf');
+  if (linkBtn) { linkBtn.disabled = true; linkBtn.textContent = 'Linking…'; }
+  var settings = window._appSettingsCache || {};
+  var userName = settings.feeEarnerNameDefault || settings.feeEarnerName || '';
+  var data = (typeof getFormData === 'function') ? getFormData() : (window.formData || {});
+  var firmEmail = '';
+  if (data.firmId && window.firms) {
+    var firm = window.firms.find(function (f) { return String(f.id) === String(data.firmId); });
+    if (firm) firmEmail = firm.contact_email || '';
+  }
+  try {
+    var result = await window.api.quickfileLinkInvoice({
+      attendanceId: recordId,
+      firmName: opts.firmName,
+      contactEmail: firmEmail,
+      invoiceNumber: invoiceNumber,
+      userName: userName,
+    });
+    if (result && result.ok) {
+      if (typeof formData === 'object' && formData) {
+        formData.quickfile_invoice_id = result.invoiceId || '';
+        formData.quickfileInvoiceNumber = result.invoiceNumber || '';
+        formData.quickfileInvoiceUrl = result.invoiceUrl || '';
+      }
+      showToast('Linked invoice #' + (result.invoiceNumber || result.invoiceId), 'success', 7000);
+      _wfShowInvoiceSent(Object.assign({}, result, { linked: true }), opts);
+      try {
+        if (typeof quietSave === 'function') quietSave();
+        if (typeof refreshQuickFileInvoiceRefDisplay === 'function') refreshQuickFileInvoiceRefDisplay();
+        if (typeof _wfAfterInvoiceCreatedGoToCompletion === 'function') {
+          _wfAfterInvoiceCreatedGoToCompletion();
+        } else if (typeof _wfRenderCurrentStep === 'function') {
+          _wfRenderCurrentStep();
+        }
+      } catch (uiErr) {
+        console.error('[billing] Invoice linked but screen refresh failed:', uiErr);
+      }
+    } else {
+      _wfShowInvoiceFailure((result && result.error) || 'Could not link invoice', result && result.code, result);
+    }
+  } catch (err) {
+    _wfShowInvoiceFailure(err && err.message ? err.message : String(err), err && err.code);
+  } finally {
+    if (linkBtn) { linkBtn.disabled = false; linkBtn.textContent = 'Link existing QuickFile invoice'; }
+  }
+}
+
 async function _wfHandleCreateInvoiceImpl(recordId, opts) {
   console.log('[billing] Invoice creation started for record', recordId);
   if (!recordId) {
@@ -836,9 +946,32 @@ function _wfShowInvoiceFailure(reason, code, result) {
   var R = (typeof window !== 'undefined' && window.QuickfileInvoiceResult) || null;
   if (!R || typeof showModal !== 'function') return;
   var msg = R.buildInvoiceFailureMessage(Object.assign({}, result || {}, { error: reason, code: code }));
-  showModal(msg.title, _wfInvoiceDialogHtml('error',
-    '<p><strong>Reason:</strong> ' + _wfEsc(msg.reason) + '</p>',
-    '<p>' + _wfEsc(msg.advice) + '</p>'));
+  var inner = R.buildInvoiceFailureDialogHtml
+    ? R.buildInvoiceFailureDialogHtml(Object.assign({}, msg, {
+      reason: _wfEsc(msg.reason),
+      advice: _wfEsc(msg.advice),
+      referenceCode: _wfEsc(msg.referenceCode || ''),
+    }))
+    : ('<p><strong>Reason:</strong> ' + _wfEsc(msg.reason) + '</p><p>' + _wfEsc(msg.advice) + '</p>');
+  showModal(msg.title, _wfInvoiceDialogHtml('error', inner, ''));
+  var copyBtn = document.getElementById('wf-invoice-copy-details');
+  if (copyBtn && msg.copyDetails) {
+    copyBtn.addEventListener('click', function () {
+      var text = String(msg.copyDetails || '');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          showToast('Error details copied', 'success', 3000);
+        }).catch(function () {
+          showToast('Could not copy — select the text manually', 'warning', 5000);
+        });
+      } else {
+        showToast('Copy is not available in this environment', 'warning', 5000);
+      }
+    });
+  }
+  if (typeof refreshList === 'function') {
+    try { refreshList(); } catch (_) {}
+  }
 }
 
 /**

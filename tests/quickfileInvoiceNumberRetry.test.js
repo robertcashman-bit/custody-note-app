@@ -28,7 +28,7 @@ describe('isQuickFileInvoiceNumberDuplicateError', () => {
     'The invoice number is already used',
     'Invoice number is already there',
     'Invoice #006066 already exists',
-    '006070 already in use',
+    'Invoice number 328610 already exists',
     'This InvoiceNumber has already been used',
     'Duplicate invoice number',
     'Invoice number already taken',
@@ -48,6 +48,13 @@ describe('isQuickFileInvoiceNumberDuplicateError', () => {
     'QuickFile HTTP 500: Internal',
     'No billable items to invoice',
     'Account suspended',
+    'Client already exists',
+    'Company already exists',
+    'Customer already exists',
+    'Email address already exists',
+    '006070 already in use',
+    'already exists',
+    'Item already exists',
   ];
   for (const msg of negatives) {
     it('does not match non-duplicate: ' + msg, () => {

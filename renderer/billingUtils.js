@@ -30,6 +30,39 @@ var INVOICE_STATUS_LABELS = {
   archived: 'Archived',
 };
 
+var QUICKFILE_SEND_STATUS_LABELS = {
+  not_sent: 'Not sent',
+  sending: 'Sending',
+  failed: 'Failed',
+  sent: 'Sent',
+  check_quickfile: 'Check QuickFile',
+};
+
+function formatQuickFileSendStatusLabel(row) {
+  var r = row || {};
+  var st = String(r.quickfile_send_status || '').trim() || 'not_sent';
+  if (st === 'sent') {
+    var num = String(r.quickfile_invoice_number || '').trim().replace(/^#+/, '');
+    return num ? 'Sent #' + num : 'Sent';
+  }
+  if (st === 'failed') {
+    var err = String(r.quickfile_send_error || '').trim();
+    var base = QUICKFILE_SEND_STATUS_LABELS.failed;
+    return err ? base + ': ' + (err.length > 48 ? err.slice(0, 45) + '…' : err) : base;
+  }
+  return QUICKFILE_SEND_STATUS_LABELS[st] || QUICKFILE_SEND_STATUS_LABELS.not_sent;
+}
+
+function quickFileSendStatusClass(status) {
+  switch (String(status || 'not_sent')) {
+    case 'sending': return 'qf-send-status--sending';
+    case 'failed': return 'qf-send-status--failed';
+    case 'sent': return 'qf-send-status--sent';
+    case 'check_quickfile': return 'qf-send-status--check';
+    default: return 'qf-send-status--not-sent';
+  }
+}
+
 function calculateInvoiceTotals(opts) {
   var fixedFee = parseFloat(opts.fixedFee);
   if (!Number.isFinite(fixedFee) || fixedFee < 0) fixedFee = 0;
@@ -189,6 +222,8 @@ if (typeof window !== 'undefined') {
   window.isAlreadyInvoicedError = isAlreadyInvoicedError;
   window.formatBillingCreateFailureToast = formatBillingCreateFailureToast;
   window.formatLegacyBillingCreateFailureToast = formatLegacyBillingCreateFailureToast;
+  window.formatQuickFileSendStatusLabel = formatQuickFileSendStatusLabel;
+  window.quickFileSendStatusClass = quickFileSendStatusClass;
 }
 
 /**

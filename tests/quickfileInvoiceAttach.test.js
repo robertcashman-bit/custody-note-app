@@ -136,7 +136,7 @@ describe('QuickFile invoice number — ledger sync and sequential allocate', () 
   it('calls invoice/search ordered by InvoiceNumber DESC before create', () => {
     assert.ok(mainJs.includes('/1_2/invoice/search'));
     assert.ok(mainJs.includes('syncNextInvoiceNumberFromQuickFileLedger'));
-    assert.ok(mainJs.includes('OrderResultsBy'));
+    assert.ok(mainJs.includes('orderResultsBy'));
     assert.ok(mainJs.includes("'DESC'"));
   });
 
@@ -147,14 +147,15 @@ describe('QuickFile invoice number — ledger sync and sequential allocate', () 
     assert.ok(mainJs.includes('MAX_INVOICE_NUMBER_ATTEMPTS'));
   });
 
-  it('uses peek-only allocation (does not pre-advance the counter)', () => {
-    assert.ok(mainJs.includes('allocateNextNumber: peekNextSequentialInvoiceNumber'));
-    assert.ok(!mainJs.includes('function getNextSequentialInvoiceNumber'));
+  it('re-reads QuickFile ledger before each allocate (not per-machine counter alone)', () => {
+    assert.ok(mainJs.includes('resolveNextInvoiceNumberFromQuickFileLedger'));
+    assert.ok(mainJs.includes('allocateNextNumber: async'));
     assert.ok(mainJs.includes('bumpPastNumber: bumpNextInvoiceNumberPast'));
+    assert.ok(mainJs.includes('onDuplicateConflict:'));
   });
 
   it('includes deleted invoices when syncing max ledger number', () => {
-    assert.ok(mainJs.includes('ShowDeleted: true'));
+    assert.ok(mainJs.includes('showDeleted: true'));
   });
 
   it('tags creates with attendance PurchaseReference and Notes marker', () => {

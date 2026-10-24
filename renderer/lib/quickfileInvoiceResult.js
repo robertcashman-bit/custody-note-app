@@ -52,7 +52,7 @@
     var title = r.reused
       ? 'Already in QuickFile: invoice ' + label + ' linked'
       : 'Sent to QuickFile: invoice ' + label;
-    var level = failures.length ? 'warning' : 'success';
+    var level = (failures.length || r.verifyWarning) ? 'warning' : 'success';
 
     var rows = [{ label: 'QuickFile invoice', value: label || '(number not returned)' }];
     if (o.firmName) rows.push({ label: 'Firm', value: String(o.firmName) });
@@ -63,9 +63,11 @@
     else if (!failures.length) attachText = okCount + ' uploaded';
     else attachText = okCount + ' uploaded, ' + failures.length + ' failed';
     rows.push({ label: 'Attachments', value: attachText });
+    if (r.verifyWarning) rows.push({ label: 'Check in QuickFile', value: String(r.verifyWarning) });
 
     var summary = title;
     if (r.reused) summary += '. No duplicate was created.';
+    if (r.verifyWarning) summary += '. Please check it in QuickFile: ' + String(r.verifyWarning);
     if (failures.length) {
       summary += '. ' + failures.length + ' attachment' + (failures.length === 1 ? '' : 's')
         + ' failed to upload \u2014 add ' + (failures.length === 1 ? 'it' : 'them') + ' in QuickFile.';
@@ -87,39 +89,87 @@
    */
   function buildInvoiceFailureMessage(result) {
     var r = result || {};
-    var reason = String(r.error || '').trim() || 'Unknown error';
+    var reason = String(r.userMessage || r.error || '').trim() || 'Unknown error';
+    var technical = String(r.error || '').trim() || reason;
     var code = String(r.code || '');
+    var ref = String(r.referenceCode || '').trim();
+    if (code === 'QF_VERIFY') {
+      return {
+        title: r.userTitle || 'Check QuickFile manually',
+        reason: reason,
+        advice: 'An invoice may exist but could not be verified. Open QuickFile, confirm the invoice, then retry or mark complete.',
+        referenceCode: ref,
+        copyDetails: r.copyDetails || '',
+        technicalReason: technical,
+      };
+    }
+    if (code === 'QF_PREFLIGHT') {
+      return {
+        title: r.userTitle || 'Cannot send yet',
+        reason: reason,
+        advice: 'Fix the items above, then press Send Bill to QuickFile again.',
+        referenceCode: ref,
+        copyDetails: r.copyDetails || '',
+        technicalReason: technical,
+      };
+    }
     if (code === 'ALREADY_INVOICED') {
       return {
         title: 'This record already has an invoice',
         reason: reason,
         advice: 'Nothing new was sent. Click Continue to Review & complete to move on.',
+        referenceCode: ref,
+        copyDetails: r.copyDetails || '',
+        technicalReason: technical,
       };
     }
     if (code === 'QF_UNCONFIRMED' || r.mayHaveBeenCreated) {
       return {
-        title: "QuickFile didn't confirm the invoice",
+        title: r.userTitle || "QuickFile didn't confirm the invoice",
         reason: reason,
         advice: 'The invoice may or may not have been created. Connect to your own Wi-Fi or a phone hotspot, '
           + 'then press Send Bill to QuickFile again. The app checks QuickFile first and links the existing '
           + 'invoice rather than creating a duplicate.',
+        referenceCode: ref,
+        copyDetails: r.copyDetails || '',
+        technicalReason: technical,
       };
     }
     if (code === 'QF_TIMEOUT' || code === 'QF_NETWORK') {
       return {
-        title: 'Not sent to QuickFile',
+        title: r.userTitle || 'Not sent to QuickFile',
         reason: reason,
         advice: 'Nothing was created in QuickFile. Connect to your own Wi-Fi or a phone hotspot, then press Send Bill to QuickFile again.',
+        referenceCode: ref,
+        copyDetails: r.copyDetails || '',
+        technicalReason: technical,
       };
     }
-    var looksLikeConnection = /not configured|auth|credential|401|403|HTTP 5\d\d|parse error|empty response/i.test(reason);
+    var looksLikeConnection = /not configured|auth|credential|401|403|HTTP 5\d\d|parse error|empty response/i.test(technical);
     return {
-      title: 'Not sent to QuickFile',
+      title: r.userTitle || 'Not sent to QuickFile',
       reason: reason,
       advice: looksLikeConnection
         ? 'Check Settings \u2192 QuickFile and click "Test QuickFile connection", then press Send Bill to QuickFile again.'
         : 'Nothing was created in QuickFile. Fix the problem above, then press Send Bill to QuickFile again.',
+      referenceCode: ref,
+      copyDetails: r.copyDetails || '',
+      technicalReason: technical,
     };
+  }
+
+  function buildInvoiceFailureDialogHtml(msg) {
+    var m = msg || {};
+    var refLine = m.referenceCode
+      ? '<p class="wf-invoice-ref"><strong>Reference:</strong> ' + m.referenceCode + '</p>'
+      : '';
+    var copyBtn = m.copyDetails
+      ? '<p><button type="button" class="btn btn-secondary btn-small" id="wf-invoice-copy-details" data-testid="qf-copy-details">Copy details</button></p>'
+      : '';
+    return refLine
+      + '<p><strong>Reason:</strong> ' + (m.reason || '') + '</p>'
+      + '<p>' + (m.advice || '') + '</p>'
+      + copyBtn;
   }
 
   return {
@@ -127,5 +177,6 @@
     invoiceLabel: invoiceLabel,
     buildInvoiceSentConfirmation: buildInvoiceSentConfirmation,
     buildInvoiceFailureMessage: buildInvoiceFailureMessage,
+    buildInvoiceFailureDialogHtml: buildInvoiceFailureDialogHtml,
   };
 });

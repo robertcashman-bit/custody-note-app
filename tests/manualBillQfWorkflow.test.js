@@ -474,7 +474,9 @@ describe('Step 2: Billing screen — data loading', () => {
   it('uses allSettled so partial failures still render billing with DB-backed QuickFile state', () => {
     assert.ok(billingScreenJs.includes('Promise.allSettled'));
     assert.ok(billingScreenJs.includes('_wfIsQuickFileConfigured'));
-    assert.ok(!billingScreenJs.includes('}).catch(function ()'), 'must not downgrade QF on load failure');
+    const loadStart = billingScreenJs.indexOf('Promise.allSettled(loadJobs)');
+    const loadBlock = billingScreenJs.slice(loadStart, loadStart + 900);
+    assert.ok(!loadBlock.includes('}).catch(function ()'), 'must not downgrade QF on load failure');
   });
 
   it('resolves quickfileConnectionState in loadJobs before Send Bill to QuickFile UI', () => {

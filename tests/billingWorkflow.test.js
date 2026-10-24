@@ -571,12 +571,12 @@ describe('Billing panel (no firm email pack)', () => {
 
 describe('QuickFile client search — required fields', () => {
   it('all quickFileRequest client/search calls include OrderResultsBy and OrderDirection', () => {
-    const re = /quickFileRequest\s*\(\s*'\/1_2\/client\/search'\s*,\s*\{[\s\S]*?\}\s*\)/g;
+    const re = /quickFileRequest\s*\(\s*'\/1_2\/client\/search'\s*,\s*quickfileRequestBodies\.clientSearchBody\(\{[\s\S]*?\}\)/g;
     const matches = mainJs.match(re) || [];
     assert.ok(matches.length >= 2, 'Expected at least 2 client/search calls, found ' + matches.length);
     for (let i = 0; i < matches.length; i++) {
-      assert.ok(matches[i].includes('OrderResultsBy'), 'client/search call ' + i + ' missing OrderResultsBy');
-      assert.ok(matches[i].includes('OrderDirection'), 'client/search call ' + i + ' missing OrderDirection');
+      assert.ok(matches[i].includes('orderResultsBy'), 'client/search call ' + i + ' missing OrderResultsBy');
+      assert.ok(matches[i].includes('orderDirection'), 'client/search call ' + i + ' missing OrderDirection');
     }
   });
 });
@@ -663,21 +663,25 @@ describe('QuickFile invoice payload schema compliance', () => {
   it('nests SingleInvoiceData inside InvoiceData.Scheduling (not as Body sibling)', () => {
     assert.ok(mainJs.includes('Scheduling: {'));
     assert.ok(mainJs.includes('SingleInvoiceData: singleInvoiceData'));
-    const bodyMatch = mainJs.match(/quickFileRequest\s*\(\s*'\/1_2\/invoice\/create'\s*,\s*(\w+)\)/);
-    assert.ok(bodyMatch, 'invoice/create call should use a named payload variable');
+    assert.ok(mainJs.includes('invoicePayload'), 'invoice/create should use invoicePayload');
+    assert.ok(mainJs.includes("quickFileRequest('/1_2/invoice/create', invoicePayload"), 'invoice/create wired to invoicePayload');
   });
 
   it('includes Language field inside InvoiceData', () => {
-    const createIdx = mainJs.indexOf("'/1_2/invoice/create'");
-    const block = mainJs.slice(Math.max(0, createIdx - 600), createIdx + 100);
+    const createIdx = mainJs.indexOf('createWithNumber: async (invNum)');
+    assert.ok(createIdx > -1, 'createWithNumber handler should exist');
+    const block = mainJs.slice(createIdx, createIdx + 1200);
     assert.ok(block.includes("Language: 'en'"), 'InvoiceData should include Language');
   });
 
   it('calls validateQuickFileInvoicePayload before invoice/create request', () => {
-    const createIdx = mainJs.indexOf("quickFileRequest('/1_2/invoice/create'");
-    const validateIdx = mainJs.indexOf('validateQuickFileInvoicePayload(invoicePayload)');
-    assert.ok(validateIdx > 0, 'validateQuickFileInvoicePayload call should exist');
-    assert.ok(validateIdx < createIdx, 'validateQuickFileInvoicePayload must be called before quickFileRequest');
+    const createIdx = mainJs.indexOf('createWithNumber: async (invNum)');
+    assert.ok(createIdx > 0, 'createWithNumber handler should exist');
+    const createBlock = mainJs.slice(createIdx, createIdx + 3500);
+    const validateIdx = createBlock.indexOf('validateQuickFileInvoicePayload(invoicePayload)');
+    const sendIdx = createBlock.indexOf('createRequestSent = true');
+    assert.ok(validateIdx > 0, 'validateQuickFileInvoicePayload call should exist inside createWithNumber');
+    assert.ok(sendIdx > validateIdx, 'validateQuickFileInvoicePayload must run before createRequestSent');
   });
 
   it('passes trimmed firmName to quickFileFindOrCreateClient', () => {
