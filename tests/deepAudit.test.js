@@ -133,6 +133,7 @@ describe('3 · IPC Surface Completeness', () => {
   const onceChannels = [...allMainSrc.matchAll(/ipcMain\.once\(['"]([^'"]+)['"]/g)].map(m => m[1]);
 
   const KNOWN_INTERNAL = /^(recovery-pw-|pdf-viewer-)/;
+  /* pdf-viewer-test-metrics is viewer-preload test hook only */
 
   it('preload exposes at least 20 invoke channels', () => {
     assert.ok(invokeChannels.length >= 20, `only ${invokeChannels.length} invoke channels found`);

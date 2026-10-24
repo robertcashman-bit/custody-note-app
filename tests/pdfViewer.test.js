@@ -40,6 +40,32 @@ describe('pdfViewer module', () => {
     assert.strictEqual(isManagedEphemeralPreviewPath('/etc/passwd.pdf'), false);
     assert.strictEqual(isManagedEphemeralPreviewPath(''), false);
   });
+
+  it('allows chrome-extension PDF viewer and about:blank in pane navigation policy', () => {
+    const { isAllowedPdfViewerPaneNavigation, CHROMIUM_PDF_EXTENSION_ID } = require(LIB);
+    const pdfUrl = 'file:///tmp/synthetic-test.pdf';
+    assert.strictEqual(
+      isAllowedPdfViewerPaneNavigation('chrome-extension://' + CHROMIUM_PDF_EXTENSION_ID + '/index.html', pdfUrl),
+      true
+    );
+    assert.strictEqual(isAllowedPdfViewerPaneNavigation('about:blank', pdfUrl), true);
+    assert.strictEqual(isAllowedPdfViewerPaneNavigation('https://evil.example/', pdfUrl), false);
+  });
+});
+
+describe('pdfViewer partition isolation (source)', () => {
+  it('BrowserView uses in-memory cn-pdf-viewer partition', () => {
+    const src = fs.readFileSync(LIB, 'utf8');
+    assert.ok(src.includes("partition: PDF_VIEWER_PARTITION") || src.includes("partition: 'cn-pdf-viewer'"));
+    assert.ok(src.includes("PDF_VIEWER_PARTITION = 'cn-pdf-viewer'"));
+    assert.ok(src.includes('session.fromPartition(PDF_VIEWER_PARTITION)'));
+  });
+
+  it('does not call hardenSession on the viewer partition', () => {
+    const src = fs.readFileSync(LIB, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    assert.ok(!/hardenSession\s*\(/.test(src), 'pdfViewer must not call hardenSession (CSP breaks PDF extension)');
+    assert.ok(!/onHeadersReceived\s*\(/.test(src), 'pdfViewer must not inject CSP headers on viewer session');
+  });
 });
 
 describe('Generated PDF preview IPC (source)', () => {
