@@ -12913,7 +12913,8 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
   const ping = await quickFilePingAuthenticated(false);
   const preflight = quickfilePreflight.runQuickFileSendPreflight({
     settingsMissing: qfSettings.missing,
-    settingsPullFailed: !!settingsPullError,
+    /* A failed cloud pull only matters when there are no usable local credentials. */
+    settingsPullFailed: !!settingsPullError && qfSettings.missing.length > 0,
     pingRequired: true,
     pingOk: ping.ok,
     pingError: ping.error,
@@ -12950,7 +12951,10 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
      network level we cannot know whether QuickFile made the invoice. */
   let createRequestSent = false;
   let lastInvoiceNumberTried = '';
-  const customInvoiceNumber = sanitizeQuickFileInvoiceNumber(billingInvoiceNumber);
+  /* billingInvoiceNumber is only the billing screen's display/suggestion and is
+     always sent; treating it as a forced number stopped auto-assign and ledger
+     recovery. Only an explicit customInvoiceNumber forces a number. */
+  const customInvoiceNumber = sanitizeQuickFileInvoiceNumber(params.customInvoiceNumber);
   const hasCustomInvoiceNumber = !!customInvoiceNumber;
   let lastLedgerMax = null;
   if (attendanceId) {
@@ -13202,7 +13206,15 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     } catch (verifyErr) {
       verifyReason = verifyErr && verifyErr.message ? verifyErr.message : String(verifyErr);
     }
-    if (verifyReason) {
+    /* A client mismatch is serious: stop before attaching anything. Any other
+       verify problem (number/total differs, or QuickFile could not be re-read)
+       still records the invoice and uploads attachments, but flags the record
+       "Check QuickFile" so the user reviews it. */
+    const verifyBlocks = !!verifyReason && /client mismatch/i.test(verifyReason);
+    const verifyRefSoft = verifyReason && !verifyBlocks
+      ? quickfileUserError.makeReferenceCode('verify|' + invoiceId + '|' + attendanceId)
+      : '';
+    if (verifyBlocks) {
       const verifyRef = quickfileUserError.makeReferenceCode('verify|' + invoiceId + '|' + attendanceId);
       if (attendanceId) {
         db.run(
@@ -13267,7 +13279,10 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
         WHERE id = ?`,
         [
           String(invoiceId), invoiceNumber, invoiceUrl,
-          'sent', '', '', '',
+          verifyRefSoft ? 'check_quickfile' : 'sent',
+          verifyRefSoft ? verifyReason.slice(0, 500) : '',
+          verifyRefSoft ? 'QF_VERIFY' : '',
+          verifyRefSoft || '',
           userName || '',
           subtotal, vat, total,
           narrative || '',
@@ -13370,6 +13385,9 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
       attachmentOk: attachResults.some(r => r.ok),
       attachmentError: attachmentError || undefined,
       attachResults,
+      reused: !!createResult.reused,
+      verifyWarning: verifyRefSoft ? verifyReason : undefined,
+      referenceCode: verifyRefSoft || undefined,
     };
   } catch (err) {
     const shaped = quickfileInvoiceNumber.describeCreateInvoiceFailure(err, {
@@ -13460,6 +13478,7 @@ ipcMain.handle('quickfile-link-invoice', async (_, params) => {
     pingOk: ping.ok,
     pingError: ping.error,
     firmName,
+    skipTotalCheck: true,
   });
   if (!preflight.ok) {
     return quickfileUserError.enrichQuickFileFailure({
