@@ -61,7 +61,7 @@
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "electron": "^42.11.9",
+    "electron": "^42.11.16",
     "electron-builder": "^26.16.1",
     "fontkit": "^2.0.4",
     "jsdom": "^29.0.0",
