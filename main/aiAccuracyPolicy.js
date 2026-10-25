@@ -46,7 +46,10 @@ const LAW_ELEMENTS_PLAIN_NOTE_RULES =
   'Attendance-note body (what the solicitor will paste into the note):\n' +
   '- Plain text only: no "Answer" heading, no introductory sentence, no markdown (** ## ---), no inline links or URLs, no utm parameters.\n' +
   '- Per offence use headings: Actus reus, Mens rea, Common defences, Sentencing — concise bullet points.\n' +
-  '- Put anything unverified only under Uncertainties (not in the note body). List source titles/URLs only under Sources (shown separately in the app).';
+  '- Put anything unverified only under Uncertainties (not in the note body). List source titles/URLs only under Sources (shown separately in the app).\n' +
+  '- Statute and sentencing limits MUST be verified via web search on legislation.gov.uk (current text) and Sentencing Council — not training memory.\n' +
+  '- Do NOT cite the Powers of Criminal Courts (Sentencing) Act 2000 (repealed). Use Sentencing Act 2020 for minimum sentences (e.g. third domestic burglary: s.314).\n' +
+  '- For magistrates\' court maximums on triable-either-way offences, apply Sentencing Act 2020 s.224 (12 months for a single offence from 18 November 2024) where it applies, not outdated 6-month summaries alone.';
 
 const CASE_LAW_PATTERN =
   /\b(?:v\.?|vs\.?)\b|\[[12]\d{3}\]\s*[A-Z]|\b(?:EWCA|EWHC|UKSC|UKHL|Cr\.?\s*App\.?\s*R\.?|WLR|All\s*ER)\b/i;
@@ -212,11 +215,33 @@ function validateAiLegalResponse(opts) {
   const cleaned =
     noteMode === 'ask' ? cleanAskAnswerNoteText(rawText) : cleanLawElementsNoteText(rawText);
 
+  let noteText = cleaned.noteText;
+  let stalenessWarnings = [];
+  if (noteMode === 'law') {
+    const { guardLawNoteStaleness } = require('./aiLawStalenessGuard');
+    const guarded = guardLawNoteStaleness(noteText);
+    noteText = guarded.noteText;
+    stalenessWarnings = guarded.stalenessWarnings || [];
+    if (guarded.needsRegenerate) {
+      return {
+        ok: false,
+        error: 'AI response rejected: out-of-date legislation or sentencing limits detected.',
+        text: noteText,
+        sources: sources,
+        uncertainties: cleaned.uncertainties || uncertainties,
+        stalenessWarnings: stalenessWarnings,
+        needsRegenerate: true,
+        regeneratePrompt: guarded.regeneratePrompt,
+      };
+    }
+  }
+
   return {
     ok: true,
-    text: cleaned.noteText,
+    text: noteText,
     sources: sources,
     uncertainties: cleaned.uncertainties || uncertainties,
+    stalenessWarnings: stalenessWarnings,
     refusal: false,
   };
 }
