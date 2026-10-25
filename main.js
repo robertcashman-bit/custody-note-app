@@ -11372,6 +11372,9 @@ const quickfileSettingsSync = require('./lib/quickfileSettingsSync');
 const quickfileInvoiceNumber = require('./lib/quickfileInvoiceNumber');
 const quickfileInvoiceLedger = require('./lib/quickfileInvoiceLedger');
 const quickfileRequestBodies = require('./lib/quickfileRequestBodies');
+const quickfileOrderResultsBy = require('./lib/quickfileOrderResultsBy');
+const quickfileInvoiceViewUrl = require('./lib/quickfileInvoiceViewUrl');
+const quickfileInvoiceLine = require('./lib/quickfileInvoiceLine');
 
 const QUICKFILE_CREDENTIAL_KEYS = new Set(['quickfileAccountNumber', 'quickfileApiKey', 'quickfileAppId']);
 
@@ -12597,6 +12600,7 @@ function readLocalNextInvoiceNumeric() {
 }
 
 function _quickFileInvoiceSearchPage(orderResultsBy, offset, pageSize) {
+  quickfileOrderResultsBy.assertInvoiceSearchOrderResultsBy(orderResultsBy);
   return quickFileRequest('/1_2/invoice/search', quickfileRequestBodies.invoiceSearchBody({
     returnCount: pageSize,
     offset: offset,
@@ -12607,24 +12611,46 @@ function _quickFileInvoiceSearchPage(orderResultsBy, offset, pageSize) {
   }), { logEvent: 'invoice_search_ledger', skipRetry: false });
 }
 
-/** Scan QuickFile (multiple sort orders) and return the highest numeric invoice suffix. */
+/** Paginate Invoice_Search (InvoiceNumber DESC) for the highest numeric invoice suffix. */
 async function quickFileFetchLedgerMaxInvoiceNumeric() {
   const pageSize = quickfileInvoiceLedger.DEFAULT_PAGE_SIZE;
   const maxPages = quickfileInvoiceLedger.DEFAULT_MAX_PAGES;
-  const byIssueDate = await quickfileInvoiceLedger.fetchLedgerMaxInvoiceNumeric(
-    (offset, size) => _quickFileInvoiceSearchPage('IssueDate', offset, size || pageSize),
+  return quickfileInvoiceLedger.fetchLedgerMaxInvoiceNumeric(
+    (offset, size) => _quickFileInvoiceSearchPage('InvoiceNumber', offset, size || pageSize),
     { pageSize, maxPages }
   );
-  let byInvoiceId = null;
-  try {
-    byInvoiceId = await quickfileInvoiceLedger.fetchLedgerMaxInvoiceNumeric(
-      (offset, size) => _quickFileInvoiceSearchPage('InvoiceID', offset, size || pageSize),
-      { pageSize, maxPages }
-    );
-  } catch (e) {
-    console.warn('[QuickFile] ledger scan by InvoiceID failed:', e && e.message ? e.message : e);
+}
+
+let _qfLedgerSyncCache = { at: 0, ledgerMax: null, inFlight: null };
+const QF_LEDGER_SYNC_CACHE_MS = 45000;
+
+function invalidateQuickFileLedgerSyncCache() {
+  _qfLedgerSyncCache = { at: 0, ledgerMax: null, inFlight: null };
+}
+
+async function quickFileResolveInvoiceViewUrl(invoiceId, invoiceNumber, hints) {
+  const h = hints && typeof hints === 'object' ? hints : {};
+  let url = quickfileInvoiceViewUrl.resolveInvoiceViewUrlFromSources({
+    searchRow: h.searchRow,
+    getBody: h.getBody,
+    invoiceId,
+  });
+  if (url) return url;
+  const num = String(invoiceNumber || '').trim();
+  if (num) {
+    try {
+      const row = await quickFileFindInvoiceByNumber(num);
+      url = quickfileInvoiceViewUrl.resolveInvoiceViewUrlFromSources({
+        searchRow: row,
+        getBody: h.getBody,
+        invoiceId,
+      });
+      if (url) return url;
+    } catch (e) {
+      console.warn('[QuickFile] ViewHref lookup failed:', e && e.message ? e.message : e);
+    }
   }
-  return quickfileInvoiceLedger.mergeLedgerMaxNumeric(byIssueDate, byInvoiceId);
+  return '';
 }
 
 async function resolveNextInvoiceNumberFromQuickFileLedger() {
@@ -12641,15 +12667,33 @@ async function resolveNextInvoiceNumberFromQuickFileLedger() {
 
 /** Align local nextInvoiceNumber so the next issued number is above QuickFile's ledger (handles QF-only / other machines). */
 async function syncNextInvoiceNumberFromQuickFileLedger() {
-  try {
-    const max = await quickFileFetchLedgerMaxInvoiceNumeric();
-    if (max === null || !Number.isFinite(max)) return { ok: true, ledgerMax: null };
-    bumpNextInvoiceNumberPast(String(max));
-    return { ok: true, ledgerMax: max };
-  } catch (e) {
-    console.warn('[QuickFile] syncNextInvoiceNumberFromQuickFileLedger:', e && e.message ? e.message : e);
-    return { ok: false, error: e && e.message ? e.message : String(e) };
+  const now = Date.now();
+  if (
+    _qfLedgerSyncCache.ledgerMax != null
+    && now - _qfLedgerSyncCache.at < QF_LEDGER_SYNC_CACHE_MS
+  ) {
+    return { ok: true, ledgerMax: _qfLedgerSyncCache.ledgerMax, cached: true };
   }
+  if (_qfLedgerSyncCache.inFlight) {
+    return _qfLedgerSyncCache.inFlight;
+  }
+  _qfLedgerSyncCache.inFlight = (async () => {
+    try {
+      const max = await quickFileFetchLedgerMaxInvoiceNumeric();
+      if (max === null || !Number.isFinite(max)) {
+        _qfLedgerSyncCache = { at: Date.now(), ledgerMax: null, inFlight: null };
+        return { ok: true, ledgerMax: null };
+      }
+      bumpNextInvoiceNumberPast(String(max));
+      _qfLedgerSyncCache = { at: Date.now(), ledgerMax: max, inFlight: null };
+      return { ok: true, ledgerMax: max };
+    } catch (e) {
+      _qfLedgerSyncCache.inFlight = null;
+      console.warn('[QuickFile] syncNextInvoiceNumberFromQuickFileLedger:', e && e.message ? e.message : e);
+      return { ok: false, error: e && e.message ? e.message : String(e) };
+    }
+  })();
+  return _qfLedgerSyncCache.inFlight;
 }
 
 function peekNextInvoiceNumberAfterLedgerSync(ledgerMax) {
@@ -12723,26 +12767,15 @@ ipcMain.handle('quickfile-suggest-next-invoice-number', async () => {
   }
 });
 
-function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate) {
-  const vr = Number.isFinite(Number(vatRate)) ? Number(vatRate) : 0.2;
-  const net = Number.isFinite(Number(unitCost)) ? Number(unitCost) : 0;
-  const q = Number.isFinite(Number(qty)) && Number(qty) > 0 ? Number(qty) : 1;
-  if (net <= 0) throw new Error('Line item unit cost must be > 0: ' + shortName);
-  const taxAmt = net * vr;
-  const name = String(shortName || 'Item').replace(/\s+/g, ' ').trim().slice(0, 25);
-  return {
-    ItemID: 0,
-    ItemName: name,
-    ItemDescription: String(description || '').slice(0, 5000),
-    ItemNominalCode: '4000',
-    Qty: q,
-    UnitCost: Number(net.toFixed(2)),
-    Tax1: {
-      TaxName: 'VAT',
-      TaxPercentage: Number((vr * 100).toFixed(2)),
-      TaxAmount: Number(taxAmt.toFixed(2)),
-    },
-  };
+function buildQuickFileItemLine(shortName, description, unitCost, qty, vatRate, nominalCodeOverride) {
+  return quickfileInvoiceLine.buildQuickFileItemLine(
+    shortName,
+    description,
+    unitCost,
+    qty,
+    vatRate,
+    nominalCodeOverride
+  );
 }
 
 /* Product note: invoice/create shipped first; Document_Upload was added so the attendance PDF
@@ -12996,8 +13029,11 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
 
     const invDate = invoiceDate || new Date().toISOString().slice(0, 10);
 
-    let ledgerSync = await syncNextInvoiceNumberFromQuickFileLedger();
-    lastLedgerMax = ledgerSync && ledgerSync.ledgerMax != null ? ledgerSync.ledgerMax : null;
+    let ledgerSync = { ok: true, ledgerMax: null };
+    if (hasCustomInvoiceNumber) {
+      ledgerSync = await syncNextInvoiceNumberFromQuickFileLedger();
+      lastLedgerMax = ledgerSync && ledgerSync.ledgerMax != null ? ledgerSync.ledgerMax : null;
+    }
     let autoAssignAttempted = false;
 
     const purchaseRef = quickfileInvoiceNumber.attendancePurchaseReference(attendanceId);
@@ -13048,6 +13084,7 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
           attendanceId,
           qfErrorMessage: dupErr && dupErr.message ? String(dupErr.message).slice(0, 300) : undefined,
         });
+        invalidateQuickFileLedgerSyncCache();
         ledgerSync = await syncNextInvoiceNumberFromQuickFileLedger();
         if (ledgerSync && ledgerSync.ledgerMax != null) {
           lastLedgerMax = ledgerSync.ledgerMax;
@@ -13172,24 +13209,26 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     const vat = subtotal * vr;
     const total = subtotal + vat;
 
-    const invoiceUrl = invoiceId
-      ? 'https://app.quickfile.co.uk/invoice/view/' + invoiceId
-      : '';
-
     let verifyReason = '';
+    let fetchedInvoice = null;
     try {
-      const fetched = await quickFileGetInvoiceById(invoiceId);
+      fetchedInvoice = await quickFileGetInvoiceById(invoiceId);
       const verified = quickfileVerify.verifyQuickFileInvoice({
         expectedNumber: invoiceNumber,
         expectedTotal: total,
         expectedClientId: clientIdNum,
-        fetchedBody: fetched,
+        fetchedBody: fetchedInvoice,
       });
       if (!verified.ok) verifyReason = verified.reason || 'Verification failed';
       else if (!invoiceNumber && verified.invoiceNumber) invoiceNumber = String(verified.invoiceNumber);
     } catch (verifyErr) {
       verifyReason = verifyErr && verifyErr.message ? verifyErr.message : String(verifyErr);
     }
+
+    const invoiceUrl = await quickFileResolveInvoiceViewUrl(invoiceId, invoiceNumber, {
+      searchRow: createResult.reused ? createResult.invoiceBody : null,
+      getBody: fetchedInvoice,
+    });
     /* A client mismatch is serious: stop before attaching anything. Any other
        verify problem (number/total differs, or QuickFile could not be re-read)
        still records the invoice and uploads attachments, but flags the record
@@ -13357,6 +13396,8 @@ ipcMain.handle('quickfile-create-invoice', async (_, params) => {
     }
 
     if (attachResults.length) saveDb();
+
+    invalidateQuickFileLedgerSyncCache();
 
     return {
       ok: true,
@@ -13539,7 +13580,10 @@ ipcMain.handle('quickfile-link-invoice', async (_, params) => {
     const invoiceNumber = String(
       searchHit.InvoiceNumber || searchHit.Invoice_No || invoiceNumberRaw
     ).trim();
-    const invoiceUrl = 'https://app.quickfile.co.uk/invoice/view/' + invoiceId;
+    const invoiceUrl = await quickFileResolveInvoiceViewUrl(invoiceId, invoiceNumber, {
+      searchRow: searchHit,
+      getBody: fetched,
+    });
     const total = quickfileVerify.extractInvoiceTotal(fetched || searchHit);
 
     db.run(

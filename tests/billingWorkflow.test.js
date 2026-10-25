@@ -706,33 +706,34 @@ describe('QuickFile invoice payload schema compliance', () => {
 });
 
 describe('buildQuickFileItemLine field types', () => {
+  const invoiceLineJs = fs.readFileSync(path.join(root, 'lib', 'quickfileInvoiceLine.js'), 'utf8');
+  const fnMatch = invoiceLineJs.match(/function buildQuickFileItemLine[\s\S]*?^}/m);
+  const fnBody = fnMatch ? fnMatch[0] : '';
+
   it('returns Qty as a number, not a string', () => {
-    const fnMatch = mainJs.match(/function buildQuickFileItemLine[\s\S]*?^}/m);
-    assert.ok(fnMatch, 'buildQuickFileItemLine function should exist');
-    const fnBody = fnMatch[0];
+    assert.ok(fnBody, 'buildQuickFileItemLine function should exist in lib/quickfileInvoiceLine.js');
     assert.ok(!fnBody.includes('Qty: String('), 'Qty should not be wrapped in String()');
     assert.ok(fnBody.includes('Qty: q'), 'Qty should be the raw numeric value');
   });
 
   it('uses ItemID: 0 for one-off items', () => {
-    assert.ok(mainJs.includes('ItemID: 0'));
+    assert.ok(fnBody.includes('ItemID: 0'));
   });
 
-  it('uses ItemNominalCode 4000 as default', () => {
-    assert.ok(mainJs.includes("ItemNominalCode: '4000'"));
+  it('delegates nominal codes to quickfileInvoiceLine from main', () => {
+    assert.ok(mainJs.includes('quickfileInvoiceLine.buildQuickFileItemLine'));
+    assert.ok(mainJs.includes("require('./lib/quickfileInvoiceLine')"));
   });
 
   it('enforces max 25 chars on ItemName', () => {
-    assert.ok(mainJs.includes(".slice(0, 25)"));
+    assert.ok(fnBody.includes('.slice(0, 25)'));
   });
 
   it('enforces max 5000 chars on ItemDescription', () => {
-    assert.ok(mainJs.includes(".slice(0, 5000)"));
+    assert.ok(fnBody.includes('.slice(0, 5000)'));
   });
 
   it('includes Tax1 with TaxName, TaxPercentage, and TaxAmount', () => {
-    const fnMatch = mainJs.match(/function buildQuickFileItemLine[\s\S]*?^}/m);
-    const fnBody = fnMatch[0];
     assert.ok(fnBody.includes("TaxName: 'VAT'"));
     assert.ok(fnBody.includes('TaxPercentage:'));
     assert.ok(fnBody.includes('TaxAmount:'));
@@ -931,10 +932,12 @@ describe('Attachment flow — trigger conditions and partial success', () => {
   it('returns ok: true with attachmentOk and attachmentError fields on success path', () => {
     const handlerMatch = mainJs.match(/ipcMain\.handle\('quickfile-create-invoice'[\s\S]*?^\}\);/m);
     const handler = handlerMatch[0];
-    const returnMatch = handler.match(/return\s*\{[\s\S]*?ok:\s*true[\s\S]*?\};/);
-    assert.ok(returnMatch, 'Success return block must exist');
-    assert.ok(returnMatch[0].includes('attachmentOk'), 'Success return includes attachmentOk');
-    assert.ok(returnMatch[0].includes('attachmentError'), 'Success return includes attachmentError');
+    const successIdx = handler.lastIndexOf('invalidateQuickFileLedgerSyncCache');
+    assert.ok(successIdx > 0, 'Success path should invalidate ledger cache before return');
+    const tail = handler.slice(successIdx);
+    assert.ok(tail.includes('ok: true'), 'Success return includes ok: true');
+    assert.ok(tail.includes('attachmentOk'), 'Success return includes attachmentOk');
+    assert.ok(tail.includes('attachmentError'), 'Success return includes attachmentError');
   });
 
   it('attachment failure is caught independently and does not prevent invoice success', () => {
