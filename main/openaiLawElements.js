@@ -48,7 +48,8 @@ function buildPromptMessages(offences) {
       'Offence(s) on the attendance note:\n' +
       lines.join('\n') +
       '\n\nDraft plain-text note content (Actus reus / Mens rea / Common defences / Sentencing). ' +
-      'No intro, no inline URLs, no markdown. Put unverified points under Uncertainties and list sources under Sources only.',
+      'No intro, no inline URLs, no markdown. Verify all section numbers and sentence maximums on legislation.gov.uk (Sentencing Act 2020 where relevant). ' +
+      'Put unverified points under Uncertainties and list sources under Sources only.',
   };
 }
 
@@ -89,6 +90,7 @@ async function requestLawElementsDraft(opts) {
       draft: result.text,
       sources: result.sources || [],
       uncertainties: result.uncertainties || '',
+      stalenessWarnings: result.stalenessWarnings || [],
       refusal: !!result.refusal,
       model: result.model || DEFAULT_MODEL,
       message: result.message,

@@ -111,7 +111,8 @@ async function requestGroundedLegalAnswer(opts) {
     { role: 'system', content: systemBits.join('\n\n') },
   ].concat(inputMessages);
 
-  async function callOnce(extraUserNote) {
+  async function callOnce(extraUserNote, callOpts) {
+    const localOpts = callOpts || {};
     const payloadInput = extraUserNote
       ? input.concat([{ role: 'user', content: extraUserNote }])
       : input;
@@ -148,7 +149,7 @@ async function requestGroundedLegalAnswer(opts) {
         /unknown|invalid|unsupported|tool_choice|filters|allowed_domains/i.test(errMsg) &&
         !options._simplified
       ) {
-        return callOnceSimplified(extraUserNote);
+        return callOnceSimplified(extraUserNote, callOpts);
       }
       return { ok: false, error: errMsg };
     }
@@ -162,11 +163,21 @@ async function requestGroundedLegalAnswer(opts) {
       noteMode: options.noteMode,
     });
     if (!validated.ok) {
+      if (
+        validated.needsRegenerate &&
+        validated.regeneratePrompt &&
+        retryOnFail &&
+        !localOpts._staleRetried &&
+        options.noteMode === 'law'
+      ) {
+        return callOnce(validated.regeneratePrompt, { _staleRetried: true });
+      }
       return {
         ok: false,
         error: validated.error || 'AI response failed accuracy validation.',
         _rawText: validated.text,
         _sources: validated.sources,
+        stalenessWarnings: validated.stalenessWarnings,
       };
     }
     return {
@@ -174,6 +185,7 @@ async function requestGroundedLegalAnswer(opts) {
       text: validated.text,
       sources: validated.sources || [],
       uncertainties: validated.uncertainties || '',
+      stalenessWarnings: validated.stalenessWarnings || [],
       refusal: !!validated.refusal,
       model: model,
       message:
@@ -181,7 +193,7 @@ async function requestGroundedLegalAnswer(opts) {
     };
   }
 
-  async function callOnceSimplified(extraUserNote) {
+  async function callOnceSimplified(extraUserNote, callOpts) {
     const payloadInput = extraUserNote
       ? input.concat([{ role: 'user', content: extraUserNote }])
       : input;
@@ -220,11 +232,21 @@ async function requestGroundedLegalAnswer(opts) {
       noteMode: options.noteMode,
     });
     if (!validated.ok) {
+      if (
+        validated.needsRegenerate &&
+        validated.regeneratePrompt &&
+        retryOnFail &&
+        !(callOpts && callOpts._staleRetried) &&
+        options.noteMode === 'law'
+      ) {
+        return callOnce(validated.regeneratePrompt, { _staleRetried: true });
+      }
       return {
         ok: false,
         error: validated.error || 'AI response failed accuracy validation.',
         _rawText: validated.text,
         _sources: validated.sources,
+        stalenessWarnings: validated.stalenessWarnings,
       };
     }
     return {
@@ -232,6 +254,7 @@ async function requestGroundedLegalAnswer(opts) {
       text: validated.text,
       sources: validated.sources || [],
       uncertainties: validated.uncertainties || '',
+      stalenessWarnings: validated.stalenessWarnings || [],
       refusal: !!validated.refusal,
       model: model,
       message:
@@ -240,8 +263,8 @@ async function requestGroundedLegalAnswer(opts) {
   }
 
   try {
-    let result = await callOnce(null);
-    if (!result.ok && retryOnFail && /rejected|Sources|case-law|accuracy/i.test(result.error || '')) {
+    let result = await callOnce(null, {});
+    if (!result.ok && retryOnFail && /rejected|Sources|case-law|accuracy|out-of-date/i.test(result.error || '')) {
       result = await callOnce(
         'Previous answer was REJECTED by the app accuracy gate: ' +
           (result.error || 'missing/unverified sources') +

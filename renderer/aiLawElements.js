@@ -183,7 +183,7 @@
 
   /* ── Law / Elements fill ── */
 
-  function showReviewModal(draft, meta, sources, refusal, uncertainties) {
+  function showReviewModal(draft, meta, sources, refusal, uncertainties, stalenessWarnings) {
     var modal = document.getElementById('ai-law-draft-modal');
     var text = document.getElementById('ai-law-draft-text');
     var metaEl = document.getElementById('ai-law-draft-meta');
@@ -212,8 +212,20 @@
           escapeHtml(String(uncertainties)).replace(/\n/g, '<br>') +
           '</p>';
       }
+      var staleHtml = '';
+      if (Array.isArray(stalenessWarnings) && stalenessWarnings.length) {
+        staleHtml =
+          '<p class="settings-hint" style="margin:0 0 0.5rem;font-size:0.85rem;color:#b45309;"><strong>Legislation check</strong><br>' +
+          stalenessWarnings
+            .map(function (w) {
+              return escapeHtml(String(w || ''));
+            })
+            .join('<br>') +
+          '</p>';
+      }
       sourcesEl.innerHTML =
         uncHtml +
+        staleHtml +
         '<strong style="font-size:0.85rem;">Sources checked</strong>' +
         formatSourcesHtml(_lastLawSources);
       wireSourcesClicks(sourcesEl);
@@ -322,6 +334,7 @@
           res.sources || [],
           !!res.refusal,
           res.uncertainties || '',
+          res.stalenessWarnings || [],
         );
       })
       .catch(function (e) {
