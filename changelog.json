@@ -1,9 +1,20 @@
 {
   "releases": [
     {
-      "version": "1.9.121",
+      "version": "1.9.122",
       "date": "2026-10-25",
       "latest": true,
+      "changes": [
+        "ChatGPT key: saved to your account and loaded automatically on each of your computers after you sign in. A key already entered on this computer is kept and uploaded, never wiped by signing in.",
+        "The ChatGPT key field has moved to Settings \u2192 Account & cloud.",
+        "Clearer message when no ChatGPT key is set, telling you exactly where to add it.",
+        "Law / Elements AI fill now puts only the law into the note, under headings: no intro and no web links. The sources it checked, and any points it could not verify, are shown separately in the review panel."
+      ]
+    },
+    {
+      "version": "1.9.121",
+      "date": "2026-10-25",
+      "latest": false,
       "changes": [
         "Attendance type dropdown at the top of the note: mark any attendance as a first attendance, bail return or further attendance, and link it to the earlier visit.",
         "Follow-up is now the one clear way to start a bail return from an earlier attendance.",
