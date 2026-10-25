@@ -6042,6 +6042,20 @@ var REQUIRED_FIELD_KEYS = [
   }
   window.openQuickFileSettings = openQuickFileSettings;
 
+  function openOpenAiApiKeySettings() {
+    if (typeof showView === 'function') showView('settings');
+    var tabBar = document.getElementById('settings-tab-bar');
+    var accountTab = tabBar && tabBar.querySelector('.settings-tab[data-stab="account"]');
+    if (accountTab) accountTab.click();
+    setTimeout(function () {
+      var target = document.getElementById('openai-settings-card');
+      if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      var inp = document.getElementById('setting-openai-apikey');
+      if (inp && inp.focus) inp.focus();
+    }, 120);
+  }
+  window.openOpenAiApiKeySettings = openOpenAiApiKeySettings;
+
   function hydrateQuickFileSettingsInputs(s) {
     s = s || {};
     var qfAcc = document.getElementById('setting-quickfile-account');
@@ -6465,7 +6479,7 @@ var REQUIRED_FIELD_KEYS = [
       if (oaiUnreadable) {
         var oaiWarn = '';
         if (s.openaiApiKeyUnreadable) {
-          oaiWarn = 'A saved OpenAI API key is on this computer but could not be read (for example after a reinstall). Paste your key again to restore AI fill.';
+          oaiWarn = 'A saved OpenAI API key is on this computer but could not be read (for example after a reinstall). Paste your key again in Account & cloud to restore AI fill.';
         } else if (s.openaiApiKeySyncError && !s.openaiApiKey) {
           oaiWarn = String(s.openaiApiKeySyncError);
         }
@@ -10715,10 +10729,10 @@ var REQUIRED_FIELD_KEYS = [
       hint.style.margin = '0.25rem 0 0 1.5rem';
       if (f.type === 'aiAsk') {
         hint.textContent =
-          'Requires your OpenAI API key in Settings → Integrations. Ask any question; follow-ups stay in the session. Nothing is written into the note until you Copy or Append. You control what is sent — do not paste client names or privileged instructions unless you intend to.';
+          'Requires your ChatGPT (OpenAI) API key in Settings → Account & cloud (saved to your account). Ask any question; follow-ups stay in the session. Nothing is written into the note until you Copy or Append. You control what is sent — do not paste client names or privileged instructions unless you intend to.';
       } else {
         hint.textContent =
-          'Requires your OpenAI API key in Settings → Integrations. Draft opens for review only — nothing is inserted into Law / Elements until you press Insert.';
+          'Requires your ChatGPT (OpenAI) API key in Settings → Account & cloud (saved to your account). Draft opens for review only — nothing is inserted into Law / Elements until you press Insert.';
         const status = document.createElement('p');
         status.className = 'settings-hint';
         status.setAttribute('data-ai-law-status', '1');

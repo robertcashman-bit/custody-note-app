@@ -15,6 +15,25 @@
     if (typeof showToast === 'function') showToast(msg, type || 'info', ms);
   }
 
+  function maybeOfferOpenAiSettings(res) {
+    if (!res || res.ok) return Promise.resolve();
+    var focus = res.settingsFocus;
+    var err = String(res.error || '');
+    var looksMissing =
+      focus === 'openai-api-key' ||
+      /No ChatGPT key saved to your account yet/i.test(err) ||
+      /Settings → Account & cloud/i.test(err);
+    if (!looksMissing) return Promise.resolve();
+    return confirmAsync(
+      err + '\n\nOpen Settings → Account & cloud now to add your API key?',
+      'ChatGPT API key needed',
+    ).then(function (ok) {
+      if (ok && typeof window.openOpenAiApiKeySettings === 'function') {
+        window.openOpenAiApiKeySettings();
+      }
+    });
+  }
+
   function confirmAsync(message, title) {
     if (typeof showConfirm === 'function') {
       return showConfirm(message, title || 'Confirm');
@@ -273,7 +292,9 @@
         _fillRunning = false;
         if (!res || !res.ok) {
           toast((res && res.error) || 'AI fill failed', 'error', 7000);
-          uncheckFillBoxes();
+          maybeOfferOpenAiSettings(res).finally(function () {
+            uncheckFillBoxes();
+          });
           return;
         }
         /* Review modal only — never write lawElements here. */
@@ -491,6 +512,7 @@
           if (sendBtn) sendBtn.disabled = false;
           if (!res || !res.ok) {
             toast((res && res.error) || 'Ask AI failed', 'error', 7000);
+            maybeOfferOpenAiSettings(res);
             return;
           }
           _askThread.push({ role: 'user', content: question });

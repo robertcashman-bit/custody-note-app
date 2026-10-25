@@ -6667,6 +6667,9 @@ ipcMain.handle('licence:activate', async (_, { key, email }) => {
     scheduleSyncSoon({ immediate: true });
   }
   checkCloudBackupEntitlement().catch(() => {});
+  if (data.accountId) {
+    scheduleOpenAiKeyPullAfterAuth('licence-activate');
+  }
   return { success: true, status: computeLicenceStatus(data) };
 });
 
@@ -6889,6 +6892,9 @@ ipcMain.handle('auth:poll', async (_, { pollId }) => {
         });
       } else {
         scheduleSyncSoon({ immediate: true });
+      }
+      if (data.accountId) {
+        scheduleOpenAiKeyPullAfterAuth('auth-poll');
       }
     }
     return resp;
@@ -7456,6 +7462,8 @@ const {
   requestLawElementsDraft,
 } = require('./main/openaiLawElements');
 const { requestAskAnswer } = require('./main/openaiAsk');
+const openAiKeyCopy = require('./lib/openaiApiKeyCopy');
+const openAiKeyLocalMigration = require('./lib/openaiApiKeyLocalMigration');
 
 function loadOpenAiKeyFromEnvLocal() {
   if (process.env.OPENAI_API_KEY && String(process.env.OPENAI_API_KEY).trim()) {
@@ -7532,6 +7540,33 @@ function resolveOpenAiApiKey() {
   return loadOpenAiKeyFromEnvLocal();
 }
 
+function deleteOpenAiLocalFallbackFile() {
+  try {
+    const localPath = path.join(app.getPath('userData'), openAiKeyLocalMigration.LOCAL_FALLBACK_BASENAME);
+    if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+  } catch (_) {}
+}
+
+async function resolveOpenAiApiKeyForAiUse() {
+  let key = resolveOpenAiApiKey();
+  const sealedUnreadable = !key && isOpenAiApiKeySealedFileUnreadable();
+  if (openAiKeyLocalMigration.shouldForceServerPullBeforeAi({ localKey: key, sealedUnreadable })) {
+    try {
+      await ensureOpenAiApiKeyFromServer({ reason: 'ai-use', force: true });
+    } catch (pullErr) {
+      console.warn('[OpenAiKeySync] pre-AI pull failed:', pullErr && pullErr.message);
+    }
+    key = resolveOpenAiApiKey();
+  }
+  return String(key || '').trim();
+}
+
+function scheduleOpenAiKeyPullAfterAuth(reason) {
+  ensureOpenAiApiKeyFromServer({ reason: reason || 'sign-in', force: true }).catch(function (err) {
+    console.warn('[OpenAiKeySync] pull after auth failed:', err && err.message);
+  });
+}
+
 function persistOpenAiApiKeySecure(key) {
   const trimmed = key != null ? String(key).trim() : '';
   const sealedPath = path.join(app.getPath('userData'), 'openai-api-key.dat');
@@ -7553,21 +7588,42 @@ function persistOpenAiApiKeySecure(key) {
 }
 
 function seedOpenAiApiKeyIntoSettings() {
-  // Migrate any leftover plaintext settings value into the OS-sealed store, then
-  // clear the plaintext column only after seal succeeds. Never copy a sealed
-  // key back into SQLite.
+  // Migrate leftover plaintext (SQLite column or openai-api-key.local) into the
+  // OS-sealed store, then clear plaintext only after seal succeeds.
   try {
-    const existing = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
-    const plaintext = existing && String(existing.value || '').trim();
-    if (plaintext) {
-      const sealedOk = persistOpenAiApiKeySecure(plaintext);
-      if (!sealedOk) {
-        console.warn('[ai-law] Seal failed; keeping plaintext OpenAI key in settings until seal succeeds');
-        return;
+    const userData = app.getPath('userData');
+    const localPath = path.join(userData, openAiKeyLocalMigration.LOCAL_FALLBACK_BASENAME);
+    let localFilePlain = '';
+    try {
+      if (fs.existsSync(localPath)) {
+        localFilePlain = String(fs.readFileSync(localPath, 'utf8') || '').trim();
       }
+    } catch (_) {}
+    const existing = dbGet("SELECT value FROM settings WHERE key = 'openaiApiKey'");
+    const dbPlain = existing && String(existing.value || '').trim();
+    const picked = openAiKeyLocalMigration.pickPlaintextOpenAiKeyForMigration(dbPlain, localFilePlain);
+    if (!picked.key) return;
+
+    const sealedOk = persistOpenAiApiKeySecure(picked.key);
+    if (!sealedOk) {
+      console.warn('[ai-law] Seal failed; keeping plaintext OpenAI key in settings until seal succeeds');
+      return;
+    }
+    const cleanup = openAiKeyLocalMigration.planPostSealCleanup({
+      sealedOk: true,
+      hadDbPlaintext: !!dbPlain,
+      hadLocalFile: !!localFilePlain,
+    });
+    if (cleanup.clearDbPlaintext) {
       dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
-      markDbDirty();
-      console.log('[ai-law] Migrated OpenAI API key to secure store and cleared plaintext settings');
+    }
+    if (cleanup.deleteLocalFile) {
+      deleteOpenAiLocalFallbackFile();
+    }
+    markDbDirty();
+    console.log('[ai-law] Migrated OpenAI API key to secure store and cleared plaintext settings');
+    if (typeof scheduleOpenAiApiKeyCloudPush === 'function') {
+      scheduleOpenAiApiKeyCloudPush('local-plaintext-migrate');
     }
   } catch (e) {
     console.warn('[ai-law] could not migrate/clear OpenAI key plaintext:', e && e.message);
@@ -7615,7 +7671,10 @@ ipcMain.handle('ai:fill-law-elements', async (_, params) => {
   if (payload.error) {
     return { ok: false, error: payload.error };
   }
-  const apiKey = resolveOpenAiApiKey();
+  const apiKey = await resolveOpenAiApiKeyForAiUse();
+  if (!apiKey) {
+    return openAiKeyCopy.openAiKeyMissingResult();
+  }
   const result = await requestLawElementsDraft({
     confirmed: true,
     apiKey: apiKey,
@@ -7654,7 +7713,10 @@ ipcMain.handle('ai:ask-question', async (_, params) => {
     const payload = buildOffencePayload(p.formData || {});
     offences = payload.offences || [];
   }
-  const apiKey = resolveOpenAiApiKey();
+  const apiKey = await resolveOpenAiApiKeyForAiUse();
+  if (!apiKey) {
+    return openAiKeyCopy.openAiKeyMissingResult();
+  }
   const result = await requestAskAnswer({
     confirmed: true,
     apiKey: apiKey,
@@ -7844,6 +7906,7 @@ ipcMain.handle('set-settings', (_, settings) => {
             // Persist sealed only — never keep the raw key in SQLite settings.
             dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
             dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', '']);
+            deleteOpenAiLocalFallbackFile();
             if (typeof scheduleOpenAiApiKeyCloudPush === 'function') {
               scheduleOpenAiApiKeyCloudPush('openai-save');
             }
@@ -7855,6 +7918,7 @@ ipcMain.handle('set-settings', (_, settings) => {
         }
         // Explicit clear (empty incoming, no plaintext to preserve): delete sealed file too.
         persistOpenAiApiKeySecure('');
+        deleteOpenAiLocalFallbackFile();
         dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
         dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', '']);
         if (typeof scheduleOpenAiApiKeyCloudPush === 'function') {
@@ -12214,6 +12278,7 @@ function applyOpenAiApiKeyFromCloud(apiKey, serverUpdatedAt) {
   } else {
     persistOpenAiApiKeySecure('');
   }
+  deleteOpenAiLocalFallbackFile();
   dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
   if (serverUpdatedAt) {
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeyServerUpdatedAt', serverUpdatedAt]);
@@ -12229,9 +12294,10 @@ function applyOpenAiApiKeyFromCloud(apiKey, serverUpdatedAt) {
 
 async function ensureOpenAiApiKeyFromServer(opts) {
   const reason = (opts && opts.reason) || 'unknown';
-  const force = !!(opts && opts.force);
+  const sealedUnreadable = isOpenAiApiKeySealedFileUnreadable();
   const localKey = resolveOpenAiApiKey();
   const localHasKey = !!String(localKey || '').trim();
+  const force = !!(opts && opts.force) || (sealedUnreadable && !localHasKey);
   const rows = dbAll('SELECT key, value FROM settings');
   const localMeta = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const localServerUpdatedAt = String(localMeta.openaiApiKeyServerUpdatedAt || '').trim();
@@ -12334,7 +12400,7 @@ async function ensureOpenAiApiKeyFromServer(opts) {
 
   const decrypted = openaiApiKeySync.decryptOpenAiApiKeyBlob(wrap.wrapKeyHex, pull.blob);
   if (!decrypted) {
-    const userMsg = 'Your saved OpenAI API key could not be read on this computer. Re-enter it in Settings (Integrations → OpenAI).';
+    const userMsg = openAiKeyCopy.OPENAI_REENTER_IN_ACCOUNT_SETTINGS;
     console.warn('[OpenAiKeySync] undecryptable blob (' + reason + ')');
     dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncError', userMsg.slice(0, 500)]);
     markDbDirty();
@@ -12527,9 +12593,10 @@ async function ensureQuickFileSettingsFromServer(opts) {
     reason: reason + '+credentials',
     force: force || status.missing.length > 0,
   });
+  const openAiUnreadable = isOpenAiApiKeySealedFileUnreadable() && !resolveOpenAiApiKey();
   const openAiResult = await ensureOpenAiApiKeyFromServer({
     reason: reason + '+openai',
-    force: force,
+    force: force || openAiUnreadable,
   });
   syncFirmsWithCloud().catch(function (e) {
     console.warn('[FirmSync] after settings pull failed:', e && e.message);

@@ -1176,6 +1176,18 @@
           </div>
         </div>
 
+        <div class="settings-section-label">ChatGPT (AI features)</div>
+        <div class="settings-card" id="openai-settings-card">
+          <h2>Law / Elements &amp; Ask AI</h2>
+          <div id="openai-settings-content">
+            <p class="settings-hint">Optional. Paste your OpenAI API key to fill <strong>The Law / Elements of offence</strong> or use <strong>Ask AI</strong> on the attendance form. Only offence name and statute (or what you type) are sent when you confirm. Billed to your OpenAI account.</p>
+            <label for="setting-openai-apikey">ChatGPT (OpenAI) API key — saved to your account</label>
+            <input type="password" id="setting-openai-apikey" class="settings-input" placeholder="sk-…" autocomplete="off" spellcheck="false">
+            <p id="openai-apikey-unreadable-hint" class="settings-hint settings-hint-warning" style="margin-top:0.5rem;display:none;" role="alert"></p>
+            <p class="settings-hint" style="margin-top:0.5rem;">Encrypted on this device and synced to your <strong>Custody Note account</strong> (same protection as QuickFile credentials — not stored in the licence-key settings blob). Sign in on each computer; enter the key once here.</p>
+          </div>
+        </div>
+
         <div class="settings-section-label">QuickFile</div>
         <div class="settings-card" id="quickfile-settings-card">
           <h2>QuickFile invoicing &amp; directory</h2>
@@ -1238,16 +1250,6 @@
 
         <div class="settings-tab-panel" data-stab-panel="integrations">
         <div class="settings-section-label">Integrations (advanced)</div>
-        <div class="settings-card" id="openai-settings-card">
-          <h2>OpenAI (Law / Elements)</h2>
-          <div id="openai-settings-content">
-            <p class="settings-hint">Optional. Paste your own OpenAI API key to fill <strong>The Law / Elements of offence</strong> from the Case Assessment checkbox. Only offence name and statute are sent when you confirm. Billed to your OpenAI account.</p>
-            <label for="setting-openai-apikey">OpenAI API key</label>
-            <input type="password" id="setting-openai-apikey" class="settings-input" placeholder="sk-…" autocomplete="off" spellcheck="false">
-            <p id="openai-apikey-unreadable-hint" class="settings-hint settings-hint-warning" style="margin-top:0.5rem;display:none;" role="alert"></p>
-            <p class="settings-hint" style="margin-top:0.5rem;">Encrypted on this device and synced to your <strong>Custody Note account</strong> (same protection as QuickFile credentials — not stored in the licence-key settings blob). Sign in and activate sync on each computer.</p>
-          </div>
-        </div>
 
         <div class="settings-card" id="postcode-settings-card">
           <h2>Postcode Address Lookup</h2>

@@ -8,6 +8,7 @@
 
 const { requestGroundedLegalAnswer, DEFAULT_MODEL, RESPONSES_URL } = require('./openaiClient');
 const { ACCURACY_SYSTEM_RULES } = require('./aiAccuracyPolicy');
+const { OPENAI_KEY_MISSING_USER_MESSAGE } = require('../lib/openaiApiKeyCopy');
 
 let _inFlight = false;
 
@@ -76,7 +77,7 @@ async function requestAskAnswer(opts) {
   }
   const apiKey = String(options.apiKey || '').trim();
   if (!apiKey) {
-    return { ok: false, error: 'Add your OpenAI API key in Settings → Integrations first.' };
+    return { ok: false, error: OPENAI_KEY_MISSING_USER_MESSAGE };
   }
   const built = buildAskMessages(options);
   if (!built.question) {

@@ -6,6 +6,7 @@
 'use strict';
 
 const { requestGroundedLegalAnswer, DEFAULT_MODEL, RESPONSES_URL } = require('./openaiClient');
+const { OPENAI_KEY_MISSING_USER_MESSAGE } = require('../lib/openaiApiKeyCopy');
 
 let _inFlight = false;
 
@@ -57,7 +58,7 @@ async function requestLawElementsDraft(opts) {
   }
   const apiKey = String(options.apiKey || '').trim();
   if (!apiKey) {
-    return { ok: false, error: 'Add your OpenAI API key in Settings → Integrations first.' };
+    return { ok: false, error: OPENAI_KEY_MISSING_USER_MESSAGE };
   }
   if (!Array.isArray(options.offences) || !options.offences.length) {
     return { ok: false, error: 'Enter at least one offence before using AI fill.' };
