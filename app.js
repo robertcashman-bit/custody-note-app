@@ -998,7 +998,7 @@ var LAA = {
       id: 'outcome', title: '8. Outcome',
       keyFields: ['outcomeDecision'],
       fields: [
-        { key: 'outcomeDecision', label: 'Decision', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Charged without Bail','Charged with Bail','Bail without charge','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Community Resolution','Penalty Notice (PND)','Remanded in Custody','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
+        { key: 'outcomeDecision', label: 'Decision', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Charged without Bail','Charged with Bail','Bail without charge','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Cannabis / khat warning','Remanded in Custody','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: '_h_bail_return', label: 'Bail to return details', type: 'sectionHeading', showIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
@@ -1769,7 +1769,7 @@ var LAA = {
       keyFields: ['outcomeDecision'],
       fields: [
         { key: 'interviewCompleted', label: 'Interview completed?', type: 'select', options: ['Yes','No'] },
-        { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Referred to diversion programme','Further voluntary interview required','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
+        { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Cannabis / khat warning','Referred to diversion programme','Further voluntary interview required','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
@@ -4607,6 +4607,73 @@ var REQUIRED_FIELD_KEYS = [
   function updateHomeBillingWidget() {}
   window.updateHomeBillingWidget = updateHomeBillingWidget;
 
+  function _startBlankAttendanceForm(mode) {
+    currentStandaloneSectionId = null;
+    formData = {};
+    currentAttendanceId = null;
+    currentSectionIdx = 0;
+    if (mode === 'voluntary') {
+      activeFormSections = voluntaryFormSections;
+      formData.attendanceMode = 'voluntary';
+      formData.workType = 'Voluntary Police Station Attendance';
+    } else if (mode === 'telephone') {
+      activeFormSections = telFormSections;
+      formData.workType = 'Police Station Telephone Attendance';
+      formData._formType = 'telephone';
+      prefillDefaults();
+      renderForm(formData);
+      showView('new');
+      return;
+    } else {
+      activeFormSections = formSections;
+      formData.attendanceMode = 'custody';
+      formData.workType = 'First Police Station Attendance';
+    }
+    formData._formType = 'attendance';
+    prefillDefaults();
+    renderForm(formData);
+    showView('new');
+  }
+
+  function openNewRecordTypeChooser() {
+    if (window.__licenceExpired) { showLicenceGateToast(); return; }
+    var overlay = document.getElementById('new-record-type-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+  window.openNewRecordTypeChooser = openNewRecordTypeChooser;
+
+  function closeNewRecordTypeChooser() {
+    var overlay = document.getElementById('new-record-type-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'none';
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  function openOfficerEmailFromForm() {
+    if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.init === 'function') {
+      try { window.OfficerEmailsPanel.init(); } catch (_) {}
+    }
+    if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.refresh === 'function') {
+      try { window.OfficerEmailsPanel.refresh(); } catch (_) {}
+    }
+    var panelToggle = document.getElementById('form-context-panel-toggle');
+    var panel = document.getElementById('form-context-panel');
+    if (panel && panel.hidden && panelToggle) {
+      panelToggle.click();
+    }
+    var host = document.getElementById('officer-emails-panel-host');
+    if (host && host.scrollIntoView) {
+      requestAnimationFrame(function () {
+        host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+    var tpl = document.getElementById('oep-template');
+    if (tpl && tpl.focus) tpl.focus();
+  }
+  window.openOfficerEmailFromForm = openOfficerEmailFromForm;
+
   function openQuickCapture() {
     showView('quickcapture');
     (function initQcDsccPrivateToggle() {
@@ -5338,6 +5405,71 @@ var REQUIRED_FIELD_KEYS = [
     setFieldValueSilent('bailConditions', '');
   }
 
+  /** Shared side effects when outcomeDecision changes (section 8 or visit-type outcome bar). */
+  function applyOutcomeDecisionChangeEffects() {
+    if (!isBailOutcomeDecision(formData.outcomeDecision)) {
+      clearOutcomeBailState();
+    } else if (!isBailReturnOutcomeDecision(formData.outcomeDecision)) {
+      clearBailReturnDetails();
+    }
+    prefillOutcomeChargesFromOffences();
+    if (formData.outcomeDecision === 'Bail without charge' && (!formData.bailReturnStationName || !formData.bailReturnStationCode)) {
+      if (formData.policeStationName) {
+        formData.bailReturnStationName = formData.policeStationName;
+        setFieldValueSilent('bailReturnStationName', formData.policeStationName);
+      }
+      if (formData.schemeId) {
+        formData.bailReturnStationCode = formData.schemeId;
+        setFieldValueSilent('bailReturnStationCode', formData.schemeId);
+      }
+    }
+    var _chargedOutcomes = ['Charged without Bail', 'Charged with Bail', 'Remanded in Custody'];
+    if (_chargedOutcomes.indexOf(formData.outcomeDecision) !== -1) {
+      if (!formData.courtDate) {
+        var _tomorrow = new Date();
+        _tomorrow.setDate(_tomorrow.getDate() + 1);
+        var _tomorrowStr = _tomorrow.getFullYear() + '-' +
+          ('0' + (_tomorrow.getMonth() + 1)).slice(-2) + '-' +
+          ('0' + _tomorrow.getDate()).slice(-2);
+        formData.courtDate = _tomorrowStr;
+        setFieldValue('courtDate', _tomorrowStr);
+      }
+      if (!formData.courtTime) {
+        formData.courtTime = '10:00';
+        setFieldValue('courtTime', '10:00');
+      }
+    }
+    var _DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+    if (_DS && typeof _DS.resolveOutcomeCodeOnDecisionChange === 'function') {
+      var _resolvedCode = _DS.resolveOutcomeCodeOnDecisionChange(formData.outcomeDecision, formData.outcomeCode);
+      if (_resolvedCode !== (formData.outcomeCode || '').trim()) {
+        formData.outcomeCode = _resolvedCode;
+        setFieldValueSilent('outcomeCode', _resolvedCode);
+      }
+    }
+  }
+
+  function handleQuickVisitOutcomeChange(quickCode) {
+    if (isNoteLockedForEditing()) {
+      showToast('Re-open this record for amendment before changing outcome.', 'info', 6000);
+      updateVisitTypeBar();
+      return;
+    }
+    if (typeof mapQuickVisitOutcomeToDecision !== 'function') return;
+    if (!quickCode) return;
+    formData.outcomeDecision = mapQuickVisitOutcomeToDecision(quickCode);
+    setFieldValueSilent('outcomeDecision', formData.outcomeDecision);
+    applyOutcomeDecisionChangeEffects();
+    if (quickCode === 're_bailed' && !formData.bailType) {
+      formData.bailType = 'Conditional';
+      setFieldValueSilent('bailType', 'Conditional');
+    }
+    scheduleQuietSave();
+    updateVisitTypeBar();
+    updateContextBar();
+    applyConditionalVisibility();
+  }
+
   /**
    * When attendanceMode was never stored (legacy rows, sync glitches, imports), infer
    * voluntary vs custody from fields that only exist / are set on voluntary matters
@@ -5430,6 +5562,10 @@ var REQUIRED_FIELD_KEYS = [
       clearOutcomeBailState();
     } else if (!isBailReturnOutcomeDecision(formData.outcomeDecision)) {
       clearBailReturnDetails();
+    }
+    if (formData._formType !== 'telephone') {
+      if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
+      if (typeof syncWorkTypeFromVisitType === 'function') syncWorkTypeFromVisitType(formData);
     }
     window.api.getSettings().then(s => {
       window._appSettingsCache = s || {};
@@ -5936,6 +6072,9 @@ var REQUIRED_FIELD_KEYS = [
         if (!hadLocal && hasQuickFileSettingsConfigured() && opts.toastOnPull !== false) {
           showToast('QuickFile settings loaded from your Custody Note account', 'success', 4000);
         }
+        if (result && result.userMessage && !hasQuickFileSettingsConfigured()) {
+          showToast(result.userMessage, 'warning', 8000);
+        }
         return { settings: s, ensure: result };
       });
     }).catch(function(err) {
@@ -5952,7 +6091,13 @@ var REQUIRED_FIELD_KEYS = [
   window.syncQuickFileSettingsFromAccount = syncQuickFileSettingsFromAccount;
 
   function showQuickFileSetupRequired() {
-    showToast('Add your QuickFile account number, API key and application ID first.', 'warning');
+    showToast(
+      'QuickFile is not set up on this computer yet. Enter your Account Number, API key and Application ID once in Settings — they can sync from your Custody Note account when this device is signed in and activated.',
+      'warning',
+      9000
+    );
+    var banner = document.getElementById('qf-setup-required-banner');
+    if (banner) banner.style.display = '';
     openQuickFileSettings();
   }
 
@@ -6316,6 +6461,22 @@ var REQUIRED_FIELD_KEYS = [
       if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
       const oaiKey = document.getElementById('setting-openai-apikey');
       if (oaiKey) oaiKey.value = s.openaiApiKey || '';
+      const oaiUnreadable = document.getElementById('openai-apikey-unreadable-hint');
+      if (oaiUnreadable) {
+        var oaiWarn = '';
+        if (s.openaiApiKeyUnreadable) {
+          oaiWarn = 'A saved OpenAI API key is on this computer but could not be read (for example after a reinstall). Paste your key again to restore AI fill.';
+        } else if (s.openaiApiKeySyncError && !s.openaiApiKey) {
+          oaiWarn = String(s.openaiApiKeySyncError);
+        }
+        if (oaiWarn) {
+          oaiUnreadable.textContent = oaiWarn;
+          oaiUnreadable.style.display = '';
+        } else {
+          oaiUnreadable.textContent = '';
+          oaiUnreadable.style.display = 'none';
+        }
+      }
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
       const opc = document.getElementById('setting-office-postcode');
@@ -7063,6 +7224,10 @@ var REQUIRED_FIELD_KEYS = [
       const existingByName = new Map((firms || []).map(function(firm) {
         return [String(firm.name || '').trim().toLowerCase(), firm];
       }).filter(function(entry) { return entry[0]; }));
+      const existingByQfId = new Map((firms || []).map(function(firm) {
+        const qid = String(firm.quickfile_client_id || '').trim();
+        return qid ? [qid, firm] : null;
+      }).filter(Boolean));
       let added = 0;
       let updated = 0;
       let skipped = 0;
@@ -7071,11 +7236,12 @@ var REQUIRED_FIELD_KEYS = [
         const companyName = String(client.companyName || '').trim();
         if (!companyName) return;
         const key = companyName.toLowerCase();
+        const qfClientId = String(client.clientId || client.ClientID || '').trim();
         const nextContact = String(client.contactName || '').trim();
         const nextPhone = String(client.telephone || '').trim();
         const nextEmail = String(client.email || '').trim();
         const nextAddress = String(client.address || '').trim();
-        const existing = existingByName.get(key);
+        let existing = (qfClientId && existingByQfId.get(qfClientId)) || existingByName.get(key);
         if (existing) {
           if (!overwriteExisting) {
             skipped++;
@@ -7096,10 +7262,12 @@ var REQUIRED_FIELD_KEYS = [
             contact_phone: nextPhone,
             contact_email: nextEmail,
             address: nextAddress,
+            quickfile_client_id: qfClientId || existing.quickfile_client_id || '',
           })));
           return;
         }
         existingByName.set(key, true);
+        if (qfClientId) existingByQfId.set(qfClientId, true);
         added++;
         saves.push(window.api.firmSave({
           name: companyName,
@@ -7107,6 +7275,7 @@ var REQUIRED_FIELD_KEYS = [
           contact_phone: nextPhone,
           contact_email: nextEmail,
           address: nextAddress,
+          quickfile_client_id: qfClientId,
         }));
       });
       const stamp = new Date().toISOString();
@@ -7427,7 +7596,7 @@ var REQUIRED_FIELD_KEYS = [
     return billHtml +
       '<button type="button" class="btn-list-action amend-btn" data-action="amend" data-id="' + idAttr + '" title="Open record to edit (amend)">Edit</button>' +
       '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for another client (same session)">Duplicate</button>' +
-      '<button type="button" class="btn-list-action" data-action="followUp" title="Same client — bail return, identification, or other further visit">Follow-up</button>' +
+      '<button type="button" class="btn-list-action btn-list-action-primary" data-action="followUp" title="Start a new follow-up attendance (bail return, RUI, ID, etc.) — primary way to open the next visit">Follow-up</button>' +
       '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
       archiveBtn +
       '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>';
@@ -7664,6 +7833,12 @@ var REQUIRED_FIELD_KEYS = [
     }).catch(function(e) { showToast('Failed to load record', 'error'); console.error('[newMatter]', e); });
   }
 
+  function _syncVisitTypeFieldsOnOpen(data) {
+    if (!data || data._formType === 'telephone') return;
+    if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(data);
+    if (typeof syncWorkTypeFromVisitType === 'function') syncWorkTypeFromVisitType(data);
+  }
+
   function openAttendance(id, openOpts) {
     var requestToken = ++_openAttendanceToken;
     var pendingStandalone = (openOpts && openOpts.standaloneSectionId)
@@ -7701,6 +7876,7 @@ var REQUIRED_FIELD_KEYS = [
         activeFormSections = formSections;
       }
       currentSectionIdx = 0;
+      _syncVisitTypeFieldsOnOpen(formData);
       renderForm(formData);
       showView('new');
       reconcileFeeEarnerCertificationWithDraftStatus(currentRecordStatus);
@@ -7747,6 +7923,7 @@ var REQUIRED_FIELD_KEYS = [
         activeFormSections = formSections;
       }
       currentSectionIdx = 0;
+      _syncVisitTypeFieldsOnOpen(formData);
       renderForm(formData);
       showView('new');
       reconcileFeeEarnerCertificationWithDraftStatus(currentRecordStatus);
@@ -8012,6 +8189,12 @@ var REQUIRED_FIELD_KEYS = [
     var canMark = !!(currentAttendanceId && locked && !hasInvoice && !markedBilled);
     if (markBilledBtn) markBilledBtn.style.display = canMark ? '' : 'none';
     if (purgeBtn) purgeBtn.style.display = canPurge ? '' : 'none';
+    var saveExitBtn = document.getElementById('form-save-exit');
+    if (saveExitBtn) {
+      var onStationForm = _currentView === 'new' && formData && formData._formType;
+      var canSaveExit = onStationForm && !currentRecordArchived && !isNoteLockedForEditing();
+      saveExitBtn.style.display = canSaveExit ? '' : 'none';
+    }
   }
 
   /** Mark billed to firm — enables Clear after billed without QuickFile. */
@@ -8127,10 +8310,6 @@ var REQUIRED_FIELD_KEYS = [
 
   function updateBottomBarFinishPill() {
     var headerBtn = document.getElementById('billing-panel-btn');
-    if (headerBtn) {
-      headerBtn.style.display = 'none';
-      headerBtn.removeAttribute('data-action');
-    }
     var pill = document.getElementById('bottom-bar-finish-pill');
     if (!pill) return;
     var state = getPrimaryRecordActionState();
@@ -8138,6 +8317,10 @@ var REQUIRED_FIELD_KEYS = [
       pill.style.display = 'none';
       pill.setAttribute('aria-hidden', 'true');
       pill.removeAttribute('data-action');
+      if (headerBtn) {
+        headerBtn.style.display = 'none';
+        headerBtn.removeAttribute('data-action');
+      }
       return;
     }
     pill.style.display = '';
@@ -8146,6 +8329,13 @@ var REQUIRED_FIELD_KEYS = [
     pill.className = 'bottom-btn finish-pill ' + state.stateClass;
     pill.dataset.action = state.action;
     pill.title = state.titleText;
+    if (headerBtn) {
+      headerBtn.style.display = '';
+      headerBtn.textContent = state.label;
+      headerBtn.className = 'btn btn-small btn-accent btn-header-primary-action ' + state.stateClass;
+      headerBtn.dataset.action = state.action;
+      headerBtn.title = state.titleText;
+    }
   }
 
   function updateBillingPanelHeaderBtn() {
@@ -8397,6 +8587,8 @@ var REQUIRED_FIELD_KEYS = [
         return;
       }
       applyAttendanceSessionFromRow(id, cachedRow, cachedData);
+      _matterBillingStartStep = 1;
+      _matterBillingAutoStartPending = true;
       if (typeof showView === 'function') showView('matter-billing');
       return;
     }
@@ -8411,6 +8603,8 @@ var REQUIRED_FIELD_KEYS = [
         return;
       }
       applyAttendanceSessionFromRow(id, row, parsedData);
+      _matterBillingStartStep = 1;
+      _matterBillingAutoStartPending = true;
       if (typeof showView === 'function') showView('matter-billing');
     }).catch(function (e) {
       showToast('Failed to load record for billing', 'error');
@@ -8471,6 +8665,8 @@ var REQUIRED_FIELD_KEYS = [
    * showView / Finish-matter entry passes autoStart:true once.
    * Close / refresh paths pass autoStart:false so Close cannot remount. */
   var _matterBillingAutoStartPending = false;
+  /** When set (0–2), inline workflow opens on that step (e.g. 1 = billing from Records Bill). */
+  var _matterBillingStartStep = null;
 
   function _matterBillingMountWorkflow() {
     var stage = document.getElementById('matter-billing-stage');
@@ -8490,7 +8686,9 @@ var REQUIRED_FIELD_KEYS = [
     _matterBillingAutoStartPending = false;
     var startBtn = document.getElementById('matter-billing-start-btn');
     if (startBtn) startBtn.textContent = 'Restart from step 1';
-    window.mountWorkflowInline(stage, undefined, function () {
+    var startStep = typeof _matterBillingStartStep === 'number' ? _matterBillingStartStep : undefined;
+    _matterBillingStartStep = null;
+    window.mountWorkflowInline(stage, startStep, function () {
       /* onClose: workflow closed (e.g. Close, or after Archive).
        * Reset the stage and reload chrome WITHOUT auto-starting again. */
       var s = document.getElementById('matter-billing-stage');
@@ -8936,9 +9134,13 @@ var REQUIRED_FIELD_KEYS = [
     var result = applyAttendanceVisitType(formData, targetType);
     if (result.blocked) {
       showToast(result.message || 'Visit type cannot be changed on this record.', 'info', 6500);
+      updateVisitTypeBar();
       return;
     }
-    if (!result.changed) return;
+    if (!result.changed) {
+      updateVisitTypeBar();
+      return;
+    }
     var needsFullRender = wasVoluntary && formData.attendanceMode === 'custody';
     if (formData.attendanceMode === 'voluntary') {
       activeFormSections = voluntaryFormSections;
@@ -8953,6 +9155,7 @@ var REQUIRED_FIELD_KEYS = [
       scheduleQuietSave();
       return;
     }
+    if (typeof syncWorkTypeFromVisitType === 'function') syncWorkTypeFromVisitType(formData);
     _syncVisitTypeManagedFieldsToForm();
     updateVisitTypeBar();
     updateContextBar();
@@ -8969,15 +9172,8 @@ var REQUIRED_FIELD_KEYS = [
     formData.attendanceMode = mode;
     var isVol = mode === 'voluntary';
     activeFormSections = isVol ? voluntaryFormSections : formSections;
-    if (isVol) {
-      formData.workType = 'Voluntary Police Station Attendance';
-      if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
-    } else {
-      formData.workType = formData.workType === 'Voluntary Police Station Attendance'
-        ? 'First Police Station Attendance'
-        : (formData.workType || 'First Police Station Attendance');
-      if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
-    }
+    if (typeof syncWorkTypeFromVisitType === 'function') syncWorkTypeFromVisitType(formData);
+    else if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
     currentSectionIdx = 0;
     _progressBarBuilt = false;
     renderForm(formData);
@@ -9005,37 +9201,42 @@ var REQUIRED_FIELD_KEYS = [
       : visitTypes.first;
     var mode = formData.attendanceMode === 'voluntary' ? 'voluntary' : 'custody';
     var linkId = formData._followUpFromAttendanceId;
-    var linkHint = linkId
-      ? ('Linked to attendance #' + esc(String(linkId)))
-      : 'Optional: link to the earlier attendance this visit relates to.';
+    var linkTitle = linkId
+      ? ('Linked to prior attendance #' + esc(String(linkId)) + ' (metadata on this note only)')
+      : 'Link this note to a prior visit on file — does not create a new follow-up (use Records → Follow-up for that).';
 
-    var seg = [visitTypes.first, visitTypes.bail_return, visitTypes.further].map(function (code) {
-      var label = typeof visitTypeLabelForCode === 'function' ? visitTypeLabelForCode(code) : code;
-      var active = currentVisit === code ? ' is-active' : '';
-      return '<button type="button" class="visit-type-choice' + active + '" data-visit-type="' + esc(code) + '"'
-        + (locked ? ' disabled' : '') + '>' + esc(label) + '</button>';
+    var typeOptions = typeof listAttendanceVisitTypeOptions === 'function'
+      ? listAttendanceVisitTypeOptions()
+      : [
+        { code: visitTypes.first, label: 'First attendance' },
+        { code: visitTypes.bail_return, label: 'Bail return' },
+        { code: visitTypes.further, label: 'Further attendance / further interview' },
+      ];
+    var typeSelectHtml = typeOptions.map(function (opt) {
+      var selected = currentVisit === opt.code ? ' selected' : '';
+      return '<option value="' + esc(opt.code) + '"' + selected + '>' + esc(opt.label) + '</option>';
     }).join('');
 
     bar.innerHTML =
-      '<span class="visit-type-bar-label">Attendance</span>' +
-      '<select class="visit-type-mode-select" id="visit-type-mode-select"' + (locked ? ' disabled' : '') + '>' +
-        '<option value="custody"' + (mode === 'custody' ? ' selected' : '') + '>Custody</option>' +
-        '<option value="voluntary"' + (mode === 'voluntary' ? ' selected' : '') + '>Voluntary</option>' +
-      '</select>' +
-      '<span class="visit-type-bar-label">Visit</span>' +
-      '<div class="visit-type-segmented" role="group" aria-label="Visit type">' + seg + '</div>' +
-      '<button type="button" class="btn btn-secondary btn-small visit-type-link-btn" id="visit-type-link-btn"'
-        + (locked || currentVisit === visitTypes.first ? ' disabled' : '') + '>Link earlier visit</button>' +
-      '<span class="visit-type-bar-hint">' + linkHint + '</span>';
+      '<div class="visit-type-bar-primary">' +
+        '<span class="visit-type-bar-label">Attendance</span>' +
+        '<select class="visit-type-mode-select" id="visit-type-mode-select"' + (locked ? ' disabled' : '') + '>' +
+          '<option value="custody"' + (mode === 'custody' ? ' selected' : '') + '>Custody</option>' +
+          '<option value="voluntary"' + (mode === 'voluntary' ? ' selected' : '') + '>Voluntary</option>' +
+        '</select>' +
+        '<label class="visit-type-bar-label" for="visit-type-attendance-select">Attendance type</label>' +
+        '<select class="visit-type-attendance-select" id="visit-type-attendance-select" aria-label="Attendance type"'
+          + (locked ? ' disabled' : '') + '>' + typeSelectHtml + '</select>' +
+        '<button type="button" class="btn btn-secondary btn-small visit-type-link-btn" id="visit-type-link-btn"'
+          + (locked || currentVisit === visitTypes.first ? ' disabled' : '') + ' title="' + esc(linkTitle) + '">Link prior visit</button>' +
+      '</div>';
 
     if (!_visitTypeBarHandlersBound) {
       _visitTypeBarHandlersBound = true;
-      bar.addEventListener('click', function (e) {
-        var btn = e.target && e.target.closest ? e.target.closest('[data-visit-type]') : null;
-        if (!btn || btn.disabled) return;
-        handleAttendanceVisitTypeChange(btn.getAttribute('data-visit-type'));
-      });
       bar.addEventListener('change', function (e) {
+        if (e.target && e.target.id === 'visit-type-attendance-select' && !e.target.disabled) {
+          handleAttendanceVisitTypeChange(e.target.value);
+        }
         if (e.target && e.target.id === 'visit-type-mode-select') {
           handleVisitTypeBarModeChange(e.target.value);
         }
@@ -9061,8 +9262,18 @@ var REQUIRED_FIELD_KEYS = [
     const leftParts = [];
     if (formData._formType === 'telephone') leftParts.push('<span class="context-invb-badge">INVB Tel</span>');
     else if (formData.attendanceMode === 'voluntary') leftParts.push('<span class="context-vol-badge">Voluntary</span>');
-    else if (formData._followUpReason === 'bail_return') leftParts.push('<span class="context-vol-badge" title="Visit type">Bail return</span>');
-    else if (formData.workType === 'Further Police Station Attendance') leftParts.push('<span class="context-invb-badge" style="background:#7c3aed;">Further</span>');
+    else if (formData.workType === 'Further Police Station Attendance' || formData._followUpReason) {
+      var visitBadge = typeof resolveAttendanceVisitType === 'function'
+        ? resolveAttendanceVisitType(formData)
+        : null;
+      var visitLabel = visitBadge && typeof visitTypeLabelForCode === 'function'
+        ? visitTypeLabelForCode(visitBadge)
+        : 'Further';
+      if (visitBadge && visitBadge !== 'first') {
+        leftParts.push('<span class="context-invb-badge" style="background:#7c3aed;" title="Attendance type">'
+          + esc(visitLabel) + '</span>');
+      }
+    }
     leftParts.push('<span><span class="context-label">Client:</span>' + esc(clientName) + '</span>');
     leftParts.push('<span><span class="context-label">Station:</span>' + esc(station) + '</span>');
     if (formData.custodyNumber && formData.attendanceMode !== 'voluntary') leftParts.push('<span><span class="context-label">Custody:</span>' + esc(formData.custodyNumber) + '</span>');
@@ -9765,41 +9976,11 @@ var REQUIRED_FIELD_KEYS = [
             setFieldValue('weekendBankHoliday', (isWE || isBH) ? 'Yes' : 'No');
           }
           if (field === 'outcomeDecision') {
-            if (!isBailOutcomeDecision(formData.outcomeDecision)) {
-              clearOutcomeBailState();
-            } else if (!isBailReturnOutcomeDecision(formData.outcomeDecision)) {
-              clearBailReturnDetails();
-            }
-            prefillOutcomeChargesFromOffences();
-            if (formData.outcomeDecision === 'Bail without charge' && (!formData.bailReturnStationName || !formData.bailReturnStationCode)) {
-              if (formData.policeStationName) { formData.bailReturnStationName = formData.policeStationName; setFieldValueSilent('bailReturnStationName', formData.policeStationName); }
-              if (formData.schemeId) { formData.bailReturnStationCode = formData.schemeId; setFieldValueSilent('bailReturnStationCode', formData.schemeId); }
-            }
-            var _chargedOutcomes = ['Charged without Bail','Charged with Bail','Remanded in Custody'];
-            if (_chargedOutcomes.indexOf(formData.outcomeDecision) !== -1) {
-              if (!formData.courtDate) {
-                var _tomorrow = new Date(); _tomorrow.setDate(_tomorrow.getDate() + 1);
-                var _tomorrowStr = _tomorrow.getFullYear() + '-' +
-                  ('0' + (_tomorrow.getMonth() + 1)).slice(-2) + '-' +
-                  ('0' + _tomorrow.getDate()).slice(-2);
-                formData.courtDate = _tomorrowStr;
-                setFieldValue('courtDate', _tomorrowStr);
-              }
-              if (!formData.courtTime) {
-                formData.courtTime = '10:00';
-                setFieldValue('courtTime', '10:00');
-              }
-            }
-            /* Auto-suggest LAA outcome code from decision (never CN09 for bail).
-               Switching to first-grant bail clears ANY leftover suggested CN (not only CN09). */
-            var _DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
-            if (_DS && typeof _DS.resolveOutcomeCodeOnDecisionChange === 'function') {
-              var _resolvedCode = _DS.resolveOutcomeCodeOnDecisionChange(formData.outcomeDecision, formData.outcomeCode);
-              if (_resolvedCode !== (formData.outcomeCode || '').trim()) {
-                formData.outcomeCode = _resolvedCode;
-                setFieldValueSilent('outcomeCode', _resolvedCode);
-              }
-            }
+            applyOutcomeDecisionChangeEffects();
+            updateVisitTypeBar();
+          }
+          if (field === 'bailDate' || field === 'bailType' || field === 'bailConditions') {
+            updateVisitTypeBar();
           }
           if (field === 'attendanceMode') {
             var isVol = formData.attendanceMode === 'voluntary';
@@ -10410,6 +10591,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function renderField(f, data, grid) {
     if (f.key === 'attendanceMode' && formData._formType !== 'telephone') return;
+    if (f.key === 'workType' && formData._formType !== 'telephone') return;
     if (f.type === 'sectionHeading') {
       const h = document.createElement('h3');
       h.className = 'section-heading section-heading--static';
@@ -12896,6 +13078,20 @@ var REQUIRED_FIELD_KEYS = [
       input.addEventListener(clearEvent, () => {
         if ((input.value || '').trim()) input.classList.remove('input-error');
       });
+    }
+
+    if (f.key === 'oicName' && formData._formType !== 'telephone') {
+      var oicMailBtn = document.createElement('button');
+      oicMailBtn.type = 'button';
+      oicMailBtn.className = 'btn btn-secondary btn-small';
+      oicMailBtn.style.marginTop = '0.35rem';
+      oicMailBtn.textContent = 'Email officer';
+      oicMailBtn.title = 'Open officer email drafts for this matter (Outlook Web)';
+      oicMailBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (typeof openOfficerEmailFromForm === 'function') openOfficerEmailFromForm();
+      });
+      wrap.appendChild(oicMailBtn);
     }
 
     grid.appendChild(wrap);
@@ -17723,15 +17919,7 @@ pdfAuditFooterHtml(d, settings) +
             case 'records': navigateTo('list'); break;
             case 'new-attendance':
               if (window.__licenceExpired) { showLicenceGateToast(); break; }
-              currentStandaloneSectionId = null;
-              formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
-              activeFormSections = formSections;
-              formData.attendanceMode = 'custody';
-              formData.workType = 'First Police Station Attendance';
-              formData._formType = 'attendance';
-              prefillDefaults();
-              renderForm(formData);
-              showView('new');
+              openNewRecordTypeChooser();
               break;
             case 'laa-forms': showLaaFormsNav(); break;
             case 'firms': showView('firms'); break;
@@ -18054,8 +18242,14 @@ pdfAuditFooterHtml(d, settings) +
           });
           if (listStatusFilter === 'draft') filtered = filtered.filter(function(r) { return (r.status || 'draft') === 'draft'; });
           else if (listStatusFilter === 'finalised') filtered = filtered.filter(function(r) { return r.status === 'finalised'; });
+          if (filtered.length === 1) {
+            openAttendance(filtered[0].id);
+            globalSearchEl.value = '';
+            return;
+          }
           showView('list');
           refreshList();
+          if (filtered.length === 0) showToast('No records match that search', 'info');
         });
       });
     }
@@ -18372,9 +18566,29 @@ pdfAuditFooterHtml(d, settings) +
       }
     });
 
-    syncQuickFileSettingsFromAccount({ toastOnPull: true }).catch(function(e) {
+    syncQuickFileSettingsFromAccount({ toastOnPull: true }).then(function() {
+      if (!firms || !firms.length) {
+        if (hasQuickFileSettingsConfigured()) {
+          importFirmsFromQuickFile(false).catch(function(e) {
+            console.warn('[init] Auto QuickFile firm import skipped:', e && e.message);
+          });
+        }
+      }
+    }).catch(function(e) {
       console.error('[init] QuickFile account sync failed:', e);
     });
+
+    if (window.api && window.api.onFirmsUpdatedFromSync) {
+      window.api.onFirmsUpdatedFromSync(function(info) {
+        window.api.firmsList().then(function(f) {
+          setFirmsList(f || []);
+          if (typeof loadFirmsList === 'function') loadFirmsList();
+          if (info && info.count > 0) {
+            showToast('Firms synced from your Custody Note account (' + info.count + ' updated)', 'success', 4500);
+          }
+        }).catch(function() {});
+      });
+    }
 
     initDarkMode();
     initFontSize();
@@ -18522,6 +18736,33 @@ pdfAuditFooterHtml(d, settings) +
     });
     document.getElementById('form-bottom-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
     document.getElementById('header-export-pdf-btn')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
+    document.getElementById('form-preview-pdf-btn')?.addEventListener('click', function () {
+      confirmConfidentialityThen(printAttendanceNote);
+    });
+    document.getElementById('header-preview-pdf-btn')?.addEventListener('click', function () {
+      confirmConfidentialityThen(printAttendanceNote);
+    });
+    var newRecOverlay = document.getElementById('new-record-type-overlay');
+    if (newRecOverlay && !newRecOverlay.dataset.bound) {
+      newRecOverlay.dataset.bound = '1';
+      newRecOverlay.addEventListener('click', function (e) {
+        if (e.target === newRecOverlay) closeNewRecordTypeChooser();
+      });
+      newRecOverlay.querySelectorAll('[data-new-record-kind]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var kind = btn.getAttribute('data-new-record-kind');
+          closeNewRecordTypeChooser();
+          if (kind === 'follow-up') {
+            if (typeof openFollowUpSearchPicker === 'function') openFollowUpSearchPicker();
+            else showToast('Follow-up attendance is not available. Please refresh the app.', 'error');
+            return;
+          }
+          if (kind === 'quick') { openQuickCapture(); return; }
+          _startBlankAttendanceForm(kind === 'voluntary' ? 'voluntary' : (kind === 'telephone' ? 'telephone' : 'custody'));
+        });
+      });
+      document.getElementById('new-record-type-cancel')?.addEventListener('click', closeNewRecordTypeChooser);
+    }
     document.getElementById('header-sections-idx')?.addEventListener('click', openSectionsIndex);
     document.getElementById('header-laa-forms')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('header-kb-help')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
@@ -18553,12 +18794,12 @@ pdfAuditFooterHtml(d, settings) +
         var nav = btn.dataset.nav;
         if (nav === 'new-attendance') {
           if (window.__licenceExpired) { showLicenceGateToast(); return; }
-          if (currentAttendanceId || Object.keys(formData).length > 0) {
+          if (currentAttendanceId || (formData && hasMeaningfulData(formData))) {
             showConfirm('Start a new record? Any unsaved changes will be lost.').then(function(ok) {
-              if (ok) { currentAttendanceId = null; formData = {}; showView('new'); }
+              if (ok) openNewRecordTypeChooser();
             });
           } else {
-            showView('new');
+            openNewRecordTypeChooser();
           }
         } else if (nav === 'update') {
           triggerUpdateCheck();

@@ -4,7 +4,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const sync = require('../lib/quickfileSettingsSync');
 
-describe('quickfileSettingsSync (full user settings)', () => {
+describe('quickfileSettingsSync (preferences only)', () => {
   const key = 'CN-TEST-KEY-1234';
   const settings = {
     quickfileAccountNumber: '12345678',
@@ -28,7 +28,7 @@ describe('quickfileSettingsSync (full user settings)', () => {
     assert.equal(out.backupFolder, undefined);
   });
 
-  it('does not sync privileged secrets or scratchpad text', () => {
+  it('does not sync QuickFile credentials or other privileged secrets', () => {
     const picked = sync.pickSyncableSettings(settings);
     assert.equal(picked.openaiApiKey, undefined);
     assert.equal(picked.quickfileApiKey, undefined);
@@ -40,17 +40,6 @@ describe('quickfileSettingsSync (full user settings)', () => {
       assert.ok(sync.MACHINE_LOCAL_SETTINGS_KEYS.includes(k), k + ' must be machine-local');
       assert.ok(!sync.SYNCABLE_SETTINGS_KEYS.includes(k), k + ' must not be syncable');
     }
-  });
-
-  it('excludes machine-local keys from pickSyncableSettings', () => {
-    const picked = sync.pickSyncableSettings({
-      email: 'a@b.c',
-      backupFolder: '/tmp/backups',
-      nextInvoiceNumber: '99',
-    });
-    assert.equal(picked.email, 'a@b.c');
-    assert.equal(picked.backupFolder, undefined);
-    assert.ok(sync.MACHINE_LOCAL_SETTINGS_KEYS.includes('backupFolder'));
   });
 
   it('returns null for wrong licence key', () => {
@@ -78,30 +67,33 @@ describe('quickfileSettingsSync (full user settings)', () => {
     assert.equal(dec.email, 'me@example.com');
     assert.equal(dec.openaiApiKey, undefined);
     assert.equal(dec.quickfileApiKey, undefined);
-    assert.equal(dec.dsccPin, undefined);
-    assert.equal(dec.scratchpadText, undefined);
   });
 
-  it('hasAnySyncableContent detects empty vs populated', () => {
+  it('hasAnySyncableContent ignores credential fields', () => {
     assert.equal(sync.hasAnySyncableContent({}), false);
     assert.equal(sync.hasAnySyncableContent({ email: 'x@y.z' }), true);
-    assert.equal(sync.hasAnySyncableContent({ openaiApiKey: 'sk-x' }), false);
+    assert.equal(sync.hasAnySyncableContent({
+      quickfileApiKey: 'x',
+      quickfileAccountNumber: '1',
+      quickfileAppId: '2',
+    }), false);
   });
 });
 
-describe('main.js user settings sync wiring', () => {
+describe('main.js QuickFile sync wiring', () => {
   const fs = require('fs');
   const path = require('path');
   const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
 
-  it('defines ensure/push/schedule sync helpers', () => {
+  it('defines preference and credential cloud sync helpers', () => {
     assert.match(main, /async function ensureQuickFileSettingsFromServer/);
-    assert.match(main, /async function pushQuickFileSettingsToCloud/);
-    assert.match(main, /function scheduleUserSettingsCloudPush/);
-    assert.match(main, /collectSyncableSettingsFromDb/);
+    assert.match(main, /async function ensureQuickFileCredentialsFromServer/);
+    assert.match(main, /async function pushQuickFileCredentialsToCloud/);
+    assert.match(main, /function scheduleQuickFileCredentialsCloudPush/);
+    assert.match(main, /syncFirmsWithCloud/);
   });
 
-  it('set-settings schedules cloud push for syncable keys', () => {
-    assert.match(main, /scheduleUserSettingsCloudPush\('set-settings'\)/);
+  it('schedules credential cloud push when QuickFile keys are saved', () => {
+    assert.match(main, /scheduleQuickFileCredentialsCloudPush\('quickfile-credentials'\)/);
   });
 });

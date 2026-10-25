@@ -6,7 +6,7 @@ import { test, expect, _electron, type ElectronApplication, type Page } from '@p
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { dismissFirstLaunchModalIfPresent } from './e2e-helpers';
+import { dismissFirstLaunchModalIfPresent, startNewCustodyAttendanceFromBottomNav } from './e2e-helpers';
 
 let electronApp: ElectronApplication;
 let page: Page;
@@ -63,9 +63,7 @@ test.afterAll(async ({}, testInfo) => {
 test('surname typed in form persists after save as draft and exit; search finds record', async () => {
   const marker = `E2EJourney${Date.now()}`;
 
-  await page.locator('.bottom-nav-btn[data-nav="new-attendance"]').click();
-  await page.waitForTimeout(800);
-  await expect(page.locator('#view-form')).toHaveClass(/active/);
+  await startNewCustodyAttendanceFromBottomNav(page);
 
   const surnameInput = page.locator('#view-form [data-field="surname"]').first();
   await expect(surnameInput).toBeVisible({ timeout: 15000 });

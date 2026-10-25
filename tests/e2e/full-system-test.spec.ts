@@ -2,7 +2,7 @@ import { test, expect, _electron, type ElectronApplication, type Page } from '@p
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { dismissFirstLaunchModalIfPresent } from './e2e-helpers';
+import { dismissFirstLaunchModalIfPresent, startNewCustodyAttendanceFromBottomNav } from './e2e-helpers';
 
 let electronApp: ElectronApplication;
 let page: Page;
@@ -119,11 +119,7 @@ test('clicking Home tab shows home view', async () => {
 // 4. Create new attendance record
 // ================================================================
 test('can start a new attendance record', async () => {
-  await page.locator('.bottom-nav-btn[data-nav="new-attendance"]').click();
-  await page.waitForTimeout(1000);
-
-  const formView = page.locator('#view-form');
-  await expect(formView).toHaveClass(/active/);
+  await startNewCustodyAttendanceFromBottomNav(page);
 });
 
 // ================================================================

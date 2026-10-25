@@ -646,12 +646,7 @@ body.form-active .app-footer { display: none; }
   background: linear-gradient(135deg, #6d28d9, #7c3aed);
 }
 
-/* Phase 3: Calm header — hide secondary buttons when editing, show only autosave + gear */
-body.form-active #header-kb-help,
-body.form-active #header-laa-forms,
-body.form-active #header-sections-idx {
-  display: none;
-}
+/* Keep ? / LAA / Sections reachable in the app header while editing (form-page-header is hidden). */
 body.form-active .autosave-indicator {
   font-size: 0.82rem; opacity: 0.85;
 }
@@ -1898,13 +1893,55 @@ html:not(.dark) #view-list .list-sort-select option {
 /* Visit type + custody/voluntary bar (station attendance forms) */
 .form-visit-type-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.65rem 1.25rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
   padding: 0.45rem 1.2rem;
   background: color-mix(in srgb, var(--primary) 5%, var(--surface));
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+}
+.visit-type-bar-primary,
+.visit-type-outcome-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1.25rem;
+}
+.visit-type-outcome-row {
+  padding-top: 0.15rem;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 80%, transparent);
+}
+.visit-type-bail-date {
+  font-size: 0.85rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.visit-type-bail-type {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.visit-type-bail-conditions {
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  min-width: 12rem;
+  flex: 1 1 14rem;
+}
+.visit-type-outcome-select {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  min-width: min(20rem, 100%);
+  max-width: 28rem;
+  flex: 1 1 14rem;
 }
 .form-visit-type-bar.hidden { display: none !important; }
 .form-visit-type-bar.is-locked { opacity: 0.72; }
@@ -1915,7 +1952,8 @@ html:not(.dark) #view-list .list-sort-select option {
   letter-spacing: 0.04em;
   color: var(--on-surface-muted);
 }
-.visit-type-mode-select {
+.visit-type-mode-select,
+.visit-type-attendance-select {
   font-size: 0.85rem;
   font-weight: 600;
   padding: 0.25rem 0.5rem;
@@ -1924,34 +1962,10 @@ html:not(.dark) #view-list .list-sort-select option {
   background: var(--surface);
   min-width: 7.5rem;
 }
-.visit-type-segmented {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-}
-.visit-type-segmented button {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--on-surface);
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-}
-.visit-type-segmented button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
-}
-.visit-type-segmented button.is-active {
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
-  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
-  color: var(--primary);
-}
-.visit-type-segmented button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+.visit-type-attendance-select {
+  min-width: min(22rem, 100%);
+  max-width: 28rem;
+  flex: 1 1 14rem;
 }
 .visit-type-link-btn {
   font-size: 0.78rem !important;
@@ -4663,7 +4677,8 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
 }
 .cn-undo-btn:hover { background: rgba(255,255,255,0.4); }
 
-.cn-confirm-overlay {
+.cn-confirm-overlay,
+.new-record-type-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);

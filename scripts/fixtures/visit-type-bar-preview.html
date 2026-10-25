@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Attendance type bar preview</title>
+  <link rel="stylesheet" href="../../styles.css" />
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg, #f4f6f8); }
+    .preview-shell { max-width: 1100px; margin: 0 auto; }
+    .preview-form-head { padding: 0.75rem 1.2rem; background: var(--surface, #fff); border-bottom: 1px solid var(--border, #ddd); }
+  </style>
+</head>
+<body>
+  <div class="preview-shell">
+    <div class="preview-form-head"><strong>Custody attendance</strong> — preview</div>
+    <div id="form-visit-type-bar" class="form-visit-type-bar" aria-label="Attendance and visit type">
+      <div class="visit-type-bar-primary">
+        <span class="visit-type-bar-label">Attendance</span>
+        <select class="visit-type-mode-select" id="visit-type-mode-select">
+          <option value="custody" selected>Custody</option>
+          <option value="voluntary">Voluntary</option>
+        </select>
+        <label class="visit-type-bar-label" for="visit-type-attendance-select">Attendance type</label>
+        <select class="visit-type-attendance-select" id="visit-type-attendance-select" aria-label="Attendance type" size="7">
+          <option value="first">First attendance</option>
+          <option value="bail_return">Bail return</option>
+          <option value="further">Further attendance / further interview</option>
+          <option value="re_interview">Re-interview</option>
+          <option value="charge_only" selected>Charge only (no interview)</option>
+          <option value="identification">ID procedure (identification parade / VIPER)</option>
+          <option value="rui_return">RUI return</option>
+        </select>
+        <button type="button" class="btn btn-secondary btn-small visit-type-link-btn" title="Link this note to a prior visit on file">Link prior visit</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

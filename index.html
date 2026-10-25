@@ -95,6 +95,7 @@
       <div class="header-right">
         <span id="header-form-actions" class="header-form-actions">
           <button type="button" id="billing-panel-btn" class="btn btn-small btn-accent btn-header-primary-action" title="Primary action for the current record (Finalise / Finish matter / Archive)" style="display:none;">Finalise</button>
+          <button type="button" class="btn btn-small" id="header-preview-pdf-btn" title="Preview attendance note PDF in the built-in viewer">Preview PDF</button>
           <button type="button" class="btn-small" id="header-kb-help" title="Keyboard shortcuts">?</button>
           <button type="button" class="btn btn-small" id="header-laa-forms" title="Generate LAA forms">LAA Forms</button>
           <button type="button" class="btn btn-sections" id="header-sections-idx">Sections</button>
@@ -243,8 +244,8 @@
             </button>
             <button type="button" id="home-card-follow-up" class="home-primary-card home-primary-followup">
               <span class="home-primary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"/><path d="M20 20v-6h-6"/><path d="M5 19a9 9 0 0114-7.5"/><path d="M19 5A9 9 0 005 12.5"/></svg></span>
-              <span class="home-primary-title">Bail return / follow-up</span>
-              <span class="home-primary-sub">Same client, further visit &mdash; bail return, RUI, ID procedure</span>
+              <span class="home-primary-title">Follow-up attendance</span>
+              <span class="home-primary-sub">Same client, new visit &mdash; bail return, RUI, ID (same flow as Records &rarr; Follow-up)</span>
             </button>
             <button type="button" id="home-card-voluntary" class="home-primary-card home-primary-voluntary">
               <span class="home-primary-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/><path d="M9 11h6"/></svg></span>
@@ -664,6 +665,9 @@
               <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy QuickFile add-on</a>
             </div>
             <div id="qf-firms-content">
+              <div id="qf-setup-required-banner" style="display:none;margin-bottom:0.65rem;padding:0.65rem 0.85rem;border-radius:10px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:0.86rem;line-height:1.45;">
+                <strong>QuickFile not set up on this computer.</strong> Credentials do not travel with your licence key alone — sign in and activate sync, or enter your QuickFile Account Number, API key and Application ID once in Settings (Integrations → QuickFile), then use Import below.
+              </div>
               <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;">
                 <button type="button" id="btn-open-qf-settings" class="btn btn-secondary">Open QuickFile settings</button>
                 <button type="button" id="btn-test-qf-connection" class="btn btn-secondary">Test QuickFile connection</button>
@@ -721,6 +725,7 @@
             <button type="button" id="form-duplicate-btn" class="btn btn-small" title="Duplicate for another client in the same session" style="display:none;">Duplicate</button>
             <button type="button" id="form-follow-up-btn" class="btn btn-small" title="Same client — bail return, identification, or other further attendance" style="display:none;">Follow-up attendance</button>
             <button type="button" id="form-header-history-btn" class="btn btn-small" title="View change history for this record">&#128203; History</button>
+            <button type="button" id="form-preview-pdf-btn" class="btn btn-small" title="Preview note PDF in the built-in viewer">Preview PDF</button>
             <button type="button" id="kb-help-btn" class="btn-small" title="Keyboard shortcuts">?</button>
             <button type="button" id="laa-forms-btn" class="btn btn-small" title="Generate LAA forms from this record">LAA Forms</button>
             <button type="button" id="form-context-panel-toggle" class="btn btn-small" title="Show or hide matter summary panel" aria-expanded="false" aria-controls="form-context-panel">Summary</button>
@@ -827,7 +832,7 @@
           <button type="button" id="form-prev" class="bottom-btn prev-btn" title="Previous section (Ctrl+&#8592;)">&#9664; Prev</button>
           <div id="section-progress-bar" class="section-progress-bar" style="display:none;"></div>
           <button type="button" id="form-sections-btn" class="bottom-btn sections-btn" title="Jump to section"><span id="form-section-indicator">Section 1/9</span></button>
-          <button type="button" id="form-save-exit" class="bottom-btn save-btn" title="Save &amp; exit" style="display:none;">Save</button>
+          <button type="button" id="form-save-exit" class="bottom-btn save-btn" title="Save &amp; exit">Save</button>
           <button type="button" id="bottom-bar-finish-pill" class="bottom-btn finish-pill" style="display:none;" title="Finalise or finish this matter" aria-hidden="true"></button>
           <button type="button" id="form-next" class="bottom-btn next-btn" title="Next section (Ctrl+&#8594;)">Next &#9654;</button>
         </div>
@@ -979,7 +984,7 @@
         </div>
 
         <div class="settings-tab-bar" id="settings-tab-bar">
-          <button type="button" class="settings-tab active" data-stab="account">Account</button>
+          <button type="button" class="settings-tab active" data-stab="account">Account &amp; cloud</button>
           <button type="button" class="settings-tab" data-stab="backup">Backup</button>
           <button type="button" class="settings-tab" data-stab="appearance" data-advanced-tab="true" style="display:none;">Appearance</button>
           <button type="button" class="settings-tab" data-stab="integrations" data-advanced-tab="true" style="display:none;">Integrations</button>
@@ -991,7 +996,7 @@
         </div>
 
         <div class="settings-tab-panel active" data-stab-panel="account">
-        <div class="settings-section-label">Account &amp; Billing</div>
+        <div class="settings-section-label">Account, licence &amp; cloud</div>
 
         <div class="settings-card" id="licence-settings-card">
           <h2>Licence</h2>
@@ -1146,34 +1151,36 @@
           <p id="desktop-shortcut-msg" class="settings-hint" style="margin-top:0.75rem;display:none;" role="status"></p>
         </div>
 
-        <div class="settings-section-label">Billing Defaults</div>
+        <div class="settings-section-label">Cloud sync</div>
         <div class="settings-card">
-          <h2>Invoice &amp; Billing Defaults</h2>
-          <p class="settings-hint">These values pre-fill the billing panel for new invoices. You can override them on each invoice.</p>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;">
-            <div>
-              <label for="setting-billing-attendance-fee">Attendance fee (&pound;)</label>
-              <input type="number" id="setting-billing-attendance-fee" class="settings-input" step="0.01" min="0" placeholder="160.00">
+          <div id="cross-device-sync-section" style="margin-bottom:0;">
+            <h2 style="margin:0 0 0.5rem 0;">Data &amp; Sync</h2>
+            <p class="settings-hint" style="margin:0 0 0.5rem;">Records sync automatically in the background when online. Each computer keeps a local copy; changes push to the cloud and pull onto your other devices.</p>
+            <p id="cross-device-sync-status" class="settings-hint" style="margin:0 0 0.5rem;">Checking sync status&hellip;</p>
+            <label class="toggle-row" style="margin:0 0 0.75rem;">
+              <span>Show the Wi-Fi warning when sync is held up<br><small style="font-weight:400;opacity:0.75;">An amber bar under the top bar when notes are saved here but have not synced for over a minute.</small></span>
+              <input type="checkbox" id="setting-show-wifi-sync-banner" checked>
+            </label>
+            <p id="cross-device-sync-health" class="settings-hint" style="margin:0 0 0.5rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.8rem;"></p>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.25rem;">
+              <button type="button" id="btn-sync-full-resync" class="btn btn-secondary">Full re-sync from cloud</button>
+              <button type="button" id="btn-sync-push-now" class="btn btn-secondary">Push all pending now</button>
+              <button type="button" id="btn-sync-reupload-all" class="btn btn-secondary">Re-upload all local records to cloud</button>
+              <button type="button" id="btn-sync-export-index" class="btn btn-secondary">Export record index (no note text)</button>
+              <button type="button" id="btn-sync-integrity-check" class="btn btn-secondary">Integrity check (local vs cloud)</button>
+              <button type="button" id="btn-sync-open-diagnostics" class="btn btn-secondary">Open sync diagnostics</button>
             </div>
-            <div>
-              <label for="setting-billing-mileage-rate">Mileage rate (&pound;/mile)</label>
-              <input type="number" id="setting-billing-mileage-rate" class="settings-input" step="0.01" min="0" placeholder="0.45">
-            </div>
-            <div>
-              <label for="setting-billing-vat-rate">VAT rate (%)</label>
-              <input type="number" id="setting-billing-vat-rate" class="settings-input" step="1" min="0" max="100" placeholder="20">
-            </div>
+            <p class="settings-hint" style="margin:0.5rem 0 0;">Use <strong>Full re-sync from cloud</strong> if this computer shows Synced but records from another device are missing. Use <strong>Push all pending now</strong> on the computer that has your records. Use <strong>Re-upload all local records to cloud</strong> after a manual database file copy, or when other devices still show &ldquo;No remote records&rdquo; while this computer has data. <strong>Export record index</strong> lists client/station/date metadata only (no note bodies) for incident recovery. <strong>Integrity check</strong> reports local vs cloud discrepancies without deleting anything.</p>
+            <p id="cross-device-sync-action-status" class="settings-hint" style="margin:0.35rem 0 0;"></p>
+            <p id="cross-device-sync-recovery-hint" class="settings-hint" style="margin:0.35rem 0 0;display:none;color:#b45309;"></p>
           </div>
         </div>
 
-        </div><!-- end account tab panel -->
-
-        <div class="settings-tab-panel" data-stab-panel="integrations">
-        <div class="settings-section-label">Integrations</div>
+        <div class="settings-section-label">QuickFile</div>
         <div class="settings-card" id="quickfile-settings-card">
           <h2>QuickFile invoicing &amp; directory</h2>
           <div id="quickfile-settings-content">
-            <p class="settings-hint">Enter your QuickFile API credentials once — they are saved to your Custody Note account and available on every computer you use. Use them to <strong>send invoices</strong> from the billing workflow.</p>
+            <p class="settings-hint">Enter your QuickFile API credentials once on each computer (or sign in and activate sync so they load from your Custody Note account). They are encrypted on the server and are <strong>not</strong> stored in the licence-key settings blob. Use them to <strong>send invoices</strong> from the billing workflow.</p>
 
             <div id="qf-connection-status" class="qf-connection-status" role="status" aria-live="polite">
               <span class="qf-status-dot" id="qf-status-dot"></span>
@@ -1207,13 +1214,38 @@
           </div>
         </div>
 
+        <div class="settings-section-label">Billing Defaults</div>
+        <div class="settings-card">
+          <h2>Invoice &amp; Billing Defaults</h2>
+          <p class="settings-hint">These values pre-fill the billing panel for new invoices. You can override them on each invoice.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;">
+            <div>
+              <label for="setting-billing-attendance-fee">Attendance fee (&pound;)</label>
+              <input type="number" id="setting-billing-attendance-fee" class="settings-input" step="0.01" min="0" placeholder="160.00">
+            </div>
+            <div>
+              <label for="setting-billing-mileage-rate">Mileage rate (&pound;/mile)</label>
+              <input type="number" id="setting-billing-mileage-rate" class="settings-input" step="0.01" min="0" placeholder="0.45">
+            </div>
+            <div>
+              <label for="setting-billing-vat-rate">VAT rate (%)</label>
+              <input type="number" id="setting-billing-vat-rate" class="settings-input" step="1" min="0" max="100" placeholder="20">
+            </div>
+          </div>
+        </div>
+
+        </div><!-- end account tab panel -->
+
+        <div class="settings-tab-panel" data-stab-panel="integrations">
+        <div class="settings-section-label">Integrations (advanced)</div>
         <div class="settings-card" id="openai-settings-card">
           <h2>OpenAI (Law / Elements)</h2>
           <div id="openai-settings-content">
             <p class="settings-hint">Optional. Paste your own OpenAI API key to fill <strong>The Law / Elements of offence</strong> from the Case Assessment checkbox. Only offence name and statute are sent when you confirm. Billed to your OpenAI account.</p>
             <label for="setting-openai-apikey">OpenAI API key</label>
             <input type="password" id="setting-openai-apikey" class="settings-input" placeholder="sk-…" autocomplete="off" spellcheck="false">
-            <p class="settings-hint" style="margin-top:0.5rem;">Saved on this device and synced (encrypted) with your other Custody Note settings to your licence account.</p>
+            <p id="openai-apikey-unreadable-hint" class="settings-hint settings-hint-warning" style="margin-top:0.5rem;display:none;" role="alert"></p>
+            <p class="settings-hint" style="margin-top:0.5rem;">Encrypted on this device and synced to your <strong>Custody Note account</strong> (same protection as QuickFile credentials — not stored in the licence-key settings blob). Sign in and activate sync on each computer.</p>
           </div>
         </div>
 
@@ -1407,27 +1439,6 @@
               <span style="font-size:1.1rem;">&#9889;</span>
               <span><strong>AWS Cloud:</strong> <span id="backup-dest-cloud-status">Checking&hellip;</span></span>
             </div>
-          </div>
-          <div id="cross-device-sync-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border,#ccc);">
-            <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Data &amp; Sync</h3>
-            <p class="settings-hint" style="margin:0 0 0.5rem;">Records sync automatically in the background when online. Each computer keeps a local copy; changes push to the cloud and pull onto your other devices.</p>
-            <p id="cross-device-sync-status" class="settings-hint" style="margin:0 0 0.5rem;">Checking sync status&hellip;</p>
-            <label class="toggle-row" style="margin:0 0 0.75rem;">
-              <span>Show the Wi-Fi warning when sync is held up<br><small style="font-weight:400;opacity:0.75;">An amber bar under the top bar when notes are saved here but have not synced for over a minute.</small></span>
-              <input type="checkbox" id="setting-show-wifi-sync-banner" checked>
-            </label>
-            <p id="cross-device-sync-health" class="settings-hint" style="margin:0 0 0.5rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:0.8rem;"></p>
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.25rem;">
-              <button type="button" id="btn-sync-full-resync" class="btn btn-secondary">Full re-sync from cloud</button>
-              <button type="button" id="btn-sync-push-now" class="btn btn-secondary">Push all pending now</button>
-              <button type="button" id="btn-sync-reupload-all" class="btn btn-secondary">Re-upload all local records to cloud</button>
-              <button type="button" id="btn-sync-export-index" class="btn btn-secondary">Export record index (no note text)</button>
-              <button type="button" id="btn-sync-integrity-check" class="btn btn-secondary">Integrity check (local vs cloud)</button>
-              <button type="button" id="btn-sync-open-diagnostics" class="btn btn-secondary">Open sync diagnostics</button>
-            </div>
-            <p class="settings-hint" style="margin:0.5rem 0 0;">Use <strong>Full re-sync from cloud</strong> if this computer shows Synced but records from another device are missing. Use <strong>Push all pending now</strong> on the computer that has your records. Use <strong>Re-upload all local records to cloud</strong> after a manual database file copy, or when other devices still show &ldquo;No remote records&rdquo; while this computer has data. <strong>Export record index</strong> lists client/station/date metadata only (no note bodies) for incident recovery. <strong>Integrity check</strong> reports local vs cloud discrepancies without deleting anything.</p>
-            <p id="cross-device-sync-action-status" class="settings-hint" style="margin:0.35rem 0 0;"></p>
-            <p id="cross-device-sync-recovery-hint" class="settings-hint" style="margin:0.35rem 0 0;display:none;color:#b45309;"></p>
           </div>
           <div id="anywhere-bridge-section" style="margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border,#ccc);">
             <h3 style="margin:0 0 0.5rem 0;font-size:1rem;">Custody Note Anywhere &rarr; Desktop</h3>
@@ -2345,8 +2356,9 @@
     <button type="button" id="scratchpad-toggle" class="scratchpad-fab" title="Quick Notes">&#128221;</button>
   </div>
   <script src="renderer/lib/duplicate-attendance.js"></script>
-  <script src="renderer/lib/follow-up-attendance.js"></script>
   <script src="renderer/lib/attendance-visit-type.js"></script>
+  <script src="renderer/lib/attendance-visit-outcome.js"></script>
+  <script src="renderer/lib/follow-up-attendance.js"></script>
   <script src="renderer/lib/follow-up-search.js"></script>
   <script src="lib/stationMileage.js"></script>
   <script src="renderer/lib/station-visits.js"></script>
@@ -2572,6 +2584,22 @@
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
         <button type="button" id="cloud-backup-restore-prompt-continue" class="btn btn-secondary">Continue with this device</button>
         <button type="button" id="cloud-backup-restore-prompt-restore" class="btn btn-primary">Restore selected backup</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New record type chooser (Home cards + bottom New) -->
+  <div id="new-record-type-overlay" class="new-record-type-overlay" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="new-record-type-title" aria-hidden="true">
+    <div class="cn-confirm-box" style="max-width:420px;">
+      <h3 id="new-record-type-title" class="cn-confirm-title">Start a new record</h3>
+      <p class="cn-confirm-msg" style="margin-bottom:0.75rem;">Choose the type of attendance or capture.</p>
+      <div class="cn-confirm-btns" style="flex-direction:column;gap:0.5rem;align-items:stretch;">
+        <button type="button" class="btn btn-primary" data-new-record-kind="custody">Custody attendance</button>
+        <button type="button" class="btn btn-secondary" data-new-record-kind="follow-up">Follow-up attendance (existing client)</button>
+        <button type="button" class="btn btn-secondary" data-new-record-kind="voluntary">Voluntary attendance</button>
+        <button type="button" class="btn btn-secondary" data-new-record-kind="telephone">Telephone advice (INVB)</button>
+        <button type="button" class="btn btn-secondary" data-new-record-kind="quick">Quick Capture</button>
+        <button type="button" class="btn btn-secondary" id="new-record-type-cancel">Cancel</button>
       </div>
     </div>
   </div>

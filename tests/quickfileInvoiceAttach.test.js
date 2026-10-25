@@ -174,4 +174,16 @@ describe('QuickFile invoice number — ledger sync and sequential allocate', () 
     assert.ok(mainJs.includes('quickFileExtractInvoiceSearchRecords'));
     assert.ok(mainJs.includes('parseInvoiceNumberNumericPart'));
   });
+
+  it('ledger scan uses valid InvoiceNumber order only (not InvoiceID)', () => {
+    assert.ok(mainJs.includes("_quickFileInvoiceSearchPage('InvoiceNumber'"));
+    assert.doesNotMatch(mainJs, /_quickFileInvoiceSearchPage\('InvoiceID'/);
+    assert.doesNotMatch(mainJs, /OrderResultsBy.*InvoiceID/);
+  });
+
+  it('resolves invoice view URL from Invoice_Search ViewHref', () => {
+    assert.ok(mainJs.includes('quickFileResolveInvoiceViewUrl'));
+    assert.ok(mainJs.includes('quickfileInvoiceViewUrl'));
+    assert.doesNotMatch(mainJs, /app\.quickfile\.co\.uk\/invoice\/view/);
+  });
 });

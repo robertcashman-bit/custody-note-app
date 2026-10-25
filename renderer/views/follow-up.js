@@ -4,14 +4,17 @@ function showFollowUpReasonChooser() {
   return new Promise(function (resolve) {
     var overlay = document.createElement('div');
     overlay.className = 'attendance-picker-overlay';
-    var reasons = (typeof FOLLOW_UP_REASON_CODES === 'object' && FOLLOW_UP_REASON_CODES)
-      ? FOLLOW_UP_REASON_CODES
-      : {
-        bail_return: 'Bail return',
-        rui_return: 'RUI return',
-        identification: 'Identification procedure',
-        other: 'Other further attendance',
-      };
+    var reasons = (typeof followUpReasonCodesForChooser === 'function')
+      ? followUpReasonCodesForChooser()
+      : ((typeof FOLLOW_UP_REASON_CODES === 'object' && FOLLOW_UP_REASON_CODES)
+        ? FOLLOW_UP_REASON_CODES
+        : {
+          bail_return: 'Bail return',
+          rui_return: 'RUI return',
+          identification: 'ID procedure (identification parade / VIPER)',
+          re_interview: 'Re-interview',
+          other: 'Further attendance / further interview',
+        });
     var buttons = Object.keys(reasons).map(function (code) {
       return '<button type="button" class="btn btn-secondary follow-up-reason-btn" data-reason="' + esc(code) + '" style="width:100%;margin-bottom:0.5rem;text-align:left;">'
         + esc(reasons[code]) + '</button>';

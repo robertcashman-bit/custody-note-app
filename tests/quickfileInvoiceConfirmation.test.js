@@ -133,13 +133,13 @@ describe('create-invoice failure result', () => {
 describe('success confirmation copy', () => {
   it('names the QuickFile invoice number, total and attachments', () => {
     const c = R.buildInvoiceSentConfirmation(
-      { ok: true, invoiceId: '555', invoiceNumber: '1042', total: 192, invoiceUrl: 'https://app.quickfile.co.uk/invoice/view/555', attachResults: [{ name: 'note.pdf', ok: true }] },
+      { ok: true, invoiceId: '555', invoiceNumber: '1042', total: 192, invoiceUrl: 'https://firm.quickfile.co.uk/sales/preview?invoiceID=555', attachResults: [{ name: 'note.pdf', ok: true }] },
       { firmName: 'Test Firm LLP' }
     );
     assert.strictEqual(c.level, 'success');
     assert.strictEqual(c.title, 'Sent to QuickFile: invoice #1042');
     assert.deepStrictEqual(c.rows.map((r) => r.value), ['#1042', 'Test Firm LLP', '\u00A3192.00', '1 uploaded']);
-    assert.strictEqual(c.invoiceUrl, 'https://app.quickfile.co.uk/invoice/view/555');
+    assert.strictEqual(c.invoiceUrl, 'https://firm.quickfile.co.uk/sales/preview?invoiceID=555');
   });
 
   it('says when an existing invoice was linked instead of duplicated', () => {

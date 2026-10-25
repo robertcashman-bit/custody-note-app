@@ -13,7 +13,7 @@ const licence = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'licence.
 describe('QuickFile settings ensure (main process)', () => {
   it('registers quickfile-settings-ensure IPC returning ok/pulled/missing', () => {
     assert.match(main, /ipcMain\.handle\('quickfile-settings-ensure'/);
-    assert.match(main, /force: before\.missing\.length > 0/);
+    assert.match(main, /force: !!\(opts && opts\.force\) \|\| before\.missing\.length > 0/);
     assert.match(main, /pulled: result\.usedLocal === false/);
   });
 
@@ -42,7 +42,7 @@ describe('QuickFile settings ensure (main process)', () => {
 describe('QuickFile settings ensure (renderer + preload)', () => {
   it('preload exposes quickfileSettingsEnsure', () => {
     assert.ok(preload.includes('quickfileSettingsEnsure'));
-    assert.ok(preload.includes("ipcRenderer.invoke('quickfile-settings-ensure')"));
+    assert.ok(preload.includes("ipcRenderer.invoke('quickfile-settings-ensure'"));
   });
 
   it('app.js defines syncQuickFileSettingsFromAccount and exposes on window', () => {

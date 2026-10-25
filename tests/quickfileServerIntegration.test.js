@@ -90,9 +90,7 @@ describe('QuickFile server integration (custodynote.com)', () => {
     assert.equal(pull.ok, true, pull.error || 'pull failed');
     assert.ok(pull.blob, 'expected encrypted blob');
     const decrypted = sync.decryptQuickFileSettings(KEY, pull.blob);
-    assert.ok(decrypted, 'blob must decrypt with licence key');
-    assert.ok(decrypted.quickfileAccountNumber, 'account number');
-    assert.ok(decrypted.quickfileApiKey, 'api key');
-    assert.ok(decrypted.quickfileAppId, 'application id');
+    assert.ok(decrypted, 'preferences blob must decrypt');
+    assert.equal(decrypted.quickfileApiKey, undefined, 'credentials must not be in preferences blob');
   });
 });

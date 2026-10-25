@@ -48,7 +48,7 @@ describe('QuickFile connection panel (renderer)', () => {
     assert.ok(PRELOAD.includes("ipcRenderer.invoke('quickfile-connection-state')"));
     assert.ok(PRELOAD.includes('quickfileSettingsPush'));
     assert.ok(PRELOAD.includes('quickfileSettingsEnsure'));
-    assert.ok(PRELOAD.includes("ipcRenderer.invoke('quickfile-settings-ensure')"));
+    assert.ok(PRELOAD.includes("ipcRenderer.invoke('quickfile-settings-ensure'"));
   });
 
   it('saveSettings does not include QuickFile credential keys', () => {

@@ -58,9 +58,10 @@ describe('Async IPC — no synchronous bridge misuse', () => {
 
 describe('QuickFile payload shape — main.js', () => {
   it('uses ItemLines.ItemLine and Tax1 on lines', () => {
+    const invoiceLineJs = fs.readFileSync(path.join(root, 'lib', 'quickfileInvoiceLine.js'), 'utf8');
     assert.ok(mainJs.includes('ItemLines'));
     assert.ok(mainJs.includes('ItemLine:'));
-    assert.ok(mainJs.includes('Tax1:'));
+    assert.ok(invoiceLineJs.includes('Tax1:'));
   });
   it('accepts billingInvoiceNumber param', () => {
     assert.ok(mainJs.includes('billingInvoiceNumber'));
