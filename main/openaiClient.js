@@ -159,6 +159,7 @@ async function requestGroundedLegalAnswer(opts) {
     const validated = validateAiLegalResponse({
       text: parsed.text,
       citations: parsed.citations,
+      noteMode: options.noteMode,
     });
     if (!validated.ok) {
       return {
@@ -216,6 +217,7 @@ async function requestGroundedLegalAnswer(opts) {
     const validated = validateAiLegalResponse({
       text: parsed.text,
       citations: parsed.citations,
+      noteMode: options.noteMode,
     });
     if (!validated.ok) {
       return {

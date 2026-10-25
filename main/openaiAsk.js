@@ -14,10 +14,10 @@ let _inFlight = false;
 
 const ASK_SYSTEM_PROMPT =
   'You are a UK criminal defence solicitor assistant helping a qualified solicitor. ' +
-  'Answer the question asked clearly and practically. ' +
+  'Answer the question asked clearly and practically in plain text (no markdown, no inline URLs). ' +
   'Do not invent case facts about a specific client. Do not require or request client identifiers. ' +
   'UK law only unless the user asks about another jurisdiction. ' +
-  'Use web search. Follow the ACCURACY RULES and required Sources format.';
+  'Use web search. Follow the ACCURACY RULES. Put unverified points under Uncertainties; list URLs under Sources only.';
 
 function normaliseHistory(history) {
   if (!Array.isArray(history)) return [];
@@ -96,6 +96,7 @@ async function requestAskAnswer(opts) {
       inputMessages: built.messages,
       requireWebSearch: true,
       retryOnValidationFail: true,
+      noteMode: 'ask',
     });
     if (!result.ok) return result;
     return {

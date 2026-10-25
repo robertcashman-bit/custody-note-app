@@ -7,6 +7,7 @@
 
 const { requestGroundedLegalAnswer, DEFAULT_MODEL, RESPONSES_URL } = require('./openaiClient');
 const { OPENAI_KEY_MISSING_USER_MESSAGE } = require('../lib/openaiApiKeyCopy');
+const { LAW_ELEMENTS_PLAIN_NOTE_RULES } = require('./aiAccuracyPolicy');
 
 let _inFlight = false;
 
@@ -40,14 +41,14 @@ function buildPromptMessages(offences) {
     system:
       'You are a UK criminal defence solicitor assistant. Draft concise attendance-note content for "The Law / Elements of offence". ' +
       'Cover for each offence: (1) Actus reus, (2) Mens rea, (3) Common defences, (4) Sentencing guidelines summary (Sentencing Council / magistrates where relevant). ' +
-      'Use clear headings. UK law only. Use web search. Follow ACCURACY RULES — no unsourced case law; mandatory Sources. ' +
-      'Do not invent case facts. Do not ask for client details.',
+      'UK law only. Use web search. Follow ACCURACY RULES — no unsourced case law. ' +
+      'Do not invent case facts. Do not ask for client details.\n\n' +
+      LAW_ELEMENTS_PLAIN_NOTE_RULES,
     user:
       'Offence(s) on the attendance note:\n' +
       lines.join('\n') +
-      '\n\nProduce structured text suitable to paste into the Law / Elements of offence field. ' +
-      'Include Answer / Uncertainties / Sources headings. At least two source URLs. ' +
-      'Do not cite case law unless a retrieved source URL supports it.',
+      '\n\nDraft plain-text note content (Actus reus / Mens rea / Common defences / Sentencing). ' +
+      'No intro, no inline URLs, no markdown. Put unverified points under Uncertainties and list sources under Sources only.',
   };
 }
 
@@ -80,6 +81,7 @@ async function requestLawElementsDraft(opts) {
       ],
       requireWebSearch: true,
       retryOnValidationFail: true,
+      noteMode: 'law',
     });
     if (!result.ok) return result;
     return {

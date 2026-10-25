@@ -82,7 +82,9 @@ describe('openaiLawElements', () => {
     assert.match(msg.system, /Sentencing/i);
     assert.match(msg.system, /ACCURACY|Sources/i);
     assert.match(msg.user, /ABH/);
-    assert.match(msg.user, /Sources/);
+    assert.match(msg.user, /Uncertainties/i);
+    assert.match(msg.user, /plain-text/i);
+    assert.doesNotMatch(msg.user, /Include Answer \/ Uncertainties \/ Sources headings/i);
   });
 
   it('gates on confirmed and api key', async () => {
@@ -122,6 +124,8 @@ describe('openaiLawElements', () => {
     assert.equal(res.ok, true);
     assert.match(res.draft, /Actus reus/i);
     assert.ok(res.sources.length >= 2);
+    assert.doesNotMatch(res.draft, /\nSources\n/i);
+    assert.doesNotMatch(res.draft, /https?:\/\//);
   });
 
   it('rejects unsourced legal draft after retry', async () => {
@@ -182,6 +186,8 @@ describe('aiLawElements renderer — Insert-only + sources gate', () => {
     assert.match(html, /id="ai-ask-accuracy-banner"/);
     assert.match(src, /sources\.length/);
     assert.match(src, /Insert disabled|sources required|canInsert|_lastLawSources|appendLastToLawElements/i);
+    assert.doesNotMatch(src, /draft \+ '\\n\\nSources\\n' \+ formatSourcesPlain/);
+    assert.doesNotMatch(src, /answer \+ '\\n\\nSources\\n' \+ formatSourcesPlain/);
   });
 });
 
@@ -235,7 +241,8 @@ describe('openaiAsk', () => {
     });
     assert.equal(res.ok, true);
     assert.ok(res.sources.length >= 2);
-    assert.match(res.answer, /Sources/i);
+    assert.match(res.answer, /Actus reus|assault or battery/i);
+    assert.doesNotMatch(res.answer, /\nSources\n/i);
   });
 
   it('extractTextAndCitations reads annotations', () => {

@@ -35,12 +35,12 @@ describe('aiAccuracyPolicy', () => {
     assert.ok(r.sources.length >= 2);
   });
 
-  it('fails missing Sources section on legal assertions', () => {
+  it('fails legal assertions without enough citation URLs', () => {
     const r = validateAiLegalResponse({
       text: 'Answer\nThe prosecution must prove actus reus and mens rea.\n\nUncertainties\nNone',
     });
     assert.equal(r.ok, false);
-    assert.match(r.error, /Sources/i);
+    assert.match(r.error, /two source/i);
   });
 
   it('fails legal answer with fewer than two URLs', () => {
@@ -72,18 +72,19 @@ describe('aiAccuracyPolicy', () => {
     assert.equal(r.refusal, true);
   });
 
-  it('merges citation annotations into Sources when model omitted URLs', () => {
+  it('accepts url_citation annotations without URLs in note body', () => {
     const r = validateAiLegalResponse({
       text:
-        'Answer\nThe offence is either-way. Maximum sentence is five years.\n\nUncertainties\nNone\n\nSources\n(see citations)',
+        'Answer\nThe offence is either-way. Maximum sentence is five years.\n\nUncertainties\nNone',
       citations: [
-        { title: 'OAPA', url: 'https://www.legislation.gov.uk/ukpga/1861/100' },
+        { title: 'OAPA', url: 'https://www.legislation.gov.uk/ukpga/1861/100?utm_source=openai' },
         { title: 'CPS', url: 'https://www.cps.gov.uk/legal-guidance/offences-against-person' },
       ],
     });
     assert.equal(r.ok, true);
     assert.ok(r.sources.length >= 2);
-    assert.match(r.text, /legislation\.gov\.uk/);
+    assert.doesNotMatch(r.text, /legislation\.gov\.uk/);
+    assert.doesNotMatch(r.sources[0].url, /utm_source/);
   });
 
   it('formatSourcesBlock numbers title and URL', () => {

@@ -183,18 +183,39 @@
 
   /* ── Law / Elements fill ── */
 
-  function showReviewModal(draft, meta, sources, refusal) {
+  function showReviewModal(draft, meta, sources, refusal, uncertainties) {
     var modal = document.getElementById('ai-law-draft-modal');
     var text = document.getElementById('ai-law-draft-text');
     var metaEl = document.getElementById('ai-law-draft-meta');
     var sourcesEl = document.getElementById('ai-law-draft-sources');
     if (!modal || !text) return;
     text.value = draft || '';
-    if (metaEl) metaEl.textContent = meta || '';
     _lastLawSources = Array.isArray(sources) ? sources.slice() : [];
+    if (metaEl) {
+      var metaLine = meta || '';
+      if (uncertainties && String(uncertainties).trim() && !/^none$/i.test(String(uncertainties).trim())) {
+        metaLine =
+          (metaLine ? metaLine + ' ' : '') +
+          'Some points could not be fully verified — see Uncertainties below before inserting.';
+      } else if (_lastLawSources.length >= 2) {
+        metaLine =
+          (metaLine ? metaLine + ' ' : '') +
+          'Sources checked separately below — not inserted into the note.';
+      }
+      metaEl.textContent = metaLine;
+    }
     if (sourcesEl) {
+      var uncHtml = '';
+      if (uncertainties && String(uncertainties).trim() && !/^none$/i.test(String(uncertainties).trim())) {
+        uncHtml =
+          '<p class="settings-hint" style="margin:0 0 0.5rem;font-size:0.85rem;"><strong>Uncertainties</strong><br>' +
+          escapeHtml(String(uncertainties)).replace(/\n/g, '<br>') +
+          '</p>';
+      }
       sourcesEl.innerHTML =
-        '<strong style="font-size:0.85rem;">Sources</strong>' + formatSourcesHtml(_lastLawSources);
+        uncHtml +
+        '<strong style="font-size:0.85rem;">Sources checked</strong>' +
+        formatSourcesHtml(_lastLawSources);
       wireSourcesClicks(sourcesEl);
     }
     setInsertEnabled(sourcesPass(_lastLawSources, !!refusal) && !refusal);
@@ -253,13 +274,10 @@
       toast('Nothing to insert', 'warning');
       return;
     }
-    if (!/\bSources\b/i.test(draft) && _lastLawSources.length) {
-      draft = draft + '\n\nSources\n' + formatSourcesPlain(_lastLawSources);
-    }
     var existing = getField('lawElements').trim();
     if (existing) {
       confirmAsync(
-        'Replace the current Law / Elements of offence text with this AI draft (including Sources)?',
+        'Replace the current Law / Elements of offence text with this AI draft? (Sources stay in the review panel only.)',
         'Insert AI draft',
       ).then(function (ok) {
         if (ok) applyLawElementsDraft(draft);
@@ -303,6 +321,7 @@
           res.message || 'Web-sourced draft — verify before inserting',
           res.sources || [],
           !!res.refusal,
+          res.uncertainties || '',
         );
       })
       .catch(function (e) {
@@ -454,15 +473,12 @@
       return;
     }
     var answer = String(last.content || '').trim();
-    if (!/\bSources\b/i.test(answer) && last.sources && last.sources.length) {
-      answer = answer + '\n\nSources\n' + formatSourcesPlain(last.sources);
-    }
     var existing = getField('lawElements').trim();
     var next = existing ? existing + '\n\n' + answer : answer;
     confirmAsync(
       existing
-        ? 'Append the last AI answer (with Sources) to Law / Elements of offence?'
-        : 'Insert the last AI answer (with Sources) into Law / Elements of offence?',
+        ? 'Append the last AI answer to Law / Elements of offence? (Sources are not appended — see the Ask panel.)'
+        : 'Insert the last AI answer into Law / Elements of offence? (Sources are not inserted into the note.)',
       'Append AI answer',
     ).then(function (ok) {
       if (!ok) return;
