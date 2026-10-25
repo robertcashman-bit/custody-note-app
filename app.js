@@ -6072,6 +6072,9 @@ var REQUIRED_FIELD_KEYS = [
         if (!hadLocal && hasQuickFileSettingsConfigured() && opts.toastOnPull !== false) {
           showToast('QuickFile settings loaded from your Custody Note account', 'success', 4000);
         }
+        if (result && result.userMessage && !hasQuickFileSettingsConfigured()) {
+          showToast(result.userMessage, 'warning', 8000);
+        }
         return { settings: s, ensure: result };
       });
     }).catch(function(err) {
@@ -6088,7 +6091,13 @@ var REQUIRED_FIELD_KEYS = [
   window.syncQuickFileSettingsFromAccount = syncQuickFileSettingsFromAccount;
 
   function showQuickFileSetupRequired() {
-    showToast('Add your QuickFile account number, API key and application ID first.', 'warning');
+    showToast(
+      'QuickFile is not set up on this computer yet. Enter your Account Number, API key and Application ID once in Settings — they can sync from your Custody Note account when this device is signed in and activated.',
+      'warning',
+      9000
+    );
+    var banner = document.getElementById('qf-setup-required-banner');
+    if (banner) banner.style.display = '';
     openQuickFileSettings();
   }
 
@@ -6452,6 +6461,22 @@ var REQUIRED_FIELD_KEYS = [
       if (typeof refreshQuickFileConnectionPanel === 'function') refreshQuickFileConnectionPanel();
       const oaiKey = document.getElementById('setting-openai-apikey');
       if (oaiKey) oaiKey.value = s.openaiApiKey || '';
+      const oaiUnreadable = document.getElementById('openai-apikey-unreadable-hint');
+      if (oaiUnreadable) {
+        var oaiWarn = '';
+        if (s.openaiApiKeyUnreadable) {
+          oaiWarn = 'A saved OpenAI API key is on this computer but could not be read (for example after a reinstall). Paste your key again to restore AI fill.';
+        } else if (s.openaiApiKeySyncError && !s.openaiApiKey) {
+          oaiWarn = String(s.openaiApiKeySyncError);
+        }
+        if (oaiWarn) {
+          oaiUnreadable.textContent = oaiWarn;
+          oaiUnreadable.style.display = '';
+        } else {
+          oaiUnreadable.textContent = '';
+          oaiUnreadable.style.display = 'none';
+        }
+      }
       const fen = document.getElementById('setting-fee-earner-name');
       if (fen) fen.value = s.feeEarnerNameDefault || '';
       const opc = document.getElementById('setting-office-postcode');
@@ -7199,6 +7224,10 @@ var REQUIRED_FIELD_KEYS = [
       const existingByName = new Map((firms || []).map(function(firm) {
         return [String(firm.name || '').trim().toLowerCase(), firm];
       }).filter(function(entry) { return entry[0]; }));
+      const existingByQfId = new Map((firms || []).map(function(firm) {
+        const qid = String(firm.quickfile_client_id || '').trim();
+        return qid ? [qid, firm] : null;
+      }).filter(Boolean));
       let added = 0;
       let updated = 0;
       let skipped = 0;
@@ -7207,11 +7236,12 @@ var REQUIRED_FIELD_KEYS = [
         const companyName = String(client.companyName || '').trim();
         if (!companyName) return;
         const key = companyName.toLowerCase();
+        const qfClientId = String(client.clientId || client.ClientID || '').trim();
         const nextContact = String(client.contactName || '').trim();
         const nextPhone = String(client.telephone || '').trim();
         const nextEmail = String(client.email || '').trim();
         const nextAddress = String(client.address || '').trim();
-        const existing = existingByName.get(key);
+        let existing = (qfClientId && existingByQfId.get(qfClientId)) || existingByName.get(key);
         if (existing) {
           if (!overwriteExisting) {
             skipped++;
@@ -7232,10 +7262,12 @@ var REQUIRED_FIELD_KEYS = [
             contact_phone: nextPhone,
             contact_email: nextEmail,
             address: nextAddress,
+            quickfile_client_id: qfClientId || existing.quickfile_client_id || '',
           })));
           return;
         }
         existingByName.set(key, true);
+        if (qfClientId) existingByQfId.set(qfClientId, true);
         added++;
         saves.push(window.api.firmSave({
           name: companyName,
@@ -7243,6 +7275,7 @@ var REQUIRED_FIELD_KEYS = [
           contact_phone: nextPhone,
           contact_email: nextEmail,
           address: nextAddress,
+          quickfile_client_id: qfClientId,
         }));
       });
       const stamp = new Date().toISOString();
@@ -18533,9 +18566,29 @@ pdfAuditFooterHtml(d, settings) +
       }
     });
 
-    syncQuickFileSettingsFromAccount({ toastOnPull: true }).catch(function(e) {
+    syncQuickFileSettingsFromAccount({ toastOnPull: true }).then(function() {
+      if (!firms || !firms.length) {
+        if (hasQuickFileSettingsConfigured()) {
+          importFirmsFromQuickFile(false).catch(function(e) {
+            console.warn('[init] Auto QuickFile firm import skipped:', e && e.message);
+          });
+        }
+      }
+    }).catch(function(e) {
       console.error('[init] QuickFile account sync failed:', e);
     });
+
+    if (window.api && window.api.onFirmsUpdatedFromSync) {
+      window.api.onFirmsUpdatedFromSync(function(info) {
+        window.api.firmsList().then(function(f) {
+          setFirmsList(f || []);
+          if (typeof loadFirmsList === 'function') loadFirmsList();
+          if (info && info.count > 0) {
+            showToast('Firms synced from your Custody Note account (' + info.count + ' updated)', 'success', 4500);
+          }
+        }).catch(function() {});
+      });
+    }
 
     initDarkMode();
     initFontSize();

@@ -665,6 +665,9 @@
               <a href="https://custodynote.com" target="_blank" rel="noopener noreferrer" class="addon-buy-link">Buy QuickFile add-on</a>
             </div>
             <div id="qf-firms-content">
+              <div id="qf-setup-required-banner" style="display:none;margin-bottom:0.65rem;padding:0.65rem 0.85rem;border-radius:10px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:0.86rem;line-height:1.45;">
+                <strong>QuickFile not set up on this computer.</strong> Credentials do not travel with your licence key alone — sign in and activate sync, or enter your QuickFile Account Number, API key and Application ID once in Settings (Integrations → QuickFile), then use Import below.
+              </div>
               <div style="display:flex;flex-wrap:wrap;gap:0.6rem;align-items:center;">
                 <button type="button" id="btn-open-qf-settings" class="btn btn-secondary">Open QuickFile settings</button>
                 <button type="button" id="btn-test-qf-connection" class="btn btn-secondary">Test QuickFile connection</button>
@@ -1177,7 +1180,7 @@
         <div class="settings-card" id="quickfile-settings-card">
           <h2>QuickFile invoicing &amp; directory</h2>
           <div id="quickfile-settings-content">
-            <p class="settings-hint">Enter your QuickFile API credentials once — they are saved to your Custody Note account and available on every computer you use. Use them to <strong>send invoices</strong> from the billing workflow.</p>
+            <p class="settings-hint">Enter your QuickFile API credentials once on each computer (or sign in and activate sync so they load from your Custody Note account). They are encrypted on the server and are <strong>not</strong> stored in the licence-key settings blob. Use them to <strong>send invoices</strong> from the billing workflow.</p>
 
             <div id="qf-connection-status" class="qf-connection-status" role="status" aria-live="polite">
               <span class="qf-status-dot" id="qf-status-dot"></span>
@@ -1241,7 +1244,8 @@
             <p class="settings-hint">Optional. Paste your own OpenAI API key to fill <strong>The Law / Elements of offence</strong> from the Case Assessment checkbox. Only offence name and statute are sent when you confirm. Billed to your OpenAI account.</p>
             <label for="setting-openai-apikey">OpenAI API key</label>
             <input type="password" id="setting-openai-apikey" class="settings-input" placeholder="sk-…" autocomplete="off" spellcheck="false">
-            <p class="settings-hint" style="margin-top:0.5rem;">Saved on this device and synced (encrypted) with your other Custody Note settings to your licence account.</p>
+            <p id="openai-apikey-unreadable-hint" class="settings-hint settings-hint-warning" style="margin-top:0.5rem;display:none;" role="alert"></p>
+            <p class="settings-hint" style="margin-top:0.5rem;">Encrypted on this device and synced to your <strong>Custody Note account</strong> (same protection as QuickFile credentials — not stored in the licence-key settings blob). Sign in and activate sync on each computer.</p>
           </div>
         </div>
 

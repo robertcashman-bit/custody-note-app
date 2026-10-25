@@ -16,15 +16,16 @@ describe('QuickFile server-first sync (source regression)', () => {
     assert.match(APP, /syncQuickFileSettingsFromAccount\(\{ toastOnPull: true \}\)/);
   });
 
-  it('settings hint says enter once and syncs to account', () => {
-    assert.match(HTML, /Enter your QuickFile API credentials once/i);
-    assert.match(HTML, /every computer you use/i);
+  it('settings hint explains per-computer entry and account credential sync', () => {
+    assert.match(HTML, /Enter your QuickFile API credentials once on each computer/i);
+    assert.match(HTML, /sign in and activate sync/i);
   });
 
-  it('INTEGRATIONS.md documents server-backed QuickFile credentials', () => {
-    assert.match(DOCS, /QuickFile invoicing/);
-    assert.match(DOCS, /\/api\/settings\/quickfile/);
-    assert.match(DOCS, /Enter them once/i);
+  it('INTEGRATIONS.md documents wrap-key credential sync separate from preferences blob', () => {
+    assert.match(DOCS, /QuickFile credentials/);
+    assert.match(DOCS, /\/api\/settings\/quickfile-credentials/);
+    assert.match(DOCS, /\/api\/account\/quickfile-wrap-key/);
+    assert.match(DOCS, /licence key string alone cannot decrypt credentials/i);
   });
 
   it('connection state helper describes account sync not per-machine-only storage', () => {
