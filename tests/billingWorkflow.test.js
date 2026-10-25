@@ -308,6 +308,22 @@ describe('app.js — view wiring', () => {
     assert.ok(appJs.includes('executePrimaryRecordAction'));
   });
 
+  it('Records Bill action opens workflow at billing step', () => {
+    assert.match(appJs, /function billAttendanceFromList/);
+    assert.match(appJs, /_matterBillingStartStep\s*=\s*1/);
+    assert.match(appJs, /mountWorkflowInline\(stage, startStep/);
+  });
+
+  it('Account & cloud settings tab merges sync and QuickFile on account panel', () => {
+    const accountIdx = indexHtml.indexOf('data-stab-panel="account"');
+    const backupIdx = indexHtml.indexOf('data-stab-panel="backup"');
+    assert.ok(accountIdx !== -1 && backupIdx !== -1);
+    const accountSlice = indexHtml.slice(accountIdx, backupIdx);
+    assert.ok(accountSlice.includes('id="cross-device-sync-section"'), 'sync must live on account tab');
+    assert.ok(accountSlice.includes('id="quickfile-settings-card"'), 'QuickFile must live on account tab');
+    assert.match(indexHtml, /data-stab="account"[^>]*>Account &amp; cloud</);
+  });
+
   it('streamlined billing UX hides §9 duplicate action buttons', () => {
     const fnIdx = appJs.indexOf('function updateFormBarVisibility');
     assert.ok(fnIdx !== -1);

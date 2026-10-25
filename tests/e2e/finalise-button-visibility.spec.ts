@@ -2,11 +2,11 @@
  * Regression: Finalise must be reachable from any section via the bottom bar pill.
  *
  * Primary record action (Finalise / Finish matter / Archive) lives on
- * #bottom-bar-finish-pill; #billing-panel-btn stays hidden on the form.
+ * #bottom-bar-finish-pill and matching #billing-panel-btn in the app header.
  *
  * Asserts on a custody/voluntary draft:
  *   A. #bottom-bar-finish-pill visible on §1 with label Finalise
- *   B. Same on §9; #form-finalise-bar and #billing-panel-btn stay hidden
+ *   B. Same on §9; header pill mirrors bottom bar; §9 duplicate bars stay hidden
  *   C. billing-readiness panel readable in light and dark themes
  */
 import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test';
@@ -167,8 +167,6 @@ for (const mode of ['custody', 'voluntary'] as const) {
 
     /* ---- A. Bottom-bar Finalise pill visible on Section 1 (draft) ---- */
     const headerBtn = page.locator('#header-form-actions #billing-panel-btn');
-    await expect(headerBtn, '#billing-panel-btn must stay hidden on the form (bottom-bar UX)').not.toBeVisible();
-
     const pill = page.locator('#bottom-bar-finish-pill');
     await expect(
       pill,
@@ -176,6 +174,8 @@ for (const mode of ['custody', 'voluntary'] as const) {
     ).toBeVisible({ timeout: 5_000 });
     await expect(pill).toHaveText(/Finalise/);
     await expect(pill).toHaveAttribute('data-action', 'finalise');
+    await expect(headerBtn, '#billing-panel-btn mirrors bottom pill on §1').toBeVisible();
+    await expect(headerBtn).toHaveText(/Finalise/);
 
     /* ---- B. Navigate to Section 9; bottom pill still primary; no §9 duplicates ---- */
     await page.evaluate(() => {
@@ -190,7 +190,8 @@ for (const mode of ['custody', 'voluntary'] as const) {
 
     await expect(pill, 'bottom-bar Finalise must remain visible on §9').toBeVisible();
     await expect(pill).toHaveText(/Finalise/);
-    await expect(headerBtn, 'header billing button must stay hidden on §9').not.toBeVisible();
+    await expect(headerBtn, 'header billing button mirrors bottom pill on §9').toBeVisible();
+    await expect(headerBtn).toHaveText(/Finalise/);
 
     const finaliseBar = page.locator('#form-finalise-bar');
     await expect(

@@ -242,6 +242,22 @@
    * Keep visit-type bar and Work Type dropdown aligned when workType changes in section 1.
    * @returns {string|null} resolved visit type after sync
    */
+  /** Derive LAA workType from visit type + custody/voluntary mode (UI hides Work Type on station forms). */
+  function syncWorkTypeFromVisitType(data) {
+    if (!data || data._formType === 'telephone') return null;
+    var visit = resolveVisitType(data);
+    if (visit && visit !== VISIT_FIRST) {
+      data.workType = WORK_TYPE_FURTHER;
+      return data.workType;
+    }
+    if (data.attendanceMode === 'voluntary') {
+      data.workType = WORK_TYPE_VOLUNTARY;
+    } else {
+      data.workType = WORK_TYPE_FIRST;
+    }
+    return data.workType;
+  }
+
   function syncVisitTypeFromWorkType(data) {
     if (!data || data._formType === 'telephone') return null;
     var wt = String(data.workType || '').trim();
@@ -282,6 +298,7 @@
   global.followUpReasonCodesForChooser = followUpReasonCodesForChooser;
   global.applyAttendanceVisitType = applyVisitType;
   global.syncVisitTypeFromWorkType = syncVisitTypeFromWorkType;
+  global.syncWorkTypeFromVisitType = syncWorkTypeFromVisitType;
   global.captureVisitTypeRevertIfNeeded = captureVisitTypeRevertIfNeeded;
   global.countAttendanceDataKeys = countDataKeys;
 
@@ -296,6 +313,7 @@
       followUpReasonCodesForChooser: followUpReasonCodesForChooser,
       applyAttendanceVisitType: applyVisitType,
       syncVisitTypeFromWorkType: syncVisitTypeFromWorkType,
+      syncWorkTypeFromVisitType: syncWorkTypeFromVisitType,
       captureVisitTypeRevertIfNeeded: captureVisitTypeRevertIfNeeded,
       countAttendanceDataKeys: countDataKeys,
       WORK_TYPE_FURTHER: WORK_TYPE_FURTHER,

@@ -646,12 +646,7 @@ body.form-active .app-footer { display: none; }
   background: linear-gradient(135deg, #6d28d9, #7c3aed);
 }
 
-/* Phase 3: Calm header — hide secondary buttons when editing, show only autosave + gear */
-body.form-active #header-kb-help,
-body.form-active #header-laa-forms,
-body.form-active #header-sections-idx {
-  display: none;
-}
+/* Keep ? / LAA / Sections reachable in the app header while editing (form-page-header is hidden). */
 body.form-active .autosave-indicator {
   font-size: 0.82rem; opacity: 0.85;
 }

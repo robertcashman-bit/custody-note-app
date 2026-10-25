@@ -10,6 +10,7 @@ const {
   applyAttendanceVisitType,
   resolveAttendanceVisitType,
   syncVisitTypeFromWorkType,
+  syncWorkTypeFromVisitType,
   listAttendanceVisitTypeOptions,
   followUpReasonCodesForChooser,
   TELEPHONE_VISIT_TYPE_BLOCK_MESSAGE,
@@ -93,6 +94,15 @@ describe('attendance-visit-type (in-place conversion)', () => {
       resolveAttendanceVisitType({ workType: 'First Police Station Attendance' }),
       ATTENDANCE_VISIT_TYPES.first
     );
+  });
+
+  it('syncWorkTypeFromVisitType derives LAA workType from visit type + mode', () => {
+    var d = syntheticCustodyRecord();
+    assert.strictEqual(syncWorkTypeFromVisitType(d), 'First Police Station Attendance');
+    applyAttendanceVisitType(d, ATTENDANCE_VISIT_TYPES.bail_return);
+    assert.strictEqual(syncWorkTypeFromVisitType(d), WORK_TYPE_FURTHER);
+    var v = syntheticVoluntaryRecord();
+    assert.strictEqual(syncWorkTypeFromVisitType(v), 'Voluntary Police Station Attendance');
   });
 
   it('maps extended follow-up types onto Further + _followUpReason', () => {
@@ -225,8 +235,9 @@ describe('attendance-visit-type UI wiring (source)', () => {
     assert.match(appJs, /function updateVisitTypeBar/);
     assert.match(appJs, /handleAttendanceVisitTypeChange/);
     assert.match(appJs, /id="visit-type-attendance-select"/);
-    assert.match(appJs, /id="visit-type-outcome-select"/);
-    assert.match(appJs, /field === 'workType'/);
+    assert.doesNotMatch(appJs, /id="visit-type-outcome-select"/);
+    assert.match(appJs, /f\.key === 'workType' && formData\._formType !== 'telephone'/);
+    assert.match(appJs, /syncWorkTypeFromVisitType/);
     assert.doesNotMatch(appJs, /visit-type-segmented/);
   });
 

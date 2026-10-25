@@ -4607,6 +4607,73 @@ var REQUIRED_FIELD_KEYS = [
   function updateHomeBillingWidget() {}
   window.updateHomeBillingWidget = updateHomeBillingWidget;
 
+  function _startBlankAttendanceForm(mode) {
+    currentStandaloneSectionId = null;
+    formData = {};
+    currentAttendanceId = null;
+    currentSectionIdx = 0;
+    if (mode === 'voluntary') {
+      activeFormSections = voluntaryFormSections;
+      formData.attendanceMode = 'voluntary';
+      formData.workType = 'Voluntary Police Station Attendance';
+    } else if (mode === 'telephone') {
+      activeFormSections = telFormSections;
+      formData.workType = 'Police Station Telephone Attendance';
+      formData._formType = 'telephone';
+      prefillDefaults();
+      renderForm(formData);
+      showView('new');
+      return;
+    } else {
+      activeFormSections = formSections;
+      formData.attendanceMode = 'custody';
+      formData.workType = 'First Police Station Attendance';
+    }
+    formData._formType = 'attendance';
+    prefillDefaults();
+    renderForm(formData);
+    showView('new');
+  }
+
+  function openNewRecordTypeChooser() {
+    if (window.__licenceExpired) { showLicenceGateToast(); return; }
+    var overlay = document.getElementById('new-record-type-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'flex';
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+  window.openNewRecordTypeChooser = openNewRecordTypeChooser;
+
+  function closeNewRecordTypeChooser() {
+    var overlay = document.getElementById('new-record-type-overlay');
+    if (!overlay) return;
+    overlay.style.display = 'none';
+    overlay.setAttribute('aria-hidden', 'true');
+  }
+
+  function openOfficerEmailFromForm() {
+    if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.init === 'function') {
+      try { window.OfficerEmailsPanel.init(); } catch (_) {}
+    }
+    if (window.OfficerEmailsPanel && typeof window.OfficerEmailsPanel.refresh === 'function') {
+      try { window.OfficerEmailsPanel.refresh(); } catch (_) {}
+    }
+    var panelToggle = document.getElementById('form-context-panel-toggle');
+    var panel = document.getElementById('form-context-panel');
+    if (panel && panel.hidden && panelToggle) {
+      panelToggle.click();
+    }
+    var host = document.getElementById('officer-emails-panel-host');
+    if (host && host.scrollIntoView) {
+      requestAnimationFrame(function () {
+        host.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      });
+    }
+    var tpl = document.getElementById('oep-template');
+    if (tpl && tpl.focus) tpl.focus();
+  }
+  window.openOfficerEmailFromForm = openOfficerEmailFromForm;
+
   function openQuickCapture() {
     showView('quickcapture');
     (function initQcDsccPrivateToggle() {
@@ -5495,6 +5562,10 @@ var REQUIRED_FIELD_KEYS = [
       clearOutcomeBailState();
     } else if (!isBailReturnOutcomeDecision(formData.outcomeDecision)) {
       clearBailReturnDetails();
+    }
+    if (formData._formType !== 'telephone') {
+      if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
+      if (typeof syncWorkTypeFromVisitType === 'function') syncWorkTypeFromVisitType(formData);
     }
     window.api.getSettings().then(s => {
       window._appSettingsCache = s || {};
@@ -7492,7 +7563,7 @@ var REQUIRED_FIELD_KEYS = [
     return billHtml +
       '<button type="button" class="btn-list-action amend-btn" data-action="amend" data-id="' + idAttr + '" title="Open record to edit (amend)">Edit</button>' +
       '<button type="button" class="btn-list-action" data-action="dup" title="Duplicate for another client (same session)">Duplicate</button>' +
-      '<button type="button" class="btn-list-action" data-action="followUp" title="Same client — bail return, identification, or other further visit">Follow-up</button>' +
+      '<button type="button" class="btn-list-action btn-list-action-primary" data-action="followUp" title="Start a new follow-up attendance (bail return, RUI, ID, etc.) — primary way to open the next visit">Follow-up</button>' +
       '<button type="button" class="btn-list-action" data-action="newMatter" title="New matter (same client)">New matter</button>' +
       archiveBtn +
       '<button type="button" class="btn-list-action" data-action="delete" title="Delete this record">Delete</button>';
@@ -7729,6 +7800,12 @@ var REQUIRED_FIELD_KEYS = [
     }).catch(function(e) { showToast('Failed to load record', 'error'); console.error('[newMatter]', e); });
   }
 
+  function _syncVisitTypeFieldsOnOpen(data) {
+    if (!data || data._formType === 'telephone') return;
+    if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(data);
+    if (typeof syncWorkTypeFromVisitType === 'function') syncWorkTypeFromVisitType(data);
+  }
+
   function openAttendance(id, openOpts) {
     var requestToken = ++_openAttendanceToken;
     var pendingStandalone = (openOpts && openOpts.standaloneSectionId)
@@ -7766,6 +7843,7 @@ var REQUIRED_FIELD_KEYS = [
         activeFormSections = formSections;
       }
       currentSectionIdx = 0;
+      _syncVisitTypeFieldsOnOpen(formData);
       renderForm(formData);
       showView('new');
       reconcileFeeEarnerCertificationWithDraftStatus(currentRecordStatus);
@@ -7812,6 +7890,7 @@ var REQUIRED_FIELD_KEYS = [
         activeFormSections = formSections;
       }
       currentSectionIdx = 0;
+      _syncVisitTypeFieldsOnOpen(formData);
       renderForm(formData);
       showView('new');
       reconcileFeeEarnerCertificationWithDraftStatus(currentRecordStatus);
@@ -8077,6 +8156,12 @@ var REQUIRED_FIELD_KEYS = [
     var canMark = !!(currentAttendanceId && locked && !hasInvoice && !markedBilled);
     if (markBilledBtn) markBilledBtn.style.display = canMark ? '' : 'none';
     if (purgeBtn) purgeBtn.style.display = canPurge ? '' : 'none';
+    var saveExitBtn = document.getElementById('form-save-exit');
+    if (saveExitBtn) {
+      var onStationForm = _currentView === 'new' && formData && formData._formType;
+      var canSaveExit = onStationForm && !currentRecordArchived && !isNoteLockedForEditing();
+      saveExitBtn.style.display = canSaveExit ? '' : 'none';
+    }
   }
 
   /** Mark billed to firm — enables Clear after billed without QuickFile. */
@@ -8192,10 +8277,6 @@ var REQUIRED_FIELD_KEYS = [
 
   function updateBottomBarFinishPill() {
     var headerBtn = document.getElementById('billing-panel-btn');
-    if (headerBtn) {
-      headerBtn.style.display = 'none';
-      headerBtn.removeAttribute('data-action');
-    }
     var pill = document.getElementById('bottom-bar-finish-pill');
     if (!pill) return;
     var state = getPrimaryRecordActionState();
@@ -8203,6 +8284,10 @@ var REQUIRED_FIELD_KEYS = [
       pill.style.display = 'none';
       pill.setAttribute('aria-hidden', 'true');
       pill.removeAttribute('data-action');
+      if (headerBtn) {
+        headerBtn.style.display = 'none';
+        headerBtn.removeAttribute('data-action');
+      }
       return;
     }
     pill.style.display = '';
@@ -8211,6 +8296,13 @@ var REQUIRED_FIELD_KEYS = [
     pill.className = 'bottom-btn finish-pill ' + state.stateClass;
     pill.dataset.action = state.action;
     pill.title = state.titleText;
+    if (headerBtn) {
+      headerBtn.style.display = '';
+      headerBtn.textContent = state.label;
+      headerBtn.className = 'btn btn-small btn-accent btn-header-primary-action ' + state.stateClass;
+      headerBtn.dataset.action = state.action;
+      headerBtn.title = state.titleText;
+    }
   }
 
   function updateBillingPanelHeaderBtn() {
@@ -8462,6 +8554,8 @@ var REQUIRED_FIELD_KEYS = [
         return;
       }
       applyAttendanceSessionFromRow(id, cachedRow, cachedData);
+      _matterBillingStartStep = 1;
+      _matterBillingAutoStartPending = true;
       if (typeof showView === 'function') showView('matter-billing');
       return;
     }
@@ -8476,6 +8570,8 @@ var REQUIRED_FIELD_KEYS = [
         return;
       }
       applyAttendanceSessionFromRow(id, row, parsedData);
+      _matterBillingStartStep = 1;
+      _matterBillingAutoStartPending = true;
       if (typeof showView === 'function') showView('matter-billing');
     }).catch(function (e) {
       showToast('Failed to load record for billing', 'error');
@@ -8536,6 +8632,8 @@ var REQUIRED_FIELD_KEYS = [
    * showView / Finish-matter entry passes autoStart:true once.
    * Close / refresh paths pass autoStart:false so Close cannot remount. */
   var _matterBillingAutoStartPending = false;
+  /** When set (0–2), inline workflow opens on that step (e.g. 1 = billing from Records Bill). */
+  var _matterBillingStartStep = null;
 
   function _matterBillingMountWorkflow() {
     var stage = document.getElementById('matter-billing-stage');
@@ -8555,7 +8653,9 @@ var REQUIRED_FIELD_KEYS = [
     _matterBillingAutoStartPending = false;
     var startBtn = document.getElementById('matter-billing-start-btn');
     if (startBtn) startBtn.textContent = 'Restart from step 1';
-    window.mountWorkflowInline(stage, undefined, function () {
+    var startStep = typeof _matterBillingStartStep === 'number' ? _matterBillingStartStep : undefined;
+    _matterBillingStartStep = null;
+    window.mountWorkflowInline(stage, startStep, function () {
       /* onClose: workflow closed (e.g. Close, or after Archive).
        * Reset the stage and reload chrome WITHOUT auto-starting again. */
       var s = document.getElementById('matter-billing-stage');
@@ -9022,6 +9122,7 @@ var REQUIRED_FIELD_KEYS = [
       scheduleQuietSave();
       return;
     }
+    if (typeof syncWorkTypeFromVisitType === 'function') syncWorkTypeFromVisitType(formData);
     _syncVisitTypeManagedFieldsToForm();
     updateVisitTypeBar();
     updateContextBar();
@@ -9038,15 +9139,8 @@ var REQUIRED_FIELD_KEYS = [
     formData.attendanceMode = mode;
     var isVol = mode === 'voluntary';
     activeFormSections = isVol ? voluntaryFormSections : formSections;
-    if (isVol) {
-      formData.workType = 'Voluntary Police Station Attendance';
-      if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
-    } else {
-      formData.workType = formData.workType === 'Voluntary Police Station Attendance'
-        ? 'First Police Station Attendance'
-        : (formData.workType || 'First Police Station Attendance');
-      if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
-    }
+    if (typeof syncWorkTypeFromVisitType === 'function') syncWorkTypeFromVisitType(formData);
+    else if (typeof syncVisitTypeFromWorkType === 'function') syncVisitTypeFromWorkType(formData);
     currentSectionIdx = 0;
     _progressBarBuilt = false;
     renderForm(formData);
@@ -9074,9 +9168,9 @@ var REQUIRED_FIELD_KEYS = [
       : visitTypes.first;
     var mode = formData.attendanceMode === 'voluntary' ? 'voluntary' : 'custody';
     var linkId = formData._followUpFromAttendanceId;
-    var linkHint = linkId
-      ? ('Linked to attendance #' + esc(String(linkId)))
-      : 'Optional: link to the earlier attendance this visit relates to.';
+    var linkTitle = linkId
+      ? ('Linked to prior attendance #' + esc(String(linkId)) + ' (metadata on this note only)')
+      : 'Link this note to a prior visit on file — does not create a new follow-up (use Records → Follow-up for that).';
 
     var typeOptions = typeof listAttendanceVisitTypeOptions === 'function'
       ? listAttendanceVisitTypeOptions()
@@ -9090,58 +9184,6 @@ var REQUIRED_FIELD_KEYS = [
       return '<option value="' + esc(opt.code) + '"' + selected + '>' + esc(opt.label) + '</option>';
     }).join('');
 
-    var showQuickOutcome = typeof visitTypeShowsQuickOutcome === 'function'
-      && visitTypeShowsQuickOutcome(currentVisit);
-    var quickOutcome = (typeof resolveQuickVisitOutcomeFromDecision === 'function')
-      ? resolveQuickVisitOutcomeFromDecision(formData.outcomeDecision)
-      : '';
-    var outcomeGroups = typeof listQuickVisitOutcomeOptionGroups === 'function'
-      ? listQuickVisitOutcomeOptionGroups()
-      : (typeof listQuickVisitOutcomeOptions === 'function'
-        ? [{ label: '', options: listQuickVisitOutcomeOptions() }]
-        : []);
-    var outcomeSelectHtml = '<option value="">— Outcome (section 8) —</option>' + outcomeGroups.map(function (grp) {
-      var optsHtml = (grp.options || []).map(function (opt) {
-        var sel = quickOutcome === opt.code ? ' selected' : '';
-        return '<option value="' + esc(opt.code) + '"' + sel + '>' + esc(opt.label) + '</option>';
-      }).join('');
-      if (grp.label) {
-        return '<optgroup label="' + esc(grp.label) + '">' + optsHtml + '</optgroup>';
-      }
-      return optsHtml;
-    }).join('');
-
-    var bailExtrasHtml = '';
-    if (showQuickOutcome && quickOutcome === 're_bailed') {
-      var bailDateVal = esc(formData.bailDate || '');
-      var bailType = formData.bailType || 'Conditional';
-      var bailCondVal = esc(formData.bailConditions || '');
-      bailExtrasHtml =
-        '<label class="visit-type-bar-label" for="visit-type-bail-date">Bail return date</label>' +
-        '<input type="date" class="visit-type-bail-date" id="visit-type-bail-date" value="' + bailDateVal + '"'
-          + (locked ? ' disabled' : '') + ' />' +
-        '<label class="visit-type-bar-label" for="visit-type-bail-type">Bail</label>' +
-        '<select class="visit-type-bail-type" id="visit-type-bail-type"' + (locked ? ' disabled' : '') + '>' +
-          '<option value="Unconditional"' + (bailType === 'Unconditional' ? ' selected' : '') + '>Unconditional</option>' +
-          '<option value="Conditional"' + (bailType === 'Conditional' ? ' selected' : '') + '>Conditional</option>' +
-        '</select>' +
-        (bailType === 'Conditional'
-          ? ('<label class="visit-type-bar-label" for="visit-type-bail-conditions">Conditions</label>' +
-            '<input type="text" class="visit-type-bail-conditions" id="visit-type-bail-conditions" '
-            + 'placeholder="Summary — full checklist in section 8" value="' + bailCondVal + '"'
-            + (locked ? ' disabled' : '') + ' />')
-          : '');
-    }
-
-    var outcomeRowHtml = showQuickOutcome
-      ? ('<div class="visit-type-outcome-row">' +
-          '<label class="visit-type-bar-label" for="visit-type-outcome-select">Outcome</label>' +
-          '<select class="visit-type-outcome-select" id="visit-type-outcome-select" aria-label="Visit outcome"'
-            + (locked ? ' disabled' : '') + '>' + outcomeSelectHtml + '</select>' +
-          bailExtrasHtml +
-        '</div>')
-      : '';
-
     bar.innerHTML =
       '<div class="visit-type-bar-primary">' +
         '<span class="visit-type-bar-label">Attendance</span>' +
@@ -9153,10 +9195,8 @@ var REQUIRED_FIELD_KEYS = [
         '<select class="visit-type-attendance-select" id="visit-type-attendance-select" aria-label="Attendance type"'
           + (locked ? ' disabled' : '') + '>' + typeSelectHtml + '</select>' +
         '<button type="button" class="btn btn-secondary btn-small visit-type-link-btn" id="visit-type-link-btn"'
-          + (locked || currentVisit === visitTypes.first ? ' disabled' : '') + '>Link earlier visit</button>' +
-        '<span class="visit-type-bar-hint">' + linkHint + '</span>' +
-      '</div>' +
-      outcomeRowHtml;
+          + (locked || currentVisit === visitTypes.first ? ' disabled' : '') + ' title="' + esc(linkTitle) + '">Link prior visit</button>' +
+      '</div>';
 
     if (!_visitTypeBarHandlersBound) {
       _visitTypeBarHandlersBound = true;
@@ -9166,29 +9206,6 @@ var REQUIRED_FIELD_KEYS = [
         }
         if (e.target && e.target.id === 'visit-type-mode-select') {
           handleVisitTypeBarModeChange(e.target.value);
-        }
-        if (e.target && e.target.id === 'visit-type-outcome-select' && !e.target.disabled) {
-          handleQuickVisitOutcomeChange(e.target.value);
-        }
-        if (e.target && e.target.id === 'visit-type-bail-type' && !e.target.disabled) {
-          formData.bailType = e.target.value;
-          setFieldValueSilent('bailType', e.target.value);
-          updateVisitTypeBar();
-          applyConditionalVisibility();
-          scheduleQuietSave();
-        }
-        if (e.target && e.target.id === 'visit-type-bail-date' && !e.target.disabled) {
-          formData.bailDate = e.target.value;
-          setFieldValueSilent('bailDate', e.target.value);
-          scheduleQuietSave();
-          updateContextBar();
-        }
-      });
-      bar.addEventListener('input', function (e) {
-        if (e.target && e.target.id === 'visit-type-bail-conditions' && !e.target.disabled) {
-          formData.bailConditions = e.target.value;
-          setFieldValueSilent('bailConditions', e.target.value);
-          scheduleQuietSave();
         }
       });
       bar.addEventListener('click', function (e) {
@@ -10541,6 +10558,7 @@ var REQUIRED_FIELD_KEYS = [
 
   function renderField(f, data, grid) {
     if (f.key === 'attendanceMode' && formData._formType !== 'telephone') return;
+    if (f.key === 'workType' && formData._formType !== 'telephone') return;
     if (f.type === 'sectionHeading') {
       const h = document.createElement('h3');
       h.className = 'section-heading section-heading--static';
@@ -13027,6 +13045,20 @@ var REQUIRED_FIELD_KEYS = [
       input.addEventListener(clearEvent, () => {
         if ((input.value || '').trim()) input.classList.remove('input-error');
       });
+    }
+
+    if (f.key === 'oicName' && formData._formType !== 'telephone') {
+      var oicMailBtn = document.createElement('button');
+      oicMailBtn.type = 'button';
+      oicMailBtn.className = 'btn btn-secondary btn-small';
+      oicMailBtn.style.marginTop = '0.35rem';
+      oicMailBtn.textContent = 'Email officer';
+      oicMailBtn.title = 'Open officer email drafts for this matter (Outlook Web)';
+      oicMailBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        if (typeof openOfficerEmailFromForm === 'function') openOfficerEmailFromForm();
+      });
+      wrap.appendChild(oicMailBtn);
     }
 
     grid.appendChild(wrap);
@@ -17854,15 +17886,7 @@ pdfAuditFooterHtml(d, settings) +
             case 'records': navigateTo('list'); break;
             case 'new-attendance':
               if (window.__licenceExpired) { showLicenceGateToast(); break; }
-              currentStandaloneSectionId = null;
-              formData = {}; currentAttendanceId = null; currentSectionIdx = 0;
-              activeFormSections = formSections;
-              formData.attendanceMode = 'custody';
-              formData.workType = 'First Police Station Attendance';
-              formData._formType = 'attendance';
-              prefillDefaults();
-              renderForm(formData);
-              showView('new');
+              openNewRecordTypeChooser();
               break;
             case 'laa-forms': showLaaFormsNav(); break;
             case 'firms': showView('firms'); break;
@@ -18185,8 +18209,14 @@ pdfAuditFooterHtml(d, settings) +
           });
           if (listStatusFilter === 'draft') filtered = filtered.filter(function(r) { return (r.status || 'draft') === 'draft'; });
           else if (listStatusFilter === 'finalised') filtered = filtered.filter(function(r) { return r.status === 'finalised'; });
+          if (filtered.length === 1) {
+            openAttendance(filtered[0].id);
+            globalSearchEl.value = '';
+            return;
+          }
           showView('list');
           refreshList();
+          if (filtered.length === 0) showToast('No records match that search', 'info');
         });
       });
     }
@@ -18653,6 +18683,33 @@ pdfAuditFooterHtml(d, settings) +
     });
     document.getElementById('form-bottom-export-pdf')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
     document.getElementById('header-export-pdf-btn')?.addEventListener('click', () => { confirmConfidentialityThen(exportPdf); });
+    document.getElementById('form-preview-pdf-btn')?.addEventListener('click', function () {
+      confirmConfidentialityThen(printAttendanceNote);
+    });
+    document.getElementById('header-preview-pdf-btn')?.addEventListener('click', function () {
+      confirmConfidentialityThen(printAttendanceNote);
+    });
+    var newRecOverlay = document.getElementById('new-record-type-overlay');
+    if (newRecOverlay && !newRecOverlay.dataset.bound) {
+      newRecOverlay.dataset.bound = '1';
+      newRecOverlay.addEventListener('click', function (e) {
+        if (e.target === newRecOverlay) closeNewRecordTypeChooser();
+      });
+      newRecOverlay.querySelectorAll('[data-new-record-kind]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var kind = btn.getAttribute('data-new-record-kind');
+          closeNewRecordTypeChooser();
+          if (kind === 'follow-up') {
+            if (typeof openFollowUpSearchPicker === 'function') openFollowUpSearchPicker();
+            else showToast('Follow-up attendance is not available. Please refresh the app.', 'error');
+            return;
+          }
+          if (kind === 'quick') { openQuickCapture(); return; }
+          _startBlankAttendanceForm(kind === 'voluntary' ? 'voluntary' : (kind === 'telephone' ? 'telephone' : 'custody'));
+        });
+      });
+      document.getElementById('new-record-type-cancel')?.addEventListener('click', closeNewRecordTypeChooser);
+    }
     document.getElementById('header-sections-idx')?.addEventListener('click', openSectionsIndex);
     document.getElementById('header-laa-forms')?.addEventListener('click', showLaaFormsPopup);
     document.getElementById('header-kb-help')?.addEventListener('click', () => { document.getElementById('kb-help-modal').classList.remove('hidden'); });
@@ -18684,12 +18741,12 @@ pdfAuditFooterHtml(d, settings) +
         var nav = btn.dataset.nav;
         if (nav === 'new-attendance') {
           if (window.__licenceExpired) { showLicenceGateToast(); return; }
-          if (currentAttendanceId || Object.keys(formData).length > 0) {
+          if (currentAttendanceId || (formData && hasMeaningfulData(formData))) {
             showConfirm('Start a new record? Any unsaved changes will be lost.').then(function(ok) {
-              if (ok) { currentAttendanceId = null; formData = {}; showView('new'); }
+              if (ok) openNewRecordTypeChooser();
             });
           } else {
-            showView('new');
+            openNewRecordTypeChooser();
           }
         } else if (nav === 'update') {
           triggerUpdateCheck();

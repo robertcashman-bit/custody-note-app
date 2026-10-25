@@ -30,37 +30,7 @@
           <option value="identification">ID procedure (identification parade / VIPER)</option>
           <option value="rui_return">RUI return</option>
         </select>
-        <button type="button" class="btn btn-secondary btn-small visit-type-link-btn">Link earlier visit</button>
-        <span class="visit-type-bar-hint">Optional: link to the earlier attendance this visit relates to.</span>
-      </div>
-      <div class="visit-type-outcome-row">
-        <label class="visit-type-bar-label" for="visit-type-outcome-select">Outcome</label>
-        <select class="visit-type-outcome-select" id="visit-type-outcome-select" aria-label="Visit outcome" size="12">
-          <option value="">— Outcome (section 8) —</option>
-          <option value="charged">Charged</option>
-          <option value="nfa">NFA (no further action)</option>
-          <option value="re_bailed" selected>Re-bailed</option>
-          <option value="rui">Released under investigation</option>
-          <option value="further_interview_needed">Further interview needed</option>
-          <optgroup label="Out-of-court disposal">
-            <option value="ooc_simple_caution">Simple caution</option>
-            <option value="ooc_conditional_caution">Conditional caution</option>
-            <option value="ooc_youth_caution">Youth caution / Youth conditional caution</option>
-            <option value="ooc_community_resolution">Community resolution</option>
-            <option value="ooc_penalty_notice">Penalty notice (PND)</option>
-            <option value="ooc_cannabis_khat">Cannabis / khat warning</option>
-          </optgroup>
-        </select>
-        <label class="visit-type-bar-label" for="visit-type-bail-date">Bail return date</label>
-        <input type="date" class="visit-type-bail-date" id="visit-type-bail-date" value="2026-11-20" />
-        <label class="visit-type-bar-label" for="visit-type-bail-type">Bail</label>
-        <select class="visit-type-bail-type" id="visit-type-bail-type">
-          <option value="Unconditional">Unconditional</option>
-          <option value="Conditional" selected>Conditional</option>
-        </select>
-        <label class="visit-type-bar-label" for="visit-type-bail-conditions">Conditions</label>
-        <input type="text" class="visit-type-bail-conditions" id="visit-type-bail-conditions"
-          placeholder="Summary — full checklist in section 8" value="Not to contact complainant" />
+        <button type="button" class="btn btn-secondary btn-small visit-type-link-btn" title="Link this note to a prior visit on file">Link prior visit</button>
       </div>
     </div>
   </div>
