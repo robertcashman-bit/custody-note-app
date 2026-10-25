@@ -111,12 +111,18 @@ const ACT_NAME_SOURCE =
   '(?:the\\s+)?(?:Powers of Criminal Courts \\(Sentencing\\) Act 2000|PCC\\s*\\(?S\\s*\\)?\\s*A\\s*2000)';
 const SECTION_REF_SOURCE = '(?:ss?\\.?|sections?)\\s*\\d';
 
-/** True when the act mention at [start, end) is attached to a section number (e.g. "PCC(S)A 2000 s.110"). */
+const ACT_SECTION_WINDOW = 80;
+
+/**
+ * True when any section reference sits near the act mention at [start, end), in any form
+ * (e.g. "PCC(S)A 2000 s.110", "(PCC(S)A 2000, ss.110-111)", "sections 109, 110 and 111 of the ...").
+ * Such mentions are left unrenamed: section numbers differ between the 2000 and 2020 Acts, so the
+ * draft must stay flagged for regeneration rather than be silently reattributed.
+ */
 function isActMentionSectionCitation(text, start, end) {
-  const after = text.slice(end, end + 40);
-  if (new RegExp('^\\s*,?\\s*' + SECTION_REF_SOURCE, 'i').test(after)) return true;
-  const before = text.slice(Math.max(0, start - 60), start);
-  return /(?:ss?\.?|sections?)\s*\d+[A-Za-z]?(?:\s*\([^)]*\))*\s*,?\s*(?:of\s+(?:the\s+)?)?$/i.test(before);
+  const near =
+    text.slice(Math.max(0, start - ACT_SECTION_WINDOW), start) + ' ' + text.slice(end, end + ACT_SECTION_WINDOW);
+  return new RegExp('(?:^|[^A-Za-z])' + SECTION_REF_SOURCE, 'i').test(near);
 }
 
 function applyStatuteReplacements(noteText) {

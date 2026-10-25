@@ -101,3 +101,24 @@ describe('applyStatuteReplacements citation integrity', () => {
     assert.equal(r.needsRegenerate, true);
   });
 });
+
+describe('applyStatuteReplacements parenthetical and compound citations', () => {
+  const cases = [
+    '- Minimum sentences for drug trafficking (PCC(S)A 2000, s.110) apply.',
+    '- See sections 109 and 110 of the Powers of Criminal Courts (Sentencing) Act 2000 for minimums.',
+    '- Drug trafficking minimum: s.110(2)(a) and (b) of the PCC(S)A 2000.',
+    '- Powers of Criminal Courts (Sentencing) Act 2000 (ss.109-110) required minimum terms.',
+  ];
+  for (const input of cases) {
+    it('keeps old Act name and flags: ' + input.slice(2, 50), () => {
+      const r = guardLawNoteStaleness(input);
+      assert.doesNotMatch(r.noteText, /Sentencing Act 2020/);
+      assert.equal(r.needsRegenerate, true);
+    });
+  }
+
+  it('still renames a bare mention of the repealed Act', () => {
+    const out = applyStatuteReplacements('- Sentencing law: the Powers of Criminal Courts (Sentencing) Act 2000 governs this.').text;
+    assert.match(out, /Sentencing Act 2020/);
+  });
+});
