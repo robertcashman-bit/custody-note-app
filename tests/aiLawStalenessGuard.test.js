@@ -48,6 +48,16 @@ describe('aiLawStalenessGuard', () => {
     assert.doesNotMatch(guarded.noteText, /up to 6 months/i);
   });
 
+  it('does not inject s.139 maximum into other either-way offences (Bugbot)', () => {
+    const genericTew =
+      'Sentencing\n- Triable either way. In the magistrates\' court up to 6 months; on indictment up to 10 years (Theft Act 1968 s.9).';
+    const guarded = guardLawNoteStaleness(genericTew);
+    assert.doesNotMatch(guarded.noteText, /s\.139/i);
+    assert.doesNotMatch(guarded.noteText, /4 years for s\.139/i);
+    assert.equal(guarded.needsRegenerate, true);
+    assert.ok(guarded.stalenessWarnings.some((w) => /12 months/i.test(w)));
+  });
+
   it('validateAiLegalResponse rejects raw stale note then accepts after guard correction path', () => {
     const raw =
       'Answer\n' +

@@ -40,8 +40,12 @@ const MAGISTRATES_SIX_MONTH_STALE = {
     /magistrates['’]?\s+court[\s\S]{0,200}?\b6\s*(?:months?|mths?)\b/i,
   altPattern:
     /\b(?:up to|maximum)\b[\s\S]{0,120}?\b6\s*(?:months?|mths?)\b[\s\S]{0,120}?magistrates['’]?\s+court/i,
-  contextPattern:
+  /** Flag stale 6-month magistrates limits when the draft looks TEW or offence-specific. */
+  detectContextPattern:
     /either\s+way|triable either way|s\.?\s*139\b|bladed|Criminal Justice Act 1988|CJA\s*1988/i,
+  /** Auto-replace sentencing bullets only for s.139 / bladed article — not every TEW offence. */
+  autoFixContextPattern:
+    /s\.?\s*139\b|bladed|Criminal Justice Act 1988|CJA\s*1988/i,
   userWarning:
     'Magistrates may impose up to 12 months for a single triable-either-way offence on summary trial (Sentencing Act 2020 s.224, as amended with effect from 18 November 2024). CJA 1988 s.139(6)(a) still lists 6 months on summary conviction — apply the Sentencing Act general limit for either-way summary trial.',
   correctionSnippet:
@@ -91,10 +95,10 @@ function detectStaleLegalReferences(noteText) {
 
   const m = MAGISTRATES_SIX_MONTH_STALE;
   const staleMag =
-    (m.textPattern.test(text) || m.altPattern.test(text)) && m.contextPattern.test(text);
+    (m.textPattern.test(text) || m.altPattern.test(text)) && m.detectContextPattern.test(text);
   m.textPattern.lastIndex = 0;
   m.altPattern.lastIndex = 0;
-  m.contextPattern.lastIndex = 0;
+  m.detectContextPattern.lastIndex = 0;
   if (staleMag) {
     flags.push(m.id);
     warnings.push(m.userWarning);
@@ -143,12 +147,12 @@ function applyStatuteReplacements(noteText) {
 function applyMagistratesSentencingCorrection(noteText, warnings) {
   const text = String(noteText || '');
   const m = MAGISTRATES_SIX_MONTH_STALE;
-  const stale =
-    (m.textPattern.test(text) || m.altPattern.test(text)) && m.contextPattern.test(text);
+  const hasStaleMagLimit = m.textPattern.test(text) || m.altPattern.test(text);
   m.textPattern.lastIndex = 0;
   m.altPattern.lastIndex = 0;
-  m.contextPattern.lastIndex = 0;
-  if (!stale) return { text: text, applied: false };
+  const canAutoFix = hasStaleMagLimit && m.autoFixContextPattern.test(text);
+  m.autoFixContextPattern.lastIndex = 0;
+  if (!canAutoFix) return { text: text, applied: false };
 
   const staleLine =
     /magistrates['’]?\s+court[\s\S]{0,200}?\b6\s*(?:months?|mths?)\b/i.test(text) ||
