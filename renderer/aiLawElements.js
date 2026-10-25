@@ -8,11 +8,30 @@
   var _fillRunning = false;
   var _askRunning = false;
   var _askSessionConfirmed = false;
-  var _askThread = []; /* { role, content, sources? } */
+  var _askThread = []; /* { role, content, sources?, uncertainties? } */
   var _lastLawSources = [];
 
   function toast(msg, type, ms) {
     if (typeof showToast === 'function') showToast(msg, type || 'info', ms);
+  }
+
+  function maybeOfferOpenAiSettings(res) {
+    if (!res || res.ok) return Promise.resolve();
+    var focus = res.settingsFocus;
+    var err = String(res.error || '');
+    var looksMissing =
+      focus === 'openai-api-key' ||
+      /No ChatGPT key saved to your account yet/i.test(err) ||
+      /Settings → Account & cloud/i.test(err);
+    if (!looksMissing) return Promise.resolve();
+    return confirmAsync(
+      err + '\n\nOpen Settings → Account & cloud now to add your API key?',
+      'ChatGPT API key needed',
+    ).then(function (ok) {
+      if (ok && typeof window.openOpenAiApiKeySettings === 'function') {
+        window.openOpenAiApiKeySettings();
+      }
+    });
   }
 
   function confirmAsync(message, title) {
@@ -164,18 +183,39 @@
 
   /* ── Law / Elements fill ── */
 
-  function showReviewModal(draft, meta, sources, refusal) {
+  function showReviewModal(draft, meta, sources, refusal, uncertainties) {
     var modal = document.getElementById('ai-law-draft-modal');
     var text = document.getElementById('ai-law-draft-text');
     var metaEl = document.getElementById('ai-law-draft-meta');
     var sourcesEl = document.getElementById('ai-law-draft-sources');
     if (!modal || !text) return;
     text.value = draft || '';
-    if (metaEl) metaEl.textContent = meta || '';
     _lastLawSources = Array.isArray(sources) ? sources.slice() : [];
+    if (metaEl) {
+      var metaLine = meta || '';
+      if (uncertainties && String(uncertainties).trim() && !/^none$/i.test(String(uncertainties).trim())) {
+        metaLine =
+          (metaLine ? metaLine + ' ' : '') +
+          'Some points could not be fully verified — see Uncertainties below before inserting.';
+      } else if (_lastLawSources.length >= 2) {
+        metaLine =
+          (metaLine ? metaLine + ' ' : '') +
+          'Sources checked separately below — not inserted into the note.';
+      }
+      metaEl.textContent = metaLine;
+    }
     if (sourcesEl) {
+      var uncHtml = '';
+      if (uncertainties && String(uncertainties).trim() && !/^none$/i.test(String(uncertainties).trim())) {
+        uncHtml =
+          '<p class="settings-hint" style="margin:0 0 0.5rem;font-size:0.85rem;"><strong>Uncertainties</strong><br>' +
+          escapeHtml(String(uncertainties)).replace(/\n/g, '<br>') +
+          '</p>';
+      }
       sourcesEl.innerHTML =
-        '<strong style="font-size:0.85rem;">Sources</strong>' + formatSourcesHtml(_lastLawSources);
+        uncHtml +
+        '<strong style="font-size:0.85rem;">Sources checked</strong>' +
+        formatSourcesHtml(_lastLawSources);
       wireSourcesClicks(sourcesEl);
     }
     setInsertEnabled(sourcesPass(_lastLawSources, !!refusal) && !refusal);
@@ -234,13 +274,10 @@
       toast('Nothing to insert', 'warning');
       return;
     }
-    if (!/\bSources\b/i.test(draft) && _lastLawSources.length) {
-      draft = draft + '\n\nSources\n' + formatSourcesPlain(_lastLawSources);
-    }
     var existing = getField('lawElements').trim();
     if (existing) {
       confirmAsync(
-        'Replace the current Law / Elements of offence text with this AI draft (including Sources)?',
+        'Replace the current Law / Elements of offence text with this AI draft? (Sources stay in the review panel only.)',
         'Insert AI draft',
       ).then(function (ok) {
         if (ok) applyLawElementsDraft(draft);
@@ -273,7 +310,9 @@
         _fillRunning = false;
         if (!res || !res.ok) {
           toast((res && res.error) || 'AI fill failed', 'error', 7000);
-          uncheckFillBoxes();
+          maybeOfferOpenAiSettings(res).finally(function () {
+            uncheckFillBoxes();
+          });
           return;
         }
         /* Review modal only — never write lawElements here. */
@@ -282,6 +321,7 @@
           res.message || 'Web-sourced draft — verify before inserting',
           res.sources || [],
           !!res.refusal,
+          res.uncertainties || '',
         );
       })
       .catch(function (e) {
@@ -336,6 +376,11 @@
     setAskAppendEnabled(sourcesPass(last.sources, !!last.refusal) && !last.refusal);
   }
 
+  function hasUncertainties(u) {
+    var v = String(u || '').trim();
+    return !!v && !/^none\.?$/i.test(v);
+  }
+
   function renderAskThread() {
     var el = document.getElementById('ai-ask-thread');
     if (!el) return;
@@ -360,6 +405,12 @@
         '<div style="font-size:0.88rem;line-height:1.4;">' +
         body +
         '</div>';
+      if (t.role === 'assistant' && hasUncertainties(t.uncertainties)) {
+        html +=
+          '<div style="margin-top:0.5rem;font-size:0.82rem;"><strong>Uncertainties</strong><br>' +
+          escapeHtml(String(t.uncertainties)).replace(/\n/g, '<br>') +
+          '</div>';
+      }
       if (t.role === 'assistant') {
         html +=
           '<div style="margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid rgba(15,23,42,0.08);">' +
@@ -414,6 +465,9 @@
     return _askThread
       .map(function (t) {
         var block = (t.role === 'assistant' ? 'AI' : 'You') + ':\n' + t.content;
+        if (t.role === 'assistant' && hasUncertainties(t.uncertainties)) {
+          block += '\n\nUncertainties\n' + String(t.uncertainties).trim();
+        }
         if (t.role === 'assistant' && t.sources && t.sources.length) {
           block += '\n\nSources\n' + formatSourcesPlain(t.sources);
         }
@@ -433,15 +487,12 @@
       return;
     }
     var answer = String(last.content || '').trim();
-    if (!/\bSources\b/i.test(answer) && last.sources && last.sources.length) {
-      answer = answer + '\n\nSources\n' + formatSourcesPlain(last.sources);
-    }
     var existing = getField('lawElements').trim();
     var next = existing ? existing + '\n\n' + answer : answer;
     confirmAsync(
       existing
-        ? 'Append the last AI answer (with Sources) to Law / Elements of offence?'
-        : 'Insert the last AI answer (with Sources) into Law / Elements of offence?',
+        ? 'Append the last AI answer to Law / Elements of offence? (Sources are not appended — see the Ask panel.)'
+        : 'Insert the last AI answer into Law / Elements of offence? (Sources are not inserted into the note.)',
       'Append AI answer',
     ).then(function (ok) {
       if (!ok) return;
@@ -491,6 +542,7 @@
           if (sendBtn) sendBtn.disabled = false;
           if (!res || !res.ok) {
             toast((res && res.error) || 'Ask AI failed', 'error', 7000);
+            maybeOfferOpenAiSettings(res);
             return;
           }
           _askThread.push({ role: 'user', content: question });
@@ -498,6 +550,7 @@
             role: 'assistant',
             content: res.answer || '',
             sources: Array.isArray(res.sources) ? res.sources : [],
+            uncertainties: res.uncertainties || '',
             refusal: !!res.refusal,
           });
           if (input) input.value = '';

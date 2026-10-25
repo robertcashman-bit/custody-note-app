@@ -190,7 +190,7 @@ describe('postBillPurge Bugbot wiring (source)', () => {
     assert.ok(main.includes('return false;'));
     const seedStart = main.indexOf('function seedOpenAiApiKeyIntoSettings');
     assert.ok(seedStart > 0);
-    const seedFn = main.slice(seedStart, seedStart + 900);
+    const seedFn = main.slice(seedStart, seedStart + 1600);
     assert.ok(seedFn.includes('sealedOk') || seedFn.includes('!sealedOk'));
     assert.ok(seedFn.includes("['openaiApiKey', '']"));
   });

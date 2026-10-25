@@ -26,21 +26,27 @@ const ACCURACY_SYSTEM_RULES =
   '3. Be truthful, up to date, and accurate. Prefer current primary/official materials. If the law may have changed, say so.\n' +
   '4. If in doubt, do not quote or assert the point — omit it and list it under Uncertainties.\n' +
   '5. Case law is especially strict: only cite a case if a retrieved source URL supports that citation. Otherwise do not name the case.\n' +
-  '6. Every substantive answer MUST end with a Sources section listing at least two http(s) URLs (title + URL). No sources = rejected.\n' +
+  '6. Ground every substantive legal answer in web search. The app records source URLs from your citations; you may also add a Sources section for validation. At least two distinct official URLs are required or the answer is rejected.\n' +
   'Prefer UK official domains (legislation.gov.uk, sentencingcouncil.org.uk, cps.gov.uk, bailii.org, judiciary.uk, gov.uk) when available.\n' +
   'This is a draft for a qualified solicitor to verify against primary materials — not legal advice. Do not invent client facts.';
 
 const REQUIRED_OUTPUT_SHAPE =
-  'Output format (use these headings exactly):\n' +
+  'Internal structure (for validation — the app strips this before inserting into notes):\n' +
   'Answer\n' +
-  '<your substantive answer>\n\n' +
+  '<substantive legal content only in plain language; no preamble; no inline URLs; no markdown>\n\n' +
   'Uncertainties\n' +
   '<points you could not verify, or None>\n\n' +
   'Sources\n' +
   '1. <title> — <https://url>\n' +
   '2. <title> — <https://url>\n' +
-  '(Minimum two Sources URLs for any answer that states legal rules. ' +
-  'If you cannot reliably confirm from sources, reply only with a short refusal under Answer, Uncertainties explaining why, and Sources: None — do not invent URLs.)';
+  '(Minimum two distinct source URLs across web-search citations and/or the Sources section. ' +
+  'If you cannot reliably confirm, reply with a short refusal under Answer, explain under Uncertainties, and Sources: None — do not invent URLs.)';
+
+const LAW_ELEMENTS_PLAIN_NOTE_RULES =
+  'Attendance-note body (what the solicitor will paste into the note):\n' +
+  '- Plain text only: no "Answer" heading, no introductory sentence, no markdown (** ## ---), no inline links or URLs, no utm parameters.\n' +
+  '- Per offence use headings: Actus reus, Mens rea, Common defences, Sentencing — concise bullet points.\n' +
+  '- Put anything unverified only under Uncertainties (not in the note body). List source titles/URLs only under Sources (shown separately in the app).';
 
 const CASE_LAW_PATTERN =
   /\b(?:v\.?|vs\.?)\b|\[[12]\d{3}\]\s*[A-Z]|\b(?:EWCA|EWHC|UKSC|UKHL|Cr\.?\s*App\.?\s*R\.?|WLR|All\s*ER)\b/i;
@@ -132,26 +138,18 @@ function formatSourcesBlock(citations) {
   return 'Sources\n' + lines.join('\n');
 }
 
-function mergeTextWithCitationSources(text, citations) {
-  let body = String(text || '').trim();
-  const fromText = extractUrlsFromText(body);
-  const fromCite = normaliseCitations(citations);
-  const merged = normaliseCitations(
-    fromCite.concat(
-      fromText.map(function (url) {
-        return { title: url, url: url };
-      }),
-    ),
-  );
-  const section = extractSourcesSection(body);
-  if (!section.hasHeading || extractUrlsFromText(section.body).length < 2) {
-    if (merged.length >= 2) {
-      /* Strip a weak/empty Sources section then append a complete one. */
-      body = body.replace(/\n\s*Sources\s*\n[\s\S]*$/i, '').trim();
-      body = body + '\n\n' + formatSourcesBlock(merged);
-    }
-  }
-  return { text: body, sources: merged };
+function collectValidationSources(text, citations) {
+  const {
+    normaliseSourceList,
+    parseSourcesSectionUrls,
+    mergeSourceLists,
+  } = require('./aiNoteTextCleanup');
+  const fromCite = normaliseSourceList(citations);
+  const fromSection = parseSourcesSectionUrls(text);
+  const fromInline = extractUrlsFromText(text).map(function (url) {
+    return { title: url, url: url };
+  });
+  return mergeSourceLists(fromCite, mergeSourceLists(fromSection, fromInline));
 }
 
 /**
@@ -160,72 +158,65 @@ function mergeTextWithCitationSources(text, citations) {
  */
 function validateAiLegalResponse(opts) {
   const options = opts || {};
-  const merged = mergeTextWithCitationSources(options.text, options.citations);
-  const text = merged.text;
-  const sources = merged.sources;
-  const uncertainties = extractUncertainties(text);
+  const rawText = String(options.text || '').trim();
+  const {
+    cleanLawElementsNoteText,
+    cleanAskAnswerNoteText,
+  } = require('./aiNoteTextCleanup');
+  const sources = collectValidationSources(rawText, options.citations);
+  const uncertainties = extractUncertainties(rawText);
+  const noteMode = options.noteMode === 'ask' ? 'ask' : 'law';
 
-  if (!text) {
+  if (!rawText) {
     return { ok: false, error: 'Empty AI response.' };
   }
 
-  if (isHonestRefusal(text)) {
+  if (isHonestRefusal(rawText)) {
+    const cleaned =
+      noteMode === 'ask' ? cleanAskAnswerNoteText(rawText) : cleanLawElementsNoteText(rawText);
     return {
       ok: true,
-      text: text,
+      text: cleaned.noteText || rawText,
       sources: sources,
-      uncertainties: uncertainties || 'Insufficient reliable sources.',
+      uncertainties: cleaned.uncertainties || uncertainties || 'Insufficient reliable sources.',
       refusal: true,
     };
   }
 
-  const section = extractSourcesSection(text);
-  if (!section.hasHeading) {
-    return {
-      ok: false,
-      error: 'AI response rejected: missing Sources section (mandatory).',
-      text: text,
-      sources: sources,
-    };
-  }
+  const sourceUrls = sources.map(function (s) {
+    return s.url;
+  });
 
-  const sourceUrls = extractUrlsFromText(section.body);
-  const allUrls = sourceUrls.length ? sourceUrls : sources.map(function (s) { return s.url; });
-
-  if (CASE_LAW_PATTERN.test(text) && allUrls.length < 1) {
+  if (CASE_LAW_PATTERN.test(rawText) && sourceUrls.length < 1) {
     return {
       ok: false,
       error:
         'AI response rejected: case-law references require supporting source URLs. ' +
         'If in doubt, the case must not be cited.',
-      text: text,
+      text: rawText,
       sources: sources,
     };
   }
 
-  if (hasLegalAssertions(text) && allUrls.length < 2) {
+  if (hasLegalAssertions(rawText) && sourceUrls.length < 2) {
     return {
       ok: false,
       error:
         'AI response rejected: legal answers require at least two source URLs. ' +
         'Doubtful or unsourced material must not be quoted.',
-      text: text,
+      text: rawText,
       sources: sources,
     };
   }
 
-  const normalisedSources =
-    sources.length >= 2
-      ? sources
-      : allUrls.map(function (url) {
-          return { title: url, url: url };
-        });
+  const cleaned =
+    noteMode === 'ask' ? cleanAskAnswerNoteText(rawText) : cleanLawElementsNoteText(rawText);
 
   return {
     ok: true,
-    text: text,
-    sources: normalisedSources,
-    uncertainties: uncertainties,
+    text: cleaned.noteText,
+    sources: sources,
+    uncertainties: cleaned.uncertainties || uncertainties,
     refusal: false,
   };
 }
@@ -233,6 +224,7 @@ function validateAiLegalResponse(opts) {
 module.exports = {
   ACCURACY_SYSTEM_RULES,
   REQUIRED_OUTPUT_SHAPE,
+  LAW_ELEMENTS_PLAIN_NOTE_RULES,
   PREFERRED_UK_LEGAL_DOMAINS,
   CASE_LAW_PATTERN,
   extractUrlsFromText,
@@ -240,7 +232,7 @@ module.exports = {
   extractUncertainties,
   normaliseCitations,
   formatSourcesBlock,
-  mergeTextWithCitationSources,
+  collectValidationSources,
   validateAiLegalResponse,
   hasLegalAssertions,
   isHonestRefusal,

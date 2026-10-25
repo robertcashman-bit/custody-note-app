@@ -152,6 +152,11 @@ describe('main.js OpenAI key sync wiring', () => {
     assert.match(main, /scheduleOpenAiApiKeyCloudPush\('openai-save'\)/);
     assert.match(main, /scheduleOpenAiApiKeyCloudPush\('openai-clear'\)/);
   });
+
+  it('pulls OpenAI key during startup settings ensure', () => {
+    assert.match(main, /ensureOpenAiApiKeyFromServer\(\{\s*\n\s*reason: reason \+ '\+openai'/);
+    assert.match(main, /reason: 'startup'/);
+  });
 });
 
 describe('app.js unreadable OpenAI key warning', () => {

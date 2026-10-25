@@ -5,6 +5,7 @@
 'use strict';
 
 const safeLog = require('../lib/safeLog');
+const { OPENAI_KEY_MISSING_USER_MESSAGE } = require('../lib/openaiApiKeyCopy');
 
 const {
   ACCURACY_SYSTEM_RULES,
@@ -88,7 +89,7 @@ async function requestGroundedLegalAnswer(opts) {
   const options = opts || {};
   const apiKey = String(options.apiKey || '').trim();
   if (!apiKey) {
-    return { ok: false, error: 'Add your OpenAI API key in Settings → Integrations first.' };
+    return { ok: false, error: OPENAI_KEY_MISSING_USER_MESSAGE };
   }
   const inputMessages = Array.isArray(options.inputMessages) ? options.inputMessages : [];
   if (!inputMessages.length) {
@@ -158,6 +159,7 @@ async function requestGroundedLegalAnswer(opts) {
     const validated = validateAiLegalResponse({
       text: parsed.text,
       citations: parsed.citations,
+      noteMode: options.noteMode,
     });
     if (!validated.ok) {
       return {
@@ -215,6 +217,7 @@ async function requestGroundedLegalAnswer(opts) {
     const validated = validateAiLegalResponse({
       text: parsed.text,
       citations: parsed.citations,
+      noteMode: options.noteMode,
     });
     if (!validated.ok) {
       return {
