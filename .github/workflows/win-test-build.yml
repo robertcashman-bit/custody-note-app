@@ -1,0 +1,88 @@
+# THROWAWAY: Windows NSIS TEST build 1.9.122-test.10 (PR #135 OpenAI key in Account & cloud + plain-text Law/Elements).
+# Builds only; never publishes (--publish never; GH_TOKEN not provided to the build).
+name: win-test-build (throwaway)
+on:
+  push:
+    branches: [test/1.9.122-test10]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  win-test:
+    runs-on: windows-latest
+    environment: windows-signing
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - run: npm ci
+      - name: Decide Windows Azure Artifact Signing
+        id: win-sign
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CODE_SIGNING_ENDPOINT: ${{ secrets.AZURE_CODE_SIGNING_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
+          AZURE_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for n in AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID AZURE_CODE_SIGNING_ENDPOINT AZURE_CODE_SIGNING_ACCOUNT_NAME AZURE_CERTIFICATE_PROFILE_NAME AZURE_TRUSTED_SIGNING_PUBLISHER_NAME; do
+            if [[ -z "${!n:-}" ]]; then missing=$((missing+1)); fi
+          done
+          if [[ $missing -eq 0 ]]; then echo "enabled=true" >> "$GITHUB_OUTPUT"; echo "Signing enabled";
+          else echo "enabled=false" >> "$GITHUB_OUTPUT"; echo "::warning::Signing secrets missing ($missing) - UNSIGNED test build"; fi
+      - name: Azure login (OIDC)
+        if: steps.win-sign.outputs.enabled == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build Windows NSIS installer (NO publish)
+        shell: bash
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CODE_SIGNING_ENDPOINT: ${{ secrets.AZURE_CODE_SIGNING_ENDPOINT }}
+          AZURE_CODE_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_CODE_SIGNING_ACCOUNT_NAME }}
+          AZURE_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
+          CN_WIN_SIGN_ENABLED: ${{ steps.win-sign.outputs.enabled }}
+        run: |
+          set -euo pipefail
+          unset CN_PUBLISH GH_TOKEN GITHUB_TOKEN || true
+          if [[ "${CN_WIN_SIGN_ENABLED}" == "true" ]]; then
+            npx electron-builder --win nsis --publish never \
+              "-c.win.azureSignOptions.publisherName=${AZURE_TRUSTED_SIGNING_PUBLISHER_NAME}" \
+              "-c.win.azureSignOptions.endpoint=${AZURE_CODE_SIGNING_ENDPOINT}" \
+              "-c.win.azureSignOptions.codeSigningAccountName=${AZURE_CODE_SIGNING_ACCOUNT_NAME}" \
+              "-c.win.azureSignOptions.certificateProfileName=${AZURE_CERTIFICATE_PROFILE_NAME}"
+          else
+            npx electron-builder --win nsis --publish never
+          fi
+          npm run verify:built-asar
+          ls -la dist
+      - name: Check Authenticode signature + checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist\*.exe | ForEach-Object {
+            $s = Get-AuthenticodeSignature $_.FullName
+            "{0}  status={1}  signer={2}" -f $_.Name, $s.Status, $s.SignerCertificate.Subject
+          }
+          Get-ChildItem dist\*.exe | Get-FileHash -Algorithm SHA256 | ForEach-Object { "{0}  {1}" -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf) } | Tee-Object dist\SHA256SUMS-test.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: custody-note-1.9.122-test-10-win-x64
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            dist/Custody-Note-Setup-*.exe
+            dist/SHA256SUMS-test.txt
