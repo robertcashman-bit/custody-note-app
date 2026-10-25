@@ -8936,9 +8936,13 @@ var REQUIRED_FIELD_KEYS = [
     var result = applyAttendanceVisitType(formData, targetType);
     if (result.blocked) {
       showToast(result.message || 'Visit type cannot be changed on this record.', 'info', 6500);
+      updateVisitTypeBar();
       return;
     }
-    if (!result.changed) return;
+    if (!result.changed) {
+      updateVisitTypeBar();
+      return;
+    }
     var needsFullRender = wasVoluntary && formData.attendanceMode === 'custody';
     if (formData.attendanceMode === 'voluntary') {
       activeFormSections = voluntaryFormSections;
@@ -9009,11 +9013,16 @@ var REQUIRED_FIELD_KEYS = [
       ? ('Linked to attendance #' + esc(String(linkId)))
       : 'Optional: link to the earlier attendance this visit relates to.';
 
-    var seg = [visitTypes.first, visitTypes.bail_return, visitTypes.further].map(function (code) {
-      var label = typeof visitTypeLabelForCode === 'function' ? visitTypeLabelForCode(code) : code;
-      var active = currentVisit === code ? ' is-active' : '';
-      return '<button type="button" class="visit-type-choice' + active + '" data-visit-type="' + esc(code) + '"'
-        + (locked ? ' disabled' : '') + '>' + esc(label) + '</button>';
+    var typeOptions = typeof listAttendanceVisitTypeOptions === 'function'
+      ? listAttendanceVisitTypeOptions()
+      : [
+        { code: visitTypes.first, label: 'First attendance' },
+        { code: visitTypes.bail_return, label: 'Bail return' },
+        { code: visitTypes.further, label: 'Further attendance / further interview' },
+      ];
+    var typeSelectHtml = typeOptions.map(function (opt) {
+      var selected = currentVisit === opt.code ? ' selected' : '';
+      return '<option value="' + esc(opt.code) + '"' + selected + '>' + esc(opt.label) + '</option>';
     }).join('');
 
     bar.innerHTML =
@@ -9022,20 +9031,19 @@ var REQUIRED_FIELD_KEYS = [
         '<option value="custody"' + (mode === 'custody' ? ' selected' : '') + '>Custody</option>' +
         '<option value="voluntary"' + (mode === 'voluntary' ? ' selected' : '') + '>Voluntary</option>' +
       '</select>' +
-      '<span class="visit-type-bar-label">Visit</span>' +
-      '<div class="visit-type-segmented" role="group" aria-label="Visit type">' + seg + '</div>' +
+      '<label class="visit-type-bar-label" for="visit-type-attendance-select">Attendance type</label>' +
+      '<select class="visit-type-attendance-select" id="visit-type-attendance-select" aria-label="Attendance type"'
+        + (locked ? ' disabled' : '') + '>' + typeSelectHtml + '</select>' +
       '<button type="button" class="btn btn-secondary btn-small visit-type-link-btn" id="visit-type-link-btn"'
         + (locked || currentVisit === visitTypes.first ? ' disabled' : '') + '>Link earlier visit</button>' +
       '<span class="visit-type-bar-hint">' + linkHint + '</span>';
 
     if (!_visitTypeBarHandlersBound) {
       _visitTypeBarHandlersBound = true;
-      bar.addEventListener('click', function (e) {
-        var btn = e.target && e.target.closest ? e.target.closest('[data-visit-type]') : null;
-        if (!btn || btn.disabled) return;
-        handleAttendanceVisitTypeChange(btn.getAttribute('data-visit-type'));
-      });
       bar.addEventListener('change', function (e) {
+        if (e.target && e.target.id === 'visit-type-attendance-select' && !e.target.disabled) {
+          handleAttendanceVisitTypeChange(e.target.value);
+        }
         if (e.target && e.target.id === 'visit-type-mode-select') {
           handleVisitTypeBarModeChange(e.target.value);
         }
@@ -9061,8 +9069,18 @@ var REQUIRED_FIELD_KEYS = [
     const leftParts = [];
     if (formData._formType === 'telephone') leftParts.push('<span class="context-invb-badge">INVB Tel</span>');
     else if (formData.attendanceMode === 'voluntary') leftParts.push('<span class="context-vol-badge">Voluntary</span>');
-    else if (formData._followUpReason === 'bail_return') leftParts.push('<span class="context-vol-badge" title="Visit type">Bail return</span>');
-    else if (formData.workType === 'Further Police Station Attendance') leftParts.push('<span class="context-invb-badge" style="background:#7c3aed;">Further</span>');
+    else if (formData.workType === 'Further Police Station Attendance' || formData._followUpReason) {
+      var visitBadge = typeof resolveAttendanceVisitType === 'function'
+        ? resolveAttendanceVisitType(formData)
+        : null;
+      var visitLabel = visitBadge && typeof visitTypeLabelForCode === 'function'
+        ? visitTypeLabelForCode(visitBadge)
+        : 'Further';
+      if (visitBadge && visitBadge !== 'first') {
+        leftParts.push('<span class="context-invb-badge" style="background:#7c3aed;" title="Attendance type">'
+          + esc(visitLabel) + '</span>');
+      }
+    }
     leftParts.push('<span><span class="context-label">Client:</span>' + esc(clientName) + '</span>');
     leftParts.push('<span><span class="context-label">Station:</span>' + esc(station) + '</span>');
     if (formData.custodyNumber && formData.attendanceMode !== 'voluntary') leftParts.push('<span><span class="context-label">Custody:</span>' + esc(formData.custodyNumber) + '</span>');

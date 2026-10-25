@@ -86,9 +86,19 @@ describe('followUpAttendanceData', () => {
     assert.strictEqual(follow.forename, 'Jane');
   });
 
-  it('exposes reason labels', () => {
+  it('exposes reason labels including re-interview', () => {
     assert.ok(FOLLOW_UP_REASON_CODES.bail_return);
     assert.ok(FOLLOW_UP_REASON_CODES.identification);
+    assert.ok(FOLLOW_UP_REASON_CODES.re_interview);
+    const joined = Object.values(FOLLOW_UP_REASON_CODES).join(' ');
+    assert.ok(!/breach of bail/i.test(joined));
+  });
+
+  it('creates re-interview follow-up with Further work type', () => {
+    const out = followUpAttendanceData(baseSource(), 7, 're_interview');
+    assert.strictEqual(out.workType, 'Further Police Station Attendance');
+    assert.strictEqual(out._followUpReason, 're_interview');
+    assert.strictEqual(out._followUpFromAttendanceId, 7);
   });
 });
 

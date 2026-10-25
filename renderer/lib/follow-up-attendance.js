@@ -75,12 +75,27 @@
     /^vidParade/i,
   ];
 
-  var REASON_CODES = {
-    bail_return: 'Bail return',
-    rui_return: 'RUI return',
-    identification: 'Identification procedure',
-    other: 'Other further attendance',
-  };
+  function loadFollowUpReasonCodes() {
+    if (typeof followUpReasonCodesForChooser === 'function') {
+      return followUpReasonCodesForChooser();
+    }
+    try {
+      // eslint-disable-next-line global-require
+      var visitMod = require('./attendance-visit-type');
+      if (visitMod && typeof visitMod.followUpReasonCodesForChooser === 'function') {
+        return visitMod.followUpReasonCodesForChooser();
+      }
+    } catch (_) {}
+    return {
+      bail_return: 'Bail return',
+      rui_return: 'RUI return',
+      identification: 'ID procedure (identification parade / VIPER)',
+      re_interview: 'Re-interview',
+      other: 'Further attendance / further interview',
+    };
+  }
+
+  var REASON_CODES = loadFollowUpReasonCodes();
 
   function copyKeys(target, source, keys) {
     keys.forEach(function (k) {
@@ -128,7 +143,7 @@
   /**
    * @param {object} originalAttendance — parsed data JSON
    * @param {number|string} sourceAttendanceId
-   * @param {string} reasonCode — bail_return | rui_return | identification | other
+   * @param {string} reasonCode — bail_return | rui_return | identification | re_interview | other
    * @returns {object}
    */
   function followUpAttendanceData(originalAttendance, sourceAttendanceId, reasonCode) {

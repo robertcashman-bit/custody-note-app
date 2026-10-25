@@ -10,9 +10,12 @@ const {
   applyAttendanceVisitType,
   resolveAttendanceVisitType,
   syncVisitTypeFromWorkType,
+  listAttendanceVisitTypeOptions,
+  followUpReasonCodesForChooser,
   TELEPHONE_VISIT_TYPE_BLOCK_MESSAGE,
   WORK_TYPE_FURTHER,
   ATTENDANCE_VISIT_TYPES,
+  REASON_CODE_BY_VISIT_TYPE,
 } = require('../renderer/lib/attendance-visit-type');
 
 function syntheticCustodyRecord(extra) {
@@ -49,10 +52,64 @@ function assertAllKeysPreserved(before, after, label) {
 }
 
 describe('attendance-visit-type (in-place conversion)', () => {
-  it('resolves bail return from _followUpReason and further from work type', () => {
-    assert.strictEqual(resolveAttendanceVisitType({ workType: WORK_TYPE_FURTHER, _followUpReason: 'bail_return' }), ATTENDANCE_VISIT_TYPES.bail_return);
-    assert.strictEqual(resolveAttendanceVisitType({ workType: WORK_TYPE_FURTHER, _followUpReason: 'other' }), ATTENDANCE_VISIT_TYPES.further);
-    assert.strictEqual(resolveAttendanceVisitType({ workType: 'First Police Station Attendance' }), ATTENDANCE_VISIT_TYPES.first);
+  it('lists all attendance types for the dropdown (no breach of bail)', () => {
+    const opts = listAttendanceVisitTypeOptions();
+    const codes = opts.map(function (o) { return o.code; });
+    assert.deepStrictEqual(codes, [
+      ATTENDANCE_VISIT_TYPES.first,
+      ATTENDANCE_VISIT_TYPES.bail_return,
+      ATTENDANCE_VISIT_TYPES.further,
+      ATTENDANCE_VISIT_TYPES.re_interview,
+      ATTENDANCE_VISIT_TYPES.identification,
+      ATTENDANCE_VISIT_TYPES.rui_return,
+    ]);
+    const labelsJoined = opts.map(function (o) { return o.label; }).join(' ');
+    assert.ok(!/breach of bail/i.test(labelsJoined));
+  });
+
+  it('resolves stored follow-up reasons and further work type', () => {
+    assert.strictEqual(
+      resolveAttendanceVisitType({ workType: WORK_TYPE_FURTHER, _followUpReason: 'bail_return' }),
+      ATTENDANCE_VISIT_TYPES.bail_return
+    );
+    assert.strictEqual(
+      resolveAttendanceVisitType({ workType: WORK_TYPE_FURTHER, _followUpReason: 'other' }),
+      ATTENDANCE_VISIT_TYPES.further
+    );
+    assert.strictEqual(
+      resolveAttendanceVisitType({ workType: WORK_TYPE_FURTHER, _followUpReason: 're_interview' }),
+      ATTENDANCE_VISIT_TYPES.re_interview
+    );
+    assert.strictEqual(
+      resolveAttendanceVisitType({ workType: WORK_TYPE_FURTHER, _followUpReason: 'identification' }),
+      ATTENDANCE_VISIT_TYPES.identification
+    );
+    assert.strictEqual(
+      resolveAttendanceVisitType({ workType: WORK_TYPE_FURTHER, _followUpReason: 'rui_return' }),
+      ATTENDANCE_VISIT_TYPES.rui_return
+    );
+    assert.strictEqual(
+      resolveAttendanceVisitType({ workType: 'First Police Station Attendance' }),
+      ATTENDANCE_VISIT_TYPES.first
+    );
+  });
+
+  it('maps extended follow-up types onto Further + _followUpReason', () => {
+    const d = syntheticCustodyRecord();
+    applyAttendanceVisitType(d, ATTENDANCE_VISIT_TYPES.re_interview);
+    assert.strictEqual(d.workType, WORK_TYPE_FURTHER);
+    assert.strictEqual(d._followUpReason, 're_interview');
+    assert.strictEqual(d.caseStatus, 'Existing case');
+    assert.strictEqual(d.clientType, 'Existing');
+
+    const d2 = syntheticCustodyRecord();
+    applyAttendanceVisitType(d2, ATTENDANCE_VISIT_TYPES.identification);
+    assert.strictEqual(d2._followUpReason, 'identification');
+    assert.strictEqual(REASON_CODE_BY_VISIT_TYPE.identification, 'identification');
+
+    const d3 = syntheticCustodyRecord();
+    applyAttendanceVisitType(d3, ATTENDANCE_VISIT_TYPES.rui_return);
+    assert.strictEqual(d3._followUpReason, 'rui_return');
   });
 
   it('custody → bail return → first preserves every data key and non-managed values', () => {
@@ -104,8 +161,9 @@ describe('attendance-visit-type (in-place conversion)', () => {
   it('syncVisitTypeFromWorkType aligns further work type and clears follow-up on first work type', () => {
     const d = syntheticCustodyRecord();
     d.workType = WORK_TYPE_FURTHER;
+    d._followUpReason = 'identification';
     syncVisitTypeFromWorkType(d);
-    assert.strictEqual(resolveAttendanceVisitType(d), ATTENDANCE_VISIT_TYPES.further);
+    assert.strictEqual(resolveAttendanceVisitType(d), ATTENDANCE_VISIT_TYPES.identification);
     d.workType = 'First Police Station Attendance';
     syncVisitTypeFromWorkType(d);
     assert.strictEqual(resolveAttendanceVisitType(d), ATTENDANCE_VISIT_TYPES.first);
@@ -118,6 +176,13 @@ describe('attendance-visit-type (in-place conversion)', () => {
     assert.ok(Array.isArray(d._visitTypeChangeLog) && d._visitTypeChangeLog.length === 1);
     assert.strictEqual(d._visitTypeChangeLog[0].from, ATTENDANCE_VISIT_TYPES.first);
     assert.strictEqual(d._visitTypeChangeLog[0].to, ATTENDANCE_VISIT_TYPES.bail_return);
+  });
+
+  it('followUpReasonCodesForChooser matches follow-up attendance model', () => {
+    const codes = followUpReasonCodesForChooser();
+    assert.ok(codes.re_interview);
+    assert.ok(codes.identification);
+    assert.ok(!codes.breach);
   });
 });
 
@@ -143,12 +208,14 @@ describe('attendance-visit-type UI wiring (source)', () => {
   const appJs = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
   const indexHtml = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
-  it('loads attendance-visit-type.js and renders prominent visit type bar', () => {
+  it('loads attendance-visit-type.js and renders attendance type dropdown bar', () => {
     assert.match(indexHtml, /attendance-visit-type\.js/);
     assert.match(indexHtml, /id="form-visit-type-bar"/);
     assert.match(appJs, /function updateVisitTypeBar/);
     assert.match(appJs, /handleAttendanceVisitTypeChange/);
+    assert.match(appJs, /id="visit-type-attendance-select"/);
     assert.match(appJs, /field === 'workType'/);
+    assert.doesNotMatch(appJs, /visit-type-segmented/);
   });
 
   it('hides duplicate attendanceMode field in section 1 for station forms', () => {

@@ -1915,7 +1915,8 @@ html:not(.dark) #view-list .list-sort-select option {
   letter-spacing: 0.04em;
   color: var(--on-surface-muted);
 }
-.visit-type-mode-select {
+.visit-type-mode-select,
+.visit-type-attendance-select {
   font-size: 0.85rem;
   font-weight: 600;
   padding: 0.25rem 0.5rem;
@@ -1924,34 +1925,10 @@ html:not(.dark) #view-list .list-sort-select option {
   background: var(--surface);
   min-width: 7.5rem;
 }
-.visit-type-segmented {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-}
-.visit-type-segmented button {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--on-surface);
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.3rem 0.65rem;
-  border-radius: 999px;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, color 0.12s;
-}
-.visit-type-segmented button:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
-}
-.visit-type-segmented button.is-active {
-  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
-  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
-  color: var(--primary);
-}
-.visit-type-segmented button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+.visit-type-attendance-select {
+  min-width: min(22rem, 100%);
+  max-width: 28rem;
+  flex: 1 1 14rem;
 }
 .visit-type-link-btn {
   font-size: 0.78rem !important;
