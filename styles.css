@@ -4677,7 +4677,8 @@ html.dark .authority-wording { color: var(--on-surface, #f1f5f9); }
 }
 .cn-undo-btn:hover { background: rgba(255,255,255,0.4); }
 
-.cn-confirm-overlay {
+.cn-confirm-overlay,
+.new-record-type-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);

@@ -12,6 +12,15 @@ export async function dismissEmailOicModalIfPresent(_page: Page): Promise<void> 
   return;
 }
 
+/** Bottom **New** opens the record-type chooser; pick custody attendance. */
+export async function startNewCustodyAttendanceFromBottomNav(page: Page): Promise<void> {
+  await page.locator('.bottom-nav-btn[data-nav="new-attendance"]').click();
+  const chooser = page.locator('#new-record-type-overlay');
+  await expect(chooser).toBeVisible({ timeout: 15_000 });
+  await chooser.locator('[data-new-record-kind="custody"]').click();
+  await expect(page.locator('#view-form')).toHaveClass(/active/, { timeout: 20_000 });
+}
+
 export async function dismissFirstLaunchModalIfPresent(page: Page): Promise<void> {
   const skip = page.locator('#fl-skip');
   try {
@@ -39,9 +48,9 @@ export async function clickConfirmOverlayPrimary(
   opts: { choiceId?: string; name?: string | RegExp; timeoutMs?: number } = {}
 ): Promise<boolean> {
   const timeoutMs = opts.timeoutMs ?? 15_000;
-  const overlay = page.locator('.cn-confirm-overlay');
+  const overlay = page.locator('.cn-confirm-overlay:visible');
   try {
-    await overlay.waitFor({ state: 'visible', timeout: timeoutMs });
+    await overlay.first().waitFor({ state: 'visible', timeout: timeoutMs });
   } catch {
     return false;
   }
@@ -57,7 +66,7 @@ export async function clickConfirmOverlayPrimary(
   await btn.waitFor({ state: 'visible', timeout: 10_000 });
   /* DOM click is more reliable than pointer hit-testing when toasts/overlays shift. */
   await btn.evaluate((el: HTMLElement) => el.click());
-  await overlay.waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => undefined);
+  await overlay.first().waitFor({ state: 'hidden', timeout: 15_000 }).catch(() => undefined);
   return true;
 }
 

@@ -6,7 +6,7 @@ import { test, expect, _electron, type ElectronApplication, type Page } from '@p
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { dismissFirstLaunchModalIfPresent } from './e2e-helpers';
+import { dismissFirstLaunchModalIfPresent, startNewCustodyAttendanceFromBottomNav } from './e2e-helpers';
 
 const MAIN = path.join(__dirname, '..', '..', 'main.js');
 const TEST_KEY = 'SYNC-TEST-0001-KEY1';
@@ -76,8 +76,7 @@ test.afterAll(async () => {
 test('create on computer A appears on computer B after sync', async () => {
   const marker = `SyncE2E${Date.now()}`;
 
-  await pageA.locator('.bottom-nav-btn[data-nav="new-attendance"]').click();
-  await pageA.waitForTimeout(600);
+  await startNewCustodyAttendanceFromBottomNav(pageA);
   await pageA.locator('#view-form [data-field="surname"]').first().fill(marker);
   await pageA.evaluate(() => document.getElementById('form-save-exit')?.click());
   const draftBtn = pageA.locator('#save-exit-draft');
