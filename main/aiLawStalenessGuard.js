@@ -107,39 +107,69 @@ function detectStaleLegalReferences(noteText) {
   return { flags: flags, warnings: uniqueWarnings(warnings) };
 }
 
+const ACT_NAME_SOURCE =
+  '(?:the\\s+)?(?:Powers of Criminal Courts \\(Sentencing\\) Act 2000|PCC\\s*\\(?S\\s*\\)?\\s*A\\s*2000)';
+const SECTION_REF_SOURCE = '(?:ss?\\.?|sections?)\\s*\\d';
+
+/** True when the act mention at [start, end) is attached to a section number (e.g. "PCC(S)A 2000 s.110"). */
+function isActMentionSectionCitation(text, start, end) {
+  const after = text.slice(end, end + 40);
+  if (new RegExp('^\\s*,?\\s*' + SECTION_REF_SOURCE, 'i').test(after)) return true;
+  const before = text.slice(Math.max(0, start - 60), start);
+  return /(?:ss?\.?|sections?)\s*\d+[A-Za-z]?(?:\s*\([^)]*\))*\s*,?\s*(?:of\s+(?:the\s+)?)?$/i.test(before);
+}
+
 function applyStatuteReplacements(noteText) {
   let text = String(noteText || '');
   const applied = [];
 
-  for (let i = 0; i < REPEALED_ACT_PATTERNS.length; i++) {
-    const row = REPEALED_ACT_PATTERNS[i];
-    if (row.actPattern.test(text)) {
-      text = text.replace(row.actPattern, row.replacementAct);
-      applied.push('act:' + row.id);
-    }
-    row.actPattern.lastIndex = 0;
-    if (row.shortPattern.test(text)) {
-      text = text.replace(row.shortPattern, row.replacementAct);
-      applied.push('short:' + row.id);
-    }
-    row.shortPattern.lastIndex = 0;
-  }
-
+  // 1) Remap known sections first, consuming any adjacent old-act name so the new
+  //    citation (which already names the Act) is not duplicated.
   for (let j = 0; j < SECTION_REMAP.length; j++) {
     const map = SECTION_REMAP[j];
     const hasContext = map.contextPattern.test(text);
     map.contextPattern.lastIndex = 0;
-    if (!hasContext && !map.oldActHint.test(text)) {
-      map.oldActHint.lastIndex = 0;
-      continue;
-    }
+    const hasOldAct = map.oldActHint.test(text);
     map.oldActHint.lastIndex = 0;
-    if (map.oldSection.test(text)) {
-      text = text.replace(map.oldSection, map.newCitation);
+    if (!hasContext && !hasOldAct) continue;
+    const combined = new RegExp(
+      '(?:' + ACT_NAME_SOURCE + '\\s*,?\\s*)?' +
+        map.oldSection.source +
+        '(?:\\s*,?\\s*(?:of\\s+)?' + ACT_NAME_SOURCE + ')?',
+      'gi',
+    );
+    if (combined.test(text)) {
+      combined.lastIndex = 0;
+      text = text.replace(combined, map.newCitation);
       applied.push('section:' + map.id);
     }
-    map.oldSection.lastIndex = 0;
   }
+
+  // 2) Rename bare mentions of the repealed Act only. A mention attached to a section we
+  //    do not remap keeps its old name so the draft is still flagged for regeneration
+  //    (section numbers differ between the 2000 and 2020 Acts).
+  for (let i = 0; i < REPEALED_ACT_PATTERNS.length; i++) {
+    const row = REPEALED_ACT_PATTERNS[i];
+    const patterns = [
+      ['act:', row.actPattern],
+      ['short:', row.shortPattern],
+    ];
+    for (let k = 0; k < patterns.length; k++) {
+      const re = patterns[k][1];
+      let changed = false;
+      const src = text;
+      text = src.replace(re, function (match, offset) {
+        if (isActMentionSectionCitation(src, offset, offset + match.length)) return match;
+        changed = true;
+        return row.replacementAct;
+      });
+      re.lastIndex = 0;
+      if (changed) applied.push(patterns[k][0] + row.id);
+    }
+  }
+
+  // 3) Collapse any doubled Act title left by the model's own wording.
+  text = text.replace(/Sentencing Act 2020(?:\s*,?\s*(?:of\s+)?(?:the\s+)?Sentencing Act 2020)+/gi, 'Sentencing Act 2020');
 
   return { text: text.trim(), applied: applied };
 }

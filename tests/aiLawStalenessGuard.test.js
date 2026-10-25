@@ -78,3 +78,26 @@ describe('aiLawStalenessGuard', () => {
     assert.match(r.text, /Sentencing Act 2020/);
   });
 });
+
+describe('applyStatuteReplacements citation integrity', () => {
+  it('does not duplicate the Act name when remapping s.111', () => {
+    const inputs = [
+      '- Third domestic burglary: minimum 3 years under PCC(S)A 2000 s.111.',
+      '- Minimum sentence: Powers of Criminal Courts (Sentencing) Act 2000 s.111(2) for third domestic burglary.',
+      '- Third domestic burglary: s.111 of the Powers of Criminal Courts (Sentencing) Act 2000.',
+    ];
+    for (const input of inputs) {
+      const out = applyStatuteReplacements(input).text;
+      assert.match(out, /Sentencing Act 2020 s\.314/);
+      assert.doesNotMatch(out, /Sentencing Act 2020\s*(?:of\s+)?(?:the\s+)?Sentencing Act 2020/i);
+      assert.doesNotMatch(out, /Powers of Criminal Courts|PCC\s*\(?S\)?A/i);
+    }
+  });
+
+  it('keeps unmapped old-Act section citations so the draft is flagged, not renumbered', () => {
+    const r = guardLawNoteStaleness('- PCC(S)A 2000 s.110 minimum for drug trafficking.');
+    assert.doesNotMatch(r.noteText, /Sentencing Act 2020 s\.110/);
+    assert.match(r.noteText, /PCC\(S\)A 2000 s\.110/);
+    assert.equal(r.needsRegenerate, true);
+  });
+});
