@@ -1,9 +1,24 @@
 {
   "releases": [
     {
+      "version": "1.9.121",
+      "date": "2026-10-25",
+      "latest": true,
+      "changes": [
+        "Attendance type dropdown at the top of the note: mark any attendance as a first attendance, bail return or further attendance, and link it to the earlier visit.",
+        "Follow-up is now the one clear way to start a bail return from an earlier attendance.",
+        "Tidier attendance form: Outcome stays in section 8 and the duplicate Work Type field has gone from section 1.",
+        "Bill now goes straight to the billing step. New shortcuts: Preview PDF, Email officer and search from Home.",
+        "Settings: a single Account & cloud tab. Your ChatGPT key, QuickFile details and firms now sync between your computers when you sign in.",
+        "QuickFile: more reliable Send Bill (correct invoice numbering, link an existing invoice, no duplicate sends), working \"View the invoice\" links, faster ledger lookups, and mileage posted to nominal code 4906.",
+        "PDFs: open generated documents in a built-in viewer, and no DRAFT watermark on finalised records.",
+        "Officer Emails: date/time controls are readable in dark mode."
+      ]
+    },
+    {
       "version": "1.9.120",
       "date": "2026-10-23",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Officer Emails redesigned: tap-through date and time counters, clearer step-by-step layout and a live preview.",
         "Fixed bail fields showing on every email type and dates appearing as 2026-10-23."
