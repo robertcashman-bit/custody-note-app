@@ -84,3 +84,18 @@ describe('stripTrailingMetaSections keeps law after horizontal rules', () => {
     assert.doesNotMatch(res.noteText, /---|Uncertainties|https?:/);
   });
 });
+
+describe('markdown Uncertainties headings are kept for review', () => {
+  const { cleanLawElementsNoteText, cleanAskAnswerNoteText } = require('../main/aiNoteTextCleanup');
+
+  for (const heading of ['## Uncertainties', '**Uncertainties**', '**Uncertainties:**', 'Uncertainties:']) {
+    it('extracts uncertainties under "' + heading + '"', () => {
+      const raw = 'Actus reus\nA.\n\n---\n\n' + heading + '\nPoint X unverified.\n\n---\n\n**Sources**\n- https://example.org/a';
+      const law = cleanLawElementsNoteText(raw);
+      assert.equal(law.uncertainties, 'Point X unverified.');
+      assert.equal(law.noteText, 'Actus reus\nA.');
+      const ask = cleanAskAnswerNoteText(raw);
+      assert.equal(ask.uncertainties, 'Point X unverified.');
+    });
+  }
+});

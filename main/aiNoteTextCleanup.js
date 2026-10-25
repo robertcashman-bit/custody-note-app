@@ -42,6 +42,18 @@ function normaliseSourceList(citations) {
   return out;
 }
 
+/** Turn markdown meta headings (## Uncertainties, **Sources**:) into plain heading lines. */
+function normaliseMetaHeadings(text) {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/^[ \t]*(?:#{1,6}[ \t]*)?(?:\*\*)?[ \t]*(Uncertainties|Sources)[ \t]*:?[ \t]*(?:\*\*)?[ \t]*:?[ \t]*$/gim, '$1');
+}
+
+function extractUncertaintiesText(raw) {
+  const u = extractUncertainties(normaliseMetaHeadings(raw)) || '';
+  return u.replace(/\n[ \t]*---+[ \t]*$/, '').trim();
+}
+
 function stripTrailingMetaSections(text) {
   let t = String(text || '').replace(/\r\n/g, '\n');
   // Only cut at a trailing Uncertainties / Sources heading (optionally preceded by a
@@ -93,24 +105,24 @@ function demarkdownForNote(text) {
  * @returns {{ noteText: string, uncertainties: string }}
  */
 function cleanLawElementsNoteText(rawText) {
-  const raw = String(rawText || '');
-  const uncertainties = extractUncertainties(raw) || '';
+  const raw = normaliseMetaHeadings(rawText);
+  const uncertainties = extractUncertaintiesText(raw);
   let body = stripTrailingMetaSections(raw);
   body = stripLawElementsIntro(body);
   body = demarkdownForNote(body);
-  return { noteText: body, uncertainties: uncertainties.trim() };
+  return { noteText: body, uncertainties: uncertainties };
 }
 
 /**
  * Plain-text cleanup for Ask AI answers shown in session / appended to notes.
  */
 function cleanAskAnswerNoteText(rawText) {
-  const raw = String(rawText || '');
-  const uncertainties = extractUncertainties(raw) || '';
+  const raw = normaliseMetaHeadings(rawText);
+  const uncertainties = extractUncertaintiesText(raw);
   let body = stripTrailingMetaSections(raw);
   body = body.replace(/^Answer\s*\n+/i, '');
   body = demarkdownForNote(body);
-  return { noteText: body, uncertainties: uncertainties.trim() };
+  return { noteText: body, uncertainties: uncertainties };
 }
 
 function parseSourcesSectionUrls(rawText) {
@@ -153,6 +165,7 @@ function mergeSourceLists(primary, secondary) {
 module.exports = {
   stripTrackingParamsFromUrl,
   normaliseSourceList,
+  normaliseMetaHeadings,
   stripTrailingMetaSections,
   stripLawElementsIntro,
   demarkdownForNote,
