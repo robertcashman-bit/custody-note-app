@@ -1,9 +1,17 @@
 {
   "releases": [
     {
-      "version": "1.9.122",
+      "version": "1.9.123",
       "date": "2026-10-25",
       "latest": true,
+      "changes": [
+        "AI law explanation now checks for out-of-date law, e.g. it cites the Sentencing Act 2020 instead of the repealed 2000 Act, and gives the current magistrates' sentencing limits for either-way offences such as s.139. Anything it can't verify is flagged under Sources checked, not in the note."
+      ]
+    },
+    {
+      "version": "1.9.122",
+      "date": "2026-10-25",
+      "latest": false,
       "changes": [
         "ChatGPT key: saved to your account and loaded automatically on each of your computers after you sign in. A key already entered on this computer is kept and uploaded, never wiped by signing in.",
         "The ChatGPT key field has moved to Settings \u2192 Account & cloud.",
