@@ -8,7 +8,7 @@
   var _fillRunning = false;
   var _askRunning = false;
   var _askSessionConfirmed = false;
-  var _askThread = []; /* { role, content, sources? } */
+  var _askThread = []; /* { role, content, sources?, uncertainties? } */
   var _lastLawSources = [];
 
   function toast(msg, type, ms) {
@@ -376,6 +376,11 @@
     setAskAppendEnabled(sourcesPass(last.sources, !!last.refusal) && !last.refusal);
   }
 
+  function hasUncertainties(u) {
+    var v = String(u || '').trim();
+    return !!v && !/^none\.?$/i.test(v);
+  }
+
   function renderAskThread() {
     var el = document.getElementById('ai-ask-thread');
     if (!el) return;
@@ -400,6 +405,12 @@
         '<div style="font-size:0.88rem;line-height:1.4;">' +
         body +
         '</div>';
+      if (t.role === 'assistant' && hasUncertainties(t.uncertainties)) {
+        html +=
+          '<div style="margin-top:0.5rem;font-size:0.82rem;"><strong>Uncertainties</strong><br>' +
+          escapeHtml(String(t.uncertainties)).replace(/\n/g, '<br>') +
+          '</div>';
+      }
       if (t.role === 'assistant') {
         html +=
           '<div style="margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid rgba(15,23,42,0.08);">' +
@@ -454,6 +465,9 @@
     return _askThread
       .map(function (t) {
         var block = (t.role === 'assistant' ? 'AI' : 'You') + ':\n' + t.content;
+        if (t.role === 'assistant' && hasUncertainties(t.uncertainties)) {
+          block += '\n\nUncertainties\n' + String(t.uncertainties).trim();
+        }
         if (t.role === 'assistant' && t.sources && t.sources.length) {
           block += '\n\nSources\n' + formatSourcesPlain(t.sources);
         }
@@ -536,6 +550,7 @@
             role: 'assistant',
             content: res.answer || '',
             sources: Array.isArray(res.sources) ? res.sources : [],
+            uncertainties: res.uncertainties || '',
             refusal: !!res.refusal,
           });
           if (input) input.value = '';

@@ -57,3 +57,30 @@ describe('aiNoteTextCleanup — theft fixture', () => {
     assert.match(out, /Dishonest taking/);
   });
 });
+
+describe('stripTrailingMetaSections keeps law after horizontal rules', () => {
+  const { stripTrailingMetaSections, cleanLawElementsNoteText } = require('../main/aiNoteTextCleanup');
+
+  it('does not drop later headings separated by ---', () => {
+    const raw = 'Actus reus\nAppropriation of property.\n\n---\n\nMens rea\nDishonesty.\n\n---\n\nSentencing\nCategory ranges.\n\nUncertainties\nNone\n\nSources\n- https://example.org/a\n- https://example.org/b';
+    const out = stripTrailingMetaSections(raw);
+    assert.match(out, /Mens rea/);
+    assert.match(out, /Sentencing/);
+    assert.doesNotMatch(out, /Uncertainties|Sources|example\.org/);
+  });
+
+  it('strips a rule-preceded markdown Sources heading', () => {
+    const raw = 'Actus reus\nText.\n\n---\n\n**Sources**\n- https://example.org/a';
+    const out = stripTrailingMetaSections(raw);
+    assert.equal(out, 'Actus reus\nText.');
+  });
+
+  it('note text keeps all four headings when rules separate them', () => {
+    const raw = '**1. Actus Reus**\nA.\n\n---\n\n**2. Mens Rea**\nB.\n\n---\n\n**3. Common Defences**\nC.\n\n---\n\n**4. Sentencing**\nD.\n\n## Uncertainties\nPoint X unverified.\n\n## Sources\n- https://example.org/a';
+    const res = cleanLawElementsNoteText(raw);
+    for (const h of ['Actus reus', 'Mens rea', 'Common defences', 'Sentencing']) {
+      assert.match(res.noteText, new RegExp(h));
+    }
+    assert.doesNotMatch(res.noteText, /---|Uncertainties|https?:/);
+  });
+});

@@ -44,9 +44,12 @@ function normaliseSourceList(citations) {
 
 function stripTrailingMetaSections(text) {
   let t = String(text || '').replace(/\r\n/g, '\n');
-  t = t.replace(/\n---+\s*\n[\s\S]*$/g, '');
-  t = t.replace(/\n\s*Sources\s*\n[\s\S]*$/i, '');
-  t = t.replace(/\n\s*Uncertainties\s*\n[\s\S]*$/i, '');
+  // Only cut at a trailing Uncertainties / Sources heading (optionally preceded by a
+  // horizontal rule). A bare `---` between law headings must never drop later sections.
+  const META_HEADING = '(?:#{1,6}[ \\t]*)?(?:\\*\\*)?[ \\t]*(?:Uncertainties|Sources)[ \\t]*:?[ \\t]*(?:\\*\\*)?[ \\t]*\\n';
+  t = t.replace(new RegExp('\\n[ \\t]*---+[ \\t]*\\n\\s*(?=' + META_HEADING + ')[\\s\\S]*$', 'i'), '');
+  t = t.replace(new RegExp('\\n[ \\t]*' + META_HEADING + '[\\s\\S]*$', 'i'), '');
+  t = t.replace(/\n[ \t]*---+[ \t]*$/, '');
   return t.trim();
 }
 
