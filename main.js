@@ -7487,6 +7487,25 @@ function loadOpenAiKeyFromEnvLocal() {
   return '';
 }
 
+function readSealedOpenAiApiKey() {
+  try {
+    const sealedPath = path.join(app.getPath('userData'), 'openai-api-key.dat');
+    if (!fs.existsSync(sealedPath)) return '';
+    const raw = fs.readFileSync(sealedPath);
+    if (!raw || !raw.length) return '';
+    if (safeStorage.isEncryptionAvailable()) {
+      try {
+        return String(safeStorage.decryptString(raw) || '').trim();
+      } catch (_) {
+        return '';
+      }
+    }
+    return String(raw.toString('utf8') || '').trim();
+  } catch (_) {
+    return '';
+  }
+}
+
 function isOpenAiApiKeySealedFileUnreadable() {
   try {
     const sealedPath = path.join(app.getPath('userData'), 'openai-api-key.dat');
@@ -7603,6 +7622,21 @@ function seedOpenAiApiKeyIntoSettings() {
     const dbPlain = existing && String(existing.value || '').trim();
     const picked = openAiKeyLocalMigration.pickPlaintextOpenAiKeyForMigration(dbPlain, localFilePlain);
     if (!picked.key) return;
+
+    // If the sealed store already holds a working key, it is the source of truth:
+    // never overwrite it with leftover plaintext or push that stale value to the account.
+    const sealedKey = readSealedOpenAiApiKey();
+    if (!openAiKeyLocalMigration.shouldSealPlaintextKey({ sealedKey: sealedKey, plaintextKey: picked.key })) {
+      if (dbPlain) {
+        dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKey', '']);
+      }
+      if (localFilePlain) {
+        deleteOpenAiLocalFallbackFile();
+      }
+      markDbDirty();
+      console.log('[ai-law] Sealed OpenAI key already present; cleared leftover plaintext without overwriting');
+      return;
+    }
 
     const sealedOk = persistOpenAiApiKeySecure(picked.key);
     if (!sealedOk) {
@@ -12385,7 +12419,20 @@ async function ensureOpenAiApiKeyFromServer(opts) {
 
   const serverUpdatedAt = String(pull.updatedAt || '').trim();
   if (pull.empty) {
-    if (localHasKey && serverUpdatedAt && localServerUpdatedAt && serverUpdatedAt <= localServerUpdatedAt && !force) {
+    const emptyAction = openaiApiKeySync.resolveEmptyServerPullAction({
+      localHasKey: localHasKey,
+      localServerUpdatedAt: localServerUpdatedAt,
+      serverUpdatedAt: serverUpdatedAt,
+    });
+    if (emptyAction === 'push-local') {
+      // Account has never stored a key (or this computer's key was never synced):
+      // keep the local key and upload it instead of treating "empty" as a remote clear.
+      scheduleOpenAiApiKeyCloudPush('bootstrap-push');
+      dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncedAt', new Date().toISOString()]);
+      markDbDirty();
+      return { ok: true, usedLocal: true, reason: reason, skipped: 'local-push-scheduled' };
+    }
+    if (emptyAction === 'keep-local') {
       dbRun('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['openaiApiKeySyncedAt', new Date().toISOString()]);
       markDbDirty();
       return { ok: true, usedLocal: true, reason: reason, skipped: 'server-not-newer' };
