@@ -8,6 +8,7 @@
   var VISIT_RE_INTERVIEW = 're_interview';
   var VISIT_IDENTIFICATION = 'identification';
   var VISIT_RUI_RETURN = 'rui_return';
+  var VISIT_CHARGE_ONLY = 'charge_only';
 
   var WORK_TYPE_FURTHER = 'Further Police Station Attendance';
   var WORK_TYPE_FIRST = 'First Police Station Attendance';
@@ -19,6 +20,7 @@
     re_interview: 're_interview',
     identification: 'identification',
     rui_return: 'rui_return',
+    charge_only: 'charge_only',
   };
 
   var VISIT_TYPE_BY_REASON_CODE = {
@@ -27,6 +29,7 @@
     re_interview: VISIT_RE_INTERVIEW,
     identification: VISIT_IDENTIFICATION,
     rui_return: VISIT_RUI_RETURN,
+    charge_only: VISIT_CHARGE_ONLY,
   };
 
   /** Labels for follow-up chooser (excludes first attendance). */
@@ -35,6 +38,7 @@
     rui_return: 'RUI return',
     identification: 'ID procedure (identification parade / VIPER)',
     re_interview: 'Re-interview',
+    charge_only: 'Charge only (no interview)',
     other: 'Further attendance / further interview',
   };
 
@@ -47,6 +51,7 @@
     { code: VISIT_BAIL_RETURN, label: 'Bail return' },
     { code: VISIT_FURTHER, label: 'Further attendance / further interview' },
     { code: VISIT_RE_INTERVIEW, label: 'Re-interview' },
+    { code: VISIT_CHARGE_ONLY, label: 'Charge only (no interview)' },
     { code: VISIT_IDENTIFICATION, label: 'ID procedure (identification parade / VIPER)' },
     { code: VISIT_RUI_RETURN, label: 'RUI return' },
   ];
@@ -267,6 +272,7 @@
     re_interview: VISIT_RE_INTERVIEW,
     identification: VISIT_IDENTIFICATION,
     rui_return: VISIT_RUI_RETURN,
+    charge_only: VISIT_CHARGE_ONLY,
   };
   global.ATTENDANCE_VISIT_TYPE_OPTIONS = VISIT_TYPE_OPTIONS;
   global.TELEPHONE_VISIT_TYPE_BLOCK_MESSAGE = TELEPHONE_BLOCK_MESSAGE;

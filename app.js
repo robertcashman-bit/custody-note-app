@@ -998,7 +998,7 @@ var LAA = {
       id: 'outcome', title: '8. Outcome',
       keyFields: ['outcomeDecision'],
       fields: [
-        { key: 'outcomeDecision', label: 'Decision', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Charged without Bail','Charged with Bail','Bail without charge','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Community Resolution','Penalty Notice (PND)','Remanded in Custody','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
+        { key: 'outcomeDecision', label: 'Decision', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Charged without Bail','Charged with Bail','Bail without charge','Released Under Investigation','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Cannabis / khat warning','Remanded in Custody','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: '_h_bail_return', label: 'Bail to return details', type: 'sectionHeading', showIf: { field: 'outcomeDecision', value: 'Bail without charge' } },
@@ -1769,7 +1769,7 @@ var LAA = {
       keyFields: ['outcomeDecision'],
       fields: [
         { key: 'interviewCompleted', label: 'Interview completed?', type: 'select', options: ['Yes','No'] },
-        { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Referred to diversion programme','Further voluntary interview required','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
+        { key: 'outcomeDecision', label: 'Outcome', type: 'select', options: ['Ongoing / Unknown','Officer to Notify','Referred to CPS','Released NFA','Simple Caution','Conditional Caution','Youth caution / Youth conditional caution','Community Resolution','Penalty Notice (PND)','Cannabis / khat warning','Referred to diversion programme','Further voluntary interview required','Handed back to DSCC','Did not attend (exceptional circumstances)','Other'], cols: 2 },
         { key: 'handedBackToDSCCReason', label: 'Reason handed back to DSCC', type: 'textarea', placeholder: 'Required per Spec 9.53', cols: 2, showIf: { field: 'outcomeDecision', value: 'Handed back to DSCC' } },
         { key: 'nonAttendanceReason', label: 'Reason for non-attendance (exceptional circumstances)', type: 'textarea', placeholder: 'Required per Spec 9.39/9.44', cols: 2, showIf: { field: 'outcomeDecision', value: 'Did not attend (exceptional circumstances)' } },
         { key: 'outcomeCode', label: 'Outcome Code (LAA)', type: 'select', options: [
@@ -5336,6 +5336,71 @@ var REQUIRED_FIELD_KEYS = [
     setFieldValueSilent('bailReturnStationName', '');
     setFieldValueSilent('bailReturnStationCode', '');
     setFieldValueSilent('bailConditions', '');
+  }
+
+  /** Shared side effects when outcomeDecision changes (section 8 or visit-type outcome bar). */
+  function applyOutcomeDecisionChangeEffects() {
+    if (!isBailOutcomeDecision(formData.outcomeDecision)) {
+      clearOutcomeBailState();
+    } else if (!isBailReturnOutcomeDecision(formData.outcomeDecision)) {
+      clearBailReturnDetails();
+    }
+    prefillOutcomeChargesFromOffences();
+    if (formData.outcomeDecision === 'Bail without charge' && (!formData.bailReturnStationName || !formData.bailReturnStationCode)) {
+      if (formData.policeStationName) {
+        formData.bailReturnStationName = formData.policeStationName;
+        setFieldValueSilent('bailReturnStationName', formData.policeStationName);
+      }
+      if (formData.schemeId) {
+        formData.bailReturnStationCode = formData.schemeId;
+        setFieldValueSilent('bailReturnStationCode', formData.schemeId);
+      }
+    }
+    var _chargedOutcomes = ['Charged without Bail', 'Charged with Bail', 'Remanded in Custody'];
+    if (_chargedOutcomes.indexOf(formData.outcomeDecision) !== -1) {
+      if (!formData.courtDate) {
+        var _tomorrow = new Date();
+        _tomorrow.setDate(_tomorrow.getDate() + 1);
+        var _tomorrowStr = _tomorrow.getFullYear() + '-' +
+          ('0' + (_tomorrow.getMonth() + 1)).slice(-2) + '-' +
+          ('0' + _tomorrow.getDate()).slice(-2);
+        formData.courtDate = _tomorrowStr;
+        setFieldValue('courtDate', _tomorrowStr);
+      }
+      if (!formData.courtTime) {
+        formData.courtTime = '10:00';
+        setFieldValue('courtTime', '10:00');
+      }
+    }
+    var _DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
+    if (_DS && typeof _DS.resolveOutcomeCodeOnDecisionChange === 'function') {
+      var _resolvedCode = _DS.resolveOutcomeCodeOnDecisionChange(formData.outcomeDecision, formData.outcomeCode);
+      if (_resolvedCode !== (formData.outcomeCode || '').trim()) {
+        formData.outcomeCode = _resolvedCode;
+        setFieldValueSilent('outcomeCode', _resolvedCode);
+      }
+    }
+  }
+
+  function handleQuickVisitOutcomeChange(quickCode) {
+    if (isNoteLockedForEditing()) {
+      showToast('Re-open this record for amendment before changing outcome.', 'info', 6000);
+      updateVisitTypeBar();
+      return;
+    }
+    if (typeof mapQuickVisitOutcomeToDecision !== 'function') return;
+    if (!quickCode) return;
+    formData.outcomeDecision = mapQuickVisitOutcomeToDecision(quickCode);
+    setFieldValueSilent('outcomeDecision', formData.outcomeDecision);
+    applyOutcomeDecisionChangeEffects();
+    if (quickCode === 're_bailed' && !formData.bailType) {
+      formData.bailType = 'Conditional';
+      setFieldValueSilent('bailType', 'Conditional');
+    }
+    scheduleQuietSave();
+    updateVisitTypeBar();
+    updateContextBar();
+    applyConditionalVisibility();
   }
 
   /**
@@ -9025,18 +9090,73 @@ var REQUIRED_FIELD_KEYS = [
       return '<option value="' + esc(opt.code) + '"' + selected + '>' + esc(opt.label) + '</option>';
     }).join('');
 
+    var showQuickOutcome = typeof visitTypeShowsQuickOutcome === 'function'
+      && visitTypeShowsQuickOutcome(currentVisit);
+    var quickOutcome = (typeof resolveQuickVisitOutcomeFromDecision === 'function')
+      ? resolveQuickVisitOutcomeFromDecision(formData.outcomeDecision)
+      : '';
+    var outcomeGroups = typeof listQuickVisitOutcomeOptionGroups === 'function'
+      ? listQuickVisitOutcomeOptionGroups()
+      : (typeof listQuickVisitOutcomeOptions === 'function'
+        ? [{ label: '', options: listQuickVisitOutcomeOptions() }]
+        : []);
+    var outcomeSelectHtml = '<option value="">— Outcome (section 8) —</option>' + outcomeGroups.map(function (grp) {
+      var optsHtml = (grp.options || []).map(function (opt) {
+        var sel = quickOutcome === opt.code ? ' selected' : '';
+        return '<option value="' + esc(opt.code) + '"' + sel + '>' + esc(opt.label) + '</option>';
+      }).join('');
+      if (grp.label) {
+        return '<optgroup label="' + esc(grp.label) + '">' + optsHtml + '</optgroup>';
+      }
+      return optsHtml;
+    }).join('');
+
+    var bailExtrasHtml = '';
+    if (showQuickOutcome && quickOutcome === 're_bailed') {
+      var bailDateVal = esc(formData.bailDate || '');
+      var bailType = formData.bailType || 'Conditional';
+      var bailCondVal = esc(formData.bailConditions || '');
+      bailExtrasHtml =
+        '<label class="visit-type-bar-label" for="visit-type-bail-date">Bail return date</label>' +
+        '<input type="date" class="visit-type-bail-date" id="visit-type-bail-date" value="' + bailDateVal + '"'
+          + (locked ? ' disabled' : '') + ' />' +
+        '<label class="visit-type-bar-label" for="visit-type-bail-type">Bail</label>' +
+        '<select class="visit-type-bail-type" id="visit-type-bail-type"' + (locked ? ' disabled' : '') + '>' +
+          '<option value="Unconditional"' + (bailType === 'Unconditional' ? ' selected' : '') + '>Unconditional</option>' +
+          '<option value="Conditional"' + (bailType === 'Conditional' ? ' selected' : '') + '>Conditional</option>' +
+        '</select>' +
+        (bailType === 'Conditional'
+          ? ('<label class="visit-type-bar-label" for="visit-type-bail-conditions">Conditions</label>' +
+            '<input type="text" class="visit-type-bail-conditions" id="visit-type-bail-conditions" '
+            + 'placeholder="Summary — full checklist in section 8" value="' + bailCondVal + '"'
+            + (locked ? ' disabled' : '') + ' />')
+          : '');
+    }
+
+    var outcomeRowHtml = showQuickOutcome
+      ? ('<div class="visit-type-outcome-row">' +
+          '<label class="visit-type-bar-label" for="visit-type-outcome-select">Outcome</label>' +
+          '<select class="visit-type-outcome-select" id="visit-type-outcome-select" aria-label="Visit outcome"'
+            + (locked ? ' disabled' : '') + '>' + outcomeSelectHtml + '</select>' +
+          bailExtrasHtml +
+        '</div>')
+      : '';
+
     bar.innerHTML =
-      '<span class="visit-type-bar-label">Attendance</span>' +
-      '<select class="visit-type-mode-select" id="visit-type-mode-select"' + (locked ? ' disabled' : '') + '>' +
-        '<option value="custody"' + (mode === 'custody' ? ' selected' : '') + '>Custody</option>' +
-        '<option value="voluntary"' + (mode === 'voluntary' ? ' selected' : '') + '>Voluntary</option>' +
-      '</select>' +
-      '<label class="visit-type-bar-label" for="visit-type-attendance-select">Attendance type</label>' +
-      '<select class="visit-type-attendance-select" id="visit-type-attendance-select" aria-label="Attendance type"'
-        + (locked ? ' disabled' : '') + '>' + typeSelectHtml + '</select>' +
-      '<button type="button" class="btn btn-secondary btn-small visit-type-link-btn" id="visit-type-link-btn"'
-        + (locked || currentVisit === visitTypes.first ? ' disabled' : '') + '>Link earlier visit</button>' +
-      '<span class="visit-type-bar-hint">' + linkHint + '</span>';
+      '<div class="visit-type-bar-primary">' +
+        '<span class="visit-type-bar-label">Attendance</span>' +
+        '<select class="visit-type-mode-select" id="visit-type-mode-select"' + (locked ? ' disabled' : '') + '>' +
+          '<option value="custody"' + (mode === 'custody' ? ' selected' : '') + '>Custody</option>' +
+          '<option value="voluntary"' + (mode === 'voluntary' ? ' selected' : '') + '>Voluntary</option>' +
+        '</select>' +
+        '<label class="visit-type-bar-label" for="visit-type-attendance-select">Attendance type</label>' +
+        '<select class="visit-type-attendance-select" id="visit-type-attendance-select" aria-label="Attendance type"'
+          + (locked ? ' disabled' : '') + '>' + typeSelectHtml + '</select>' +
+        '<button type="button" class="btn btn-secondary btn-small visit-type-link-btn" id="visit-type-link-btn"'
+          + (locked || currentVisit === visitTypes.first ? ' disabled' : '') + '>Link earlier visit</button>' +
+        '<span class="visit-type-bar-hint">' + linkHint + '</span>' +
+      '</div>' +
+      outcomeRowHtml;
 
     if (!_visitTypeBarHandlersBound) {
       _visitTypeBarHandlersBound = true;
@@ -9046,6 +9166,29 @@ var REQUIRED_FIELD_KEYS = [
         }
         if (e.target && e.target.id === 'visit-type-mode-select') {
           handleVisitTypeBarModeChange(e.target.value);
+        }
+        if (e.target && e.target.id === 'visit-type-outcome-select' && !e.target.disabled) {
+          handleQuickVisitOutcomeChange(e.target.value);
+        }
+        if (e.target && e.target.id === 'visit-type-bail-type' && !e.target.disabled) {
+          formData.bailType = e.target.value;
+          setFieldValueSilent('bailType', e.target.value);
+          updateVisitTypeBar();
+          applyConditionalVisibility();
+          scheduleQuietSave();
+        }
+        if (e.target && e.target.id === 'visit-type-bail-date' && !e.target.disabled) {
+          formData.bailDate = e.target.value;
+          setFieldValueSilent('bailDate', e.target.value);
+          scheduleQuietSave();
+          updateContextBar();
+        }
+      });
+      bar.addEventListener('input', function (e) {
+        if (e.target && e.target.id === 'visit-type-bail-conditions' && !e.target.disabled) {
+          formData.bailConditions = e.target.value;
+          setFieldValueSilent('bailConditions', e.target.value);
+          scheduleQuietSave();
         }
       });
       bar.addEventListener('click', function (e) {
@@ -9783,41 +9926,11 @@ var REQUIRED_FIELD_KEYS = [
             setFieldValue('weekendBankHoliday', (isWE || isBH) ? 'Yes' : 'No');
           }
           if (field === 'outcomeDecision') {
-            if (!isBailOutcomeDecision(formData.outcomeDecision)) {
-              clearOutcomeBailState();
-            } else if (!isBailReturnOutcomeDecision(formData.outcomeDecision)) {
-              clearBailReturnDetails();
-            }
-            prefillOutcomeChargesFromOffences();
-            if (formData.outcomeDecision === 'Bail without charge' && (!formData.bailReturnStationName || !formData.bailReturnStationCode)) {
-              if (formData.policeStationName) { formData.bailReturnStationName = formData.policeStationName; setFieldValueSilent('bailReturnStationName', formData.policeStationName); }
-              if (formData.schemeId) { formData.bailReturnStationCode = formData.schemeId; setFieldValueSilent('bailReturnStationCode', formData.schemeId); }
-            }
-            var _chargedOutcomes = ['Charged without Bail','Charged with Bail','Remanded in Custody'];
-            if (_chargedOutcomes.indexOf(formData.outcomeDecision) !== -1) {
-              if (!formData.courtDate) {
-                var _tomorrow = new Date(); _tomorrow.setDate(_tomorrow.getDate() + 1);
-                var _tomorrowStr = _tomorrow.getFullYear() + '-' +
-                  ('0' + (_tomorrow.getMonth() + 1)).slice(-2) + '-' +
-                  ('0' + _tomorrow.getDate()).slice(-2);
-                formData.courtDate = _tomorrowStr;
-                setFieldValue('courtDate', _tomorrowStr);
-              }
-              if (!formData.courtTime) {
-                formData.courtTime = '10:00';
-                setFieldValue('courtTime', '10:00');
-              }
-            }
-            /* Auto-suggest LAA outcome code from decision (never CN09 for bail).
-               Switching to first-grant bail clears ANY leftover suggested CN (not only CN09). */
-            var _DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
-            if (_DS && typeof _DS.resolveOutcomeCodeOnDecisionChange === 'function') {
-              var _resolvedCode = _DS.resolveOutcomeCodeOnDecisionChange(formData.outcomeDecision, formData.outcomeCode);
-              if (_resolvedCode !== (formData.outcomeCode || '').trim()) {
-                formData.outcomeCode = _resolvedCode;
-                setFieldValueSilent('outcomeCode', _resolvedCode);
-              }
-            }
+            applyOutcomeDecisionChangeEffects();
+            updateVisitTypeBar();
+          }
+          if (field === 'bailDate' || field === 'bailType' || field === 'bailConditions') {
+            updateVisitTypeBar();
           }
           if (field === 'attendanceMode') {
             var isVol = formData.attendanceMode === 'voluntary';

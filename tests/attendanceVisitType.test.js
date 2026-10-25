@@ -60,6 +60,7 @@ describe('attendance-visit-type (in-place conversion)', () => {
       ATTENDANCE_VISIT_TYPES.bail_return,
       ATTENDANCE_VISIT_TYPES.further,
       ATTENDANCE_VISIT_TYPES.re_interview,
+      ATTENDANCE_VISIT_TYPES.charge_only,
       ATTENDANCE_VISIT_TYPES.identification,
       ATTENDANCE_VISIT_TYPES.rui_return,
     ]);
@@ -110,6 +111,15 @@ describe('attendance-visit-type (in-place conversion)', () => {
     const d3 = syntheticCustodyRecord();
     applyAttendanceVisitType(d3, ATTENDANCE_VISIT_TYPES.rui_return);
     assert.strictEqual(d3._followUpReason, 'rui_return');
+
+    const d4 = syntheticCustodyRecord();
+    applyAttendanceVisitType(d4, ATTENDANCE_VISIT_TYPES.charge_only);
+    assert.strictEqual(d4.workType, WORK_TYPE_FURTHER);
+    assert.strictEqual(d4._followUpReason, 'charge_only');
+    assert.strictEqual(
+      resolveAttendanceVisitType(d4),
+      ATTENDANCE_VISIT_TYPES.charge_only
+    );
   });
 
   it('custody → bail return → first preserves every data key and non-managed values', () => {
@@ -210,10 +220,12 @@ describe('attendance-visit-type UI wiring (source)', () => {
 
   it('loads attendance-visit-type.js and renders attendance type dropdown bar', () => {
     assert.match(indexHtml, /attendance-visit-type\.js/);
+    assert.match(indexHtml, /attendance-visit-outcome\.js/);
     assert.match(indexHtml, /id="form-visit-type-bar"/);
     assert.match(appJs, /function updateVisitTypeBar/);
     assert.match(appJs, /handleAttendanceVisitTypeChange/);
     assert.match(appJs, /id="visit-type-attendance-select"/);
+    assert.match(appJs, /id="visit-type-outcome-select"/);
     assert.match(appJs, /field === 'workType'/);
     assert.doesNotMatch(appJs, /visit-type-segmented/);
   });

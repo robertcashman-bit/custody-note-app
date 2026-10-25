@@ -100,6 +100,12 @@ describe('followUpAttendanceData', () => {
     assert.strictEqual(out._followUpReason, 're_interview');
     assert.strictEqual(out._followUpFromAttendanceId, 7);
   });
+
+  it('creates charge-only follow-up with Further work type', () => {
+    const out = followUpAttendanceData(baseSource(), 8, 'charge_only');
+    assert.strictEqual(out._followUpReason, 'charge_only');
+    assert.strictEqual(out.workType, 'Further Police Station Attendance');
+  });
 });
 
 describe('appendFollowUpIdToSourceData', () => {
