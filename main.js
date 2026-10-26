@@ -407,6 +407,13 @@ function getOrCreateMasterKey(options = {}) {
     if (result.legacyPlaintextFallback) {
       _writeFallbackKeyEncrypted(getFallbackKeyPath(), result.key);
     }
+    if (masterKeyLib.shouldMigrateFallbackToSafeStorage({
+      safeStorageAvailable: safeStorage.isEncryptionAvailable(),
+      reason: result.reason,
+      legacyPlaintextFallback: !!result.legacyPlaintextFallback,
+    })) {
+      saveMasterKeyToSafeStorage(result.key);
+    }
   }
   return result.key || null;
 }

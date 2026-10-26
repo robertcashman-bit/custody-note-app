@@ -15,14 +15,14 @@ Key settings that must not be changed without justification:
   "nsis": {
     "oneClick": true,
     "perMachine": false,
-    "allowElevation": true,
+    "allowElevation": false,
     "include": "build/installer.nsh"
   }
 }
 ```
 
 - `perMachine: false` — installs to user AppData, avoids admin permission issues
-- `allowElevation: true` — lets NSIS elevate if needed to overwrite locked files
+- `allowElevation: false` — per-user install (`perMachine: false`); custom `installer.nsh` closes/kills the app before overwrite without requiring UAC elevation
 - `include: build/installer.nsh` — custom script that kills running instances before install
 
 ## build/installer.nsh

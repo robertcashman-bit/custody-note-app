@@ -6,8 +6,9 @@
  *     local / PR builds must not force the Azure sign manager).
  *   - release-windows uses OIDC (id-token + azure/login) and CLI
  *     -c.win.azureSignOptions.* when signing is enabled.
- *   - Soft gate: absent secrets → unsigned + warning; fail-closed only for
- *     CN_WINDOWS_SIGN=1 or partially configured secrets.
+ *   - Fail-closed on tag release when secrets absent (no unsigned feed publish).
+ *   - CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1 opt-in for test builds only.
+ *   - Partial secrets or CN_WINDOWS_SIGN=1 without secrets → fail closed.
  *   - electron-builder is new enough for DefaultAzureCredential / OIDC.
  */
 'use strict';
@@ -70,7 +71,7 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
   });
 
   it('release-windows authenticates with azure/login and Artifact Signing secrets', () => {
-    assert.match(wf, /uses:\s*azure\/login@v/);
+    assert.match(wf, /uses:\s*azure\/login@[0-9a-f]{40}/);
     for (const k of [
       'AZURE_CLIENT_ID',
       'AZURE_TENANT_ID',
@@ -92,18 +93,14 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
     assert.match(wf, /-c\.win\.azureSignOptions\.certificateProfileName=/);
   });
 
-  it('soft-gates signing: unsigned when secrets absent; fail-closed only for CN_WINDOWS_SIGN or partial secrets', () => {
+  it('fail-closes release when signing secrets absent unless CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1', () => {
     const block = releaseWindowsBlock();
     assert.match(block, /CN_WINDOWS_SIGN/);
+    assert.match(block, /CN_ALLOW_UNSIGNED_WINDOWS_RELEASE/);
     assert.match(block, /partially configured/);
     assert.match(block, /CN_WINDOWS_SIGN=1 requires Windows Azure Artifact Signing/);
-    assert.match(block, /UNSIGNED Windows installer/);
-    // Must NOT fail closed merely because the ref is a version tag.
-    assert.doesNotMatch(
-      block,
-      /require_sign=true[\s\S]*refs\/tags\/v\*|refs\/tags\/v\*[\s\S]*require_sign=true/
-    );
-    assert.doesNotMatch(block, /required for this run \(tag release/);
+    assert.match(block, /Release blocked: Windows Authenticode signing is required/);
+    assert.match(block, /verify-windows-installer-signed/);
   });
 
   it('SIGNING.md documents Azure Artifact Signing Basic + publisher legal name', () => {
@@ -115,7 +112,6 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
     assert.match(signingDoc, /YOUR_ACCOUNT/);
     assert.match(signingDoc, /https:\/\/eus\.codesigning\.azure\.net\//);
     assert.match(signingDoc, /Federated credentials|OIDC/i);
-    assert.match(signingDoc, /Soft gate/);
-    assert.doesNotMatch(signingDoc, /will fail on `v\*` tags/);
+    assert.match(signingDoc, /CN_ALLOW_UNSIGNED_WINDOWS_RELEASE/);
   });
 });
