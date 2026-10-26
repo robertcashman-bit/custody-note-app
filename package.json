@@ -60,7 +60,7 @@
   "author": "DEFENCELEGALSERVICES LIMITED",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.64.1",
     "@electron/fuses": "^1.8.0",
     "electron": "^42.11.16",
     "electron-builder": "^26.16.1",
