@@ -7,6 +7,13 @@
 const path = require('path');
 
 module.exports = async function afterPack(context) {
+  const extra =
+    (context.packager.config && context.packager.config.extraMetadata) || {};
+  if (extra.cnPackagedTestHooks === true) {
+    console.log('[fuses] skip: cnPackagedTestHooks packaged test build (Playwright needs inspect/CDP)');
+    return;
+  }
+
   const { flipFuses, FuseVersion, FuseV1Options } = require('@electron/fuses');
 
   const product = context.packager.appInfo.productFilename;

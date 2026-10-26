@@ -11,6 +11,7 @@ describe('Electron fuses (packaged builds)', () => {
     assert.strictEqual(pkg.build.afterPack, './scripts/flip-electron-fuses.cjs');
     assert.ok(pkg.devDependencies['@electron/fuses'], '@electron/fuses devDependency required');
     const script = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'flip-electron-fuses.cjs'), 'utf8');
+    assert.match(script, /cnPackagedTestHooks/);
     assert.match(script, /RunAsNode\]: false/);
     assert.match(script, /EnableCookieEncryption\]: true/);
     assert.doesNotMatch(script, /OnlyLoadAppFromAsar\]: true/);
