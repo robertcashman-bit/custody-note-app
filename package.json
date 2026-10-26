@@ -163,7 +163,7 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "allowElevation": false,
+      "allowElevation": true,
       "allowToChangeInstallationDirectory": false,
       "runAfterFinish": true,
       "createDesktopShortcut": true,

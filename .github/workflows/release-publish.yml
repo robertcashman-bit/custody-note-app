@@ -16,11 +16,8 @@
 # - AZURE_CODE_SIGNING_ACCOUNT_NAME — Artifact Signing account name (YOUR_ACCOUNT)
 # - AZURE_CERTIFICATE_PROFILE_NAME  — Certificate profile name (YOUR_CERT_PROFILE)
 # - AZURE_TRUSTED_SIGNING_PUBLISHER_NAME — Cert CN, e.g. DEFENCELEGALSERVICES LIMITED
-# Fail-closed: tag releases require Azure Artifact Signing when secrets are complete.
-# If ALL signing secrets are absent, the Windows job FAILS (no unsigned feed publish).
-# Opt-in escape hatch for test/local only: repo variable CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1
-# (see SIGNING.md — never use for production custody-note-releases mirrors).
-# Partial secrets or CN_WINDOWS_SIGN=1 without a full secret set also fail.
+# Soft gate: if ALL of the above are absent → unsigned Windows build (warning logged).
+# Fail-closed only when CN_WINDOWS_SIGN=1 OR secrets are partially present/misconfigured.
 # Optional repo variable:
 # - CN_WINDOWS_SIGN=1               — Require signing (fail if secrets incomplete)
 # Full Azure setup checklist: SIGNING.md
@@ -146,16 +143,11 @@ jobs:
           AZURE_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
           AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
           CN_WINDOWS_SIGN: ${{ vars.CN_WINDOWS_SIGN }}
-          CN_ALLOW_UNSIGNED_WINDOWS_RELEASE: ${{ vars.CN_ALLOW_UNSIGNED_WINDOWS_RELEASE }}
         run: |
           set -euo pipefail
           force_sign=false
           if [[ "${CN_WINDOWS_SIGN:-}" == "1" ]]; then
             force_sign=true
-          fi
-          allow_unsigned=false
-          if [[ "${CN_ALLOW_UNSIGNED_WINDOWS_RELEASE:-}" == "1" ]]; then
-            allow_unsigned=true
           fi
 
           required=(
@@ -179,7 +171,6 @@ jobs:
 
           if [[ ${#missing[@]} -eq 0 ]]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "allow_unsigned=false" >> "$GITHUB_OUTPUT"
             echo "Azure Artifact Signing enabled for this Windows build (all secrets present)."
           elif [[ ${#present[@]} -gt 0 ]]; then
             echo "::error::Windows Azure Artifact Signing secrets are partially configured (present: ${present[*]}; missing: ${missing[*]}). Fix or remove the partial set before releasing. See SIGNING.md."
@@ -187,13 +178,9 @@ jobs:
           elif [[ "$force_sign" == "true" ]]; then
             echo "::error::CN_WINDOWS_SIGN=1 requires Windows Azure Artifact Signing, but secrets are missing: ${missing[*]}. See SIGNING.md."
             exit 1
-          elif [[ "$allow_unsigned" == "true" ]]; then
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "allow_unsigned=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1 — building UNSIGNED Windows NSIS for test only. Do NOT mirror this build to custody-note-releases for end-user auto-update."
           else
-            echo "::error::Release blocked: Windows Authenticode signing is required but Azure Artifact Signing secrets are not configured (missing: ${missing[*]}). Complete SIGNING.md before shipping to custody-note-releases. For non-production test installers only, set repo variable CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1."
-            exit 1
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=UNSIGNED Windows installer — Authenticode signing not configured::Azure Artifact Signing secrets are not configured. This job will build and publish an UNSIGNED Custody-Note-Setup .exe to the release draft (and public feed after mirror). Integrity for auto-update still relies on the SHA256 sidecar in custody-note-releases, not a code signature. Complete SIGNING.md when ready to sign."
           fi
 
       - name: Azure login (OIDC)
@@ -217,7 +204,6 @@ jobs:
           AZURE_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_CERTIFICATE_PROFILE_NAME }}
           AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME }}
           CN_WIN_SIGN_ENABLED: ${{ steps.win-sign.outputs.enabled }}
-          CN_ALLOW_UNSIGNED_WINDOWS_RELEASE: ${{ steps.win-sign.outputs.allow_unsigned == 'true' && '1' || '' }}
         run: |
           set -euo pipefail
           # NSIS only — AppX/MSIX is a separate job so a Store packaging failure
@@ -230,16 +216,28 @@ jobs:
               "-c.win.azureSignOptions.codeSigningAccountName=${AZURE_CODE_SIGNING_ACCOUNT_NAME}" \
               "-c.win.azureSignOptions.certificateProfileName=${AZURE_CERTIFICATE_PROFILE_NAME}"
           else
-            echo "Building unsigned Windows NSIS installer (CN_ALLOW_UNSIGNED_WINDOWS_RELEASE escape hatch)…"
+            echo "Building unsigned Windows NSIS installer…"
             npx electron-builder --win nsis --publish never
           fi
+
+      - name: Job summary — unsigned Windows installer
+        if: steps.win-sign.outputs.enabled != 'true'
+        shell: bash
+        run: |
+          {
+            echo "## ⚠️ Unsigned Windows NSIS installer"
+            echo ""
+            echo "Azure Artifact Signing is **not** configured for this run. The \`Custody-Note-Setup-*.exe\` artefact is **unsigned** (no Authenticode signature)."
+            echo ""
+            echo "Auto-update for existing installs is unchanged: electron-updater still verifies the published **SHA256** in \`latest.yml\` on \`custody-note-releases\`."
+            echo ""
+            echo "When signing is ready, add the Azure secrets in SIGNING.md — no repo variable is required for unsigned builds to continue until you opt in with \`CN_WINDOWS_SIGN=1\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verify Windows NSIS installer Authenticode signature
         if: steps.win-sign.outputs.enabled == 'true'
         working-directory: custody-note-app
         shell: bash
-        env:
-          CN_ALLOW_UNSIGNED_WINDOWS_RELEASE: ${{ steps.win-sign.outputs.allow_unsigned == 'true' && '1' || '' }}
         run: node scripts/verify-windows-installer-signed.mjs
 
       - name: Upload Windows NSIS assets to canonical draft release

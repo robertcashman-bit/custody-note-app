@@ -13,7 +13,7 @@ describe('Electron fuses (packaged builds)', () => {
     const script = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'flip-electron-fuses.cjs'), 'utf8');
     assert.match(script, /RunAsNode\]: false/);
     assert.match(script, /EnableCookieEncryption\]: true/);
-    assert.match(script, /OnlyLoadAppFromAsar\]: true/);
-    assert.match(script, /EnableEmbeddedAsarIntegrityValidation\]: true/);
+    assert.doesNotMatch(script, /OnlyLoadAppFromAsar\]: true/);
+    assert.doesNotMatch(script, /EnableEmbeddedAsarIntegrityValidation\]: true/);
   });
 });

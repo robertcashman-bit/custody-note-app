@@ -3,7 +3,7 @@
 
 /**
  * Fail CI when a release NSIS installer is not Authenticode-signed.
- * No-op when CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1 (test / local escape hatch).
+ * Used only when Azure signing is enabled in release-windows.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
@@ -28,10 +28,6 @@ function findSetupExe() {
 }
 
 function main() {
-  if (process.env.CN_ALLOW_UNSIGNED_WINDOWS_RELEASE === '1') {
-    console.log('[win-sign-verify] CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1 — skipping Authenticode check');
-    return;
-  }
   if (process.platform !== 'win32') {
     console.log('[win-sign-verify] skip: not Windows (signature check runs on release-windows job)');
     return;
@@ -55,7 +51,7 @@ function main() {
   if (status !== 'Valid') {
     console.error(
       '::error::Windows installer is not Authenticode-signed (status=' + status + '). '
-      + 'Configure Azure Artifact Signing (SIGNING.md) or use CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1 only for non-production test builds.'
+      + 'Configure Azure Artifact Signing (SIGNING.md).'
     );
     process.exit(1);
   }

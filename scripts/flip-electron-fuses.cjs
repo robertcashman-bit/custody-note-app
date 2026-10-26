@@ -31,9 +31,9 @@ module.exports = async function afterPack(context) {
     [FuseV1Options.EnableCookieEncryption]: true,
     [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
     [FuseV1Options.EnableNodeCliInspectArguments]: false,
-    [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
-    [FuseV1Options.OnlyLoadAppFromAsar]: true,
-    // file:// loads for bundled HTML/PDF viewer — required for this app.
+    // Omit OnlyLoadAppFromAsar + embedded ASAR integrity: this app unpacks
+    // resources/fonts for PDF @font-face; enabling those fuses risks breaking
+    // packaged loads and in-place auto-updates until validated on signed builds.
     [FuseV1Options.GrantFileProtocolExtraPrivileges]: true,
   });
 

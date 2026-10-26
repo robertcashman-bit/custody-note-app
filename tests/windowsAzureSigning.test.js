@@ -6,9 +6,8 @@
  *     local / PR builds must not force the Azure sign manager).
  *   - release-windows uses OIDC (id-token + azure/login) and CLI
  *     -c.win.azureSignOptions.* when signing is enabled.
- *   - Fail-closed on tag release when secrets absent (no unsigned feed publish).
- *   - CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1 opt-in for test builds only.
- *   - Partial secrets or CN_WINDOWS_SIGN=1 without secrets → fail closed.
+ *   - Soft gate: absent secrets → unsigned + warning; fail-closed only for
+ *     CN_WINDOWS_SIGN=1 or partially configured secrets.
  *   - electron-builder is new enough for DefaultAzureCredential / OIDC.
  */
 'use strict';
@@ -93,14 +92,14 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
     assert.match(wf, /-c\.win\.azureSignOptions\.certificateProfileName=/);
   });
 
-  it('fail-closes release when signing secrets absent unless CN_ALLOW_UNSIGNED_WINDOWS_RELEASE=1', () => {
+  it('soft-gates signing: unsigned when secrets absent; fail-closed only for CN_WINDOWS_SIGN or partial secrets', () => {
     const block = releaseWindowsBlock();
     assert.match(block, /CN_WINDOWS_SIGN/);
-    assert.match(block, /CN_ALLOW_UNSIGNED_WINDOWS_RELEASE/);
     assert.match(block, /partially configured/);
     assert.match(block, /CN_WINDOWS_SIGN=1 requires Windows Azure Artifact Signing/);
-    assert.match(block, /Release blocked: Windows Authenticode signing is required/);
-    assert.match(block, /verify-windows-installer-signed/);
+    assert.match(block, /UNSIGNED Windows installer/);
+    assert.match(block, /GITHUB_STEP_SUMMARY/);
+    assert.doesNotMatch(block, /CN_ALLOW_UNSIGNED_WINDOWS_RELEASE/);
   });
 
   it('SIGNING.md documents Azure Artifact Signing Basic + publisher legal name', () => {
@@ -112,6 +111,7 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
     assert.match(signingDoc, /YOUR_ACCOUNT/);
     assert.match(signingDoc, /https:\/\/eus\.codesigning\.azure\.net\//);
     assert.match(signingDoc, /Federated credentials|OIDC/i);
-    assert.match(signingDoc, /CN_ALLOW_UNSIGNED_WINDOWS_RELEASE/);
+    assert.match(signingDoc, /Soft gate/);
+    assert.doesNotMatch(signingDoc, /will fail on `v\*` tags/);
   });
 });
