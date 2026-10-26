@@ -5879,7 +5879,34 @@ function getStatsNetPost() {
 
 let _usageHeartbeatPeriodicTimer = null;
 let _usageHeartbeatSendInFlight = false;
+let _usageHeartbeatLifecycleStarted = false;
 let _trialStartedSendInFlight = false;
+
+function buildUsageHeartbeatInstallEnv() {
+  return {
+    platform: process.platform,
+    windowsStore: !!process.windowsStore,
+    mas: !!process.mas,
+    execPath: process.execPath,
+    isPackaged: app.isPackaged,
+    isMsixStore: IS_MSIX_STORE_BUILD,
+    distributionChannel: WINDOWS_PACKAGE_CHANNEL,
+  };
+}
+
+/** Anonymous heartbeat body for one UTC usage day (no case or licence key data). */
+function buildUsageHeartbeatPayloadForDay(usageDate) {
+  return usageHeartbeat.buildHeartbeatPayload(
+    {
+      machineId: getMachineId(),
+      platform: process.platform,
+      appVersion: app.getVersion(),
+      tier: getAnalyticsLicenceTier(),
+      usageDate,
+    },
+    buildUsageHeartbeatInstallEnv()
+  );
+}
 
 /** Current licence tier for analytics only — free / pro / trial / none. No case data. */
 function getAnalyticsLicenceTier() {
@@ -5894,12 +5921,17 @@ function getAnalyticsLicenceTier() {
 }
 
 function buildTrialStartedPayload() {
-  return usageHeartbeat.buildHeartbeatPayload({
-    machineId: getMachineId(),
-    platform: process.platform,
-    appVersion: app.getVersion(),
-    tier: isFreeTierEnabled() ? 'free' : 'trial',
-  });
+  const payload = usageHeartbeat.buildHeartbeatPayload(
+    {
+      machineId: getMachineId(),
+      platform: process.platform,
+      appVersion: app.getVersion(),
+      tier: isFreeTierEnabled() ? 'free' : 'trial',
+    },
+    buildUsageHeartbeatInstallEnv()
+  );
+  delete payload.usageDate;
+  return payload;
 }
 
 /** Ensure local FREE/TRIAL licences keep trialStartedPending until stats ack (not sent on write). */
@@ -5973,53 +6005,31 @@ function reportTrialStartedToServer() {
 
 /**
  * Privacy-safe daily usage heartbeat (packaged only).
- * Fire-and-forget; rate-limited to once per 24h via userData stamp (written only after 2xx).
- * Must never run on the startup critical path.
+ * Fire-and-forget; queues unsent calendar days locally and retries on later launches,
+ * timers, and when the OS reports the network is back. Must never block startup or UI.
  */
 function reportUsageHeartbeatToServer() {
   if (!app.isPackaged) return;
   const apiUrl = getManagedCloudApiUrl();
   if (!apiUrl) return;
   const stampPath = path.join(app.getPath('userData'), usageHeartbeat.HEARTBEAT_STATE_FILE);
-  let lastAt = null;
+  let state = null;
   try {
-    lastAt = usageHeartbeat.readLastHeartbeatAt(stampPath, fs);
+    state = usageHeartbeat.readHeartbeatState(stampPath, fs);
   } catch (_) {}
-  if (!usageHeartbeat.shouldSendHeartbeat(lastAt)) return;
+  if (!usageHeartbeat.heartbeatWorkRemaining(state)) return;
   if (_usageHeartbeatSendInFlight) return;
-
-  const payload = usageHeartbeat.buildHeartbeatPayload(
-    {
-      machineId: getMachineId(),
-      platform: process.platform,
-      appVersion: app.getVersion(),
-      tier: getAnalyticsLicenceTier(),
-    },
-    {
-      platform: process.platform,
-      windowsStore: !!process.windowsStore,
-      mas: !!process.mas,
-      execPath: process.execPath,
-      isPackaged: app.isPackaged,
-      isMsixStore: IS_MSIX_STORE_BUILD,
-      distributionChannel: WINDOWS_PACKAGE_CHANNEL,
-    }
-  );
-  if (!usageHeartbeat.payloadIsPrivacySafe(payload)) return;
 
   _usageHeartbeatSendInFlight = true;
   usageHeartbeat
-    .postStatsWithRetry({
+    .flushHeartbeatQueue({
       postFn: getStatsNetPost(),
       url: `${apiUrl}/api/stats/heartbeat`,
-      body: payload,
+      statePath: stampPath,
+      fsModule: fs,
+      buildPayloadForDay: (day) => buildUsageHeartbeatPayloadForDay(day),
       timeoutMs: usageHeartbeat.HEARTBEAT_POST_TIMEOUT_MS,
       retryDelaysMs: usageHeartbeat.HEARTBEAT_RETRY_DELAYS_MS,
-      onSuccess: () => {
-        try {
-          usageHeartbeat.writeLastHeartbeatAt(stampPath, fs, new Date().toISOString());
-        } catch (_) {}
-      },
     })
     .catch(function () {})
     .finally(function () {
@@ -6027,31 +6037,50 @@ function reportUsageHeartbeatToServer() {
     });
 }
 
+function kickDeferredUsageAnalytics() {
+  try {
+    reportUsageHeartbeatToServer();
+    reportTrialStartedToServer();
+  } catch (_) {}
+}
+
+/** Packaged-only timers: every launch + periodic while running + when back online. */
+function beginUsageHeartbeatLifecycle() {
+  if (!app.isPackaged || _usageHeartbeatLifecycleStarted) return;
+  _usageHeartbeatLifecycleStarted = true;
+
+  setTimeout(kickDeferredUsageAnalytics, usageHeartbeat.HEARTBEAT_STARTUP_DELAY_MS);
+
+  if (!_usageHeartbeatPeriodicTimer) {
+    _usageHeartbeatPeriodicTimer = setInterval(kickDeferredUsageAnalytics, usageHeartbeat.HEARTBEAT_RECHECK_INTERVAL_MS);
+    if (typeof _usageHeartbeatPeriodicTimer.unref === 'function') {
+      _usageHeartbeatPeriodicTimer.unref();
+    }
+  }
+
+  try {
+    if (net && typeof net.on === 'function') {
+      net.on('online', () => {
+        kickDeferredUsageAnalytics();
+      });
+    }
+  } catch (_) {}
+}
+
 function scheduleDeferredUsageAnalytics(browserWindow) {
   if (!browserWindow || browserWindow.isDestroyed()) return;
+  beginUsageHeartbeatLifecycle();
   usageHeartbeat.deferAfterWebContentsLoad(
     browserWindow.webContents,
     usageHeartbeat.HEARTBEAT_STARTUP_DELAY_MS,
-    () => {
-      reportUsageHeartbeatToServer();
-      reportTrialStartedToServer();
-    }
+    kickDeferredUsageAnalytics
   );
 }
 
 /** Defer heartbeat until after first renderer load; re-check every few hours while running. */
 function scheduleUsageHeartbeat(browserWindow) {
+  beginUsageHeartbeatLifecycle();
   scheduleDeferredUsageAnalytics(browserWindow);
-  if (_usageHeartbeatPeriodicTimer) return;
-  _usageHeartbeatPeriodicTimer = setInterval(() => {
-    try {
-      reportUsageHeartbeatToServer();
-      reportTrialStartedToServer();
-    } catch (_) {}
-  }, usageHeartbeat.HEARTBEAT_RECHECK_INTERVAL_MS);
-  if (typeof _usageHeartbeatPeriodicTimer.unref === 'function') {
-    _usageHeartbeatPeriodicTimer.unref();
-  }
 }
 
 function buildLocalFreeLicenceData() {
@@ -7010,6 +7039,7 @@ app.on('second-instance', () => {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   }
+  kickDeferredUsageAnalytics();
 });
 
 app.whenReady().then(async () => {
@@ -7154,6 +7184,8 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
+
+  beginUsageHeartbeatLifecycle();
 
   /* Pull QuickFile credentials from Custody Note account when licence is present.
      Never block first window paint on this network call — home/lock/first-launch
