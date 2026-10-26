@@ -42,10 +42,15 @@ async function buildHtmlViaElectron() {
       { timeout: 60000 },
     );
     const record = buildSyntheticAttendanceForPdfTimes();
-    const html = await page.evaluate((rec) => {
+    const pkgVersion = require('../package.json').version;
+    const html = await page.evaluate(({ rec, appVersion }) => {
       const enriched = window.enrichDataForPdf(rec, 'finalised');
-      return window.buildPdfHtml(enriched, { brandName: 'Synthetic Firm', dsccPin: 'SYN-PIN' });
-    }, record);
+      return window.buildPdfHtml(enriched, {
+        brandName: 'Synthetic Firm',
+        dsccPin: 'SYN-PIN',
+        appVersion,
+      });
+    }, { rec: record, appVersion: pkgVersion });
     return html;
   } finally {
     await electronApp.close().catch(() => {});

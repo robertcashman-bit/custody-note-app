@@ -1,0 +1,92 @@
+# Manual macOS DMG test builds (draft pre-release on app repo only — not custody-note-releases).
+name: Mac test installer
+
+on:
+  push:
+    branches:
+      - cursor/times-travel-pdf-summary-6424
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Build version (e.g. 1.9.123-test.2)'
+        required: true
+        type: string
+        default: '1.9.123-test.2'
+
+concurrency:
+  group: mac-test-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test-mac:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve test version
+        id: ver
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=1.9.123-test.2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build unsigned macOS DMG (test version)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          CN_TEST_VERSION: ${{ steps.ver.outputs.value }}
+        run: |
+          set -euo pipefail
+          npx electron-builder --mac dmg --publish never \
+            -c.mac.identity=null \
+            -c.mac.hardenedRuntime=false \
+            "--config.extraMetadata.version=${CN_TEST_VERSION}"
+          DMG="dist/Custody Note-${CN_TEST_VERSION}.dmg"
+          if [[ ! -f "$DMG" ]]; then
+            DMG="dist/Custody-Note-${CN_TEST_VERSION}.dmg"
+          fi
+          if [[ ! -f "$DMG" ]]; then
+            echo "::error::Expected DMG under dist/"
+            ls -la dist || true
+            exit 1
+          fi
+          shasum -a 256 "$DMG" | tee "dist/Custody-Note-mac-${CN_TEST_VERSION}.sha256.txt"
+          echo "dmg_path=$DMG" >> "$GITHUB_ENV"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Custody-Note-mac-${{ steps.ver.outputs.value }}
+          path: |
+            dist/Custody-Note-mac-${{ steps.ver.outputs.value }}.sha256.txt
+            dist/*.dmg
+
+      - name: Create draft pre-release on app repo (not public feed)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.ver.outputs.value }}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" 2>/dev/null; then
+            gh release upload "$TAG" "$dmg_path" --repo "${{ github.repository }}" --clobber
+          else
+            gh release create "$TAG" "$dmg_path" \
+              --repo "${{ github.repository }}" \
+              --title "Test build macOS ${{ steps.ver.outputs.value }}" \
+              --notes "Pre-release test DMG. Not published to custody-note-releases and not offered as Latest." \
+              --draft \
+              --prerelease
+          fi

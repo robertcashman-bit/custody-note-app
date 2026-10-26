@@ -39,6 +39,21 @@ describe('pdfTimesTravelSummary — synthetic custody record', () => {
     assert.match(html, /08:15/);
   });
 
+  it('attendance subline explains waiting deduction (no contradictory on-site duration)', () => {
+    const html = tt.buildPdfTimesTravelHtml(d, (s) => s, { variant: 'custody' });
+    assert.match(html, /less 30m waiting/);
+    assert.doesNotMatch(html, /09:30 → 12:45 \(3h 15m\)/);
+  });
+
+  it('panel total equals sum of travel, waiting, and attendance lines', () => {
+    const totals = tt.computePanelTimeTotals(d, { variant: 'custody' });
+    assert.strictEqual(totals.panelTotalMins, 315);
+    assert.strictEqual(totals.totalRowMins, 315);
+    assert.strictEqual(totals.sumDisplayedPartsMins, 315);
+    assert.ok(totals.reconciled);
+    assert.strictEqual(totals.billableTotalMins, 315);
+  });
+
   it('returns empty HTML when nothing is recorded', () => {
     const empty = tt.buildPdfTimesTravelHtml({}, (s) => s, { variant: 'custody' });
     assert.strictEqual(empty, '');
@@ -70,5 +85,14 @@ describe('pdfTimesTravelSummary — app wiring', () => {
     assert.match(appJs, /pdfTimesTravelSummaryHtml\(d, h, 'telephone'\)/);
     assert.match(appJs, /pdfTimesTravelSummaryHtml\(d, h, 'voluntary'\)/);
     assert.match(appJs, /pdfTimesTravelSummaryCss\(\)/);
+  });
+
+  it('PDF audit footer resolves app version from app-version / settings (not legacy id version)', () => {
+    assert.match(appJs, /resolvePdfAppVersion/);
+    assert.match(appJs, /getElementById\('app-version'\)/);
+    assert.doesNotMatch(
+      appJs.slice(appJs.indexOf('function pdfAuditFooterHtml'), appJs.indexOf('function buildPdfHtml')),
+      /getElementById\('version'\)/
+    );
   });
 });

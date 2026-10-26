@@ -13,7 +13,7 @@ on:
         description: 'Installer version (e.g. 1.9.123-test.1)'
         required: true
         type: string
-        default: '1.9.123-test.1'
+        default: '1.9.123-test.2'
 
 concurrency:
   group: windows-test-installer-${{ github.ref }}
@@ -43,7 +43,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
           else
-            echo "value=1.9.123-test.1" >> "$GITHUB_OUTPUT"
+            echo "value=1.9.123-test.2" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build unsigned Windows NSIS (test version)

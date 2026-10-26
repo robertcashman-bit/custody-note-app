@@ -14953,14 +14953,25 @@ var REQUIRED_FIELD_KEYS = [
       '.pdf-audit-footer span{white-space:nowrap;}' +
       '.pdf-audit-footer .audit-mid{flex:1 1 auto;text-align:center;font-style:italic;}';
   }
+  function normalizePdfAppVersion(raw) {
+    var s = String(raw == null ? '' : raw).trim().replace(/^v/i, '');
+    return s;
+  }
+  function resolvePdfAppVersion(settings) {
+    var fromSettings = settings && settings.appVersion;
+    var fromWindow = (typeof window !== 'undefined' && window.__appVersion) || '';
+    var fromDom = '';
+    if (typeof window !== 'undefined' && document.getElementById) {
+      var el = document.getElementById('app-version');
+      if (el && el.textContent) fromDom = el.textContent;
+    }
+    return normalizePdfAppVersion(fromSettings || fromWindow || fromDom);
+  }
   function pdfAuditFooterHtml(d, settings) {
     var feeEarner = (d.feeEarnerName || (settings && settings.feeEarnerName) || '\u2014').toString();
     var finalisedAt = d.finalisedAt || d.finalised_at || '';
     var updatedAt = d.updated_at || d.updatedAt || d.lastEditedAt || '';
-    var appVer = (settings && settings.appVersion) ||
-      (typeof window !== 'undefined' && window.__appVersion) ||
-      (typeof window !== 'undefined' && document.getElementById && document.getElementById('version') && document.getElementById('version').textContent) ||
-      '';
+    var appVer = resolvePdfAppVersion(settings);
     var leftBits = ['Fee earner: ' + esc(feeEarner)];
     var midBits = [];
     if (finalisedAt) midBits.push('Finalised ' + esc(fmtPdfTimestamp(finalisedAt)));
@@ -17193,7 +17204,7 @@ pdfAuditFooterHtml(d, settings) +
         window.api.syncStatus ? window.api.syncStatus() : {},
         window.api.backupStatus ? window.api.backupStatus() : {},
       ]).then(function(results) {
-        var exportData = { diagnostics: results[0], syncStatus: results[1], backup: results[2], renderer: { currentRecordStatus: currentRecordStatus, finalising: _finalising, draftSaveInFlight: _draftSaveInFlight, autosaveRunning: !!autoSaveTimer }, exportedAt: new Date().toISOString(), appVersion: document.getElementById('version')?.textContent || '' };
+        var exportData = { diagnostics: results[0], syncStatus: results[1], backup: results[2], renderer: { currentRecordStatus: currentRecordStatus, finalising: _finalising, draftSaveInFlight: _draftSaveInFlight, autosaveRunning: !!autoSaveTimer }, exportedAt: new Date().toISOString(), appVersion: (document.getElementById('app-version') && document.getElementById('app-version').textContent) || '' };
         var text = JSON.stringify(exportData, null, 2);
         if (navigator.clipboard) {
           navigator.clipboard.writeText(text).then(function() { showToast('Diagnostics copied to clipboard', 'success'); });
