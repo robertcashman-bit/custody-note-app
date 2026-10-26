@@ -54,12 +54,9 @@ jobs:
             -c.mac.identity=null \
             -c.mac.hardenedRuntime=false \
             "--config.extraMetadata.version=${CN_TEST_VERSION}"
-          DMG="dist/Custody Note-${CN_TEST_VERSION}.dmg"
-          if [[ ! -f "$DMG" ]]; then
-            DMG="dist/Custody-Note-${CN_TEST_VERSION}.dmg"
-          fi
-          if [[ ! -f "$DMG" ]]; then
-            echo "::error::Expected DMG under dist/"
+          DMG=$(ls -1 dist/Custody-Note-"${CN_TEST_VERSION}"*.dmg 2>/dev/null | head -1)
+          if [[ -z "$DMG" || ! -f "$DMG" ]]; then
+            echo "::error::Expected dist/Custody-Note-${CN_TEST_VERSION}*.dmg"
             ls -la dist || true
             exit 1
           fi
