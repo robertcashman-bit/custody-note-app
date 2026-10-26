@@ -14910,6 +14910,21 @@ var REQUIRED_FIELD_KEYS = [
     var DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
     return DS && DS.buildDefenceSummaryFields ? DS.buildDefenceSummaryFields(d) : {};
   }
+  function getPdfTimesTravelSummaryHelpers() {
+    return (typeof window !== 'undefined' && window.PdfTimesTravelSummary) ? window.PdfTimesTravelSummary : null;
+  }
+  function pdfTimesTravelSummaryCss() {
+    var T = getPdfTimesTravelSummaryHelpers();
+    return T && T.buildPdfTimesTravelCss ? T.buildPdfTimesTravelCss() : '';
+  }
+  function pdfTimesTravelSummaryHtml(d, escFn, variant) {
+    var T = getPdfTimesTravelSummaryHelpers();
+    if (T && typeof T.buildPdfTimesTravelHtml === 'function') {
+      return T.buildPdfTimesTravelHtml(d, escFn, { variant: variant || 'custody' });
+    }
+    return '';
+  }
+
   function pdfDefenceSummaryHtml(d) {
     var DS = (typeof window !== 'undefined' && window.DefenceSummary) ? window.DefenceSummary : null;
     if (DS && typeof DS.buildDefenceSummaryHtml === 'function') {
@@ -15194,6 +15209,7 @@ var REQUIRED_FIELD_KEYS = [
 'h2{font-size:9.5px;font-weight:700;margin:12px 0 4px;padding:4px 8px;background:#eef2ff;color:#1e40af;border-radius:3px;border-left:3px solid #2563eb;print-color-adjust:exact;}' +
 pdfAuditFooterCss() +
 pdfDefenceSummaryCss() +
+pdfTimesTravelSummaryCss() +
 '.pdf-section{page-break-inside:avoid;}' +
 'table{width:100%;border-collapse:collapse;margin-bottom:4px;}' +
 'td{padding:3px 7px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
@@ -15244,6 +15260,7 @@ laaDeclarationPdfCssSnippet() +
 '<div class="cover-item"><strong>Firm:</strong> ' + h(firmName || '\u2014') + '</div>' +
 '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || '\u2014') + '</div>' +
 '</div>' +
+pdfTimesTravelSummaryHtml(d, h, 'custody') +
 pdfDefenceSummaryHtml(d) +
 pdfDraftWatermarkHtml(d) +
 
@@ -15668,6 +15685,7 @@ pdfAuditFooterHtml(d, settings) +
       'body{font-family:' + pdfBodyFontStack() + ';font-size:11px;padding:20px 24px 48px;color:#111;line-height:1.45;}' +
       pdfAuditFooterCss() +
       pdfDefenceSummaryCss() +
+      pdfTimesTravelSummaryCss() +
       'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
       'h2{font-size:12px;font-weight:700;margin:24px 0 8px;padding:8px 10px;background:#f0fdfa;color:#0f766e;border-radius:4px;border-left:4px solid #0f766e;border-top:1px solid #e2e8f0;padding-top:16px;print-color-adjust:exact;}' +
       'table{width:100%;border-collapse:collapse;margin-bottom:8px;}td{padding:6px 10px;border-bottom:1px solid #e2e8f0;vertical-align:top;}' +
@@ -15702,6 +15720,7 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="cover-item"><strong>Offence:</strong> ' + h(d.offenceSummary || '\u2014') + '</div>' +
       '<div class="cover-item"><strong>DSCC:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
       '</div>' +
+      pdfTimesTravelSummaryHtml(d, h, 'telephone') +
       pdfDefenceSummaryHtml(d) +
       pdfDraftWatermarkHtml(d) +
 
@@ -15823,6 +15842,7 @@ pdfAuditFooterHtml(d, settings) +
       'body{font-family:' + pdfBodyFontStack() + ';font-size:11px;padding:20px 24px 56px;color:#111;line-height:1.45;max-width:100%;}' +
       pdfAuditFooterCss() +
       pdfDefenceSummaryCss() +
+      pdfTimesTravelSummaryCss() +
       '@media print{.pdf-section,.nar,.cover-block{page-break-inside:avoid;}h2{print-color-adjust:exact;}.pdf-break-before{page-break-before:always;}.watermark{print-color-adjust:exact;}}' +
       '.pdf-break-before{page-break-before:always;}' +
       'h1{font-size:18px;font-weight:700;color:#0f766e;margin:0 0 8px;letter-spacing:-0.02em;}' +
@@ -15859,6 +15879,7 @@ pdfAuditFooterHtml(d, settings) +
       '<div class="cover-item"><strong>DSCC:</strong> ' + h(formatDsccForPdf(d)) + '</div>' +
       '<div class="cover-item"><strong>Fee Earner:</strong> ' + h(d.feeEarnerName || settings.feeEarnerNameDefault || '\u2014') + '</div>' +
       '</div>' +
+      pdfTimesTravelSummaryHtml(d, h, 'voluntary') +
       pdfDefenceSummaryHtml(d) +
       pdfDraftWatermarkHtml(d) +
 

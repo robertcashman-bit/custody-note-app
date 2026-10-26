@@ -116,6 +116,19 @@ describe('window exposure of PDF builders (so documents-screen can reach them)',
   });
 });
 
+describe('Police Station Attendance Note PDF — times & travel summary', () => {
+  const buildPdfHtmlBody = sliceFunction(
+    appJs,
+    'function buildPdfHtml(',
+    'function buildTelephonePdfHtml('
+  );
+
+  it('buildPdfHtml inserts pdfTimesTravelSummaryHtml after the cover block', () => {
+    assert.match(buildPdfHtmlBody, /pdfTimesTravelSummaryHtml\(d, h, 'custody'\)/);
+    assert.match(buildPdfHtmlBody, /pdfTimesTravelSummaryCss\(\)/);
+  });
+});
+
 describe('Police Station Attendance Note PDF — defence summary and outcome fields', () => {
   const buildPdfHtmlBody = sliceFunction(
     appJs,
