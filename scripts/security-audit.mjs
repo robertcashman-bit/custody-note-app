@@ -179,6 +179,13 @@ if (!/contextIsolation:\s*true/.test(mainJs) || !/sandbox:\s*true/.test(mainJs))
   console.log('  electron window hardening flags: OK');
 }
 
+const pkgJson = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
+if (pkgJson.build && pkgJson.build.afterPack !== './scripts/flip-electron-fuses.cjs') {
+  failRegression('package.json build.afterPack must flip Electron fuses via scripts/flip-electron-fuses.cjs');
+} else {
+  console.log('  electron fuses afterPack hook: OK');
+}
+
 const envExample = existsSync(join(ROOT, '.env.example'))
   ? readFileSync(join(ROOT, '.env.example'), 'utf8')
   : '';

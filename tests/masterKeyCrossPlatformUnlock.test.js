@@ -164,6 +164,34 @@ describe('masterKey — resolveMasterKey (Mac→Windows class)', () => {
     assert.strictEqual(createdCount, 0, 'must not invent a replacement master key');
   });
 
+  it('shouldMigrateFallbackToSafeStorage when safeStorage can replace fallback reads', () => {
+    const { shouldMigrateFallbackToSafeStorage } = require('../lib/masterKey');
+    assert.strictEqual(
+      shouldMigrateFallbackToSafeStorage({
+        safeStorageAvailable: true,
+        reason: 'fallback',
+        legacyPlaintextFallback: false,
+      }),
+      true
+    );
+    assert.strictEqual(
+      shouldMigrateFallbackToSafeStorage({
+        safeStorageAvailable: false,
+        reason: 'fallback',
+        legacyPlaintextFallback: false,
+      }),
+      false
+    );
+    assert.strictEqual(
+      shouldMigrateFallbackToSafeStorage({
+        safeStorageAvailable: true,
+        reason: 'safeStorage',
+        legacyPlaintextFallback: false,
+      }),
+      false
+    );
+  });
+
   it('still refuses to mint a replacement key when allowCreate is true after unreadable key', () => {
     const mem = makeMemFs({ [KEY_PATH]: Buffer.from('foreign') });
     let persisted = null;

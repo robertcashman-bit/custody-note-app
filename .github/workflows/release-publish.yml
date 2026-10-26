@@ -71,12 +71,12 @@ jobs:
       contents: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.ref }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: 'npm'
@@ -115,13 +115,13 @@ jobs:
       id-token: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: custody-note-app
           ref: ${{ github.ref }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: 'npm'
@@ -180,12 +180,12 @@ jobs:
             exit 1
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Azure Artifact Signing secrets are not configured — building and publishing an UNSIGNED Windows installer. Complete SIGNING.md and set secrets (or CN_WINDOWS_SIGN=1 after secrets exist) when ready to require signed releases."
+            echo "::warning title=UNSIGNED Windows installer — Authenticode signing not configured::Azure Artifact Signing secrets are not configured. This job will build and publish an UNSIGNED Custody-Note-Setup .exe to the release draft (and public feed after mirror). Integrity for auto-update still relies on the SHA256 sidecar in custody-note-releases, not a code signature. Complete SIGNING.md when ready to sign."
           fi
 
       - name: Azure login (OIDC)
         if: steps.win-sign.outputs.enabled == 'true'
-        uses: azure/login@v2
+        uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -220,6 +220,26 @@ jobs:
             npx electron-builder --win nsis --publish never
           fi
 
+      - name: Job summary — unsigned Windows installer
+        if: steps.win-sign.outputs.enabled != 'true'
+        shell: bash
+        run: |
+          {
+            echo "## ⚠️ Unsigned Windows NSIS installer"
+            echo ""
+            echo "Azure Artifact Signing is **not** configured for this run. The \`Custody-Note-Setup-*.exe\` artefact is **unsigned** (no Authenticode signature)."
+            echo ""
+            echo "Auto-update for existing installs is unchanged: electron-updater still verifies the published **SHA256** in \`latest.yml\` on \`custody-note-releases\`."
+            echo ""
+            echo "When signing is ready, add the Azure secrets in SIGNING.md — no repo variable is required for unsigned builds to continue until you opt in with \`CN_WINDOWS_SIGN=1\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify Windows NSIS installer Authenticode signature
+        if: steps.win-sign.outputs.enabled == 'true'
+        working-directory: custody-note-app
+        shell: bash
+        run: node scripts/verify-windows-installer-signed.mjs
+
       - name: Upload Windows NSIS assets to canonical draft release
         working-directory: custody-note-app
         env:
@@ -238,13 +258,13 @@ jobs:
       contents: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: custody-note-app
           ref: ${{ github.ref }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: 'npm'
@@ -311,12 +331,12 @@ jobs:
       contents: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.ref }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
           cache: 'npm'
@@ -395,12 +415,12 @@ jobs:
       contents: write
     steps:
       - name: Checkout app
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.ref }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
 

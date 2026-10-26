@@ -13,7 +13,7 @@ describe('release-publish.yml — cross-platform build pipeline', () => {
     assert.match(wf, /electron-builder --win nsis --publish never/);
     assert.match(wf, /prepare-release-draft:/);
     assert.match(wf, /id-token:\s*write/);
-    assert.match(wf, /azure\/login@v/);
+    assert.match(wf, /azure\/login@[0-9a-f]{40}/);
   });
 
   it('has a dedicated macOS job that runs on macos-latest', () => {

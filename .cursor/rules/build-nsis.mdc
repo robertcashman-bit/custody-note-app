@@ -22,7 +22,7 @@ Key settings that must not be changed without justification:
 ```
 
 - `perMachine: false` — installs to user AppData, avoids admin permission issues
-- `allowElevation: true` — lets NSIS elevate if needed to overwrite locked files
+- `allowElevation: true` — lets NSIS elevate if needed to overwrite locked files (legacy per-machine installs)
 - `include: build/installer.nsh` — custom script that kills running instances before install
 
 ## build/installer.nsh

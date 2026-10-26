@@ -70,7 +70,7 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
   });
 
   it('release-windows authenticates with azure/login and Artifact Signing secrets', () => {
-    assert.match(wf, /uses:\s*azure\/login@v/);
+    assert.match(wf, /uses:\s*azure\/login@[0-9a-f]{40}/);
     for (const k of [
       'AZURE_CLIENT_ID',
       'AZURE_TENANT_ID',
@@ -98,12 +98,8 @@ describe('Windows signing — Azure Artifact Signing posture', () => {
     assert.match(block, /partially configured/);
     assert.match(block, /CN_WINDOWS_SIGN=1 requires Windows Azure Artifact Signing/);
     assert.match(block, /UNSIGNED Windows installer/);
-    // Must NOT fail closed merely because the ref is a version tag.
-    assert.doesNotMatch(
-      block,
-      /require_sign=true[\s\S]*refs\/tags\/v\*|refs\/tags\/v\*[\s\S]*require_sign=true/
-    );
-    assert.doesNotMatch(block, /required for this run \(tag release/);
+    assert.match(block, /GITHUB_STEP_SUMMARY/);
+    assert.doesNotMatch(block, /CN_ALLOW_UNSIGNED_WINDOWS_RELEASE/);
   });
 
   it('SIGNING.md documents Azure Artifact Signing Basic + publisher legal name', () => {

@@ -101,8 +101,8 @@ In [`.github/workflows/release-publish.yml`](.github/workflows/release-publish.y
 
 1. Job permissions include `contents: write` and `id-token: write` (required for OIDC).
 2. Soft gate (default, until Azure signup is finished):
-   - **All** signing secrets present → sign (build fails if signing itself fails)
-   - **No** signing secrets present → build + publish **unsigned**, with a clear `::warning::` log line
+   - **All** signing secrets present → sign (and CI verifies Authenticode via `scripts/verify-windows-installer-signed.mjs`)
+   - **No** signing secrets present → build + publish **unsigned**, with a clear workflow warning and job summary note
    - **Partial** secrets / misconfiguration → **fail closed** (do not ship half-configured)
    - `CN_WINDOWS_SIGN=1` with secrets missing → **fail closed** (explicit hard require)
 3. When enabled, the job runs `azure/login` (OIDC), then electron-builder with Azure options via CLI (so local/unsigned builds stay unsigned by default):
@@ -138,7 +138,7 @@ Requires **electron-builder ≥ 26.15** (OIDC / `DefaultAzureCredential` without
 
 ### 8. Soft gate now; hard require after Azure is ready
 
-**Merge-safe soft gate:** `v*` tag releases keep working **unsigned** while Azure Artifact Signing signup is incomplete (all secrets absent). You will see a CI warning that the installer is unsigned.
+**Merge-safe soft gate:** `v*` tag releases keep working **unsigned** while Azure Artifact Signing signup is incomplete (all secrets absent). CI logs a loud warning and adds an unsigned notice to the job summary.
 
 When Azure is fully set up and secrets in §6 are populated, the next release signs automatically. To make unsigned releases impossible after that, set repo variable `CN_WINDOWS_SIGN=1`.
 
