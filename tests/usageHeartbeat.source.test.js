@@ -24,21 +24,30 @@ describe('usage heartbeat wiring (source)', () => {
     assert.ok(fnStart > 0);
     const fnBody = mainJs.slice(fnStart, fnStart + 2800);
     assert.match(fnBody, /app\.isPackaged/);
-    assert.match(fnBody, /IS_MSIX_STORE_BUILD/);
-    assert.match(fnBody, /buildHeartbeatPayload/);
-    assert.match(fnBody, /postStatsWithRetry/);
+    assert.match(mainJs, /buildUsageHeartbeatInstallEnv/);
+    assert.match(mainJs, /IS_MSIX_STORE_BUILD/);
+    assert.match(fnBody, /flushHeartbeatQueue/);
+    assert.match(fnBody, /heartbeatWorkRemaining/);
+    assert.match(fnBody, /buildUsageHeartbeatPayloadForDay/);
     assert.match(fnBody, /getStatsNetPost\(\)/);
-    assert.match(fnBody, /onSuccess:/);
-    assert.doesNotMatch(fnBody, /writeLastHeartbeatAt[\s\S]{0,120}postStatsWithRetry/);
+    assert.doesNotMatch(fnBody, /writeLastHeartbeatAt[\s\S]{0,120}flushHeartbeatQueue/);
     assert.doesNotMatch(fnBody, /postFn:\s*httpPost/);
 
-    const scheduleStart = mainJs.indexOf('function scheduleUsageHeartbeat');
-    assert.ok(scheduleStart > 0);
-    const scheduleBody = mainJs.slice(scheduleStart, scheduleStart + 900);
-    assert.match(scheduleBody, /deferAfterWebContentsLoad|HEARTBEAT_RECHECK_INTERVAL_MS/);
-    assert.match(scheduleBody, /setInterval/);
+    const lifecycleStart = mainJs.indexOf('function beginUsageHeartbeatLifecycle');
+    assert.ok(lifecycleStart > 0);
+    const lifecycleBody = mainJs.slice(lifecycleStart, lifecycleStart + 1200);
+    assert.match(lifecycleBody, /HEARTBEAT_RECHECK_INTERVAL_MS/);
+    assert.match(lifecycleBody, /net\.on\('online'/);
+
+    const deferStart = mainJs.indexOf('function scheduleDeferredUsageAnalytics');
+    assert.ok(deferStart > 0);
+    const deferBody = mainJs.slice(deferStart, deferStart + 600);
+    assert.match(deferBody, /deferAfterWebContentsLoad/);
 
     assert.match(mainJs, /scheduleUsageHeartbeat\(mainWindow\)/);
+    assert.match(mainJs, /beginUsageHeartbeatLifecycle\(\)/);
+    assert.match(mainJs, /kickDeferredUsageAnalytics/);
+    assert.match(mainJs, /second-instance[\s\S]{0,400}kickDeferredUsageAnalytics/);
   });
 
   it('retries trial-started and records sentAt only after success', () => {
@@ -67,6 +76,7 @@ describe('usage heartbeat wiring (source)', () => {
     assert.match(analyticsMd, /\/api\/stats\/heartbeat/);
     assert.match(analyticsMd, /machineId/);
     assert.match(analyticsMd, /installSource/);
+    assert.match(analyticsMd, /usageDate/);
     assert.match(analyticsMd, /unique machines/i);
     assert.match(analyticsMd, /Do \*\*not\*\* reuse `trial-started`/);
   });

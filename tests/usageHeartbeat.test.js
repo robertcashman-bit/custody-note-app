@@ -13,8 +13,17 @@ const {
   TRIAL_STARTED_STATE_FILE,
   ALLOWED_PAYLOAD_KEYS,
   ALLOWED_INSTALL_SOURCES,
+  formatUsageDateUtc,
   shouldSendHeartbeat,
+  isUsageDateAcked,
+  readHeartbeatState,
+  writeHeartbeatState,
+  enqueueHeartbeatPayload,
+  listPendingUsageDates,
+  heartbeatWorkRemaining,
+  flushHeartbeatQueue,
   buildHeartbeatPayload,
+  coercePlatform,
   resolveInstallSource,
   resolveAnalyticsTier,
   payloadIsPrivacySafe,
@@ -100,6 +109,7 @@ describe('usageHeartbeat payload', () => {
         platform: 'linux',
         appVersion: '1.9.80',
         tier: 'pro',
+        usageDate: '2026-08-31',
         email: 'should-not-appear@example.com',
         ufn: 'UFN123',
         licenceKey: 'CN-AAAA-BBBB-CCCC-DDDD',
@@ -138,6 +148,7 @@ describe('usageHeartbeat payload', () => {
         appVersion: '1.9.80',
         tier: 'free',
         installSource: 'dmg',
+        usageDate: '2026-08-31',
       },
       { platform: 'darwin' }
     );
@@ -150,8 +161,26 @@ describe('usageHeartbeat payload', () => {
       platform: 'win32',
       appVersion: '1.9.80',
       tier: 'enterprise',
+      usageDate: '2026-08-31',
     });
     assert.equal(payload.tier, 'none');
+  });
+
+  it('coerces platform labels and defaults usageDate to UTC today', () => {
+    assert.equal(coercePlatform('win32'), 'win32');
+    assert.equal(coercePlatform('MacOS'), 'darwin');
+    const payload = buildHeartbeatPayload(
+      {
+        machineId: 'd'.repeat(32),
+        platform: '',
+        appVersion: '1.9.80',
+        tier: 'free',
+      },
+      { platform: 'darwin' },
+      Date.parse('2026-08-31T12:00:00.000Z')
+    );
+    assert.equal(payload.platform, 'darwin');
+    assert.equal(payload.usageDate, '2026-08-31');
   });
 });
 
@@ -177,6 +206,107 @@ describe('resolveAnalyticsTier', () => {
     assert.equal(resolveAnalyticsTier(null, { key: 'FREE-ABC' }), 'free');
     assert.equal(resolveAnalyticsTier(null, { key: 'TRIAL-ABC' }), 'trial');
     assert.equal(resolveAnalyticsTier(null, { key: 'CN-AAAA-BBBB' }), 'pro');
+  });
+});
+
+describe('usageHeartbeat queue by usageDate', () => {
+  it('tracks acked days and pending payloads separately from lastHeartbeatAt', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-heartbeat-q-'));
+    const stampPath = path.join(dir, HEARTBEAT_STATE_FILE);
+    let state = readHeartbeatState(stampPath, fs);
+    const sample = buildHeartbeatPayload(
+      {
+        machineId: 'e'.repeat(32),
+        platform: 'win32',
+        appVersion: '1.0.0',
+        tier: 'free',
+        installSource: 'direct',
+        usageDate: '2026-08-30',
+      },
+      { platform: 'win32' }
+    );
+    state = enqueueHeartbeatPayload(state, '2026-08-30', sample);
+    writeHeartbeatState(stampPath, fs, state);
+    const stored = readHeartbeatState(stampPath, fs);
+    assert.deepEqual(Object.keys(stored.pending).sort(), ['2026-08-30']);
+    assert.deepEqual(listPendingUsageDates(stored, '2026-08-30'), ['2026-08-30']);
+    assert.equal(isUsageDateAcked('2026-08-30', state.ackedUsageDates), false);
+  });
+
+  it('flushHeartbeatQueue sends oldest pending day and marks it acked', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-heartbeat-flush-'));
+    const stampPath = path.join(dir, HEARTBEAT_STATE_FILE);
+    const posts = [];
+    const result = await flushHeartbeatQueue({
+      postFn: async (_url, body) => {
+        posts.push(body.usageDate);
+        return {};
+      },
+      url: 'https://custodynote.com/api/stats/heartbeat',
+      statePath: stampPath,
+      fsModule: fs,
+      buildPayloadForDay: (day) =>
+        buildHeartbeatPayload(
+          {
+            machineId: 'f'.repeat(32),
+            platform: 'win32',
+            appVersion: '1.0.0',
+            tier: 'free',
+            installSource: 'direct',
+            usageDate: day,
+          },
+          { platform: 'win32' },
+          Date.parse(`${day}T12:00:00.000Z`)
+        ),
+      retryDelaysMs: [0],
+      nowMs: Date.parse('2026-08-31T12:00:00.000Z'),
+    });
+    assert.deepEqual(posts, ['2026-08-31']);
+    assert.deepEqual(result.sentDays, ['2026-08-31']);
+    const after = readHeartbeatState(stampPath, fs);
+    assert.equal(isUsageDateAcked('2026-08-31', after.ackedUsageDates), true);
+    assert.equal(heartbeatWorkRemaining(after, Date.parse('2026-08-31T12:00:00.000Z')), false);
+  });
+
+  it('keeps failed days in pending for a later flush', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cn-heartbeat-fail-'));
+    const stampPath = path.join(dir, HEARTBEAT_STATE_FILE);
+    let calls = 0;
+    await flushHeartbeatQueue({
+      postFn: async () => {
+        calls += 1;
+        throw new Error('blocked wifi');
+      },
+      url: 'https://custodynote.com/api/stats/heartbeat',
+      statePath: stampPath,
+      fsModule: fs,
+      buildPayloadForDay: (day) =>
+        buildHeartbeatPayload(
+          {
+            machineId: 'a'.repeat(32),
+            platform: 'darwin',
+            appVersion: '1.0.0',
+            tier: 'free',
+            installSource: 'dmg',
+            usageDate: day,
+          },
+          { platform: 'darwin' },
+          Date.parse(`${day}T12:00:00.000Z`)
+        ),
+      retryDelaysMs: [0],
+      nowMs: Date.parse('2026-08-31T12:00:00.000Z'),
+    });
+    assert.ok(calls >= 1);
+    const after = readHeartbeatState(stampPath, fs);
+    assert.equal(isUsageDateAcked('2026-08-31', after.ackedUsageDates), false);
+    assert.ok(Object.keys(after.pending).includes('2026-08-31'));
+  });
+});
+
+describe('formatUsageDateUtc', () => {
+  it('returns UTC YYYY-MM-DD', () => {
+    assert.equal(formatUsageDateUtc(Date.parse('2026-08-31T23:59:00.000Z')), '2026-08-31');
+    assert.equal(formatUsageDateUtc(Date.parse('2026-09-01T00:30:00.000Z')), '2026-09-01');
   });
 });
 
@@ -232,6 +362,7 @@ describe('postStatsWithRetry', () => {
         appVersion: '1.0.0',
         tier: 'free',
         installSource: 'direct',
+        usageDate: '2026-08-31',
       },
       retryDelaysMs: [0, 0],
       onSuccess: () => {
