@@ -1,9 +1,19 @@
 {
   "releases": [
     {
+      "version": "1.9.124",
+      "date": "2026-10-26",
+      "latest": true,
+      "changes": [
+        "Attendance note PDFs now have a clear Times & travel box near the top: travel there and back, waiting, attendance, interview, total time, mileage, parking and other travel costs, all in large type. The total adds up to its parts, and if a figure differs from your billing total (for example one you typed in by hand) the PDF says so.",
+        "Fixed the PDF footer showing the wrong app version number.",
+        "Anonymous usage check-ins are now more reliable: if the network blocks them (for example on police station Wi-Fi), missed days are queued and retried until they get through. They still send only anonymous details: app version, Windows or Mac, Free or Pro, and where the app was installed from."
+      ]
+    },
+    {
       "version": "1.9.123",
       "date": "2026-10-25",
-      "latest": true,
+      "latest": false,
       "changes": [
         "AI law explanation now checks for out-of-date law, e.g. it cites the Sentencing Act 2020 instead of the repealed 2000 Act, and gives the current magistrates' sentencing limits for either-way offences such as s.139. Anything it can't verify is flagged under Sources checked, not in the note."
       ]
