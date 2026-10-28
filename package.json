@@ -67,7 +67,7 @@
     "fontkit": "^2.0.4",
     "jsdom": "^29.0.0",
     "nodemailer": "^10.0.13",
-    "pdf-parse": "^1.1.4",
+    "pdf-parse": "^2.4.5",
     "playwright": "^1.58.2",
     "png-to-ico": "^3.0.1",
     "sharp": "^0.35.5",
@@ -79,7 +79,7 @@
     "electron-log": "^5.4.3",
     "electron-updater": "^6.8.9",
     "pdf-lib": "^1.17.1",
-    "pdf-parse": "^1.1.4",
+    "pdf-parse": "^2.4.5",
     "sql.js": "^1.10.0"
   },
   "build": {
