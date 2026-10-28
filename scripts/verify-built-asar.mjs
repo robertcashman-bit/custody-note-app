@@ -77,7 +77,7 @@ function findBuiltAsars() {
    * <platform-unpacked>/<productName>.app/Contents/Resources/app.asar.
    * We discover the .app name dynamically so this script does not need
    * to be edited if the productName changes. */
-  for (const d of ['mac', 'mac-arm64']) {
+  for (const d of ['mac-universal', 'mac', 'mac-arm64']) {
     const macUnpacked = join(distRoot, d);
     if (!existsSync(macUnpacked)) continue;
     let appName = null;

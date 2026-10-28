@@ -10,6 +10,7 @@ import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { pickPrimaryMacFeedEntry } from './mac-release-assets.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
@@ -44,7 +45,7 @@ function buildLatestMacYml(version, fileEntries, releaseDate) {
     lines.push(`    sha512: ${f.sha512}`);
     lines.push(`    size: ${f.size}`);
   }
-  const primary = fileEntries.find((f) => f.url.includes('-arm64.zip')) || fileEntries[0];
+  const primary = pickPrimaryMacFeedEntry(fileEntries);
   lines.push(`path: ${primary.url}`);
   lines.push(`sha512: ${primary.sha512}`);
   lines.push(`releaseDate: '${releaseDate || new Date().toISOString()}'`);

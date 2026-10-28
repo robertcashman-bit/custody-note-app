@@ -1,17 +1,22 @@
-# Manual macOS DMG test builds (draft pre-release on app repo only — not custody-note-releases).
+# Manual macOS test builds (draft pre-release on app repo only — never custody-note-releases,
+# never Latest). Builds the same UNIVERSAL (arm64 + x86_64) dmg + zip as the release job,
+# optionally Developer ID–signed + notarised with the existing Apple secrets, and proves with
+# lipo/file that every Mach-O in the app contains both architectures.
 name: Mac test installer
 
 on:
-  push:
-    branches:
-      - cursor/times-travel-pdf-summary-6424
   workflow_dispatch:
     inputs:
       version:
-        description: 'Build version (e.g. 1.9.123-test.2)'
+        description: 'Build version (e.g. 1.9.125-test.1)'
         required: true
         type: string
-        default: '1.9.123-test.2'
+        default: '1.9.125-test.1'
+      signed:
+        description: 'Developer ID sign + notarise (uses the release Apple secrets)'
+        required: true
+        type: boolean
+        default: true
 
 concurrency:
   group: mac-test-installer-${{ github.ref }}
@@ -20,9 +25,11 @@ concurrency:
 jobs:
   build-test-mac:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: write
+    env:
+      CN_TEST_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -34,56 +41,161 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Resolve test version
-        id: ver
+      - name: Validate + stamp test version
         shell: bash
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=1.9.123-test.2" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Build unsigned macOS DMG (test version)
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          CN_TEST_VERSION: ${{ steps.ver.outputs.value }}
-        run: |
           set -euo pipefail
-          npx electron-builder --mac dmg --publish never \
-            -c.mac.identity=null \
-            -c.mac.hardenedRuntime=false \
-            "--config.extraMetadata.version=${CN_TEST_VERSION}"
-          DMG=$(ls -1 dist/Custody-Note-"${CN_TEST_VERSION}"*.dmg 2>/dev/null | head -1)
-          if [[ -z "$DMG" || ! -f "$DMG" ]]; then
-            echo "::error::Expected dist/Custody-Note-${CN_TEST_VERSION}*.dmg"
-            ls -la dist || true
+          if [[ ! "$CN_TEST_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-test\.[0-9]+$ ]]; then
+            echo "::error::version must look like 1.9.125-test.1 (a -test.N prerelease)"
             exit 1
           fi
-          shasum -a 256 "$DMG" | tee "dist/Custody-Note-mac-${CN_TEST_VERSION}.sha256.txt"
+          npm pkg set "version=${CN_TEST_VERSION}"
+          node -p "'package.json version: ' + require('./package.json').version"
+
+      - name: Import Apple Developer ID certificate into a temporary keychain
+        if: ${{ inputs.signed }}
+        env:
+          MAC_CERTIFICATE_P12_BASE64:   ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
+          MAC_CERTIFICATE_P12_PASSWORD: ${{ secrets.MAC_CERTIFICATE_P12_PASSWORD }}
+          MAC_KEYCHAIN_PASSWORD:        ${{ secrets.MAC_KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          CERT_PATH="$RUNNER_TEMP/cn-cert.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/cn-build.keychain-db"
+          printf '%s' "$MAC_CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          test -s "$CERT_PATH"
+          security create-keychain -p "$MAC_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain      -p "$MAC_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MAC_CERTIFICATE_P12_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | xargs)
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$MAC_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+          rm -f "$CERT_PATH"
+
+      - name: Preflight Apple notarization credentials
+        if: ${{ inputs.signed }}
+        env:
+          APPLE_ID:                    ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID:               ${{ secrets.APPLE_TEAM_ID }}
+        run: node scripts/preflight-apple-notary.mjs
+
+      # No CN_PUBLISH here: build-mac-signed.mjs builds, signs, notarises and
+      # Gatekeeper-assesses but uploads NOTHING to the public releases repo.
+      - name: Build signed + notarised universal dmg + zip
+        if: ${{ inputs.signed }}
+        env:
+          APPLE_ID:                    ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID:               ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          npm run build:icns
+          node scripts/build-mac-signed.mjs
+          npm run verify:built-asar
+
+      - name: Build unsigned universal dmg + zip
+        if: ${{ !inputs.signed }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          set -euo pipefail
+          npm run build:icns
+          npx electron-builder --mac --publish never \
+            -c.mac.identity=null \
+            -c.mac.hardenedRuntime=false
+          npm run verify:built-asar
+
+      - name: Verify universal binaries (lipo / file) + fuses
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="dist/mac-universal/Custody Note.app"
+          DMG="dist/Custody-Note-${CN_TEST_VERSION}-universal.dmg"
+          ZIP="dist/Custody-Note-${CN_TEST_VERSION}-universal.zip"
+          for f in "$APP" "$DMG" "$ZIP"; do
+            [[ -e "$f" ]] || { echo "::error::missing $f"; ls -la dist || true; exit 1; }
+          done
+
+          check_fat() {
+            local bin="$1"
+            local info
+            info=$(lipo -info "$bin" 2>&1 || true)
+            echo "lipo: $info"
+            file "$bin"
+            if [[ "$info" != *x86_64* || "$info" != *arm64* ]]; then
+              echo "::error::not universal: $bin"
+              return 1
+            fi
+          }
+
+          echo "== main executable + Electron Framework =="
+          check_fat "$APP/Contents/MacOS/Custody Note"
+          check_fat "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Electron Framework"
+
+          echo "== native modules (.node) =="
+          NODES=$(find "$APP" -name '*.node' -type f || true)
+          if [[ -z "$NODES" ]]; then echo "(no .node files in bundle)"; fi
+          while IFS= read -r n; do [[ -n "$n" ]] && check_fat "$n"; done <<< "$NODES"
+
+          echo "== every Mach-O in the bundle =="
+          BAD=0; COUNT=0
+          while IFS= read -r -d '' f; do
+            if file -b "$f" | grep -q 'Mach-O'; then
+              COUNT=$((COUNT+1))
+              info=$(lipo -info "$f" 2>&1 || true)
+              if [[ "$info" != *x86_64* || "$info" != *arm64* ]]; then
+                echo "::error::single-arch Mach-O: $f -> $info"; BAD=1
+              fi
+            fi
+          done < <(find "$APP" -type f -print0)
+          echo "Mach-O files checked: $COUNT, all contain arm64 + x86_64: $([[ $BAD == 0 ]] && echo yes || echo NO)"
+          [[ $BAD == 0 ]]
+
+          echo "== fuses (both slices) =="
+          npx --no-install @electron/fuses read --app "$APP"
+
+          echo "== shipped DMG contents =="
+          MNT=$(mktemp -d)
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MNT" >/dev/null
+          check_fat "$MNT/Custody Note.app/Contents/MacOS/Custody Note"
+          if [[ "${{ inputs.signed }}" == "true" ]]; then
+            codesign --verify --deep --strict "$MNT/Custody Note.app"
+            spctl -a -vvv -t exec "$MNT/Custody Note.app"
+            xcrun stapler validate "$DMG" || true
+          fi
+          hdiutil detach "$MNT" >/dev/null
+
+          (cd dist && shasum -a 256 "$(basename "$DMG")" "$(basename "$ZIP")") | tee "dist/Custody-Note-mac-${CN_TEST_VERSION}.sha256.txt"
           echo "dmg_path=$DMG" >> "$GITHUB_ENV"
+          echo "zip_path=$ZIP" >> "$GITHUB_ENV"
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Custody-Note-mac-${{ steps.ver.outputs.value }}
+          name: Custody-Note-mac-${{ inputs.version }}
           path: |
-            dist/Custody-Note-mac-${{ steps.ver.outputs.value }}.sha256.txt
+            dist/Custody-Note-mac-${{ inputs.version }}.sha256.txt
             dist/*.dmg
 
-      - name: Create draft pre-release on app repo (not public feed)
+      - name: Create draft pre-release on app repo (not public feed, not Latest)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG="v${{ steps.ver.outputs.value }}"
-          if gh release view "$TAG" --repo "${{ github.repository }}" 2>/dev/null; then
-            gh release upload "$TAG" "$dmg_path" --repo "${{ github.repository }}" --clobber
+          TAG="v${CN_TEST_VERSION}"
+          SUM="dist/Custody-Note-mac-${CN_TEST_VERSION}.sha256.txt"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$dmg_path" "$zip_path" "$SUM" --repo "${{ github.repository }}" --clobber
           else
-            gh release create "$TAG" "$dmg_path" \
+            gh release create "$TAG" "$dmg_path" "$zip_path" "$SUM" \
               --repo "${{ github.repository }}" \
-              --title "Test build macOS ${{ steps.ver.outputs.value }}" \
-              --notes "Pre-release test DMG. Not published to custody-note-releases and not offered as Latest." \
+              --target "${{ github.sha }}" \
+              --title "Test build macOS ${CN_TEST_VERSION} (universal)" \
+              --notes "Pre-release test build: one universal DMG for Apple silicon and Intel Macs. Not published to custody-note-releases and not offered as Latest." \
               --draft \
               --prerelease
           fi

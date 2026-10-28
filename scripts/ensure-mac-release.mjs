@@ -8,6 +8,7 @@ import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { macSentinelDmg } from './mac-release-assets.mjs';
 import { fetchReleaseByTag } from './github-release-api.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -58,7 +59,7 @@ let needMac = true;
 try {
   const release = await fetchReleaseByTag(tag, token);
   const names = new Set((release.assets || []).map((a) => a.name));
-  needMac = !names.has('latest-mac.yml') || !names.has(`Custody-Note-${version}-arm64.dmg`);
+  needMac = !names.has('latest-mac.yml') || !names.has(macSentinelDmg(version));
 } catch (err) {
   console.warn(`[ensure-mac-release] Could not read ${tag} yet (${err.message || err}) — will try complete-mac-release.`);
 }
@@ -71,7 +72,7 @@ if (needMac) {
     try {
       const release = await fetchReleaseByTag(tag, token);
       const names = new Set((release.assets || []).map((a) => a.name));
-      const hasMac = names.has('latest-mac.yml') && names.has(`Custody-Note-${version}-arm64.dmg`);
+      const hasMac = names.has('latest-mac.yml') && names.has(macSentinelDmg(version));
       if (hasMac) {
         console.warn('[ensure-mac-release] complete-mac-release failed but Mac assets are on GitHub — continuing.');
       } else {

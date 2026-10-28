@@ -23,8 +23,7 @@
  *         "Developer ID Application: <something> (<APPLE_TEAM_ID>)"
  *
  * Output:
- *   dist/Custody Note-<version>.dmg            (x64,   signed + notarised)
- *   dist/Custody Note-<version>-arm64.dmg      (arm64, signed + notarised)
+ *   dist/Custody-Note-<version>-universal.dmg  (arm64 + x86_64, signed + notarised)
  *   plus matching .zip files and latest-mac.yml for the auto-updater feed.
  *
  * After electron-builder completes (and BEFORE any GitHub Release upload), this
@@ -48,6 +47,7 @@ import { dirname, join } from 'path';
 import { homedir, tmpdir } from 'os';
 import { randomBytes } from 'crypto';
 import { fileURLToPath } from 'url';
+import { MAC_APP_OUT_DIRS } from './mac-release-assets.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = join(__dirname, '..');
@@ -468,7 +468,7 @@ function listBuiltDmgs() {
 let anyFailed = false;
 if (SKIP_NOTARIZE) {
   info('running codesign --verify on each built .app (notarization skipped, local/dev) …');
-  for (const dir of ['mac', 'mac-arm64']) {
+  for (const dir of MAC_APP_OUT_DIRS) {
     const appPath = join(APP_ROOT, 'dist', dir, 'Custody Note.app');
     if (!existsSync(appPath)) {
       info(`  (skipped, not present: ${appPath})`);
@@ -508,7 +508,7 @@ if (SKIP_NOTARIZE) {
 } else {
   info('running spctl --assess on each built .app …');
   let assessedApps = 0;
-  for (const dir of ['mac', 'mac-arm64']) {
+  for (const dir of MAC_APP_OUT_DIRS) {
     const appPath = join(APP_ROOT, 'dist', dir, 'Custody Note.app');
     if (!existsSync(appPath)) {
       info(`  (skipped, not present: ${appPath})`);
@@ -518,7 +518,7 @@ if (SKIP_NOTARIZE) {
     if (!spctlAssessApp(appPath)) anyFailed = true;
   }
   if (assessedApps === 0) {
-    fail('no built .app found under dist/mac or dist/mac-arm64 — cannot Gatekeeper-assess.');
+    fail('no built .app found under dist/mac-universal, dist/mac or dist/mac-arm64 — cannot Gatekeeper-assess.');
   }
 
   info('running spctl --assess on .app inside each built .dmg …');

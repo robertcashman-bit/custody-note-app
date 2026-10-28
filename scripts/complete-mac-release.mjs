@@ -13,6 +13,7 @@ import { execSync, spawnSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { macReleaseAssetNames } from './mac-release-assets.mjs';
 import { fetchReleaseByTag, waitForReleaseByTag } from './github-release-api.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -59,10 +60,7 @@ async function publishReleaseIfReady(version, token, opts = {}) {
     `Custody-Note-Setup-${version}.exe`,
     `Custody-Note-Setup-${version}.exe.blockmap`,
     'latest.yml',
-    `Custody-Note-${version}-arm64.dmg`,
-    `Custody-Note-${version}-arm64.zip`,
-    `Custody-Note-${version}-x64.dmg`,
-    `Custody-Note-${version}-x64.zip`,
+    ...macReleaseAssetNames(version),
     'latest-mac.yml',
   ];
   const headers = {

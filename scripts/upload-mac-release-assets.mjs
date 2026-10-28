@@ -15,6 +15,7 @@ import { execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import { macUploadAssetNames } from './mac-release-assets.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -163,17 +164,7 @@ async function main() {
   }
 
   const assetByName = new Map((release.assets || []).map((a) => [a.name, a]));
-  const files = [
-    `Custody-Note-${version}-arm64.dmg`,
-    `Custody-Note-${version}-arm64.dmg.blockmap`,
-    `Custody-Note-${version}-arm64.zip`,
-    `Custody-Note-${version}-arm64.zip.blockmap`,
-    `Custody-Note-${version}-x64.dmg`,
-    `Custody-Note-${version}-x64.dmg.blockmap`,
-    `Custody-Note-${version}-x64.zip`,
-    `Custody-Note-${version}-x64.zip.blockmap`,
-    'latest-mac.yml',
-  ];
+  const files = macUploadAssetNames(version);
 
   for (const name of files) {
     const localPath = join(dist, name);

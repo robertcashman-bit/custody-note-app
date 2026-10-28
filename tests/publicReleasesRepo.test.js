@@ -27,7 +27,7 @@ describe('public releases repo', () => {
     const m = await import('../scripts/mirror-release-to-public-repo.mjs');
     const names = m.requiredMirrorAssetNames('1.2.3');
     for (const n of ['latest.yml', 'latest-mac.yml', 'changelog.json', 'Custody-Note-Setup-1.2.3.exe',
-      'Custody-Note-1.2.3-arm64.dmg', 'Custody-Note-1.2.3-x64.zip']) {
+      'Custody-Note-1.2.3-universal.dmg', 'Custody-Note-1.2.3-universal.zip']) {
       assert.ok(names.includes(n), n);
     }
     const buf = m.buildPublicChangelogAsset({ releases: [{ version: '1.2.3', date: '2026-01-01', latest: true, changes: ['Faster saving'] }] }, '1.2.3');
