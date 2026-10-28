@@ -28,8 +28,24 @@ module.exports = async function afterPack(context) {
     return;
   }
 
+  // electron-builder Arch enum: x64=1, arm64=3, universal=4.
   const isArm64 = context.arch === 'arm64' || context.arch === 3;
-  const resetAdHocDarwinSignature = platform === 'darwin' && isArm64;
+  const isUniversal = context.arch === 'universal' || context.arch === 4;
+
+  // Universal Mac builds: electron-builder packs x64 and arm64 into
+  // "<appOutDir>-x64-temp" / "<appOutDir>-arm64-temp", calls afterPack on each,
+  // merges them with @electron/universal, then calls afterPack once more on the
+  // merged app. Flip fuses only on the merged app (@electron/fuses flips the
+  // sentinel in BOTH slices of a fat binary) so the slices stay byte-identical
+  // to what @electron/universal expects and we codesign once.
+  if (platform === 'darwin' && /-(x64|arm64)-temp$/.test(String(context.appOutDir || ''))) {
+    console.log('[fuses] skip per-arch temp build (fuses applied to the merged universal app):', context.appOutDir);
+    return;
+  }
+
+  // Any slice containing arm64 needs its ad-hoc signature reset after patching,
+  // or Apple silicon refuses to launch an unsigned/test build.
+  const resetAdHocDarwinSignature = platform === 'darwin' && (isArm64 || isUniversal);
 
   await flipFuses(appPath, {
     version: FuseVersion.V1,

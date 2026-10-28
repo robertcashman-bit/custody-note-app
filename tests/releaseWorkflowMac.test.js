@@ -63,8 +63,8 @@ describe('release-publish.yml — cross-platform build pipeline', () => {
     assert.match(wf, /wait-and-publish-release\.mjs/);
     assert.match(gate, /latest\.yml/);
     assert.match(gate, /latest-mac\.yml/);
-    assert.match(gate, /Custody-Note-\$\{version\}-arm64\.dmg/);
-    assert.match(gate, /Custody-Note-\$\{version\}-x64\.dmg/);
+    // Mac asset names come from the shared helper (universal dmg + zip).
+    assert.match(gate, /macReleaseAssetNames\(version\)/);
     assert.match(gate, /Custody-Note-Setup-\$\{version\}\.exe/);
     assert.match(gate, /--draft=false --latest/);
   });

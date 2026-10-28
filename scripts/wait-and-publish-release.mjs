@@ -12,6 +12,7 @@
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { macReleaseAssetNames } from './mac-release-assets.mjs';
 import { execSync } from 'child_process';
 import {
   consolidateDuplicateReleases,
@@ -33,10 +34,7 @@ function requiredAssetNames(version) {
     `Custody-Note-Setup-${version}.exe`,
     `Custody-Note-Setup-${version}.exe.blockmap`,
     'latest.yml',
-    `Custody-Note-${version}-arm64.dmg`,
-    `Custody-Note-${version}-arm64.zip`,
-    `Custody-Note-${version}-x64.dmg`,
-    `Custody-Note-${version}-x64.zip`,
+    ...macReleaseAssetNames(version),
     'latest-mac.yml',
   ];
 }
