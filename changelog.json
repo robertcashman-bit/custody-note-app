@@ -1,9 +1,18 @@
 {
   "releases": [
     {
+      "version": "1.9.125",
+      "date": "2026-10-28",
+      "latest": true,
+      "changes": [
+        "Mac: Custody Note is now one universal app that runs natively on both Apple silicon (M1–M4) and Intel Macs. On Apple silicon it no longer runs through Rosetta, so the macOS \"Support Ending for Intel-based Apps\" warning goes away. Existing Mac installs update automatically.",
+        "Security hardening: tighter Electron security settings, saved credentials moved into the operating system keychain where available, and updated dependencies."
+      ]
+    },
+    {
       "version": "1.9.124",
       "date": "2026-10-26",
-      "latest": true,
+      "latest": false,
       "changes": [
         "Attendance note PDFs now have a clear Times & travel box near the top: travel there and back, waiting, attendance, interview, total time, mileage, parking and other travel costs, all in large type. The total adds up to its parts, and if a figure differs from your billing total (for example one you typed in by hand) the PDF says so.",
         "Fixed the PDF footer showing the wrong app version number.",
