@@ -625,7 +625,7 @@
       "latest": false,
       "changes": [
         "Beta: Custody Note is free during public beta while we test with real police station work — no credit card to start",
-        "Copy: Free forever wording replaced with Free during beta across tips, licence banners, and share invites",
+        "Copy: wording updated to Free during beta across tips, licence banners, and share invites",
         "Pro: paid plans remain planned after beta (cloud backup and advanced tools)"
       ]
     },
@@ -666,8 +666,8 @@
       "date": "2026-07-22",
       "latest": false,
       "changes": [
-        "Free forever: first launch no longer starts a timed trial — core notes, PDF, billing and local backup stay available without a subscription",
-        "Pro (£9.99/mo): managed cloud backup and advanced tools; expired Pro falls back to Free core instead of blocking new records",
+        "Free during beta: first launch no longer starts a timed trial — core notes, PDF, billing and local backup stay available without a subscription",
+        "Pro (planned after beta): managed cloud backup and advanced tools; expired Pro falls back to Free core instead of blocking new records",
         "Onboarding: explore-first Free banner (dismissible); help and share copy updated for Free/Pro"
       ]
     },
